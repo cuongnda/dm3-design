@@ -84,7 +84,6 @@ async def _run_simulation(config: SimulationConfig) -> None:
 
     from dm3_simulator.api import SimulatorAPI
     from dm3_simulator.device import VirtualDevice
-    from dm3_simulator.event_generator import generate_mock_persons, generate_mock_rules
 
     logger = structlog.get_logger()
     start_time = time.time()
@@ -105,21 +104,12 @@ async def _run_simulation(config: SimulationConfig) -> None:
     await site.start()
     logger.info("api_started", port=config.api_port)
 
-    # Start devices with staggered connections
+    # Start devices with staggered connections (empty DB — data comes via server sync)
     for device_id, device in devices.items():
         try:
             device.event_callback = api.record_event
             await device.start()
-            # Seed with mock data
-            persons = generate_mock_persons(config.persons)
-            await device.db.bulk_upsert_persons(persons)
-            person_ids = [p["person_id"] for p in persons]
-            rules, groups = generate_mock_rules(device.door_ids, person_ids)
-            for rule in rules:
-                await device.db.upsert_access_rule(rule)
-            for group in groups:
-                await device.db.upsert_person_group(group["group_id"], group["person_ids"])
-            logger.info("device_seeded", device_id=device_id, persons=len(persons), rules=len(rules))
+            logger.info("device_started_empty", device_id=device_id, msg="empty DB, waiting for server sync")
         except Exception as e:
             logger.error("device_start_error", device_id=device_id, error=str(e))
 

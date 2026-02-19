@@ -54,6 +54,8 @@ class SimulatorAPI:
         self.app.router.add_get("/api/simulation/status", self.get_simulation_status)
         self.app.router.add_post("/api/simulation/start", self.start_simulation)
         self.app.router.add_post("/api/simulation/stop", self.stop_simulation)
+        # Sync endpoint
+        self.app.router.add_post("/api/devices/{device_id}/sync", self.trigger_sync)
         # Provisioning endpoints
         self.app.router.add_post("/api/devices/new", self.create_new_device)
         self.app.router.add_post("/api/devices/{device_id}/bootstrap", self.start_bootstrap)
@@ -151,17 +153,57 @@ class SimulatorAPI:
         })
 
     async def get_devices(self, request: web.Request) -> web.Response:
-        """List all virtual devices."""
-        devices = [d.to_dict() for d in self.devices.values()]
+        """List all virtual devices with sync status."""
+        devices = []
+        for d in self.devices.values():
+            info = d.to_dict()
+            # Add sync info inline
+            try:
+                person_count = await d.db.get_person_count()
+                db_version = int(await d.db.get_sync_state("person_db_version") or "0")
+                if person_count == 0 and db_version == 0:
+                    info["sync_status"] = "empty"
+                elif db_version > 0:
+                    info["sync_status"] = "synced"
+                else:
+                    info["sync_status"] = "syncing"
+                info["local_person_count"] = person_count
+                info["local_db_version"] = db_version
+            except Exception:
+                info["sync_status"] = "unknown"
+                info["local_person_count"] = 0
+                info["local_db_version"] = 0
+            devices.append(info)
         return web.json_response({"devices": devices, "count": len(devices)})
 
     async def get_device(self, request: web.Request) -> web.Response:
-        """Get a single device's status."""
+        """Get a single device's status, including sync info."""
         device_id = request.match_info["device_id"]
         device = self.devices.get(device_id)
         if not device:
             return web.json_response({"error": "Device not found"}, status=404)
-        return web.json_response(device.to_dict())
+        info = device.to_dict()
+        # Add sync status
+        try:
+            person_count = await device.db.get_person_count()
+            db_version = int(await device.db.get_sync_state("person_db_version") or "0")
+            last_sync = await device.db.get_sync_state("last_sync_time")
+            if person_count == 0 and db_version == 0:
+                sync_status = "empty"
+            elif db_version > 0:
+                sync_status = "synced"
+            else:
+                sync_status = "syncing"
+            info["local_person_count"] = person_count
+            info["sync_status"] = sync_status
+            info["last_sync_time"] = last_sync
+            info["local_db_version"] = db_version
+        except Exception:
+            info["local_person_count"] = 0
+            info["sync_status"] = "unknown"
+            info["last_sync_time"] = None
+            info["local_db_version"] = 0
+        return web.json_response(info)
 
     async def trigger_event(self, request: web.Request) -> web.Response:
         """Trigger a simulated access event on a device."""
@@ -247,7 +289,6 @@ class SimulatorAPI:
         # Import here to avoid circular imports
         import asyncio
         from dm3_simulator.device import VirtualDevice
-        from dm3_simulator.event_generator import generate_mock_persons, generate_mock_rules
         from dm3_simulator.models import SimulationConfig
 
         config = SimulationConfig(
@@ -267,19 +308,11 @@ class SimulatorAPI:
             device = VirtualDevice(device_id, config, door_ids)
             self.devices[device_id] = device
 
-        # Start devices in background
+        # Start devices in background (empty DB — data comes via server sync)
         async def _start_devices() -> None:
             for device_id, device in list(self.devices.items()):
                 try:
                     await device.start()
-                    persons = generate_mock_persons(config.persons)
-                    await device.db.bulk_upsert_persons(persons)
-                    person_ids = [p["person_id"] for p in persons]
-                    rules, groups = generate_mock_rules(device.door_ids, person_ids)
-                    for rule in rules:
-                        await device.db.upsert_access_rule(rule)
-                    for group in groups:
-                        await device.db.upsert_person_group(group["group_id"], group["person_ids"])
                 except Exception as e:
                     logger.error("device_start_error", device_id=device_id, error=str(e))
                 await asyncio.sleep(config.connect_delay)
@@ -456,6 +489,78 @@ class SimulatorAPI:
         else:
             device.auto_trigger = not device.auto_trigger
         return web.json_response({"status": "ok", "device_id": device_id, "auto_trigger": device.auto_trigger})
+
+    async def trigger_sync(self, request: web.Request) -> web.Response:
+        """Trigger a sync push from the backend for this device."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+
+        # Call the backend's sync endpoint
+        try:
+            import aiohttp as _aiohttp
+
+            # Look up device UUID from backend
+            backend_url = "http://localhost:8002"
+            async with _aiohttp.ClientSession() as session:
+                # Find the device by device_id
+                async with session.get(
+                    f"{backend_url}/api/v1/devices?status=",
+                    headers={"Authorization": f"Bearer {self._generate_admin_jwt()}"},
+                ) as resp:
+                    if resp.status != 200:
+                        return web.json_response({"error": "Failed to list devices from backend", "status": resp.status}, status=502)
+                    devices_list = await resp.json()
+
+                # Find the matching device
+                device_uuid = None
+                for d in devices_list:
+                    if d.get("device_id") == device_id:
+                        device_uuid = d.get("id")
+                        break
+
+                if not device_uuid:
+                    return web.json_response({"error": f"Device {device_id} not found in backend"}, status=404)
+
+                # Trigger sync
+                async with session.post(
+                    f"{backend_url}/api/v1/devices/{device_uuid}/sync",
+                    headers={"Authorization": f"Bearer {self._generate_admin_jwt()}"},
+                ) as resp:
+                    result = await resp.json()
+                    return web.json_response({"status": "sync_triggered", "backend_response": result})
+
+        except Exception as e:
+            return web.json_response({"error": f"Failed to trigger sync: {e}"}, status=500)
+
+    @staticmethod
+    def _generate_admin_jwt() -> str:
+        """Generate a dev admin JWT for backend API calls."""
+        import base64
+        import hashlib
+        import hmac
+        import json as _json
+
+        secret = "dm3-dev-secret-key"
+        now = int(time.time())
+        header = {"alg": "HS256", "typ": "JWT"}
+        payload = {
+            "sub": "user:admin",
+            "role": "system_admin",
+            "cid": "00000000-0000-0000-0000-000000000001",
+            "iat": now,
+            "exp": now + 3600,
+            "iss": "dm3",
+        }
+
+        def b64url(data: bytes) -> str:
+            return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+        h = b64url(_json.dumps(header, separators=(",", ":")).encode())
+        p = b64url(_json.dumps(payload, separators=(",", ":")).encode())
+        sig = hmac.new(secret.encode(), f"{h}.{p}".encode(), hashlib.sha256).digest()
+        return f"{h}.{p}.{b64url(sig)}"
 
     # ─── Provisioning Endpoints ─────────────────────────────────────────────
 

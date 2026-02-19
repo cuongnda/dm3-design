@@ -502,6 +502,8 @@ class VirtualDevice:
         while self._running:
             try:
                 queue_depth = await self.db.get_queue_depth()
+                person_count = await self.db.get_person_count()
+                db_version = int(await self.db.get_sync_state("person_db_version") or "0")
                 data = {
                     "online": True,
                     "uptime_s": int(time.time() - self.start_time),
@@ -513,6 +515,8 @@ class VirtualDevice:
                     "temperature_c": random.randint(35, 55),
                     "queue_depth": queue_depth,
                     "last_access_ts": int(time.time() * 1000),
+                    "local_db_version": db_version,
+                    "local_person_count": person_count,
                 }
                 await self.mqtt.publish_status(data)
                 metrics.queue_depth.labels(device_id=self.device_id).set(queue_depth)
@@ -574,3 +578,25 @@ class VirtualDevice:
             "running": self._running,
             "provisioning_status": self.provisioning_status.value,
         }
+
+    async def to_dict_full(self) -> dict[str, Any]:
+        """Return device status with sync info (async)."""
+        info = self.to_dict()
+        try:
+            person_count = await self.db.get_person_count()
+            db_version = int(await self.db.get_sync_state("person_db_version") or "0")
+            last_sync = await self.db.get_sync_state("last_sync_time")
+            if person_count == 0 and db_version == 0:
+                sync_status = "empty"
+            elif db_version > 0:
+                sync_status = "synced"
+            else:
+                sync_status = "syncing"
+            info["local_person_count"] = person_count
+            info["sync_status"] = sync_status
+            info["last_sync_time"] = last_sync
+            info["local_db_version"] = db_version
+        except Exception:
+            info["local_person_count"] = 0
+            info["sync_status"] = "unknown"
+        return info

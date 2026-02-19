@@ -36,6 +36,11 @@
   .prov-approved { background: #064E3B; color: #34D399; }
   .prov-rejected { background: #7F1D1D; color: #F87171; }
   .prov-provisioned { background: #1C1917; color: #78716C; }
+  /* Sync status badges */
+  .sync-empty { background: #7F1D1D; color: #FCA5A5; }
+  .sync-syncing { background: #78350F; color: #FDE68A; }
+  .sync-synced { background: #064E3B; color: #6EE7B7; }
+  .sync-unknown { background: #374151; color: #9CA3AF; }
   .modal-overlay { backdrop-filter: blur(4px); }
 </style>
 </head>
@@ -175,7 +180,7 @@
         <input type="checkbox" id="select-all" onchange="toggleSelectAll(this.checked)" class="accent-blue-500">
         <span class="w-20">Device ID</span>
         <span class="w-16">State</span>
-        <span class="w-24">Provisioning</span>
+        <span class="w-24">Sync</span>
         <span class="w-14">Network</span>
         <span class="flex-1">Actions</span>
         <span class="w-16 text-right">Events</span>
@@ -314,22 +319,20 @@ async function poll() {
       grid.querySelectorAll('input[type=checkbox]:checked').forEach(cb => prevChecked.add(cb.dataset.id));
       
       grid.innerHTML = devices.map(d => {
-        const ps = d.provisioning_status || 'provisioned';
-        const provActions = ps === 'unprovisioned' ? `
-          <button onclick="event.stopPropagation();bootstrapDevice('${d.device_id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-0.5 rounded text-[10px]">🔗 Bootstrap</button>
-          <button onclick="event.stopPropagation();openQRModal('${d.device_id}')" class="bg-teal-600 hover:bg-teal-700 text-white px-2 py-0.5 rounded text-[10px]">📱 QR Activate</button>
-        ` : ps === 'pending_approval' ? `
-          <button onclick="event.stopPropagation();approveDevice('${d.device_id}')" class="bg-green-600 hover:bg-green-700 text-white px-2 py-0.5 rounded text-[10px]">✅ Approve</button>
-          <button onclick="event.stopPropagation();rejectDevice('${d.device_id}')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded text-[10px]">❌ Reject</button>
-        ` : '';
+        const ss = d.sync_status || 'unknown';
+        const personCount = d.local_person_count || 0;
+        const syncLabel = ss === 'empty' ? 'No data' : ss === 'syncing' ? 'Syncing...' : ss === 'synced' ? `Synced (${personCount})` : 'Unknown';
         return `
         <div class="flex items-center gap-2 text-xs px-1 py-1.5 rounded hover:bg-gray-800/50 ${!d.running ? 'opacity-40' : ''} ${d.network_disabled ? 'bg-yellow-900/10' : ''}">
           <input type="checkbox" class="device-cb accent-blue-500" data-id="${d.device_id}" ${prevChecked.has(d.device_id)?'checked':''} onchange="updateSelectedCount()" onclick="event.stopPropagation()">
           <span class="w-20 font-mono text-white cursor-pointer hover:text-blue-400" onclick="openDeviceModal('${d.device_id}')">${d.device_id}</span>
           <span class="w-16"><span class="dot dot-${stateClass(d.state)}"></span> <span class="status-${stateClass(d.state)} uppercase">${d.state}</span></span>
-          <span class="w-24"><span class="prov-${ps} px-1.5 py-0.5 rounded text-[10px] font-medium">${ps.replace('_',' ')}</span></span>
+          <span class="w-24 flex items-center gap-1">
+            <span class="sync-${ss} px-1.5 py-0.5 rounded text-[10px] font-medium">${syncLabel}</span>
+            <button onclick="event.stopPropagation();triggerSync('${d.device_id}')" class="text-blue-400 hover:text-blue-300 text-[10px]" title="Trigger sync">🔄</button>
+          </span>
           <span class="w-14">${d.network_disabled ? '<span class="text-yellow-400">📡 OFF</span>' : '<span class="text-green-400/60">📡 ON</span>'}</span>
-          <span class="flex-1 flex gap-1">${provActions}</span>
+          <span class="flex-1 flex gap-1"></span>
           <span class="w-16 text-right text-gray-300 font-mono">${d.events_published}</span>
           <span class="w-10 text-right"><button class="text-blue-400 hover:text-blue-300" onclick="event.stopPropagation();openDeviceModal('${d.device_id}')">🔍</button></span>
         </div>`;
@@ -717,6 +720,11 @@ async function createNewDevice() {
   });
   document.getElementById('new-device-modal')?.remove();
   if (r && r.status === 'created') poll();
+}
+
+async function triggerSync(deviceId) {
+  const r = await fetchJSON(`/api/devices/${deviceId}/sync`, { method: 'POST' });
+  if (r) { setTimeout(poll, 1000); }
 }
 
 async function bootstrapDevice(deviceId) {
