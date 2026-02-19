@@ -332,7 +332,12 @@ async function poll() {
             <button onclick="event.stopPropagation();triggerSync('${d.device_id}')" class="text-blue-400 hover:text-blue-300 text-[10px]" title="Trigger sync">🔄</button>
           </span>
           <span class="w-14">${d.network_disabled ? '<span class="text-yellow-400">📡 OFF</span>' : '<span class="text-green-400/60">📡 ON</span>'}</span>
-          <span class="flex-1 flex gap-1"></span>
+          <span class="flex-1 flex gap-1">${
+            d.provisioning_status === 'unprovisioned' ? `<button onclick="event.stopPropagation();bootstrapDevice('${d.device_id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-0.5 rounded text-[10px]">🚀 Bootstrap</button><button onclick="event.stopPropagation();openQRModal('${d.device_id}')" class="bg-green-600 hover:bg-green-700 text-white px-2 py-0.5 rounded text-[10px]">📱 QR</button>` :
+            d.provisioning_status === 'pending_approval' ? `<span class="text-yellow-400 text-[10px]">⏳ Pending</span>` :
+            d.provisioning_status === 'rejected' ? `<span class="text-red-400 text-[10px]">❌ Rejected</span>` :
+            d.provisioning_status === 'registering' ? `<span class="text-blue-400 text-[10px]">📡 Registering...</span>` : ''
+          }</span>
           <span class="w-16 text-right text-gray-300 font-mono">${d.events_published}</span>
           <span class="w-10 text-right"><button class="text-blue-400 hover:text-blue-300" onclick="event.stopPropagation();openDeviceModal('${d.device_id}')">🔍</button></span>
         </div>`;
