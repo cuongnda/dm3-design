@@ -257,14 +257,14 @@ class SimulatorAPI:
         limit = int(request.query.get("limit", "50"))
         offset = int(request.query.get("offset", "0"))
         async with device.db.db.execute(
-            "SELECT person_id, name, department, status, valid_from, valid_until FROM persons LIMIT ? OFFSET ?",
+            "SELECT person_id, name, status, valid_from, valid_until FROM persons LIMIT ? OFFSET ?",
             (limit, offset),
         ) as cursor:
             rows = await cursor.fetchall()
         async with device.db.db.execute("SELECT COUNT(*) FROM persons") as cursor:
             total = (await cursor.fetchone())[0]
         persons = [
-            {"person_id": r[0], "name": r[1], "department": r[2], "status": r[3], "valid_from": r[4], "valid_until": r[5]}
+            {"person_id": r[0], "name": r[1], "status": r[2], "valid_from": r[3], "valid_until": r[4]}
             for r in rows
         ]
         return web.json_response({"persons": persons, "total": total})
@@ -288,25 +288,20 @@ class SimulatorAPI:
         device = self.devices.get(device_id)
         if not device:
             return web.json_response({"error": "Device not found"}, status=404)
+        import json as _json
         async with device.db.db.execute(
-            "SELECT rule_id, name, priority, enabled FROM access_rules"
+            "SELECT rule_id, name, priority, enabled, door_ids, person_group_ids, schedule_json FROM access_rules"
         ) as cursor:
             rows = await cursor.fetchall()
-        rules = [{"rule_id": r[0], "name": r[1], "priority": r[2], "enabled": bool(r[3])} for r in rows]
-        # Get schedules and doors for each rule
-        for rule in rules:
-            async with device.db.db.execute(
-                "SELECT day_of_week, start_time, end_time FROM access_rule_schedules WHERE rule_id = ?",
-                (rule["rule_id"],),
-            ) as cursor:
-                scheds = await cursor.fetchall()
-            rule["schedules"] = [{"day": s[0], "start": s[1], "end": s[2]} for s in scheds]
-            async with device.db.db.execute(
-                "SELECT door_id FROM access_rule_doors WHERE rule_id = ?",
-                (rule["rule_id"],),
-            ) as cursor:
-                doors = await cursor.fetchall()
-            rule["doors"] = [d[0] for d in doors]
+        rules = []
+        for r in rows:
+            door_ids = _json.loads(r[4]) if r[4] else []
+            group_ids = _json.loads(r[5]) if r[5] else []
+            schedule = _json.loads(r[6]) if r[6] else []
+            rules.append({
+                "rule_id": r[0], "name": r[1], "priority": r[2], "enabled": bool(r[3]),
+                "doors": door_ids, "groups": group_ids, "schedules": schedule,
+            })
         return web.json_response({"rules": rules, "count": len(rules)})
 
     async def get_device_events_queue(self, request: web.Request) -> web.Response:

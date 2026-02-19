@@ -368,16 +368,16 @@ async function loadTabContent(tab) {
       <div class="text-sm text-gray-400 mb-3">Total: <span class="text-white font-bold">${data.total}</span> persons in local DB</div>
       <table class="w-full text-xs">
         <thead><tr class="text-left text-gray-400 border-b border-gray-700">
+          <th class="pb-2 pr-3">Person ID</th>
           <th class="pb-2 pr-3">Name</th>
-          <th class="pb-2 pr-3">Department</th>
           <th class="pb-2 pr-3">Status</th>
           <th class="pb-2 pr-3">Valid From</th>
           <th class="pb-2">Valid Until</th>
         </tr></thead>
         <tbody>
           ${data.persons.map(p => `<tr class="border-b border-gray-800 hover:bg-gray-800/50">
+            <td class="py-1.5 pr-3 font-mono text-blue-300 text-xs">${p.person_id?.slice(0,8)}...</td>
             <td class="py-1.5 pr-3 text-white">${p.name || '—'}</td>
-            <td class="py-1.5 pr-3 text-gray-300">${p.department || '—'}</td>
             <td class="py-1.5 pr-3"><span class="${p.status==='active'?'text-green-400':'text-red-400'}">${p.status}</span></td>
             <td class="py-1.5 pr-3 text-gray-400 font-mono">${p.valid_from || '—'}</td>
             <td class="py-1.5 text-gray-400 font-mono">${p.valid_until || '—'}</td>
@@ -426,8 +426,9 @@ async function loadTabContent(tab) {
             </div>
             <div class="text-xs space-y-1">
               <div class="text-gray-400">🚪 Doors: <span class="text-gray-300">${r.doors?.join(', ') || 'None'}</span></div>
+              <div class="text-gray-400">👥 Groups: <span class="text-gray-300">${r.groups?.join(', ') || 'None'}</span></div>
               ${r.schedules?.length ? `<div class="text-gray-400">🕐 Schedules: ${r.schedules.map(s => 
-                `<span class="text-gray-300">Day ${s.day} ${s.start}-${s.end}</span>`
+                `<span class="text-gray-300">${typeof s === 'object' ? `Day ${s.day_of_week??s.day} ${s.start_time??s.start}-${s.end_time??s.end}` : s}</span>`
               ).join(', ')}</div>` : ''}
             </div>
           </div>
