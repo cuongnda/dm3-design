@@ -74,7 +74,7 @@
       <div class="space-y-3 text-sm">
         <div>
           <label class="text-gray-400 block mb-1">MQTT Broker</label>
-          <input id="cfg-broker" type="text" value="mqtt://localhost:1883" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm">
+          <input id="cfg-broker" type="text" value="" placeholder="mqtt://localhost:1883" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm">
         </div>
         <div>
           <label class="text-gray-400 block mb-1">Site ID</label>
@@ -249,12 +249,15 @@ async function fetchJSON(url, opts) {
 
 async function startSimulation() {
   const body = {
-    broker: document.getElementById('cfg-broker').value,
-    site_id: document.getElementById('cfg-site').value,
     num_devices: parseInt(document.getElementById('cfg-devices').value),
     mode: document.getElementById('cfg-mode').value,
     event_rate: parseFloat(document.getElementById('cfg-rate').value),
   };
+  // Only send broker/site if explicitly set (don't override server defaults)
+  const broker = document.getElementById('cfg-broker').value.trim();
+  const site = document.getElementById('cfg-site').value.trim();
+  if (broker) body.broker = broker;
+  if (site) body.site_id = site;
   await fetchJSON('/api/simulation/start', {
     method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
   });

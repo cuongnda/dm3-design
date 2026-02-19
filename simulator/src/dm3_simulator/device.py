@@ -181,6 +181,7 @@ class VirtualDevice:
         ).hexdigest()
 
         # Create bootstrap MQTT client
+        logger.info("bootstrap_connecting", device_id=rid, broker=self.config.broker)
         self._bootstrap_mqtt = DeviceMqttClient(
             broker_url=self.config.broker,
             tenant_id=self.tenant_id,

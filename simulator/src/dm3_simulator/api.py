@@ -75,6 +75,7 @@ class SimulatorAPI:
         return web.json_response({
             "status": "running",
             "uptime_s": int(time.time() - self.start_time),
+            "broker": self.simulation_config.get("broker", "unknown"),
             "devices": {
                 "total": total,
                 "connected": connected,
@@ -281,7 +282,8 @@ class SimulatorAPI:
     async def start_simulation(self, request: web.Request) -> web.Response:
         """Create N unprovisioned devices (must go through bootstrap/QR to connect)."""
         body = await request.json() if request.body_exists else {}
-        self.simulation_config = body
+        # Merge request body into existing config (preserves CLI defaults like broker)
+        self.simulation_config = {**self.simulation_config, **{k: v for k, v in body.items() if v}}
 
         import asyncio
         from dm3_simulator.device import VirtualDevice
@@ -298,10 +300,16 @@ class SimulatorAPI:
         if existing_rids:
             next_rid = max(existing_rids) + 1
 
+        # Inherit broker/tenant/site from CLI config (set at startup), allow override from request
+        def _cfg(key: str, default: str) -> str:
+            """Get value from request body, falling back to CLI config."""
+            val = body.get(key) or self.simulation_config.get(key) or default
+            return val
+
         config = SimulationConfig(
-            broker=body.get("broker", "mqtt://localhost:1884"),
-            site_id=body.get("site_id", "site-001"),
-            tenant_id=body.get("tenant_id", "tenant-001"),
+            broker=_cfg("broker", "mqtt://localhost:1884"),
+            site_id=_cfg("site_id", "site-001"),
+            tenant_id=_cfg("tenant_id", "tenant-001"),
             devices=num_devices,
             mode=body.get("mode", "normal"),
             event_rate=body.get("event_rate", 1.0),
@@ -589,14 +597,14 @@ class SimulatorAPI:
         from dm3_simulator.models import SimulationConfig, ProvisioningStatus
 
         # Create config matching current simulation — inherit broker from existing devices
-        existing_broker = "mqtt://localhost:1884"
-        if self.devices:
-            first_dev = next(iter(self.devices.values()))
-            existing_broker = first_dev.config.broker
+        def _cfg(key: str, default: str) -> str:
+            val = body.get(key) or self.simulation_config.get(key) or default
+            return val
+
         config = SimulationConfig(
-            broker=body.get("broker", self.simulation_config.get("broker", existing_broker)),
-            tenant_id=body.get("tenant_id", self.simulation_config.get("tenant_id", "tenant-001")),
-            site_id=body.get("site_id", self.simulation_config.get("site_id", "site-001")),
+            broker=_cfg("broker", "mqtt://localhost:1884"),
+            tenant_id=_cfg("tenant_id", "tenant-001"),
+            site_id=_cfg("site_id", "site-001"),
             device_type=body.get("device_type", "terminal"),
             devices=1,
             event_rate=float(body.get("event_rate", 1.0)),
@@ -660,9 +668,12 @@ class SimulatorAPI:
         from dm3_simulator.device import VirtualDevice
         from dm3_simulator.models import SimulationConfig, ProvisioningStatus
 
+        def _cfg(key: str, default: str) -> str:
+            return body.get(key) or self.simulation_config.get(key) or default
+
         config = SimulationConfig(
-            broker=body.get("broker", self.simulation_config.get("broker", "mqtt://localhost:1884")),
-            tenant_id=body.get("tenant_id", self.simulation_config.get("tenant_id", "tenant-001")),
+            broker=_cfg("broker", "mqtt://localhost:1884"),
+            tenant_id=_cfg("tenant_id", "tenant-001"),
             devices=1,
         )
         device = VirtualDevice(rid, config)
@@ -686,9 +697,12 @@ class SimulatorAPI:
         from dm3_simulator.device import VirtualDevice
         from dm3_simulator.models import SimulationConfig, ProvisioningStatus
 
+        def _cfg(key: str, default: str) -> str:
+            return body.get(key) or self.simulation_config.get(key) or default
+
         config = SimulationConfig(
-            broker=body.get("broker", self.simulation_config.get("broker", "mqtt://localhost:1884")),
-            tenant_id=body.get("tenant_id", self.simulation_config.get("tenant_id", "tenant-001")),
+            broker=_cfg("broker", "mqtt://localhost:1884"),
+            tenant_id=_cfg("tenant_id", "tenant-001"),
             device_type=body.get("device_type", "terminal"),
             devices=1,
         )
