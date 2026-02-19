@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Building2, Settings, LogOut, Smartphone } from 'lucide-react';
+import { Building2, Settings, LogOut, Smartphone, HardDrive } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { fetchPendingDevices } from '@/lib/api';
 
 const navItems = [
   { to: '/system/companies', icon: Building2, label: 'Companies' },
   { to: '/system/devices/pending', icon: Smartphone, label: 'Pending Devices', badge: true },
+  { to: '/system/devices', icon: HardDrive, label: 'All Devices' },
   { to: '/system/settings', icon: Settings, label: 'Settings' },
 ];
 

@@ -321,6 +321,13 @@ export async function suspendCompany(id: string): Promise<void> {
   await apiFetch<void>(`${SYSTEM_URL}/companies/${id}`, { method: 'DELETE' });
 }
 
+// ─── System Admin Device APIs ────────────────────────────────
+
+export async function fetchSystemDevices(params?: Record<string, string>): Promise<any[]> {
+  const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+  return apiFetch<any[]>(`${SYSTEM_URL}/devices${qs}`);
+}
+
 // ─── Device Provisioning API (device-gateway :8002) ─────────
 
 export interface ProvisionRequest {

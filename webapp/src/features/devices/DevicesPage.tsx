@@ -1,13 +1,9 @@
 import { useState, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { DataTable, type Column } from '@/components/common/DataTable';
-import { fetchDevices, fetchPendingDevices, type DeviceDTO } from '@/lib/api';
-import { PendingDevicesPage } from './PendingDevicesPage';
+import { fetchDevices, type DeviceDTO } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
-import { cn } from '@/lib/utils';
-
-const tabs = ['Devices', 'Pending'] as const;
 
 const statusColors: Record<string, string> = {
   online: 'bg-[#22C55E]/10 text-[#22C55E]',
@@ -18,16 +14,11 @@ const statusColors: Record<string, string> = {
 };
 
 export function DevicesPage() {
-  const [activeTab, setActiveTab] = useState<typeof tabs[number]>('Devices');
   const [devices, setDevices] = useState<DeviceDTO[]>([]);
-  const [pendingCount, setPendingCount] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
-    Promise.all([
-      fetchDevices().then(setDevices).catch(() => {}),
-      fetchPendingDevices().then((p) => setPendingCount(p.length)).catch(() => {}),
-    ]);
+    fetchDevices().then(setDevices).catch(() => {});
   }, []);
 
   const columns: Column<DeviceDTO>[] = [
@@ -43,31 +34,13 @@ export function DevicesPage() {
 
   return (
     <div>
-      <PageHeader title="Devices" description={`${devices.length} devices registered`}>
+      <PageHeader title="Devices" description={`${devices.length} provisioned devices`}>
         <button onClick={() => navigate('/devices/provision')} className="flex items-center gap-1.5 px-3 py-2 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-md text-[13px] font-medium transition-colors">
           <Plus size={15} /> Add Device
         </button>
       </PageHeader>
 
-      <div className="flex border-b border-[#1E293B] mb-4">
-        {tabs.map((t) => (
-          <button key={t} onClick={() => setActiveTab(t)} className={cn(
-            'px-4 py-2 text-[13px] font-medium border-b-2 transition-colors',
-            activeTab === t ? 'text-[#F8FAFC] border-[#3B82F6]' : 'text-[#94A3B8] border-transparent hover:text-[#F8FAFC]'
-          )}>
-            {t}
-            {t === 'Pending' && pendingCount > 0 && (
-              <span className="ml-1.5 text-[11px] px-1.5 rounded-full text-[#3B82F6] bg-[#3B82F6]/20">{pendingCount}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === 'Devices' && (
-        <DataTable columns={columns} data={devices} rowKey={(r) => r.id} />
-      )}
-
-      {activeTab === 'Pending' && <PendingDevicesPage isSystemAdmin={false} />}
+      <DataTable columns={columns} data={devices} rowKey={(r) => r.id} />
     </div>
   );
 }

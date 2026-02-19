@@ -279,48 +279,59 @@ class SimulatorAPI:
         })
 
     async def start_simulation(self, request: web.Request) -> web.Response:
-        """Start simulation with config from request body."""
-        if self.simulation_running and self.devices:
-            return web.json_response({"status": "already_running", "devices": len(self.devices)})
-
+        """Create N unprovisioned devices (must go through bootstrap/QR to connect)."""
         body = await request.json() if request.body_exists else {}
         self.simulation_config = body
 
-        # Import here to avoid circular imports
         import asyncio
         from dm3_simulator.device import VirtualDevice
-        from dm3_simulator.models import SimulationConfig
+        from dm3_simulator.models import SimulationConfig, ProvisioningStatus
+
+        num_devices = body.get("num_devices", 10)
+
+        # Find next available registration ID
+        existing_rids = set()
+        for did in self.devices:
+            if did.isdigit():
+                existing_rids.add(int(did))
+        next_rid = 1
+        if existing_rids:
+            next_rid = max(existing_rids) + 1
 
         config = SimulationConfig(
-            broker=body.get("broker", "mqtt://localhost:1883"),
+            broker=body.get("broker", "mqtt://localhost:1884"),
             site_id=body.get("site_id", "site-001"),
             tenant_id=body.get("tenant_id", "tenant-001"),
-            devices=body.get("num_devices", 10),
+            devices=num_devices,
             mode=body.get("mode", "normal"),
             event_rate=body.get("event_rate", 1.0),
         )
 
         self.start_time = time.time()
+        created = []
 
-        for i in range(config.devices):
-            device_id = f"{config.device_prefix}-{i + 1:04d}"
-            door_ids = [f"{device_id}-door-{j + 1:03d}" for j in range(config.doors_per_device)]
-            device = VirtualDevice(device_id, config, door_ids)
-            self.devices[device_id] = device
+        for i in range(num_devices):
+            rid = f"{next_rid + i:06d}"
+            if rid in self.devices:
+                continue
+            device = VirtualDevice(rid, config)
+            device.provisioning_status = ProvisioningStatus.UNPROVISIONED
+            device.auto_trigger = False
+            device.event_callback = self.record_event
+            self.devices[rid] = device
+            # Initialize DB only (don't connect MQTT — must provision first)
+            await device.db.connect()
+            created.append(rid)
 
-        # Start devices in background (empty DB — data comes via server sync)
-        async def _start_devices() -> None:
-            for device_id, device in list(self.devices.items()):
-                try:
-                    await device.start()
-                except Exception as e:
-                    logger.error("device_start_error", device_id=device_id, error=str(e))
-                await asyncio.sleep(config.connect_delay)
-
-        asyncio.create_task(_start_devices())
         self.simulation_running = True
+        logger.info("created_unprovisioned_devices", count=len(created), rids=created[:5])
 
-        return web.json_response({"status": "starting", "devices": config.devices})
+        return web.json_response({
+            "status": "created",
+            "devices": len(created),
+            "device_ids": created,
+            "message": f"Created {len(created)} unprovisioned devices. Use Bootstrap or QR to provision.",
+        })
 
     async def stop_simulation(self, request: web.Request) -> web.Response:
         """Stop all simulated devices."""
