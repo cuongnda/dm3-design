@@ -577,9 +577,13 @@ class SimulatorAPI:
         from dm3_simulator.device import VirtualDevice
         from dm3_simulator.models import SimulationConfig, ProvisioningStatus
 
-        # Create config matching current simulation but don't auto-start
+        # Create config matching current simulation — inherit broker from existing devices
+        existing_broker = "mqtt://localhost:1884"
+        if self.devices:
+            first_dev = next(iter(self.devices.values()))
+            existing_broker = first_dev.config.broker
         config = SimulationConfig(
-            broker=body.get("broker", self.simulation_config.get("broker", "mqtt://localhost:1884")),
+            broker=body.get("broker", self.simulation_config.get("broker", existing_broker)),
             tenant_id=body.get("tenant_id", self.simulation_config.get("tenant_id", "tenant-001")),
             site_id=body.get("site_id", self.simulation_config.get("site_id", "site-001")),
             device_type=body.get("device_type", "terminal"),
