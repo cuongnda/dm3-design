@@ -108,6 +108,7 @@ async def _run_simulation(config: SimulationConfig) -> None:
     # Start devices with staggered connections
     for device_id, device in devices.items():
         try:
+            device.event_callback = api.record_event
             await device.start()
             # Seed with mock data
             persons = generate_mock_persons(config.persons)

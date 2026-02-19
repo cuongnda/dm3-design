@@ -51,6 +51,7 @@ class VirtualDevice:
         self.events_published = 0
         self.lockdown_active = False
         self.current_direction = "entry"
+        self.event_callback: Any = None  # Set by API to capture events
 
         # Components
         db_path = ":memory:" if config.db_mode == "memory" else f"/tmp/dm3-sim/{device_id}.db"
@@ -202,6 +203,20 @@ class VirtualDevice:
             await self.db.queue_event(msg.id, f"{self.mqtt.topic_prefix}/evt", payload)
 
         metrics.events_total.labels(type="access_log", decision=result).inc()
+
+        # Notify API event callback
+        if self.event_callback:
+            self.event_callback({
+                "device_id": self.device_id,
+                "door_id": door_id,
+                "decision": result,
+                "person_name": decision.person_name,
+                "credential_type": credential_type,
+                "reason": decision.reason,
+                "decision_time_ms": decision.decision_time_ms,
+                "timestamp": time.time(),
+            })
+
         return decision
 
     async def _on_message(self, topic: str, payload: dict[str, Any]) -> None:
