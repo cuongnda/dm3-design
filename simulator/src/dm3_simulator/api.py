@@ -40,6 +40,11 @@ class SimulatorAPI:
         self.app.router.add_get("/api/metrics", self.get_metrics)
         self.app.router.add_get("/metrics", self.get_metrics)
         self.app.router.add_get("/api/events/recent", self.get_recent_events)
+        self.app.router.add_get("/api/devices/{device_id}/persons", self.get_device_persons)
+        self.app.router.add_get("/api/devices/{device_id}/credentials", self.get_device_credentials)
+        self.app.router.add_get("/api/devices/{device_id}/rules", self.get_device_rules)
+        self.app.router.add_get("/api/devices/{device_id}/events-queue", self.get_device_events_queue)
+        self.app.router.add_get("/api/devices/{device_id}/config", self.get_device_config)
         self.app.router.add_get("/api/simulation/status", self.get_simulation_status)
         self.app.router.add_post("/api/simulation/start", self.start_simulation)
         self.app.router.add_post("/api/simulation/stop", self.stop_simulation)
@@ -242,6 +247,100 @@ class SimulatorAPI:
         if not index_path.exists():
             return web.Response(text="Dashboard not found", status=404)
         return web.FileResponse(index_path)
+
+    async def get_device_persons(self, request: web.Request) -> web.Response:
+        """Get persons stored in a device's local DB."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+        limit = int(request.query.get("limit", "50"))
+        offset = int(request.query.get("offset", "0"))
+        async with device.db.db.execute(
+            "SELECT person_id, name, department, status, valid_from, valid_until FROM persons LIMIT ? OFFSET ?",
+            (limit, offset),
+        ) as cursor:
+            rows = await cursor.fetchall()
+        async with device.db.db.execute("SELECT COUNT(*) FROM persons") as cursor:
+            total = (await cursor.fetchone())[0]
+        persons = [
+            {"person_id": r[0], "name": r[1], "department": r[2], "status": r[3], "valid_from": r[4], "valid_until": r[5]}
+            for r in rows
+        ]
+        return web.json_response({"persons": persons, "total": total})
+
+    async def get_device_credentials(self, request: web.Request) -> web.Response:
+        """Get credentials stored in a device's local DB."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+        async with device.db.db.execute(
+            "SELECT person_id, type, value, status FROM credentials LIMIT 100"
+        ) as cursor:
+            rows = await cursor.fetchall()
+        creds = [{"person_id": r[0], "type": r[1], "value": r[2][:20] + "..." if len(r[2]) > 20 else r[2], "status": r[3]} for r in rows]
+        return web.json_response({"credentials": creds, "count": len(creds)})
+
+    async def get_device_rules(self, request: web.Request) -> web.Response:
+        """Get access rules stored in a device's local DB."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+        async with device.db.db.execute(
+            "SELECT rule_id, name, priority, enabled FROM access_rules"
+        ) as cursor:
+            rows = await cursor.fetchall()
+        rules = [{"rule_id": r[0], "name": r[1], "priority": r[2], "enabled": bool(r[3])} for r in rows]
+        # Get schedules and doors for each rule
+        for rule in rules:
+            async with device.db.db.execute(
+                "SELECT day_of_week, start_time, end_time FROM access_rule_schedules WHERE rule_id = ?",
+                (rule["rule_id"],),
+            ) as cursor:
+                scheds = await cursor.fetchall()
+            rule["schedules"] = [{"day": s[0], "start": s[1], "end": s[2]} for s in scheds]
+            async with device.db.db.execute(
+                "SELECT door_id FROM access_rule_doors WHERE rule_id = ?",
+                (rule["rule_id"],),
+            ) as cursor:
+                doors = await cursor.fetchall()
+            rule["doors"] = [d[0] for d in doors]
+        return web.json_response({"rules": rules, "count": len(rules)})
+
+    async def get_device_events_queue(self, request: web.Request) -> web.Response:
+        """Get pending events in device's offline queue."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+        events = await device.db.get_pending_events(limit=50)
+        return web.json_response({"events": events, "count": len(events)})
+
+    async def get_device_config(self, request: web.Request) -> web.Response:
+        """Get device configuration and sync state."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+        config = {
+            "device_id": device.device_id,
+            "site_id": device.site_id,
+            "tenant_id": device.tenant_id,
+            "doors": device.door_ids,
+            "state": device.state.value,
+            "mqtt_connected": device.mqtt.connected,
+            "events_published": device.events_published,
+            "uptime_s": int(time.time() - device.start_time),
+            "lockdown_active": device.lockdown_active,
+            "person_count": await device.db.get_person_count(),
+        }
+        # Sync state
+        async with device.db.db.execute("SELECT key, value FROM sync_state") as cursor:
+            rows = await cursor.fetchall()
+        config["sync_state"] = {r[0]: r[1] for r in rows}
+        return web.json_response(config)
 
     def record_event(self, event: dict[str, Any]) -> None:
         """Record an event for the recent events feed."""

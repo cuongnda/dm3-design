@@ -26,6 +26,8 @@
   .btn-red { background: #DC2626; } .btn-red:hover { background: #B91C1C; }
   .btn-blue { background: #2563EB; } .btn-blue:hover { background: #1D4ED8; }
   .pulse { animation: pulse 2s infinite; }
+  .tab-btn { transition: all 0.15s; cursor: pointer; }
+  .tab-btn:hover { color: #93C5FD; }
   @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
 </style>
 </head>
@@ -121,6 +123,31 @@
   </div>
 </div>
 
+<!-- Device Detail Modal -->
+<div id="device-modal" class="fixed inset-0 bg-black/70 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeDeviceModal()">
+  <div class="card w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between p-4 border-b border-gray-700">
+      <h2 class="text-lg font-bold text-white">🔍 Device <span id="dm-device-id" class="text-blue-400 font-mono"></span></h2>
+      <div class="flex gap-2">
+        <button onclick="triggerDeviceFromModal()" class="btn-blue text-white px-3 py-1 rounded text-sm">⚡ Trigger Event</button>
+        <button onclick="closeDeviceModal()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+      </div>
+    </div>
+    <!-- Tabs -->
+    <div class="flex border-b border-gray-700 px-4 gap-1">
+      <button onclick="showTab('config')" class="tab-btn px-3 py-2 text-sm" id="tab-config">⚙️ Config</button>
+      <button onclick="showTab('persons')" class="tab-btn px-3 py-2 text-sm" id="tab-persons">👥 Persons</button>
+      <button onclick="showTab('credentials')" class="tab-btn px-3 py-2 text-sm" id="tab-credentials">🔑 Credentials</button>
+      <button onclick="showTab('rules')" class="tab-btn px-3 py-2 text-sm" id="tab-rules">📋 Rules</button>
+      <button onclick="showTab('queue')" class="tab-btn px-3 py-2 text-sm" id="tab-queue">📤 Event Queue</button>
+    </div>
+    <!-- Tab Content -->
+    <div class="flex-1 overflow-y-auto p-4" id="dm-content">
+      <div class="text-gray-500">Loading...</div>
+    </div>
+  </div>
+</div>
+
 <footer class="text-center text-gray-600 text-xs py-4">DM3 Simulator v0.1 • DUALI</footer>
 
 <script>
@@ -205,7 +232,7 @@ async function poll() {
       grid.innerHTML = '<div class="text-gray-500 text-sm p-4 col-span-full">No devices running. Click Start to begin.</div>';
     } else {
       grid.innerHTML = devices.map(d => `
-        <div class="device-card card p-2 text-xs" onclick="triggerDevice('${d.device_id}')">
+        <div class="device-card card p-2 text-xs" onclick="openDeviceModal('${d.device_id}')">
           <div class="flex items-center gap-1 mb-1">
             <span class="dot dot-${stateClass(d.state)}"></span>
             <span class="font-mono text-white truncate">${d.device_id}</span>
@@ -261,6 +288,170 @@ async function poll() {
       feed.scrollTop = 0;
     }
   }
+}
+
+// === Device Detail Modal ===
+let currentDeviceId = null;
+let currentTab = 'config';
+
+function openDeviceModal(deviceId) {
+  currentDeviceId = deviceId;
+  document.getElementById('dm-device-id').textContent = deviceId;
+  document.getElementById('device-modal').classList.remove('hidden');
+  document.getElementById('device-modal').classList.add('flex');
+  showTab('config');
+}
+
+function closeDeviceModal() {
+  document.getElementById('device-modal').classList.add('hidden');
+  document.getElementById('device-modal').classList.remove('flex');
+  currentDeviceId = null;
+}
+
+async function triggerDeviceFromModal() {
+  if (!currentDeviceId) return;
+  await fetch(`/api/devices/${currentDeviceId}/trigger`, { method: 'POST' });
+  showTab(currentTab); // refresh
+}
+
+function showTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.remove('text-blue-400', 'border-b-2', 'border-blue-400');
+    b.classList.add('text-gray-400');
+  });
+  const btn = document.getElementById('tab-' + tab);
+  btn.classList.add('text-blue-400', 'border-b-2', 'border-blue-400');
+  btn.classList.remove('text-gray-400');
+  loadTabContent(tab);
+}
+
+async function loadTabContent(tab) {
+  const el = document.getElementById('dm-content');
+  el.innerHTML = '<div class="text-gray-500">Loading...</div>';
+  
+  if (tab === 'config') {
+    const data = await fetchJSON(`/api/devices/${currentDeviceId}/config`);
+    if (!data) { el.innerHTML = '<div class="text-red-400">Failed to load</div>'; return; }
+    el.innerHTML = `
+      <div class="grid grid-cols-2 gap-4 text-sm">
+        <div class="space-y-3">
+          <h3 class="text-white font-semibold">Device Info</h3>
+          ${cfgRow('Device ID', data.device_id)}
+          ${cfgRow('Site ID', data.site_id)}
+          ${cfgRow('Tenant ID', data.tenant_id)}
+          ${cfgRow('State', `<span class="status-${data.state}">${data.state.toUpperCase()}</span>`)}
+          ${cfgRow('MQTT', data.mqtt_connected ? '<span class="text-green-400">Connected</span>' : '<span class="text-red-400">Disconnected</span>')}
+          ${cfgRow('Lockdown', data.lockdown_active ? '<span class="text-red-400">ACTIVE</span>' : '<span class="text-gray-400">No</span>')}
+        </div>
+        <div class="space-y-3">
+          <h3 class="text-white font-semibold">Statistics</h3>
+          ${cfgRow('Doors', data.doors?.join(', '))}
+          ${cfgRow('Person Count', data.person_count)}
+          ${cfgRow('Events Published', data.events_published)}
+          ${cfgRow('Uptime', formatUptime(data.uptime_s))}
+        </div>
+      </div>
+      ${data.sync_state && Object.keys(data.sync_state).length ? `
+        <div class="mt-4">
+          <h3 class="text-white font-semibold text-sm mb-2">Sync State</h3>
+          <div class="bg-gray-800 rounded p-3 text-xs font-mono space-y-1">
+            ${Object.entries(data.sync_state).map(([k,v]) => `<div><span class="text-gray-400">${k}:</span> <span class="text-white">${v}</span></div>`).join('')}
+          </div>
+        </div>` : ''}`;
+  }
+  
+  else if (tab === 'persons') {
+    const data = await fetchJSON(`/api/devices/${currentDeviceId}/persons?limit=50`);
+    if (!data) { el.innerHTML = '<div class="text-red-400">Failed to load</div>'; return; }
+    el.innerHTML = `
+      <div class="text-sm text-gray-400 mb-3">Total: <span class="text-white font-bold">${data.total}</span> persons in local DB</div>
+      <table class="w-full text-xs">
+        <thead><tr class="text-left text-gray-400 border-b border-gray-700">
+          <th class="pb-2 pr-3">Name</th>
+          <th class="pb-2 pr-3">Department</th>
+          <th class="pb-2 pr-3">Status</th>
+          <th class="pb-2 pr-3">Valid From</th>
+          <th class="pb-2">Valid Until</th>
+        </tr></thead>
+        <tbody>
+          ${data.persons.map(p => `<tr class="border-b border-gray-800 hover:bg-gray-800/50">
+            <td class="py-1.5 pr-3 text-white">${p.name || '—'}</td>
+            <td class="py-1.5 pr-3 text-gray-300">${p.department || '—'}</td>
+            <td class="py-1.5 pr-3"><span class="${p.status==='active'?'text-green-400':'text-red-400'}">${p.status}</span></td>
+            <td class="py-1.5 pr-3 text-gray-400 font-mono">${p.valid_from || '—'}</td>
+            <td class="py-1.5 text-gray-400 font-mono">${p.valid_until || '—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+  
+  else if (tab === 'credentials') {
+    const data = await fetchJSON(`/api/devices/${currentDeviceId}/credentials`);
+    if (!data) { el.innerHTML = '<div class="text-red-400">Failed to load</div>'; return; }
+    el.innerHTML = `
+      <div class="text-sm text-gray-400 mb-3">Total: <span class="text-white font-bold">${data.count}</span> credentials</div>
+      <table class="w-full text-xs">
+        <thead><tr class="text-left text-gray-400 border-b border-gray-700">
+          <th class="pb-2 pr-3">Person ID</th>
+          <th class="pb-2 pr-3">Type</th>
+          <th class="pb-2 pr-3">Value</th>
+          <th class="pb-2">Status</th>
+        </tr></thead>
+        <tbody>
+          ${data.credentials.map(c => `<tr class="border-b border-gray-800 hover:bg-gray-800/50">
+            <td class="py-1.5 pr-3 font-mono text-blue-300">${c.person_id?.slice(0,8)}...</td>
+            <td class="py-1.5 pr-3"><span class="px-1.5 py-0.5 rounded text-xs ${c.type==='card'?'bg-blue-900 text-blue-300':c.type==='face'?'bg-purple-900 text-purple-300':'bg-gray-700 text-gray-300'}">${c.type}</span></td>
+            <td class="py-1.5 pr-3 font-mono text-gray-300">${c.value}</td>
+            <td class="py-1.5"><span class="${c.status==='active'?'text-green-400':'text-red-400'}">${c.status}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+  
+  else if (tab === 'rules') {
+    const data = await fetchJSON(`/api/devices/${currentDeviceId}/rules`);
+    if (!data) { el.innerHTML = '<div class="text-red-400">Failed to load</div>'; return; }
+    el.innerHTML = `
+      <div class="text-sm text-gray-400 mb-3">Total: <span class="text-white font-bold">${data.count}</span> access rules</div>
+      <div class="space-y-3">
+        ${data.rules.map(r => `
+          <div class="bg-gray-800 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-white font-medium">${r.name}</span>
+              <div class="flex gap-2 items-center">
+                <span class="text-xs text-gray-400">Priority: ${r.priority}</span>
+                <span class="px-2 py-0.5 rounded text-xs ${r.enabled?'bg-green-900 text-green-300':'bg-red-900 text-red-300'}">${r.enabled?'Enabled':'Disabled'}</span>
+              </div>
+            </div>
+            <div class="text-xs space-y-1">
+              <div class="text-gray-400">🚪 Doors: <span class="text-gray-300">${r.doors?.join(', ') || 'None'}</span></div>
+              ${r.schedules?.length ? `<div class="text-gray-400">🕐 Schedules: ${r.schedules.map(s => 
+                `<span class="text-gray-300">Day ${s.day} ${s.start}-${s.end}</span>`
+              ).join(', ')}</div>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>`;
+  }
+  
+  else if (tab === 'queue') {
+    const data = await fetchJSON(`/api/devices/${currentDeviceId}/events-queue`);
+    if (!data) { el.innerHTML = '<div class="text-red-400">Failed to load</div>'; return; }
+    if (data.count === 0) {
+      el.innerHTML = '<div class="text-gray-500 text-sm">📤 Event queue is empty — all events have been published to MQTT.</div>';
+    } else {
+      el.innerHTML = `
+        <div class="text-sm text-gray-400 mb-3">⚠️ <span class="text-yellow-400 font-bold">${data.count}</span> events pending in offline queue</div>
+        <div class="space-y-1 text-xs">
+          ${data.events.map(e => `<div class="bg-gray-800 rounded px-3 py-2 font-mono text-gray-300">${JSON.stringify(e).slice(0,120)}...</div>`).join('')}
+        </div>`;
+    }
+  }
+}
+
+function cfgRow(label, value) {
+  return `<div class="flex justify-between"><span class="text-gray-400">${label}</span><span class="text-white">${value ?? '—'}</span></div>`;
 }
 
 // Start polling
