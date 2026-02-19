@@ -33,7 +33,7 @@ def cli() -> None:
 
 
 @cli.command()
-@click.option("--devices", default=10, help="Number of virtual devices")
+@click.option("--devices", default=0, help="Number of virtual devices to auto-create (0 = empty, use dashboard)")
 @click.option("--broker", default="mqtt://localhost:1883", help="MQTT broker URL")
 @click.option("--tenant-id", default="tenant-001", help="Tenant ID")
 @click.option("--site-id", default="site-001", help="Site ID")
@@ -89,29 +89,41 @@ async def _run_simulation(config: SimulationConfig) -> None:
     start_time = time.time()
     devices: dict[str, VirtualDevice] = {}
 
-    # Create virtual devices
-    for i in range(config.devices):
-        device_id = f"{i + 1:06d}"
-        door_ids = [f"{device_id}-door-{j + 1:03d}" for j in range(config.doors_per_device)]
-        device = VirtualDevice(device_id, config, door_ids)
-        devices[device_id] = device
-
-    # Start REST API
+    # Start REST API (no devices by default — create via dashboard)
     api = SimulatorAPI(devices, start_time)
+    api.simulation_config = {
+        "broker": config.broker,
+        "tenant_id": config.tenant_id,
+        "site_id": config.site_id,
+        "heartbeat_interval": config.heartbeat_interval,
+        "event_rate": config.event_rate,
+        "mode": config.mode,
+    }
+    api._config = config  # Store config for new device creation
     runner = web.AppRunner(api.app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", config.api_port)
     await site.start()
-    logger.info("api_started", port=config.api_port)
+    logger.info("api_started", port=config.api_port, devices=config.devices)
 
-    # Start devices with staggered connections (empty DB — data comes via server sync)
-    for device_id, device in devices.items():
-        try:
-            device.event_callback = api.record_event
-            await device.start()
-            logger.info("device_started_empty", device_id=device_id, msg="empty DB, waiting for server sync")
-        except Exception as e:
-            logger.error("device_start_error", device_id=device_id, error=str(e))
+    # Only auto-create devices if --devices > 0
+    if config.devices > 0:
+        for i in range(config.devices):
+            device_id = f"{i + 1:06d}"
+            door_ids = [f"{device_id}-door-{j + 1:03d}" for j in range(config.doors_per_device)]
+            device = VirtualDevice(device_id, config, door_ids)
+            devices[device_id] = device
+
+        for device_id, device in devices.items():
+            try:
+                device.event_callback = api.record_event
+                await device.start()
+                logger.info("device_started_empty", device_id=device_id, msg="empty DB, waiting for server sync")
+            except Exception as e:
+                logger.error("device_start_error", device_id=device_id, error=str(e))
+        logger.info("all_devices_started", count=len(devices))
+    else:
+        logger.info("simulator_ready", msg="No devices. Use dashboard to create and register devices.")
 
         await asyncio.sleep(config.connect_delay)
 

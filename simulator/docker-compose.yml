@@ -28,7 +28,7 @@ services:
     depends_on:
       emqx:
         condition: service_healthy
-    command: run --devices 10 --broker mqtt://emqx:1883 --site-id site-001
+    command: run --devices 0 --broker mqtt://emqx:1883 --site-id site-001 --tenant-id 00000000-0000-0000-0000-000000000001
     restart: unless-stopped
     environment:
       - DM3_BROKER_URL=mqtt://emqx:1883
