@@ -27,6 +27,7 @@ object Routes {
     const val FACE_RECOGNITION_SETTINGS = "face_recognition_settings"
     const val USER_MANAGEMENT = "user_management"
     const val FACE_ENROLLMENT = "face_enrollment"
+    const val ACTIVATE_DEVICE = "activate_device"
 
     fun granted(personName: String) = "granted/$personName"
     fun denied(reason: String) = "denied/$reason"
@@ -145,6 +146,7 @@ fun DM3NavHost(mqttService: MqttService? = null) {
                 onDeviceConfig = { navController.navigate(Routes.DEVICE_CONFIG) },
                 onFaceRecognition = { navController.navigate(Routes.FACE_RECOGNITION_SETTINGS) },
                 onUserManagement = { navController.navigate(Routes.USER_MANAGEMENT) },
+                onActivateDevice = { navController.navigate(Routes.ACTIVATE_DEVICE) },
                 onBack = { navigateToIdle() },
             )
         }
@@ -163,6 +165,13 @@ fun DM3NavHost(mqttService: MqttService? = null) {
 
         composable(Routes.FACE_ENROLLMENT) {
             FaceEnrollmentScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.ACTIVATE_DEVICE) {
+            ActivateDeviceScreen(
+                onBack = { navController.popBackStack() },
+                onActivated = { navigateToIdle() },
+            )
         }
     }
 }

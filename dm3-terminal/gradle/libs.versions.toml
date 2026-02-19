@@ -11,6 +11,8 @@ cameraX = "1.4.1"
 mlkitFace = "16.1.7"
 pahoMqtt = "1.2.5"
 pahoMqttAndroid = "1.1.1"
+mlkitBarcode = "17.3.0"
+securityCrypto = "1.1.0-alpha06"
 coreKtx = "1.15.0"
 lifecycleRuntime = "2.8.7"
 activityCompose = "1.9.3"
@@ -52,6 +54,8 @@ camerax-view = { group = "androidx.camera", name = "camera-view", version.ref = 
 
 # ML Kit
 mlkit-face = { group = "com.google.mlkit", name = "face-detection", version.ref = "mlkitFace" }
+mlkit-barcode = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcode" }
+security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 
 # MQTT
 paho-mqtt = { group = "org.eclipse.paho", name = "org.eclipse.paho.client.mqttv3", version.ref = "pahoMqtt" }

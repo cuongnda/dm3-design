@@ -89,6 +89,17 @@ const AutomationPage = lazy(() =>
   import('@/features/smart/automation/AutomationPage').then((m) => ({ default: m.AutomationPage }))
 );
 
+// DEVICES
+const DevicesPage = lazy(() =>
+  import('@/features/devices/DevicesPage').then((m) => ({ default: m.DevicesPage }))
+);
+const ProvisionDevicePage = lazy(() =>
+  import('@/features/devices/ProvisionDevicePage').then((m) => ({ default: m.ProvisionDevicePage }))
+);
+const PendingDevicesPage = lazy(() =>
+  import('@/features/devices/PendingDevicesPage').then((m) => ({ default: m.PendingDevicesPage }))
+);
+
 // SETTINGS
 const SettingsPage = lazy(() =>
   import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage }))
@@ -126,6 +137,7 @@ export const router = createBrowserRouter([
       { path: 'companies', element: <CompanyListPage /> },
       { path: 'companies/new', element: <CreateCompanyPage /> },
       { path: 'companies/:id', element: <CompanyDetailPage /> },
+      { path: 'devices/pending', element: <LazyWrap><PendingDevicesPage isSystemAdmin={true} /></LazyWrap> },
       { path: 'settings', element: <PlaceholderPage title="System Settings" /> },
     ],
   },
@@ -167,6 +179,10 @@ export const router = createBrowserRouter([
       { path: 'smart/ai-assistant', element: <LazyWrap><AIAssistantPage /></LazyWrap> },
       { path: 'smart/analytics', element: <LazyWrap><AnalyticsPage /></LazyWrap> },
       { path: 'smart/automation', element: <LazyWrap><AutomationPage /></LazyWrap> },
+
+      // DEVICES
+      { path: 'devices', element: <LazyWrap><DevicesPage /></LazyWrap> },
+      { path: 'devices/provision', element: <LazyWrap><ProvisionDevicePage /></LazyWrap> },
 
       // SETTINGS
       { path: 'settings', element: <LazyWrap><SettingsPage /></LazyWrap> },

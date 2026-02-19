@@ -283,6 +283,85 @@ export async function suspendCompany(id: string): Promise<void> {
   await apiFetch<void>(`${SYSTEM_URL}/companies/${id}`, { method: 'DELETE' });
 }
 
+// ─── Device Provisioning API (device-gateway :8002) ─────────
+
+export interface ProvisionRequest {
+  device_id: string;
+  name: string;
+  type: string;
+  company_id?: string;
+  site_id?: string;
+  location?: string;
+}
+
+export interface ProvisionResponse {
+  device: {
+    id: string;
+    device_id: string;
+    name: string;
+    type: string;
+    status: string;
+    company_id: string;
+  };
+  provisioning: {
+    qr_token: string;
+    qr_data: string;
+    expires_at: string;
+    ttl_minutes: number;
+  };
+}
+
+export interface PendingDevice {
+  id: string;
+  rid: string;
+  device_type: string;
+  firmware_version?: string;
+  hardware_fingerprint?: {
+    android_id?: string;
+    mac_address?: string;
+    model?: string;
+    app_signature_hash?: string;
+  };
+  signature_verified?: boolean;
+  status: string;
+  created_at: string;
+}
+
+export interface ApproveRequest {
+  company_id: string;
+  name: string;
+  location?: string;
+}
+
+export async function provisionDevice(data: ProvisionRequest): Promise<ProvisionResponse> {
+  return apiFetch<ProvisionResponse>(`${DEVICE_URL}/provision`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function regenerateQR(deviceDbId: string): Promise<ProvisionResponse> {
+  return apiFetch<ProvisionResponse>(`${DEVICE_URL}/provision/${deviceDbId}/qr`);
+}
+
+export async function fetchPendingDevices(): Promise<PendingDevice[]> {
+  const res = await apiFetch<{ data: PendingDevice[] } | PendingDevice[]>(`${DEVICE_URL}/pending`);
+  return Array.isArray(res) ? res : res.data;
+}
+
+export async function approvePendingDevice(id: string, data: ApproveRequest): Promise<void> {
+  await apiFetch<void>(`${DEVICE_URL}/pending/${id}/approve`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function rejectPendingDevice(id: string): Promise<void> {
+  await apiFetch<void>(`${DEVICE_URL}/pending/${id}/reject`, {
+    method: 'POST',
+  });
+}
+
 // ─── JWT Helper ─────────────────────────────────────────────
 
 export function decodeJWT(token: string): Record<string, unknown> {

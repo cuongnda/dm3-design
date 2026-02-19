@@ -22,6 +22,7 @@ fun SettingsMenuScreen(
     onDeviceConfig: () -> Unit,
     onFaceRecognition: () -> Unit,
     onUserManagement: () -> Unit,
+    onActivateDevice: () -> Unit = {},
     onAccessLogs: () -> Unit = {},
     onSyncDatabase: () -> Unit = {},
     onBack: () -> Unit,
@@ -68,6 +69,8 @@ fun SettingsMenuScreen(
                 SettingsMenuItem(icon = "👥", label = "User Management", onClick = onUserManagement)
                 CardDivider()
                 SettingsMenuItem(icon = "📊", label = "Access Logs", onClick = onAccessLogs)
+                CardDivider()
+                SettingsMenuItem(icon = "📱", label = "Activate Device (QR)", onClick = onActivateDevice)
                 CardDivider()
                 SettingsMenuItem(icon = "🔄", label = "Sync Database", onClick = {
                     viewModel.seedData()

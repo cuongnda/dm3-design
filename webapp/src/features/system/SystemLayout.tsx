@@ -1,9 +1,12 @@
+import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Building2, Settings, LogOut } from 'lucide-react';
+import { Building2, Settings, LogOut, Smartphone } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { fetchPendingDevices } from '@/lib/api';
 
 const navItems = [
   { to: '/system/companies', icon: Building2, label: 'Companies' },
+  { to: '/system/devices/pending', icon: Smartphone, label: 'Pending Devices', badge: true },
   { to: '/system/settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -11,6 +14,15 @@ export function SystemLayout() {
   const logout = useAuthStore((s) => s.logout);
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    fetchPendingDevices().then((d) => setPendingCount(d.length)).catch(() => {});
+    const iv = setInterval(() => {
+      fetchPendingDevices().then((d) => setPendingCount(d.length)).catch(() => {});
+    }, 30000);
+    return () => clearInterval(iv);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -30,7 +42,7 @@ export function SystemLayout() {
         </div>
 
         <nav className="flex-1 py-3 px-2 space-y-0.5">
-          {navItems.map(({ to, icon: Icon, label }) => (
+          {navItems.map(({ to, icon: Icon, label, badge }) => (
             <NavLink
               key={to}
               to={to}
@@ -44,6 +56,9 @@ export function SystemLayout() {
             >
               <Icon size={16} />
               {label}
+              {badge && pendingCount > 0 && (
+                <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-[#F97316] text-white font-medium">{pendingCount}</span>
+              )}
             </NavLink>
           ))}
         </nav>

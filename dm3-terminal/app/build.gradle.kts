@@ -79,6 +79,12 @@ dependencies {
     // ML Kit Face (dep only)
     implementation(libs.mlkit.face)
 
+    // ML Kit Barcode scanning (QR provisioning)
+    implementation(libs.mlkit.barcode)
+
+    // Security - EncryptedSharedPreferences
+    implementation(libs.security.crypto)
+
     // MQTT (dep only)
     implementation(libs.paho.mqtt)
 }

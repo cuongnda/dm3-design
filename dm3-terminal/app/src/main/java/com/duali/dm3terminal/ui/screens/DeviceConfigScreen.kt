@@ -1,11 +1,13 @@
 package com.duali.dm3terminal.ui.screens
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -14,30 +16,210 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import com.duali.dm3terminal.data.DeviceConfig
+import com.duali.dm3terminal.data.DeviceCredentials
 import com.duali.dm3terminal.data.DevicePreferences
+import com.duali.dm3terminal.data.ProvisioningCredentials
 import com.duali.dm3terminal.mqtt.MqttConnectionState
 import com.duali.dm3terminal.mqtt.MqttService
 import com.duali.dm3terminal.ui.components.*
 import com.duali.dm3terminal.ui.theme.*
+import com.duali.dm3terminal.util.HardwareFingerprint
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import org.eclipse.paho.client.mqttv3.*
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
+import org.json.JSONObject
+import java.util.UUID
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 import javax.inject.Inject
+
+sealed class BootstrapState {
+    data object Idle : BootstrapState()
+    data object Connecting : BootstrapState()
+    data object WaitingApproval : BootstrapState()
+    data class Approved(val companyName: String) : BootstrapState()
+    data class Rejected(val message: String) : BootstrapState()
+    data class Error(val message: String) : BootstrapState()
+}
 
 @HiltViewModel
 class DeviceConfigViewModel @Inject constructor(
+    @ApplicationContext private val appContext: android.content.Context,
     private val devicePreferences: DevicePreferences,
     private val mqttService: MqttService,
+    private val provisioningCredentials: ProvisioningCredentials,
 ) : ViewModel() {
+    companion object {
+        private const val TAG = "DeviceConfigVM"
+        private const val BOOTSTRAP_SECRET = "dm3-bootstrap-v1-dev-secret"
+    }
+
     val config = devicePreferences.config
     val mqttState = mqttService.connectionState
 
+    private val _bootstrapState = MutableStateFlow<BootstrapState>(BootstrapState.Idle)
+    val bootstrapState: StateFlow<BootstrapState> = _bootstrapState.asStateFlow()
+
+    private var bootstrapClient: MqttAsyncClient? = null
+
     fun save(config: DeviceConfig) {
         devicePreferences.save(config)
+    }
+
+    fun startBootstrapRegistration() {
+        val cfg = config.value
+        val rid = cfg.deviceId
+        val brokerUrl = cfg.mqttBrokerUrl
+
+        _bootstrapState.value = BootstrapState.Connecting
+
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val timestampMinute = System.currentTimeMillis() / 60000
+                val hmacInput = "$rid:$timestampMinute"
+                val password = hmacSha256(hmacInput, BOOTSTRAP_SECRET)
+
+                val clientId = "dm3-bootstrap-$rid-${System.currentTimeMillis() % 10000}"
+                val client = MqttAsyncClient(brokerUrl, clientId, MemoryPersistence())
+
+                val options = MqttConnectOptions().apply {
+                    isCleanSession = true
+                    userName = "bootstrap:$rid"
+                    this.password = password.toCharArray()
+                    connectionTimeout = 10
+                    keepAliveInterval = 60
+                }
+
+                val responseTopic = "dm/bootstrap/$rid/response"
+
+                client.setCallback(object : MqttCallbackExtended {
+                    override fun connectComplete(reconnect: Boolean, serverURI: String?) {}
+                    override fun connectionLost(cause: Throwable?) {
+                        Log.w(TAG, "Bootstrap connection lost", cause)
+                        if (_bootstrapState.value is BootstrapState.WaitingApproval) {
+                            _bootstrapState.value = BootstrapState.Error("Connection lost")
+                        }
+                    }
+                    override fun messageArrived(topic: String, message: MqttMessage) {
+                        handleBootstrapResponse(topic, message)
+                    }
+                    override fun deliveryComplete(token: IMqttDeliveryToken?) {}
+                })
+
+                val connectToken = client.connect(options)
+                connectToken.waitForCompletion(10_000)
+                bootstrapClient = client
+
+                // Subscribe to response topic
+                client.subscribe(responseTopic, 1).waitForCompletion(5_000)
+
+                // Build registration payload
+                val fingerprint = HardwareFingerprint.toJson(appContext)
+                val nonce = UUID.randomUUID().toString()
+                val timestamp = System.currentTimeMillis() / 1000
+
+                val payload = JSONObject().apply {
+                    put("type", "device.register")
+                    put("rid", rid)
+                    put("device_type", "terminal")
+                    put("firmware_version", HardwareFingerprint.getFirmwareVersion(appContext))
+                    put("hardware_fingerprint", fingerprint)
+                    put("timestamp", timestamp)
+                    put("nonce", nonce)
+                }
+                // HMAC over the payload
+                payload.put("hmac", hmacSha256(payload.toString(), BOOTSTRAP_SECRET))
+
+                client.publish(
+                    "dm/bootstrap/register",
+                    MqttMessage(payload.toString().toByteArray()).apply { qos = 1 }
+                ).waitForCompletion(5_000)
+
+                _bootstrapState.value = BootstrapState.WaitingApproval
+                Log.i(TAG, "Bootstrap registration sent for RID=$rid")
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Bootstrap registration failed", e)
+                _bootstrapState.value = BootstrapState.Error(e.message ?: "Connection failed")
+            }
+        }
+    }
+
+    private fun handleBootstrapResponse(topic: String, message: MqttMessage) {
+        try {
+            val json = JSONObject(String(message.payload))
+            val type = json.optString("type")
+            Log.i(TAG, "Bootstrap response: $type")
+
+            when (type) {
+                "device.register_ack" -> {
+                    _bootstrapState.value = BootstrapState.WaitingApproval
+                }
+                "device.approved" -> {
+                    val creds = json.getJSONObject("credentials")
+                    val company = json.getJSONObject("company")
+
+                    provisioningCredentials.save(
+                        DeviceCredentials(
+                            mqttBrokerUrl = config.value.mqttBrokerUrl,
+                            mqttUsername = creds.optString("mqtt_username"),
+                            mqttToken = creds.optString("mqtt_token"),
+                            tokenExpiresAt = creds.optString("token_expires_at"),
+                            refreshUrl = creds.optString("refresh_url"),
+                            companyId = company.optString("id"),
+                            companyName = company.optString("name"),
+                            companyCode = company.optString("code", ""),
+                            isProvisioned = true,
+                        )
+                    )
+
+                    _bootstrapState.value = BootstrapState.Approved(company.optString("name"))
+                    disconnectBootstrap()
+                }
+                "device.rejected" -> {
+                    _bootstrapState.value = BootstrapState.Rejected(
+                        json.optString("message", "Registration rejected")
+                    )
+                    disconnectBootstrap()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse bootstrap response", e)
+        }
+    }
+
+    private fun disconnectBootstrap() {
+        try { bootstrapClient?.disconnect() } catch (_: Exception) {}
+        bootstrapClient = null
+    }
+
+    fun resetBootstrap() {
+        disconnectBootstrap()
+        _bootstrapState.value = BootstrapState.Idle
+    }
+
+    private fun hmacSha256(data: String, secret: String): String {
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(secret.toByteArray(), "HmacSHA256"))
+        return mac.doFinal(data.toByteArray()).joinToString("") { String.format("%02x", it) }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        disconnectBootstrap()
     }
 }
 
@@ -48,6 +230,7 @@ fun DeviceConfigScreen(
 ) {
     val config by viewModel.config.collectAsStateWithLifecycle()
     val mqttState by viewModel.mqttState.collectAsStateWithLifecycle()
+    val bootstrapState by viewModel.bootstrapState.collectAsStateWithLifecycle()
 
     var deviceId by remember(config) { mutableStateOf(config.deviceId) }
     var tenantId by remember(config) { mutableStateOf(config.tenantId) }
@@ -129,6 +312,110 @@ fun DeviceConfigScreen(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(16.dp),
                 )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Bootstrap Registration
+            GlassCard(title = "BOOTSTRAP REGISTRATION") {
+                when (val bs = bootstrapState) {
+                    is BootstrapState.Idle -> {
+                        Text(
+                            text = "Register this device via MQTT bootstrap. The admin will need to approve.",
+                            color = DM3Gray,
+                            fontSize = 13.sp,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Surface(
+                            onClick = { viewModel.startBootstrapRegistration() },
+                            color = DM3AccentBlue,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = "Register Device",
+                                color = DM3White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(16.dp),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                    is BootstrapState.Connecting -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                color = DM3AccentBlue,
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Connecting to bootstrap...", color = DM3White, fontSize = 14.sp)
+                        }
+                    }
+                    is BootstrapState.WaitingApproval -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                color = DM3Yellow,
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("⏳ Waiting for approval...", color = DM3Yellow, fontSize = 14.sp)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Ask your admin to approve this device in the management portal.",
+                            color = DM3Gray,
+                            fontSize = 12.sp,
+                        )
+                    }
+                    is BootstrapState.Approved -> {
+                        Text("✅ Approved — ${bs.companyName}", color = DM3Green, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Device credentials stored. Reconnecting...", color = DM3Gray, fontSize = 12.sp)
+                    }
+                    is BootstrapState.Rejected -> {
+                        Text("❌ Registration rejected", color = DM3Red, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(bs.message, color = DM3Gray, fontSize = 12.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Surface(
+                            onClick = { viewModel.resetBootstrap() },
+                            color = DM3AccentBlue,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = "Try Again",
+                                color = DM3White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(12.dp),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                    is BootstrapState.Error -> {
+                        Text("Error: ${bs.message}", color = DM3Red, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Surface(
+                            onClick = { viewModel.resetBootstrap() },
+                            color = DM3AccentBlue,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = "Try Again",
+                                color = DM3White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(12.dp),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
