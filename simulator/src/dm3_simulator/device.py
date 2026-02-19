@@ -53,6 +53,7 @@ class VirtualDevice:
         self.current_direction = "entry"
         self.event_callback: Any = None  # Set by API to capture events
         self._network_disabled = False
+        self.auto_trigger = True  # Auto-generate events in event loop
 
         # Components
         db_path = ":memory:" if config.db_mode == "memory" else f"/tmp/dm3-sim/{device_id}.db"
@@ -335,7 +336,7 @@ class VirtualDevice:
         """Generate simulated access events at configured rate."""
         while self._running:
             try:
-                if self.state in (DeviceState.READY, DeviceState.OFFLINE):
+                if self.auto_trigger and self.state in (DeviceState.READY, DeviceState.OFFLINE):
                     await self.trigger_access()
                     self.current_direction = random.choice(["entry", "exit"])
             except Exception as e:
@@ -381,5 +382,6 @@ class VirtualDevice:
             "uptime_s": int(time.time() - self.start_time),
             "lockdown_active": self.lockdown_active,
             "network_disabled": self.network_disabled,
+            "auto_trigger": self.auto_trigger,
             "running": self._running,
         }

@@ -50,6 +50,7 @@ class SimulatorAPI:
         self.app.router.add_post("/api/devices/{device_id}/stop", self.stop_device)
         self.app.router.add_post("/api/devices/{device_id}/network/disconnect", self.disconnect_device_network)
         self.app.router.add_post("/api/devices/{device_id}/network/reconnect", self.reconnect_device_network)
+        self.app.router.add_post("/api/devices/{device_id}/auto-trigger", self.toggle_auto_trigger)
         self.app.router.add_get("/api/simulation/status", self.get_simulation_status)
         self.app.router.add_post("/api/simulation/start", self.start_simulation)
         self.app.router.add_post("/api/simulation/stop", self.stop_simulation)
@@ -433,6 +434,22 @@ class SimulatorAPI:
             return web.json_response({"error": "Device not found"}, status=404)
         await device.reconnect_network()
         return web.json_response({"status": "reconnected", "device_id": device_id, "state": device.state.value})
+
+    async def toggle_auto_trigger(self, request: web.Request) -> web.Response:
+        """Toggle auto event generation on a device."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+        body = {}
+        if request.body_exists:
+            body = await request.json()
+        # Explicit value or toggle
+        if "enabled" in body:
+            device.auto_trigger = bool(body["enabled"])
+        else:
+            device.auto_trigger = not device.auto_trigger
+        return web.json_response({"status": "ok", "device_id": device_id, "auto_trigger": device.auto_trigger})
 
     def record_event(self, event: dict[str, Any]) -> None:
         """Record an event for the recent events feed."""

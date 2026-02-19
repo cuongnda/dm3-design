@@ -153,6 +153,8 @@
         <div class="flex gap-2 text-xs">
           <span class="text-gray-400" id="selected-count">0 selected</span>
           <button onclick="batchAction('trigger')" class="btn-blue text-white px-2 py-1 rounded">⚡ Trigger</button>
+          <button onclick="batchAction('auto-on')" class="bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded">🔄 Auto On</button>
+          <button onclick="batchAction('auto-off')" class="bg-gray-600 hover:bg-gray-700 text-white px-2 py-1 rounded">⏸ Auto Off</button>
           <button onclick="batchAction('disconnect')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded">📡 Off</button>
           <button onclick="batchAction('reconnect')" class="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded">📡 On</button>
           <button onclick="batchAction('stop')" class="btn-red text-white px-2 py-1 rounded">⏹ Stop</button>
@@ -164,11 +166,12 @@
         <input type="checkbox" id="select-all" onchange="toggleSelectAll(this.checked)" class="accent-blue-500">
         <span class="w-20">Device ID</span>
         <span class="w-16">State</span>
-        <span class="w-16">Network</span>
+        <span class="w-14">Network</span>
+        <span class="w-14">Auto</span>
         <span class="flex-1">Doors</span>
-        <span class="w-20 text-right">Events</span>
-        <span class="w-16 text-right">Queue</span>
-        <span class="w-12"></span>
+        <span class="w-16 text-right">Events</span>
+        <span class="w-14 text-right">Queue</span>
+        <span class="w-10"></span>
       </div>
       <div id="device-grid" class="max-h-[500px] overflow-y-auto space-y-0.5">
         <div class="text-gray-500 text-sm p-4">No devices running. Click Start to begin.</div>
@@ -194,6 +197,7 @@
       <h2 class="text-lg font-bold text-white">🔍 Device <span id="dm-device-id" class="text-blue-400 font-mono"></span></h2>
       <div class="flex gap-2 items-center">
         <button onclick="triggerDeviceFromModal()" class="btn-blue text-white px-3 py-1.5 rounded text-xs">⚡ Trigger</button>
+        <button onclick="toggleAutoTrigger()" id="dm-auto-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs">🔄 Auto Off</button>
         <button onclick="toggleDeviceNetwork()" id="dm-network-btn" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1.5 rounded text-xs">📡 Disconnect</button>
         <button onclick="toggleDeviceRunning()" id="dm-startstop-btn" class="btn-red text-white px-3 py-1.5 rounded text-xs">⏹ Stop</button>
         <button onclick="closeDeviceModal()" class="text-gray-400 hover:text-white text-2xl leading-none ml-2">&times;</button>
@@ -306,11 +310,12 @@ async function poll() {
           <input type="checkbox" class="device-cb accent-blue-500" data-id="${d.device_id}" ${prevChecked.has(d.device_id)?'checked':''} onchange="updateSelectedCount()" onclick="event.stopPropagation()">
           <span class="w-20 font-mono text-white cursor-pointer hover:text-blue-400" onclick="openDeviceModal('${d.device_id}')">${d.device_id}</span>
           <span class="w-16"><span class="dot dot-${stateClass(d.state)}"></span> <span class="status-${stateClass(d.state)} uppercase">${d.state}</span></span>
-          <span class="w-16">${d.network_disabled ? '<span class="text-yellow-400">📡 OFF</span>' : '<span class="text-green-400/60">📡 ON</span>'}</span>
+          <span class="w-14">${d.network_disabled ? '<span class="text-yellow-400">📡 OFF</span>' : '<span class="text-green-400/60">📡 ON</span>'}</span>
+          <span class="w-14">${d.auto_trigger ? '<span class="text-purple-400">🔄 ON</span>' : '<span class="text-gray-500">⏸ OFF</span>'}</span>
           <span class="flex-1 text-gray-400 truncate">${d.door_ids?.join(', ') || '—'}</span>
-          <span class="w-20 text-right text-gray-300 font-mono">${d.events_published}</span>
-          <span class="w-16 text-right font-mono ${d.network_disabled ? 'text-yellow-400' : 'text-gray-500'}">${d.network_disabled ? '⏳' : '—'}</span>
-          <span class="w-12 text-right"><button class="text-blue-400 hover:text-blue-300" onclick="event.stopPropagation();openDeviceModal('${d.device_id}')">🔍</button></span>
+          <span class="w-16 text-right text-gray-300 font-mono">${d.events_published}</span>
+          <span class="w-14 text-right font-mono ${d.network_disabled ? 'text-yellow-400' : 'text-gray-500'}">${d.network_disabled ? '⏳' : '—'}</span>
+          <span class="w-10 text-right"><button class="text-blue-400 hover:text-blue-300" onclick="event.stopPropagation();openDeviceModal('${d.device_id}')">🔍</button></span>
         </div>
       `).join('');
     }
@@ -404,6 +409,8 @@ async function batchAction(action) {
   
   const endpoints = {
     trigger: id => [`/api/devices/${id}/trigger`, 'POST'],
+    'auto-on': id => [`/api/devices/${id}/auto-trigger`, 'POST', {enabled: true}],
+    'auto-off': id => [`/api/devices/${id}/auto-trigger`, 'POST', {enabled: false}],
     disconnect: id => [`/api/devices/${id}/network/disconnect`, 'POST'],
     reconnect: id => [`/api/devices/${id}/network/reconnect`, 'POST'],
     stop: id => [`/api/devices/${id}/stop`, 'POST'],
@@ -415,8 +422,10 @@ async function batchAction(action) {
   
   // Execute in parallel
   await Promise.all(ids.map(id => {
-    const [url, method] = fn(id);
-    return fetch(url, { method });
+    const [url, method, body] = fn(id);
+    const opts = { method };
+    if (body) { opts.headers = {'Content-Type':'application/json'}; opts.body = JSON.stringify(body); }
+    return fetch(url, opts);
   }));
   
   // Immediate refresh
@@ -448,6 +457,12 @@ async function triggerDeviceFromModal() {
   showTab(currentTab);
 }
 
+async function toggleAutoTrigger() {
+  if (!currentDeviceId) return;
+  await fetch(`/api/devices/${currentDeviceId}/auto-trigger`, { method: 'POST' });
+  updateModalButtons();
+}
+
 async function toggleDeviceNetwork() {
   if (!currentDeviceId) return;
   const data = await fetchJSON(`/api/devices/${currentDeviceId}`);
@@ -473,6 +488,15 @@ async function updateModalButtons() {
   if (!currentDeviceId) return;
   const data = await fetchJSON(`/api/devices/${currentDeviceId}`);
   if (!data) return;
+  
+  const autoBtn = document.getElementById('dm-auto-btn');
+  if (data.auto_trigger) {
+    autoBtn.textContent = '🔄 Auto Off';
+    autoBtn.className = 'bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs';
+  } else {
+    autoBtn.textContent = '🔄 Auto On';
+    autoBtn.className = 'bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded text-xs';
+  }
   
   const netBtn = document.getElementById('dm-network-btn');
   if (data.network_disabled) {
