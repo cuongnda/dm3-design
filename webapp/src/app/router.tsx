@@ -54,6 +54,42 @@ const ProvisioningPage = lazy(() =>
   import('@/features/manage/provisioning/ProvisioningPage').then((m) => ({ default: m.ProvisioningPage }))
 );
 
+// OPERATE
+const RoomBookingPage = lazy(() =>
+  import('@/features/operate/room-booking/RoomBookingPage').then((m) => ({ default: m.RoomBookingPage }))
+);
+const ParkingPage = lazy(() =>
+  import('@/features/operate/parking/ParkingPage').then((m) => ({ default: m.ParkingPage }))
+);
+const MaintenancePage = lazy(() =>
+  import('@/features/operate/maintenance/MaintenancePage').then((m) => ({ default: m.MaintenancePage }))
+);
+const GuardTourPage = lazy(() =>
+  import('@/features/operate/guard-tour/GuardTourPage').then((m) => ({ default: m.GuardTourPage }))
+);
+const KeyManagementPage = lazy(() =>
+  import('@/features/operate/keys/KeyManagementPage').then((m) => ({ default: m.KeyManagementPage }))
+);
+const IoTEnergyPage = lazy(() =>
+  import('@/features/operate/iot-energy/IoTEnergyPage').then((m) => ({ default: m.IoTEnergyPage }))
+);
+
+// SMART
+const AIAssistantPage = lazy(() =>
+  import('@/features/smart/ai-assistant/AIAssistantPage').then((m) => ({ default: m.AIAssistantPage }))
+);
+const AnalyticsPage = lazy(() =>
+  import('@/features/smart/analytics/AnalyticsPage').then((m) => ({ default: m.AnalyticsPage }))
+);
+const AutomationPage = lazy(() =>
+  import('@/features/smart/automation/AutomationPage').then((m) => ({ default: m.AutomationPage }))
+);
+
+// SETTINGS
+const SettingsPage = lazy(() =>
+  import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage }))
+);
+
 function LazyWrap({ children }: { children: React.ReactNode }) {
   return (
     <Suspense
@@ -105,20 +141,20 @@ export const router = createBrowserRouter([
       { path: 'manage/provisioning', element: <LazyWrap><ProvisioningPage /></LazyWrap> },
 
       // OPERATE
-      { path: 'operate/room-booking', element: ph('Room Booking', 'OPERATE', '#F59E0B') },
-      { path: 'operate/parking', element: ph('Parking', 'OPERATE', '#F59E0B') },
-      { path: 'operate/maintenance', element: ph('Maintenance', 'OPERATE', '#F59E0B') },
-      { path: 'operate/guard-tour', element: ph('Guard Tour', 'OPERATE', '#F59E0B') },
-      { path: 'operate/keys', element: ph('Keys', 'OPERATE', '#F59E0B') },
-      { path: 'operate/iot-energy', element: ph('IoT & Energy', 'OPERATE', '#F59E0B') },
+      { path: 'operate/room-booking', element: <LazyWrap><RoomBookingPage /></LazyWrap> },
+      { path: 'operate/parking', element: <LazyWrap><ParkingPage /></LazyWrap> },
+      { path: 'operate/maintenance', element: <LazyWrap><MaintenancePage /></LazyWrap> },
+      { path: 'operate/guard-tour', element: <LazyWrap><GuardTourPage /></LazyWrap> },
+      { path: 'operate/keys', element: <LazyWrap><KeyManagementPage /></LazyWrap> },
+      { path: 'operate/iot-energy', element: <LazyWrap><IoTEnergyPage /></LazyWrap> },
 
       // SMART
-      { path: 'smart/ai-assistant', element: ph('AI Assistant', 'SMART', '#06B6D4') },
-      { path: 'smart/analytics', element: ph('Analytics', 'SMART', '#06B6D4') },
-      { path: 'smart/automation', element: ph('Automation', 'SMART', '#06B6D4') },
+      { path: 'smart/ai-assistant', element: <LazyWrap><AIAssistantPage /></LazyWrap> },
+      { path: 'smart/analytics', element: <LazyWrap><AnalyticsPage /></LazyWrap> },
+      { path: 'smart/automation', element: <LazyWrap><AutomationPage /></LazyWrap> },
 
       // SETTINGS
-      { path: 'settings', element: ph('Settings') },
+      { path: 'settings', element: <LazyWrap><SettingsPage /></LazyWrap> },
     ],
   },
 ]);
