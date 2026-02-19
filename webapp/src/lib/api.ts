@@ -71,7 +71,9 @@ async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<T> {
     }
 
     clearToken();
-    window.location.href = '/login';
+    if (window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
     throw new Error('Unauthorized');
   }
 
