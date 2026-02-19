@@ -220,7 +220,7 @@ class VirtualDevice:
                 "timestamp": ts,
                 "nonce": nonce,
             }
-            canonical = json.dumps(payload_for_hmac, sort_keys=True)
+            canonical = json.dumps(payload_for_hmac, sort_keys=True, separators=(',', ':'))
             payload_hmac = hmac_mod.new(
                 bootstrap_secret.encode(), canonical.encode(), hashlib.sha256
             ).hexdigest()
