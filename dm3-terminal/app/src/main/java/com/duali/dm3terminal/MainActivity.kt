@@ -5,12 +5,17 @@ import android.view.View
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import com.duali.dm3terminal.mqtt.MqttService
 import com.duali.dm3terminal.ui.navigation.DM3NavHost
 import com.duali.dm3terminal.ui.theme.DM3Theme
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject lateinit var mqttService: MqttService
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -30,7 +35,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             DM3Theme {
-                DM3NavHost()
+                DM3NavHost(mqttService = mqttService)
             }
         }
     }

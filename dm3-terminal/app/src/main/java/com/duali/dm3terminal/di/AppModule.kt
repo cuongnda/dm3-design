@@ -3,6 +3,8 @@ package com.duali.dm3terminal.di
 import android.content.Context
 import androidx.room.Room
 import com.duali.dm3terminal.data.local.AppDatabase
+import com.duali.dm3terminal.data.local.dao.EventQueueDao
+import com.duali.dm3terminal.data.local.dao.SyncStateDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -23,4 +25,12 @@ object AppModule {
             "dm3_terminal.db",
         ).build()
     }
+
+    @Provides
+    @Singleton
+    fun provideEventQueueDao(db: AppDatabase): EventQueueDao = db.eventQueueDao()
+
+    @Provides
+    @Singleton
+    fun provideSyncStateDao(db: AppDatabase): SyncStateDao = db.syncStateDao()
 }

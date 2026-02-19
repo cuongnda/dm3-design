@@ -8,6 +8,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.duali.dm3terminal.mqtt.MqttConnectionState
+import com.duali.dm3terminal.mqtt.MqttService
 import com.duali.dm3terminal.ui.screens.*
 
 object Routes {
@@ -30,7 +33,7 @@ object Routes {
 }
 
 @Composable
-fun DM3NavHost() {
+fun DM3NavHost(mqttService: MqttService? = null) {
     val navController = rememberNavController()
 
     fun navigateClean(route: String) {
@@ -52,9 +55,13 @@ fun DM3NavHost() {
         exitTransition = { fadeOut(tween(300)) },
     ) {
         composable(Routes.IDLE) {
+            val mqttState = mqttService?.connectionState
+                ?.collectAsStateWithLifecycle()?.value
+                ?: MqttConnectionState.DISCONNECTED
             IdleScreen(
                 onTap = { navController.navigate(Routes.CAMERA_READY) },
                 onLongPress = { navController.navigate(Routes.PIN) },
+                mqttState = mqttState,
             )
         }
 

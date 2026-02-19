@@ -18,6 +18,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextAlign
+import com.duali.dm3terminal.mqtt.MqttConnectionState
+import com.duali.dm3terminal.mqtt.MqttService
 import com.duali.dm3terminal.ui.components.*
 import com.duali.dm3terminal.ui.theme.*
 import java.text.SimpleDateFormat
@@ -27,6 +29,7 @@ import java.util.*
 fun IdleScreen(
     onTap: () -> Unit,
     onLongPress: () -> Unit,
+    mqttState: MqttConnectionState = MqttConnectionState.DISCONNECTED,
 ) {
     var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -102,7 +105,33 @@ fun IdleScreen(
                 Text(text = "Access Control", color = DM3AccentPurple, fontSize = 12.sp)
             }
             Spacer(modifier = Modifier.weight(1f))
-            Text(text = "Lobby A • Gate 1", color = DM3Gray, fontSize = 12.sp)
+            // MQTT status indicator
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(
+                            when (mqttState) {
+                                MqttConnectionState.CONNECTED -> DM3Green
+                                MqttConnectionState.CONNECTING -> DM3Yellow
+                                MqttConnectionState.DISCONNECTED -> DM3Red
+                            }
+                        ),
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = when (mqttState) {
+                        MqttConnectionState.CONNECTED -> "MQTT"
+                        MqttConnectionState.CONNECTING -> "MQTT..."
+                        MqttConnectionState.DISCONNECTED -> "MQTT ✗"
+                    },
+                    color = DM3GrayDark,
+                    fontSize = 10.sp,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "Lobby A • Gate 1", color = DM3Gray, fontSize = 12.sp)
+            }
         }
 
         // Center content
