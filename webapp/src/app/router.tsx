@@ -1,9 +1,13 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { PlaceholderPage } from '@/components/common/PlaceholderPage';
+import { SystemLayout } from '@/features/system/SystemLayout';
+import { CompanyListPage } from '@/features/system/CompanyListPage';
+import { CreateCompanyPage } from '@/features/system/CreateCompanyPage';
+import { CompanyDetailPage } from '@/features/system/CompanyDetailPage';
 
 // Lazy-loaded feature modules
 const AccessControlPage = lazy(() =>
@@ -113,6 +117,17 @@ export const router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />,
+  },
+  {
+    path: '/system',
+    element: <SystemLayout />,
+    children: [
+      { index: true, element: <Navigate to="/system/companies" replace /> },
+      { path: 'companies', element: <CompanyListPage /> },
+      { path: 'companies/new', element: <CreateCompanyPage /> },
+      { path: 'companies/:id', element: <CompanyDetailPage /> },
+      { path: 'settings', element: <PlaceholderPage title="System Settings" /> },
+    ],
   },
   {
     path: '/',

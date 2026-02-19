@@ -181,6 +181,84 @@ export async function fetchPersons(page = 1, limit = 50): Promise<Paginated<Pers
   return apiFetch<Paginated<PersonDTO>>(`${IDENTITY_URL}/persons?page=${page}&limit=${limit}`);
 }
 
+// ─── System Admin API (auth-svc :8005) ──────────────────────
+
+const SYSTEM_URL = '/api/v1/system';
+
+export interface CompanyDTO {
+  id: string;
+  name: string;
+  code: string;
+  plan: string;
+  status: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  max_devices: number;
+  max_users: number;
+  user_count?: number;
+  device_count?: number;
+  door_count?: number;
+  event_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCompanyRequest {
+  name: string;
+  code: string;
+  email: string;
+  plan: string;
+  address?: string;
+  phone?: string;
+  max_devices?: number;
+  max_users?: number;
+}
+
+export interface CreateCompanyResponse {
+  company: CompanyDTO;
+  credentials: {
+    email: string;
+    password: string;
+  };
+}
+
+export async function fetchCompanies(): Promise<CompanyDTO[]> {
+  return apiFetch<CompanyDTO[]>(`${SYSTEM_URL}/companies`);
+}
+
+export async function fetchCompany(id: string): Promise<CompanyDTO> {
+  return apiFetch<CompanyDTO>(`${SYSTEM_URL}/companies/${id}`);
+}
+
+export async function createCompany(data: CreateCompanyRequest): Promise<CreateCompanyResponse> {
+  return apiFetch<CreateCompanyResponse>(`${SYSTEM_URL}/companies`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateCompany(id: string, data: Partial<CreateCompanyRequest>): Promise<CompanyDTO> {
+  return apiFetch<CompanyDTO>(`${SYSTEM_URL}/companies/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function suspendCompany(id: string): Promise<void> {
+  await apiFetch<void>(`${SYSTEM_URL}/companies/${id}`, { method: 'DELETE' });
+}
+
+// ─── JWT Helper ─────────────────────────────────────────────
+
+export function decodeJWT(token: string): Record<string, unknown> {
+  try {
+    return JSON.parse(atob(token.split('.')[1]));
+  } catch {
+    return {};
+  }
+}
+
 // ─── WebSocket ──────────────────────────────────────────────
 
 export type WSEventHandler = (event: EventDTO) => void;

@@ -23,14 +23,15 @@ export function LoginPage() {
 
       // Decode JWT payload for user info
       const payload = JSON.parse(atob(res.access_token.split('.')[1]));
+      const role = payload.role || payload.roles?.[0] || 'user';
       login({
         id: payload.sub,
         name: payload.name || email.split('@')[0],
         email: payload.email || email,
-        role: payload.roles?.[0] || 'user',
+        role,
         initials: (payload.name || email).slice(0, 2).toUpperCase(),
       });
-      navigate('/');
+      navigate(role === 'system_admin' ? '/system' : '/');
     } catch (err) {
       setError('Invalid email or password');
     } finally {

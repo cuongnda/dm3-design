@@ -12,7 +12,7 @@ import javax.inject.Singleton
 data class DeviceConfig(
     val deviceId: String = "000001",
     val tenantId: String = "00000000-0000-0000-0000-000000000001",
-    val mqttBrokerUrl: String = "tcp://10.0.2.2:1884",
+    val mqttBrokerUrl: String = "tcp://127.0.0.1:1884",
     val deviceName: String = "Lobby A Gate 1",
     val doorId: String = "door-001",
 )
@@ -31,8 +31,8 @@ class DevicePreferences @Inject constructor(
         deviceId = prefs.getString("device_id", "000001") ?: "000001",
         tenantId = prefs.getString("tenant_id", "00000000-0000-0000-0000-000000000001")
             ?: "00000000-0000-0000-0000-000000000001",
-        mqttBrokerUrl = prefs.getString("mqtt_broker_url", "tcp://10.0.2.2:1884")
-            ?: "tcp://10.0.2.2:1884",
+        mqttBrokerUrl = prefs.getString("mqtt_broker_url", "tcp://127.0.0.1:1884")
+            ?: "tcp://127.0.0.1:1884",
         deviceName = prefs.getString("device_name", "Lobby A Gate 1") ?: "Lobby A Gate 1",
         doorId = prefs.getString("door_id", "door-001") ?: "door-001",
     )
