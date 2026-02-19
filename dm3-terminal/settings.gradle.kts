@@ -16,3 +16,9 @@ dependencyResolutionManagement {
 
 rootProject.name = "dm3-terminal"
 include(":app")
+include(":rf")
+include(":wiegand")
+include(":serial_port")
+include(":sam_uart")
+include(":thermal")
+include(":tof")

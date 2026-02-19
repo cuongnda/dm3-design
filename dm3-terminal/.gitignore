@@ -7,3 +7,16 @@ local.properties
 captures/
 .externalNativeBuild/
 .cxx/
+rf/build/
+wiegand/build/
+serial_port/build/
+sam_uart/build/
+thermal/build/
+tof/build/
+rf/.cxx/
+wiegand/.cxx/
+serial_port/.cxx/
+sam_uart/.cxx/
+thermal/.cxx/
+tof/.cxx/
+.kotlin/

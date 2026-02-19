@@ -38,6 +38,12 @@ android {
         compose = true
         buildConfig = true
     }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 dependencies {
@@ -87,4 +93,19 @@ dependencies {
 
     // MQTT (dep only)
     implementation(libs.paho.mqtt)
+
+    // DF970 Hardware SDK
+    implementation(files("libs/HWControl-release.aar"))
+    implementation(files("libs/FacePassAndroidSDK-year-release.aar"))
+
+    // JNI modules
+    implementation(project(":rf"))
+    implementation(project(":wiegand"))
+    implementation(project(":serial_port"))
+    implementation(project(":sam_uart"))
+    implementation(project(":thermal"))
+    implementation(project(":tof"))
+
+    // Coroutines (for hardware wrappers)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
