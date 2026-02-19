@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
-import { login as apiLogin, loginStep2, setToken, LoginCompany, LoginUser } from '@/lib/api';
+import { login as apiLogin, loginStep2, setToken } from '@/lib/api';
+import type { LoginCompany, LoginUser } from '@/lib/api';
 import { Eye, EyeOff, Building2, ChevronRight } from 'lucide-react';
 
 type LoginStep = 'credentials' | 'select_company';
