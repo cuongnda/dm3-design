@@ -23,6 +23,30 @@ export function clearToken() {
 
 // ─── Fetch wrapper ──────────────────────────────────────────
 
+let _refreshing: Promise<boolean> | null = null;
+
+async function tryRefreshToken(): Promise<boolean> {
+  const refresh = localStorage.getItem('dm3-refresh');
+  if (!refresh) return false;
+
+  try {
+    const res = await fetch(`${AUTH_URL}/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refresh }),
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (data.access_token) {
+      setToken(data.access_token, data.refresh_token || refresh);
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -34,6 +58,18 @@ async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<T> {
   const res = await fetch(url, { ...opts, headers });
 
   if (res.status === 401) {
+    // Try refresh once (deduplicated across concurrent requests)
+    if (!_refreshing) _refreshing = tryRefreshToken().finally(() => { _refreshing = null; });
+    const refreshed = await _refreshing;
+
+    if (refreshed) {
+      // Retry original request with new token
+      const newToken = getToken();
+      if (newToken) headers['Authorization'] = `Bearer ${newToken}`;
+      const retry = await fetch(url, { ...opts, headers });
+      if (retry.ok) return retry.json();
+    }
+
     clearToken();
     window.location.href = '/login';
     throw new Error('Unauthorized');

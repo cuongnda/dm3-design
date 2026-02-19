@@ -28,6 +28,16 @@ class DeviceState(str, enum.Enum):
     ERROR = "error"
 
 
+class ProvisioningStatus(str, enum.Enum):
+    """Device provisioning states."""
+    UNPROVISIONED = "unprovisioned"
+    REGISTERING = "registering"
+    PENDING_APPROVAL = "pending_approval"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    PROVISIONED = "provisioned"
+
+
 class DoorState(str, enum.Enum):
     """Door physical states."""
     LOCKED = "locked"

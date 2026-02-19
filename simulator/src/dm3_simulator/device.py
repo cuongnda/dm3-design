@@ -18,6 +18,7 @@ from dm3_simulator.models import (
     DeviceState,
     DoorState,
     MqttMessage,
+    ProvisioningStatus,
     SimulationConfig,
     generate_uuidv7,
 )
@@ -54,6 +55,9 @@ class VirtualDevice:
         self.event_callback: Any = None  # Set by API to capture events
         self._network_disabled = False
         self.auto_trigger = True  # Auto-generate events in event loop
+        self.provisioning_status = ProvisioningStatus.PROVISIONED  # default for existing devices
+        self.mqtt_token: str | None = None  # JWT token from provisioning
+        self._bootstrap_mqtt: DeviceMqttClient | None = None  # separate client for bootstrap
 
         # Components
         db_path = ":memory:" if config.db_mode == "memory" else f"/tmp/dm3-sim/{device_id}.db"
