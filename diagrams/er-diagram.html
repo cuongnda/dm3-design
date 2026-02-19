@@ -148,13 +148,15 @@
     <span class="domain-tag platform">PLATFORM</span>
     
     <div class="entity">
-      <div class="entity-name" style="color:#6B7280">tenants</div>
+      <div class="entity-name" style="color:#6B7280">companies <span style="font-size:10px;color:#94A3B8;font-weight:400">(= tenant)</span></div>
       <div class="entity-fields">
-        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK (= tenant_id)</span></div>
         <div class="field"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">VARCHAR(255)</span></div>
         <div class="field"><span class="field-icon"></span><span class="field-name">code</span><span class="field-type">VARCHAR(50) UQ</span></div>
-        <div class="field"><span class="field-icon"></span><span class="field-name">plan</span><span class="field-type">ENUM</span></div>
-        <div class="field"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">ENUM</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">plan</span><span class="field-type">starter | professional | enterprise</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">active | suspended | deactivated</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">logo_url / address / phone / email</span><span class="field-type">VARCHAR</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">max_devices / max_users</span><span class="field-type">INT</span></div>
         <div class="field"><span class="field-icon"></span><span class="field-name">settings</span><span class="field-type">JSONB</span></div>
         <div class="field"><span class="field-icon"></span><span class="field-name">created_at</span><span class="field-type">TIMESTAMPTZ</span></div>
       </div>
@@ -164,12 +166,12 @@
       <div class="entity-name" style="color:#6B7280">users</div>
       <div class="entity-fields">
         <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
-        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">tenant_id</span><span class="field-type">→ tenants</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">company_id</span><span class="field-type">→ companies (NULL for sysadmin)</span></div>
         <div class="field"><span class="field-icon"></span><span class="field-name">email</span><span class="field-type">VARCHAR UQ</span></div>
-        <div class="field"><span class="field-icon"></span><span class="field-name">password_hash</span><span class="field-type">VARCHAR</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">password_hash</span><span class="field-type">VARCHAR (bcrypt)</span></div>
         <div class="field"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">VARCHAR(255)</span></div>
-        <div class="field"><span class="field-icon"></span><span class="field-name">roles</span><span class="field-type">TEXT[]</span></div>
-        <div class="field"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">ENUM</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">role</span><span class="field-type">system_admin | primary_manager | manager | operator | viewer</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">active | inactive | locked</span></div>
         <div class="field"><span class="field-icon"></span><span class="field-name">last_login</span><span class="field-type">TIMESTAMPTZ</span></div>
       </div>
     </div>
@@ -426,7 +428,7 @@
 <div class="relations">
   <h2>Key Relationships</h2>
   <div class="rel-grid">
-    <div class="rel"><span class="rel-from" style="color:#6B7280">tenants</span><span class="rel-arrow">──1:N──▶</span><span class="rel-to" style="color:#6B7280">users, sites</span><span class="rel-card">Every entity scoped by tenant</span></div>
+    <div class="rel"><span class="rel-from" style="color:#6B7280">companies</span><span class="rel-arrow">──1:N──▶</span><span class="rel-to" style="color:#6B7280">users, sites, devices, doors, persons, ...</span><span class="rel-card">Every entity scoped by company (tenant_id = company.id)</span></div>
     <div class="rel"><span class="rel-from" style="color:#3B82F6">devices</span><span class="rel-arrow">──1:1──▶</span><span class="rel-to" style="color:#3B82F6">doors</span><span class="rel-card">Terminal controls a door</span></div>
     <div class="rel"><span class="rel-from" style="color:#3B82F6">doors</span><span class="rel-arrow">──1:N──▶</span><span class="rel-to" style="color:#F59E0B">access_events</span><span class="rel-card">Events logged per door</span></div>
     <div class="rel"><span class="rel-from" style="color:#8B5CF6">persons</span><span class="rel-arrow">──1:N──▶</span><span class="rel-to" style="color:#8B5CF6">credentials</span><span class="rel-card">Face, card, PIN, QR, fingerprint</span></div>

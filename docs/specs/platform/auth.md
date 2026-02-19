@@ -1,7 +1,65 @@
 # Feature: Authentication & Authorization
 
-> Domain: PLATFORM | Color: #6366F1 | Priority: P0
-> Status: Draft | Owner: Platform Team
+> Domain: PLATFORM | Color: #6B7280 | Priority: P0
+> Status: **Implementing** | Owner: Platform Team
+> Updated: 2026-02-19 — Company-based multi-tenancy, role changes
+
+## Current Implementation (v1)
+
+The v1 auth system is a lightweight Go service (auth-svc) with:
+- **JWT access tokens** (15min, HS256) + **refresh tokens** (7d, stored in DB with rotation + replay detection)
+- **Company-scoped users** — every user belongs to a Company (except system_admin)
+- **Role-based access**: system_admin, primary_manager, manager, operator, viewer
+- **Device tokens** for MQTT authentication (24h, scoped to company + device)
+- **bcrypt** password hashing
+- No Keycloak dependency yet (planned for v2 SSO/MFA)
+
+### JWT Access Token Claims (v1)
+```json
+{
+  "sub": "user-uuid",
+  "cid": "company-uuid",        // null for system_admin
+  "email": "user@company.com",
+  "name": "User Name",
+  "role": "primary_manager",     // single role per user
+  "exp": 1740000000,
+  "iat": 1739900000
+}
+```
+
+### Device JWT Claims (v1)
+```json
+{
+  "sub": "device:000001",
+  "cid": "company-uuid",
+  "did": "000001",
+  "dtype": "terminal",
+  "permissions": ["pub:evt", "pub:sta", "sub:cmd", "sub:cfg"],
+  "exp": 1740000000
+}
+```
+
+### Default Users
+| Email | Password | Role | Company |
+|-------|----------|------|---------|
+| sysadmin@duali.com | sysadmin123 | system_admin | — (none) |
+| admin@duali.com | admin123 | primary_manager | Duali Demo |
+
+### v1 API Endpoints (auth-svc, port 8005)
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/v1/auth/login` | Public | Email + password → JWT |
+| POST | `/api/v1/auth/refresh` | Public | Refresh token → new access token |
+| POST | `/api/v1/auth/logout` | Bearer | Invalidate refresh token |
+| GET | `/api/v1/auth/me` | Bearer | Current user profile |
+| POST | `/api/v1/auth/device-token` | Bearer | Issue device MQTT JWT |
+| GET | `/api/v1/roles` | Bearer | List available roles |
+| CRUD | `/api/v1/users` | Admin | User management (within company) |
+| CRUD | `/api/v1/system/companies` | system_admin | Company management |
+
+---
+
+## Full Spec (v2 — Future)
 
 ## Overview
 

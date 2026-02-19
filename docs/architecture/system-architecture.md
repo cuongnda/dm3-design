@@ -263,11 +263,11 @@ Zooming into `access-svc`. **Note:** access-svc is NOT a real-time decision engi
 ║                                                                          ║
 ║  ⚙️ PLATFORM DOMAIN                                                     ║
 ║  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐       ║
-║  │ auth-svc    │ │ tenant-svc  │ │ device-gw   │ │ notif-svc   │       ║
-║  │ Keycloak+Go │ │ Go          │ │ Go          │ │ Go          │       ║
-║  │ OAuth2, SSO │ │ Onboarding  │ │ Sync coord. │ │ Push, SMS,  │       ║
-║  │ SAML, MFA   │ │ isolation   │ │ Protocol    │ │ email,      │       ║
-║  │ RBAC        │ │ billing     │ │ adapters    │ │ Telegram    │       ║
+║  │ auth-svc    │ │ company-mgmt│ │ device-gw   │ │ notif-svc   │       ║
+║  │ Go (v1)     │ │ (in auth-   │ │ Go          │ │ Go          │       ║
+║  │ JWT, bcrypt │ │  svc)       │ │ Sync coord. │ │ Push, SMS,  │       ║
+║  │ Refresh tok │ │ Company     │ │ Protocol    │ │ email,      │       ║
+║  │ RBAC, roles │ │ CRUD+users  │ │ adapters    │ │ Telegram    │       ║
 ║  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘       ║
 ║  ┌─────────────┐                                                        ║
 ║  │ audit-svc   │                                                        ║
@@ -390,10 +390,12 @@ SMART Domain:
   /api/v1/ai/commands                   POST
 
 PLATFORM:
-  /api/v1/auth/token                    POST (OAuth2 token)
-  /api/v1/auth/refresh                  POST
-  /api/v1/tenants                       GET, POST (super-admin)
-  /api/v1/tenants/{id}/settings         GET, PUT
+  /api/v1/auth/login                    POST (email+password → JWT)
+  /api/v1/auth/refresh                  POST (refresh token rotation)
+  /api/v1/auth/device-token             POST (issue device MQTT JWT)
+  /api/v1/system/companies              GET, POST (system_admin only)
+  /api/v1/system/companies/{id}         GET, PUT, DELETE
+  /api/v1/users                         GET, POST, PUT, DELETE (company-scoped)
   /api/v1/webhooks                      GET, POST, PUT, DELETE
   /api/v1/audit/events                  GET (immutable log query)
   /api/v1/system/health                 GET
