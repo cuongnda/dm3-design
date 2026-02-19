@@ -52,6 +52,7 @@ class VirtualDevice:
         self.lockdown_active = False
         self.current_direction = "entry"
         self.event_callback: Any = None  # Set by API to capture events
+        self._network_disabled = False
 
         # Components
         db_path = ":memory:" if config.db_mode == "memory" else f"/tmp/dm3-sim/{device_id}.db"
@@ -122,6 +123,35 @@ class VirtualDevice:
         self.state = DeviceState.OFFLINE
         metrics.devices_total.labels(state="connected").dec()
         logger.info("device_stopped", device_id=self.device_id)
+
+    async def disconnect_network(self) -> None:
+        """Simulate network disconnection — MQTT drops but device keeps running."""
+        if self.mqtt.connected:
+            await self.mqtt.disconnect()
+            self.state = DeviceState.OFFLINE
+            self._network_disabled = True
+            logger.info("network_disconnected", device_id=self.device_id)
+
+    async def reconnect_network(self) -> None:
+        """Simulate network restoration — reconnect MQTT and drain queued events."""
+        self._network_disabled = False
+        try:
+            connected = await self.mqtt.connect_with_retry(max_retries=5)
+            if connected:
+                self.state = DeviceState.READY
+                # Re-subscribe
+                self._listen_task = asyncio.create_task(self.mqtt.listen())
+                logger.info("network_reconnected", device_id=self.device_id)
+                # Queue drain will pick up automatically
+            else:
+                self.state = DeviceState.ERROR
+        except Exception as e:
+            self.state = DeviceState.ERROR
+            logger.error("reconnect_failed", device_id=self.device_id, error=str(e))
+
+    @property
+    def network_disabled(self) -> bool:
+        return getattr(self, '_network_disabled', False)
 
     async def trigger_access(
         self,
@@ -350,4 +380,6 @@ class VirtualDevice:
             "events_published": self.events_published,
             "uptime_s": int(time.time() - self.start_time),
             "lockdown_active": self.lockdown_active,
+            "network_disabled": self.network_disabled,
+            "running": self._running,
         }

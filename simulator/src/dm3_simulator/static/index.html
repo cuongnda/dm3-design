@@ -128,9 +128,11 @@
   <div class="card w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col" onclick="event.stopPropagation()">
     <div class="flex items-center justify-between p-4 border-b border-gray-700">
       <h2 class="text-lg font-bold text-white">🔍 Device <span id="dm-device-id" class="text-blue-400 font-mono"></span></h2>
-      <div class="flex gap-2">
-        <button onclick="triggerDeviceFromModal()" class="btn-blue text-white px-3 py-1 rounded text-sm">⚡ Trigger Event</button>
-        <button onclick="closeDeviceModal()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+      <div class="flex gap-2 items-center">
+        <button onclick="triggerDeviceFromModal()" class="btn-blue text-white px-3 py-1.5 rounded text-xs">⚡ Trigger</button>
+        <button onclick="toggleDeviceNetwork()" id="dm-network-btn" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1.5 rounded text-xs">📡 Disconnect</button>
+        <button onclick="toggleDeviceRunning()" id="dm-startstop-btn" class="btn-red text-white px-3 py-1.5 rounded text-xs">⏹ Stop</button>
+        <button onclick="closeDeviceModal()" class="text-gray-400 hover:text-white text-2xl leading-none ml-2">&times;</button>
       </div>
     </div>
     <!-- Tabs -->
@@ -232,13 +234,14 @@ async function poll() {
       grid.innerHTML = '<div class="text-gray-500 text-sm p-4 col-span-full">No devices running. Click Start to begin.</div>';
     } else {
       grid.innerHTML = devices.map(d => `
-        <div class="device-card card p-2 text-xs" onclick="openDeviceModal('${d.device_id}')">
+        <div class="device-card card p-2 text-xs ${d.network_disabled ? 'border-yellow-500/50' : ''} ${!d.running ? 'opacity-50' : ''}" onclick="openDeviceModal('${d.device_id}')">
           <div class="flex items-center gap-1 mb-1">
             <span class="dot dot-${stateClass(d.state)}"></span>
             <span class="font-mono text-white truncate">${d.device_id}</span>
+            ${d.network_disabled ? '<span class="text-yellow-400" title="Network off">📡</span>' : ''}
           </div>
           <div class="text-gray-400">${d.door_ids?.[0]?.split('-').pop() || 'door'}</div>
-          <div class="status-${stateClass(d.state)} font-medium uppercase">${d.state}</div>
+          <div class="status-${stateClass(d.state)} font-medium uppercase">${d.state}${d.network_disabled ? ' <span class="text-yellow-400 text-[10px] normal-case">offline</span>' : ''}</div>
           <div class="text-gray-500 mt-1">${d.events_published} events</div>
         </div>
       `).join('');
@@ -299,6 +302,7 @@ function openDeviceModal(deviceId) {
   document.getElementById('dm-device-id').textContent = deviceId;
   document.getElementById('device-modal').classList.remove('hidden');
   document.getElementById('device-modal').classList.add('flex');
+  updateModalButtons();
   showTab('config');
 }
 
@@ -311,7 +315,52 @@ function closeDeviceModal() {
 async function triggerDeviceFromModal() {
   if (!currentDeviceId) return;
   await fetch(`/api/devices/${currentDeviceId}/trigger`, { method: 'POST' });
-  showTab(currentTab); // refresh
+  showTab(currentTab);
+}
+
+async function toggleDeviceNetwork() {
+  if (!currentDeviceId) return;
+  const data = await fetchJSON(`/api/devices/${currentDeviceId}`);
+  if (!data) return;
+  const action = data.network_disabled ? 'reconnect' : 'disconnect';
+  const resp = await fetch(`/api/devices/${currentDeviceId}/network/${action}`, { method: 'POST' });
+  const result = await resp.json();
+  updateModalButtons();
+  // Refresh queue tab if viewing it
+  if (currentTab === 'queue') showTab('queue');
+}
+
+async function toggleDeviceRunning() {
+  if (!currentDeviceId) return;
+  const data = await fetchJSON(`/api/devices/${currentDeviceId}`);
+  if (!data) return;
+  const action = data.running ? 'stop' : 'start';
+  await fetch(`/api/devices/${currentDeviceId}/${action}`, { method: 'POST' });
+  updateModalButtons();
+}
+
+async function updateModalButtons() {
+  if (!currentDeviceId) return;
+  const data = await fetchJSON(`/api/devices/${currentDeviceId}`);
+  if (!data) return;
+  
+  const netBtn = document.getElementById('dm-network-btn');
+  if (data.network_disabled) {
+    netBtn.textContent = '📡 Reconnect';
+    netBtn.className = 'bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs';
+  } else {
+    netBtn.textContent = '📡 Disconnect';
+    netBtn.className = 'bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1.5 rounded text-xs';
+  }
+  
+  const ssBtn = document.getElementById('dm-startstop-btn');
+  if (data.running) {
+    ssBtn.textContent = '⏹ Stop';
+    ssBtn.className = 'btn-red text-white px-3 py-1.5 rounded text-xs';
+  } else {
+    ssBtn.textContent = '▶ Start';
+    ssBtn.className = 'btn-green text-white px-3 py-1.5 rounded text-xs';
+  }
 }
 
 function showTab(tab) {

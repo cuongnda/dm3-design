@@ -45,6 +45,10 @@ class SimulatorAPI:
         self.app.router.add_get("/api/devices/{device_id}/rules", self.get_device_rules)
         self.app.router.add_get("/api/devices/{device_id}/events-queue", self.get_device_events_queue)
         self.app.router.add_get("/api/devices/{device_id}/config", self.get_device_config)
+        self.app.router.add_post("/api/devices/{device_id}/start", self.start_device)
+        self.app.router.add_post("/api/devices/{device_id}/stop", self.stop_device)
+        self.app.router.add_post("/api/devices/{device_id}/network/disconnect", self.disconnect_device_network)
+        self.app.router.add_post("/api/devices/{device_id}/network/reconnect", self.reconnect_device_network)
         self.app.router.add_get("/api/simulation/status", self.get_simulation_status)
         self.app.router.add_post("/api/simulation/start", self.start_simulation)
         self.app.router.add_post("/api/simulation/stop", self.stop_simulation)
@@ -336,6 +340,47 @@ class SimulatorAPI:
             rows = await cursor.fetchall()
         config["sync_state"] = {r[0]: r[1] for r in rows}
         return web.json_response(config)
+
+    async def start_device(self, request: web.Request) -> web.Response:
+        """Start a stopped device."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+        if device._running:
+            return web.json_response({"status": "already_running"})
+        await device.start()
+        return web.json_response({"status": "started", "device_id": device_id})
+
+    async def stop_device(self, request: web.Request) -> web.Response:
+        """Stop a running device."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+        if not device._running:
+            return web.json_response({"status": "already_stopped"})
+        await device.stop()
+        return web.json_response({"status": "stopped", "device_id": device_id})
+
+    async def disconnect_device_network(self, request: web.Request) -> web.Response:
+        """Simulate network disconnection on a device."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+        await device.disconnect_network()
+        queue_size = len(await device.db.get_pending_events(limit=1000))
+        return web.json_response({"status": "disconnected", "device_id": device_id, "queue_size": queue_size})
+
+    async def reconnect_device_network(self, request: web.Request) -> web.Response:
+        """Restore network connection on a device."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+        await device.reconnect_network()
+        return web.json_response({"status": "reconnected", "device_id": device_id, "state": device.state.value})
 
     def record_event(self, event: dict[str, Any]) -> None:
         """Record an event for the recent events feed."""
