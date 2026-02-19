@@ -31,7 +31,7 @@ object HardwareFingerprint {
         return try {
             val signingInfo = context.packageManager
                 .getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
-                .signingInfo
+                .signingInfo ?: return "sha256:unknown"
             val cert = if (signingInfo.hasMultipleSigners()) {
                 signingInfo.apkContentsSigners[0]
             } else {
