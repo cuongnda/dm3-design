@@ -17,6 +17,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextAlign
 import com.duali.dm3terminal.ui.components.*
 import com.duali.dm3terminal.ui.theme.*
 import java.text.SimpleDateFormat
@@ -116,13 +117,17 @@ fun IdleScreen(
                 color = DM3White,
                 fontSize = 72.sp,
                 fontWeight = FontWeight.Thin,
-                letterSpacing = 8.sp,
+                letterSpacing = 2.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = dateStr,
                 color = DM3Gray,
                 fontSize = 16.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
             )
 
             Spacer(modifier = Modifier.height(48.dp))
