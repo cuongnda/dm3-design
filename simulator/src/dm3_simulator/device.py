@@ -273,6 +273,7 @@ class VirtualDevice:
                 try:
                     connected = await self.mqtt.connect_with_retry(max_retries=3)
                     if connected:
+                        self._running = True
                         self.state = DeviceState.READY
                         self._listen_task = asyncio.create_task(self.mqtt.listen())
                         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
@@ -326,6 +327,7 @@ class VirtualDevice:
                         # Connect as provisioned device
                         connected = await self.mqtt.connect_with_retry(max_retries=3)
                         if connected:
+                            self._running = True
                             self.state = DeviceState.READY
                             self._listen_task = asyncio.create_task(self.mqtt.listen())
                             self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
