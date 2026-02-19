@@ -158,6 +158,190 @@ class VirtualDevice:
     def network_disabled(self) -> bool:
         return getattr(self, '_network_disabled', False)
 
+    # ─── Provisioning: Bootstrap Flow ─────────────────────────────────────────
+
+    async def start_bootstrap(self, bootstrap_secret: str = "dm3-bootstrap-v1-dev-secret") -> dict[str, Any]:
+        """Start bootstrap provisioning flow.
+
+        Connects with bootstrap credentials, publishes registration,
+        subscribes to response topic.
+        """
+        import hashlib
+        import hmac as hmac_mod
+        import uuid as uuid_mod
+
+        self.provisioning_status = ProvisioningStatus.REGISTERING
+        rid = self.device_id
+
+        # Generate HMAC: HMAC-SHA256 over "{RID}:{timestamp_minute}"
+        timestamp_minute = int(time.time()) // 60
+        hmac_message = f"{rid}:{timestamp_minute}"
+        hmac_password = hmac_mod.new(
+            bootstrap_secret.encode(), hmac_message.encode(), hashlib.sha256
+        ).hexdigest()
+
+        # Create bootstrap MQTT client
+        self._bootstrap_mqtt = DeviceMqttClient(
+            broker_url=self.config.broker,
+            tenant_id=self.tenant_id,
+            device_id=rid,
+            username=f"bootstrap:{rid}",
+            password=hmac_password,
+            on_message=self._on_bootstrap_message,
+        )
+
+        try:
+            connected = await self._bootstrap_mqtt.connect_with_retry(max_retries=3)
+            if not connected:
+                self.provisioning_status = ProvisioningStatus.UNPROVISIONED
+                return {"status": "error", "message": "Failed to connect with bootstrap credentials"}
+
+            # Subscribe to response topic
+            if self._bootstrap_mqtt._client:
+                await self._bootstrap_mqtt._client.subscribe(f"dm/bootstrap/{rid}/response", qos=1)
+
+            # Start listening for responses
+            asyncio.create_task(self._bootstrap_mqtt.listen())
+
+            # Compute HMAC over the payload (excluding the hmac field itself)
+            nonce = str(uuid_mod.uuid4())
+            ts = int(time.time())
+            payload_for_hmac = {
+                "type": "device.register",
+                "rid": rid,
+                "device_type": self.config.device_type,
+                "firmware_version": "sim-0.1.0",
+                "hardware_fingerprint": {
+                    "android_id": hashlib.md5(rid.encode()).hexdigest()[:12],
+                    "mac_address": ":".join(f"{b:02X}" for b in hashlib.md5(rid.encode()).digest()[:6]),
+                    "model": "DM3-SIM",
+                    "firmware_version": "sim-0.1.0",
+                },
+                "timestamp": ts,
+                "nonce": nonce,
+            }
+            canonical = json.dumps(payload_for_hmac, sort_keys=True)
+            payload_hmac = hmac_mod.new(
+                bootstrap_secret.encode(), canonical.encode(), hashlib.sha256
+            ).hexdigest()
+
+            # Add hmac to payload
+            payload_for_hmac["hmac"] = payload_hmac
+
+            # Publish registration
+            await self._bootstrap_mqtt.publish(
+                "dm/bootstrap/register",
+                json.dumps(payload_for_hmac),
+                qos=1,
+            )
+
+            logger.info("bootstrap_registration_sent", device_id=rid)
+            return {"status": "registering", "rid": rid}
+
+        except Exception as e:
+            self.provisioning_status = ProvisioningStatus.UNPROVISIONED
+            logger.error("bootstrap_failed", device_id=rid, error=str(e))
+            return {"status": "error", "message": str(e)}
+
+    async def _on_bootstrap_message(self, topic: str, payload: dict[str, Any]) -> None:
+        """Handle bootstrap response messages."""
+        msg_type = payload.get("type", "")
+        rid = payload.get("rid", "")
+
+        logger.info("bootstrap_response", device_id=self.device_id, type=msg_type, status=payload.get("status"))
+
+        if msg_type == "device.register_ack":
+            self.provisioning_status = ProvisioningStatus.PENDING_APPROVAL
+            logger.info("bootstrap_pending_approval", device_id=self.device_id)
+
+        elif msg_type == "device.approved":
+            self.provisioning_status = ProvisioningStatus.APPROVED
+            creds = payload.get("credentials", {})
+            self.mqtt_token = creds.get("mqtt_token")
+
+            # Disconnect bootstrap
+            if self._bootstrap_mqtt:
+                await self._bootstrap_mqtt.disconnect()
+                self._bootstrap_mqtt = None
+
+            # Reconnect as provisioned device
+            if self.mqtt_token:
+                self.provisioning_status = ProvisioningStatus.PROVISIONED
+                # Update MQTT client credentials
+                self.mqtt.username = creds.get("mqtt_username", f"device:{self.device_id}")
+                self.mqtt.password = self.mqtt_token
+                try:
+                    connected = await self.mqtt.connect_with_retry(max_retries=3)
+                    if connected:
+                        self.state = DeviceState.READY
+                        self._listen_task = asyncio.create_task(self.mqtt.listen())
+                        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+                        self._event_task = asyncio.create_task(self._event_loop())
+                        self._queue_drain_task = asyncio.create_task(self._queue_drain_loop())
+                        logger.info("bootstrap_provisioned", device_id=self.device_id)
+                except Exception as e:
+                    logger.error("bootstrap_reconnect_failed", device_id=self.device_id, error=str(e))
+
+        elif msg_type == "device.register_nack":
+            self.provisioning_status = ProvisioningStatus.REJECTED
+            logger.warn("bootstrap_rejected", device_id=self.device_id, message=payload.get("message"))
+
+        elif msg_type == "device.rejected":
+            self.provisioning_status = ProvisioningStatus.REJECTED
+
+    # ─── Provisioning: QR Flow ────────────────────────────────────────────────
+
+    async def activate_qr(self, qr_token: str, backend_url: str = "http://localhost:8002") -> dict[str, Any]:
+        """Activate device using a QR token by calling the backend API."""
+        import hashlib
+        try:
+            import aiohttp
+
+            self.provisioning_status = ProvisioningStatus.REGISTERING
+
+            payload = {
+                "qr_token": qr_token,
+                "hardware_fingerprint": {
+                    "android_id": hashlib.md5(self.device_id.encode()).hexdigest()[:12],
+                    "mac_address": ":".join(f"{b:02X}" for b in hashlib.md5(self.device_id.encode()).digest()[:6]),
+                    "model": "DM3-SIM",
+                    "firmware_version": "sim-0.1.0",
+                },
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{backend_url}/api/v1/devices/activate",
+                    json=payload,
+                ) as resp:
+                    result = await resp.json()
+
+                    if resp.status == 200:
+                        self.provisioning_status = ProvisioningStatus.PROVISIONED
+                        mqtt_info = result.get("mqtt", {})
+                        self.mqtt_token = mqtt_info.get("token")
+                        self.mqtt.username = mqtt_info.get("username", f"device:{self.device_id}")
+                        self.mqtt.password = self.mqtt_token
+
+                        # Connect as provisioned device
+                        connected = await self.mqtt.connect_with_retry(max_retries=3)
+                        if connected:
+                            self.state = DeviceState.READY
+                            self._listen_task = asyncio.create_task(self.mqtt.listen())
+                            self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+                            self._event_task = asyncio.create_task(self._event_loop())
+                            self._queue_drain_task = asyncio.create_task(self._queue_drain_loop())
+                        logger.info("qr_activated", device_id=self.device_id)
+                        return result
+                    else:
+                        self.provisioning_status = ProvisioningStatus.UNPROVISIONED
+                        logger.error("qr_activation_failed", device_id=self.device_id, status=resp.status, error=result)
+                        return {"status": "error", "error": result}
+        except Exception as e:
+            self.provisioning_status = ProvisioningStatus.UNPROVISIONED
+            logger.error("qr_activation_error", device_id=self.device_id, error=str(e))
+            return {"status": "error", "message": str(e)}
+
     async def trigger_access(
         self,
         credential_type: str = "card",
@@ -388,4 +572,5 @@ class VirtualDevice:
             "network_disabled": self.network_disabled,
             "auto_trigger": self.auto_trigger,
             "running": self._running,
+            "provisioning_status": self.provisioning_status.value,
         }

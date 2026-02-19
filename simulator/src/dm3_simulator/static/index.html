@@ -29,6 +29,14 @@
   .tab-btn { transition: all 0.15s; cursor: pointer; }
   .tab-btn:hover { color: #93C5FD; }
   @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+  /* Provisioning badges */
+  .prov-unprovisioned { background: #374151; color: #9CA3AF; }
+  .prov-registering { background: #1E3A5F; color: #60A5FA; }
+  .prov-pending_approval { background: #78350F; color: #FBBF24; }
+  .prov-approved { background: #064E3B; color: #34D399; }
+  .prov-rejected { background: #7F1D1D; color: #F87171; }
+  .prov-provisioned { background: #1C1917; color: #78716C; }
+  .modal-overlay { backdrop-filter: blur(4px); }
 </style>
 </head>
 <body class="min-h-screen">
@@ -39,7 +47,8 @@
     <h1 class="text-xl font-bold text-white">🏢 DM3 Simulator Dashboard</h1>
     <p class="text-sm text-gray-400 mt-1">Virtual Access Control Device Simulator</p>
   </div>
-  <div class="flex gap-6 text-sm">
+  <div class="flex gap-6 text-sm items-center">
+    <button onclick="openNewDeviceModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">➕ New Device</button>
     <div class="text-center"><div class="text-2xl font-bold text-white" id="stat-total">0</div><div class="text-gray-400">Devices</div></div>
     <div class="text-center"><div class="text-2xl font-bold text-green-400" id="stat-online">0</div><div class="text-gray-400">Online</div></div>
     <div class="text-center"><div class="text-2xl font-bold text-blue-400" id="stat-eps">0</div><div class="text-gray-400">Events/s</div></div>
@@ -166,11 +175,10 @@
         <input type="checkbox" id="select-all" onchange="toggleSelectAll(this.checked)" class="accent-blue-500">
         <span class="w-20">Device ID</span>
         <span class="w-16">State</span>
+        <span class="w-24">Provisioning</span>
         <span class="w-14">Network</span>
-        <span class="w-14">Auto</span>
-        <span class="flex-1">Doors</span>
+        <span class="flex-1">Actions</span>
         <span class="w-16 text-right">Events</span>
-        <span class="w-14 text-right">Queue</span>
         <span class="w-10"></span>
       </div>
       <div id="device-grid" class="max-h-[500px] overflow-y-auto space-y-0.5">
@@ -305,19 +313,27 @@ async function poll() {
       const prevChecked = new Set();
       grid.querySelectorAll('input[type=checkbox]:checked').forEach(cb => prevChecked.add(cb.dataset.id));
       
-      grid.innerHTML = devices.map(d => `
+      grid.innerHTML = devices.map(d => {
+        const ps = d.provisioning_status || 'provisioned';
+        const provActions = ps === 'unprovisioned' ? `
+          <button onclick="event.stopPropagation();bootstrapDevice('${d.device_id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-0.5 rounded text-[10px]">🔗 Bootstrap</button>
+          <button onclick="event.stopPropagation();openQRModal('${d.device_id}')" class="bg-teal-600 hover:bg-teal-700 text-white px-2 py-0.5 rounded text-[10px]">📱 QR Activate</button>
+        ` : ps === 'pending_approval' ? `
+          <button onclick="event.stopPropagation();approveDevice('${d.device_id}')" class="bg-green-600 hover:bg-green-700 text-white px-2 py-0.5 rounded text-[10px]">✅ Approve</button>
+          <button onclick="event.stopPropagation();rejectDevice('${d.device_id}')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded text-[10px]">❌ Reject</button>
+        ` : '';
+        return `
         <div class="flex items-center gap-2 text-xs px-1 py-1.5 rounded hover:bg-gray-800/50 ${!d.running ? 'opacity-40' : ''} ${d.network_disabled ? 'bg-yellow-900/10' : ''}">
           <input type="checkbox" class="device-cb accent-blue-500" data-id="${d.device_id}" ${prevChecked.has(d.device_id)?'checked':''} onchange="updateSelectedCount()" onclick="event.stopPropagation()">
           <span class="w-20 font-mono text-white cursor-pointer hover:text-blue-400" onclick="openDeviceModal('${d.device_id}')">${d.device_id}</span>
           <span class="w-16"><span class="dot dot-${stateClass(d.state)}"></span> <span class="status-${stateClass(d.state)} uppercase">${d.state}</span></span>
+          <span class="w-24"><span class="prov-${ps} px-1.5 py-0.5 rounded text-[10px] font-medium">${ps.replace('_',' ')}</span></span>
           <span class="w-14">${d.network_disabled ? '<span class="text-yellow-400">📡 OFF</span>' : '<span class="text-green-400/60">📡 ON</span>'}</span>
-          <span class="w-14">${d.auto_trigger ? '<span class="text-purple-400">🔄 ON</span>' : '<span class="text-gray-500">⏸ OFF</span>'}</span>
-          <span class="flex-1 text-gray-400 truncate">${d.door_ids?.join(', ') || '—'}</span>
+          <span class="flex-1 flex gap-1">${provActions}</span>
           <span class="w-16 text-right text-gray-300 font-mono">${d.events_published}</span>
-          <span class="w-14 text-right font-mono ${d.network_disabled ? 'text-yellow-400' : 'text-gray-500'}">${d.network_disabled ? '⏳' : '—'}</span>
           <span class="w-10 text-right"><button class="text-blue-400 hover:text-blue-300" onclick="event.stopPropagation();openDeviceModal('${d.device_id}')">🔍</button></span>
-        </div>
-      `).join('');
+        </div>`;
+      }).join('');
     }
     updateSelectedCount();
   }
@@ -656,6 +672,141 @@ async function loadTabContent(tab) {
 
 function cfgRow(label, value) {
   return `<div class="flex justify-between"><span class="text-gray-400">${label}</span><span class="text-white">${value ?? '—'}</span></div>`;
+}
+
+// ─── Provisioning Functions ───────────────────────────────────────────────
+
+function openNewDeviceModal() {
+  const modal = document.createElement('div');
+  modal.id = 'new-device-modal';
+  modal.className = 'fixed inset-0 bg-black/70 modal-overlay z-50 flex items-center justify-center p-4';
+  modal.onclick = e => { if(e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div class="card p-6 w-full max-w-md" onclick="event.stopPropagation()">
+      <h2 class="text-lg font-bold text-white mb-4">➕ New Unprovisioned Device</h2>
+      <div class="space-y-3">
+        <div>
+          <label class="text-gray-400 text-sm block mb-1">Device RID (6-digit ID)</label>
+          <input id="new-rid" type="text" placeholder="e.g. 000099" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm" autofocus>
+        </div>
+        <div>
+          <label class="text-gray-400 text-sm block mb-1">Device Type</label>
+          <select id="new-dtype" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+            <option value="terminal">Terminal</option>
+            <option value="reader">Reader</option>
+            <option value="controller">Controller</option>
+          </select>
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button onclick="createNewDevice()" class="btn-green text-white px-4 py-2 rounded text-sm font-medium flex-1">Create</button>
+          <button onclick="document.getElementById('new-device-modal').remove()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded text-sm font-medium">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.getElementById('new-rid').focus();
+}
+
+async function createNewDevice() {
+  const rid = document.getElementById('new-rid').value.trim();
+  const dtype = document.getElementById('new-dtype').value;
+  if (!rid) return;
+  const r = await fetchJSON('/api/devices/new', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ rid, device_type: dtype })
+  });
+  document.getElementById('new-device-modal')?.remove();
+  if (r && r.status === 'created') poll();
+}
+
+async function bootstrapDevice(deviceId) {
+  await fetchJSON(`/api/devices/${deviceId}/bootstrap`, { method: 'POST' });
+  poll();
+}
+
+function openQRModal(deviceId) {
+  const modal = document.createElement('div');
+  modal.id = 'qr-modal';
+  modal.className = 'fixed inset-0 bg-black/70 modal-overlay z-50 flex items-center justify-center p-4';
+  modal.onclick = e => { if(e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div class="card p-6 w-full max-w-md" onclick="event.stopPropagation()">
+      <h2 class="text-lg font-bold text-white mb-4">📱 QR Activation — ${deviceId}</h2>
+      <div class="space-y-3">
+        <div>
+          <label class="text-gray-400 text-sm block mb-1">QR Token (from backend /api/v1/devices/provision)</label>
+          <textarea id="qr-token-input" rows="4" placeholder="Paste QR token here..." class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm font-mono"></textarea>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="activateWithQR('${deviceId}')" class="btn-green text-white px-4 py-2 rounded text-sm font-medium flex-1">🔓 Activate</button>
+          <button onclick="document.getElementById('qr-modal').remove()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded text-sm font-medium">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function activateWithQR(deviceId) {
+  const token = document.getElementById('qr-token-input').value.trim();
+  if (!token) return;
+  const r = await fetchJSON(`/api/devices/${deviceId}/activate`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ qr_token: token })
+  });
+  document.getElementById('qr-modal')?.remove();
+  poll();
+}
+
+async function approveDevice(deviceId) {
+  // Get pending registration from backend, then approve
+  const pending = await fetchJSON('http://localhost:8002/api/v1/devices/pending');
+  if (!pending) return;
+  const reg = (Array.isArray(pending) ? pending : []).find(p => p.rid === deviceId && p.status === 'pending');
+  if (!reg) { alert('No pending registration found for ' + deviceId); return; }
+
+  // We need a company_id — use default
+  const r = await fetch(`http://localhost:8002/api/v1/devices/pending/${reg.id}/approve`, {
+    method: 'POST', headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + generateAdminJWT()
+    },
+    body: JSON.stringify({
+      company_id: '00000000-0000-0000-0000-000000000001',
+      name: 'Device ' + deviceId,
+    })
+  });
+  poll();
+}
+
+async function rejectDevice(deviceId) {
+  const pending = await fetchJSON('http://localhost:8002/api/v1/devices/pending');
+  if (!pending) return;
+  const reg = (Array.isArray(pending) ? pending : []).find(p => p.rid === deviceId && p.status === 'pending');
+  if (!reg) return;
+  await fetch(`http://localhost:8002/api/v1/devices/pending/${reg.id}/reject`, {
+    method: 'POST', headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + generateAdminJWT()
+    }
+  });
+  poll();
+}
+
+// Simple JWT generation for dev/testing (HS256, matches dm3-dev-secret-change-me)
+function generateAdminJWT() {
+  // In development, we use a hardcoded dev JWT.
+  // The backend accepts JWT_SECRET=dm3-dev-secret-change-me
+  function b64url(s) { return btoa(s).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_'); }
+  const header = b64url(JSON.stringify({alg:'HS256',typ:'JWT'}));
+  const now = Math.floor(Date.now()/1000);
+  const payload = b64url(JSON.stringify({
+    sub:'user:admin', role:'system_admin',
+    cid:'00000000-0000-0000-0000-000000000001',
+    iat:now, exp:now+3600, iss:'dm3'
+  }));
+  // NOTE: This is unsigned — works only if backend doesn't validate signature in dev mode
+  // For real testing, get a token from auth-svc
+  return header + '.' + payload + '.dev-unsigned';
 }
 
 // Start polling

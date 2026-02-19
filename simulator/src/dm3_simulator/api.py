@@ -54,6 +54,12 @@ class SimulatorAPI:
         self.app.router.add_get("/api/simulation/status", self.get_simulation_status)
         self.app.router.add_post("/api/simulation/start", self.start_simulation)
         self.app.router.add_post("/api/simulation/stop", self.stop_simulation)
+        # Provisioning endpoints
+        self.app.router.add_post("/api/devices/new", self.create_new_device)
+        self.app.router.add_post("/api/devices/{device_id}/bootstrap", self.start_bootstrap)
+        self.app.router.add_post("/api/devices/{device_id}/activate", self.activate_qr)
+        self.app.router.add_post("/api/simulate/activate", self.simulate_activate)
+        self.app.router.add_post("/api/simulate/bootstrap", self.simulate_bootstrap)
         # Serve index.html at root
         self.app.router.add_get("/", self.serve_index)
         # Serve static files
@@ -450,6 +456,132 @@ class SimulatorAPI:
         else:
             device.auto_trigger = not device.auto_trigger
         return web.json_response({"status": "ok", "device_id": device_id, "auto_trigger": device.auto_trigger})
+
+    # ─── Provisioning Endpoints ─────────────────────────────────────────────
+
+    async def create_new_device(self, request: web.Request) -> web.Response:
+        """Create a new unprovisioned virtual device."""
+        body = await request.json() if request.body_exists else {}
+        rid = body.get("rid") or body.get("device_id")
+        if not rid:
+            return web.json_response({"error": "rid is required"}, status=400)
+
+        if rid in self.devices:
+            return web.json_response({"error": "device already exists"}, status=409)
+
+        from dm3_simulator.device import VirtualDevice
+        from dm3_simulator.models import SimulationConfig, ProvisioningStatus
+
+        # Create config matching current simulation but don't auto-start
+        config = SimulationConfig(
+            broker=body.get("broker", self.simulation_config.get("broker", "mqtt://localhost:1884")),
+            tenant_id=body.get("tenant_id", self.simulation_config.get("tenant_id", "tenant-001")),
+            site_id=body.get("site_id", self.simulation_config.get("site_id", "site-001")),
+            device_type=body.get("device_type", "terminal"),
+            devices=1,
+            event_rate=float(body.get("event_rate", 1.0)),
+        )
+
+        device = VirtualDevice(rid, config)
+        device.provisioning_status = ProvisioningStatus.UNPROVISIONED
+        device.auto_trigger = False
+        device.event_callback = self.record_event
+        self.devices[rid] = device
+
+        # Initialize DB only (don't connect MQTT)
+        await device.db.connect()
+
+        logger.info("new_unprovisioned_device", device_id=rid)
+        return web.json_response({
+            "status": "created",
+            "device_id": rid,
+            "provisioning_status": "unprovisioned",
+        }, status=201)
+
+    async def start_bootstrap(self, request: web.Request) -> web.Response:
+        """Start bootstrap provisioning flow for a device."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+
+        body = await request.json() if request.body_exists else {}
+        secret = body.get("bootstrap_secret", "dm3-bootstrap-v1-dev-secret")
+
+        result = await device.start_bootstrap(bootstrap_secret=secret)
+        return web.json_response(result)
+
+    async def activate_qr(self, request: web.Request) -> web.Response:
+        """Activate a device using a QR token."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+
+        body = await request.json() if request.body_exists else {}
+        qr_token = body.get("qr_token")
+        if not qr_token:
+            return web.json_response({"error": "qr_token is required"}, status=400)
+
+        backend_url = body.get("backend_url", "http://localhost:8002")
+        result = await device.activate_qr(qr_token, backend_url=backend_url)
+        return web.json_response(result)
+
+    async def simulate_activate(self, request: web.Request) -> web.Response:
+        """Shortcut: create device + activate with QR token in one step."""
+        body = await request.json() if request.body_exists else {}
+        qr_token = body.get("qr_token")
+        if not qr_token:
+            return web.json_response({"error": "qr_token is required"}, status=400)
+
+        rid = body.get("rid", f"sim-qr-{int(time.time()) % 100000:05d}")
+
+        # Create device
+        from dm3_simulator.device import VirtualDevice
+        from dm3_simulator.models import SimulationConfig, ProvisioningStatus
+
+        config = SimulationConfig(
+            broker=body.get("broker", self.simulation_config.get("broker", "mqtt://localhost:1884")),
+            tenant_id=body.get("tenant_id", self.simulation_config.get("tenant_id", "tenant-001")),
+            devices=1,
+        )
+        device = VirtualDevice(rid, config)
+        device.provisioning_status = ProvisioningStatus.UNPROVISIONED
+        device.auto_trigger = False
+        device.event_callback = self.record_event
+        self.devices[rid] = device
+        await device.db.connect()
+
+        backend_url = body.get("backend_url", "http://localhost:8002")
+        result = await device.activate_qr(qr_token, backend_url=backend_url)
+        return web.json_response({"device_id": rid, **result})
+
+    async def simulate_bootstrap(self, request: web.Request) -> web.Response:
+        """Shortcut: create device + start bootstrap in one step."""
+        body = await request.json() if request.body_exists else {}
+        rid = body.get("rid")
+        if not rid:
+            return web.json_response({"error": "rid is required"}, status=400)
+
+        from dm3_simulator.device import VirtualDevice
+        from dm3_simulator.models import SimulationConfig, ProvisioningStatus
+
+        config = SimulationConfig(
+            broker=body.get("broker", self.simulation_config.get("broker", "mqtt://localhost:1884")),
+            tenant_id=body.get("tenant_id", self.simulation_config.get("tenant_id", "tenant-001")),
+            device_type=body.get("device_type", "terminal"),
+            devices=1,
+        )
+        device = VirtualDevice(rid, config)
+        device.provisioning_status = ProvisioningStatus.UNPROVISIONED
+        device.auto_trigger = False
+        device.event_callback = self.record_event
+        self.devices[rid] = device
+        await device.db.connect()
+
+        secret = body.get("bootstrap_secret", "dm3-bootstrap-v1-dev-secret")
+        result = await device.start_bootstrap(bootstrap_secret=secret)
+        return web.json_response({"device_id": rid, **result})
 
     def record_event(self, event: dict[str, Any]) -> None:
         """Record an event for the recent events feed."""
