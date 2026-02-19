@@ -1,19 +1,37 @@
+version: "3.8"
+
 services:
-  mosquitto:
-    image: eclipse-mosquitto:2
+  emqx:
+    image: emqx/emqx:5.8
+    container_name: dm3-emqx
     ports:
-      - "1883:1883"
+      - "1884:1883"     # MQTT (1884 external, 1883 internal — avoids Roombox RabbitMQ on 1883)
+      - "8083:8083"     # WebSocket
+      - "8084:8084"     # WSS
+      - "18083:18083"   # EMQX Dashboard
+    environment:
+      - EMQX_ALLOW_ANONYMOUS=true
+      - EMQX_LISTENER__TCP__EXTERNAL=1883
     volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
-    restart: unless-stopped
+      - emqx-data:/opt/emqx/data
+    healthcheck:
+      test: ["CMD", "emqx", "ctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   simulator:
     build: .
-    command: run --devices 10 --broker mqtt://mosquitto:1883 --tenant-id tenant-001
-    depends_on:
-      - mosquitto
+    container_name: dm3-simulator
     ports:
       - "9090:9090"
-    environment:
-      - DM3_TENANT_ID=tenant-001
+    depends_on:
+      emqx:
+        condition: service_healthy
+    command: run --devices 10 --broker mqtt://emqx:1883 --site-id site-001
     restart: unless-stopped
+    environment:
+      - DM3_BROKER_URL=mqtt://emqx:1883
+
+volumes:
+  emqx-data:
