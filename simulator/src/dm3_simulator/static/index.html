@@ -570,14 +570,25 @@ async function loadTabContent(tab) {
           <h3 class="text-white font-semibold">Device Info</h3>
           ${cfgRow('Device ID', data.device_id)}
           ${cfgRow('Site ID', data.site_id)}
-          ${cfgRow('Tenant ID', data.tenant_id)}
+          ${cfgRow('Tenant ID', `<span class="font-mono text-[11px]">${data.tenant_id}</span>`)}
           ${cfgRow('State', `<span class="status-${data.state}">${data.state.toUpperCase()}</span>`)}
-          ${cfgRow('MQTT', data.mqtt_connected ? '<span class="text-green-400">Connected</span>' : '<span class="text-red-400">Disconnected</span>')}
+          ${cfgRow('Provisioning', `<span class="prov-${data.provisioning_status || 'unknown'} px-2 py-0.5 rounded text-[11px]">${(data.provisioning_status || 'unknown').toUpperCase()}</span>`)}
           ${cfgRow('Lockdown', data.lockdown_active ? '<span class="text-red-400">ACTIVE</span>' : '<span class="text-gray-400">No</span>')}
         </div>
         <div class="space-y-3">
+          <h3 class="text-white font-semibold">MQTT Connection</h3>
+          ${cfgRow('Broker', `<span class="font-mono text-[11px]">${data.mqtt_broker || '—'}</span>`)}
+          ${cfgRow('Host:Port', `<span class="font-mono text-[11px]">${data.mqtt_host || '—'}:${data.mqtt_port || '—'}</span>`)}
+          ${cfgRow('Username', `<span class="font-mono text-[11px]">${data.mqtt_username || '—'}</span>`)}
+          ${cfgRow('Client ID', `<span class="font-mono text-[11px]">${data.mqtt_client_id || '—'}</span>`)}
+          ${cfgRow('Topic Prefix', `<span class="font-mono text-[11px]">${data.mqtt_topic_prefix || '—'}</span>`)}
+          ${cfgRow('Status', data.mqtt_connected ? '<span class="text-green-400">● Connected</span>' : '<span class="text-red-400">● Disconnected</span>')}
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4 text-sm mt-4">
+        <div class="space-y-3">
           <h3 class="text-white font-semibold">Statistics</h3>
-          ${cfgRow('Doors', data.doors?.join(', '))}
+          ${cfgRow('Doors', data.doors?.join(', ') || 'None')}
           ${cfgRow('Person Count', data.person_count)}
           ${cfgRow('Events Published', data.events_published)}
           ${cfgRow('Uptime', formatUptime(data.uptime_s))}

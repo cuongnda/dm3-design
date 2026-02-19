@@ -445,6 +445,15 @@ class SimulatorAPI:
             "uptime_s": int(time.time() - device.start_time),
             "lockdown_active": device.lockdown_active,
             "person_count": await device.db.get_person_count(),
+            # MQTT connection details
+            "mqtt_broker": device.config.broker,
+            "mqtt_host": device.mqtt.host,
+            "mqtt_port": device.mqtt.port,
+            "mqtt_username": device.mqtt.username or "(none)",
+            "mqtt_client_id": f"dm3-{device.device_id}",
+            "mqtt_topic_prefix": device.mqtt.topic_prefix,
+            # Provisioning
+            "provisioning_status": device.provisioning_status.value if hasattr(device.provisioning_status, 'value') else str(device.provisioning_status),
         }
         # Sync state
         async with device.db.db.execute("SELECT key, value FROM sync_state") as cursor:
