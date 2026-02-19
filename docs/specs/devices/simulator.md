@@ -21,21 +21,16 @@ The DM3 Device Simulator creates virtual access control devices for end-to-end t
 ## Running
 
 ```bash
+# Docker (recommended) — starts with 0 devices by default
 cd simulator
+docker compose up -d
+
+# Local
 pip install -e .
-python -m dm3_simulator run --broker mqtt://localhost:1884 --devices 10
+python -m dm3_simulator run --broker mqtt://localhost:1884 --devices 0
 ```
 
-Or with all options:
-```bash
-dm3-simulator run \
-  --broker mqtt://localhost:1884 \
-  --tenant-id tenant-001 \
-  --devices 10 \
-  --mode normal \
-  --event-rate 1.0 \
-  --api-port 9090
-```
+**Important:** Simulator starts with **zero devices** by default. All devices must be created via the dashboard or API and go through proper provisioning (Bootstrap or QR) before they can connect to MQTT.
 
 ## Provisioning Simulation
 
@@ -93,9 +88,11 @@ dm3-simulator run \
 |--------|------|-------------|
 | GET | `/api/status` | Overall status |
 | GET | `/api/stats` | Detailed metrics |
-| POST | `/api/simulation/start` | Start simulation with config |
+| POST | `/api/simulation/start` | Create N unprovisioned devices (batch) |
 | POST | `/api/simulation/stop` | Stop all devices |
 | GET | `/api/events/recent` | Recent event feed |
+
+> **Note:** `POST /api/simulation/start` creates unprovisioned devices with sequential 6-digit IDs (000001, 000002, ...). Devices must go through Bootstrap or QR provisioning before connecting to MQTT. This is the same as clicking "➕ Create Devices" on the dashboard.
 
 ### Device Inspection
 
@@ -110,8 +107,8 @@ dm3-simulator run \
 ## Dashboard Features
 
 - **Header** — Device count, online count, events/s, simulation status, "➕ New Device" button
-- **Configuration Panel** — Broker URL, device count, mode, event rate, start/stop
-- **Device Grid** — All devices with state, provisioning status, network status, action buttons
+- **Configuration Panel** — Broker URL, device count, mode, event rate, "➕ Create Devices" / "⏹ Stop All"
+- **Device Grid** — All devices with state, provisioning status, network status, action buttons (Bootstrap/QR on unprovisioned devices)
 - **Provisioning Badges** — Color-coded: unprovisioned (gray), registering (blue), pending (yellow), approved (green), rejected (red)
 - **Provisioning Actions** — Bootstrap, QR Activate, Approve, Reject buttons contextual to device state
 - **Metrics Panel** — Throughput, access decisions, latency, offline/sync stats
@@ -127,4 +124,4 @@ unprovisioned → registering → pending_approval → approved → provisioned 
 unprovisioned → registering (QR) → provisioned → ready (online)
 ```
 
-Existing pre-started devices (sim-000001 to sim-000010) start as `provisioned`.
+All devices start as `unprovisioned` and must go through Bootstrap or QR flow. No devices are auto-created or pre-provisioned — this ensures testing reflects real-world provisioning behavior.
