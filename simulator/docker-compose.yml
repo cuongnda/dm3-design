@@ -1,0 +1,19 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+    restart: unless-stopped
+
+  simulator:
+    build: .
+    command: run --devices 10 --broker mqtt://mosquitto:1883 --tenant-id tenant-001
+    depends_on:
+      - mosquitto
+    ports:
+      - "9090:9090"
+    environment:
+      - DM3_TENANT_ID=tenant-001
+    restart: unless-stopped
