@@ -92,7 +92,7 @@ async def _run_simulation(config: SimulationConfig) -> None:
 
     # Create virtual devices
     for i in range(config.devices):
-        device_id = f"{config.device_prefix}-{i + 1:04d}"
+        device_id = f"{i + 1:06d}"
         door_ids = [f"{device_id}-door-{j + 1:03d}" for j in range(config.doors_per_device)]
         device = VirtualDevice(device_id, config, door_ids)
         devices[device_id] = device
@@ -159,7 +159,7 @@ async def _seed_databases(devices: int, persons: int, output_dir: str) -> None:
     os.makedirs(output_dir, exist_ok=True)
 
     for i in range(devices):
-        device_id = f"sim-{i + 1:04d}"
+        device_id = f"{i + 1:06d}"
         db_path = os.path.join(output_dir, f"{device_id}.db")
         door_ids = [f"{device_id}-door-001"]
 

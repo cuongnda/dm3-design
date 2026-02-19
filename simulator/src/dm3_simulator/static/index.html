@@ -208,7 +208,7 @@ async function poll() {
         <div class="device-card card p-2 text-xs" onclick="triggerDevice('${d.device_id}')">
           <div class="flex items-center gap-1 mb-1">
             <span class="dot dot-${stateClass(d.state)}"></span>
-            <span class="font-mono text-white truncate">${d.device_id.replace('sim-','')}</span>
+            <span class="font-mono text-white truncate">${d.device_id}</span>
           </div>
           <div class="text-gray-400">${d.door_ids?.[0]?.split('-').pop() || 'door'}</div>
           <div class="status-${stateClass(d.state)} font-medium uppercase">${d.state}</div>
@@ -251,7 +251,7 @@ async function poll() {
         const cls = e.decision === 'GRANTED' ? 'granted' : e.reason?.includes('alarm') ? 'alarm' : 'denied';
         return `<div class="event-${cls} bg-gray-800/50 px-2 py-1 rounded">
           <span class="text-gray-500">${formatTime(e.timestamp)}</span>
-          <span class="font-mono text-blue-300">${(e.device_id||'').replace('sim-','')}</span>
+          <span class="font-mono text-blue-300">${e.device_id||''}</span>
           <span class="${cls==='granted'?'text-green-400':cls==='alarm'?'text-yellow-400':'text-red-400'} font-medium">${e.decision}</span>
           <span class="text-gray-300">${e.person_name||'Unknown'}</span>
           <span class="text-gray-500">${e.credential_type||''}</span>

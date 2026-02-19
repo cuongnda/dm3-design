@@ -77,7 +77,7 @@ class DeviceMqttClient:
             username=self.username,
             password=self.password,
             tls_context=tls_params,
-            identifier=f"dm3-sim-{self.device_id}",
+            identifier=f"dm3-{self.device_id}",
             will=self._build_lwt(),
             keepalive=60,
         )
