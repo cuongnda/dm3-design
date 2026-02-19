@@ -335,7 +335,7 @@ class VirtualDevice:
         """Generate simulated access events at configured rate."""
         while self._running:
             try:
-                if self.state == DeviceState.READY:
+                if self.state in (DeviceState.READY, DeviceState.OFFLINE):
                     await self.trigger_access()
                     self.current_direction = random.choice(["entry", "exit"])
             except Exception as e:
