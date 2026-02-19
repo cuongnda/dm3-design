@@ -393,6 +393,114 @@ username: "device:*"
 
 ---
 
+## Token Lifecycle & Offline Resilience
+
+### Device JWT Refresh
+
+Device MQTT JWTs expire after 24 hours. Devices must refresh before expiry.
+
+**Normal refresh (device online, token not yet expired):**
+```
+Device checks JWT expiry every 5 minutes
+  → If < 1 hour remaining:
+    POST /api/v1/devices/refresh-token
+    Auth: Bearer {current-jwt}
+    → Returns new 24h JWT
+    → Device reconnects to MQTT with new token
+```
+
+**Expired token refresh (device was offline > 24h):**
+```
+Device boots up / reconnects after outage
+  → JWT expired → MQTT connection rejected
+  → Call refresh endpoint with expired JWT:
+    POST /api/v1/devices/refresh-token
+    Auth: Bearer {expired-jwt}
+  → Server checks:
+    - Is the device still active? (not decommissioned)
+    - Is the token within grace period? (expired < 7 days ago)
+    - Is the device_id valid and matches the JWT claims?
+  → If all pass: returns new 24h JWT ✅
+  → If grace period exceeded (> 7 days): returns 401 → device needs re-provisioning
+  → If device decommissioned: returns 403 → device shows "Deactivated"
+```
+
+### Grace Period Configuration
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `DEVICE_TOKEN_TTL` | 24h | JWT validity period |
+| `DEVICE_REFRESH_GRACE_DAYS` | 7 | Max days an expired token can still refresh |
+| `DEVICE_REFRESH_BUFFER` | 1h | How early before expiry device should refresh |
+
+### Offline Mode Behavior
+
+When a device cannot reach the server (no network, server down):
+
+```
+1. Device operates in FULL OFFLINE MODE
+   → Access decisions made locally from synced person DB + rules
+   → This is by design (offline-first architecture)
+
+2. Events queued locally
+   → Access events stored in Room DB (SQLite)
+   → Queue drains automatically when reconnected
+   → Events include original timestamp (not upload time)
+
+3. Reconnection strategy (exponential backoff)
+   → Retry MQTT: 5s → 10s → 30s → 60s → 300s (5min max)
+   → Retry HTTPS refresh: every 5 minutes
+   → On successful refresh → reconnect MQTT → drain event queue
+
+4. Device status on server
+   → Missed 3 heartbeats (90s) → status: "offline"
+   → Reconnects → status: "online" → heartbeats resume
+```
+
+### Edge Cases
+
+| Scenario | Device Behavior | Server Behavior |
+|----------|----------------|-----------------|
+| Offline < 24h | Reconnects with same JWT | Updates last_seen, status → online |
+| Offline 1-7 days | Refreshes expired JWT via HTTPS, then reconnects | Issues new JWT, logs reconnection |
+| Offline > 7 days | Refresh rejected (401), shows "Re-activation needed" | Rejects refresh, requires re-provisioning |
+| Server unreachable | Full offline mode, queues events, retries every 5min | Shows device as "offline" |
+| Device decommissioned while offline | Refresh returns 403, shows "Deactivated" | Device record marked decommissioned |
+| Network flap (brief disconnect) | Auto-reconnect with same JWT (< 24h) | Brief offline blip in status |
+| Clock drift on device | Server allows ±5min tolerance on JWT timestamps | Logged as warning |
+
+### Refresh Token Endpoint (Updated)
+
+**`POST /api/v1/devices/refresh-token`**
+
+**Auth:** Device JWT (valid OR expired within grace period)
+
+**Server logic:**
+```
+1. Parse JWT (skip expiry validation)
+2. Extract device_id, company_id from claims
+3. Verify device exists and status != decommissioned
+4. Check JWT issued_at:
+   - If expired > DEVICE_REFRESH_GRACE_DAYS → 401 "Token expired beyond grace period"
+   - If device decommissioned → 403 "Device deactivated"
+5. Generate new 24h JWT
+6. Update device.last_seen
+7. Return new JWT
+```
+
+**Response 200:**
+```json
+{
+  "token": "eyJhbG...",
+  "expires_at": "2026-02-20T21:51:00Z"
+}
+```
+
+**Response 401:** `{"error": "Token expired beyond grace period. Re-provisioning required."}`
+**Response 403:** `{"error": "Device has been deactivated."}`
+
+---
+
 ## Simulator Support
 
 The device simulator should support both flows for testing:
