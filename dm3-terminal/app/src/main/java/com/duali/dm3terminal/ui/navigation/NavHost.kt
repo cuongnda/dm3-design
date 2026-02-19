@@ -1,7 +1,7 @@
 package com.duali.dm3terminal.ui.navigation
 
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -11,83 +11,151 @@ import androidx.navigation.navArgument
 import com.duali.dm3terminal.ui.screens.*
 
 object Routes {
-    const val STANDBY = "standby"
-    const val RECOGNITION = "recognition"
-    const val RESULT = "result/{granted}/{personName}/{reason}"
+    const val IDLE = "idle"
+    const val CAMERA_READY = "camera_ready"
+    const val FACE_SCAN = "face_scan"
+    const val GRANTED = "granted/{personName}"
+    const val DENIED = "denied/{reason}"
+    const val QR_SCAN = "qr_scan"
+    const val NFC = "nfc"
     const val PIN = "pin"
-    const val ADMIN = "admin"
+    const val SETTINGS_MENU = "settings_menu"
+    const val DEVICE_CONFIG = "device_config"
+    const val FACE_RECOGNITION_SETTINGS = "face_recognition_settings"
+    const val USER_MANAGEMENT = "user_management"
+    const val FACE_ENROLLMENT = "face_enrollment"
 
-    fun result(granted: Boolean, personName: String, reason: String) =
-        "result/$granted/$personName/$reason"
+    fun granted(personName: String) = "granted/$personName"
+    fun denied(reason: String) = "denied/$reason"
 }
 
 @Composable
 fun DM3NavHost() {
     val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = Routes.STANDBY) {
-        composable(Routes.STANDBY) {
-            StandbyScreen(
-                onTap = { navController.navigate(Routes.RECOGNITION) },
+    fun navigateClean(route: String) {
+        navController.navigate(route) {
+            popUpTo(Routes.IDLE) { inclusive = false }
+        }
+    }
+
+    fun navigateToIdle() {
+        navController.navigate(Routes.IDLE) {
+            popUpTo(Routes.IDLE) { inclusive = true }
+        }
+    }
+
+    NavHost(
+        navController = navController,
+        startDestination = Routes.IDLE,
+        enterTransition = { fadeIn(tween(300)) },
+        exitTransition = { fadeOut(tween(300)) },
+    ) {
+        composable(Routes.IDLE) {
+            IdleScreen(
+                onTap = { navController.navigate(Routes.CAMERA_READY) },
                 onLongPress = { navController.navigate(Routes.PIN) },
             )
         }
 
-        composable(Routes.RECOGNITION) {
-            RecognitionScreen(
-                onResult = { granted, name, reason ->
-                    navController.navigate(Routes.result(granted, name, reason)) {
-                        popUpTo(Routes.STANDBY)
-                    }
-                },
+        composable(Routes.CAMERA_READY) {
+            CameraReadyScreen(
+                onFaceDetected = { navigateClean(Routes.FACE_SCAN) },
                 onCancel = { navController.popBackStack() },
             )
         }
 
-        composable(
-            Routes.RESULT,
-            arguments = listOf(
-                navArgument("granted") { type = NavType.BoolType },
-                navArgument("personName") { type = NavType.StringType },
-                navArgument("reason") { type = NavType.StringType },
-            ),
-            enterTransition = { slideInVertically { it } },
-            exitTransition = { slideOutVertically { it } },
-        ) { backStackEntry ->
-            val granted = backStackEntry.arguments?.getBoolean("granted") ?: false
-            val personName = backStackEntry.arguments?.getString("personName") ?: ""
-            val reason = backStackEntry.arguments?.getString("reason") ?: ""
-            ResultScreen(
-                granted = granted,
-                personName = personName,
-                reason = reason,
-                onTimeout = {
-                    navController.navigate(Routes.STANDBY) {
-                        popUpTo(Routes.STANDBY) { inclusive = true }
+        composable(Routes.FACE_SCAN) {
+            FaceScanScreen(
+                onResult = { granted, personName, reason ->
+                    if (granted) {
+                        navigateClean(Routes.granted(personName))
+                    } else {
+                        navigateClean(Routes.denied(reason))
                     }
                 },
+                onCancel = { navigateToIdle() },
+            )
+        }
+
+        composable(
+            Routes.GRANTED,
+            arguments = listOf(navArgument("personName") { type = NavType.StringType }),
+        ) { entry ->
+            val personName = entry.arguments?.getString("personName") ?: ""
+            GrantedScreen(
+                personName = personName,
+                onTimeout = { navigateToIdle() },
+            )
+        }
+
+        composable(
+            Routes.DENIED,
+            arguments = listOf(navArgument("reason") { type = NavType.StringType }),
+        ) { entry ->
+            val reason = entry.arguments?.getString("reason") ?: "Face not recognized"
+            DeniedScreen(
+                reason = reason,
+                onTimeout = { navigateToIdle() },
+            )
+        }
+
+        composable(Routes.QR_SCAN) {
+            QrScanScreen(
+                onResult = { granted, personName, reason ->
+                    if (granted) {
+                        navigateClean(Routes.granted(personName))
+                    } else {
+                        navigateClean(Routes.denied(reason))
+                    }
+                },
+                onCancel = { navigateToIdle() },
+            )
+        }
+
+        composable(Routes.NFC) {
+            NfcScreen(
+                onNfcDetected = { granted, personName, reason ->
+                    if (granted) {
+                        navigateClean(Routes.granted(personName))
+                    } else {
+                        navigateClean(Routes.denied(reason))
+                    }
+                },
+                onCancel = { navigateToIdle() },
             )
         }
 
         composable(Routes.PIN) {
             PinScreen(
-                onPinVerified = {
-                    navController.navigate(Routes.ADMIN) {
-                        popUpTo(Routes.STANDBY)
-                    }
-                },
+                onPinVerified = { navigateClean(Routes.SETTINGS_MENU) },
                 onCancel = { navController.popBackStack() },
             )
         }
 
-        composable(Routes.ADMIN) {
-            AdminScreen(
-                onBack = {
-                    navController.navigate(Routes.STANDBY) {
-                        popUpTo(Routes.STANDBY) { inclusive = true }
-                    }
-                },
+        composable(Routes.SETTINGS_MENU) {
+            SettingsMenuScreen(
+                onDeviceConfig = { navController.navigate(Routes.DEVICE_CONFIG) },
+                onFaceRecognition = { navController.navigate(Routes.FACE_RECOGNITION_SETTINGS) },
+                onUserManagement = { navController.navigate(Routes.USER_MANAGEMENT) },
+                onBack = { navigateToIdle() },
             )
+        }
+
+        composable(Routes.DEVICE_CONFIG) {
+            DeviceConfigScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.FACE_RECOGNITION_SETTINGS) {
+            FaceRecognitionSettingsScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.USER_MANAGEMENT) {
+            UserManagementScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.FACE_ENROLLMENT) {
+            FaceEnrollmentScreen(onBack = { navController.popBackStack() })
         }
     }
 }

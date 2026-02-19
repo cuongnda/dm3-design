@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Microservices Communication Map — Duall Master 3.0</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: Helvetica, Arial, sans-serif; background: #FAFBFC; padding: 24px; }
+.diagram { width: 1500px; margin: 0 auto; }
+h1 { text-align: center; color: #1E293B; font-size: 20px; margin-bottom: 4px; }
+.sub { text-align: center; color: #64748B; font-size: 12px; margin-bottom: 24px; }
+.grid { display: grid; grid-template-columns: 1fr 280px 1fr; gap: 16px; align-items: start; }
+.domain { border: 2px solid; border-radius: 14px; padding: 14px; position: relative; background: #fff; }
+.domain-label { position: absolute; top: -11px; left: 16px; background: #fff; padding: 0 8px; font-weight: 700; font-size: 11px; letter-spacing: .5px; }
+.svc { border-radius: 8px; padding: 8px 10px; text-align: center; font-size: 11px; font-weight: 600; color: #fff; margin: 4px; display: inline-block; min-width: 100px; line-height: 1.3; }
+.svc small { display: block; font-weight: 400; font-size: 9px; opacity: .8; }
+.center-col { display: flex; flex-direction: column; gap: 14px; align-items: center; }
+.broker { background: #1E293B; color: #fff; border-radius: 14px; padding: 18px 24px; text-align: center; font-size: 14px; font-weight: 700; box-shadow: 0 4px 16px rgba(0,0,0,.2); width: 100%; }
+.broker small { font-weight: 400; font-size: 11px; opacity: .7; display: block; margin-top: 4px; }
+.db { background: #374151; color: #fff; border-radius: 20px; padding: 10px 16px; text-align: center; font-size: 12px; font-weight: 600; width: 100%; }
+.db small { font-weight: 400; font-size: 10px; opacity: .7; display: block; }
+.legend { display: flex; gap: 20px; justify-content: center; margin-top: 20px; padding: 12px; background: #F1F5F9; border-radius: 10px; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #475569; }
+.line { height: 3px; width: 30px; }
+.solid { background: #3B82F6; }
+.dashed { background: repeating-linear-gradient(90deg, #F59E0B 0 8px, transparent 8px 12px); }
+.dotted { background: repeating-linear-gradient(90deg, #8B5CF6 0 4px, transparent 4px 8px); }
+.conn { font-size: 10px; color: #64748B; text-align: center; padding: 2px 0; }
+.arrow-r { color: #3B82F6; font-size: 16px; }
+.arrow-d { color: #F59E0B; font-size: 16px; }
+.left-col, .right-col { display: flex; flex-direction: column; gap: 14px; }
+</style></head><body>
+<div class="diagram">
+<h1>Microservices Communication Map</h1>
+<p class="sub">~23 services · 4 domains + platform · REST / gRPC / NATS event-driven</p>
+
+<div class="grid">
+  <div class="left-col">
+    <div class="domain" style="border-color:#3B82F6;">
+      <span class="domain-label" style="color:#1D4ED8;">🔒 SECURE</span>
+      <div class="svc" style="background:#3B82F6;">access-svc<small>Go · Door Control</small></div>
+      <div class="svc" style="background:#3B82F6;">video-svc<small>Go · Camera Mgmt</small></div>
+      <div class="svc" style="background:#3B82F6;">intercom-svc<small>Go · SIP</small></div>
+      <div class="svc" style="background:#3B82F6;">alarm-svc<small>Go · Intrusion</small></div>
+      <div class="svc" style="background:#2563EB;">vision-svc<small>Python · AI Vision</small></div>
+      <div class="conn">access-svc ——gRPC——→ identity-svc</div>
+      <div class="conn">access-svc ···NATS···→ alert-svc, audit-svc</div>
+      <div class="conn">video-svc ——gRPC——→ go2rtc</div>
+      <div class="conn">vision-svc ···NATS···→ access-svc, alarm-svc</div>
+    </div>
+
+    <div class="domain" style="border-color:#8B5CF6;">
+      <span class="domain-label" style="color:#6D28D9;">👤 MANAGE</span>
+      <div class="svc" style="background:#8B5CF6;">identity-svc<small>Go · People</small></div>
+      <div class="svc" style="background:#8B5CF6;">visitor-svc<small>Go · Visitors</small></div>
+      <div class="svc" style="background:#8B5CF6;">attend-svc<small>Go · Attendance</small></div>
+      <div class="conn">identity-svc ···NATS···→ notif-svc</div>
+      <div class="conn">visitor-svc ——gRPC——→ identity-svc</div>
+      <div class="conn">attend-svc ···NATS···→ report-svc</div>
+    </div>
+  </div>
+
+  <div class="center-col">
+    <div class="broker">📡 NATS JetStream<small>Internal Event Bus · At-least-once · Durable</small></div>
+    <div class="broker">📶 EMQX<small>MQTT 5.0 Broker · IoT Devices</small></div>
+    <div style="border-top: 2px solid #CBD5E1; width: 100%; padding-top: 12px;">
+      <div class="db">🗄️ TimescaleDB<small>Schema-per-service</small></div>
+    </div>
+    <div class="db">⚡ Valkey (Redis)<small>Cache · Sessions · Pub/Sub</small></div>
+    <div class="db">📦 MinIO<small>Object Storage · S3 API</small></div>
+    <div class="db">📊 ClickHouse<small>Analytics (Phase 3)</small></div>
+    <div class="broker" style="background:#374151;">🎥 go2rtc<small>RTSP ↔ WebRTC/HLS Proxy</small></div>
+  </div>
+
+  <div class="right-col">
+    <div class="domain" style="border-color:#F59E0B;">
+      <span class="domain-label" style="color:#D97706;">🏢 OPERATE</span>
+      <div class="svc" style="background:#F59E0B;color:#1E293B;">parking-svc<small>Go · LPR</small></div>
+      <div class="svc" style="background:#F59E0B;color:#1E293B;">booking-svc<small>Go · Rooms</small></div>
+      <div class="svc" style="background:#F59E0B;color:#1E293B;">maint-svc<small>Go · Work Orders</small></div>
+      <div class="svc" style="background:#F59E0B;color:#1E293B;">iot-svc<small>Go · Sensors</small></div>
+      <div class="svc" style="background:#F59E0B;color:#1E293B;">patrol-svc<small>Go · Guard Tour</small></div>
+      <div class="svc" style="background:#F59E0B;color:#1E293B;">key-svc<small>Go · Key Cabinet</small></div>
+      <div class="conn">parking-svc ···NATS···→ access-svc</div>
+      <div class="conn">iot-svc ←···EMQX···← devices</div>
+      <div class="conn">booking-svc ···NATS···→ notif-svc</div>
+    </div>
+
+    <div class="domain" style="border-color:#06B6D4;">
+      <span class="domain-label" style="color:#0891B2;">🧠 SMART</span>
+      <div class="svc" style="background:#06B6D4;">ai-assistant<small>Python · LLM</small></div>
+      <div class="svc" style="background:#06B6D4;">anomaly-svc<small>Python · ML</small></div>
+      <div class="svc" style="background:#06B6D4;">automate-svc<small>Go · Rules</small></div>
+      <div class="svc" style="background:#06B6D4;">report-svc<small>Python · Analytics</small></div>
+      <div class="conn">ai-assistant ——REST——→ all services</div>
+      <div class="conn">anomaly-svc ···NATS···→ alert-svc</div>
+      <div class="conn">automate-svc ←···NATS···← all events</div>
+    </div>
+
+    <div class="domain" style="border-color:#6B7280;">
+      <span class="domain-label" style="color:#4B5563;">⚙️ PLATFORM</span>
+      <div class="svc" style="background:#6B7280;">auth-svc<small>Keycloak+Go</small></div>
+      <div class="svc" style="background:#6B7280;">tenant-svc<small>Go · Multi-tenant</small></div>
+      <div class="svc" style="background:#6B7280;">device-gw<small>Go · Protocols</small></div>
+      <div class="svc" style="background:#6B7280;">notif-svc<small>Go · Alerts</small></div>
+      <div class="svc" style="background:#6B7280;">audit-svc<small>Go · Immutable Log</small></div>
+      <div class="conn">device-gw ←···EMQX···← all devices</div>
+      <div class="conn">device-gw ···NATS···→ all services</div>
+      <div class="conn">audit-svc ←···NATS···← all events</div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="line solid"></div>REST (synchronous)</div>
+  <div class="legend-item"><div class="line dotted"></div>gRPC (internal sync)</div>
+  <div class="legend-item"><div class="line dashed"></div>NATS Events (async)</div>
+  <div class="legend-item">🔒 SECURE = #3B82F6</div>
+  <div class="legend-item">👤 MANAGE = #8B5CF6</div>
+  <div class="legend-item">🏢 OPERATE = #F59E0B</div>
+  <div class="legend-item">🧠 SMART = #06B6D4</div>
+  <div class="legend-item">⚙️ PLATFORM = #6B7280</div>
+</div>
+</div>
+</body></html>
