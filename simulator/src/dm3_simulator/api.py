@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import collections
+import pathlib
 import time
 from typing import Any
 
@@ -12,6 +14,8 @@ import structlog
 
 logger = structlog.get_logger()
 
+STATIC_DIR = pathlib.Path(__file__).parent / "static"
+
 
 class SimulatorAPI:
     """aiohttp REST API for the DM3 simulator control plane."""
@@ -19,6 +23,9 @@ class SimulatorAPI:
     def __init__(self, devices: dict[str, Any], start_time: float) -> None:
         self.devices = devices  # device_id -> VirtualDevice
         self.start_time = start_time
+        self.recent_events: collections.deque[dict[str, Any]] = collections.deque(maxlen=200)
+        self.simulation_running = bool(devices)
+        self.simulation_config: dict[str, Any] = {}
         self.app = web.Application()
         self._setup_routes()
 
@@ -32,6 +39,15 @@ class SimulatorAPI:
         self.app.router.add_post("/trigger/event", self.trigger_event_body)
         self.app.router.add_get("/api/metrics", self.get_metrics)
         self.app.router.add_get("/metrics", self.get_metrics)
+        self.app.router.add_get("/api/events/recent", self.get_recent_events)
+        self.app.router.add_get("/api/simulation/status", self.get_simulation_status)
+        self.app.router.add_post("/api/simulation/start", self.start_simulation)
+        self.app.router.add_post("/api/simulation/stop", self.stop_simulation)
+        # Serve index.html at root
+        self.app.router.add_get("/", self.serve_index)
+        # Serve static files
+        if STATIC_DIR.exists():
+            self.app.router.add_static("/static", STATIC_DIR)
 
     async def get_status(self, request: web.Request) -> web.Response:
         """Overall simulation status."""
@@ -95,7 +111,15 @@ class SimulatorAPI:
             credential_value=body.get("credential_value"),
             door_id=body.get("door_id"),
         )
-        return web.json_response(decision.model_dump())
+        result = decision.model_dump()
+        self.record_event({
+            "device_id": device_id, "timestamp": time.time(),
+            "decision": "GRANTED" if result["granted"] else "DENIED",
+            "person_name": result.get("person_name"), "reason": result.get("reason"),
+            "credential_type": body.get("credential_type", "card"),
+            "decision_time_ms": result.get("decision_time_ms", 0),
+        })
+        return web.json_response(result)
 
     async def trigger_event_body(self, request: web.Request) -> web.Response:
         """Trigger event via POST body with device_id."""
@@ -110,7 +134,15 @@ class SimulatorAPI:
             credential_value=body.get("credential_value"),
             door_id=body.get("door_id"),
         )
-        return web.json_response(decision.model_dump())
+        result = decision.model_dump()
+        self.record_event({
+            "device_id": device_id, "timestamp": time.time(),
+            "decision": "GRANTED" if result["granted"] else "DENIED",
+            "person_name": result.get("person_name"), "reason": result.get("reason"),
+            "credential_type": body.get("credential_type", "card"),
+            "decision_time_ms": result.get("decision_time_ms", 0),
+        })
+        return web.json_response(result)
 
     async def get_metrics(self, request: web.Request) -> web.Response:
         """Prometheus metrics endpoint."""
@@ -118,3 +150,100 @@ class SimulatorAPI:
             body=generate_latest(),
             content_type="text/plain; version=0.0.4; charset=utf-8",
         )
+
+    async def get_recent_events(self, request: web.Request) -> web.Response:
+        """Return last 100 events across all devices."""
+        limit = int(request.query.get("limit", "100"))
+        events = list(self.recent_events)[-limit:]
+        return web.json_response({"events": events, "count": len(events)})
+
+    async def get_simulation_status(self, request: web.Request) -> web.Response:
+        """Return simulation running status."""
+        connected = sum(1 for d in self.devices.values() if d.mqtt.connected)
+        return web.json_response({
+            "running": self.simulation_running,
+            "config": self.simulation_config,
+            "uptime_s": int(time.time() - self.start_time),
+            "devices_total": len(self.devices),
+            "devices_connected": connected,
+        })
+
+    async def start_simulation(self, request: web.Request) -> web.Response:
+        """Start simulation with config from request body."""
+        if self.simulation_running and self.devices:
+            return web.json_response({"status": "already_running", "devices": len(self.devices)})
+
+        body = await request.json() if request.body_exists else {}
+        self.simulation_config = body
+
+        # Import here to avoid circular imports
+        import asyncio
+        from dm3_simulator.device import VirtualDevice
+        from dm3_simulator.event_generator import generate_mock_persons, generate_mock_rules
+        from dm3_simulator.models import SimulationConfig
+
+        config = SimulationConfig(
+            broker=body.get("broker", "mqtt://localhost:1883"),
+            site_id=body.get("site_id", "site-001"),
+            tenant_id=body.get("tenant_id", "tenant-001"),
+            devices=body.get("num_devices", 10),
+            mode=body.get("mode", "normal"),
+            event_rate=body.get("event_rate", 1.0),
+        )
+
+        self.start_time = time.time()
+
+        for i in range(config.devices):
+            device_id = f"{config.device_prefix}-{i + 1:04d}"
+            door_ids = [f"{device_id}-door-{j + 1:03d}" for j in range(config.doors_per_device)]
+            device = VirtualDevice(device_id, config, door_ids)
+            self.devices[device_id] = device
+
+        # Start devices in background
+        async def _start_devices() -> None:
+            for device_id, device in list(self.devices.items()):
+                try:
+                    await device.start()
+                    persons = generate_mock_persons(config.persons)
+                    await device.db.bulk_upsert_persons(persons)
+                    person_ids = [p["person_id"] for p in persons]
+                    rules, groups = generate_mock_rules(device.door_ids, person_ids)
+                    for rule in rules:
+                        await device.db.upsert_access_rule(rule)
+                    for group in groups:
+                        await device.db.upsert_person_group(group["group_id"], group["person_ids"])
+                except Exception as e:
+                    logger.error("device_start_error", device_id=device_id, error=str(e))
+                await asyncio.sleep(config.connect_delay)
+
+        asyncio.create_task(_start_devices())
+        self.simulation_running = True
+
+        return web.json_response({"status": "starting", "devices": config.devices})
+
+    async def stop_simulation(self, request: web.Request) -> web.Response:
+        """Stop all simulated devices."""
+        if not self.simulation_running:
+            return web.json_response({"status": "already_stopped"})
+
+        for device in list(self.devices.values()):
+            try:
+                await device.stop()
+            except Exception as e:
+                logger.error("device_stop_error", device_id=device.device_id, error=str(e))
+
+        self.devices.clear()
+        self.simulation_running = False
+        return web.json_response({"status": "stopped"})
+
+    async def serve_index(self, request: web.Request) -> web.Response:
+        """Serve the dashboard index.html."""
+        index_path = STATIC_DIR / "index.html"
+        if not index_path.exists():
+            return web.Response(text="Dashboard not found", status=404)
+        return web.FileResponse(index_path)
+
+    def record_event(self, event: dict[str, Any]) -> None:
+        """Record an event for the recent events feed."""
+        event["_recorded_at"] = time.time()
+        self.recent_events.append(event)

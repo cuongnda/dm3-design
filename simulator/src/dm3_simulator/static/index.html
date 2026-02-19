@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DM3 Simulator Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #0A0E1A; color: #E5E7EB; font-family: 'Inter', system-ui, sans-serif; }
+  .card { background: #111827; border: 1px solid #1F2937; border-radius: 0.75rem; }
+  .status-ready { color: #34D399; }
+  .status-syncing { color: #FBBF24; }
+  .status-offline, .status-error, .status-init, .status-connecting { color: #F87171; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot-ready { background: #34D399; }
+  .dot-syncing { background: #FBBF24; }
+  .dot-offline, .dot-error, .dot-init, .dot-connecting { background: #F87171; }
+  .event-granted { border-left: 3px solid #34D399; }
+  .event-denied { border-left: 3px solid #F87171; }
+  .event-alarm { border-left: 3px solid #FBBF24; }
+  #event-feed { max-height: 400px; overflow-y: auto; }
+  .device-card:hover { border-color: #3B82F6; cursor: pointer; }
+  .device-card:active { transform: scale(0.98); }
+  input[type=range] { accent-color: #3B82F6; }
+  .btn-green { background: #059669; } .btn-green:hover { background: #047857; }
+  .btn-red { background: #DC2626; } .btn-red:hover { background: #B91C1C; }
+  .btn-blue { background: #2563EB; } .btn-blue:hover { background: #1D4ED8; }
+  .pulse { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- Header -->
+<header class="card mx-4 mt-4 p-4 flex flex-wrap items-center justify-between gap-4">
+  <div>
+    <h1 class="text-xl font-bold text-white">🏢 DM3 Simulator Dashboard</h1>
+    <p class="text-sm text-gray-400 mt-1">Virtual Access Control Device Simulator</p>
+  </div>
+  <div class="flex gap-6 text-sm">
+    <div class="text-center"><div class="text-2xl font-bold text-white" id="stat-total">0</div><div class="text-gray-400">Devices</div></div>
+    <div class="text-center"><div class="text-2xl font-bold text-green-400" id="stat-online">0</div><div class="text-gray-400">Online</div></div>
+    <div class="text-center"><div class="text-2xl font-bold text-blue-400" id="stat-eps">0</div><div class="text-gray-400">Events/s</div></div>
+    <div class="text-center">
+      <div class="text-2xl font-bold" id="stat-status-text">Stopped</div>
+      <div class="text-gray-400">Status</div>
+    </div>
+  </div>
+</header>
+
+<div class="mx-4 mt-4 grid grid-cols-1 lg:grid-cols-4 gap-4">
+
+  <!-- Left: Config + Metrics -->
+  <div class="space-y-4">
+    <!-- Configuration Panel -->
+    <div class="card p-4">
+      <h2 class="font-semibold text-white mb-3">⚙️ Configuration</h2>
+      <div class="space-y-3 text-sm">
+        <div>
+          <label class="text-gray-400 block mb-1">MQTT Broker</label>
+          <input id="cfg-broker" type="text" value="mqtt://localhost:1883" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm">
+        </div>
+        <div>
+          <label class="text-gray-400 block mb-1">Site ID</label>
+          <input id="cfg-site" type="text" value="site-001" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm">
+        </div>
+        <div>
+          <label class="text-gray-400 block mb-1">Devices: <span id="cfg-devices-val" class="text-white">10</span></label>
+          <input id="cfg-devices" type="range" min="1" max="1000" value="10" class="w-full" oninput="document.getElementById('cfg-devices-val').textContent=this.value">
+        </div>
+        <div>
+          <label class="text-gray-400 block mb-1">Mode</label>
+          <select id="cfg-mode" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm">
+            <option value="normal">Normal</option>
+            <option value="stress">Stress</option>
+            <option value="chaos">Chaos</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-gray-400 block mb-1">Event Rate: <span id="cfg-rate-val" class="text-white">1.0</span> /min/device</label>
+          <input id="cfg-rate" type="range" min="0.1" max="60" step="0.1" value="1" class="w-full" oninput="document.getElementById('cfg-rate-val').textContent=parseFloat(this.value).toFixed(1)">
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button onclick="startSimulation()" class="btn-green text-white px-4 py-2 rounded text-sm font-medium flex-1">▶ Start</button>
+          <button onclick="stopSimulation()" class="btn-red text-white px-4 py-2 rounded text-sm font-medium flex-1">⏹ Stop</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metrics Panel -->
+    <div class="card p-4">
+      <h2 class="font-semibold text-white mb-3">📊 Metrics</h2>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between"><span class="text-gray-400">Events/sec</span><span class="text-white font-mono" id="m-eps">0</span></div>
+        <div class="flex justify-between"><span class="text-gray-400">Grant/Deny</span><span class="text-white font-mono" id="m-ratio">-</span></div>
+        <div class="flex justify-between"><span class="text-gray-400">Avg Latency</span><span class="text-white font-mono" id="m-latency">-</span></div>
+        <div class="flex justify-between"><span class="text-gray-400">Total Events</span><span class="text-white font-mono" id="m-total">0</span></div>
+        <div class="flex justify-between"><span class="text-gray-400">Uptime</span><span class="text-white font-mono" id="m-uptime">-</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Center: Device Grid -->
+  <div class="lg:col-span-2">
+    <div class="card p-4">
+      <h2 class="font-semibold text-white mb-3">🖥️ Device Grid <span class="text-gray-500 text-sm font-normal" id="device-count"></span></h2>
+      <div id="device-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-[600px] overflow-y-auto">
+        <div class="text-gray-500 text-sm p-4">No devices running. Click Start to begin.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Event Feed -->
+  <div>
+    <div class="card p-4">
+      <h2 class="font-semibold text-white mb-3">📡 Live Event Feed</h2>
+      <div id="event-feed" class="space-y-1 text-xs">
+        <div class="text-gray-500 p-2">Waiting for events...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="text-center text-gray-600 text-xs py-4">DM3 Simulator v0.1 • DUALI</footer>
+
+<script>
+const API = '';
+let pollInterval = null;
+let lastEventCount = 0;
+let lastEventTime = 0;
+
+async function fetchJSON(url, opts) {
+  try {
+    const r = await fetch(API + url, opts);
+    return await r.json();
+  } catch(e) { return null; }
+}
+
+async function startSimulation() {
+  const body = {
+    broker: document.getElementById('cfg-broker').value,
+    site_id: document.getElementById('cfg-site').value,
+    num_devices: parseInt(document.getElementById('cfg-devices').value),
+    mode: document.getElementById('cfg-mode').value,
+    event_rate: parseFloat(document.getElementById('cfg-rate').value),
+  };
+  await fetchJSON('/api/simulation/start', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+}
+
+async function stopSimulation() {
+  await fetchJSON('/api/simulation/stop', { method: 'POST' });
+}
+
+async function triggerDevice(deviceId) {
+  await fetchJSON(`/api/devices/${deviceId}/trigger`, { method: 'POST' });
+}
+
+function formatTime(ts) {
+  if (!ts) return '-';
+  const d = new Date(ts * 1000);
+  return d.toLocaleTimeString('vi-VN');
+}
+
+function formatUptime(s) {
+  if (!s) return '-';
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+  return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+}
+
+function stateClass(state) {
+  if (state === 'ready') return 'ready';
+  if (state === 'syncing') return 'syncing';
+  return 'offline';
+}
+
+async function poll() {
+  // Fetch devices
+  const devData = await fetchJSON('/api/devices');
+  if (devData) {
+    const devices = devData.devices || [];
+    const grid = document.getElementById('device-grid');
+    const online = devices.filter(d => d.state === 'ready').length;
+    const totalEvents = devices.reduce((s,d) => s + d.events_published, 0);
+    
+    document.getElementById('stat-total').textContent = devices.length;
+    document.getElementById('stat-online').textContent = online;
+    document.getElementById('device-count').textContent = `(${devices.length})`;
+    
+    // EPS calc
+    const now = Date.now()/1000;
+    if (lastEventTime > 0) {
+      const dt = now - lastEventTime;
+      const de = totalEvents - lastEventCount;
+      const eps = dt > 0 ? (de/dt).toFixed(1) : '0';
+      document.getElementById('stat-eps').textContent = eps;
+      document.getElementById('m-eps').textContent = eps;
+    }
+    lastEventCount = totalEvents;
+    lastEventTime = now;
+    document.getElementById('m-total').textContent = totalEvents;
+
+    if (devices.length === 0) {
+      grid.innerHTML = '<div class="text-gray-500 text-sm p-4 col-span-full">No devices running. Click Start to begin.</div>';
+    } else {
+      grid.innerHTML = devices.map(d => `
+        <div class="device-card card p-2 text-xs" onclick="triggerDevice('${d.device_id}')">
+          <div class="flex items-center gap-1 mb-1">
+            <span class="dot dot-${stateClass(d.state)}"></span>
+            <span class="font-mono text-white truncate">${d.device_id.replace('sim-','')}</span>
+          </div>
+          <div class="text-gray-400">${d.door_ids?.[0]?.split('-').pop() || 'door'}</div>
+          <div class="status-${stateClass(d.state)} font-medium uppercase">${d.state}</div>
+          <div class="text-gray-500 mt-1">${d.events_published} events</div>
+        </div>
+      `).join('');
+    }
+  }
+
+  // Fetch simulation status
+  const simData = await fetchJSON('/api/simulation/status');
+  if (simData) {
+    const running = simData.running;
+    const el = document.getElementById('stat-status-text');
+    el.textContent = running ? 'Running' : 'Stopped';
+    el.className = 'text-2xl font-bold ' + (running ? 'text-green-400' : 'text-red-400');
+    document.getElementById('m-uptime').textContent = formatUptime(simData.uptime_s);
+  }
+
+  // Fetch recent events
+  const evtData = await fetchJSON('/api/events/recent?limit=100');
+  if (evtData) {
+    const events = evtData.events || [];
+    const feed = document.getElementById('event-feed');
+    
+    if (events.length === 0) {
+      feed.innerHTML = '<div class="text-gray-500 p-2">Waiting for events...</div>';
+    } else {
+      // Compute metrics from events
+      const granted = events.filter(e => e.decision === 'GRANTED').length;
+      const denied = events.filter(e => e.decision === 'DENIED').length;
+      document.getElementById('m-ratio').textContent = denied > 0 ? (granted/denied).toFixed(1) + ':1' : granted + ':0';
+      const latencies = events.filter(e => e.decision_time_ms).map(e => e.decision_time_ms);
+      if (latencies.length) {
+        const avg = (latencies.reduce((a,b)=>a+b,0)/latencies.length).toFixed(1);
+        document.getElementById('m-latency').textContent = avg + ' ms';
+      }
+      
+      feed.innerHTML = events.slice(-100).reverse().map(e => {
+        const cls = e.decision === 'GRANTED' ? 'granted' : e.reason?.includes('alarm') ? 'alarm' : 'denied';
+        return `<div class="event-${cls} bg-gray-800/50 px-2 py-1 rounded">
+          <span class="text-gray-500">${formatTime(e.timestamp)}</span>
+          <span class="font-mono text-blue-300">${(e.device_id||'').replace('sim-','')}</span>
+          <span class="${cls==='granted'?'text-green-400':cls==='alarm'?'text-yellow-400':'text-red-400'} font-medium">${e.decision}</span>
+          <span class="text-gray-300">${e.person_name||'Unknown'}</span>
+          <span class="text-gray-500">${e.credential_type||''}</span>
+        </div>`;
+      }).join('');
+      
+      feed.scrollTop = 0;
+    }
+  }
+}
+
+// Start polling
+pollInterval = setInterval(poll, 2000);
+poll();
+</script>
+</body>
+</html>
