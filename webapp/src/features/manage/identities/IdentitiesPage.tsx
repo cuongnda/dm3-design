@@ -3,7 +3,24 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { DataTable, type Column } from '@/components/common/DataTable';
 import { StatCard } from '@/components/common/StatCard';
 import { cn } from '@/lib/utils';
+import { usePersons } from '@/lib/hooks';
 import { mockPeople, type Person } from './mock-data';
+import type { PersonDTO } from '@/lib/api';
+
+function mapPerson(p: PersonDTO): Person {
+  return {
+    id: p.id,
+    name: `${p.first_name} ${p.last_name}`.trim(),
+    email: p.email || '',
+    phone: p.phone || '',
+    department: p.department || '—',
+    role: p.role || '—',
+    status: (p.status as Person['status']) || 'active',
+    credentials: { card: false, face: false, mobile: false },
+    accessGroups: [],
+    recentEvents: [],
+  };
+}
 
 const PURPLE = '#8B5CF6';
 
@@ -28,14 +45,20 @@ export function IdentitiesPage() {
   const [deptFilter, setDeptFilter] = useState('');
   const [selected, setSelected] = useState<Person | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const { data: personsData } = usePersons();
 
-  const filtered = mockPeople.filter((p) => {
+  // Use API data if available, fall back to mock
+  const people: Person[] = personsData && personsData.data.length > 0
+    ? personsData.data.map(mapPerson)
+    : mockPeople;
+
+  const filtered = people.filter((p) => {
     if (deptFilter && p.department !== deptFilter) return false;
     if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
-  const active = mockPeople.filter((p) => p.status === 'active').length;
+  const active = people.filter((p) => p.status === 'active').length;
 
   const columns: Column<Person>[] = [
     { key: 'id', header: 'ID', width: '70px', sortable: true, render: (r) => <span className="font-mono text-[11px] text-[#64748B]">{r.id}</span> },
@@ -57,10 +80,10 @@ export function IdentitiesPage() {
       </PageHeader>
 
       <div className="grid grid-cols-4 gap-3 mb-6">
-        <StatCard label="Tổng nhân sự" value={String(mockPeople.length)} sub="people" domain="manage" />
-        <StatCard label="Đang hoạt động" value={String(active)} sub={`${Math.round(active / mockPeople.length * 100)}%`} domain="manage" />
-        <StatCard label="Có thẻ" value={String(mockPeople.filter(p => p.credentials.card).length)} sub="card enrolled" domain="manage" />
-        <StatCard label="Có khuôn mặt" value={String(mockPeople.filter(p => p.credentials.face).length)} sub="face enrolled" domain="manage" />
+        <StatCard label="Tổng nhân sự" value={String(people.length)} sub="people" domain="manage" />
+        <StatCard label="Đang hoạt động" value={String(active)} sub={`${people.length > 0 ? Math.round(active / people.length * 100) : 0}%`} domain="manage" />
+        <StatCard label="Có thẻ" value={String(people.filter(p => p.credentials.card).length)} sub="card enrolled" domain="manage" />
+        <StatCard label="Có khuôn mặt" value={String(people.filter(p => p.credentials.face).length)} sub="face enrolled" domain="manage" />
       </div>
 
       <div className="flex gap-2 mb-4">

@@ -1,29 +1,41 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { login as apiLogin, setToken } from '@/lib/api';
 import { Eye, EyeOff } from 'lucide-react';
 
 export function LoginPage() {
-  const [email, setEmail] = useState('cuong@duali.vn');
+  const [email, setEmail] = useState('admin@duali.com');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const login = useAuthStore((s) => s.login);
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
+    setError('');
+    try {
+      const res = await apiLogin(email, password);
+      setToken(res.access_token, res.refresh_token);
+
+      // Decode JWT payload for user info
+      const payload = JSON.parse(atob(res.access_token.split('.')[1]));
       login({
-        id: '1',
-        name: 'Cuong Nguyen',
-        email,
-        role: 'Admin',
-        initials: 'CN',
+        id: payload.sub,
+        name: payload.name || email.split('@')[0],
+        email: payload.email || email,
+        role: payload.roles?.[0] || 'user',
+        initials: (payload.name || email).slice(0, 2).toUpperCase(),
       });
       navigate('/');
-    }, 800);
+    } catch (err) {
+      setError('Invalid email or password');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -40,6 +52,11 @@ export function LoginPage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="px-3 py-2 bg-[#7F1D1D]/20 border border-[#EF4444]/30 rounded-md text-[#EF4444] text-[13px]">
+              {error}
+            </div>
+          )}
           <div>
             <input
               type="email"

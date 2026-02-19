@@ -4,25 +4,23 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { DataTable, type Column } from '@/components/common/DataTable';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { cn } from '@/lib/utils';
+import { useDoors } from '@/lib/hooks';
+import type { DoorDTO } from '@/lib/api';
 import type { Door } from '@/types/models';
 
-const mockDoors: Door[] = [
-  { id: '1', name: 'Main Entrance', location: 'Bldg A, Floor 1', type: 'door', status: 'online', lastEvent: { id: 'e1', time: '09:15', personName: '', point: '', result: 'granted' } },
-  { id: '2', name: 'Gate 1 — Vehicle Entry', location: 'Bldg A, Exterior', type: 'barrier', status: 'online', lastEvent: { id: 'e2', time: '09:14', personName: '', point: '', result: 'granted' } },
-  { id: '3', name: 'Gate 2 — Vehicle Exit', location: 'Bldg A, Exterior', type: 'barrier', status: 'online', lastEvent: { id: 'e3', time: '09:12', personName: '', point: '', result: 'denied' } },
-  { id: '4', name: 'Door 3 — Office Wing', location: 'Bldg A, Floor 2', type: 'door', status: 'online', lastEvent: { id: 'e4', time: '09:11', personName: '', point: '', result: 'granted' } },
-  { id: '5', name: 'Door 5 — Lab Access', location: 'Bldg A, Floor 3', type: 'door', status: 'alarm', lastEvent: { id: 'e5', time: '09:10', personName: '', point: '', result: 'forced' } },
-  { id: '6', name: 'Lift 1 — Main', location: 'Bldg A, Lobby', type: 'lift', status: 'online', lastEvent: { id: 'e6', time: '09:09', personName: '', point: '', result: 'granted' } },
-  { id: '7', name: 'Turnstile 1', location: 'Bldg A, Lobby', type: 'turnstile', status: 'online', lastEvent: { id: 'e7', time: '09:08', personName: '', point: '', result: 'granted' } },
-  { id: '8', name: 'Server Room', location: 'Bldg A, Floor 4', type: 'door', status: 'warning', lastEvent: { id: 'e8', time: '08:45', personName: '', point: '', result: 'granted' } },
-  { id: '9', name: 'Door 8 — Storage', location: 'Bldg B, Floor 1', type: 'door', status: 'offline', lastEvent: { id: 'e9', time: '07:30', personName: '', point: '', result: 'granted' } },
-  { id: '10', name: 'Turnstile 2', location: 'Bldg A, Lobby', type: 'turnstile', status: 'online', lastEvent: { id: 'e10', time: '09:07', personName: '', point: '', result: 'granted' } },
-  { id: '11', name: 'Door 10 — Meeting Zone', location: 'Bldg A, Floor 5', type: 'door', status: 'online', lastEvent: { id: 'e11', time: '09:05', personName: '', point: '', result: 'granted' } },
-  { id: '12', name: 'Door 12 — Loading Dock', location: 'Bldg B, Ground', type: 'gate', status: 'offline' },
-  { id: '13', name: 'Door 14 — Rooftop', location: 'Bldg A, Roof', type: 'door', status: 'offline' },
-  { id: '14', name: 'Lift 2 — Service', location: 'Bldg A, Rear', type: 'lift', status: 'online', lastEvent: { id: 'e14', time: '09:01', personName: '', point: '', result: 'granted' } },
-  { id: '15', name: 'Door 15 — Emergency Exit B', location: 'Bldg B, Floor 2', type: 'door', status: 'offline' },
-];
+function mapDoor(d: DoorDTO): Door {
+  const statusMap: Record<string, Door['status']> = {
+    locked: 'online', unlocked: 'online', online: 'online',
+    offline: 'offline', alarm: 'alarm', warning: 'warning',
+  };
+  return {
+    id: d.id,
+    name: d.name,
+    location: d.location || '—',
+    type: (d.type as Door['type']) || 'door',
+    status: statusMap[d.status] || 'online',
+  };
+}
 
 const typeColors: Record<string, { text: string; border: string }> = {
   door: { text: 'text-[#3B82F6]', border: 'border-[#3B82F6]/30' },
@@ -38,20 +36,27 @@ const resultClass: Record<string, string> = {
   forced: 'text-[#EF4444] font-bold',
 };
 
-const tabs = [
-  { label: 'All', count: 52, filter: null },
-  { label: 'Online', count: 46, filter: 'online' },
-  { label: 'Offline', count: 4, filter: 'offline' },
-  { label: 'Alarm', count: 1, filter: 'alarm' },
-  { label: 'Warning', count: 1, filter: 'warning' },
-];
-
 export function AccessControlPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const { data: doorsData } = useDoors();
+  const doors: Door[] = (doorsData?.data ?? []).map(mapDoor);
 
-  const filtered = mockDoors.filter((d) => {
+  const onlineCount = doors.filter((d) => d.status === 'online').length;
+  const offlineCount = doors.filter((d) => d.status === 'offline').length;
+  const alarmCount = doors.filter((d) => d.status === 'alarm').length;
+  const warningCount = doors.filter((d) => d.status === 'warning').length;
+
+  const tabs = [
+    { label: 'All', count: doors.length, filter: null },
+    { label: 'Online', count: onlineCount, filter: 'online' },
+    { label: 'Offline', count: offlineCount, filter: 'offline' },
+    { label: 'Alarm', count: alarmCount, filter: 'alarm' },
+    { label: 'Warning', count: warningCount, filter: 'warning' },
+  ];
+
+  const filtered = doors.filter((d) => {
     if (activeTab && d.status !== activeTab) return false;
     if (search && !d.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;

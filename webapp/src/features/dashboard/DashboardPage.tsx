@@ -1,28 +1,24 @@
+import { useEffect, useRef, useState } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StatCard } from '@/components/common/StatCard';
 import { EventFeed } from '@/components/common/EventFeed';
 import { cn } from '@/lib/utils';
+import { useStats, useDevices } from '@/lib/hooks';
+import { connectWebSocket, type EventDTO } from '@/lib/api';
 import type { AccessEvent, DomainHealth } from '@/types/models';
 
-// Mock data
-const stats = [
-  { label: 'People in Building', value: '1,247', sub: 'currently inside', trend: { direction: 'up' as const, text: '12% from yesterday' }, icon: '👥', domain: 'default' as const },
-  { label: 'Doors Online', value: '48/52', sub: 'access points', trend: { direction: 'down' as const, text: '4 offline' }, icon: '🔒', domain: 'secure' as const },
-  { label: 'Cameras', value: '31/32', sub: 'streaming', trend: { direction: 'down' as const, text: '1 offline' }, icon: '📹', domain: 'secure' as const },
-  { label: 'Active Alerts', value: '3', sub: 'need attention', trend: { direction: 'down' as const, text: '2 critical' }, icon: '⚠️', domain: 'error' as const },
-  { label: 'Parking', value: '78%', sub: '312 / 400 spots', trend: { direction: 'up' as const, text: '5% from last week' }, icon: '🅿️', domain: 'operate' as const },
-];
-
-const events: AccessEvent[] = [
-  { id: '1', time: '09:15', personName: 'Nguyen Van A', point: 'Door 3', result: 'granted' },
-  { id: '2', time: '09:14', personName: 'Tran Thi B', point: 'Gate 1', result: 'granted' },
-  { id: '3', time: '09:12', personName: 'UNKNOWN', point: 'Door 7', result: 'denied' },
-  { id: '4', time: '09:11', personName: 'Le Van C', point: 'Lift 2', result: 'granted' },
-  { id: '5', time: '09:10', personName: 'Pham Thi D', point: 'Door 1', result: 'granted' },
-  { id: '6', time: '09:09', personName: 'Visitor #42', point: 'Gate 1', result: 'granted' },
-  { id: '7', time: '09:08', personName: 'Ho Van E', point: 'Turnstile 1', result: 'granted' },
-  { id: '8', time: '09:06', personName: 'Vu Thi F', point: 'Door 5', result: 'granted' },
-];
+function eventDtoToAccessEvent(e: EventDTO): AccessEvent {
+  const t = new Date(e.time);
+  const time = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+  return {
+    id: e.id,
+    time,
+    personName: e.person_name || 'Unknown',
+    point: e.door_name || e.credential_type || '—',
+    result: e.decision === 'granted' ? 'granted' : 'denied',
+    credentialType: e.credential_type,
+  };
+}
 
 const alerts = [
   { id: '1', title: 'Door 5 forced open', meta: 'Building A, Floor 3 · 2m ago', severity: 'critical' },
@@ -46,9 +42,9 @@ const domainHealthData: { domain: string; color: string; emoji: string; items: D
   {
     domain: 'MANAGE', color: '#8B5CF6', emoji: '👤',
     items: [
-      { module: 'Identities', status: 'ok', detail: '✓ 1,247 active' },
+      { module: 'Identities', status: 'ok', detail: '✓ Active' },
       { module: 'Visitors', status: 'ok', detail: '✓ 3 waiting' },
-      { module: 'Attendance', status: 'ok', detail: '✓ 892 checked in' },
+      { module: 'Attendance', status: 'ok', detail: '✓ Online' },
       { module: 'Contractors', status: 'ok', detail: '✓ 34 on-site' },
       { module: 'Deliveries', status: 'warning', detail: '⚠ 2 uncollected' },
     ],
@@ -78,6 +74,59 @@ const healthStatusClass: Record<string, string> = {
 };
 
 export function DashboardPage() {
+  const { data: statsData } = useStats();
+  const { data: devicesData } = useDevices();
+  const [wsEvents, setWsEvents] = useState<AccessEvent[]>([]);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  // WebSocket connection for real-time events
+  useEffect(() => {
+    wsRef.current = connectWebSocket((evt) => {
+      setWsEvents((prev) => [eventDtoToAccessEvent(evt), ...prev].slice(0, 20));
+    });
+    return () => { wsRef.current?.close(); };
+  }, []);
+
+  // Build stats from real data
+  const devicesOnline = devicesData?.filter((d) => d.status === 'online').length ?? 0;
+  const devicesTotal = devicesData?.length ?? 0;
+
+  const stats = [
+    {
+      label: 'Events Today', value: String(statsData?.events_today ?? 0),
+      sub: `${statsData?.granted_today ?? 0} granted, ${statsData?.denied_today ?? 0} denied`,
+      trend: { direction: 'up' as const, text: 'real-time' }, icon: '📊', domain: 'default' as const,
+    },
+    {
+      label: 'Doors', value: `${statsData?.doors_online ?? 0}/${statsData?.doors_total ?? 0}`,
+      sub: 'access points',
+      trend: { direction: (statsData?.doors_offline ?? 0) > 0 ? 'down' as const : 'up' as const, text: `${statsData?.doors_offline ?? 0} offline` },
+      icon: '🔒', domain: 'secure' as const,
+    },
+    {
+      label: 'Devices Online', value: `${devicesOnline}/${devicesTotal}`,
+      sub: 'connected devices',
+      trend: { direction: devicesOnline === devicesTotal ? 'up' as const : 'down' as const, text: `${devicesTotal - devicesOnline} offline` },
+      icon: '📡', domain: 'default' as const,
+    },
+    {
+      label: 'Active Alerts', value: '3', sub: 'need attention',
+      trend: { direction: 'down' as const, text: '2 critical' },
+      icon: '⚠️', domain: 'error' as const,
+    },
+    {
+      label: 'Parking', value: '78%', sub: '312 / 400 spots',
+      trend: { direction: 'up' as const, text: '5% from last week' },
+      icon: '🅿️', domain: 'operate' as const,
+    },
+  ];
+
+  // Merge WS events with API recent events
+  const apiEvents: AccessEvent[] = (statsData?.recent_events ?? []).map(eventDtoToAccessEvent);
+  const events = wsEvents.length > 0
+    ? [...wsEvents, ...apiEvents.filter((e) => !wsEvents.some((w) => w.id === e.id))].slice(0, 10)
+    : apiEvents.slice(0, 10);
+
   return (
     <div>
       <PageHeader title="Dashboard">
@@ -110,7 +159,6 @@ export function DashboardPage() {
             <span className="text-[12px] text-[#3B82F6] cursor-pointer hover:underline">View All →</span>
           </div>
           <div className="px-4 py-3">
-            {/* Sparkline placeholder */}
             <div className="h-10 mb-3 rounded bg-gradient-to-b from-transparent to-[#3B82F6]/10 relative overflow-hidden">
               <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 40" preserveAspectRatio="none">
                 <path d="M0,35 Q20,30 40,28 T80,20 T120,25 T160,15 T200,10 T240,18 T280,8 T320,12 T360,6 T400,10" fill="none" stroke="#3B82F6" strokeWidth="2" />

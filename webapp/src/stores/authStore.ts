@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { clearToken } from '@/lib/api';
 
 interface User {
   id: string;
@@ -20,16 +21,13 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      user: {
-        id: '1',
-        name: 'Cuong Nguyen',
-        email: 'cuong@duali.vn',
-        role: 'Admin',
-        initials: 'CN',
-      },
-      isAuthenticated: true,
+      user: null,
+      isAuthenticated: false,
       login: (user) => set({ user, isAuthenticated: true }),
-      logout: () => set({ user: null, isAuthenticated: false }),
+      logout: () => {
+        clearToken();
+        set({ user: null, isAuthenticated: false });
+      },
     }),
     { name: 'dm3-auth' }
   )
