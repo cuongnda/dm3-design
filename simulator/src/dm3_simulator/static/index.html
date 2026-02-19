@@ -92,12 +92,55 @@
     <!-- Metrics Panel -->
     <div class="card p-4">
       <h2 class="font-semibold text-white mb-3">📊 Metrics</h2>
-      <div class="space-y-2 text-sm">
-        <div class="flex justify-between"><span class="text-gray-400">Events/sec</span><span class="text-white font-mono" id="m-eps">0</span></div>
-        <div class="flex justify-between"><span class="text-gray-400">Grant/Deny</span><span class="text-white font-mono" id="m-ratio">-</span></div>
-        <div class="flex justify-between"><span class="text-gray-400">Avg Latency</span><span class="text-white font-mono" id="m-latency">-</span></div>
-        <div class="flex justify-between"><span class="text-gray-400">Total Events</span><span class="text-white font-mono" id="m-total">0</span></div>
-        <div class="flex justify-between"><span class="text-gray-400">Uptime</span><span class="text-white font-mono" id="m-uptime">-</span></div>
+      <div class="space-y-3 text-sm">
+        <!-- Throughput -->
+        <div>
+          <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Throughput</div>
+          <div class="space-y-1">
+            <div class="flex justify-between" title="Total access events generated per second across all devices"><span class="text-gray-400">Total EPS</span><span class="text-white font-mono" id="m-eps">0</span></div>
+            <div class="flex justify-between" title="Average events per second per individual device"><span class="text-gray-400">Per Device</span><span class="text-white font-mono" id="m-eps-device">0</span></div>
+            <div class="flex justify-between" title="Cumulative events since simulation started"><span class="text-gray-400">Total Events</span><span class="text-white font-mono" id="m-total">0</span></div>
+          </div>
+        </div>
+        <!-- Access Decisions -->
+        <div>
+          <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Access Decisions</div>
+          <div class="space-y-1">
+            <div class="flex justify-between" title="Number of access granted vs denied from recent events"><span class="text-gray-400">Granted</span><span class="text-green-400 font-mono" id="m-granted">0</span></div>
+            <div class="flex justify-between"><span class="text-gray-400">Denied</span><span class="text-red-400 font-mono" id="m-denied">0</span></div>
+            <div class="flex justify-between" title="Percentage of access attempts that were granted"><span class="text-gray-400">Grant Rate</span><span class="text-white font-mono" id="m-grant-rate">—</span></div>
+          </div>
+          <!-- Mini bar -->
+          <div class="flex h-1.5 rounded-full overflow-hidden mt-1.5 bg-gray-700">
+            <div class="bg-green-500 transition-all" id="m-grant-bar" style="width:50%"></div>
+            <div class="bg-red-500 transition-all" id="m-deny-bar" style="width:50%"></div>
+          </div>
+        </div>
+        <!-- Decision Latency -->
+        <div>
+          <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Decision Latency</div>
+          <div class="space-y-1">
+            <div class="flex justify-between" title="Average time for the access decision engine to evaluate a credential lookup in local SQLite"><span class="text-gray-400">Avg</span><span class="text-white font-mono" id="m-latency-avg">—</span></div>
+            <div class="flex justify-between" title="99th percentile — worst-case latency excluding outliers"><span class="text-gray-400">P99</span><span class="text-white font-mono" id="m-latency-p99">—</span></div>
+            <div class="flex justify-between" title="Fastest and slowest decision times"><span class="text-gray-400">Min / Max</span><span class="text-white font-mono" id="m-latency-range">—</span></div>
+          </div>
+        </div>
+        <!-- Offline / Sync -->
+        <div>
+          <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Offline & Sync</div>
+          <div class="space-y-1">
+            <div class="flex justify-between" title="Devices with network manually disconnected — still making decisions locally"><span class="text-gray-400">Offline Devices</span><span class="font-mono" id="m-offline-count">0</span></div>
+            <div class="flex justify-between" title="Events queued locally on offline devices, waiting to sync when network reconnects"><span class="text-gray-400">Queued Events</span><span class="font-mono" id="m-queued">0</span></div>
+          </div>
+        </div>
+        <!-- System -->
+        <div>
+          <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">System</div>
+          <div class="space-y-1">
+            <div class="flex justify-between" title="Time since simulation started"><span class="text-gray-400">Uptime</span><span class="text-white font-mono" id="m-uptime">—</span></div>
+            <div class="flex justify-between" title="MQTT broker used by all devices"><span class="text-gray-400">Broker</span><span class="text-gray-300 font-mono text-[11px]" id="m-broker">—</span></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -274,17 +317,48 @@ async function poll() {
     updateSelectedCount();
   }
 
-  // Fetch simulation status
-  const simData = await fetchJSON('/api/simulation/status');
-  if (simData) {
-    const running = simData.running;
+  // Fetch detailed stats
+  const stats = await fetchJSON('/api/stats');
+  if (stats) {
+    // Status
     const el = document.getElementById('stat-status-text');
-    el.textContent = running ? 'Running' : 'Stopped';
-    el.className = 'text-2xl font-bold ' + (running ? 'text-green-400' : 'text-red-400');
-    document.getElementById('m-uptime').textContent = formatUptime(simData.uptime_s);
+    el.textContent = stats.devices.total > 0 ? 'Running' : 'Stopped';
+    el.className = 'text-2xl font-bold ' + (stats.devices.total > 0 ? 'text-green-400' : 'text-red-400');
+    
+    // Throughput
+    document.getElementById('m-eps').textContent = stats.throughput.total_eps;
+    document.getElementById('m-eps-device').textContent = stats.throughput.avg_eps_per_device + ' /dev';
+    document.getElementById('m-total').textContent = stats.events.total_published.toLocaleString();
+    document.getElementById('stat-eps').textContent = stats.throughput.total_eps;
+    
+    // Access Decisions
+    document.getElementById('m-granted').textContent = stats.events.granted;
+    document.getElementById('m-denied').textContent = stats.events.denied;
+    document.getElementById('m-grant-rate').textContent = stats.events.grant_rate_pct + '%';
+    const total = stats.events.granted + stats.events.denied;
+    if (total > 0) {
+      document.getElementById('m-grant-bar').style.width = stats.events.grant_rate_pct + '%';
+      document.getElementById('m-deny-bar').style.width = (100 - stats.events.grant_rate_pct) + '%';
+    }
+    
+    // Latency
+    document.getElementById('m-latency-avg').textContent = stats.latency.avg_ms + ' ms';
+    document.getElementById('m-latency-p99').textContent = stats.latency.p99_ms + ' ms';
+    document.getElementById('m-latency-range').textContent = stats.latency.min_ms + ' / ' + stats.latency.max_ms + ' ms';
+    
+    // Offline & Sync
+    const offEl = document.getElementById('m-offline-count');
+    offEl.textContent = stats.offline.devices_offline;
+    offEl.className = 'font-mono ' + (stats.offline.devices_offline > 0 ? 'text-yellow-400' : 'text-gray-500');
+    const qEl = document.getElementById('m-queued');
+    qEl.textContent = stats.offline.queued_events;
+    qEl.className = 'font-mono ' + (stats.offline.queued_events > 0 ? 'text-yellow-400' : 'text-gray-500');
+    
+    // System
+    document.getElementById('m-uptime').textContent = formatUptime(stats.uptime_s);
   }
 
-  // Fetch recent events
+  // Fetch recent events for feed
   const evtData = await fetchJSON('/api/events/recent?limit=100');
   if (evtData) {
     const events = evtData.events || [];
@@ -293,27 +367,17 @@ async function poll() {
     if (events.length === 0) {
       feed.innerHTML = '<div class="text-gray-500 p-2">Waiting for events...</div>';
     } else {
-      // Compute metrics from events
-      const granted = events.filter(e => e.decision === 'GRANTED').length;
-      const denied = events.filter(e => e.decision === 'DENIED').length;
-      document.getElementById('m-ratio').textContent = denied > 0 ? (granted/denied).toFixed(1) + ':1' : granted + ':0';
-      const latencies = events.filter(e => e.decision_time_ms).map(e => e.decision_time_ms);
-      if (latencies.length) {
-        const avg = (latencies.reduce((a,b)=>a+b,0)/latencies.length).toFixed(1);
-        document.getElementById('m-latency').textContent = avg + ' ms';
-      }
-      
       feed.innerHTML = events.slice(-100).reverse().map(e => {
-        const cls = e.decision === 'GRANTED' ? 'granted' : e.reason?.includes('alarm') ? 'alarm' : 'denied';
+        const dec = (e.decision||'').toUpperCase();
+        const cls = dec === 'GRANTED' ? 'granted' : dec === 'DENIED' ? 'denied' : 'alarm';
         return `<div class="event-${cls} bg-gray-800/50 px-2 py-1 rounded">
           <span class="text-gray-500">${formatTime(e.timestamp)}</span>
           <span class="font-mono text-blue-300">${e.device_id||''}</span>
-          <span class="${cls==='granted'?'text-green-400':cls==='alarm'?'text-yellow-400':'text-red-400'} font-medium">${e.decision}</span>
+          <span class="${cls==='granted'?'text-green-400':cls==='denied'?'text-red-400':'text-yellow-400'} font-medium">${dec}</span>
           <span class="text-gray-300">${e.person_name||'Unknown'}</span>
           <span class="text-gray-500">${e.credential_type||''}</span>
         </div>`;
       }).join('');
-      
       feed.scrollTop = 0;
     }
   }

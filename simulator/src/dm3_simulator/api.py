@@ -32,6 +32,7 @@ class SimulatorAPI:
     def _setup_routes(self) -> None:
         self.app.router.add_get("/status", self.get_status)
         self.app.router.add_get("/stats", self.get_stats)
+        self.app.router.add_get("/api/stats", self.get_stats)
         self.app.router.add_get("/api/status", self.get_status)
         self.app.router.add_get("/api/devices", self.get_devices)
         self.app.router.add_get("/api/devices/{device_id}", self.get_device)
@@ -73,21 +74,72 @@ class SimulatorAPI:
         })
 
     async def get_stats(self, request: web.Request) -> web.Response:
-        """Detailed statistics."""
+        """Detailed statistics for dashboard metrics panel."""
         connected = sum(1 for d in self.devices.values() if d.mqtt.connected)
+        network_off = sum(1 for d in self.devices.values() if d.network_disabled)
+        stopped = sum(1 for d in self.devices.values() if not d._running)
         total_events = sum(d.events_published for d in self.devices.values())
         uptime = time.time() - self.start_time
+
+        # Per-device stats
+        per_device_eps = []
+        for d in self.devices.values():
+            dev_uptime = time.time() - d.start_time
+            if dev_uptime > 0 and d._running:
+                per_device_eps.append(d.events_published / dev_uptime)
+
+        # Event feed analysis
+        events = list(self.recent_events)
+        granted = sum(1 for e in events if e.get("decision") in ("granted", "GRANTED"))
+        denied = sum(1 for e in events if e.get("decision") in ("denied", "DENIED"))
+        latencies = [e["decision_time_ms"] for e in events if e.get("decision_time_ms")]
+        avg_latency = sum(latencies) / len(latencies) if latencies else 0
+        p99_latency = sorted(latencies)[int(len(latencies) * 0.99)] if len(latencies) > 10 else max(latencies, default=0)
+        min_latency = min(latencies, default=0)
+        max_latency = max(latencies, default=0)
+
+        # Queued events (across offline devices)
+        total_queued = 0
+        for d in self.devices.values():
+            if d.network_disabled and d._running:
+                try:
+                    q = await d.db.get_pending_events(limit=10000)
+                    total_queued += len(q)
+                except Exception:
+                    pass
+
         return web.json_response({
             "uptime_s": int(uptime),
             "devices": {
                 "total": len(self.devices),
                 "connected": connected,
                 "disconnected": len(self.devices) - connected,
+                "network_off": network_off,
+                "stopped": stopped,
                 "error": sum(1 for d in self.devices.values() if d.state.value == "error"),
             },
             "events": {
                 "total_published": total_events,
                 "events_per_second": round(total_events / max(uptime, 1), 1),
+                "granted": granted,
+                "denied": denied,
+                "grant_rate_pct": round(granted / max(granted + denied, 1) * 100, 1),
+                "recent_count": len(events),
+            },
+            "latency": {
+                "avg_ms": round(avg_latency, 2),
+                "min_ms": round(min_latency, 2),
+                "max_ms": round(max_latency, 2),
+                "p99_ms": round(p99_latency, 2),
+            },
+            "offline": {
+                "devices_offline": network_off,
+                "queued_events": total_queued,
+            },
+            "throughput": {
+                "avg_eps_per_device": round(sum(per_device_eps) / max(len(per_device_eps), 1), 2),
+                "max_eps_per_device": round(max(per_device_eps, default=0), 2),
+                "total_eps": round(sum(per_device_eps), 2),
             },
         })
 
