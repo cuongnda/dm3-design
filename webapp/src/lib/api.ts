@@ -224,7 +224,8 @@ export interface CreateCompanyResponse {
 }
 
 export async function fetchCompanies(): Promise<CompanyDTO[]> {
-  return apiFetch<CompanyDTO[]>(`${SYSTEM_URL}/companies`);
+  const res = await apiFetch<{ data: CompanyDTO[] } | CompanyDTO[]>(`${SYSTEM_URL}/companies`);
+  return Array.isArray(res) ? res : res.data;
 }
 
 export async function fetchCompany(id: string): Promise<CompanyDTO> {
