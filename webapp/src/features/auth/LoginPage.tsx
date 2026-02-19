@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
-import { login as apiLogin, setToken } from '@/lib/api';
-import { Eye, EyeOff } from 'lucide-react';
+import { login as apiLogin, loginStep2, setToken, LoginCompany, LoginUser } from '@/lib/api';
+import { Eye, EyeOff, Building2, ChevronRight } from 'lucide-react';
+
+type LoginStep = 'credentials' | 'select_company';
 
 export function LoginPage() {
   const [email, setEmail] = useState('admin@duali.com');
@@ -10,8 +12,27 @@ export function LoginPage() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [step, setStep] = useState<LoginStep>('credentials');
+  const [tempToken, setTempToken] = useState('');
+  const [companies, setCompanies] = useState<LoginCompany[]>([]);
+  const [user, setUser] = useState<LoginUser | null>(null);
+  const [selectingId, setSelectingId] = useState<string | null>(null);
+
   const login = useAuthStore((s) => s.login);
   const navigate = useNavigate();
+
+  const completeLogin = (accessToken: string, refreshToken: string, userInfo: LoginUser) => {
+    setToken(accessToken, refreshToken);
+    const role = userInfo.role || 'user';
+    login({
+      id: userInfo.id,
+      name: userInfo.name || userInfo.email.split('@')[0],
+      email: userInfo.email,
+      role,
+      initials: (userInfo.name || userInfo.email).slice(0, 2).toUpperCase(),
+    });
+    navigate(role === 'system_admin' ? '/system' : '/');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,24 +40,64 @@ export function LoginPage() {
     setError('');
     try {
       const res = await apiLogin(email, password);
-      setToken(res.access_token, res.refresh_token);
 
-      // Decode JWT payload for user info
-      const payload = JSON.parse(atob(res.access_token.split('.')[1]));
-      const role = payload.role || payload.roles?.[0] || 'user';
-      login({
-        id: payload.sub,
-        name: payload.name || email.split('@')[0],
-        email: payload.email || email,
-        role,
-        initials: (payload.name || email).slice(0, 2).toUpperCase(),
-      });
-      navigate(role === 'system_admin' ? '/system' : '/');
-    } catch (err) {
+      if (res.step === 'complete' && res.access_token && res.refresh_token && res.user) {
+        completeLogin(res.access_token, res.refresh_token, res.user);
+      } else if (res.step === 'select_company' && res.temporary_token && res.companies) {
+        setTempToken(res.temporary_token);
+        setCompanies(res.companies);
+        setUser(res.user || null);
+        setStep('select_company');
+      }
+    } catch {
       setError('Invalid email or password');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSelectCompany = async (companyId: string) => {
+    setSelectingId(companyId);
+    setError('');
+    try {
+      const res = await loginStep2(tempToken, companyId);
+      if (res.step === 'complete' && res.access_token && res.refresh_token && res.user) {
+        completeLogin(res.access_token, res.refresh_token, res.user);
+      }
+    } catch {
+      setError('Failed to select company. Please try again.');
+      setSelectingId(null);
+    }
+  };
+
+  const handleBack = () => {
+    setStep('credentials');
+    setTempToken('');
+    setCompanies([]);
+    setUser(null);
+    setError('');
+  };
+
+  const roleLabel = (role: string) => {
+    const labels: Record<string, string> = {
+      primary_manager: 'Primary Manager',
+      manager: 'Manager',
+      operator: 'Operator',
+      viewer: 'Viewer',
+      admin: 'Admin',
+    };
+    return labels[role] || role;
+  };
+
+  const roleBadgeColor = (role: string) => {
+    const colors: Record<string, string> = {
+      primary_manager: 'bg-[#7C3AED]/20 text-[#A78BFA] border-[#7C3AED]/30',
+      manager: 'bg-[#2563EB]/20 text-[#60A5FA] border-[#2563EB]/30',
+      operator: 'bg-[#059669]/20 text-[#34D399] border-[#059669]/30',
+      viewer: 'bg-[#64748B]/20 text-[#94A3B8] border-[#64748B]/30',
+      admin: 'bg-[#DC2626]/20 text-[#F87171] border-[#DC2626]/30',
+    };
+    return colors[role] || colors.viewer;
   };
 
   return (
@@ -51,79 +112,155 @@ export function LoginPage() {
           <p className="text-[13px] text-[#64748B] mt-1">Building Operating System</p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="px-3 py-2 bg-[#7F1D1D]/20 border border-[#EF4444]/30 rounded-md text-[#EF4444] text-[13px]">
+        {/* Step 1: Credentials */}
+        <div
+          className={`transition-all duration-300 ${
+            step === 'credentials'
+              ? 'opacity-100 translate-y-0'
+              : 'opacity-0 -translate-y-4 absolute pointer-events-none'
+          }`}
+        >
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && step === 'credentials' && (
+              <div className="px-3 py-2 bg-[#7F1D1D]/20 border border-[#EF4444]/30 rounded-md text-[#EF4444] text-[13px]">
+                {error}
+              </div>
+            )}
+            <div>
+              <input
+                type="email"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full h-9 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:border-[#3B82F6] focus:outline-none focus:ring-1 focus:ring-[#3B82F6]/20"
+              />
+            </div>
+            <div className="relative">
+              <input
+                type={showPass ? 'text' : 'password'}
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full h-9 px-3 pr-10 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:border-[#3B82F6] focus:outline-none focus:ring-1 focus:ring-[#3B82F6]/20"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass(!showPass)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#94A3B8]"
+              >
+                {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+
+            <label className="flex items-center gap-2 text-[12px] text-[#94A3B8]">
+              <input type="checkbox" className="rounded border-[#334155]" />
+              Remember this device
+            </label>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full h-9 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-[14px] font-medium transition-colors disabled:opacity-60"
+            >
+              {loading ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Signing in...
+                </span>
+              ) : (
+                'Sign In'
+              )}
+            </button>
+
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[#334155]" />
+              </div>
+              <div className="relative flex justify-center text-[12px]">
+                <span className="bg-[#0A0E1A] px-3 text-[#64748B]">or continue with</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="w-full h-9 bg-[#1E293B] hover:bg-[#334155] border border-[#334155] text-[#F8FAFC] rounded-md text-[13px] font-medium transition-colors"
+            >
+              🏢 Sign in with SSO
+            </button>
+
+            <div className="text-center mt-4">
+              <a href="#" className="text-[12px] text-[#3B82F6] hover:underline">
+                Forgot password?
+              </a>
+            </div>
+          </form>
+        </div>
+
+        {/* Step 2: Company Selector */}
+        <div
+          className={`transition-all duration-300 ${
+            step === 'select_company'
+              ? 'opacity-100 translate-y-0'
+              : 'opacity-0 translate-y-4 absolute pointer-events-none'
+          }`}
+        >
+          {user && (
+            <div className="text-center mb-6">
+              <div className="w-12 h-12 mx-auto mb-3 bg-[#1E293B] border border-[#334155] rounded-full flex items-center justify-center text-[#F8FAFC] text-[16px] font-semibold">
+                {(user.name || user.email).slice(0, 2).toUpperCase()}
+              </div>
+              <p className="text-[14px] text-[#F8FAFC]">
+                Logging in as <span className="font-medium">{user.name || user.email}</span>
+              </p>
+              <p className="text-[12px] text-[#64748B] mt-1">Select a company to continue</p>
+            </div>
+          )}
+
+          {error && step === 'select_company' && (
+            <div className="px-3 py-2 mb-4 bg-[#7F1D1D]/20 border border-[#EF4444]/30 rounded-md text-[#EF4444] text-[13px]">
               {error}
             </div>
           )}
-          <div>
-            <input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full h-9 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:border-[#3B82F6] focus:outline-none focus:ring-1 focus:ring-[#3B82F6]/20"
-            />
-          </div>
-          <div className="relative">
-            <input
-              type={showPass ? 'text' : 'password'}
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full h-9 px-3 pr-10 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:border-[#3B82F6] focus:outline-none focus:ring-1 focus:ring-[#3B82F6]/20"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPass(!showPass)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#94A3B8]"
-            >
-              {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
 
-          <label className="flex items-center gap-2 text-[12px] text-[#94A3B8]">
-            <input type="checkbox" className="rounded border-[#334155]" />
-            Remember this device
-          </label>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full h-9 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-[14px] font-medium transition-colors disabled:opacity-60"
-          >
-            {loading ? (
-              <span className="inline-flex items-center gap-2">
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Signing in...
-              </span>
-            ) : (
-              'Sign In'
-            )}
-          </button>
-
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-[#334155]" />
-            </div>
-            <div className="relative flex justify-center text-[12px]">
-              <span className="bg-[#0A0E1A] px-3 text-[#64748B]">or continue with</span>
-            </div>
+          <div className="space-y-2">
+            {companies.map((company) => (
+              <button
+                key={company.id}
+                onClick={() => handleSelectCompany(company.id)}
+                disabled={selectingId !== null}
+                className="w-full flex items-center gap-3 p-3 bg-[#111827] hover:bg-[#1E293B] border border-[#334155] hover:border-[#3B82F6]/50 rounded-lg transition-all text-left group disabled:opacity-60"
+              >
+                <div className="w-10 h-10 bg-[#1E293B] group-hover:bg-[#334155] border border-[#334155] rounded-lg flex items-center justify-center shrink-0 transition-colors">
+                  {company.logo_url ? (
+                    <img src={company.logo_url} alt="" className="w-6 h-6 rounded" />
+                  ) : (
+                    <Building2 size={18} className="text-[#64748B]" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-medium text-[#F8FAFC] truncate">{company.name}</p>
+                  <span
+                    className={`inline-block mt-1 px-1.5 py-0.5 text-[10px] font-medium rounded border ${roleBadgeColor(company.role)}`}
+                  >
+                    {roleLabel(company.role)}
+                  </span>
+                </div>
+                {selectingId === company.id ? (
+                  <span className="w-4 h-4 border-2 border-[#3B82F6]/30 border-t-[#3B82F6] rounded-full animate-spin shrink-0" />
+                ) : (
+                  <ChevronRight size={16} className="text-[#64748B] group-hover:text-[#94A3B8] shrink-0" />
+                )}
+              </button>
+            ))}
           </div>
 
           <button
-            type="button"
-            className="w-full h-9 bg-[#1E293B] hover:bg-[#334155] border border-[#334155] text-[#F8FAFC] rounded-md text-[13px] font-medium transition-colors"
+            onClick={handleBack}
+            className="w-full mt-4 text-[12px] text-[#64748B] hover:text-[#94A3B8] transition-colors"
           >
-            🏢 Sign in with SSO
+            ← Back to login
           </button>
-
-          <div className="text-center mt-4">
-            <a href="#" className="text-[12px] text-[#3B82F6] hover:underline">Forgot password?</a>
-          </div>
-        </form>
+        </div>
 
         {/* Footer */}
         <div className="mt-10 flex items-center justify-between text-[12px] text-[#64748B] border-t border-[#1E293B] pt-4">

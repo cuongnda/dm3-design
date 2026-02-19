@@ -49,7 +49,33 @@ async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<T> {
 
 // ─── Auth API ───────────────────────────────────────────────
 
+export interface LoginCompany {
+  id: string;
+  name: string;
+  code: string;
+  logo_url: string | null;
+  role: string;
+}
+
+export interface LoginUser {
+  id: string;
+  name: string;
+  email: string;
+  role?: string;
+  company_id?: string;
+}
+
 export interface LoginResponse {
+  step: 'select_company' | 'complete';
+  temporary_token?: string;
+  access_token?: string;
+  refresh_token?: string;
+  user?: LoginUser;
+  companies?: LoginCompany[];
+}
+
+// Legacy compat
+export interface LegacyLoginResponse {
   access_token: string;
   refresh_token: string;
   expires_in: number;
@@ -60,6 +86,13 @@ export async function login(email: string, password: string): Promise<LoginRespo
   return apiFetch<LoginResponse>(`${AUTH_URL}/login`, {
     method: 'POST',
     body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function loginStep2(temporaryToken: string, companyId: string): Promise<LoginResponse> {
+  return apiFetch<LoginResponse>(`${AUTH_URL}/login-step2`, {
+    method: 'POST',
+    body: JSON.stringify({ temporary_token: temporaryToken, company_id: companyId }),
   });
 }
 
