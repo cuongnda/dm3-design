@@ -9,6 +9,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api/v1/auth': { target: 'http://localhost:8005', changeOrigin: true },
+      '/api/v1/system/devices': { target: 'http://localhost:8002', changeOrigin: true },
       '/api/v1/system': { target: 'http://localhost:8005', changeOrigin: true },
       '/api/v1/users': { target: 'http://localhost:8005', changeOrigin: true },
       '/api/v1/roles': { target: 'http://localhost:8005', changeOrigin: true },
