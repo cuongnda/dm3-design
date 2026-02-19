@@ -40,6 +40,7 @@ export const ROUTES = {
   contractors: '/manage/contractors',
   attendance: '/manage/attendance',
   deliveries: '/manage/deliveries',
+  devices: '/devices',
   provisioning: '/manage/provisioning',
   // OPERATE
   roomBooking: '/operate/room-booking',
