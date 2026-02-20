@@ -47,8 +47,8 @@ class FacePassManager @Inject constructor(
         const val GROUP_NAME = "DualiPass"
         // Camera1 on DF-970: same as old app ConfigUtil.CAMERA_ROTATION
         const val CAMERA_ROTATION = 270
-        const val CAMERA_WIDTH = 1280
-        const val CAMERA_HEIGHT = 720
+        const val CAMERA_WIDTH = 640
+        const val CAMERA_HEIGHT = 480
         const val CAMERA_ID = "100" // Main face camera on DF970 (Camera2 ID)
 
         // Thresholds

@@ -371,13 +371,18 @@ class AccessControlManager @Inject constructor(
             override fun onFrame(nv21Data: ByteArray, width: Int, height: Int) {
                 previewFrameCount++
 
-                // Preview every 4th frame (offloaded to IO thread)
-                if (previewFrameCount % 4 == 0) {
-                    previewChannel.trySend(FrameData(nv21Data.copyOf(), width, height))
+                // Only process every 3rd frame to reduce CPU (~5fps to FacePass)
+                if (previewFrameCount % 3 != 0) return
+
+                val copy = nv21Data.copyOf()
+
+                // Preview every 12th frame (~1.2fps — low but keeps UI alive)
+                if (previewFrameCount % 12 == 0) {
+                    previewChannel.trySend(FrameData(copy, width, height))
                 }
 
-                // FacePass every frame (needs its own copy since Camera1 reuses buffer)
-                frameChannel.trySend(FrameData(nv21Data.copyOf(), width, height))
+                // FacePass every 3rd frame
+                frameChannel.trySend(FrameData(copy, width, height))
             }
         })
 

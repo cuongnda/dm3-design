@@ -26,8 +26,9 @@ class FaceCamera(private val context: Context) {
         private const val TAG = "FaceCamera"
         // DF-970 Camera1 ID: 1 = front face camera (same as Camera2 "100")
         private const val CAMERA_ID = 1
-        const val PREVIEW_WIDTH = 1280
-        const val PREVIEW_HEIGHT = 720
+        // Use 640x480 to reduce CPU load (was 1280x720 — caused overheating)
+        const val PREVIEW_WIDTH = 640
+        const val PREVIEW_HEIGHT = 480
     }
 
     interface FrameCallback {
