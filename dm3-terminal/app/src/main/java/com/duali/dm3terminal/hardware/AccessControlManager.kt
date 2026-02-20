@@ -96,7 +96,7 @@ class AccessControlManager @Inject constructor(
     // Camera2 ImageReader on DF-970 camera "100": sensor orientation = 270°
     // Raw NV21 is landscape (1280x720), device is portrait (480x800)
     // Need to rotate 270° to get correct portrait orientation
-    private val rotationMatrix = Matrix().apply { postRotate(270f) }
+    private val rotationMatrix = Matrix().apply { postRotate(90f) }
 
     /**
      * Initialize all hardware. Call once at app start.
