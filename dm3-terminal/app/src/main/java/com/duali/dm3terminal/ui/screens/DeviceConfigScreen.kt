@@ -38,9 +38,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import org.eclipse.paho.client.mqttv3.*
-import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
+import com.hivemq.client.mqtt.MqttClient
+import com.hivemq.client.mqtt.datatypes.MqttQos
+import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient
+import com.hivemq.client.mqtt.mqtt5.message.connect.Mqtt5Connect
 import org.json.JSONObject
+import java.net.URI
 import java.util.UUID
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
@@ -73,7 +76,7 @@ class DeviceConfigViewModel @Inject constructor(
     private val _bootstrapState = MutableStateFlow<BootstrapState>(BootstrapState.Idle)
     val bootstrapState: StateFlow<BootstrapState> = _bootstrapState.asStateFlow()
 
-    private var bootstrapClient: MqttAsyncClient? = null
+    private var bootstrapClient: Mqtt5AsyncClient? = null
 
     fun save(config: DeviceConfig) {
         devicePreferences.save(config)
@@ -92,39 +95,43 @@ class DeviceConfigViewModel @Inject constructor(
                 val hmacInput = "$rid:$timestampMinute"
                 val password = hmacSha256(hmacInput, BOOTSTRAP_SECRET)
 
+                val uri = URI(brokerUrl.replace("tcp://", "http://"))
+                val host = uri.host ?: "127.0.0.1"
+                val port = if (uri.port > 0) uri.port else 1884
                 val clientId = "dm3-bootstrap-$rid-${System.currentTimeMillis() % 10000}"
-                val client = MqttAsyncClient(brokerUrl, clientId, MemoryPersistence())
 
-                val options = MqttConnectOptions().apply {
-                    isCleanSession = true
-                    userName = "bootstrap:$rid"
-                    this.password = password.toCharArray()
-                    connectionTimeout = 10
-                    keepAliveInterval = 60
-                }
+                val client = MqttClient.builder()
+                    .useMqttVersion5()
+                    .identifier(clientId)
+                    .serverHost(host)
+                    .serverPort(port)
+                    .buildAsync()
 
                 val responseTopic = "dm/bootstrap/$rid/response"
 
-                client.setCallback(object : MqttCallbackExtended {
-                    override fun connectComplete(reconnect: Boolean, serverURI: String?) {}
-                    override fun connectionLost(cause: Throwable?) {
-                        Log.w(TAG, "Bootstrap connection lost", cause)
-                        if (_bootstrapState.value is BootstrapState.WaitingApproval) {
-                            _bootstrapState.value = BootstrapState.Error("Connection lost")
-                        }
-                    }
-                    override fun messageArrived(topic: String, message: MqttMessage) {
-                        handleBootstrapResponse(topic, message)
-                    }
-                    override fun deliveryComplete(token: IMqttDeliveryToken?) {}
-                })
+                // Subscribe to response topic before connecting
+                val connectMsg = Mqtt5Connect.builder()
+                    .cleanStart(true)
+                    .keepAlive(60)
+                    .simpleAuth()
+                        .username("bootstrap:$rid")
+                        .password(password.toByteArray())
+                        .applySimpleAuth()
+                    .build()
 
-                val connectToken = client.connect(options)
-                connectToken.waitForCompletion(10_000)
+                client.connect(connectMsg).get()
                 bootstrapClient = client
 
                 // Subscribe to response topic
-                client.subscribe(responseTopic, 1).waitForCompletion(5_000)
+                client.subscribeWith()
+                    .topicFilter(responseTopic)
+                    .qos(MqttQos.AT_LEAST_ONCE)
+                    .callback { publish ->
+                        val payload = publish.payloadAsBytes?.let { String(it) } ?: return@callback
+                        handleBootstrapResponse(publish.topic.toString(), payload)
+                    }
+                    .send()
+                    .get()
 
                 // Build registration payload
                 val fingerprint = HardwareFingerprint.toJson(appContext)
@@ -140,13 +147,14 @@ class DeviceConfigViewModel @Inject constructor(
                     put("timestamp", timestamp)
                     put("nonce", nonce)
                 }
-                // HMAC over the payload
                 payload.put("hmac", hmacSha256(payload.toString(), BOOTSTRAP_SECRET))
 
-                client.publish(
-                    "dm/bootstrap/register",
-                    MqttMessage(payload.toString().toByteArray()).apply { qos = 1 }
-                ).waitForCompletion(5_000)
+                client.publishWith()
+                    .topic("dm/bootstrap/register")
+                    .payload(payload.toString().toByteArray())
+                    .qos(MqttQos.AT_LEAST_ONCE)
+                    .send()
+                    .get()
 
                 _bootstrapState.value = BootstrapState.WaitingApproval
                 Log.i(TAG, "Bootstrap registration sent for RID=$rid")
@@ -158,9 +166,9 @@ class DeviceConfigViewModel @Inject constructor(
         }
     }
 
-    private fun handleBootstrapResponse(topic: String, message: MqttMessage) {
+    private fun handleBootstrapResponse(topic: String, payload: String) {
         try {
-            val json = JSONObject(String(message.payload))
+            val json = JSONObject(payload)
             val type = json.optString("type")
             Log.i(TAG, "Bootstrap response: $type")
 

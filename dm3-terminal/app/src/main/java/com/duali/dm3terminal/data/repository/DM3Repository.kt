@@ -53,6 +53,10 @@ class DM3Repository @Inject constructor(
     suspend fun upsertRules(rules: List<AccessRuleEntity>) = db.accessRuleDao().upsertAll(rules)
     suspend fun upsertGroups(groups: List<PersonGroupEntity>) = db.personGroupDao().upsertAll(groups)
 
+    // Blacklist management
+    suspend fun addToBlacklist(entry: BlacklistEntity) = db.blacklistDao().add(entry)
+    suspend fun removeFromBlacklist(personId: String) = db.blacklistDao().remove(personId)
+
     suspend fun clearAll() {
         db.personDao().deleteAll()
         db.credentialDao().deleteAll()

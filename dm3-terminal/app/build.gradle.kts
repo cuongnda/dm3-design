@@ -43,6 +43,13 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
+        resources {
+            excludes += setOf(
+                "META-INF/INDEX.LIST",
+                "META-INF/io.netty.versions.properties",
+                "META-INF/DEPENDENCIES"
+            )
+        }
     }
 }
 
@@ -91,8 +98,13 @@ dependencies {
     // Security - EncryptedSharedPreferences
     implementation(libs.security.crypto)
 
-    // MQTT (dep only)
-    implementation(libs.paho.mqtt)
+    // MQTT - HiveMQ MQTT 5.0 client
+    implementation(libs.hivemq.mqtt)
+
+    // WorkManager
+    implementation(libs.work.runtime)
+    implementation(libs.hilt.work)
+    ksp(libs.hilt.work.compiler)
 
     // DF970 Hardware SDK
     implementation(files("libs/HWControl-release.aar"))

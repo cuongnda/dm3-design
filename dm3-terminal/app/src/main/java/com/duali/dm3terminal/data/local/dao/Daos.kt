@@ -82,6 +82,9 @@ interface BlacklistDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun add(entry: BlacklistEntity)
 
+    @Query("DELETE FROM blacklist WHERE person_id = :personId")
+    suspend fun remove(personId: String)
+
     @Query("DELETE FROM blacklist")
     suspend fun deleteAll()
 }
