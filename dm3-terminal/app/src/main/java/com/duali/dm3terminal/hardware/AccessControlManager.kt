@@ -90,20 +90,36 @@ class AccessControlManager @Inject constructor(
             // Load config from Room
             loadConfig()
 
-            // Initialize FacePass
-            val faceReady = facePassManager.initialize()
-            if (!faceReady) {
-                Log.w(TAG, "FacePass init failed (may need device license)")
+            // Initialize FacePass (may fail if native lib corrupted)
+            try {
+                val faceReady = facePassManager.initialize()
+                if (!faceReady) {
+                    Log.w(TAG, "FacePass init failed (may need device license)")
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "FacePass init error", e)
             }
 
-            // Open NFC
-            nfcReader.open()
+            // Open NFC (graceful — may not be available)
+            try {
+                nfcReader.open()
+            } catch (e: Throwable) {
+                Log.e(TAG, "NFC init error", e)
+            }
 
-            // Open Wiegand
-            wiegandReader.open()
+            // Open Wiegand (graceful — JNI may fail)
+            try {
+                wiegandReader.open()
+            } catch (e: Throwable) {
+                Log.e(TAG, "Wiegand init error", e)
+            }
 
-            // Start door monitoring
-            doorController.startMonitoring()
+            // Start door monitoring (graceful — GPIO may not be available)
+            try {
+                doorController.startMonitoring()
+            } catch (e: Throwable) {
+                Log.e(TAG, "Door monitoring init error", e)
+            }
 
             _status.value = HardwareStatus.READY
             Log.d(TAG, "Hardware initialized (face=${facePassManager.isReady})")
