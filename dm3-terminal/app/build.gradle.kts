@@ -18,10 +18,23 @@ android {
         versionName = "1.0.0"
     }
 
+    signingConfigs {
+        create("duali") {
+            storeFile = file("../duali_keyStore.keystore")
+            storePassword = "duali1052"
+            keyAlias = "duali"
+            keyPassword = "duali1052"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("duali")
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("duali")
         }
     }
 
