@@ -55,7 +55,6 @@ fun DeniedScreen(
             ),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            DeviceStatusBar(isAlert = true)
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -131,7 +130,6 @@ fun DeniedScreen(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-            DuallPassFooter(leftText = "Lobby A • Gate 1", rightText = "Log: #AC-$logId")
         }
     }
 }

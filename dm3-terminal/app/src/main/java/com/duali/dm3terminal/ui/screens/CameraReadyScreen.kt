@@ -45,7 +45,6 @@ fun CameraReadyScreen(
             .fillMaxSize()
             .background(DM3Background),
     ) {
-        DeviceStatusBar()
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -118,6 +117,5 @@ fun CameraReadyScreen(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
-        DuallPassFooter(leftText = "Lobby A • Gate 1")
     }
 }

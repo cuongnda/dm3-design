@@ -52,7 +52,6 @@ fun QrScanScreen(
             .fillMaxSize()
             .background(DM3Background),
     ) {
-        DeviceStatusBar()
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -165,6 +164,5 @@ fun QrScanScreen(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
-        DuallPassFooter(leftText = "Lobby A • Gate 1")
     }
 }

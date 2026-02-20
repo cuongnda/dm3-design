@@ -47,8 +47,6 @@ fun PinScreen(
             .fillMaxSize()
             .background(DM3Background),
     ) {
-        DeviceStatusBar()
-        DuallPassHeader(subtitle = "Access Control")
 
         Column(
             modifier = Modifier
@@ -144,7 +142,6 @@ fun PinScreen(
             }
         }
 
-        DuallPassFooter(leftText = "Lobby A • Gate 1")
     }
 }
 

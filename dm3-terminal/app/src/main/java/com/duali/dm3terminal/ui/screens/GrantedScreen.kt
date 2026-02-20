@@ -52,7 +52,6 @@ fun GrantedScreen(
             .fillMaxSize()
             .background(DM3Background),
     ) {
-        DeviceStatusBar()
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -128,6 +127,5 @@ fun GrantedScreen(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
-        DuallPassFooter(leftText = "Lobby A • Gate 1", rightText = "Log: #AC-$logId")
     }
 }

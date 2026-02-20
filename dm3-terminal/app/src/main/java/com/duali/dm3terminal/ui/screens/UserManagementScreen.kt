@@ -45,7 +45,6 @@ fun UserManagementScreen(
             .fillMaxSize()
             .background(DM3Background),
     ) {
-        DeviceStatusBar()
         DuallPassHeader(subtitle = "User Management")
 
         Column(

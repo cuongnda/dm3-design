@@ -35,7 +35,6 @@ fun SettingsMenuScreen(
             .fillMaxSize()
             .background(DM3Background),
     ) {
-        DeviceStatusBar()
         DuallPassHeader(subtitle = "Settings")
 
         Column(

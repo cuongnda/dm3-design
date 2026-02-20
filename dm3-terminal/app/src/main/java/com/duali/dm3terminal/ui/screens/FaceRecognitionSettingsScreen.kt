@@ -33,7 +33,6 @@ fun FaceRecognitionSettingsScreen(
             .fillMaxSize()
             .background(DM3Background),
     ) {
-        DeviceStatusBar()
         DuallPassHeader(subtitle = "Face Recognition Settings")
 
         Column(

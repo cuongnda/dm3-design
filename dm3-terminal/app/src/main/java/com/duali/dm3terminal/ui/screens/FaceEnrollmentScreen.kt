@@ -53,7 +53,6 @@ fun FaceEnrollmentScreen(
             .fillMaxSize()
             .background(DM3Background),
     ) {
-        DeviceStatusBar()
         DuallPassHeader(subtitle = "Face Enrollment")
 
         Column(

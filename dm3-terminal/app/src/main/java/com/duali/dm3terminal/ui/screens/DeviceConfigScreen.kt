@@ -251,7 +251,6 @@ fun DeviceConfigScreen(
             .fillMaxSize()
             .background(DM3Background),
     ) {
-        DeviceStatusBar()
         DuallPassHeader(subtitle = "Device Configuration")
 
         Column(

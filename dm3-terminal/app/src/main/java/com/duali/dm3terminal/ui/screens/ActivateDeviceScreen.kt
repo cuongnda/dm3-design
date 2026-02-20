@@ -138,7 +138,6 @@ fun ActivateDeviceScreen(
             .fillMaxSize()
             .background(DM3Background),
     ) {
-        DeviceStatusBar()
         DuallPassHeader(subtitle = "Activate Device")
 
         Column(
