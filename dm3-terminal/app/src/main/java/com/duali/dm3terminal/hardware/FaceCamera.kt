@@ -23,9 +23,9 @@ class FaceCamera(private val context: Context) {
 
     companion object {
         private const val TAG = "FaceCamera"
-        // DF-970 Camera2 IDs: "100" (back), "102" (front IR)
-        // Note: Camera1 maps 0→"100", 1→"102"
-        private const val CAMERA_ID = "102"
+        // DF-970 Camera2 IDs: "100" (main/face camera), "102" (IR — buggy driver, kernel panic)
+        // Old SDK app uses camera "100" for face recognition
+        private const val CAMERA_ID = "100"
         const val PREVIEW_WIDTH = 1280
         const val PREVIEW_HEIGHT = 720
         private const val TARGET_FPS = 15
@@ -207,9 +207,9 @@ class FaceCamera(private val context: Context) {
         val uPlane = image.planes[1]
         val vPlane = image.planes[2]
 
-        val yBuffer = yPlane.buffer
-        val uBuffer = uPlane.buffer
-        val vBuffer = vPlane.buffer
+        val yBuffer = yPlane.buffer.rewind() as java.nio.ByteBuffer
+        val uBuffer = uPlane.buffer.rewind() as java.nio.ByteBuffer
+        val vBuffer = vPlane.buffer.rewind() as java.nio.ByteBuffer
 
         val yRowStride = yPlane.rowStride
         val uvRowStride = uPlane.rowStride
@@ -218,32 +218,43 @@ class FaceCamera(private val context: Context) {
         val width = image.width
         val height = image.height
 
+        // Validate buffer fits
+        val expectedSize = width * height * 3 / 2
+        if (nv21.size < expectedSize) return
+
         // Copy Y plane
         if (yRowStride == width) {
-            yBuffer.get(nv21, 0, width * height)
+            val ySize = minOf(yBuffer.remaining(), width * height)
+            yBuffer.get(nv21, 0, ySize)
         } else {
             for (row in 0 until height) {
-                yBuffer.position(row * yRowStride)
+                val pos = row * yRowStride
+                if (pos + width > yBuffer.capacity()) break
+                yBuffer.position(pos)
                 yBuffer.get(nv21, row * width, width)
             }
         }
 
         val uvOffset = width * height
+        val uvHeight = height / 2
+        val uvWidth = width / 2
 
         // Fast path: native NV21 (VU interleaved with pixelStride=2)
         if (uvPixelStride == 2 && uvRowStride == width) {
-            // V plane buffer starts at V, and has interleaved VU pairs
-            vBuffer.get(nv21, uvOffset, width * height / 2)
+            val uvSize = minOf(vBuffer.remaining(), width * height / 2)
+            if (uvSize > 0) {
+                vBuffer.get(nv21, uvOffset, uvSize)
+            }
             return
         }
 
         // Slow path: manual interleave
-        val uvHeight = height / 2
-        val uvWidth = width / 2
         for (row in 0 until uvHeight) {
             for (col in 0 until uvWidth) {
                 val uvIndex = row * uvRowStride + col * uvPixelStride
+                if (uvIndex >= vBuffer.capacity() || uvIndex >= uBuffer.capacity()) continue
                 val nv21Index = uvOffset + row * width + col * 2
+                if (nv21Index + 1 >= nv21.size) continue
                 nv21[nv21Index] = vBuffer.get(uvIndex)      // V
                 nv21[nv21Index + 1] = uBuffer.get(uvIndex)  // U
             }

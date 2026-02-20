@@ -246,7 +246,7 @@ class AccessControlManager @Inject constructor(
 
     private fun startFaceRecognition() {
         if (!facePassManager.isReady) {
-            Log.w(TAG, "FacePass not ready, skipping face recognition")
+            Log.w(TAG, "FacePass not ready, skipping face recognition (camera available)")
             return
         }
 
