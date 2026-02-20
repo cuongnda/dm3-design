@@ -18,9 +18,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextAlign
+import com.duali.dm3terminal.BuildConfig
 import com.duali.dm3terminal.mqtt.MqttConnectionState
-import com.duali.dm3terminal.mqtt.MqttService
-import com.duali.dm3terminal.ui.components.*
 import com.duali.dm3terminal.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -64,7 +63,7 @@ fun IdleScreen(
         label = "ringAlpha",
     )
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(DM3Background)
@@ -75,42 +74,10 @@ fun IdleScreen(
                 )
             },
     ) {
-        DeviceStatusBar()
-
-        // Header with location
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
-                    .background(DM3AccentPurple),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("D", color = DM3White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            }
-            Spacer(modifier = Modifier.width(10.dp))
-            Column {
-                Text(
-                    text = "DUALL PASS",
-                    color = DM3White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                )
-                Text(text = "Access Control", color = DM3AccentPurple, fontSize = 12.sp)
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            Text(text = "Lobby A • Gate 1", color = DM3Gray, fontSize = 12.sp)
-        }
-
         // Center content
         Column(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -167,6 +134,37 @@ fun IdleScreen(
             )
         }
 
-        DuallPassFooter()
+        // Bottom-left: version + MQTT status
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(
+                        when (mqttState) {
+                            MqttConnectionState.CONNECTED -> DM3Green
+                            MqttConnectionState.CONNECTING -> DM3Yellow
+                            MqttConnectionState.DISCONNECTED -> DM3Red
+                        }
+                    ),
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "v${BuildConfig.VERSION_NAME} • ${
+                    when (mqttState) {
+                        MqttConnectionState.CONNECTED -> "Connected"
+                        MqttConnectionState.CONNECTING -> "Connecting..."
+                        MqttConnectionState.DISCONNECTED -> "Disconnected"
+                    }
+                }",
+                color = DM3GrayDark,
+                fontSize = 10.sp,
+            )
+        }
     }
 }
