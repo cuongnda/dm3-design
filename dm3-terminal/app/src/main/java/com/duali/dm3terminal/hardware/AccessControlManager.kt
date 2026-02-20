@@ -337,37 +337,46 @@ class AccessControlManager @Inject constructor(
             }
         }
 
+        // Preview bitmap channel — separate from face recognition to avoid blocking
+        val previewChannel = Channel<FrameData>(capacity = 1, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
+
+        // Preview consumer — runs on IO dispatcher to avoid blocking main/camera thread
+        scope.launch(Dispatchers.IO) {
+            for (frame in previewChannel) {
+                try {
+                    val yuvImage = YuvImage(frame.nv21, ImageFormat.NV21, frame.width, frame.height, null)
+                    val out = java.io.ByteArrayOutputStream()
+                    yuvImage.compressToJpeg(Rect(0, 0, frame.width, frame.height), 40, out)
+                    val bytes = out.toByteArray()
+                    val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    if (bmp != null) {
+                        val rotated = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, rotationMatrix, true)
+                        _previewBitmap.value = rotated.asImageBitmap()
+                        if (rotated !== bmp) bmp.recycle()
+                        fpsFrameCount++
+                        val now = System.currentTimeMillis()
+                        if (now - fpsLastTime >= 1000) {
+                            _currentFps.value = fpsFrameCount
+                            fpsFrameCount = 0
+                            fpsLastTime = now
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Preview bitmap error: ${e.message}")
+                }
+            }
+        }
+
         faceCamera.setFrameCallback(object : FaceCamera.FrameCallback {
             override fun onFrame(nv21Data: ByteArray, width: Int, height: Int) {
                 previewFrameCount++
 
-                // Generate preview bitmap every 4th frame (~3-4fps) to reduce CPU load
+                // Preview every 4th frame (offloaded to IO thread)
                 if (previewFrameCount % 4 == 0) {
-                    try {
-                        val yuvImage = YuvImage(nv21Data, ImageFormat.NV21, width, height, null)
-                        val out = java.io.ByteArrayOutputStream()
-                        yuvImage.compressToJpeg(Rect(0, 0, width, height), 40, out)
-                        val bytes = out.toByteArray()
-                        val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                        if (bmp != null) {
-                            val rotated = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, rotationMatrix, true)
-                            _previewBitmap.value = rotated.asImageBitmap()
-                            if (rotated !== bmp) bmp.recycle()
-                            // FPS counter
-                            fpsFrameCount++
-                            val now = System.currentTimeMillis()
-                            if (now - fpsLastTime >= 1000) {
-                                _currentFps.value = fpsFrameCount
-                                fpsFrameCount = 0
-                                fpsLastTime = now
-                            }
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Preview bitmap error: ${e.message}")
-                    }
+                    previewChannel.trySend(FrameData(nv21Data.copyOf(), width, height))
                 }
 
-                // Send frame to FacePass (every frame for best tracking, drops old if slow)
+                // FacePass every frame (needs its own copy since Camera1 reuses buffer)
                 frameChannel.trySend(FrameData(nv21Data.copyOf(), width, height))
             }
         })

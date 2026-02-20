@@ -63,27 +63,25 @@ class FaceCamera(private val context: Context) {
 
             cam.parameters = params
 
-            // Allocate buffer for callback
+            // Allocate buffers for callback (triple buffer)
             val bufSize = PREVIEW_WIDTH * PREVIEW_HEIGHT * 3 / 2
             frameBuffer = ByteArray(bufSize)
-            cam.addCallbackBuffer(frameBuffer)
 
             // Use SurfaceTexture (dummy) since we don't need hardware preview
             // (SurfaceView causes kernel panic on DF-970)
-            // Keep strong reference to prevent GC from killing it
-            dummyTexture = android.graphics.SurfaceTexture(0)
-            cam.setPreviewTexture(dummyTexture!!)
+            // detachFromGLContext() prevents GL thread from abandoning the BufferQueue
+            val tex = android.graphics.SurfaceTexture(42)
+            tex.detachFromGLContext()
+            dummyTexture = tex
+            cam.setPreviewTexture(tex)
 
-            // Set display orientation for the preview surface (not affecting NV21 data)
-            cam.setDisplayOrientation(270)
-
-            cam.setPreviewCallbackWithBuffer(object : Camera.PreviewCallback {
+            // Use setPreviewCallback (not buffer-based) — more reliable on DF-970
+            // Camera allocates its own buffers internally
+            cam.setPreviewCallback(object : Camera.PreviewCallback {
                 override fun onPreviewFrame(data: ByteArray?, camera: Camera?) {
                     if (data != null && isRunning) {
                         callback?.onFrame(data, PREVIEW_WIDTH, PREVIEW_HEIGHT)
                     }
-                    // Return buffer for reuse
-                    camera?.addCallbackBuffer(data)
                 }
             })
 
