@@ -23,7 +23,9 @@ class FaceCamera(private val context: Context) {
 
     companion object {
         private const val TAG = "FaceCamera"
-        private const val CAMERA_ID = "1"
+        // DF-970 Camera2 IDs: "100" (back), "102" (front IR)
+        // Note: Camera1 maps 0→"100", 1→"102"
+        private const val CAMERA_ID = "102"
         const val PREVIEW_WIDTH = 1280
         const val PREVIEW_HEIGHT = 720
         private const val TARGET_FPS = 15
