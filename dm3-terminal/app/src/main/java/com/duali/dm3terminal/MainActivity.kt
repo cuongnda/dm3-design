@@ -11,6 +11,8 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import com.duali.dm3terminal.admin.CrashWatchdog
+import com.duali.dm3terminal.admin.KioskManager
 import com.duali.dm3terminal.mqtt.MqttService
 import com.duali.dm3terminal.service.FaceRecognitionService
 import com.duali.dm3terminal.ui.navigation.DM3NavHost
@@ -23,6 +25,8 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var mqttService: MqttService
+    @Inject lateinit var kioskManager: KioskManager
+    @Inject lateinit var crashWatchdog: CrashWatchdog
 
     private val recognitionViewModel: RecognitionViewModel by viewModels()
 
@@ -34,7 +38,10 @@ class MainActivity : ComponentActivity() {
             val binder = service as FaceRecognitionService.LocalBinder
             faceService = binder.getService()
             bound = true
-            faceService?.startRecognition()
+            // Don't start face recognition in safe mode
+            if (!crashWatchdog.safeMode.value) {
+                faceService?.startRecognition()
+            }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -45,6 +52,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Record successful start (clears crash counters)
+        crashWatchdog.onSuccessfulStart()
 
         // Keep screen on
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -60,9 +70,16 @@ class MainActivity : ComponentActivity() {
             or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
         )
 
-        // Bind to FaceRecognitionService
-        Intent(this, FaceRecognitionService::class.java).also { intent ->
-            bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        // Start kiosk / lock task mode if enabled
+        if (kioskManager.isKioskEnabled || kioskManager.isDeviceOwner) {
+            kioskManager.startLockTask(this)
+        }
+
+        // Bind to FaceRecognitionService (skip in safe mode)
+        if (!crashWatchdog.safeMode.value) {
+            Intent(this, FaceRecognitionService::class.java).also { intent ->
+                bindService(intent, connection, Context.BIND_AUTO_CREATE)
+            }
         }
 
         setContent {
@@ -82,5 +99,12 @@ class MainActivity : ComponentActivity() {
             unbindService(connection)
             bound = false
         }
+    }
+
+    /**
+     * Called from admin menu to exit kiosk mode after PIN verification.
+     */
+    fun exitKioskMode() {
+        kioskManager.stopLockTask(this)
     }
 }

@@ -2,8 +2,11 @@ package com.duali.dm3terminal.mqtt
 
 import android.content.Context
 import android.util.Log
+import com.duali.dm3terminal.admin.CrashWatchdog
+import com.duali.dm3terminal.admin.DeviceInfoProvider
+import com.duali.dm3terminal.admin.KioskManager
+import com.duali.dm3terminal.admin.OtaUpdateManager
 import com.duali.dm3terminal.hardware.DoorController
-import com.duali.dm3terminal.hardware.HardwareController
 import com.duali.dm3terminal.sync.SyncManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -23,6 +26,10 @@ class CommandHandler @Inject constructor(
     private val mqttService: MqttService,
     private val syncManager: SyncManager,
     private val doorController: DoorController,
+    private val kioskManager: KioskManager,
+    private val otaUpdateManager: OtaUpdateManager,
+    private val deviceInfoProvider: DeviceInfoProvider,
+    private val crashWatchdog: CrashWatchdog,
 ) {
     companion object {
         private const val TAG = "CommandHandler"
@@ -40,6 +47,10 @@ class CommandHandler @Inject constructor(
                     "cmd.display" -> handleDisplay(data)
                     "cmd.snapshot" -> handleSnapshot(data)
                     "cmd.lockdown" -> handleLockdown(data)
+                    "cmd.kiosk" -> handleKiosk(data)
+                    "cmd.ota_check" -> handleOtaCheck(data)
+                    "cmd.device_info" -> handleDeviceInfo(data)
+                    "cmd.safe_mode" -> handleSafeMode(data)
                     else -> Log.w(TAG, "Unknown command type: $type")
                 }
             } catch (e: Exception) {
@@ -58,6 +69,7 @@ class CommandHandler @Inject constructor(
                     "cfg.access_rules" -> syncManager.handleAccessRulesSync(data)
                     "cfg.blacklist" -> syncManager.handleBlacklistSync(data)
                     "cfg.patch" -> syncManager.handleConfigPatch(data)
+                    "cfg.firmware" -> handleFirmwareConfig(data)
                     else -> Log.w(TAG, "Unknown config type: $type")
                 }
                 // Send ACK
@@ -67,6 +79,8 @@ class CommandHandler @Inject constructor(
             }
         }
     }
+
+    // --- Existing commands (unchanged) ---
 
     private fun handleDoorCommand(data: JSONObject) {
         val action = data.optString("action", "unlock")
@@ -108,11 +122,9 @@ class CommandHandler @Inject constructor(
             put("delay_ms", delayMs)
         })
 
-        // Schedule reboot
         scope.launch {
             kotlinx.coroutines.delay(delayMs)
             try {
-                // Attempt graceful reboot via shell (requires root or device owner)
                 Runtime.getRuntime().exec(arrayOf("su", "-c", "reboot"))
             } catch (e: Exception) {
                 Log.e(TAG, "Reboot failed (may require root)", e)
@@ -144,6 +156,121 @@ class CommandHandler @Inject constructor(
         Log.i(TAG, "Lockdown: active=$active")
         // TODO: Emit lockdown state to access engine
     }
+
+    // --- Phase 5: New commands ---
+
+    private fun handleKiosk(data: JSONObject) {
+        val action = data.optString("action", "status")
+        Log.i(TAG, "Kiosk command: action=$action")
+
+        when (action) {
+            "enable" -> {
+                kioskManager.enableKioskPolicies()
+                sendCommandResponse("cmd.kiosk", JSONObject().apply {
+                    put("status", "success")
+                    put("kiosk_enabled", true)
+                    put("device_owner", kioskManager.isDeviceOwner)
+                })
+            }
+            "disable" -> {
+                kioskManager.disableKioskPolicies()
+                sendCommandResponse("cmd.kiosk", JSONObject().apply {
+                    put("status", "success")
+                    put("kiosk_enabled", false)
+                })
+            }
+            "status" -> {
+                sendCommandResponse("cmd.kiosk", JSONObject().apply {
+                    put("status", "success")
+                    put("kiosk_enabled", kioskManager.isKioskEnabled)
+                    put("kiosk_active", kioskManager.kioskActive.value)
+                    put("lock_task_mode", kioskManager.isInLockTaskMode())
+                    put("device_owner", kioskManager.isDeviceOwner)
+                })
+            }
+            else -> {
+                sendCommandResponse("cmd.kiosk", JSONObject().apply {
+                    put("status", "error")
+                    put("error", "Unknown kiosk action: $action")
+                })
+            }
+        }
+    }
+
+    private fun handleOtaCheck(data: JSONObject) {
+        val url = data.optString("url", "")
+        val version = data.optString("version", "")
+        val sha256 = data.optString("sha256", "")
+        val force = data.optBoolean("force", false)
+
+        if (url.isBlank() || version.isBlank() || sha256.isBlank()) {
+            sendCommandResponse("cmd.ota_check", JSONObject().apply {
+                put("status", "error")
+                put("error", "Missing required fields: url, version, sha256")
+                put("current_version", otaUpdateManager.getCurrentVersion())
+            })
+            return
+        }
+
+        Log.i(TAG, "OTA check: version=$version force=$force")
+        otaUpdateManager.startUpdate(url, version, sha256, force)
+
+        sendCommandResponse("cmd.ota_check", JSONObject().apply {
+            put("status", "downloading")
+            put("current_version", otaUpdateManager.getCurrentVersion())
+            put("target_version", version)
+        })
+    }
+
+    private fun handleFirmwareConfig(data: JSONObject) {
+        // cfg.firmware — same as OTA but via config channel
+        val url = data.optString("url", "")
+        val version = data.optString("version", "")
+        val checksum = data.optString("checksum", "")
+        val force = data.optBoolean("force", false)
+
+        if (url.isNotBlank() && version.isNotBlank() && checksum.isNotBlank()) {
+            Log.i(TAG, "Firmware config: version=$version force=$force")
+            otaUpdateManager.startUpdate(url, version, checksum, force)
+        } else {
+            Log.w(TAG, "Firmware config missing fields")
+        }
+    }
+
+    private fun handleDeviceInfo(data: JSONObject) {
+        Log.i(TAG, "Device info requested")
+        val info = deviceInfoProvider.getDeviceInfo()
+        info.put("kiosk_enabled", kioskManager.isKioskEnabled)
+        info.put("kiosk_active", kioskManager.kioskActive.value)
+        info.put("safe_mode", crashWatchdog.safeMode.value)
+        info.put("ota_status", otaUpdateManager.state.value.status.name)
+
+        sendCommandResponse("cmd.device_info", JSONObject().apply {
+            put("status", "success")
+            put("info", info)
+        })
+    }
+
+    private fun handleSafeMode(data: JSONObject) {
+        val action = data.optString("action", "status")
+        when (action) {
+            "exit" -> {
+                crashWatchdog.exitSafeMode()
+                sendCommandResponse("cmd.safe_mode", JSONObject().apply {
+                    put("status", "success")
+                    put("safe_mode", false)
+                })
+            }
+            "status" -> {
+                sendCommandResponse("cmd.safe_mode", JSONObject().apply {
+                    put("status", "success")
+                    put("safe_mode", crashWatchdog.safeMode.value)
+                })
+            }
+        }
+    }
+
+    // --- Helpers ---
 
     private fun sendCommandResponse(cmdType: String, responseData: JSONObject) {
         val config = mqttService.getCurrentConfig() ?: return
