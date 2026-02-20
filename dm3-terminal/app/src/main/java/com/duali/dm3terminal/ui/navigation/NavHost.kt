@@ -93,9 +93,10 @@ fun DM3NavHost(
                 ?.collectAsStateWithLifecycle()?.value
                 ?: MqttConnectionState.DISCONNECTED
             IdleScreen(
-                onTap = { navController.navigate(Routes.CAMERA_READY) },
+                onTap = { navigateClean(Routes.FACE_SCAN) },
                 onLongPress = { navController.navigate(Routes.PIN) },
                 mqttState = mqttState,
+                accessControlManager = accessControlManager,
             )
         }
 

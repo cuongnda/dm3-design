@@ -268,9 +268,9 @@ class AccessControlManager @Inject constructor(
 
         faceCamera.setFrameCallback(object : FaceCamera.FrameCallback {
             override fun onFrame(nv21Data: ByteArray, width: Int, height: Int) {
-                // Generate preview bitmap every 3rd frame (~5fps) to avoid UI jank
+                // Generate preview bitmap every 2nd frame (~7-8fps)
                 previewFrameCount++
-                if (previewFrameCount % 3 == 0) {
+                if (previewFrameCount % 2 == 0) {
                     try {
                         val yuvImage = YuvImage(nv21Data, ImageFormat.NV21, width, height, null)
                         val out = java.io.ByteArrayOutputStream()
