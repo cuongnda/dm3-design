@@ -39,6 +39,8 @@ class FaceCamera(private val context: Context) {
     @Volatile
     private var isRunning = false
     private var frameBuffer: ByteArray? = null
+    // Must keep a strong reference — GC kills the SurfaceTexture and camera stops
+    private var dummyTexture: android.graphics.SurfaceTexture? = null
 
     fun setFrameCallback(cb: FrameCallback) {
         callback = cb
@@ -68,8 +70,9 @@ class FaceCamera(private val context: Context) {
 
             // Use SurfaceTexture (dummy) since we don't need hardware preview
             // (SurfaceView causes kernel panic on DF-970)
-            val dummyTexture = android.graphics.SurfaceTexture(0)
-            cam.setPreviewTexture(dummyTexture)
+            // Keep strong reference to prevent GC from killing it
+            dummyTexture = android.graphics.SurfaceTexture(0)
+            cam.setPreviewTexture(dummyTexture!!)
 
             // Set display orientation for the preview surface (not affecting NV21 data)
             cam.setDisplayOrientation(270)
@@ -102,6 +105,8 @@ class FaceCamera(private val context: Context) {
             camera?.release()
             camera = null
             frameBuffer = null
+            dummyTexture?.release()
+            dummyTexture = null
             Log.d(TAG, "Camera1 stopped")
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping camera: ${e.message}", e)
