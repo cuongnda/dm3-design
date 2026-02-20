@@ -33,7 +33,18 @@ fun FaceRecognitionSettingsScreen(
             .fillMaxSize()
             .background(DM3Background),
     ) {
-        DuallPassHeader(subtitle = "Face Recognition Settings")
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onBack) {
+                Text("←", color = DM3White, fontSize = 20.sp)
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Face Recognition", color = DM3White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
 
         Column(
             modifier = Modifier
@@ -158,7 +169,5 @@ fun FaceRecognitionSettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
         }
-
-        DuallPassFooter(leftText = "← Settings", rightText = "Face Recognition")
     }
 }

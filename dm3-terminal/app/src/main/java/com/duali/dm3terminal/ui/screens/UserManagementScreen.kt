@@ -45,7 +45,18 @@ fun UserManagementScreen(
             .fillMaxSize()
             .background(DM3Background),
     ) {
-        DuallPassHeader(subtitle = "User Management")
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            androidx.compose.material3.TextButton(onClick = onBack) {
+                Text("←", color = DM3White, fontSize = 20.sp)
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("User Management", color = DM3White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
 
         Column(
             modifier = Modifier
@@ -100,8 +111,6 @@ fun UserManagementScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
         }
-
-        DuallPassFooter(leftText = "← Settings", rightText = "User Management")
     }
 }
 

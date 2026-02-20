@@ -3,17 +3,17 @@ package com.duali.dm3terminal.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.duali.dm3terminal.BuildConfig
 import com.duali.dm3terminal.ui.components.*
 import com.duali.dm3terminal.ui.theme.*
 
@@ -35,7 +35,19 @@ fun SettingsMenuScreen(
             .fillMaxSize()
             .background(DM3Background),
     ) {
-        DuallPassHeader(subtitle = "Settings")
+        // Simple header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onBack) {
+                Text("←", color = DM3White, fontSize = 20.sp)
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Settings", color = DM3White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
 
         Column(
             modifier = Modifier
@@ -63,15 +75,15 @@ fun SettingsMenuScreen(
             GlassCard(title = "MENU") {
                 SettingsMenuItem(icon = "⚙", label = "Device Configuration", onClick = onDeviceConfig)
                 CardDivider()
-                SettingsMenuItem(icon = "🎭", label = "Face Recognition", onClick = onFaceRecognition)
+                SettingsMenuItem(icon = "F", label = "Face Recognition", onClick = onFaceRecognition)
                 CardDivider()
-                SettingsMenuItem(icon = "👥", label = "User Management", onClick = onUserManagement)
+                SettingsMenuItem(icon = "👤", label = "User Management", onClick = onUserManagement)
                 CardDivider()
-                SettingsMenuItem(icon = "📊", label = "Access Logs", onClick = onAccessLogs)
+                SettingsMenuItem(icon = "📋", label = "Access Logs", onClick = onAccessLogs)
                 CardDivider()
-                SettingsMenuItem(icon = "📱", label = "Activate Device (QR)", onClick = onActivateDevice)
+                SettingsMenuItem(icon = "QR", label = "Activate Device", onClick = onActivateDevice)
                 CardDivider()
-                SettingsMenuItem(icon = "🔄", label = "Sync Database", onClick = {
+                SettingsMenuItem(icon = "↻", label = "Sync Database", onClick = {
                     viewModel.seedData()
                     onSyncDatabase()
                 })
@@ -82,7 +94,16 @@ fun SettingsMenuScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        DuallPassFooter(leftText = "Duali Vietnam", rightText = "DUALL PASS v3.2.1")
+        // Simple footer
+        Text(
+            text = "v${BuildConfig.VERSION_NAME}",
+            color = DM3GrayDark,
+            fontSize = 12.sp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
     }
 }
 

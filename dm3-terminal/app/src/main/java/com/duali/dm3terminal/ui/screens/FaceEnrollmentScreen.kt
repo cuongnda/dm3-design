@@ -53,7 +53,18 @@ fun FaceEnrollmentScreen(
             .fillMaxSize()
             .background(DM3Background),
     ) {
-        DuallPassHeader(subtitle = "Face Enrollment")
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onBack) {
+                Text("←", color = DM3White, fontSize = 20.sp)
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Face Enrollment", color = DM3White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
 
         Column(
             modifier = Modifier
@@ -184,7 +195,5 @@ fun FaceEnrollmentScreen(
                 }
             }
         }
-
-        DuallPassFooter(leftText = "Admin Mode")
     }
 }

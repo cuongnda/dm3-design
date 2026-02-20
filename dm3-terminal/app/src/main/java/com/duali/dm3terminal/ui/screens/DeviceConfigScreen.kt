@@ -251,7 +251,19 @@ fun DeviceConfigScreen(
             .fillMaxSize()
             .background(DM3Background),
     ) {
-        DuallPassHeader(subtitle = "Device Configuration")
+        // Simple header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            androidx.compose.material3.TextButton(onClick = onBack) {
+                Text("←", color = DM3White, fontSize = 20.sp)
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Device Configuration", color = DM3White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
 
         Column(
             modifier = Modifier
@@ -335,7 +347,7 @@ fun DeviceConfigScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                         Surface(
                             onClick = { viewModel.startBootstrapRegistration() },
-                            color = DM3AccentBlue,
+                            color = DM3AccentPurple,
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
@@ -352,7 +364,7 @@ fun DeviceConfigScreen(
                     is BootstrapState.Connecting -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             CircularProgressIndicator(
-                                color = DM3AccentBlue,
+                                color = DM3AccentPurple,
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
                             )
@@ -389,7 +401,7 @@ fun DeviceConfigScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                         Surface(
                             onClick = { viewModel.resetBootstrap() },
-                            color = DM3AccentBlue,
+                            color = DM3AccentPurple,
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
@@ -408,7 +420,7 @@ fun DeviceConfigScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                         Surface(
                             onClick = { viewModel.resetBootstrap() },
-                            color = DM3AccentBlue,
+                            color = DM3AccentPurple,
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
@@ -427,8 +439,6 @@ fun DeviceConfigScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
         }
-
-        DuallPassFooter(leftText = "← Settings", rightText = "Device Config")
     }
 }
 

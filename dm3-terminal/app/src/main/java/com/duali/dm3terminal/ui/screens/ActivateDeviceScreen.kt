@@ -138,7 +138,21 @@ fun ActivateDeviceScreen(
             .fillMaxSize()
             .background(DM3Background),
     ) {
-        DuallPassHeader(subtitle = "Activate Device")
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                onClick = onBack,
+                color = androidx.compose.ui.graphics.Color.Transparent,
+            ) {
+                Text("←", color = DM3White, fontSize = 20.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Activate Device", color = DM3White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
 
         Column(
             modifier = Modifier
@@ -303,7 +317,5 @@ fun ActivateDeviceScreen(
                 textAlign = TextAlign.Center,
             )
         }
-
-        DuallPassFooter(leftText = "← Settings", rightText = "QR Activation")
     }
 }
