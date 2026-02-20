@@ -5,6 +5,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -73,7 +76,7 @@ fun QrScanScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(DM3Red))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("IR+RGB", color = DM3Red, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    Text("IR+RGB", color = DM3Red, fontSize = 10.sp, fontWeight = FontWeight.Medium)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Box(
@@ -82,10 +85,10 @@ fun QrScanScreen(
                         .background(DM3Green)
                         .padding(horizontal = 8.dp, vertical = 2.dp),
                 ) {
-                    Text("Face Detected", color = DM3White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("Face Detected", color = DM3White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Text("$timeStr • $dateStr", color = DM3Gray, fontSize = 11.sp)
+                Text("$timeStr • $dateStr", color = DM3Gray, fontSize = 10.sp)
             }
 
             // Face bounding box (blue corners)
@@ -141,7 +144,7 @@ fun QrScanScreen(
                         },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("▦", fontSize = 24.sp, color = DM3AccentPurple.copy(alpha = 0.5f))
+                    Icon(Icons.Default.QrCode2, contentDescription = "QR Code", tint = DM3AccentPurple.copy(alpha = 0.5f), modifier = Modifier.size(24.dp))
                 }
             }
 
@@ -154,11 +157,11 @@ fun QrScanScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Verifying QR + Face...", color = DM3White, fontSize = 13.sp)
+                Text("Verifying QR + Face...", color = DM3White, fontSize = 14.sp)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(DM3AccentPurple))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("QR Detected", color = DM3AccentPurple, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("QR Detected", color = DM3AccentPurple, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }

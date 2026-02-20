@@ -7,6 +7,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -52,7 +57,7 @@ fun UserManagementScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             androidx.compose.material3.TextButton(onClick = onBack) {
-                Text("←", color = DM3White, fontSize = 20.sp)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = DM3White, modifier = Modifier.size(24.dp))
             }
             Spacer(modifier = Modifier.width(4.dp))
             Text("User Management", color = DM3White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -76,7 +81,7 @@ fun UserManagementScreen(
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("🔍", fontSize = 14.sp)
+                Icon(Icons.Default.Search, contentDescription = "Search", tint = DM3Gray, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Search users...", color = DM3GrayDark, fontSize = 14.sp, modifier = Modifier.weight(1f))
                 Box(
@@ -145,7 +150,7 @@ private fun UserRow(user: UserItem) {
                     .background(DM3Green.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("✓", color = DM3Green, fontSize = 12.sp)
+                Icon(Icons.Default.Check, contentDescription = "Synced", tint = DM3Green, modifier = Modifier.size(14.dp))
             }
         }
     }

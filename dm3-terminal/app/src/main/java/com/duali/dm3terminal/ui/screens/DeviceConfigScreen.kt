@@ -7,7 +7,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -259,7 +265,7 @@ fun DeviceConfigScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             androidx.compose.material3.TextButton(onClick = onBack) {
-                Text("←", color = DM3White, fontSize = 20.sp)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = DM3White, modifier = Modifier.size(24.dp))
             }
             Spacer(modifier = Modifier.width(4.dp))
             Text("Device Configuration", color = DM3White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -342,7 +348,7 @@ fun DeviceConfigScreen(
                         Text(
                             text = "Register this device via MQTT bootstrap. The admin will need to approve.",
                             color = DM3Gray,
-                            fontSize = 13.sp,
+                            fontSize = 14.sp,
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Surface(
@@ -380,7 +386,9 @@ fun DeviceConfigScreen(
                                 strokeWidth = 2.dp,
                             )
                             Spacer(modifier = Modifier.width(12.dp))
-                            Text("⏳ Waiting for approval...", color = DM3Yellow, fontSize = 14.sp)
+                            Icon(Icons.Default.HourglassEmpty, contentDescription = null, tint = DM3Yellow, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Waiting for approval...", color = DM3Yellow, fontSize = 14.sp)
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
@@ -390,12 +398,20 @@ fun DeviceConfigScreen(
                         )
                     }
                     is BootstrapState.Approved -> {
-                        Text("✅ Approved — ${bs.companyName}", color = DM3Green, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = DM3Green, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Approved — ${bs.companyName}", color = DM3Green, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("Device credentials stored. Reconnecting...", color = DM3Gray, fontSize = 12.sp)
                     }
                     is BootstrapState.Rejected -> {
-                        Text("❌ Registration rejected", color = DM3Red, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Cancel, contentDescription = null, tint = DM3Red, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Registration rejected", color = DM3Red, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(bs.message, color = DM3Gray, fontSize = 12.sp)
                         Spacer(modifier = Modifier.height(12.dp))

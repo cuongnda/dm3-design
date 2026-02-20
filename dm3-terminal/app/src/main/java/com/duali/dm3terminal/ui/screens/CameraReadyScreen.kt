@@ -4,6 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -87,7 +90,7 @@ fun CameraReadyScreen(
                 modifier = Modifier.align(Alignment.Center),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text("👤", fontSize = 32.sp)
+                Icon(Icons.Outlined.Person, contentDescription = "Person", tint = DM3AccentBlue, modifier = Modifier.size(32.dp))
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     text = "Step forward to check in",
@@ -99,7 +102,7 @@ fun CameraReadyScreen(
                 Text(
                     text = "Face or QR code • Camera is ready",
                     color = DM3Gray,
-                    fontSize = 13.sp,
+                    fontSize = 14.sp,
                 )
             }
 
@@ -111,8 +114,8 @@ fun CameraReadyScreen(
                     .padding(12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("Lobby A • Gate 1", color = DM3Gray, fontSize = 11.sp)
-                Text("DUALL PASS", color = DM3Gray, fontSize = 11.sp)
+                Text("Lobby A • Gate 1", color = DM3Gray, fontSize = 10.sp)
+                Text("DUALL PASS", color = DM3Gray, fontSize = 10.sp)
             }
         }
 

@@ -24,6 +24,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material3.Icon
 import com.duali.dm3terminal.BuildConfig
 import com.duali.dm3terminal.hardware.AccessControlManager
 import com.duali.dm3terminal.mqtt.MqttConnectionState
@@ -170,7 +173,7 @@ fun IdleScreen(
                             .border(2.dp, DM3AccentBlue.copy(alpha = 0.6f), CircleShape),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("👤", fontSize = 28.sp)
+                        Icon(Icons.Outlined.Person, contentDescription = "Person", tint = DM3AccentBlue, modifier = Modifier.size(32.dp))
                     }
                 }
 

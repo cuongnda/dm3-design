@@ -6,6 +6,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -13,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -90,7 +94,7 @@ fun DuallPassHeader(
                 .background(DM3AccentPurple),
             contentAlignment = Alignment.Center,
         ) {
-            Text("D", color = DM3White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("D", color = DM3White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(modifier = Modifier.width(10.dp))
         Column {
@@ -120,7 +124,7 @@ fun DuallPassHeader(
                 Text(
                     text = dateStr,
                     color = DM3Gray,
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                 )
             }
         } else if (locationRight != null) {
@@ -148,8 +152,8 @@ fun DuallPassFooter(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(text = leftText, color = DM3GrayDark, fontSize = 11.sp)
-        Text(text = rightText, color = DM3GrayDark, fontSize = 11.sp)
+        Text(text = leftText, color = DM3GrayDark, fontSize = 10.sp)
+        Text(text = rightText, color = DM3GrayDark, fontSize = 10.sp)
     }
 }
 
@@ -174,7 +178,7 @@ fun GlassCard(
             Text(
                 text = title,
                 color = DM3Gray,
-                fontSize = 11.sp,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.5.sp,
             )
@@ -223,7 +227,7 @@ fun SettingsInfoRow(
  */
 @Composable
 fun SettingsMenuItem(
-    icon: String,
+    icon: ImageVector,
     label: String,
     onClick: () -> Unit,
 ) {
@@ -238,10 +242,10 @@ fun SettingsMenuItem(
                 .padding(vertical = 14.dp, horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(text = icon, fontSize = 18.sp)
+            Icon(icon, contentDescription = label, tint = DM3Gray, modifier = Modifier.size(22.dp))
             Spacer(modifier = Modifier.width(12.dp))
             Text(text = label, color = DM3White, fontSize = 15.sp, modifier = Modifier.weight(1f))
-            Text(text = "›", color = DM3GrayDark, fontSize = 18.sp)
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = DM3GrayDark, modifier = Modifier.size(20.dp))
         }
     }
 }

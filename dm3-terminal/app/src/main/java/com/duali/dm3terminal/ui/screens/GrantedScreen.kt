@@ -2,6 +2,9 @@ package com.duali.dm3terminal.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -50,12 +53,7 @@ fun GrantedScreen(
             modifier = Modifier.padding(32.dp),
         ) {
             // Large checkmark
-            Text(
-                text = "✓",
-                color = DM3Green,
-                fontSize = 96.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            Icon(Icons.Default.Check, contentDescription = "Granted", tint = DM3Green, modifier = Modifier.size(96.dp))
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -63,7 +61,7 @@ fun GrantedScreen(
             Text(
                 text = personName,
                 color = DM3White,
-                fontSize = 28.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
             )
@@ -74,7 +72,7 @@ fun GrantedScreen(
             Text(
                 text = "CHECK IN OK",
                 color = DM3Green,
-                fontSize = 20.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
             )
 

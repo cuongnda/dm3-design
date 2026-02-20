@@ -10,7 +10,12 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -148,7 +153,9 @@ fun ActivateDeviceScreen(
                 onClick = onBack,
                 color = androidx.compose.ui.graphics.Color.Transparent,
             ) {
-                Text("←", color = DM3White, fontSize = 20.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+                Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = DM3White, modifier = Modifier.size(24.dp))
+                }
             }
             Spacer(modifier = Modifier.width(4.dp))
             Text("Activate Device", color = DM3White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -168,7 +175,7 @@ fun ActivateDeviceScreen(
                         Text(
                             text = "Point the camera at the provisioning QR code",
                             color = DM3Gray,
-                            fontSize = 13.sp,
+                            fontSize = 14.sp,
                         )
                     }
 
@@ -244,12 +251,12 @@ fun ActivateDeviceScreen(
 
                 is ActivationState.Success -> {
                     Spacer(modifier = Modifier.weight(1f))
-                    Text("✅", fontSize = 64.sp)
+                    Icon(Icons.Default.CheckCircle, contentDescription = "Success", tint = DM3Green, modifier = Modifier.size(64.dp))
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "Activated",
                         color = DM3Green,
-                        fontSize = 24.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -263,12 +270,12 @@ fun ActivateDeviceScreen(
 
                 is ActivationState.Error -> {
                     Spacer(modifier = Modifier.weight(1f))
-                    Text("❌", fontSize = 64.sp)
+                    Icon(Icons.Default.Cancel, contentDescription = "Error", tint = DM3Red, modifier = Modifier.size(64.dp))
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "Activation Failed",
                         color = DM3Red,
-                        fontSize = 24.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -309,13 +316,19 @@ fun ActivateDeviceScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
-            Text(
-                text = "← Back to Settings",
-                color = DM3Gray,
-                fontSize = 14.sp,
+            Row(
                 modifier = Modifier.padding(12.dp),
-                textAlign = TextAlign.Center,
-            )
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = DM3Gray, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Back to Settings",
+                    color = DM3Gray,
+                    fontSize = 14.sp,
+                )
+            }
         }
     }
 }

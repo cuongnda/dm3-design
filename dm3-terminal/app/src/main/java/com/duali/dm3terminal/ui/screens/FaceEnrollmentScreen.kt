@@ -7,6 +7,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -60,7 +66,7 @@ fun FaceEnrollmentScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(onClick = onBack) {
-                Text("←", color = DM3White, fontSize = 20.sp)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = DM3White, modifier = Modifier.size(24.dp))
             }
             Spacer(modifier = Modifier.width(4.dp))
             Text("Face Enrollment", color = DM3White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -107,7 +113,7 @@ fun FaceEnrollmentScreen(
                                     .border(2.dp, DM3AccentBlue.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Text("📷", fontSize = 20.sp)
+                                Icon(Icons.Default.CameraAlt, contentDescription = "Camera", tint = DM3AccentBlue, modifier = Modifier.size(24.dp))
                             }
                         }
                     }
@@ -117,7 +123,7 @@ fun FaceEnrollmentScreen(
                     Text(
                         text = "Enrolling: ${state.personName}",
                         color = DM3White,
-                        fontSize = 22.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                     )
 
@@ -153,15 +159,17 @@ fun FaceEnrollmentScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Capture button (in real device, camera auto-captures; this is manual trigger)
+                    // Capture button
                     TextButton(
                         onClick = {
                             // In production, this would capture from the camera preview.
-                            // For now we use a placeholder — the actual camera integration
-                            // will feed bitmaps from FaceCamera's preview callback.
                         },
                     ) {
-                        Text("📸 Capture", color = DM3AccentBlue, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = null, tint = DM3AccentBlue, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Capture", color = DM3AccentBlue, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
 
@@ -172,18 +180,18 @@ fun FaceEnrollmentScreen(
                 }
 
                 is EnrollmentUiState.Error -> {
-                    Text("⚠️", fontSize = 48.sp)
+                    Icon(Icons.Default.Warning, contentDescription = "Warning", tint = DM3Yellow, modifier = Modifier.size(48.dp))
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(state.message, color = DM3Red, fontSize = 16.sp, textAlign = TextAlign.Center)
                 }
 
                 is EnrollmentUiState.Complete -> {
-                    Text("✅", fontSize = 64.sp)
+                    Icon(Icons.Default.CheckCircle, contentDescription = "Complete", tint = DM3Green, modifier = Modifier.size(64.dp))
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         "Enrollment Complete!",
                         color = DM3Green,
-                        fontSize = 22.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                     )
                     Spacer(modifier = Modifier.height(8.dp))

@@ -5,6 +5,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -52,14 +56,14 @@ fun PinScreen(
         Text(
             text = "Enter PIN",
             color = DM3White,
-            fontSize = 22.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = if (error) "Incorrect PIN. Try again." else "Enter your 6-digit access PIN",
             color = if (error) DM3Red else DM3Gray,
-            fontSize = 13.sp,
+            fontSize = 14.sp,
         )
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -113,7 +117,7 @@ fun PinScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = DM3CardBg),
                             shape = RoundedCornerShape(12.dp),
                         ) {
-                            Text(text = digit, fontSize = 22.sp, color = DM3White, fontWeight = FontWeight.Medium)
+                            Text(text = digit, fontSize = 18.sp, color = DM3White, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -134,7 +138,7 @@ fun PinScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = DM3CardBg),
                     shape = RoundedCornerShape(12.dp),
                 ) {
-                    Text("←", fontSize = 22.sp, color = DM3White)
+                    Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = "Backspace", tint = DM3White, modifier = Modifier.size(24.dp))
                 }
 
                 Button(
@@ -145,7 +149,7 @@ fun PinScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = DM3CardBg),
                     shape = RoundedCornerShape(12.dp),
                 ) {
-                    Text(text = "0", fontSize = 22.sp, color = DM3White, fontWeight = FontWeight.Medium)
+                    Text(text = "0", fontSize = 18.sp, color = DM3White, fontWeight = FontWeight.Medium)
                 }
 
                 Button(
@@ -161,7 +165,7 @@ fun PinScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = DM3AccentPurple),
                     shape = RoundedCornerShape(12.dp),
                 ) {
-                    Text("✓", fontSize = 22.sp, color = DM3White, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.Check, contentDescription = "Confirm", tint = DM3White, modifier = Modifier.size(24.dp))
                 }
             }
         }
@@ -170,7 +174,11 @@ fun PinScreen(
 
         // Back button
         TextButton(onClick = onCancel) {
-            Text("← Back", color = DM3Gray, fontSize = 16.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = DM3Gray, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Back", color = DM3Gray, fontSize = 16.sp)
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))

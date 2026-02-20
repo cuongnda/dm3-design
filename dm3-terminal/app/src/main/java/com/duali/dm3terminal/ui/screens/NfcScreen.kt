@@ -6,6 +6,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Contactless
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -104,7 +107,7 @@ fun NfcScreen(
                             .background(DM3AccentBlue.copy(alpha = 0.1f)),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("📶", fontSize = 24.sp) // NFC symbol
+                        Icon(Icons.Default.Contactless, contentDescription = "NFC", tint = DM3AccentBlue, modifier = Modifier.size(24.dp))
                     }
                 }
             }
@@ -114,7 +117,7 @@ fun NfcScreen(
             Text(
                 text = "Tap your card or phone",
                 color = DM3White,
-                fontSize = 20.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
             )
 

@@ -2,6 +2,9 @@ package com.duali.dm3terminal.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -41,12 +44,7 @@ fun DeniedScreen(
             modifier = Modifier.padding(32.dp),
         ) {
             // Large X mark
-            Text(
-                text = "✕",
-                color = DM3Red,
-                fontSize = 96.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            Icon(Icons.Default.Close, contentDescription = "Denied", tint = DM3Red, modifier = Modifier.size(96.dp))
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -54,7 +52,7 @@ fun DeniedScreen(
             Text(
                 text = "ACCESS DENIED",
                 color = DM3Red,
-                fontSize = 24.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
             )
 

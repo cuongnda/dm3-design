@@ -4,6 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
@@ -40,7 +44,7 @@ fun FaceRecognitionSettingsScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(onClick = onBack) {
-                Text("←", color = DM3White, fontSize = 20.sp)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = DM3White, modifier = Modifier.size(24.dp))
             }
             Spacer(modifier = Modifier.width(4.dp))
             Text("Face Recognition", color = DM3White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -100,8 +104,8 @@ fun FaceRecognitionSettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Liveness Threshold", color = DM3Gray, fontSize = 13.sp)
-                        Text("${config.livenessThreshold.toInt()}%", color = DM3AccentBlue, fontSize = 13.sp)
+                        Text("Liveness Threshold", color = DM3Gray, fontSize = 14.sp)
+                        Text("${config.livenessThreshold.toInt()}%", color = DM3AccentBlue, fontSize = 14.sp)
                     }
                     Slider(
                         value = config.livenessThreshold,
@@ -158,12 +162,15 @@ fun FaceRecognitionSettingsScreen(
                 horizontalArrangement = Arrangement.Center,
             ) {
                 TextButton(onClick = { viewModel.save() }) {
-                    Text(
-                        if (saved) "✓ Saved" else "Save Settings",
-                        color = if (saved) DM3Green else DM3AccentPurple,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
+                    if (saved) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = DM3Green, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Saved", color = DM3Green, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Text("Save Settings", color = DM3AccentPurple, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
 
