@@ -40,6 +40,7 @@ object Routes {
 fun DM3NavHost(
     mqttService: MqttService? = null,
     recognitionViewModel: RecognitionViewModel? = null,
+    accessControlManager: com.duali.dm3terminal.hardware.AccessControlManager? = null,
 ) {
     val navController = rememberNavController()
 
@@ -115,6 +116,7 @@ fun DM3NavHost(
                     }
                 },
                 onCancel = { navigateToIdle() },
+                accessControlManager = accessControlManager,
             )
         }
 

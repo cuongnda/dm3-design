@@ -14,6 +14,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import android.graphics.Bitmap
+import android.graphics.ImageFormat
+import android.graphics.Matrix
+import android.graphics.Rect
+import android.graphics.YuvImage
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -81,6 +88,12 @@ class AccessControlManager @Inject constructor(
     // Cooldown: track last recognition time per person
     private val cooldownMap = mutableMapOf<String, Long>()
     private var config = RecognitionConfig()
+
+    // Software-rendered camera preview (SurfaceView causes kernel panic on DF-970)
+    private val _previewBitmap = MutableStateFlow<ImageBitmap?>(null)
+    val previewBitmap: StateFlow<ImageBitmap?> = _previewBitmap
+    private var previewFrameCount = 0
+    private val rotationMatrix = Matrix().apply { postRotate(270f) }
 
     /**
      * Initialize all hardware. Call once at app start.
@@ -252,6 +265,24 @@ class AccessControlManager @Inject constructor(
 
         faceCamera.setFrameCallback(object : FaceCamera.FrameCallback {
             override fun onFrame(nv21Data: ByteArray, width: Int, height: Int) {
+                // Generate preview bitmap every 3rd frame (~5fps) to avoid UI jank
+                previewFrameCount++
+                if (previewFrameCount % 3 == 0) {
+                    try {
+                        val yuvImage = YuvImage(nv21Data, ImageFormat.NV21, width, height, null)
+                        val out = java.io.ByteArrayOutputStream()
+                        yuvImage.compressToJpeg(Rect(0, 0, width, height), 60, out)
+                        val bytes = out.toByteArray()
+                        val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        if (bmp != null) {
+                            val rotated = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, rotationMatrix, true)
+                            _previewBitmap.value = rotated.asImageBitmap()
+                            if (rotated !== bmp) bmp.recycle()
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Preview bitmap error: ${e.message}")
+                    }
+                }
                 scope.launch {
                     try {
                         val result = facePassManager.processFrame(nv21Data, width, height)

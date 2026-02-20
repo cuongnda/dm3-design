@@ -53,6 +53,30 @@ class FaceCamera(private val context: Context) {
         callback = cb
     }
 
+    /** Attach a preview surface while camera is running — restarts capture session. */
+    fun attachPreviewSurface(holder: SurfaceHolder) {
+        pendingSurfaceHolder = holder
+        if (isRunning) {
+            Log.d(TAG, "Attaching preview surface, restarting capture session")
+            try { captureSession?.stopRepeating() } catch (_: Exception) {}
+            captureSession?.close()
+            captureSession = null
+            createCaptureSession()
+        }
+    }
+
+    /** Detach the preview surface — restarts capture session without it. */
+    fun detachPreviewSurface() {
+        pendingSurfaceHolder = null
+        if (isRunning) {
+            Log.d(TAG, "Detaching preview surface, restarting capture session")
+            try { captureSession?.stopRepeating() } catch (_: Exception) {}
+            captureSession?.close()
+            captureSession = null
+            createCaptureSession()
+        }
+    }
+
     fun start(surfaceHolder: SurfaceHolder? = null) {
         if (isRunning) return
 

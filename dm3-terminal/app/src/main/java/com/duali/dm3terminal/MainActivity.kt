@@ -96,6 +96,7 @@ class MainActivity : ComponentActivity() {
                 DM3NavHost(
                     mqttService = mqttService,
                     recognitionViewModel = recognitionViewModel,
+                    accessControlManager = accessControlManager,
                 )
             }
         }

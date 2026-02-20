@@ -1,5 +1,6 @@
 package com.duali.dm3terminal.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -17,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.duali.dm3terminal.hardware.AccessControlManager
 import com.duali.dm3terminal.ui.components.*
 import com.duali.dm3terminal.ui.theme.*
 import java.text.SimpleDateFormat
@@ -26,6 +28,7 @@ import java.util.*
 fun FaceScanScreen(
     onResult: (granted: Boolean, personName: String, reason: String) -> Unit,
     onCancel: () -> Unit,
+    accessControlManager: AccessControlManager? = null,
     viewModel: RecognitionViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -116,26 +119,48 @@ fun FaceScanScreen(
                 Text("$timeStr • $dateStr", color = DM3Gray, fontSize = 11.sp)
             }
 
-            // Face bounding box with blue corners
+            // Live camera preview with face bounding box corners
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(200.dp, 260.dp)
+                    .fillMaxWidth()
+                    .aspectRatio(720f / 1280f) // Portrait aspect (camera is 1280x720 landscape, rotated 270)
+                    .padding(horizontal = 16.dp)
+                    .clip(RoundedCornerShape(8.dp))
                     .drawBehind {
                         val cornerLen = 30f
                         val strokeW = 3f
-                        drawLine(blueCorner, Offset(0f, 0f), Offset(cornerLen, 0f), strokeW)
-                        drawLine(blueCorner, Offset(0f, 0f), Offset(0f, cornerLen), strokeW)
-                        drawLine(blueCorner, Offset(size.width, 0f), Offset(size.width - cornerLen, 0f), strokeW)
-                        drawLine(blueCorner, Offset(size.width, 0f), Offset(size.width, cornerLen), strokeW)
-                        drawLine(blueCorner, Offset(0f, size.height), Offset(cornerLen, size.height), strokeW)
-                        drawLine(blueCorner, Offset(0f, size.height), Offset(0f, size.height - cornerLen), strokeW)
-                        drawLine(blueCorner, Offset(size.width, size.height), Offset(size.width - cornerLen, size.height), strokeW)
-                        drawLine(blueCorner, Offset(size.width, size.height), Offset(size.width, size.height - cornerLen), strokeW)
+                        val cx = size.width / 2; val cy = size.height / 2
+                        val bw = size.width * 0.55f; val bh = size.height * 0.45f
+                        val l = cx - bw / 2; val t = cy - bh / 2; val r = cx + bw / 2; val b = cy + bh / 2
+                        drawLine(blueCorner, Offset(l, t), Offset(l + cornerLen, t), strokeW)
+                        drawLine(blueCorner, Offset(l, t), Offset(l, t + cornerLen), strokeW)
+                        drawLine(blueCorner, Offset(r, t), Offset(r - cornerLen, t), strokeW)
+                        drawLine(blueCorner, Offset(r, t), Offset(r, t + cornerLen), strokeW)
+                        drawLine(blueCorner, Offset(l, b), Offset(l + cornerLen, b), strokeW)
+                        drawLine(blueCorner, Offset(l, b), Offset(l, b - cornerLen), strokeW)
+                        drawLine(blueCorner, Offset(r, b), Offset(r - cornerLen, b), strokeW)
+                        drawLine(blueCorner, Offset(r, b), Offset(r, b - cornerLen), strokeW)
                     },
-                contentAlignment = Alignment.Center,
             ) {
-                Text("📷", fontSize = 48.sp)
+                // Software-rendered camera preview (hardware SurfaceView causes kernel panic on DF-970)
+                val previewBitmap by accessControlManager?.previewBitmap?.collectAsState()
+                    ?: remember { mutableStateOf(null) }
+                if (previewBitmap != null) {
+                    androidx.compose.foundation.Image(
+                        bitmap = previewBitmap!!,
+                        contentDescription = "Camera preview",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(DM3Background),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("📷", fontSize = 48.sp)
+                    }
+                }
             }
 
             // Bottom status
