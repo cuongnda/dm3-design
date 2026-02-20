@@ -1,5 +1,8 @@
 package com.duali.dm3terminal
 
+import com.duali.dm3terminal.BuildConfig
+import com.duali.dm3terminal.hardware.AccessControlManager
+import kotlinx.coroutines.launch
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -27,6 +30,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var mqttService: MqttService
     @Inject lateinit var kioskManager: KioskManager
     @Inject lateinit var crashWatchdog: CrashWatchdog
+    @Inject lateinit var accessControlManager: AccessControlManager
 
     private val recognitionViewModel: RecognitionViewModel by viewModels()
 
@@ -75,10 +79,15 @@ class MainActivity : ComponentActivity() {
             kioskManager.startLockTask(this)
         }
 
-        // Bind to FaceRecognitionService (skip in safe mode)
-        if (!crashWatchdog.safeMode.value) {
+        // Bind to FaceRecognitionService (skip in safe modes — camera causes kernel panic)
+        if (!crashWatchdog.safeMode.value && !BuildConfig.HARDWARE_SAFE_MODE) {
             Intent(this, FaceRecognitionService::class.java).also { intent ->
                 bindService(intent, connection, Context.BIND_AUTO_CREATE)
+            }
+        } else if (BuildConfig.HARDWARE_SAFE_MODE) {
+            // Init hardware (NFC, Wiegand, Door) without camera
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                accessControlManager.initialize()
             }
         }
 

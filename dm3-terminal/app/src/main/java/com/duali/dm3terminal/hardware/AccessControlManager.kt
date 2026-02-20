@@ -1,5 +1,6 @@
 package com.duali.dm3terminal.hardware
 
+import com.duali.dm3terminal.BuildConfig
 import android.util.Log
 import com.duali.dm3terminal.data.local.dao.ConfigDao
 import com.duali.dm3terminal.data.local.dao.FaceTemplateDao
@@ -89,6 +90,17 @@ class AccessControlManager @Inject constructor(
         try {
             // Load config from Room
             loadConfig()
+
+            if (BuildConfig.HARDWARE_SAFE_MODE) {
+                Log.w(TAG, "HARDWARE_SAFE_MODE — all hardware except camera/face recognition")
+                try { nfcReader.open(); Log.i(TAG, "NFC OK") } catch (e: Throwable) { Log.e(TAG, "NFC fail", e) }
+                try { wiegandReader.open(); Log.i(TAG, "Wiegand OK") } catch (e: Throwable) { Log.e(TAG, "Wiegand fail", e) }
+                try { doorController.startMonitoring(); Log.i(TAG, "Door monitor OK") } catch (e: Throwable) { Log.e(TAG, "Door fail", e) }
+                // Skip FacePass + camera — causes kernel panic on current firmware
+                Log.w(TAG, "Camera/FacePass SKIPPED — kernel panic on Camera1 API")
+                _status.value = HardwareStatus.READY
+                return
+            }
 
             // Initialize FacePass (may fail if native lib corrupted)
             try {

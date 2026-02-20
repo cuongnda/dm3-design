@@ -39,6 +39,13 @@ android {
         buildConfig = true
     }
 
+    // Safe mode: set to true to disable ALL hardware access for debugging
+    defaultConfig {
+        // Camera1 API (face recognition) causes kernel panic on DF-970 firmware
+        // Keep true until firmware fix or Camera2 API migration
+        buildConfigField("boolean", "HARDWARE_SAFE_MODE", "true")
+    }
+
     packaging {
         jniLibs {
             useLegacyPackaging = true
