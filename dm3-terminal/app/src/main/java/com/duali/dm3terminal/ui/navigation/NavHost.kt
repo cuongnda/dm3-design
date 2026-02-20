@@ -71,11 +71,7 @@ fun DM3NavHost(
                     recognitionViewModel.resetToIdle()
                 }
                 is RecognitionUiState.FaceDetected -> {
-                    // Navigate to face scan screen if on idle
-                    val currentRoute = navController.currentDestination?.route
-                    if (currentRoute == Routes.IDLE) {
-                        navigateClean(Routes.FACE_SCAN)
-                    }
+                    // Face detected — recognition happens on idle screen directly
                 }
                 else -> {}
             }
@@ -93,7 +89,7 @@ fun DM3NavHost(
                 ?.collectAsStateWithLifecycle()?.value
                 ?: MqttConnectionState.DISCONNECTED
             IdleScreen(
-                onTap = { navigateClean(Routes.FACE_SCAN) },
+                onTap = { /* Face recognition runs directly on idle */ },
                 onLongPress = { navController.navigate(Routes.PIN) },
                 mqttState = mqttState,
                 accessControlManager = accessControlManager,
