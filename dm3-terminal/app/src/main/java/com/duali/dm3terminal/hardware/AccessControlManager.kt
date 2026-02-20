@@ -226,6 +226,21 @@ class AccessControlManager @Inject constructor(
         Log.d(TAG, "Access control stopped")
     }
 
+    /** Pause camera to avoid kernel panic during touch-heavy screens (PIN, settings). */
+    fun pauseCamera() {
+        faceCamera.stop()
+        _previewBitmap.value = null
+        Log.d(TAG, "Camera paused")
+    }
+
+    /** Resume camera after returning to idle screen. */
+    fun resumeCamera() {
+        if (isStarted && facePassManager.isReady) {
+            startFaceRecognition()
+            Log.d(TAG, "Camera resumed")
+        }
+    }
+
     /**
      * Shutdown and release all hardware resources.
      */

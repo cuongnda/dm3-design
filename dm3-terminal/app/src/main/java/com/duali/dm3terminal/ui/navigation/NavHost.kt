@@ -63,10 +63,12 @@ fun DM3NavHost(
         LaunchedEffect(uiState) {
             when (val state = uiState) {
                 is RecognitionUiState.Granted -> {
+                    accessControlManager?.pauseCamera()
                     navigateClean(Routes.granted(state.personName))
                     recognitionViewModel.resetToIdle()
                 }
                 is RecognitionUiState.Denied -> {
+                    accessControlManager?.pauseCamera()
                     navigateClean(Routes.denied(state.reason))
                     recognitionViewModel.resetToIdle()
                 }
@@ -88,9 +90,17 @@ fun DM3NavHost(
             val mqttState = mqttService?.connectionState
                 ?.collectAsStateWithLifecycle()?.value
                 ?: MqttConnectionState.DISCONNECTED
+            // Resume camera when idle screen is shown
+            LaunchedEffect(Unit) {
+                accessControlManager?.resumeCamera()
+            }
             IdleScreen(
                 onTap = { /* Face recognition runs directly on idle */ },
-                onLongPress = { navController.navigate(Routes.PIN) },
+                onLongPress = {
+                    // Pause camera before navigating to avoid kernel panic (camera + touch)
+                    accessControlManager?.pauseCamera()
+                    navController.navigate(Routes.PIN)
+                },
                 mqttState = mqttState,
                 accessControlManager = accessControlManager,
             )
