@@ -45,6 +45,7 @@ class FacePassManager @Inject constructor(
     companion object {
         private const val TAG = "FacePassManager"
         const val GROUP_NAME = "DualiPass"
+        // Camera1 on DF-970: same as old app ConfigUtil.CAMERA_ROTATION
         const val CAMERA_ROTATION = 270
         const val CAMERA_WIDTH = 1280
         const val CAMERA_HEIGHT = 720
@@ -57,6 +58,7 @@ class FacePassManager @Inject constructor(
     }
 
     private var handler: FacePassHandler? = null
+    private var processFrameCount = 0L
 
     val isReady: Boolean get() = handler != null
 
@@ -218,12 +220,23 @@ class FacePassManager @Inject constructor(
 
         try {
             val image = FacePassImage(nv21, width, height, CAMERA_ROTATION, FacePassImageType.NV21)
-            val detectionResult = h.feedFrame(image) ?: return@withContext null
+            processFrameCount++
+            val detectionResult = h.feedFrame(image)
+            if (detectionResult == null) {
+                if (processFrameCount % 30 == 0L) Log.d(TAG, "feedFrame null (frame #$processFrameCount)")
+                return@withContext null
+            }
 
-            if (detectionResult.faceList.isEmpty()) return@withContext null
+            if (detectionResult.faceList.isEmpty()) {
+                if (processFrameCount % 30 == 0L) Log.d(TAG, "No faces (frame #$processFrameCount)")
+                return@withContext null
+            }
+
+            Log.d(TAG, "Face detected: ${detectionResult.faceList.size} face(s), messages=${detectionResult.message.size}")
 
             // If there are messages (faces ready for recognition)
             if (detectionResult.message.isNotEmpty()) {
+                Log.d(TAG, "Recognition ready: ${detectionResult.message.size} message(s), ${detectionResult.images.size} image(s)")
                 // Build track options for masked faces
                 val trackOpts = Array(detectionResult.images.size) { i ->
                     val img = detectionResult.images[i]
@@ -237,12 +250,14 @@ class FacePassManager @Inject constructor(
                 }
 
                 val recognizeResults = h.recognize(GROUP_NAME, detectionResult.message, 1, trackOpts)
+                Log.d(TAG, "Recognize returned: ${recognizeResults?.size ?: "null"} result arrays")
                 if (recognizeResults != null) {
                     for (results in recognizeResults) {
                         if (results != null) {
                             for (result in results) {
                                 val faceToken = String(result.faceToken)
                                 val isMatch = result.recognitionState == FacePassRecognitionState.RECOGNITION_PASS
+                                Log.d(TAG, "Result: token=$faceToken, state=${result.recognitionState}, search=${result.detail.searchScore}, liveness=${result.detail.livenessScore}, match=$isMatch")
                                 if (isMatch) {
                                     h.setMessage(result.trackId, 0)
                                 }

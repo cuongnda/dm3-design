@@ -21,6 +21,7 @@ import android.graphics.Rect
 import android.graphics.YuvImage
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -281,21 +282,71 @@ class AccessControlManager @Inject constructor(
         }
     }
 
+    // Frame data for sequential processing
+    private data class FrameData(val nv21: ByteArray, val width: Int, val height: Int)
+    private val frameChannel = Channel<FrameData>(capacity = 1, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
+    private var lastDeniedTime = 0L
+
     private fun startFaceRecognition() {
         if (!facePassManager.isReady) {
             Log.w(TAG, "FacePass not ready, skipping face recognition (camera available)")
             return
         }
 
+        Log.d(TAG, "Starting face recognition pipeline")
+
+        // Single consumer coroutine — processes frames sequentially (critical for FacePass tracking)
+        faceJob = scope.launch(Dispatchers.Default) {
+            Log.d(TAG, "Face recognition consumer started")
+            for (frame in frameChannel) {
+                try {
+                    val result = facePassManager.processFrame(frame.nv21, frame.width, frame.height)
+                    if (result != null) {
+                        Log.d(TAG, "Face result: match=${result.isMatch}, confidence=${result.confidence}, personId=${result.personId}, trackId=${result.trackId}")
+                        if (result.isMatch && result.personId != null) {
+                            val personId = faceTemplateDao.getPersonIdByFaceToken(result.personId)
+                            if (personId != null) {
+                                val now = System.currentTimeMillis()
+                                val lastTime = cooldownMap[personId] ?: 0L
+                                if (now - lastTime < config.cooldownMs) {
+                                    continue
+                                }
+                                cooldownMap[personId] = now
+                                Log.d(TAG, "Face GRANTED: $personId")
+                                handleFaceMatch(result.copy(personId = personId))
+                            } else {
+                                Log.d(TAG, "Face token not in DB, emitting denied")
+                                val now = System.currentTimeMillis()
+                                if (now - lastDeniedTime > 4000) {
+                                    lastDeniedTime = now
+                                    _events.emit(AccessEvent.FaceDenied("Face not registered"))
+                                }
+                            }
+                        } else if (!result.isMatch) {
+                            Log.d(TAG, "Face not recognized (no match)")
+                            val now = System.currentTimeMillis()
+                            if (now - lastDeniedTime > 4000) {
+                                lastDeniedTime = now
+                                _events.emit(AccessEvent.FaceDenied("Face not recognized"))
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Face frame error: ${e.message}")
+                }
+            }
+        }
+
         faceCamera.setFrameCallback(object : FaceCamera.FrameCallback {
             override fun onFrame(nv21Data: ByteArray, width: Int, height: Int) {
-                // Generate preview bitmap every 2nd frame (~7-8fps)
                 previewFrameCount++
-                if (previewFrameCount % 2 == 0) {
+
+                // Generate preview bitmap every 4th frame (~3-4fps) to reduce CPU load
+                if (previewFrameCount % 4 == 0) {
                     try {
                         val yuvImage = YuvImage(nv21Data, ImageFormat.NV21, width, height, null)
                         val out = java.io.ByteArrayOutputStream()
-                        yuvImage.compressToJpeg(Rect(0, 0, width, height), 60, out)
+                        yuvImage.compressToJpeg(Rect(0, 0, width, height), 40, out)
                         val bytes = out.toByteArray()
                         val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                         if (bmp != null) {
@@ -315,33 +366,9 @@ class AccessControlManager @Inject constructor(
                         Log.w(TAG, "Preview bitmap error: ${e.message}")
                     }
                 }
-                scope.launch {
-                    try {
-                        val result = facePassManager.processFrame(nv21Data, width, height)
-                        if (result != null) {
-                            if (result.isMatch && result.personId != null) {
-                                val personId = faceTemplateDao.getPersonIdByFaceToken(result.personId)
-                                if (personId != null) {
-                                    val now = System.currentTimeMillis()
-                                    val lastTime = cooldownMap[personId] ?: 0L
-                                    if (now - lastTime < config.cooldownMs) {
-                                        return@launch
-                                    }
-                                    cooldownMap[personId] = now
-                                    handleFaceMatch(result.copy(personId = personId))
-                                } else {
-                                    _events.emit(AccessEvent.FaceDenied("Face not registered"))
-                                }
-                            } else if (!result.isMatch) {
-                                _events.emit(AccessEvent.FaceDenied("Face not recognized"))
-                            } else {
-                                _events.emit(AccessEvent.FaceDetected)
-                            }
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Face frame error: ${e.message}")
-                    }
-                }
+
+                // Send frame to FacePass (every frame for best tracking, drops old if slow)
+                frameChannel.trySend(FrameData(nv21Data.copyOf(), width, height))
             }
         })
 
