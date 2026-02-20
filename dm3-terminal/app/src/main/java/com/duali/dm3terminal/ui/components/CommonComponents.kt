@@ -22,12 +22,12 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 /**
- * Top status bar: "● Online • WiFi" left, "🔋 95%" right
+ * Top status bar: MQTT connection status left, device model right
  */
 @Composable
 fun DeviceStatusBar(
     modifier: Modifier = Modifier,
-    isOnline: Boolean = true,
+    mqttConnected: Boolean = false,
     isAlert: Boolean = false,
 ) {
     Row(
@@ -42,20 +42,16 @@ fun DeviceStatusBar(
                 modifier = Modifier
                     .size(8.dp)
                     .clip(CircleShape)
-                    .background(if (isAlert) DM3Red else if (isOnline) DM3Green else DM3Yellow),
+                    .background(if (isAlert) DM3Red else if (mqttConnected) DM3Green else DM3Yellow),
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = if (isAlert) "Alert" else if (isOnline) "Online • WiFi" else "Offline",
-                color = if (isAlert) DM3Red else if (isOnline) DM3Gray else DM3Yellow,
+                text = if (isAlert) "Alert" else if (mqttConnected) "MQTT Connected" else "MQTT Disconnected",
+                color = if (isAlert) DM3Red else if (mqttConnected) DM3Green else DM3Yellow,
                 fontSize = 12.sp,
             )
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "🔋", fontSize = 12.sp)
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(text = "95%", color = DM3Green, fontSize = 12.sp)
-        }
+        Text(text = "DF-970", color = DM3Gray, fontSize = 12.sp)
     }
 }
 

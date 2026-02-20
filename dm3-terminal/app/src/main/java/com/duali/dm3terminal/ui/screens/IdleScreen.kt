@@ -105,33 +105,7 @@ fun IdleScreen(
                 Text(text = "Access Control", color = DM3AccentPurple, fontSize = 12.sp)
             }
             Spacer(modifier = Modifier.weight(1f))
-            // MQTT status indicator
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(
-                            when (mqttState) {
-                                MqttConnectionState.CONNECTED -> DM3Green
-                                MqttConnectionState.CONNECTING -> DM3Yellow
-                                MqttConnectionState.DISCONNECTED -> DM3Red
-                            }
-                        ),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = when (mqttState) {
-                        MqttConnectionState.CONNECTED -> "MQTT"
-                        MqttConnectionState.CONNECTING -> "MQTT..."
-                        MqttConnectionState.DISCONNECTED -> "MQTT ✗"
-                    },
-                    color = DM3GrayDark,
-                    fontSize = 10.sp,
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "Lobby A • Gate 1", color = DM3Gray, fontSize = 12.sp)
-            }
+            Text(text = "Lobby A • Gate 1", color = DM3Gray, fontSize = 12.sp)
         }
 
         // Center content
