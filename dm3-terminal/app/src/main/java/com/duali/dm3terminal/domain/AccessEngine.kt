@@ -1,5 +1,6 @@
 package com.duali.dm3terminal.domain
 
+import com.duali.dm3terminal.data.local.entities.AccessRuleEntity
 import com.duali.dm3terminal.data.repository.DM3Repository
 import org.json.JSONArray
 import org.json.JSONObject
@@ -16,6 +17,9 @@ data class AccessDecision(
     val personName: String? = null,
     val ruleId: String? = null,
     val decisionTimeMs: Double = 0.0,
+    val requiresMultiFactor: Boolean = false,
+    val multiFactorMethods: List<String>? = null,
+    val matchedRule: AccessRuleEntity? = null,
 )
 
 @Singleton
@@ -27,6 +31,7 @@ class AccessEngine @Inject constructor(
         credentialValue: String,
         doorId: String,
         timestamp: Long? = null,
+        skipMultiFactor: Boolean = false,
     ): AccessDecision {
         val startNs = System.nanoTime()
         val nowMs = timestamp ?: System.currentTimeMillis()
@@ -83,8 +88,40 @@ class AccessEngine @Inject constructor(
                 if (!evaluateSchedule(JSONObject(rule.scheduleJson), nowMs)) continue
             }
 
+            // Check multi-factor requirement
+            if (rule.multiFactor && !skipMultiFactor) {
+                val methods = rule.multiFactorMethods?.let { json ->
+                    try {
+                        val arr = JSONArray(json)
+                        (0 until arr.length()).map { arr.getString(it) }
+                    } catch (e: Exception) {
+                        listOf("face", "card")
+                    }
+                } ?: listOf("face", "card")
+
+                return decision(
+                    granted = false,
+                    reason = "pending_multi_factor",
+                    startNs = startNs,
+                    personId = person.personId,
+                    personName = person.name,
+                    ruleId = rule.ruleId,
+                    requiresMultiFactor = true,
+                    multiFactorMethods = methods,
+                    matchedRule = rule,
+                )
+            }
+
             // GRANTED
-            return decision(true, "authorized", startNs, person.personId, person.name, rule.ruleId)
+            return decision(
+                granted = true,
+                reason = "authorized",
+                startNs = startNs,
+                personId = person.personId,
+                personName = person.name,
+                ruleId = rule.ruleId,
+                matchedRule = rule,
+            )
         }
 
         return decision(false, "denied_time", startNs, person.personId)
@@ -117,8 +154,21 @@ class AccessEngine @Inject constructor(
         personId: String? = null,
         personName: String? = null,
         ruleId: String? = null,
+        requiresMultiFactor: Boolean = false,
+        multiFactorMethods: List<String>? = null,
+        matchedRule: AccessRuleEntity? = null,
     ): AccessDecision {
         val elapsedMs = (System.nanoTime() - startNs) / 1_000_000.0
-        return AccessDecision(granted, reason, personId, personName, ruleId, elapsedMs)
+        return AccessDecision(
+            granted = granted,
+            reason = reason,
+            personId = personId,
+            personName = personName,
+            ruleId = ruleId,
+            decisionTimeMs = elapsedMs,
+            requiresMultiFactor = requiresMultiFactor,
+            multiFactorMethods = multiFactorMethods,
+            matchedRule = matchedRule,
+        )
     }
 }

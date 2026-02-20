@@ -39,6 +39,7 @@ data class AccessRuleEntity(
     @ColumnInfo(name = "schedule_json") val scheduleJson: String? = null,
     @ColumnInfo(name = "anti_passback") val antiPassback: Boolean = false,
     @ColumnInfo(name = "multi_factor") val multiFactor: Boolean = false,
+    @ColumnInfo(name = "multi_factor_methods") val multiFactorMethods: String? = null, // JSON array: ["face","card","pin"]
     val priority: Int = 0,
     val enabled: Boolean = true,
     @ColumnInfo(name = "valid_from") val validFrom: Long? = null,

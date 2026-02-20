@@ -206,6 +206,7 @@ class MqttService @Inject constructor(
         method: String,
         doorId: String,
         direction: String = "entry",
+        cardUid: String? = null,
     ) {
         val config = currentConfig ?: return
         val envelope = JSONObject().apply {
@@ -225,6 +226,7 @@ class MqttService @Inject constructor(
                 if (decision.personName != null) put("person_name", decision.personName)
                 put("reason", decision.reason)
                 put("credential_type", method)
+                if (cardUid != null) put("card_uid", cardUid)
             })
         }
 

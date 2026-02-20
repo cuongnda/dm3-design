@@ -2,6 +2,7 @@ package com.duali.dm3terminal.mqtt
 
 import android.content.Context
 import android.util.Log
+import com.duali.dm3terminal.hardware.DoorController
 import com.duali.dm3terminal.hardware.HardwareController
 import com.duali.dm3terminal.sync.SyncManager
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -21,6 +22,7 @@ class CommandHandler @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mqttService: MqttService,
     private val syncManager: SyncManager,
+    private val doorController: DoorController,
 ) {
     companion object {
         private const val TAG = "CommandHandler"
@@ -68,22 +70,30 @@ class CommandHandler @Inject constructor(
 
     private fun handleDoorCommand(data: JSONObject) {
         val action = data.optString("action", "unlock")
-        val durationMs = data.optLong("duration_ms", 5000)
+        val durationMs = data.optLong("duration_ms", 3000)
         Log.i(TAG, "Door command: action=$action duration=$durationMs")
 
         when (action) {
             "unlock" -> {
-                HardwareController.grantAccess()
+                doorController.pulseRelay(durationMs)
                 sendCommandResponse("cmd.door", JSONObject().apply {
                     put("status", "success")
                     put("action", "unlock")
+                    put("duration_ms", durationMs)
                 })
             }
             "lock" -> {
-                // Lock is the default state; just ensure relay is off
+                doorController.lockDoor()
                 sendCommandResponse("cmd.door", JSONObject().apply {
                     put("status", "success")
                     put("action", "lock")
+                })
+            }
+            "hold_open" -> {
+                doorController.holdOpen()
+                sendCommandResponse("cmd.door", JSONObject().apply {
+                    put("status", "success")
+                    put("action", "hold_open")
                 })
             }
             else -> Log.w(TAG, "Unknown door action: $action")

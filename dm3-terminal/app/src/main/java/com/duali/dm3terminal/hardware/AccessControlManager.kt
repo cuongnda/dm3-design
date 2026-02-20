@@ -4,6 +4,7 @@ import android.util.Log
 import com.duali.dm3terminal.data.local.dao.ConfigDao
 import com.duali.dm3terminal.data.local.dao.FaceTemplateDao
 import com.duali.dm3terminal.data.local.entities.ConfigEntity
+import com.duali.dm3terminal.domain.AccessDecision
 import com.duali.dm3terminal.domain.AccessEngine
 import com.duali.dm3terminal.domain.RecognitionConfig
 import com.duali.dm3terminal.mqtt.MqttService
@@ -27,6 +28,8 @@ sealed class AccessEvent {
     data class NfcDenied(val cardId: String, val reason: String) : AccessEvent()
     data class WiegandGranted(val personId: String, val personName: String?, val cardId: String) : AccessEvent()
     data class WiegandDenied(val cardId: String, val reason: String) : AccessEvent()
+    data class MultiFactorPending(val personId: String, val personName: String?, val completedMethod: String, val requiredMethods: List<String>) : AccessEvent()
+    data class PinRequired(val personId: String, val personName: String?) : AccessEvent()
     object FaceDetected : AccessEvent()
     object Idle : AccessEvent()
 }
@@ -37,7 +40,7 @@ enum class HardwareStatus {
 
 /**
  * Orchestrates hardware (face, NFC, Wiegand) with the access engine.
- * Includes cooldown logic and config-driven recognition settings.
+ * Phase 4: Added DoorController, MultiFactorManager, WiegandOutput, NfcCardService.
  */
 @Singleton
 class AccessControlManager @Inject constructor(
@@ -49,6 +52,10 @@ class AccessControlManager @Inject constructor(
     private val configDao: ConfigDao,
     private val faceTemplateDao: FaceTemplateDao,
     private val mqttService: MqttService,
+    private val doorController: DoorController,
+    private val multiFactorManager: MultiFactorManager,
+    private val wiegandOutput: WiegandOutput,
+    private val nfcCardService: NfcCardService,
 ) {
     companion object {
         private const val TAG = "AccessControlMgr"
@@ -67,6 +74,7 @@ class AccessControlManager @Inject constructor(
     private var nfcJob: Job? = null
     private var wiegandJob: Job? = null
     private var configJob: Job? = null
+    private var nfcCardServiceJob: Job? = null
     private var isStarted = false
 
     // Cooldown: track last recognition time per person
@@ -93,6 +101,9 @@ class AccessControlManager @Inject constructor(
 
             // Open Wiegand
             wiegandReader.open()
+
+            // Start door monitoring
+            doorController.startMonitoring()
 
             _status.value = HardwareStatus.READY
             Log.d(TAG, "Hardware initialized (face=${facePassManager.isReady})")
@@ -148,6 +159,7 @@ class AccessControlManager @Inject constructor(
         startFaceRecognition()
         startNfcPolling()
         startWiegandPolling()
+        startNfcCardServicePolling()
 
         Log.d(TAG, "Access control started")
     }
@@ -161,6 +173,7 @@ class AccessControlManager @Inject constructor(
         nfcJob?.cancel()
         wiegandJob?.cancel()
         configJob?.cancel()
+        nfcCardServiceJob?.cancel()
 
         faceCamera.stop()
         HardwareController.irOff()
@@ -177,7 +190,30 @@ class AccessControlManager @Inject constructor(
         nfcReader.close()
         wiegandReader.close()
         facePassManager.release()
+        nfcCardService.release()
+        doorController.stopMonitoring()
         scope.cancel()
+    }
+
+    /**
+     * Handle PIN entry for multi-factor auth (Card+PIN flow).
+     */
+    suspend fun handlePinEntry(personId: String, pin: String) {
+        val decision = accessEngine.evaluate(
+            credentialType = "pin",
+            credentialValue = pin,
+            doorId = DEFAULT_DOOR_ID,
+            skipMultiFactor = true,
+        )
+
+        if (decision.personId == personId && decision.granted) {
+            // PIN matches same person — MFA satisfied
+            multiFactorManager.clearPending(personId)
+            onAccessGranted(decision, "card+pin", null)
+        } else {
+            multiFactorManager.clearPending(personId)
+            onAccessDenied("denied_pin_mismatch", "card+pin")
+        }
     }
 
     private fun startFaceRecognition() {
@@ -193,19 +229,16 @@ class AccessControlManager @Inject constructor(
                         val result = facePassManager.processFrame(nv21Data, width, height)
                         if (result != null) {
                             if (result.isMatch && result.personId != null) {
-                                // Resolve faceToken → personId via face_templates table
                                 val personId = faceTemplateDao.getPersonIdByFaceToken(result.personId)
                                 if (personId != null) {
-                                    // Check cooldown
                                     val now = System.currentTimeMillis()
                                     val lastTime = cooldownMap[personId] ?: 0L
                                     if (now - lastTime < config.cooldownMs) {
-                                        return@launch // Still in cooldown
+                                        return@launch
                                     }
                                     cooldownMap[personId] = now
                                     handleFaceMatch(result.copy(personId = personId))
                                 } else {
-                                    // faceToken exists in FacePass but not in our DB — treat as unknown
                                     _events.emit(AccessEvent.FaceDenied("Face not registered"))
                                 }
                             } else if (!result.isMatch) {
@@ -227,7 +260,7 @@ class AccessControlManager @Inject constructor(
     private fun startNfcPolling() {
         nfcJob = scope.launch {
             nfcReader.cardFlow().collect { cardId ->
-                handleNfcCard(cardId)
+                handleCardCredential(cardId, "nfc")
             }
         }
     }
@@ -235,7 +268,15 @@ class AccessControlManager @Inject constructor(
     private fun startWiegandPolling() {
         wiegandJob = scope.launch {
             wiegandReader.cardFlow().collect { cardId ->
-                handleWiegandCard(cardId)
+                handleCardCredential(cardId, "wiegand")
+            }
+        }
+    }
+
+    private fun startNfcCardServicePolling() {
+        nfcCardServiceJob = scope.launch {
+            nfcCardService.cardEvents.collect { event ->
+                handleCardCredential(event.uid, "card")
             }
         }
     }
@@ -247,53 +288,129 @@ class AccessControlManager @Inject constructor(
             doorId = DEFAULT_DOOR_ID,
         )
 
-        // Publish access event via MQTT (queued if offline)
+        if (decision.requiresMultiFactor) {
+            handleMultiFactor(decision, "face", result.personId ?: "")
+            return
+        }
+
         mqttService.publishAccessEvent(decision, "face", DEFAULT_DOOR_ID)
 
         if (decision.granted) {
-            HardwareController.grantAccess()
+            onAccessGranted(decision, "face", null)
             _events.emit(AccessEvent.FaceGranted(decision.personId ?: "", decision.personName))
         } else {
-            HardwareController.denyAccess()
+            onAccessDenied(decision.reason, "face")
             _events.emit(AccessEvent.FaceDenied(decision.reason))
         }
     }
 
-    private suspend fun handleNfcCard(cardId: String) {
-        Log.d(TAG, "NFC card: $cardId")
+    private suspend fun handleCardCredential(cardId: String, source: String) {
+        Log.d(TAG, "$source card: $cardId")
+        // Look up as "card" type in credentials (unified for nfc/wiegand/card sources)
+        val credType = if (source == "wiegand") "wiegand" else "card"
         val decision = accessEngine.evaluate(
-            credentialType = "nfc",
+            credentialType = credType,
             credentialValue = cardId,
             doorId = DEFAULT_DOOR_ID,
         )
 
-        mqttService.publishAccessEvent(decision, "nfc", DEFAULT_DOOR_ID)
+        if (decision.requiresMultiFactor) {
+            handleMultiFactor(decision, credType, cardId)
+            return
+        }
+
+        mqttService.publishAccessEvent(decision, source, DEFAULT_DOOR_ID)
 
         if (decision.granted) {
-            HardwareController.grantAccess()
-            _events.emit(AccessEvent.NfcGranted(decision.personId ?: "", decision.personName, cardId))
+            onAccessGranted(decision, source, cardId)
+            when (source) {
+                "wiegand" -> _events.emit(AccessEvent.WiegandGranted(decision.personId ?: "", decision.personName, cardId))
+                else -> _events.emit(AccessEvent.NfcGranted(decision.personId ?: "", decision.personName, cardId))
+            }
         } else {
-            HardwareController.denyAccess()
-            _events.emit(AccessEvent.NfcDenied(cardId, decision.reason))
+            onAccessDenied(decision.reason, source)
+            when (source) {
+                "wiegand" -> _events.emit(AccessEvent.WiegandDenied(cardId, decision.reason))
+                else -> _events.emit(AccessEvent.NfcDenied(cardId, decision.reason))
+            }
         }
     }
 
-    private suspend fun handleWiegandCard(cardId: String) {
-        Log.d(TAG, "Wiegand card: $cardId")
-        val decision = accessEngine.evaluate(
-            credentialType = "wiegand",
-            credentialValue = cardId,
-            doorId = DEFAULT_DOOR_ID,
+    private suspend fun handleMultiFactor(decision: AccessDecision, credentialType: String, credentialValue: String) {
+        val personId = decision.personId ?: return
+        val methods = decision.multiFactorMethods ?: listOf("face", "card")
+
+        val mfaResult = multiFactorManager.processCredential(
+            personId = personId,
+            credentialType = credentialType,
+            credentialValue = credentialValue,
+            requiredMethods = methods,
         )
 
-        mqttService.publishAccessEvent(decision, "wiegand", DEFAULT_DOOR_ID)
-
-        if (decision.granted) {
-            HardwareController.grantAccess()
-            _events.emit(AccessEvent.WiegandGranted(decision.personId ?: "", decision.personName, cardId))
-        } else {
-            HardwareController.denyAccess()
-            _events.emit(AccessEvent.WiegandDenied(cardId, decision.reason))
+        when (mfaResult) {
+            is MultiFactorResult.PendingSecondFactor -> {
+                // Check if PIN is the second required method
+                val remainingMethods = methods.filter { it != credentialType }
+                if (remainingMethods.contains("pin")) {
+                    _events.emit(AccessEvent.PinRequired(personId, decision.personName))
+                } else {
+                    _events.emit(AccessEvent.MultiFactorPending(
+                        personId = personId,
+                        personName = decision.personName,
+                        completedMethod = credentialType,
+                        requiredMethods = methods,
+                    ))
+                }
+            }
+            is MultiFactorResult.Satisfied -> {
+                // Both factors done — grant access
+                val finalDecision = accessEngine.evaluate(
+                    credentialType = credentialType,
+                    credentialValue = credentialValue,
+                    doorId = DEFAULT_DOOR_ID,
+                    skipMultiFactor = true,
+                )
+                mqttService.publishAccessEvent(finalDecision, "multi_factor", DEFAULT_DOOR_ID)
+                if (finalDecision.granted) {
+                    onAccessGranted(finalDecision, "multi_factor", credentialValue)
+                    _events.emit(AccessEvent.NfcGranted(personId, decision.personName, credentialValue))
+                } else {
+                    onAccessDenied(finalDecision.reason, "multi_factor")
+                }
+            }
+            is MultiFactorResult.Timeout -> {
+                mqttService.publishAccessEvent(
+                    AccessDecision(false, "denied_mfa_timeout", personId, decision.personName),
+                    credentialType, DEFAULT_DOOR_ID,
+                )
+                onAccessDenied("denied_mfa_timeout", credentialType)
+                _events.emit(AccessEvent.NfcDenied(credentialValue, "denied_mfa_timeout"))
+            }
+            is MultiFactorResult.SameFactorRejected -> {
+                // Same factor type — just re-emit pending
+                _events.emit(AccessEvent.MultiFactorPending(
+                    personId = personId,
+                    personName = decision.personName,
+                    completedMethod = credentialType,
+                    requiredMethods = methods,
+                ))
+            }
+            is MultiFactorResult.PersonMismatch -> {
+                onAccessDenied("denied_mfa_person_mismatch", credentialType)
+            }
         }
+    }
+
+    private fun onAccessGranted(decision: AccessDecision, method: String, cardId: String?) {
+        doorController.grantAccess()
+
+        // Wiegand output on successful card-based access
+        if (cardId != null && cardId.isNotEmpty()) {
+            wiegandOutput.sendCardNumber(cardId)
+        }
+    }
+
+    private fun onAccessDenied(reason: String, method: String) {
+        doorController.denyAccess()
     }
 }

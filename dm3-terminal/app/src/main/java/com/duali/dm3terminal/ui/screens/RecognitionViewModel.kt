@@ -16,6 +16,8 @@ sealed class RecognitionUiState {
     data object FaceDetected : RecognitionUiState()
     data class Granted(val personId: String, val personName: String) : RecognitionUiState()
     data class Denied(val reason: String) : RecognitionUiState()
+    data class MultiFactorPending(val personId: String, val personName: String, val completedMethod: String, val requiredMethods: List<String>) : RecognitionUiState()
+    data class PinRequired(val personId: String, val personName: String) : RecognitionUiState()
 }
 
 @HiltViewModel
@@ -59,6 +61,20 @@ class RecognitionViewModel @Inject constructor(
                     }
                     is AccessEvent.WiegandDenied -> {
                         _uiState.value = RecognitionUiState.Denied(event.reason)
+                    }
+                    is AccessEvent.MultiFactorPending -> {
+                        _uiState.value = RecognitionUiState.MultiFactorPending(
+                            personId = event.personId,
+                            personName = event.personName ?: "Unknown",
+                            completedMethod = event.completedMethod,
+                            requiredMethods = event.requiredMethods,
+                        )
+                    }
+                    is AccessEvent.PinRequired -> {
+                        _uiState.value = RecognitionUiState.PinRequired(
+                            personId = event.personId,
+                            personName = event.personName ?: "Unknown",
+                        )
                     }
                     is AccessEvent.Idle -> {
                         _uiState.value = RecognitionUiState.Idle
