@@ -43,7 +43,7 @@ android {
     defaultConfig {
         // Camera1 API (face recognition) causes kernel panic on DF-970 firmware
         // Keep true until firmware fix or Camera2 API migration
-        buildConfigField("boolean", "HARDWARE_SAFE_MODE", "true")
+        buildConfigField("boolean", "HARDWARE_SAFE_MODE", "false")
     }
 
     packaging {

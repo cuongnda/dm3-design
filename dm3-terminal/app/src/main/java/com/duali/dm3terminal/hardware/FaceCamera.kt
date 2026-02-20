@@ -1,99 +1,180 @@
-@file:Suppress("DEPRECATION")
-
 package com.duali.dm3terminal.hardware
 
-import android.hardware.Camera
+import android.content.Context
+import android.graphics.ImageFormat
+import android.hardware.camera2.*
+import android.media.ImageReader
+import android.os.Handler
+import android.os.HandlerThread
 import android.util.Log
+import android.view.Surface
 import android.view.SurfaceHolder
 
 /**
- * Camera1 API wrapper for FacePass face recognition.
- * FacePass requires NV21 frame data from Camera1 API.
+ * Camera2 API wrapper for FacePass face recognition.
+ * Replaces Camera1 to avoid kernel panic on DF-970 (RK3568).
  *
  * DF970 camera config:
- * - Camera ID: 1 (front camera)
+ * - Camera ID: "1" (front IR camera)
  * - Resolution: 1280x720
- * - Rotation: 270
- * - Format: NV21
+ * - Format: YUV_420_888 → converted to NV21
  */
-class FaceCamera {
+class FaceCamera(private val context: Context) {
 
     companion object {
         private const val TAG = "FaceCamera"
-        private const val CAMERA_ID = 1
+        private const val CAMERA_ID = "1"
         const val PREVIEW_WIDTH = 1280
         const val PREVIEW_HEIGHT = 720
+        private const val TARGET_FPS = 15
+        private const val REOPEN_DELAY_MS = 2000L
     }
 
     interface FrameCallback {
         fun onFrame(nv21Data: ByteArray, width: Int, height: Int)
     }
 
-    private var camera: Camera? = null
+    private var cameraDevice: CameraDevice? = null
+    private var captureSession: CameraCaptureSession? = null
+    private var imageReader: ImageReader? = null
+    private var cameraThread: HandlerThread? = null
+    private var cameraHandler: Handler? = null
     private var callback: FrameCallback? = null
+    @Volatile
     private var isRunning = false
+    private var pendingSurfaceHolder: SurfaceHolder? = null
+
+    // Pre-allocated NV21 buffer to reduce GC pressure
+    private var nv21Buffer: ByteArray? = null
 
     fun setFrameCallback(cb: FrameCallback) {
         callback = cb
     }
 
-    /**
-     * Open and start the camera preview.
-     * @param surfaceHolder Optional SurfaceHolder for display. Pass null for headless processing.
-     */
     fun start(surfaceHolder: SurfaceHolder? = null) {
         if (isRunning) return
 
-        try {
-            camera = Camera.open(CAMERA_ID).apply {
-                val params = parameters
-                params.setPreviewSize(PREVIEW_WIDTH, PREVIEW_HEIGHT)
-                params.previewFormat = android.graphics.ImageFormat.NV21
-                parameters = params
+        pendingSurfaceHolder = surfaceHolder
 
-                // Set display orientation for DF970
-                setDisplayOrientation(90)
+        // Start background thread
+        val thread = HandlerThread("FaceCamera").apply { start() }
+        cameraThread = thread
+        cameraHandler = Handler(thread.looper)
 
-                if (surfaceHolder != null) {
-                    setPreviewDisplay(surfaceHolder)
-                } else {
-                    // Headless — use a SurfaceTexture
-                    setPreviewTexture(android.graphics.SurfaceTexture(0))
-                }
+        // Create ImageReader
+        val reader = ImageReader.newInstance(
+            PREVIEW_WIDTH, PREVIEW_HEIGHT,
+            ImageFormat.YUV_420_888, 3
+        )
+        imageReader = reader
 
-                // Pre-allocate buffers
-                val bufferSize = PREVIEW_WIDTH * PREVIEW_HEIGHT * 3 / 2
-                addCallbackBuffer(ByteArray(bufferSize))
-                addCallbackBuffer(ByteArray(bufferSize))
-                addCallbackBuffer(ByteArray(bufferSize))
+        val bufferSize = PREVIEW_WIDTH * PREVIEW_HEIGHT * 3 / 2
+        nv21Buffer = ByteArray(bufferSize)
 
-                setPreviewCallbackWithBuffer { data, cam ->
-                    if (data != null) {
-                        callback?.onFrame(data, PREVIEW_WIDTH, PREVIEW_HEIGHT)
-                    }
-                    cam?.addCallbackBuffer(data)
-                }
-
-                startPreview()
+        reader.setOnImageAvailableListener({ ir ->
+            val image = ir.acquireLatestImage() ?: return@setOnImageAvailableListener
+            try {
+                val nv21 = nv21Buffer ?: return@setOnImageAvailableListener
+                yuv420888ToNv21(image, nv21)
+                callback?.onFrame(nv21, PREVIEW_WIDTH, PREVIEW_HEIGHT)
+            } finally {
+                image.close()
             }
-            isRunning = true
-            Log.d(TAG, "Camera started")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start camera", e)
-            camera?.release()
-            camera = null
+        }, cameraHandler)
+
+        // Open camera
+        try {
+            val manager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            manager.openCamera(CAMERA_ID, stateCallback, cameraHandler)
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Camera permission denied", e)
+            cleanup()
+        } catch (e: CameraAccessException) {
+            Log.e(TAG, "Failed to open camera", e)
+            cleanup()
+        }
+    }
+
+    private val stateCallback = object : CameraDevice.StateCallback() {
+        override fun onOpened(camera: CameraDevice) {
+            Log.d(TAG, "Camera opened")
+            cameraDevice = camera
+            createCaptureSession()
+        }
+
+        override fun onDisconnected(camera: CameraDevice) {
+            Log.w(TAG, "Camera disconnected")
+            camera.close()
+            cameraDevice = null
+            isRunning = false
+        }
+
+        override fun onError(camera: CameraDevice, error: Int) {
+            Log.e(TAG, "Camera error: $error")
+            camera.close()
+            cameraDevice = null
+            isRunning = false
+            // Attempt reopen
+            cameraHandler?.postDelayed({
+                if (!isRunning) {
+                    Log.d(TAG, "Attempting camera reopen...")
+                    start(pendingSurfaceHolder)
+                }
+            }, REOPEN_DELAY_MS)
+        }
+    }
+
+    private fun createCaptureSession() {
+        val device = cameraDevice ?: return
+        val reader = imageReader ?: return
+
+        val surfaces = mutableListOf<Surface>(reader.surface)
+        pendingSurfaceHolder?.let { surfaces.add(it.surface) }
+
+        try {
+            device.createCaptureSession(surfaces, object : CameraCaptureSession.StateCallback() {
+                override fun onConfigured(session: CameraCaptureSession) {
+                    captureSession = session
+                    try {
+                        val request = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
+                            addTarget(reader.surface)
+                            pendingSurfaceHolder?.let { addTarget(it.surface) }
+                            // Limit FPS
+                            set(
+                                CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+                                android.util.Range(TARGET_FPS, TARGET_FPS)
+                            )
+                        }
+                        session.setRepeatingRequest(request.build(), null, cameraHandler)
+                        isRunning = true
+                        Log.d(TAG, "Camera started")
+                    } catch (e: CameraAccessException) {
+                        Log.e(TAG, "Failed to start capture", e)
+                    }
+                }
+
+                override fun onConfigureFailed(session: CameraCaptureSession) {
+                    Log.e(TAG, "Capture session configuration failed")
+                }
+            }, cameraHandler)
+        } catch (e: CameraAccessException) {
+            Log.e(TAG, "Failed to create capture session", e)
         }
     }
 
     fun stop() {
+        isRunning = false
         try {
-            camera?.apply {
-                setPreviewCallbackWithBuffer(null)
-                stopPreview()
-                release()
-            }
-            camera = null
-            isRunning = false
+            captureSession?.close()
+            captureSession = null
+            cameraDevice?.close()
+            cameraDevice = null
+            imageReader?.close()
+            imageReader = null
+            cameraThread?.quitSafely()
+            cameraThread = null
+            cameraHandler = null
+            nv21Buffer = null
             Log.d(TAG, "Camera stopped")
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping camera", e)
@@ -101,4 +182,69 @@ class FaceCamera {
     }
 
     fun isRunning(): Boolean = isRunning
+
+    private fun cleanup() {
+        imageReader?.close()
+        imageReader = null
+        cameraThread?.quitSafely()
+        cameraThread = null
+        cameraHandler = null
+        nv21Buffer = null
+    }
+
+    /**
+     * Convert YUV_420_888 Image to NV21 byte array.
+     * NV21 layout: Y plane followed by interleaved VU.
+     *
+     * Optimisation: on many devices (including RK3568), the UV plane is already
+     * interleaved as VU with pixelStride=2, meaning it's native NV21. We detect
+     * this and do a direct copy.
+     */
+    private fun yuv420888ToNv21(image: android.media.Image, nv21: ByteArray) {
+        val yPlane = image.planes[0]
+        val uPlane = image.planes[1]
+        val vPlane = image.planes[2]
+
+        val yBuffer = yPlane.buffer
+        val uBuffer = uPlane.buffer
+        val vBuffer = vPlane.buffer
+
+        val yRowStride = yPlane.rowStride
+        val uvRowStride = uPlane.rowStride
+        val uvPixelStride = uPlane.pixelStride
+
+        val width = image.width
+        val height = image.height
+
+        // Copy Y plane
+        if (yRowStride == width) {
+            yBuffer.get(nv21, 0, width * height)
+        } else {
+            for (row in 0 until height) {
+                yBuffer.position(row * yRowStride)
+                yBuffer.get(nv21, row * width, width)
+            }
+        }
+
+        val uvOffset = width * height
+
+        // Fast path: native NV21 (VU interleaved with pixelStride=2)
+        if (uvPixelStride == 2 && uvRowStride == width) {
+            // V plane buffer starts at V, and has interleaved VU pairs
+            vBuffer.get(nv21, uvOffset, width * height / 2)
+            return
+        }
+
+        // Slow path: manual interleave
+        val uvHeight = height / 2
+        val uvWidth = width / 2
+        for (row in 0 until uvHeight) {
+            for (col in 0 until uvWidth) {
+                val uvIndex = row * uvRowStride + col * uvPixelStride
+                val nv21Index = uvOffset + row * width + col * 2
+                nv21[nv21Index] = vBuffer.get(uvIndex)      // V
+                nv21[nv21Index + 1] = uBuffer.get(uvIndex)  // U
+            }
+        }
+    }
 }

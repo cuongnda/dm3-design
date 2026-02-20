@@ -6,9 +6,11 @@ import com.duali.dm3terminal.hardware.NfcReader
 import com.duali.dm3terminal.hardware.WiegandOutput
 import com.duali.dm3terminal.hardware.WiegandReader
 import com.duali.dm3terminal.hardware.MultiFactorManager
+import android.content.Context
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -26,7 +28,7 @@ object HardwareModule {
 
     @Provides
     @Singleton
-    fun provideFaceCamera(): FaceCamera = FaceCamera()
+    fun provideFaceCamera(@ApplicationContext context: Context): FaceCamera = FaceCamera(context)
 
     @Provides
     @Singleton
