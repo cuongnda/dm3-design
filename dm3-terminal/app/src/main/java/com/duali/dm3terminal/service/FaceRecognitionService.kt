@@ -43,6 +43,8 @@ class FaceRecognitionService : Service() {
                 Log.d(TAG, "Hardware initialized")
             } catch (e: Exception) {
                 Log.e(TAG, "Hardware init failed", e)
+            } catch (e: Error) {
+                Log.e(TAG, "Hardware init fatal error (native lib issue?)", e)
             }
         }
     }

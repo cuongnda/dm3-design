@@ -68,8 +68,13 @@ class FacePassManager @Inject constructor(
         if (handler != null) return@withContext true
 
         try {
-            // Init SDK
-            FacePassHandler.initSDK(context.applicationContext, "")
+            // Init SDK — may throw UnsatisfiedLinkError if native lib is corrupted
+            try {
+                FacePassHandler.initSDK(context.applicationContext, "")
+            } catch (e: UnsatisfiedLinkError) {
+                Log.e(TAG, "FacePass native library failed to load — face recognition unavailable", e)
+                return@withContext false
+            }
 
             // Wait for SDK to become available
             var retries = 0
