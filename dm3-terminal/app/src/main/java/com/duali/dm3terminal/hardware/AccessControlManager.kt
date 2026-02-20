@@ -1,7 +1,12 @@
 package com.duali.dm3terminal.hardware
 
 import android.util.Log
+import com.duali.dm3terminal.data.local.dao.ConfigDao
+import com.duali.dm3terminal.data.local.dao.FaceTemplateDao
+import com.duali.dm3terminal.data.local.entities.ConfigEntity
 import com.duali.dm3terminal.domain.AccessEngine
+import com.duali.dm3terminal.domain.RecognitionConfig
+import com.duali.dm3terminal.mqtt.MqttService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -32,7 +37,7 @@ enum class HardwareStatus {
 
 /**
  * Orchestrates hardware (face, NFC, Wiegand) with the access engine.
- * Runs face detection, NFC polling, and Wiegand polling in background.
+ * Includes cooldown logic and config-driven recognition settings.
  */
 @Singleton
 class AccessControlManager @Inject constructor(
@@ -41,6 +46,9 @@ class AccessControlManager @Inject constructor(
     private val wiegandReader: WiegandReader,
     private val faceCamera: FaceCamera,
     private val accessEngine: AccessEngine,
+    private val configDao: ConfigDao,
+    private val faceTemplateDao: FaceTemplateDao,
+    private val mqttService: MqttService,
 ) {
     companion object {
         private const val TAG = "AccessControlMgr"
@@ -58,7 +66,12 @@ class AccessControlManager @Inject constructor(
     private var faceJob: Job? = null
     private var nfcJob: Job? = null
     private var wiegandJob: Job? = null
+    private var configJob: Job? = null
     private var isStarted = false
+
+    // Cooldown: track last recognition time per person
+    private val cooldownMap = mutableMapOf<String, Long>()
+    private var config = RecognitionConfig()
 
     /**
      * Initialize all hardware. Call once at app start.
@@ -66,6 +79,9 @@ class AccessControlManager @Inject constructor(
     suspend fun initialize() {
         _status.value = HardwareStatus.INITIALIZING
         try {
+            // Load config from Room
+            loadConfig()
+
             // Initialize FacePass
             val faceReady = facePassManager.initialize()
             if (!faceReady) {
@@ -86,6 +102,28 @@ class AccessControlManager @Inject constructor(
         }
     }
 
+    private suspend fun loadConfig() {
+        try {
+            val entity = configDao.get(RecognitionConfig.CONFIG_KEY)
+            if (entity != null) {
+                config = RecognitionConfig.fromJson(entity.valueJson)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load recognition config", e)
+        }
+    }
+
+    /**
+     * Update recognition config and persist to Room.
+     */
+    suspend fun updateConfig(newConfig: RecognitionConfig) {
+        config = newConfig
+        configDao.set(ConfigEntity(RecognitionConfig.CONFIG_KEY, newConfig.toJson()))
+        Log.d(TAG, "Config updated: $newConfig")
+    }
+
+    fun getConfig(): RecognitionConfig = config
+
     /**
      * Start all credential monitoring (face, NFC, Wiegand).
      */
@@ -96,6 +134,16 @@ class AccessControlManager @Inject constructor(
         // Turn on IR LED for face recognition
         HardwareController.irOn()
         HardwareController.ledScanning()
+
+        // Watch config changes
+        configJob = scope.launch {
+            configDao.observe(RecognitionConfig.CONFIG_KEY).collect { entity ->
+                if (entity != null) {
+                    config = RecognitionConfig.fromJson(entity.valueJson)
+                    Log.d(TAG, "Config reloaded: $config")
+                }
+            }
+        }
 
         startFaceRecognition()
         startNfcPolling()
@@ -112,6 +160,7 @@ class AccessControlManager @Inject constructor(
         faceJob?.cancel()
         nfcJob?.cancel()
         wiegandJob?.cancel()
+        configJob?.cancel()
 
         faceCamera.stop()
         HardwareController.irOff()
@@ -144,7 +193,23 @@ class AccessControlManager @Inject constructor(
                         val result = facePassManager.processFrame(nv21Data, width, height)
                         if (result != null) {
                             if (result.isMatch && result.personId != null) {
-                                handleFaceMatch(result)
+                                // Resolve faceToken → personId via face_templates table
+                                val personId = faceTemplateDao.getPersonIdByFaceToken(result.personId)
+                                if (personId != null) {
+                                    // Check cooldown
+                                    val now = System.currentTimeMillis()
+                                    val lastTime = cooldownMap[personId] ?: 0L
+                                    if (now - lastTime < config.cooldownMs) {
+                                        return@launch // Still in cooldown
+                                    }
+                                    cooldownMap[personId] = now
+                                    handleFaceMatch(result.copy(personId = personId))
+                                } else {
+                                    // faceToken exists in FacePass but not in our DB — treat as unknown
+                                    _events.emit(AccessEvent.FaceDenied("Face not registered"))
+                                }
+                            } else if (!result.isMatch) {
+                                _events.emit(AccessEvent.FaceDenied("Face not recognized"))
                             } else {
                                 _events.emit(AccessEvent.FaceDetected)
                             }
@@ -182,6 +247,9 @@ class AccessControlManager @Inject constructor(
             doorId = DEFAULT_DOOR_ID,
         )
 
+        // Publish access event via MQTT (queued if offline)
+        mqttService.publishAccessEvent(decision, "face", DEFAULT_DOOR_ID)
+
         if (decision.granted) {
             HardwareController.grantAccess()
             _events.emit(AccessEvent.FaceGranted(decision.personId ?: "", decision.personName))
@@ -199,6 +267,8 @@ class AccessControlManager @Inject constructor(
             doorId = DEFAULT_DOOR_ID,
         )
 
+        mqttService.publishAccessEvent(decision, "nfc", DEFAULT_DOOR_ID)
+
         if (decision.granted) {
             HardwareController.grantAccess()
             _events.emit(AccessEvent.NfcGranted(decision.personId ?: "", decision.personName, cardId))
@@ -215,6 +285,8 @@ class AccessControlManager @Inject constructor(
             credentialValue = cardId,
             doorId = DEFAULT_DOOR_ID,
         )
+
+        mqttService.publishAccessEvent(decision, "wiegand", DEFAULT_DOOR_ID)
 
         if (decision.granted) {
             HardwareController.grantAccess()

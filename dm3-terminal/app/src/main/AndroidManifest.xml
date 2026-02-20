@@ -29,6 +29,11 @@
             </intent-filter>
         </activity>
 
+        <!-- Face Recognition Bound Service -->
+        <service
+            android:name=".service.FaceRecognitionService"
+            android:exported="false" />
+
         <!-- MQTT Foreground Service -->
         <service
             android:name=".mqtt.MqttForegroundService"

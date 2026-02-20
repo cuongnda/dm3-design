@@ -3,6 +3,9 @@ package com.duali.dm3terminal.ui.navigation
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -29,12 +32,15 @@ object Routes {
     const val FACE_ENROLLMENT = "face_enrollment"
     const val ACTIVATE_DEVICE = "activate_device"
 
-    fun granted(personName: String) = "granted/$personName"
-    fun denied(reason: String) = "denied/$reason"
+    fun granted(personName: String) = "granted/${java.net.URLEncoder.encode(personName, "UTF-8")}"
+    fun denied(reason: String) = "denied/${java.net.URLEncoder.encode(reason, "UTF-8")}"
 }
 
 @Composable
-fun DM3NavHost(mqttService: MqttService? = null) {
+fun DM3NavHost(
+    mqttService: MqttService? = null,
+    recognitionViewModel: RecognitionViewModel? = null,
+) {
     val navController = rememberNavController()
 
     fun navigateClean(route: String) {
@@ -46,6 +52,32 @@ fun DM3NavHost(mqttService: MqttService? = null) {
     fun navigateToIdle() {
         navController.navigate(Routes.IDLE) {
             popUpTo(Routes.IDLE) { inclusive = true }
+        }
+    }
+
+    // Observe recognition events to auto-navigate
+    if (recognitionViewModel != null) {
+        val uiState by recognitionViewModel.uiState.collectAsState()
+
+        LaunchedEffect(uiState) {
+            when (val state = uiState) {
+                is RecognitionUiState.Granted -> {
+                    navigateClean(Routes.granted(state.personName))
+                    recognitionViewModel.resetToIdle()
+                }
+                is RecognitionUiState.Denied -> {
+                    navigateClean(Routes.denied(state.reason))
+                    recognitionViewModel.resetToIdle()
+                }
+                is RecognitionUiState.FaceDetected -> {
+                    // Navigate to face scan screen if on idle
+                    val currentRoute = navController.currentDestination?.route
+                    if (currentRoute == Routes.IDLE) {
+                        navigateClean(Routes.FACE_SCAN)
+                    }
+                }
+                else -> {}
+            }
         }
     }
 
@@ -92,7 +124,7 @@ fun DM3NavHost(mqttService: MqttService? = null) {
         ) { entry ->
             val personName = entry.arguments?.getString("personName") ?: ""
             GrantedScreen(
-                personName = personName,
+                personName = java.net.URLDecoder.decode(personName, "UTF-8"),
                 onTimeout = { navigateToIdle() },
             )
         }
@@ -103,7 +135,7 @@ fun DM3NavHost(mqttService: MqttService? = null) {
         ) { entry ->
             val reason = entry.arguments?.getString("reason") ?: "Face not recognized"
             DeniedScreen(
-                reason = reason,
+                reason = java.net.URLDecoder.decode(reason, "UTF-8"),
                 onTimeout = { navigateToIdle() },
             )
         }

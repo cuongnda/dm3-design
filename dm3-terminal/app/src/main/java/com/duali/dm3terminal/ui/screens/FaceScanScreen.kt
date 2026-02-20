@@ -12,12 +12,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.duali.dm3terminal.ui.components.*
 import com.duali.dm3terminal.ui.theme.*
 import java.text.SimpleDateFormat
@@ -27,7 +26,7 @@ import java.util.*
 fun FaceScanScreen(
     onResult: (granted: Boolean, personName: String, reason: String) -> Unit,
     onCancel: () -> Unit,
-    viewModel: RecognitionViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
+    viewModel: RecognitionViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -42,23 +41,23 @@ fun FaceScanScreen(
     val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(cal.time)
     val dateStr = SimpleDateFormat("EEE, MMM dd", Locale.ENGLISH).format(cal.time)
 
-    // Simulate recognition
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(3000)
-        viewModel.simulateRecognition()
-    }
-
+    // React to recognition results
     LaunchedEffect(uiState) {
-        if (uiState is RecognitionUiState.Result) {
-            val result = uiState as RecognitionUiState.Result
-            onResult(result.granted, result.personName, result.reason)
+        when (val state = uiState) {
+            is RecognitionUiState.Granted -> {
+                onResult(true, state.personName, "authorized")
+            }
+            is RecognitionUiState.Denied -> {
+                onResult(false, "", state.reason)
+            }
+            else -> {}
         }
     }
 
     // Timeout fallback
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(10_000)
-        if (uiState is RecognitionUiState.Scanning) {
+        if (uiState is RecognitionUiState.Scanning || uiState is RecognitionUiState.FaceDetected || uiState is RecognitionUiState.Idle) {
             onCancel()
         }
     }
@@ -90,7 +89,6 @@ fun FaceScanScreen(
                     .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // IR+RGB indicator
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
@@ -104,7 +102,6 @@ fun FaceScanScreen(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Face Detected badge
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
@@ -119,7 +116,7 @@ fun FaceScanScreen(
                 Text("$timeStr • $dateStr", color = DM3Gray, fontSize = 11.sp)
             }
 
-            // Face bounding box with blue corners (drawn in center)
+            // Face bounding box with blue corners
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -127,17 +124,12 @@ fun FaceScanScreen(
                     .drawBehind {
                         val cornerLen = 30f
                         val strokeW = 3f
-                        val stroke = Stroke(width = strokeW)
-                        // Top-left
                         drawLine(blueCorner, Offset(0f, 0f), Offset(cornerLen, 0f), strokeW)
                         drawLine(blueCorner, Offset(0f, 0f), Offset(0f, cornerLen), strokeW)
-                        // Top-right
                         drawLine(blueCorner, Offset(size.width, 0f), Offset(size.width - cornerLen, 0f), strokeW)
                         drawLine(blueCorner, Offset(size.width, 0f), Offset(size.width, cornerLen), strokeW)
-                        // Bottom-left
                         drawLine(blueCorner, Offset(0f, size.height), Offset(cornerLen, size.height), strokeW)
                         drawLine(blueCorner, Offset(0f, size.height), Offset(0f, size.height - cornerLen), strokeW)
-                        // Bottom-right
                         drawLine(blueCorner, Offset(size.width, size.height), Offset(size.width - cornerLen, size.height), strokeW)
                         drawLine(blueCorner, Offset(size.width, size.height), Offset(size.width, size.height - cornerLen), strokeW)
                     },

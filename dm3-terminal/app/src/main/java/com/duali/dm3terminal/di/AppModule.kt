@@ -23,7 +23,7 @@ object AppModule {
             context,
             AppDatabase::class.java,
             "dm3_terminal.db",
-        ).build()
+        ).fallbackToDestructiveMigration().build()
     }
 
     @Provides
@@ -57,6 +57,14 @@ object AppModule {
     @Provides
     @Singleton
     fun provideSyncStateDao(db: AppDatabase): SyncStateDao = db.syncStateDao()
+
+    @Provides
+    @Singleton
+    fun provideConfigDao(db: AppDatabase): ConfigDao = db.configDao()
+
+    @Provides
+    @Singleton
+    fun provideFaceTemplateDao(db: AppDatabase): FaceTemplateDao = db.faceTemplateDao()
 
     @Provides
     @Singleton

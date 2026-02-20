@@ -80,3 +80,21 @@ data class FailedAttemptsEntity(
     @ColumnInfo(name = "last_attempt_at") val lastAttemptAt: Long? = null,
     @ColumnInfo(name = "locked_until") val lockedUntil: Long? = null,
 )
+
+@Entity(tableName = "config")
+data class ConfigEntity(
+    @PrimaryKey val key: String,
+    @ColumnInfo(name = "value_json") val valueJson: String,
+)
+
+@Entity(
+    tableName = "face_templates",
+    indices = [Index(value = ["person_id"])],
+)
+data class FaceTemplateEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "person_id") val personId: String,
+    @ColumnInfo(name = "face_token") val faceToken: String,
+    val quality: Float = 0f,
+    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
+)
