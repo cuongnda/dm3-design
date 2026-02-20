@@ -15,6 +15,7 @@ data class DeviceConfig(
     val mqttBrokerUrl: String = "tcp://127.0.0.1:1884",
     val deviceName: String = "Lobby A Gate 1",
     val doorId: String = "door-001",
+    val debugOverlay: Boolean = false,
 )
 
 @Singleton
@@ -35,6 +36,7 @@ class DevicePreferences @Inject constructor(
             ?: "tcp://127.0.0.1:1884",
         deviceName = prefs.getString("device_name", "Lobby A Gate 1") ?: "Lobby A Gate 1",
         doorId = prefs.getString("door_id", "door-001") ?: "door-001",
+        debugOverlay = prefs.getBoolean("debug_overlay", false),
     )
 
     fun save(config: DeviceConfig) {
@@ -44,6 +46,7 @@ class DevicePreferences @Inject constructor(
             .putString("mqtt_broker_url", config.mqttBrokerUrl)
             .putString("device_name", config.deviceName)
             .putString("door_id", config.doorId)
+            .putBoolean("debug_overlay", config.debugOverlay)
             .apply()
         _config.value = config
     }

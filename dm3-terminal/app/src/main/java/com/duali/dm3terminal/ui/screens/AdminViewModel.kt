@@ -2,6 +2,7 @@ package com.duali.dm3terminal.ui.screens
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.duali.dm3terminal.data.DevicePreferences
 import com.duali.dm3terminal.data.repository.DM3Repository
 import com.duali.dm3terminal.domain.MockDataSeeder
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,10 +21,17 @@ data class AdminStats(
 class AdminViewModel @Inject constructor(
     private val repository: DM3Repository,
     private val seeder: MockDataSeeder,
+    private val devicePreferences: DevicePreferences,
 ) : ViewModel() {
 
     private val _stats = MutableStateFlow(AdminStats())
     val stats: StateFlow<AdminStats> = _stats
+    val deviceConfig = devicePreferences.config
+
+    fun toggleDebugOverlay() {
+        val current = devicePreferences.config.value
+        devicePreferences.save(current.copy(debugOverlay = !current.debugOverlay))
+    }
 
     init {
         refreshStats()

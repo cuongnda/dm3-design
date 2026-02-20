@@ -56,7 +56,7 @@ class FaceRecognitionService : Service() {
                 // Wait for init
                 while (!isInitialized) delay(100)
                 // Delay camera open to avoid kernel panic on DF-970 during boot
-                delay(3000)
+                delay(5000)
                 accessControlManager.start()
                 Log.d(TAG, "Recognition started (deferred)")
             }
@@ -64,7 +64,7 @@ class FaceRecognitionService : Service() {
         }
         scope.launch {
             // Delay camera open to avoid kernel panic on DF-970 during boot
-            delay(3000)
+            delay(5000)
             accessControlManager.start()
             Log.d(TAG, "Recognition started")
         }

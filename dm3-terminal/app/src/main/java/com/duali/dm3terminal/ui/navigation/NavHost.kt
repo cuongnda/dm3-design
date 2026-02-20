@@ -12,6 +12,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.duali.dm3terminal.data.DevicePreferences
 import com.duali.dm3terminal.mqtt.MqttConnectionState
 import com.duali.dm3terminal.mqtt.MqttService
 import com.duali.dm3terminal.ui.screens.*
@@ -41,6 +42,7 @@ fun DM3NavHost(
     mqttService: MqttService? = null,
     recognitionViewModel: RecognitionViewModel? = null,
     accessControlManager: com.duali.dm3terminal.hardware.AccessControlManager? = null,
+    devicePreferences: DevicePreferences? = null,
 ) {
     val navController = rememberNavController()
 
@@ -94,6 +96,8 @@ fun DM3NavHost(
             LaunchedEffect(Unit) {
                 accessControlManager?.resumeCamera()
             }
+            val deviceConfig = devicePreferences?.config
+                ?.collectAsStateWithLifecycle()?.value
             IdleScreen(
                 onTap = { /* Face recognition runs directly on idle */ },
                 onLongPress = {
@@ -103,6 +107,7 @@ fun DM3NavHost(
                 },
                 mqttState = mqttState,
                 accessControlManager = accessControlManager,
+                showDebugOverlay = deviceConfig?.debugOverlay == true,
             )
         }
 

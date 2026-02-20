@@ -93,6 +93,12 @@ class AccessControlManager @Inject constructor(
     private val _previewBitmap = MutableStateFlow<ImageBitmap?>(null)
     val previewBitmap: StateFlow<ImageBitmap?> = _previewBitmap
     private var previewFrameCount = 0
+
+    // FPS counter for debug overlay
+    private val _currentFps = MutableStateFlow(0)
+    val currentFps: StateFlow<Int> = _currentFps
+    private var fpsFrameCount = 0
+    private var fpsLastTime = System.currentTimeMillis()
     // Camera2 ImageReader on DF-970 camera "100": sensor orientation = 270°
     // Raw NV21 is landscape (1280x720), device is portrait (480x800)
     // Need to rotate 270° to get correct portrait orientation
@@ -296,6 +302,14 @@ class AccessControlManager @Inject constructor(
                             val rotated = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, rotationMatrix, true)
                             _previewBitmap.value = rotated.asImageBitmap()
                             if (rotated !== bmp) bmp.recycle()
+                            // FPS counter
+                            fpsFrameCount++
+                            val now = System.currentTimeMillis()
+                            if (now - fpsLastTime >= 1000) {
+                                _currentFps.value = fpsFrameCount
+                                fpsFrameCount = 0
+                                fpsLastTime = now
+                            }
                         }
                     } catch (e: Exception) {
                         Log.w(TAG, "Preview bitmap error: ${e.message}")

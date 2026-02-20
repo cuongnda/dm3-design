@@ -11,8 +11,11 @@ import androidx.compose.material.icons.outlined.Face
 import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.QrCode2
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -38,6 +41,7 @@ fun SettingsMenuScreen(
     viewModel: AdminViewModel = hiltViewModel(),
 ) {
     val stats by viewModel.stats.collectAsState()
+    val deviceConfig by viewModel.deviceConfig.collectAsState()
 
     Column(
         modifier = Modifier
@@ -98,6 +102,32 @@ fun SettingsMenuScreen(
                 })
                 CardDivider()
                 SettingsMenuItem(icon = Icons.AutoMirrored.Filled.ArrowBack, label = "Back to Authentication", onClick = onBack)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // DEBUG
+            GlassCard(title = "DEVELOPER") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Outlined.BugReport, contentDescription = null, tint = DM3Gray, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("Debug Overlay", color = DM3White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = deviceConfig.debugOverlay,
+                        onCheckedChange = { viewModel.toggleDebugOverlay() },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = DM3AccentBlue,
+                            checkedTrackColor = DM3AccentBlue.copy(alpha = 0.3f),
+                            uncheckedThumbColor = DM3Gray,
+                            uncheckedTrackColor = DM3GrayDark,
+                        ),
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))

@@ -1,6 +1,7 @@
 package com.duali.dm3terminal
 
 import com.duali.dm3terminal.BuildConfig
+import com.duali.dm3terminal.data.DevicePreferences
 import com.duali.dm3terminal.hardware.AccessControlManager
 import kotlinx.coroutines.launch
 import android.content.ComponentName
@@ -31,6 +32,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var kioskManager: KioskManager
     @Inject lateinit var crashWatchdog: CrashWatchdog
     @Inject lateinit var accessControlManager: AccessControlManager
+    @Inject lateinit var devicePreferences: DevicePreferences
 
     private val recognitionViewModel: RecognitionViewModel by viewModels()
 
@@ -97,6 +99,7 @@ class MainActivity : ComponentActivity() {
                     mqttService = mqttService,
                     recognitionViewModel = recognitionViewModel,
                     accessControlManager = accessControlManager,
+                    devicePreferences = devicePreferences,
                 )
             }
         }

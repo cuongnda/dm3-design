@@ -30,6 +30,7 @@ import androidx.compose.material3.Icon
 import com.duali.dm3terminal.BuildConfig
 import com.duali.dm3terminal.hardware.AccessControlManager
 import com.duali.dm3terminal.mqtt.MqttConnectionState
+import com.duali.dm3terminal.ui.components.DebugOverlay
 import com.duali.dm3terminal.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -40,6 +41,7 @@ fun IdleScreen(
     onLongPress: () -> Unit,
     mqttState: MqttConnectionState = MqttConnectionState.DISCONNECTED,
     accessControlManager: AccessControlManager? = null,
+    showDebugOverlay: Boolean = false,
 ) {
     var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -187,6 +189,18 @@ fun IdleScreen(
 
                 Spacer(modifier = Modifier.weight(1f))
             }
+        }
+
+        // Debug overlay (top-right)
+        if (showDebugOverlay) {
+            val fps by accessControlManager?.currentFps?.collectAsState()
+                ?: remember { mutableStateOf(0) }
+            DebugOverlay(
+                fps = fps,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp),
+            )
         }
 
         // Bottom-left: version + MQTT status
