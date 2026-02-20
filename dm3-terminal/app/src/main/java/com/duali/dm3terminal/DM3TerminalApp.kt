@@ -10,6 +10,10 @@ import com.duali.dm3terminal.sync.EventUploadWorker
 import com.duali.dm3terminal.sync.HeartbeatWorker
 import com.duali.dm3terminal.sync.SyncWorker
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltAndroidApp
@@ -19,6 +23,8 @@ class DM3TerminalApp : Application(), Configuration.Provider {
     @Inject lateinit var crashWatchdog: CrashWatchdog
     @Inject lateinit var kioskManager: KioskManager
 
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -27,20 +33,24 @@ class DM3TerminalApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
 
-        // Install crash watchdog (must be first)
+        // Install crash watchdog (must be first — lightweight, stays on main thread)
         crashWatchdog.install()
 
-        // Enable kiosk policies if device owner
-        if (kioskManager.isDeviceOwner) {
-            kioskManager.enableKioskPolicies()
+        // Move heavy init off main thread to avoid jank / ANR
+        appScope.launch {
+            // Enable kiosk policies if device owner
+            if (kioskManager.isDeviceOwner) {
+                kioskManager.enableKioskPolicies()
+            }
         }
 
-        // Start MQTT foreground service
-        MqttForegroundService.start(this)
-
-        // Enqueue periodic workers
-        SyncWorker.enqueue(this)
-        EventUploadWorker.enqueue(this)
-        HeartbeatWorker.enqueue(this)
+        // Delay MQTT + workers slightly to let UI render first
+        appScope.launch {
+            kotlinx.coroutines.delay(1000)
+            MqttForegroundService.start(this@DM3TerminalApp)
+            SyncWorker.enqueue(this@DM3TerminalApp)
+            EventUploadWorker.enqueue(this@DM3TerminalApp)
+            HeartbeatWorker.enqueue(this@DM3TerminalApp)
+        }
     }
 }
