@@ -1,8 +1,10 @@
 # Duall Master 3.0 — Marketing Website Copy
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Date:** February 2026  
-**Status:** Complete Draft
+**Status:** Built & Deployed  
+**Website:** `dm3/website/` | http://localhost:8095  
+**Languages:** English, Korean, Vietnamese (22 pages each, 66 total)
 
 ---
 
