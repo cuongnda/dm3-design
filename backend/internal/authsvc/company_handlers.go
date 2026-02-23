@@ -1,0 +1,255 @@
+package authsvc
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"golang.org/x/crypto/bcrypt"
+
+	"github.com/duali/dm3-backend/pkg/httputil"
+)
+
+// ─── Company Models ──────────────────────────────────────────────────────────
+
+type companyResponse struct {
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Code       string    `json:"code"`
+	Plan       string    `json:"plan"`
+	Status     string    `json:"status"`
+	LogoURL    *string   `json:"logo_url,omitempty"`
+	Address    *string   `json:"address,omitempty"`
+	Phone      *string   `json:"phone,omitempty"`
+	Email      *string   `json:"email,omitempty"`
+	MaxDevices int       `json:"max_devices"`
+	MaxUsers   int       `json:"max_users"`
+	UserCount  int64     `json:"user_count,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+type createCompanyRequest struct {
+	Name       string  `json:"name"`
+	Code       string  `json:"code"`
+	Email      string  `json:"email"` // primary manager email
+	Plan       string  `json:"plan,omitempty"`
+	MaxDevices *int    `json:"max_devices,omitempty"`
+	MaxUsers   *int    `json:"max_users,omitempty"`
+	Address    *string `json:"address,omitempty"`
+	Phone      *string `json:"phone,omitempty"`
+}
+
+type updateCompanyRequest struct {
+	Name       *string `json:"name,omitempty"`
+	Plan       *string `json:"plan,omitempty"`
+	Status     *string `json:"status,omitempty"`
+	LogoURL    *string `json:"logo_url,omitempty"`
+	Address    *string `json:"address,omitempty"`
+	Phone      *string `json:"phone,omitempty"`
+	Email      *string `json:"email,omitempty"`
+	MaxDevices *int    `json:"max_devices,omitempty"`
+	MaxUsers   *int    `json:"max_users,omitempty"`
+}
+
+type createCompanyResponse struct {
+	Company  companyResponse `json:"company"`
+	Admin    adminInfo       `json:"admin"`
+}
+
+type adminInfo struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Role     string `json:"role"`
+}
+
+// ─── List Companies ──────────────────────────────────────────────────────────
+
+func (h *Handlers) ListCompanies(w http.ResponseWriter, r *http.Request) {
+	page, limit := parsePagination(r)
+	offset := (page - 1) * limit
+
+	var total int64
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_auth.companies`).Scan(&total)
+
+	rows, err := h.db.Pool.Query(r.Context(),
+		`SELECT c.id, c.name, c.code, c.plan, c.status, c.logo_url, c.address, c.phone, c.email,
+		 c.max_devices, c.max_users, c.created_at, c.updated_at,
+		 (SELECT COUNT(*) FROM dm3_auth.users u WHERE u.company_id = c.id)
+		 FROM dm3_auth.companies c ORDER BY c.created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer rows.Close()
+
+	companies := []companyResponse{}
+	for rows.Next() {
+		var c companyResponse
+		if err := rows.Scan(&c.ID, &c.Name, &c.Code, &c.Plan, &c.Status, &c.LogoURL, &c.Address, &c.Phone, &c.Email,
+			&c.MaxDevices, &c.MaxUsers, &c.CreatedAt, &c.UpdatedAt, &c.UserCount); err != nil {
+			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		companies = append(companies, c)
+	}
+	httputil.Paginated(w, companies, total, page, limit)
+}
+
+// ─── Create Company ──────────────────────────────────────────────────────────
+
+func (h *Handlers) CreateCompany(w http.ResponseWriter, r *http.Request) {
+	var req createCompanyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Name == "" || req.Code == "" || req.Email == "" {
+		httputil.Error(w, http.StatusBadRequest, "name, code, and email are required")
+		return
+	}
+
+	plan := "starter"
+	if req.Plan != "" {
+		plan = req.Plan
+	}
+
+	// Generate random password for primary manager
+	pwBytes := make([]byte, 8)
+	if _, err := rand.Read(pwBytes); err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to generate password")
+		return
+	}
+	password := hex.EncodeToString(pwBytes)
+
+	pwHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "password hashing failed")
+		return
+	}
+
+	// Begin transaction
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "transaction failed")
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	// 1. Create company
+	var company companyResponse
+	err = tx.QueryRow(r.Context(),
+		`INSERT INTO dm3_auth.companies (name, code, plan, email, address, phone, max_devices, max_users)
+		 VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 50), COALESCE($8, 20))
+		 RETURNING id, name, code, plan, status, logo_url, address, phone, email, max_devices, max_users, created_at, updated_at`,
+		req.Name, req.Code, plan, req.Email, req.Address, req.Phone, req.MaxDevices, req.MaxUsers,
+	).Scan(&company.ID, &company.Name, &company.Code, &company.Plan, &company.Status,
+		&company.LogoURL, &company.Address, &company.Phone, &company.Email,
+		&company.MaxDevices, &company.MaxUsers, &company.CreatedAt, &company.UpdatedAt)
+	if err != nil {
+		slog.Error("create company error", "error", err)
+		httputil.Error(w, http.StatusConflict, "company code already exists or invalid data")
+		return
+	}
+
+	// 2. Create primary manager user
+	_, err = tx.Exec(r.Context(),
+		`INSERT INTO dm3_auth.users (email, password_hash, name, roles, company_id, role, tenant_id, status)
+		 VALUES ($1, $2, $3, $4, $5::uuid, $6, $5::uuid, 'active')`,
+		req.Email, string(pwHash), req.Name+" Admin", []string{"admin"}, company.ID, "primary_manager",
+	)
+	if err != nil {
+		slog.Error("create primary manager error", "error", err)
+		httputil.Error(w, http.StatusConflict, "user with this email already exists")
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "commit failed")
+		return
+	}
+
+	httputil.JSON(w, http.StatusCreated, createCompanyResponse{
+		Company: company,
+		Admin: adminInfo{
+			Email:    req.Email,
+			Password: password,
+			Role:     "primary_manager",
+		},
+	})
+}
+
+// ─── Get Company ─────────────────────────────────────────────────────────────
+
+func (h *Handlers) GetCompany(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var c companyResponse
+	err := h.db.Pool.QueryRow(r.Context(),
+		`SELECT c.id, c.name, c.code, c.plan, c.status, c.logo_url, c.address, c.phone, c.email,
+		 c.max_devices, c.max_users, c.created_at, c.updated_at,
+		 (SELECT COUNT(*) FROM dm3_auth.users u WHERE u.company_id = c.id)
+		 FROM dm3_auth.companies c WHERE c.id = $1::uuid`, id,
+	).Scan(&c.ID, &c.Name, &c.Code, &c.Plan, &c.Status, &c.LogoURL, &c.Address, &c.Phone, &c.Email,
+		&c.MaxDevices, &c.MaxUsers, &c.CreatedAt, &c.UpdatedAt, &c.UserCount)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "company not found")
+		return
+	}
+	httputil.JSON(w, http.StatusOK, c)
+}
+
+// ─── Update Company ──────────────────────────────────────────────────────────
+
+func (h *Handlers) UpdateCompany(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req updateCompanyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	var c companyResponse
+	err := h.db.Pool.QueryRow(r.Context(),
+		`UPDATE dm3_auth.companies SET
+			name = COALESCE($2, name),
+			plan = COALESCE($3, plan),
+			status = COALESCE($4, status),
+			logo_url = COALESCE($5, logo_url),
+			address = COALESCE($6, address),
+			phone = COALESCE($7, phone),
+			email = COALESCE($8, email),
+			max_devices = COALESCE($9, max_devices),
+			max_users = COALESCE($10, max_users),
+			updated_at = now()
+		 WHERE id = $1::uuid
+		 RETURNING id, name, code, plan, status, logo_url, address, phone, email, max_devices, max_users, created_at, updated_at`,
+		id, req.Name, req.Plan, req.Status, req.LogoURL, req.Address, req.Phone, req.Email, req.MaxDevices, req.MaxUsers,
+	).Scan(&c.ID, &c.Name, &c.Code, &c.Plan, &c.Status, &c.LogoURL, &c.Address, &c.Phone, &c.Email,
+		&c.MaxDevices, &c.MaxUsers, &c.CreatedAt, &c.UpdatedAt)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "company not found")
+		return
+	}
+	httputil.JSON(w, http.StatusOK, c)
+}
+
+// ─── Delete Company (soft) ───────────────────────────────────────────────────
+
+func (h *Handlers) DeleteCompany(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	tag, err := h.db.Pool.Exec(r.Context(),
+		`UPDATE dm3_auth.companies SET status = 'suspended', updated_at = now() WHERE id = $1::uuid AND status != 'suspended'`, id)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		httputil.Error(w, http.StatusNotFound, "company not found or already suspended")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

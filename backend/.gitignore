@@ -1,0 +1,10 @@
+data/
+*.exe
+*.test
+*.out
+bin/
+.env
+auth-svc
+device-gateway
+access-svc
+identity-svc
