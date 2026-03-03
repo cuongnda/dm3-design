@@ -3,7 +3,6 @@ import { lazy, Suspense } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { LoginPage } from '@/features/auth/LoginPage';
-import { PlaceholderPage } from '@/components/common/PlaceholderPage';
 import { SystemLayout } from '@/features/system/SystemLayout';
 import { CompanyListPage } from '@/features/system/CompanyListPage';
 import { CreateCompanyPage } from '@/features/system/CreateCompanyPage';
@@ -106,6 +105,16 @@ const SettingsPage = lazy(() =>
   import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage }))
 );
 
+// ALERTS
+const AlertsPage = lazy(() =>
+  import('@/features/alerts/AlertsPage').then((m) => ({ default: m.AlertsPage }))
+);
+
+// SYSTEM SETTINGS
+const SystemSettingsPage = lazy(() =>
+  import('@/features/system/SystemSettingsPage').then((m) => ({ default: m.SystemSettingsPage }))
+);
+
 function LazyWrap({ children }: { children: React.ReactNode }) {
   return (
     <Suspense
@@ -119,11 +128,6 @@ function LazyWrap({ children }: { children: React.ReactNode }) {
     </Suspense>
   );
 }
-
-// Placeholder factory
-const ph = (title: string, domain?: string, color?: string) => (
-  <PlaceholderPage title={title} domain={domain} domainColor={color} />
-);
 
 export const router = createBrowserRouter([
   {
@@ -140,7 +144,7 @@ export const router = createBrowserRouter([
       { path: 'companies/:id', element: <CompanyDetailPage /> },
       { path: 'devices/pending', element: <LazyWrap><PendingDevicesPage isSystemAdmin={true} /></LazyWrap> },
       { path: 'devices', element: <SystemDevicesPage /> },
-      { path: 'settings', element: <PlaceholderPage title="System Settings" /> },
+      { path: 'settings', element: <LazyWrap><SystemSettingsPage /></LazyWrap> },
     ],
   },
   {
@@ -148,7 +152,7 @@ export const router = createBrowserRouter([
     element: <MainLayout />,
     children: [
       { index: true, element: <DashboardPage /> },
-      { path: 'alerts', element: ph('Alerts') },
+      { path: 'alerts', element: <LazyWrap><AlertsPage /></LazyWrap> },
 
       // SECURE
       { path: 'secure/access-control', element: <LazyWrap><AccessControlPage /></LazyWrap> },
