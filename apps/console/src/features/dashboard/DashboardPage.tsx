@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@dm3/ui';
 import { StatCard } from '@dm3/ui';
 import { EventFeed } from '@dm3/ui';
@@ -38,39 +39,6 @@ function eventDtoToAccessEvent(e: any): AccessEvent {
   };
 }
 
-const domainHealthData: { domain: string; color: string; emoji: string; items: DomainHealth[] }[] = [
-  {
-    domain: 'SECURE', color: '#3B82F6', emoji: '🔒',
-    items: [
-      { module: 'Access Control', status: 'ok', detail: '✓ Online' },
-      { module: 'CCTV', status: 'warning', detail: '⚠ 1 offline' },
-      { module: 'Intrusion Detection', status: 'ok', detail: '✓ Armed' },
-      { module: 'Intercom', status: 'ok', detail: '✓ Online' },
-      { module: 'AI Detection', status: 'ok', detail: '✓ Active' },
-    ],
-  },
-  {
-    domain: 'MANAGE', color: '#8B5CF6', emoji: '👤',
-    items: [
-      { module: 'Identities', status: 'ok', detail: '✓ Active' },
-      { module: 'Visitors', status: 'ok', detail: '✓ 3 waiting' },
-      { module: 'Attendance', status: 'ok', detail: '✓ Online' },
-      { module: 'Contractors', status: 'ok', detail: '✓ 34 on-site' },
-      { module: 'Deliveries', status: 'warning', detail: '⚠ 2 uncollected' },
-    ],
-  },
-  {
-    domain: 'OPERATE', color: '#F59E0B', emoji: '🏢',
-    items: [
-      { module: 'Room Booking', status: 'ok', detail: '✓ 3/12 in use' },
-      { module: 'Parking', status: 'ok', detail: '✓ 78% full' },
-      { module: 'Maintenance', status: 'warning', detail: '⚠ 2 overdue' },
-      { module: 'Guard Tour', status: 'ok', detail: '✓ On schedule' },
-      { module: 'IoT & Energy', status: 'ok', detail: '✓ 142 kWh today' },
-    ],
-  },
-];
-
 const severityDot: Record<string, string> = {
   critical: 'bg-[#EF4444]',
   warning: 'bg-[#EAB308]',
@@ -84,6 +52,8 @@ const healthStatusClass: Record<string, string> = {
 };
 
 export function DashboardPage() {
+  const { t } = useTranslation('dashboard');
+
   // API data
   const { data: statsData } = useStats();
   const { data: devicesData } = useDevices();
@@ -96,69 +66,105 @@ export function DashboardPage() {
   const deviceStatuses = useDeviceStatus() as RealtimeDeviceStatus[];
 
   // Build stats from real data + real-time status
-  const devicesOnline = deviceStatuses.filter(d => d.online).length || 
+  const devicesOnline = deviceStatuses.filter(d => d.online).length ||
                         (devicesData?.filter((d) => d.status === 'online').length ?? 0);
   const devicesTotal = deviceStatuses.length || (devicesData?.length ?? 0);
 
   const stats = [
     {
-      label: 'Events Today', 
+      label: t('stats.eventsToday'),
       value: String(statsData?.events_today ?? 0),
       sub: `${statsData?.granted_today ?? 0} granted, ${statsData?.denied_today ?? 0} denied`,
-      trend: { 
-        direction: 'up' as const, 
-        text: isConnected ? 'live' : (isConnecting ? 'connecting...' : 'offline')
-      }, 
-      icon: '📊', 
+      trend: {
+        direction: 'up' as const,
+        text: isConnected ? t('status.live') : (isConnecting ? t('status.connecting') : t('status.offline'))
+      },
+      icon: '📊',
       domain: 'default' as const,
     },
     {
-      label: 'Doors', 
+      label: t('stats.doors'),
       value: `${statsData?.doors_online ?? 0}/${statsData?.doors_total ?? 0}`,
-      sub: 'access points',
-      trend: { 
-        direction: (statsData?.doors_offline ?? 0) > 0 ? 'down' as const : 'up' as const, 
-        text: `${statsData?.doors_offline ?? 0} offline` 
+      sub: t('stats.accessPoints'),
+      trend: {
+        direction: (statsData?.doors_offline ?? 0) > 0 ? 'down' as const : 'up' as const,
+        text: `${statsData?.doors_offline ?? 0} ${t('status.offline')}`
       },
-      icon: '🔒', 
+      icon: '🔒',
       domain: 'secure' as const,
     },
     {
-      label: 'Devices Online', 
+      label: t('stats.devicesOnline'),
       value: `${devicesOnline}/${devicesTotal}`,
-      sub: 'connected devices',
-      trend: { 
-        direction: devicesOnline === devicesTotal ? 'up' as const : 'down' as const, 
-        text: `${devicesTotal - devicesOnline} offline` 
+      sub: t('stats.connectedDevices'),
+      trend: {
+        direction: devicesOnline === devicesTotal ? 'up' as const : 'down' as const,
+        text: `${devicesTotal - devicesOnline} ${t('status.offline')}`
       },
-      icon: '📡', 
+      icon: '📡',
       domain: 'default' as const,
     },
     {
-      label: 'Active Alerts', 
-      value: String(activeAlarms.length), 
-      sub: 'need attention',
-      trend: { 
-        direction: activeAlarms.filter(a => a.severity === 'critical').length > 0 ? 'down' as const : 'up' as const, 
-        text: `${activeAlarms.filter(a => a.severity === 'critical').length} critical` 
+      label: t('stats.activeAlerts'),
+      value: String(activeAlarms.length),
+      sub: t('stats.needAttention'),
+      trend: {
+        direction: activeAlarms.filter(a => a.severity === 'critical').length > 0 ? 'down' as const : 'up' as const,
+        text: `${activeAlarms.filter(a => a.severity === 'critical').length} critical`
       },
-      icon: '⚠️', 
+      icon: '⚠️',
       domain: 'error' as const,
     },
     {
-      label: 'Parking', 
-      value: '78%', 
+      label: t('stats.parking'),
+      value: '78%',
       sub: '312 / 400 spots',
       trend: { direction: 'up' as const, text: '5% from last week' },
-      icon: '🅿️', 
+      icon: '🅿️',
       domain: 'operate' as const,
+    },
+  ];
+
+  const domainHealthData: { domain: string; color: string; emoji: string; items: DomainHealth[]; viewLink: string }[] = [
+    {
+      domain: t('domain.secure'), color: '#3B82F6', emoji: '🔒',
+      viewLink: t('health.viewSecurity'),
+      items: [
+        { module: t('modules.accessControl'), status: 'ok', detail: '✓ Online' },
+        { module: t('modules.cctv'), status: 'warning', detail: '⚠ 1 offline' },
+        { module: t('modules.intrusion'), status: 'ok', detail: '✓ Armed' },
+        { module: t('modules.intercom'), status: 'ok', detail: '✓ Online' },
+        { module: t('modules.aiDetection'), status: 'ok', detail: '✓ Active' },
+      ],
+    },
+    {
+      domain: t('domain.manage'), color: '#8B5CF6', emoji: '👤',
+      viewLink: t('health.viewPeople'),
+      items: [
+        { module: t('modules.identities'), status: 'ok', detail: '✓ Active' },
+        { module: t('modules.visitors'), status: 'ok', detail: '✓ 3 waiting' },
+        { module: t('modules.attendance'), status: 'ok', detail: '✓ Online' },
+        { module: t('modules.contractors'), status: 'ok', detail: '✓ 34 on-site' },
+        { module: t('modules.deliveries'), status: 'warning', detail: '⚠ 2 uncollected' },
+      ],
+    },
+    {
+      domain: t('domain.operate'), color: '#F59E0B', emoji: '🏢',
+      viewLink: t('health.viewFacility'),
+      items: [
+        { module: t('modules.roomBooking'), status: 'ok', detail: '✓ 3/12 in use' },
+        { module: t('modules.parking'), status: 'ok', detail: '✓ 78% full' },
+        { module: t('modules.maintenance'), status: 'warning', detail: '⚠ 2 overdue' },
+        { module: t('modules.guardTour'), status: 'ok', detail: '✓ On schedule' },
+        { module: t('modules.iotEnergy'), status: 'ok', detail: '✓ 142 kWh today' },
+      ],
     },
   ];
 
   // Combine real-time events with API fallback
   const realtimeAccessEvents = realtimeEvents.map(realtimeEventToAccessEvent);
   const apiEvents: AccessEvent[] = (statsData?.recent_events ?? []).map(eventDtoToAccessEvent);
-  
+
   const events = realtimeAccessEvents.length > 0
     ? [...realtimeAccessEvents, ...apiEvents.filter((e) => !realtimeAccessEvents.some((w) => w.id === e.id))].slice(0, 10)
     : apiEvents.slice(0, 10);
@@ -184,7 +190,7 @@ export function DashboardPage() {
 
   return (
     <div>
-      <PageHeader title="Dashboard">
+      <PageHeader title={t('title')}>
         <div className="flex gap-2">
           <button className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px]">
             🏢 Landmark 81 ▾
@@ -196,11 +202,11 @@ export function DashboardPage() {
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px]">
             <span className={cn(
               'w-2 h-2 rounded-full',
-              isConnected ? 'bg-[#22C55E] animate-pulse' : 
-              isConnecting ? 'bg-[#EAB308] animate-pulse' : 
+              isConnected ? 'bg-[#22C55E] animate-pulse' :
+              isConnecting ? 'bg-[#EAB308] animate-pulse' :
               'bg-[#EF4444]'
             )} />
-            {isConnected ? 'Live' : isConnecting ? 'Connecting' : 'Offline'}
+            {isConnected ? t('events.live') : isConnecting ? t('status.connecting') : t('status.offline')}
           </div>
         </div>
       </PageHeader>
@@ -222,9 +228,9 @@ export function DashboardPage() {
                 'w-1.5 h-1.5 rounded-full',
                 isConnected ? 'bg-[#22C55E] animate-pulse' : 'bg-[#EF4444]'
               )} />
-              Access Events ({isConnected ? 'Live' : 'Cached'})
+              {t('events.title')} ({isConnected ? t('events.live') : t('events.cached')})
             </div>
-            <span className="text-[12px] text-[#3B82F6] cursor-pointer hover:underline">View All →</span>
+            <span className="text-[12px] text-[#3B82F6] cursor-pointer hover:underline">{t('events.viewAll')}</span>
           </div>
           <div className="px-4 py-3">
             <div className="h-10 mb-3 rounded bg-gradient-to-b from-transparent to-[#3B82F6]/10 relative overflow-hidden">
@@ -239,8 +245,8 @@ export function DashboardPage() {
         {/* Active Alerts */}
         <div className="bg-[#1E293B] border border-[#334155] rounded-lg overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-[#334155]">
-            <div className="text-[13px] font-semibold">⚠️ Active Alerts</div>
-            <span className="text-[12px] text-[#3B82F6] cursor-pointer hover:underline">View All →</span>
+            <div className="text-[13px] font-semibold">⚠️ {t('alerts.title')}</div>
+            <span className="text-[12px] text-[#3B82F6] cursor-pointer hover:underline">{t('alerts.viewAll')}</span>
           </div>
           <div className="px-4 py-3 space-y-0">
             {alerts.map((a) => (
@@ -272,7 +278,7 @@ export function DashboardPage() {
             ))}
             <div className="mt-3">
               <span className="text-[12px] text-[#3B82F6] cursor-pointer hover:underline">
-                View {d.domain === 'SECURE' ? 'Security' : d.domain === 'MANAGE' ? 'People' : 'Facility'} →
+                {d.viewLink}
               </span>
             </div>
           </div>

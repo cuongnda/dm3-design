@@ -23,6 +23,7 @@ export * from './components/common/PlaceholderPage';
 export * from './components/common/SearchCommand';
 export * from './components/common/StatCard';
 export * from './components/common/StatusBadge';
+export * from './components/common/LanguageSwitcher';
 
 // Charts
 export * from './components/charts/AreaChart';

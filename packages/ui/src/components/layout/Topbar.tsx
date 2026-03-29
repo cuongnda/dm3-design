@@ -1,21 +1,20 @@
 import { useLocation } from 'react-router-dom';
 import { Search, Bell } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useState, useEffect } from 'react';
 import { SearchCommand } from '../common/SearchCommand';
 import { NotificationPanel } from '../common/NotificationPanel';
 
-function getBreadcrumb(pathname: string): { domain?: string; domainColor?: string; segments: string[] } {
+function getBreadcrumb(
+  pathname: string,
+  domainMap: Record<string, { label: string; color: string }>,
+  overviewLabel: string,
+  dashboardLabel: string,
+): { domain?: string; domainColor?: string; segments: string[] } {
   const parts = pathname.split('/').filter(Boolean);
-  if (parts.length === 0) return { segments: ['Overview', 'Dashboard'] };
-
-  const domainMap: Record<string, { label: string; color: string }> = {
-    secure: { label: '🔒 SECURE', color: '#3B82F6' },
-    manage: { label: '👤 MANAGE', color: '#8B5CF6' },
-    operate: { label: '🏢 OPERATE', color: '#F59E0B' },
-    smart: { label: '🧠 SMART', color: '#06B6D4' },
-  };
+  if (parts.length === 0) return { segments: [overviewLabel, dashboardLabel] };
 
   const domain = domainMap[parts[0]];
   const segments = parts.map((p) =>
@@ -29,12 +28,21 @@ function getBreadcrumb(pathname: string): { domain?: string; domainColor?: strin
 }
 
 export function Topbar() {
+  const { t } = useTranslation('common');
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
   const unreadCount = useNotificationStore((s) => s.unreadCount);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const bc = getBreadcrumb(location.pathname);
+
+  const domainMap: Record<string, { label: string; color: string }> = {
+    secure: { label: t('nav.secure'), color: '#3B82F6' },
+    manage: { label: t('nav.manage'), color: '#8B5CF6' },
+    operate: { label: t('nav.operate'), color: '#F59E0B' },
+    smart: { label: '🧠 SMART', color: '#06B6D4' },
+  };
+
+  const bc = getBreadcrumb(location.pathname, domainMap, t('breadcrumb.overview'), t('nav.dashboard'));
 
   // Cmd+K shortcut
   useEffect(() => {
@@ -75,7 +83,7 @@ export function Topbar() {
             className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#64748B] text-[12px] hover:border-[#475569] transition-colors"
           >
             <Search size={14} />
-            <span>Search...</span>
+            <span>{t('actions.search')}</span>
             <kbd className="bg-[#334155] px-1.5 py-0 rounded text-[10px] ml-1">⌘K</kbd>
           </button>
 

@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 import { login as apiLogin, loginStep2, setToken } from '@/lib/api';
 import type { LoginCompany, LoginUser } from '@/lib/api';
 import { Eye, EyeOff, Building2, ChevronRight } from 'lucide-react';
+import { LanguageSwitcher } from '@dm3/ui';
 
 type LoginStep = 'credentials' | 'select_company';
 
 export function LoginPage() {
+  const { t } = useTranslation('auth');
   const [email, setEmail] = useState('admin@duali.com');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -51,7 +54,7 @@ export function LoginPage() {
         setStep('select_company');
       }
     } catch {
-      setError('Invalid email or password');
+      setError(t('error.invalidCredentials'));
     } finally {
       setLoading(false);
     }
@@ -66,7 +69,7 @@ export function LoginPage() {
         completeLogin(res.access_token, res.refresh_token, res.user);
       }
     } catch {
-      setError('Failed to select company. Please try again.');
+      setError(t('error.failedSelectCompany'));
       setSelectingId(null);
     }
   };
@@ -80,14 +83,14 @@ export function LoginPage() {
   };
 
   const roleLabel = (role: string) => {
-    const labels: Record<string, string> = {
-      primary_manager: 'Primary Manager',
-      manager: 'Manager',
-      operator: 'Operator',
-      viewer: 'Viewer',
-      admin: 'Admin',
+    const keys: Record<string, string> = {
+      primary_manager: 'roles.primaryManager',
+      manager: 'roles.manager',
+      operator: 'roles.operator',
+      viewer: 'roles.viewer',
+      admin: 'roles.admin',
     };
-    return labels[role] || role;
+    return keys[role] ? t(keys[role]) : role;
   };
 
   const roleBadgeColor = (role: string) => {
@@ -110,7 +113,7 @@ export function LoginPage() {
             <div className="w-8 h-8 bg-[#3B82F6] rotate-45 rounded-[6px]" />
           </div>
           <h1 className="text-[20px] font-semibold text-[#F8FAFC] tracking-tight">DUALL MASTER 3.0</h1>
-          <p className="text-[13px] text-[#64748B] mt-1">Building Operating System</p>
+          <p className="text-[13px] text-[#64748B] mt-1">{t('buildingOperatingSystem')}</p>
         </div>
 
         {/* Step 1: Credentials */}
@@ -130,7 +133,7 @@ export function LoginPage() {
             <div>
               <input
                 type="email"
-                placeholder="Email"
+                placeholder={t('email')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full h-9 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:border-[#3B82F6] focus:outline-none focus:ring-1 focus:ring-[#3B82F6]/20"
@@ -139,7 +142,7 @@ export function LoginPage() {
             <div className="relative">
               <input
                 type={showPass ? 'text' : 'password'}
-                placeholder="Password"
+                placeholder={t('password')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full h-9 px-3 pr-10 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:border-[#3B82F6] focus:outline-none focus:ring-1 focus:ring-[#3B82F6]/20"
@@ -155,7 +158,7 @@ export function LoginPage() {
 
             <label className="flex items-center gap-2 text-[12px] text-[#94A3B8]">
               <input type="checkbox" className="rounded border-[#334155]" />
-              Remember this device
+              {t('rememberDevice')}
             </label>
 
             <button
@@ -166,10 +169,10 @@ export function LoginPage() {
               {loading ? (
                 <span className="inline-flex items-center gap-2">
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Signing in...
+                  {t('signingIn')}
                 </span>
               ) : (
-                'Sign In'
+                t('signIn')
               )}
             </button>
 
@@ -178,7 +181,7 @@ export function LoginPage() {
                 <div className="w-full border-t border-[#334155]" />
               </div>
               <div className="relative flex justify-center text-[12px]">
-                <span className="bg-[#0A0E1A] px-3 text-[#64748B]">or continue with</span>
+                <span className="bg-[#0A0E1A] px-3 text-[#64748B]">{t('orContinueWith')}</span>
               </div>
             </div>
 
@@ -186,12 +189,12 @@ export function LoginPage() {
               type="button"
               className="w-full h-9 bg-[#1E293B] hover:bg-[#334155] border border-[#334155] text-[#F8FAFC] rounded-md text-[13px] font-medium transition-colors"
             >
-              🏢 Sign in with SSO
+              {t('signInWithSSO')}
             </button>
 
             <div className="text-center mt-4">
               <a href="#" className="text-[12px] text-[#3B82F6] hover:underline">
-                Forgot password?
+                {t('forgotPassword')}
               </a>
             </div>
           </form>
@@ -211,9 +214,9 @@ export function LoginPage() {
                 {(user.name || user.email).slice(0, 2).toUpperCase()}
               </div>
               <p className="text-[14px] text-[#F8FAFC]">
-                Logging in as <span className="font-medium">{user.name || user.email}</span>
+                {t('loggingInAs')} <span className="font-medium">{user.name || user.email}</span>
               </p>
-              <p className="text-[12px] text-[#64748B] mt-1">Select a company to continue</p>
+              <p className="text-[12px] text-[#64748B] mt-1">{t('selectCompany')}</p>
             </div>
           )}
 
@@ -259,14 +262,14 @@ export function LoginPage() {
             onClick={handleBack}
             className="w-full mt-4 text-[12px] text-[#64748B] hover:text-[#94A3B8] transition-colors"
           >
-            ← Back to login
+            {t('backToLogin')}
           </button>
         </div>
 
         {/* Footer */}
         <div className="mt-10 flex items-center justify-between text-[12px] text-[#64748B] border-t border-[#1E293B] pt-4">
           <span>Building: Landmark 81 ▾</span>
-          <span>EN | VI</span>
+          <LanguageSwitcher />
         </div>
       </div>
     </div>
