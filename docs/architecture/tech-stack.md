@@ -257,7 +257,49 @@ Industry standard. All open source. Single stack for metrics, dashboards, and lo
 
 ---
 
-## 7. Decision Required
+## 7. Frontend Vertical Strategy (Decision 2026-03-29)
+
+**Approach:** Shared Core + Fork per Vertical. One backend, domain-specific frontends.
+
+### Structure
+
+```
+dm3/
+├── packages/
+│   ├── ui/            ← @dm3/ui — shadcn + custom components, shared by ALL apps
+│   └── api-client/    ← @dm3/api-client — generated types + hooks from OpenAPI
+├── apps/
+│   ├── console/       ← Master app (all modules, reference implementation)
+│   ├── school/        ← Fork: attendance + identity, terminology: Student/Parent
+│   ├── factory/       ← Fork: attendance + maintenance, shift management
+│   └── apartment/     ← Fork: visitor + parking + intercom, resident portal
+├── backend/           ← 1 backend, NEVER fork. Feature flags per tenant.
+└── turbo.json         ← Turborepo orchestration
+```
+
+### Rules
+- **Backend** = 1 codebase forever. Vertical differences via `modules[]` + `vertical` in company config
+- **`@dm3/ui`** and **`@dm3/api-client`** = only 2 shared packages. All apps depend on these
+- **Vertical apps** = fork from console/, customize freely (pages, layout, flows, terminology)
+- Fix shared components → fix in packages/, all verticals get update
+- Fix vertical-specific UI → fix in that app only, no cross-impact
+
+### Rationale
+In the AI coding era, **fork + customize < maintaining complex abstractions**. Backend stays unified (DB/MQTT/security too complex to fork). Frontend is visual — each vertical just needs different pages/flows. AI agents can fork + customize a new vertical in 1-2 days.
+
+### Backend Support
+Company config extends with `vertical`, `modules[]`, `terminology`, `branding` — all frontend-consumed, backend APIs stay canonical.
+
+### Creating a New Vertical
+1. Fork `apps/console/` → `apps/{vertical}/`
+2. Remove unused feature folders
+3. Customize terminology + dashboard
+4. Add vertical-specific pages if needed
+5. Estimated: 1-2 days with AI agent
+
+---
+
+## 8. Decision Required
 
 **Approve this stack to begin Phase 1 hiring and development.**
 
