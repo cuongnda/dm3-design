@@ -12,6 +12,8 @@ COPY packages/api-client/package.json  ./packages/api-client/package.json
 COPY apps/console/package.json         ./apps/console/package.json
 
 RUN npm ci
+# Ensure rollup native binaries for musl/alpine
+RUN npm rebuild
 
 # Copy full source
 COPY packages/ ./packages/
