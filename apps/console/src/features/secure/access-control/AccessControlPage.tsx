@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
 import { StatusBadge } from '@dm3/ui';
@@ -88,6 +89,7 @@ const resultClass: Record<string, string> = {
 
 export function AccessControlPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation('secure');
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [buildingFilter, setBuildingFilter] = useState('');
@@ -113,11 +115,11 @@ export function AccessControlPage() {
   const warningCount = doors.filter((d) => d.status === 'warning').length;
 
   const tabs = [
-    { label: 'All', count: doors.length, filter: null },
-    { label: 'Online', count: onlineCount, filter: 'online' },
-    { label: 'Offline', count: offlineCount, filter: 'offline' },
-    { label: 'Alarm', count: alarmCount, filter: 'alarm' },
-    { label: 'Warning', count: warningCount, filter: 'warning' },
+    { label: t('accessControl.tabs.all'), count: doors.length, filter: null },
+    { label: t('accessControl.tabs.online'), count: onlineCount, filter: 'online' },
+    { label: t('accessControl.tabs.offline'), count: offlineCount, filter: 'offline' },
+    { label: t('accessControl.tabs.alarm'), count: alarmCount, filter: 'alarm' },
+    { label: t('accessControl.tabs.warning'), count: warningCount, filter: 'warning' },
   ];
 
   // Apply additional client-side filters not handled by API
@@ -128,27 +130,27 @@ export function AccessControlPage() {
 
   const columns: Column<Door>[] = [
     {
-      key: 'name', header: 'Name', sortable: true,
+      key: 'name', header: t('accessControl.table.name'), sortable: true,
       render: (r) => (
         <span className={cn('font-medium', r.status === 'alarm' && 'text-[#EF4444]')}>
           {r.status === 'alarm' && '⚠ '}{r.name}
         </span>
       ),
     },
-    { key: 'location', header: 'Location', sortable: true, render: (r) => <span className="text-[#94A3B8]">{r.location}</span> },
+    { key: 'location', header: t('accessControl.table.location'), sortable: true, render: (r) => <span className="text-[#94A3B8]">{r.location}</span> },
     {
-      key: 'type', header: 'Type', width: '100px',
+      key: 'type', header: t('accessControl.table.type'), width: '100px',
       render: (r) => {
         const tc = typeColors[r.type];
         return (
-          <span className={cn('inline-block px-2 py-0.5 rounded text-[11px] font-medium border capitalize', tc.text, tc.border)}>
-            {r.type}
+          <span className={cn('inline-block px-2 py-0.5 rounded text-[11px] font-medium border', tc.text, tc.border)}>
+            {t(`accessControl.types.${r.type}`)}
           </span>
         );
       },
     },
     {
-      key: 'status', header: 'Status', width: '110px',
+      key: 'status', header: t('accessControl.table.status'), width: '110px',
       render: (r) => (
         <div className="flex items-center gap-2">
           <StatusBadge status={r.status} />
@@ -162,14 +164,16 @@ export function AccessControlPage() {
       ),
     },
     {
-      key: 'lastEvent', header: 'Last Event', width: '180px',
+      key: 'lastEvent', header: t('accessControl.table.lastEvent'), width: '180px',
       render: (r) => {
         if (!r.lastEvent) return <span className="text-[#64748B]">—</span>;
         return (
           <span>
             <span className="font-mono text-[11px] text-[#64748B] mr-2">{r.lastEvent.time}</span>
             <span className={cn('text-[12px] font-medium', resultClass[r.lastEvent.result])}>
-              {r.lastEvent.result === 'granted' ? 'Granted' : r.lastEvent.result === 'denied' ? 'Denied' : '⚠ Forced'}
+              {r.lastEvent.result === 'granted' ? t('accessControl.events.granted') : 
+               r.lastEvent.result === 'denied' ? t('accessControl.events.denied') : 
+               t('accessControl.events.forced')}
             </span>
           </span>
         );
@@ -185,9 +189,9 @@ export function AccessControlPage() {
 
   return (
     <div>
-      <PageHeader title="Access Control">
-        <button className="px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px] font-medium">⚙️ Rules</button>
-        <button className="px-3 py-1.5 bg-[#2563EB] rounded-md text-white text-[12px] font-medium">+ Add Door</button>
+      <PageHeader title={t('accessControl.title')}>
+        <button className="px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px] font-medium">{t('accessControl.rules')}</button>
+        <button className="px-3 py-1.5 bg-[#2563EB] rounded-md text-white text-[12px] font-medium">{t('accessControl.addDoor')}</button>
       </PageHeader>
 
       {/* Tabs */}
@@ -219,7 +223,7 @@ export function AccessControlPage() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="🔍 Search doors..."
+          placeholder={t('accessControl.searchPlaceholder')}
           className="flex-1 h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:border-[#3B82F6] focus:outline-none"
         />
         <select 
@@ -227,7 +231,7 @@ export function AccessControlPage() {
           onChange={(e) => setBuildingFilter(e.target.value)}
           className="h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]"
         >
-          <option value="">All Buildings</option>
+          <option value="">{t('accessControl.filters.allBuildings')}</option>
           {/* TODO: Get building list from API */}
         </select>
         <select 
@@ -235,7 +239,7 @@ export function AccessControlPage() {
           onChange={(e) => setFloorFilter(e.target.value)}
           className="h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]"
         >
-          <option value="">All Floors</option>
+          <option value="">{t('accessControl.filters.allFloors')}</option>
           {/* TODO: Get floor list from API */}
         </select>
         <select 
@@ -243,18 +247,18 @@ export function AccessControlPage() {
           onChange={(e) => setTypeFilter(e.target.value)}
           className="h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]"
         >
-          <option value="">All Types</option>
-          <option value="door">Door</option>
-          <option value="gate">Gate</option>
-          <option value="barrier">Barrier</option>
-          <option value="lift">Lift</option>
-          <option value="turnstile">Turnstile</option>
+          <option value="">{t('accessControl.filters.allTypes')}</option>
+          <option value="door">{t('accessControl.types.door')}</option>
+          <option value="gate">{t('accessControl.types.gate')}</option>
+          <option value="barrier">{t('accessControl.types.barrier')}</option>
+          <option value="lift">{t('accessControl.types.lift')}</option>
+          <option value="turnstile">{t('accessControl.types.turnstile')}</option>
         </select>
       </div>
 
       {/* Loading & Error States */}
-      {isLoading && <div className="text-center py-8 text-[#94A3B8]">Đang tải...</div>}
-      {error && <div className="text-center py-8 text-[#EF4444]">Có lỗi xảy ra khi tải dữ liệu</div>}
+      {isLoading && <div className="text-center py-8 text-[#94A3B8]">{t('accessControl.loading')}</div>}
+      {error && <div className="text-center py-8 text-[#EF4444]">{t('accessControl.error')}</div>}
 
       {/* Table */}
       {!isLoading && !error && (

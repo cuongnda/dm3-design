@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft, DoorOpen, Lock, ShieldAlert, Wrench, Video,
   Clock, Cpu, Wifi, User, CreditCard, Fingerprint,
@@ -48,6 +49,7 @@ const credentialIcons: Record<string, React.ReactNode> = {
 /* ── Component ─────────────────────────────────────────────── */
 
 export function DoorDetailPage() {
+  const { t } = useTranslation('secure');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
@@ -77,32 +79,32 @@ export function DoorDetailPage() {
   }, [door]);
 
   if (!id) {
-    return <div className="text-center py-8 text-[#EF4444]">ID không hợp lệ</div>;
+    return <div className="text-center py-8 text-[#EF4444]">{/* TODO: add i18n key */}ID không hợp lệ</div>;
   }
 
   if (doorLoading) {
-    return <div className="text-center py-8 text-[#94A3B8]">Đang tải...</div>;
+    return <div className="text-center py-8 text-[#94A3B8]">{t('accessControl.loading')}</div>;
   }
 
   if (!door) {
-    return <div className="text-center py-8 text-[#EF4444]">Không tìm thấy cửa</div>;
+    return <div className="text-center py-8 text-[#EF4444]">{/* TODO: add i18n key */}Không tìm thấy cửa</div>;
   }
 
   const stateConfig = {
-    locked: { icon: Lock, color: 'text-[#22C55E]', bg: 'bg-[#22C55E]/10', label: 'Locked' },
-    unlocked: { icon: DoorOpen, color: 'text-[#F59E0B]', bg: 'bg-[#F59E0B]/10', label: 'Unlocked' },
-    alarm: { icon: ShieldAlert, color: 'text-[#EF4444]', bg: 'bg-[#EF4444]/10', label: 'ALARM' },
+    locked: { icon: Lock, color: 'text-[#22C55E]', bg: 'bg-[#22C55E]/10', label: t('intrusion.status.armed') },
+    unlocked: { icon: DoorOpen, color: 'text-[#F59E0B]', bg: 'bg-[#F59E0B]/10', label: t('intrusion.status.disarmed') },
+    alarm: { icon: ShieldAlert, color: 'text-[#EF4444]', bg: 'bg-[#EF4444]/10', label: t('intrusion.status.alarm') },
   };
   const sc = stateConfig[door.state as keyof typeof stateConfig] || stateConfig.locked;
   const StateIcon = sc.icon;
 
   const eventColumns: Column<EventDTO>[] = [
     {
-      key: 'time', header: 'Time', width: '170px', sortable: true,
+      key: 'time', header: t('alerts.table.time'), width: '170px', sortable: true,
       render: (r) => <span className="font-mono text-[12px] text-[#94A3B8]">{new Date(r.time).toLocaleString('vi-VN')}</span>,
     },
     {
-      key: 'person_name', header: 'Person', sortable: true,
+      key: 'person_name', header: t('alerts.table.person'), sortable: true,
       render: (r) => (
         <span className="flex items-center gap-2">
           <span className="w-6 h-6 rounded-full bg-[#1E293B] flex items-center justify-center text-[10px] text-[#94A3B8]">
@@ -113,7 +115,7 @@ export function DoorDetailPage() {
       ),
     },
     {
-      key: 'credential_type', header: 'Credential', width: '130px',
+      key: 'credential_type', header: t('alerts.table.credential'), width: '130px',
       render: (r) => (
         <span className="flex items-center gap-1.5 text-[#94A3B8] text-[12px] capitalize">
           {r.credential_type && credentialIcons[r.credential_type]}
@@ -122,10 +124,10 @@ export function DoorDetailPage() {
       ),
     },
     {
-      key: 'decision', header: 'Result', width: '100px',
+      key: 'decision', header: t('alerts.table.reason'), width: '100px',
       render: (r) => (
         <span className={cn('text-[12px] font-semibold', r.decision === 'granted' ? 'text-[#22C55E]' : 'text-[#EF4444]')}>
-          {r.decision === 'granted' ? '✓ Granted' : '✕ Denied'}
+          {r.decision === 'granted' ? `✓ ${t('accessControl.events.granted')}` : `✕ ${t('accessControl.events.denied')}`}
         </span>
       ),
     },
@@ -146,9 +148,9 @@ export function DoorDetailPage() {
   };
 
   const confirmLabels: Record<string, { title: string; desc: string; variant: 'default' | 'destructive' }> = {
-    open: { title: 'Remote Open Door', desc: 'This will unlock the door for the configured duration. Continue?', variant: 'default' },
-    lockdown: { title: 'Lock Down Door', desc: 'This will immediately lock the door and deny all access until manually released. This is a critical action.', variant: 'destructive' },
-    maintenance: { title: 'Maintenance Mode', desc: 'Door will be set to maintenance mode. Access rules will be suspended.', variant: 'default' },
+    open: { title: 'Remote Open Door', desc: 'This will unlock the door for the configured duration. Continue?', variant: 'default' }, // TODO: add i18n keys
+    lockdown: { title: 'Lock Down Door', desc: 'This will immediately lock the door and deny all access until manually released. This is a critical action.', variant: 'destructive' }, // TODO: add i18n keys
+    maintenance: { title: 'Maintenance Mode', desc: 'Door will be set to maintenance mode. Access rules will be suspended.', variant: 'default' }, // TODO: add i18n keys
   };
 
   const handleConfirmAction = async () => {
@@ -213,24 +215,24 @@ export function DoorDetailPage() {
               <StateIcon size={28} className={sc.color} />
             </div>
             <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <InfoItem icon={<Lock size={14} />} label="State" value={sc.label} valueClass={sc.color} />
-              <InfoItem icon={<Shield size={14} />} label="Mode" value={door.mode || 'Normal'} />
-              <InfoItem icon={<Clock size={14} />} label="Last Event" value={door.last_event_at ? new Date(door.last_event_at).toLocaleTimeString('vi-VN') : '—'} />
-              <InfoItem icon={<Cpu size={14} />} label="Controller" value={door.controller_id || '—'} />
-              <InfoItem icon={<Wifi size={14} />} label="IP Address" value={door.ip_address || '—'} />
-              <InfoItem icon={<Settings size={14} />} label="Firmware" value={door.firmware_version || '—'} />
+              <InfoItem icon={<Lock size={14} />} label={/* TODO: add i18n key */"State"} value={sc.label} valueClass={sc.color} />
+              <InfoItem icon={<Shield size={14} />} label={/* TODO: add i18n key */"Mode"} value={door.mode || /* TODO: add i18n key */"Normal"} />
+              <InfoItem icon={<Clock size={14} />} label={/* TODO: add i18n key */"Last Event"} value={door.last_event_at ? new Date(door.last_event_at).toLocaleTimeString('vi-VN') : '—'} />
+              <InfoItem icon={<Cpu size={14} />} label={/* TODO: add i18n key */"Controller"} value={door.controller_id || '—'} />
+              <InfoItem icon={<Wifi size={14} />} label={/* TODO: add i18n key */"IP Address"} value={door.ip_address || '—'} />
+              <InfoItem icon={<Settings size={14} />} label={/* TODO: add i18n key */"Firmware"} value={door.firmware_version || '—'} />
             </div>
           </div>
         </div>
 
         {/* Quick Actions */}
         <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-5">
-          <h3 className="text-[13px] font-medium text-[#94A3B8] mb-3">Quick Actions</h3>
+          <h3 className="text-[13px] font-medium text-[#94A3B8] mb-3">{/* TODO: add i18n key */}Quick Actions</h3>
           <div className="grid grid-cols-2 gap-2">
-            <ActionBtn icon={<DoorOpen size={16} />} label="Remote Open" color="#3B82F6" onClick={() => handleAction('open')} />
-            <ActionBtn icon={<Lock size={16} />} label="Lock Down" color="#EF4444" onClick={() => handleAction('lockdown')} />
-            <ActionBtn icon={<Wrench size={16} />} label="Maintenance" color="#F59E0B" onClick={() => handleAction('maintenance')} />
-            <ActionBtn icon={<Video size={16} />} label="View Camera" color="#06B6D4" onClick={() => handleAction('camera')} />
+            <ActionBtn icon={<DoorOpen size={16} />} label={/* TODO: add i18n key */"Remote Open"} color="#3B82F6" onClick={() => handleAction('open')} />
+            <ActionBtn icon={<Lock size={16} />} label={/* TODO: add i18n key */"Lock Down"} color="#EF4444" onClick={() => handleAction('lockdown')} />
+            <ActionBtn icon={<Wrench size={16} />} label={/* TODO: add i18n key */"Maintenance"} color="#F59E0B" onClick={() => handleAction('maintenance')} />
+            <ActionBtn icon={<Video size={16} />} label={/* TODO: add i18n key */"View Camera"} color="#06B6D4" onClick={() => handleAction('camera')} />
           </div>
         </div>
       </div>
@@ -238,11 +240,11 @@ export function DoorDetailPage() {
       {/* Tabs */}
       <Tabs defaultValue="events">
         <TabsList variant="line" className="border-b border-[#1E293B] mb-4">
-          <TabsTrigger value="events" className="gap-1.5 text-[13px]"><List size={14} />Events</TabsTrigger>
-          <TabsTrigger value="rules" className="gap-1.5 text-[13px]"><Shield size={14} />Access Rules</TabsTrigger>
-          <TabsTrigger value="schedule" className="gap-1.5 text-[13px]"><Calendar size={14} />Schedule</TabsTrigger>
-          <TabsTrigger value="camera" className="gap-1.5 text-[13px]"><Video size={14} />Camera</TabsTrigger>
-          <TabsTrigger value="settings" className="gap-1.5 text-[13px]"><Settings size={14} />Settings</TabsTrigger>
+          <TabsTrigger value="events" className="gap-1.5 text-[13px]"><List size={14} />{t('doorDetail.events')}</TabsTrigger>
+          <TabsTrigger value="rules" className="gap-1.5 text-[13px]"><Shield size={14} />{t('accessRules.title')}</TabsTrigger>
+          <TabsTrigger value="schedule" className="gap-1.5 text-[13px]"><Calendar size={14} />{/* TODO: add i18n key */}Schedule</TabsTrigger>
+          <TabsTrigger value="camera" className="gap-1.5 text-[13px]"><Video size={14} />{/* TODO: add i18n key */}Camera</TabsTrigger>
+          <TabsTrigger value="settings" className="gap-1.5 text-[13px]"><Settings size={14} />{t('doorDetail.settings')}</TabsTrigger>
         </TabsList>
 
         {/* Events Tab */}
@@ -274,7 +276,7 @@ export function DoorDetailPage() {
               </div>
             ))}
             {!rulesData?.data?.length && (
-              <p className="text-center py-8 text-[#64748B]">Không có quy tắc nào áp dụng cho cửa này</p>
+              <p className="text-center py-8 text-[#64748B]">{/* TODO: add i18n key */}Không có quy tắc nào áp dụng cho cửa này</p>
             )}
           </div>
         </TabsContent>

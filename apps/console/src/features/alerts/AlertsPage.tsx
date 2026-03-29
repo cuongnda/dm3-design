@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
 import { Bell, AlertTriangle, ShieldAlert, Info, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -15,20 +16,25 @@ function getSeverity(event: EventDTO): 'critical' | 'warning' | 'info' {
   return 'info';
 }
 
-const severityConfig = {
-  critical: { label: 'Nghiêm trọng', color: '#EF4444', bg: 'bg-[#7F1D1D]/30 text-[#EF4444]' },
-  warning: { label: 'Từ chối', color: '#F59E0B', bg: 'bg-[#78350F]/30 text-[#F59E0B]' },
-  info: { label: 'Cho phép', color: '#3B82F6', bg: 'bg-[#1E3A5F]/30 text-[#3B82F6]' },
-};
+function getSeverityConfig(t: any) {
+  return {
+    critical: { label: t('alerts.severity.critical'), color: '#EF4444', bg: 'bg-[#7F1D1D]/30 text-[#EF4444]' },
+    warning: { label: t('alerts.severity.warning'), color: '#F59E0B', bg: 'bg-[#78350F]/30 text-[#F59E0B]' },
+    info: { label: t('alerts.severity.info'), color: '#3B82F6', bg: 'bg-[#1E3A5F]/30 text-[#3B82F6]' },
+  };
+}
 
-const tabs: { key: DecisionFilter | 'critical'; label: string; icon: React.ReactNode }[] = [
-  { key: 'all', label: 'Tất cả', icon: <Bell size={14} /> },
-  { key: 'critical', label: 'Nghiêm trọng', icon: <ShieldAlert size={14} /> },
-  { key: 'denied', label: 'Từ chối', icon: <AlertTriangle size={14} /> },
-  { key: 'granted', label: 'Cho phép', icon: <Info size={14} /> },
-];
+function getTabs(t: any): { key: DecisionFilter | 'critical'; label: string; icon: React.ReactNode }[] {
+  return [
+    { key: 'all', label: t('alerts.tabs.all'), icon: <Bell size={14} /> },
+    { key: 'critical', label: t('alerts.tabs.critical'), icon: <ShieldAlert size={14} /> },
+    { key: 'denied', label: t('alerts.tabs.denied'), icon: <AlertTriangle size={14} /> },
+    { key: 'granted', label: t('alerts.tabs.granted'), icon: <Info size={14} /> },
+  ];
+}
 
 export function AlertsPage() {
+  const { t } = useTranslation('secure');
   const [activeTab, setActiveTab] = useState<'all' | 'critical' | DecisionFilter>('all');
   const [doorFilter] = useState('');
   const [fromDate, setFromDate] = useState('');
@@ -83,6 +89,9 @@ export function AlertsPage() {
     return events;
   }, [events, activeTab]);
 
+  const severityConfig = getSeverityConfig(t);
+  const tabs = getTabs(t);
+
   const counts = useMemo(() => ({
     total: Math.max(total, events.length),
     critical: events.filter(e => getSeverity(e) === 'critical').length + activeAlarms.filter(a => a.severity === 'critical').length,
@@ -92,23 +101,23 @@ export function AlertsPage() {
   }), [events, total, activeAlarms]);
 
   const stats = [
-    { label: 'Tổng sự kiện', value: counts.total, color: '#F8FAFC', icon: <Bell size={16} /> },
-    { label: 'Nghiêm trọng', value: counts.critical, color: '#EF4444', icon: <ShieldAlert size={16} /> },
-    { label: 'Từ chối', value: counts.denied, color: '#F59E0B', icon: <AlertTriangle size={16} /> },
-    { label: 'Cho phép', value: counts.granted, color: '#3B82F6', icon: <Info size={16} /> },
+    { label: t('alerts.stats.totalEvents'), value: counts.total, color: '#F8FAFC', icon: <Bell size={16} /> },
+    { label: t('alerts.stats.critical'), value: counts.critical, color: '#EF4444', icon: <ShieldAlert size={16} /> },
+    { label: t('alerts.stats.denied'), value: counts.denied, color: '#F59E0B', icon: <AlertTriangle size={16} /> },
+    { label: t('alerts.stats.granted'), value: counts.granted, color: '#3B82F6', icon: <Info size={16} /> },
   ];
 
   const columns: Column<EventDTO>[] = [
     {
-      key: 'time', header: 'Thời gian', width: '170px', sortable: true,
+      key: 'time', header: t('alerts.table.time'), width: '170px', sortable: true,
       render: (r) => (
         <span className="font-mono text-[12px] text-[#94A3B8]">
-          {new Date(r.time).toLocaleString('vi-VN')}
+          {new Date(r.time).toLocaleString()}
         </span>
       ),
     },
     {
-      key: 'decision', header: 'Mức độ', width: '130px',
+      key: 'decision', header: t('alerts.table.severity'), width: '130px',
       render: (r) => {
         const sev = getSeverity(r);
         const cfg = severityConfig[sev];
@@ -121,11 +130,11 @@ export function AlertsPage() {
       },
     },
     {
-      key: 'door_name', header: 'Cửa / Nguồn', width: '180px',
+      key: 'door_name', header: t('alerts.table.doorSource'), width: '180px',
       render: (r) => <span className="text-[13px] text-[#94A3B8]">{r.door_id || '—'}</span>,
     },
     {
-      key: 'person_name', header: 'Người',
+      key: 'person_name', header: t('alerts.table.person'),
       render: (r) => (
         <span className="text-[13px] text-[#F8FAFC]">
           {r.person_name || <span className="text-[#64748B]">—</span>}
@@ -133,13 +142,13 @@ export function AlertsPage() {
       ),
     },
     {
-      key: 'credential_type', header: 'Credential', width: '110px',
+      key: 'credential_type', header: t('alerts.table.credential'), width: '110px',
       render: (r) => (
         <span className="text-[12px] text-[#94A3B8] capitalize">{r.credential_type || '—'}</span>
       ),
     },
     {
-      key: 'reason', header: 'Lý do', width: '160px',
+      key: 'reason', header: t('alerts.table.reason'), width: '160px',
       render: (r) => (
         <span className="text-[12px] text-[#64748B]">{r.reason || '—'}</span>
       ),
@@ -148,7 +157,12 @@ export function AlertsPage() {
 
   return (
     <div>
-      <PageHeader title="Sự kiện & Cảnh báo" description={`Nhật ký truy cập và cảnh báo hệ thống • ${isConnected ? 'Live' : 'Offline'}`} />
+      <PageHeader 
+        title={t('alerts.title')} 
+        description={t('alerts.description', { 
+          status: isConnected ? t('alerts.status.live') : t('alerts.status.offline') 
+        })} 
+      />
 
       {/* Stats bar */}
       <div className="grid grid-cols-4 gap-4 mb-6">
@@ -203,8 +217,8 @@ export function AlertsPage() {
 
       {/* Table */}
       <div className="bg-[#111827] border border-[#1E293B] rounded-lg overflow-hidden">
-        {isLoading && <div className="text-center py-8 text-[#94A3B8]">Đang tải...</div>}
-        {error && <div className="text-center py-8 text-[#EF4444]">Có lỗi xảy ra khi tải dữ liệu</div>}
+        {isLoading && <div className="text-center py-8 text-[#94A3B8]">{t('alerts.loading')}</div>}
+        {error && <div className="text-center py-8 text-[#EF4444]">{t('alerts.error')}</div>}
         {!isLoading && !error && (
           <DataTable
             columns={columns}
@@ -219,7 +233,7 @@ export function AlertsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4">
           <span className="text-[12px] text-[#64748B]">
-            Trang {page} / {totalPages} · {total} sự kiện
+            {t('alerts.pagination.page', { current: page, total: totalPages, count: total })}
           </span>
           <div className="flex gap-2">
             <button
@@ -227,14 +241,14 @@ export function AlertsPage() {
               disabled={page === 1}
               className="flex items-center gap-1 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#94A3B8] text-[12px] disabled:opacity-40"
             >
-              <ChevronLeft size={14} /> Trước
+              <ChevronLeft size={14} /> {t('alerts.pagination.previous')}
             </button>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
               className="flex items-center gap-1 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#94A3B8] text-[12px] disabled:opacity-40"
             >
-              Sau <ChevronRight size={14} />
+              {t('alerts.pagination.next')} <ChevronRight size={14} />
             </button>
           </div>
         </div>
