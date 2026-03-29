@@ -203,8 +203,9 @@ export const router = createBrowserRouter([
 
       // DEVICES
       { path: 'devices', element: <LazyWrap><DevicesPage /></LazyWrap> },
-      { path: 'devices/:id', element: <LazyWrap><DeviceDetailPage /></LazyWrap> },
+      { path: 'devices/pending', element: <LazyWrap><PendingDevicesPage /></LazyWrap> },
       { path: 'devices/provision', element: <LazyWrap><ProvisionDevicePage /></LazyWrap> },
+      { path: 'devices/:id', element: <LazyWrap><DeviceDetailPage /></LazyWrap> },
 
           // SETTINGS
           { path: 'settings', element: <LazyWrap><SettingsPage /></LazyWrap> },

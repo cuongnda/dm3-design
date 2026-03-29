@@ -540,8 +540,13 @@ export async function removeGroupMember(groupId: string, personId: string): Prom
 export async function sendDeviceCommand(deviceId: string, command: string, params?: Record<string, any>): Promise<void> {
   await apiFetch<void>(`/api/v1/devices/${deviceId}/command`, {
     method: 'POST',
-    body: JSON.stringify({ command, params }),
+    // Backend expects { type, data } — map from legacy { command, params }
+    body: JSON.stringify({ type: command, data: params || {} }),
   });
+}
+
+export async function fetchDeviceEvents(deviceId: string, page = 1, limit = 20): Promise<Paginated<EventDTO>> {
+  return apiFetch<Paginated<EventDTO>>(`${DEVICE_URL}/${deviceId}/events?page=${page}&limit=${limit}`);
 }
 
 // ─── System Admin API (auth-svc :8005) ──────────────────────
@@ -677,8 +682,15 @@ export async function provisionDevice(data: ProvisionRequest): Promise<Provision
   });
 }
 
-export async function regenerateQR(deviceDbId: string): Promise<ProvisionResponse> {
-  return apiFetch<ProvisionResponse>(`${DEVICE_URL}/provision/${deviceDbId}/qr`);
+export interface RegenerateQRResponse {
+  qr_token: string;
+  qr_data: string;
+  expires_at: string;
+  ttl_minutes: number;
+}
+
+export async function regenerateQR(deviceDbId: string): Promise<RegenerateQRResponse> {
+  return apiFetch<RegenerateQRResponse>(`${DEVICE_URL}/provision/${deviceDbId}/qr`);
 }
 
 export async function fetchPendingDevices(): Promise<PendingDevice[]> {

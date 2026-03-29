@@ -42,35 +42,23 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
     setRowState((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
   };
 
-  const handleApprove = async (d: PendingDevice) => {
+  const handleApprove = (d: PendingDevice) => {
     const row = rowState[d.id];
     if (isSystemAdmin && !row?.company_id) return;
     if (!row?.name) return;
-    setActionLoading(d.id);
-    try {
-      await approvePendingDevice(d.id, {
+    
+    approveDevice.mutate({
+      id: d.id,
+      data: {
         company_id: row.company_id,
         name: row.name,
         location: row.location || undefined,
-      });
-      setDevices((prev) => prev.filter((x) => x.id !== d.id));
-    } catch {
-      // ignore
-    } finally {
-      setActionLoading(null);
-    }
+      },
+    });
   };
 
-  const handleReject = async (d: PendingDevice) => {
-    setActionLoading(d.id);
-    try {
-      await rejectPendingDevice(d.id);
-      setDevices((prev) => prev.filter((x) => x.id !== d.id));
-    } catch {
-      // ignore
-    } finally {
-      setActionLoading(null);
-    }
+  const handleReject = (d: PendingDevice) => {
+    rejectDevice.mutate(d.id);
   };
 
   const timeAgo = (iso: string) => {
@@ -88,7 +76,7 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
   return (
     <div className={isSystemAdmin ? 'p-6' : ''}>
       <PageHeader title="Pending Device Registrations" description="Devices awaiting approval via bootstrap flow">
-        <button onClick={loadData} className="flex items-center gap-1 px-3 py-1.5 bg-[#1E293B] hover:bg-[#334155] text-[#94A3B8] rounded-md text-[12px] border border-[#334155] transition-colors">
+        <button onClick={() => loadData()} className="flex items-center gap-1 px-3 py-1.5 bg-[#1E293B] hover:bg-[#334155] text-[#94A3B8] rounded-md text-[12px] border border-[#334155] transition-colors">
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
       </PageHeader>
@@ -149,17 +137,17 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
                     <div className="flex justify-end gap-1">
                       <button
                         onClick={() => handleApprove(d)}
-                        disabled={actionLoading === d.id || !rowState[d.id]?.name || (isSystemAdmin && !rowState[d.id]?.company_id)}
+                        disabled={approveDevice.isPending || rejectDevice.isPending || !rowState[d.id]?.name || (isSystemAdmin && !rowState[d.id]?.company_id)}
                         className="px-2.5 py-1 rounded text-[11px] font-medium bg-[#22C55E] hover:bg-[#16A34A] text-white disabled:opacity-40 transition-colors"
                       >
-                        Approve
+                        {approveDevice.isPending ? 'Approving...' : 'Approve'}
                       </button>
                       <button
                         onClick={() => handleReject(d)}
-                        disabled={actionLoading === d.id}
+                        disabled={approveDevice.isPending || rejectDevice.isPending}
                         className="px-2.5 py-1 rounded text-[11px] font-medium bg-[#EF4444] hover:bg-[#DC2626] text-white disabled:opacity-40 transition-colors"
                       >
-                        Reject
+                        {rejectDevice.isPending ? 'Rejecting...' : 'Reject'}
                       </button>
                     </div>
                   </td>

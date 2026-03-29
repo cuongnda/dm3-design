@@ -1,10 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Clock, Monitor, Cpu, Camera, Radio } from 'lucide-react';
 import { PageHeader } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
-import { fetchDevices, type DeviceDTO } from '@/lib/api';
-import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
-import { useRealtimeStore, useDeviceStatus } from '@dm3/api-client';
+import { useDevicesList, useRealtimeStore, useDeviceStatus, type DeviceDTO } from '@dm3/api-client';
 
 const statusColors: Record<string, string> = {
   online: 'bg-[#22C55E]/10 text-[#22C55E]',
@@ -14,20 +12,28 @@ const statusColors: Record<string, string> = {
   disabled: 'bg-[#EF4444]/10 text-[#EF4444]',
 };
 
+const deviceTypeIcon = (type: string) => {
+  switch (type) {
+    case 'terminal': return <Monitor size={13} className="text-[#3B82F6]" />;
+    case 'controller': return <Cpu size={13} className="text-[#8B5CF6]" />;
+    case 'camera': return <Camera size={13} className="text-[#F59E0B]" />;
+    case 'sensor': return <Radio size={13} className="text-[#06B6D4]" />;
+    default: return <Cpu size={13} className="text-[#64748B]" />;
+  }
+};
+
 export function DevicesPage() {
-  const [devices, setDevices] = useState<DeviceDTO[]>([]);
   const navigate = useNavigate();
+
+  // TanStack Query — auto-refetches every 15s
+  const { data: devices = [] } = useDevicesList();
 
   // Real-time state — connection managed by <RealtimeProvider> in App.tsx
   const isConnected = useRealtimeStore((s) => s.connected);
   const deviceStatuses = useDeviceStatus() as any[];
 
-  useEffect(() => {
-    fetchDevices().then(setDevices).catch(() => {});
-  }, []);
-
   // Merge API data with real-time status
-  const devicesWithRealtimeStatus = devices.map(device => {
+  const devicesWithRealtimeStatus = (devices as DeviceDTO[]).map((device: DeviceDTO) => {
     const realtimeStatus = deviceStatuses.find(s => s.deviceId === device.device_id);
     if (realtimeStatus) {
       return {
@@ -41,24 +47,51 @@ export function DevicesPage() {
   });
 
   const columns: Column<any>[] = [
-    { key: 'device_id', header: 'ID', width: '80px', render: (r) => <span className="font-mono text-[12px] text-[#F8FAFC]">{r.device_id}</span> },
-    { key: 'name', header: 'Name', render: (r) => <span className="text-[#F8FAFC]">{r.name || '—'}</span> },
-    { key: 'type', header: 'Type', render: (r) => <span className="text-[#94A3B8] capitalize">{r.type}</span> },
-    { key: 'status', header: 'Status', width: '100px', render: (r) => (
-      <div className="flex items-center gap-2">
-        <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium capitalize ${statusColors[r.status] || statusColors.offline}`}>
-          {r.status}
-        </span>
-        {r.realtimeData && isConnected && (
-          <span className="text-[10px] text-[#22C55E]">●</span>
-        )}
-      </div>
-    )},
-    { key: 'location', header: 'Location', render: (r) => <span className="text-[#64748B]">{r.location || '—'}</span> },
-    { 
-      key: 'last_seen', 
-      header: 'Last Seen', 
-      width: '130px', 
+    {
+      key: 'device_id',
+      header: 'ID',
+      width: '80px',
+      render: (r) => <span className="font-mono text-[12px] text-[#F8FAFC]">{r.device_id}</span>,
+    },
+    {
+      key: 'name',
+      header: 'Name',
+      render: (r) => <span className="text-[#F8FAFC]">{r.name || '—'}</span>,
+    },
+    {
+      key: 'type',
+      header: 'Type',
+      render: (r) => (
+        <div className="flex items-center gap-1.5">
+          {deviceTypeIcon(r.type)}
+          <span className="text-[#94A3B8] capitalize text-[12px]">{r.type}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      width: '110px',
+      render: (r) => (
+        <div className="flex items-center gap-2">
+          <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium capitalize ${statusColors[r.status] || statusColors.offline}`}>
+            {r.status}
+          </span>
+          {r.realtimeData && isConnected && (
+            <span className="text-[10px] text-[#22C55E]">●</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'location',
+      header: 'Location',
+      render: (r) => <span className="text-[#64748B]">{r.location || '—'}</span>,
+    },
+    {
+      key: 'last_seen',
+      header: 'Last Seen',
+      width: '140px',
       render: (r) => {
         const lastSeen = r.last_seen ? new Date(r.last_seen).toLocaleString() : '—';
         const hasRealtimeData = r.realtimeData && isConnected;
@@ -74,28 +107,42 @@ export function DevicesPage() {
             )}
           </div>
         );
-      }
+      },
     },
   ];
 
-  const handleRowClick = (device: any) => {
+  const handleRowClick = (device: DeviceDTO) => {
     navigate(`/devices/${device.id}`);
   };
 
-  const onlineCount = devicesWithRealtimeStatus.filter(d => d.status === 'online').length;
+  const onlineCount = devicesWithRealtimeStatus.filter((d: { status: string }) => d.status === 'online').length;
   const totalCount = devicesWithRealtimeStatus.length;
 
   return (
     <div>
-      <PageHeader title="Devices" description={`${onlineCount}/${totalCount} online • ${isConnected ? 'Live' : 'Offline'}`}>
-        <button onClick={() => navigate('/devices/provision')} className="flex items-center gap-1.5 px-3 py-2 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-md text-[13px] font-medium transition-colors">
-          <Plus size={15} /> Add Device
-        </button>
+      <PageHeader
+        title="Devices"
+        description={`${onlineCount}/${totalCount} online • ${isConnected ? 'Live' : 'Offline'}`}
+      >
+        <div className="flex gap-2">
+          <button
+            onClick={() => navigate('/devices/pending')}
+            className="flex items-center gap-1.5 px-3 py-2 bg-[#1E293B] hover:bg-[#334155] text-[#F8FAFC] border border-[#334155] rounded-md text-[13px] font-medium transition-colors"
+          >
+            <Clock size={15} /> Pending
+          </button>
+          <button
+            onClick={() => navigate('/devices/provision')}
+            className="flex items-center gap-1.5 px-3 py-2 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-md text-[13px] font-medium transition-colors"
+          >
+            <Plus size={15} /> Add Device
+          </button>
+        </div>
       </PageHeader>
 
-      <DataTable 
-        columns={columns} 
-        data={devicesWithRealtimeStatus} 
+      <DataTable
+        columns={columns}
+        data={devicesWithRealtimeStatus}
         rowKey={(r) => r.id}
         onRowClick={handleRowClick}
       />

@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
-import { fetchDevices, fetchEvents, sendDeviceCommand, type DeviceDTO, type EventDTO } from '@/lib/api';
-import { useSendCommand } from '@/lib/hooks';
+import { fetchDeviceEvents, type EventDTO } from '@/lib/api';
+import { useDevice, useSendCommand } from '@/lib/hooks';
 import { useRealtimeStore, useDeviceStatus } from '@dm3/api-client';
 import { ArrowLeft, Unlock, Lock, RotateCcw, Camera, Wifi, WifiOff } from 'lucide-react';
 
@@ -26,11 +26,10 @@ const commandButtons = [
 export function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [device, setDevice] = useState<DeviceDTO | null>(null);
   const [recentEvents, setRecentEvents] = useState<EventDTO[]>([]);
-  const [loading, setLoading] = useState(true);
   const [eventsLoading, setEventsLoading] = useState(true);
 
+  const { data: device, isLoading: loading } = useDevice(id!);
   const sendCommand = useSendCommand();
 
   // Real-time status
@@ -39,33 +38,13 @@ export function DeviceDetailPage() {
   const realtimeStatus = device ? deviceStatuses.find(s => s.deviceId === device.device_id) : null;
 
   useEffect(() => {
-    if (!id) return;
-    
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        // Load all devices and find the one we want
-        const devices = await fetchDevices();
-        const targetDevice = devices.find(d => d.id === id);
-        setDevice(targetDevice || null);
-      } catch {
-        // ignore
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, [id]);
-
-  useEffect(() => {
     if (!device) return;
 
     const loadEvents = async () => {
       setEventsLoading(true);
       try {
-        // Load recent events for this device
-        const result = await fetchEvents(1, 20, { device_id: device.device_id });
+        // Load recent events for this device via the device-specific endpoint
+        const result = await fetchDeviceEvents(device.id, 1, 20);
         setRecentEvents(result.data || []);
       } catch {
         // ignore
@@ -236,15 +215,17 @@ export function DeviceDetailPage() {
               <div className="grid grid-cols-3 gap-4 text-[12px]">
                 <div>
                   <span className="text-[#64748B]">CPU:</span>
-                  <span className="ml-2 text-[#22C55E] font-mono">{realtimeStatus.cpuPct}%</span>
+                  <span className="ml-2 text-[#22C55E] font-mono">{realtimeStatus.cpuPct ?? '—'}%</span>
                 </div>
                 <div>
                   <span className="text-[#64748B]">Memory:</span>
-                  <span className="ml-2 text-[#22C55E] font-mono">{realtimeStatus.memPct}%</span>
+                  <span className="ml-2 text-[#22C55E] font-mono">{realtimeStatus.memPct ?? '—'}%</span>
                 </div>
                 <div>
                   <span className="text-[#64748B]">Uptime:</span>
-                  <span className="ml-2 text-[#22C55E] font-mono">{realtimeStatus.uptimeHours}h</span>
+                  <span className="ml-2 text-[#22C55E] font-mono">
+                    {realtimeStatus.uptimeSeconds ? Math.floor(realtimeStatus.uptimeSeconds / 3600) : '—'}h
+                  </span>
                 </div>
               </div>
             </div>
@@ -299,7 +280,6 @@ export function DeviceDetailPage() {
             columns={eventColumns} 
             data={recentEvents} 
             rowKey={(r) => r.id}
-            className="border-0"
           />
         )}
       </div>

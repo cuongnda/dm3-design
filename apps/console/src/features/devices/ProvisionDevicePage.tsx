@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { PageHeader } from '@dm3/ui';
-import { provisionDevice, regenerateQR, type ProvisionResponse } from '@/lib/api';
+import { regenerateQR, type ProvisionResponse, type RegenerateQRResponse } from '@/lib/api';
+import { useProvisionDevice } from '@/lib/hooks';
 import { ArrowLeft, Copy, Check, RefreshCw } from 'lucide-react';
 
 const DEVICE_TYPES = ['terminal', 'controller', 'sensor', 'camera'] as const;
 
 export function ProvisionDevicePage() {
   const [step, setStep] = useState<'form' | 'qr'>('form');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<ProvisionResponse | null>(null);
   const [copied, setCopied] = useState(false);
@@ -19,6 +19,8 @@ export function ProvisionDevicePage() {
   const [name, setName] = useState('');
   const [type, setType] = useState<string>('terminal');
   const [location, setLocation] = useState('');
+
+  const provisionMutation = useProvisionDevice();
 
   // Countdown timer
   useEffect(() => {
@@ -36,9 +38,9 @@ export function ProvisionDevicePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
+    
     try {
-      const res = await provisionDevice({
+      const res = await provisionMutation.mutateAsync({
         device_id: deviceId,
         name,
         type,
@@ -48,21 +50,18 @@ export function ProvisionDevicePage() {
       setStep('qr');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to provision device');
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleRegenerate = useCallback(async () => {
     if (!result) return;
-    setLoading(true);
     try {
-      const res = await regenerateQR(result.device.id);
-      setResult(res);
+      // Backend returns flat provisioning object; preserve existing device info
+      const provisioning: RegenerateQRResponse = await regenerateQR(result.device.id);
+      setResult(prev => prev ? { ...prev, provisioning } : null);
+      setError('');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to regenerate QR');
-    } finally {
-      setLoading(false);
     }
   }, [result]);
 
@@ -112,8 +111,8 @@ export function ProvisionDevicePage() {
           {/* Actions */}
           <div className="flex justify-center gap-2">
             {isExpired ? (
-              <button onClick={handleRegenerate} disabled={loading} className="flex items-center gap-1.5 px-4 py-2 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-md text-[13px] font-medium transition-colors disabled:opacity-50">
-                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Regenerate QR
+              <button onClick={handleRegenerate} disabled={provisionMutation.isPending} className="flex items-center gap-1.5 px-4 py-2 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-md text-[13px] font-medium transition-colors disabled:opacity-50">
+                <RefreshCw size={14} className={provisionMutation.isPending ? 'animate-spin' : ''} /> Regenerate QR
               </button>
             ) : (
               <button onClick={handleCopy} className="flex items-center gap-1.5 px-4 py-2 bg-[#1E293B] hover:bg-[#334155] text-[#F8FAFC] rounded-md text-[13px] font-medium transition-colors border border-[#334155]">
@@ -155,8 +154,8 @@ export function ProvisionDevicePage() {
 
         {error && <p className="text-[12px] text-[#EF4444]">{error}</p>}
 
-        <button type="submit" disabled={loading || deviceId.length !== 6 || !name} className="px-4 py-2 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-md text-[13px] font-medium transition-colors disabled:opacity-50">
-          {loading ? 'Provisioning...' : 'Create Device & Generate QR'}
+        <button type="submit" disabled={provisionMutation.isPending || deviceId.length !== 6 || !name} className="px-4 py-2 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-md text-[13px] font-medium transition-colors disabled:opacity-50">
+          {provisionMutation.isPending ? 'Provisioning...' : 'Create Device & Generate QR'}
         </button>
       </form>
     </div>
