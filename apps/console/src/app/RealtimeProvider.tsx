@@ -125,19 +125,23 @@ function WsStatusDot() {
   const connected = useRealtimeStore((s) => s.connected);
   const connecting = useRealtimeStore((s) => s.connecting);
 
+  // Only show indicator when connected or actively connecting — not when offline
+  // (avoids a permanent "Offline" text badge that overlays sidebar menu items)
+  if (!connected && !connecting) return null;
+
   return (
     <div
       className="fixed bottom-4 left-4 z-[9998] flex items-center gap-1.5 px-2 py-1 rounded-full bg-[#0B1120]/80 border border-[#1E293B] text-[11px] backdrop-blur-sm"
-      title={connected ? 'Real-time connected' : connecting ? 'Connecting…' : 'Real-time disconnected'}
+      title={connected ? 'Real-time connected' : 'Connecting…'}
     >
       <span className={cn(
         'w-1.5 h-1.5 rounded-full',
-        connected ? 'bg-[#22C55E] animate-pulse' : connecting ? 'bg-[#F59E0B] animate-pulse' : 'bg-[#64748B]',
+        connected ? 'bg-[#22C55E] animate-pulse' : 'bg-[#F59E0B] animate-pulse',
       )} />
       <span className={cn(
-        connected ? 'text-[#22C55E]' : connecting ? 'text-[#F59E0B]' : 'text-[#64748B]',
+        connected ? 'text-[#22C55E]' : 'text-[#F59E0B]',
       )}>
-        {connected ? 'Live' : connecting ? 'Connecting' : 'Offline'}
+        {connected ? 'Live' : 'Connecting'}
       </span>
     </div>
   );

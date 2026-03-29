@@ -80,7 +80,7 @@ export class WebSocketClient {
     this.options = {
       autoReconnect: true,
       maxReconnectAttempts: 10,
-      reconnectInterval: 1000, // Start with 1 second
+      reconnectInterval: 5000, // Start with 5 seconds
       ...options,
     };
   }
@@ -107,8 +107,19 @@ export class WebSocketClient {
       }
 
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      // Use the same host/port as the web app — vite proxy routes /ws/events → device-gateway
-      const wsUrl = `${proto}//${window.location.host}/ws/events?token=${encodeURIComponent(token)}`;
+      
+      // TEMPORARY DEV FIX: Try direct connection to backend if proxy fails
+      const isDev = window.location.hostname === 'localhost';
+      let wsUrl: string;
+      
+      if (isDev && this.reconnectAttempts > 0) {
+        // Fallback: direct connection to device-gateway after first failure
+        wsUrl = `ws://localhost:8002/ws/events?token=${encodeURIComponent(token)}`;
+        console.log('[WS] Trying direct connection to backend...');
+      } else {
+        // Normal: use Vite proxy
+        wsUrl = `${proto}//${window.location.host}/ws/events?token=${encodeURIComponent(token)}`;
+      }
 
       try {
         this.ws = new WebSocket(wsUrl);
@@ -172,12 +183,12 @@ export class WebSocketClient {
     
     const delay = Math.min(
       this.options.reconnectInterval! * Math.pow(2, this.reconnectAttempts), // Exponential backoff
-      30000 // Max 30 seconds
+      60000 // Max 60 seconds
     );
 
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectAttempts++;
-      console.log(`[WS] Reconnection attempt ${this.reconnectAttempts}/${this.options.maxReconnectAttempts}`);
+      console.debug(`[WS] Reconnection attempt ${this.reconnectAttempts}/${this.options.maxReconnectAttempts}`);
       this.connect().catch(() => {
         // Error handling is done in connect() method
       });
@@ -291,7 +302,7 @@ export function createWebSocketConnection(options: WSConnectionOptions): WebSock
   
   // Auto-connect
   client.connect().catch((error) => {
-    console.error('[WS] Failed to connect:', error);
+    console.debug('[WS] Failed to connect:', error);
   });
 
   return client;

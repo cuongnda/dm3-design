@@ -19,7 +19,16 @@ export interface UseWebSocketOptions extends Omit<WSConnectionOptions, 'onConnec
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
   const clientRef = useRef<WebSocketClient | null>(null);
-  const store = useRealtimeStore();
+  // Select only stable action references (functions never change in Zustand).
+  // Using the whole store via useRealtimeStore() would subscribe to every state
+  // update, causing excessive re-renders that can amplify into infinite loops.
+  const setConnectionStatus = useRealtimeStore(s => s.setConnectionStatus);
+  const addAccessEvent = useRealtimeStore(s => s.addAccessEvent);
+  const updateDeviceStatus = useRealtimeStore(s => s.updateDeviceStatus);
+  const updateDoorStatus = useRealtimeStore(s => s.updateDoorStatus);
+  const addAlarm = useRealtimeStore(s => s.addAlarm);
+  const clearOldEvents = useRealtimeStore(s => s.clearOldEvents);
+  const connecting = useRealtimeStore(s => s.connecting);
   const { enableToasts = true, toastProvider = 'notification', ...wsOptions } = options;
 
   // Show toast notifications for critical events
@@ -57,27 +66,27 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     }
 
     try {
-      store.setConnectionStatus(false, true);
+      setConnectionStatus(false, true);
 
       const client = new WebSocketClient({
         ...wsOptions,
         onConnect: () => {
-          store.setConnectionStatus(true, false);
+          setConnectionStatus(true, false);
           options.onConnect?.();
           console.log('[useWebSocket] Connected');
         },
         onDisconnect: () => {
-          store.setConnectionStatus(false, false);
+          setConnectionStatus(false, false);
           options.onDisconnect?.();
           console.log('[useWebSocket] Disconnected');
         },
         onError: (error) => {
-          store.setConnectionStatus(false, false);
-          console.error('[useWebSocket] Error:', error);
+          setConnectionStatus(false, false);
+          console.debug('[useWebSocket] Connection error (WS unavailable, app continues via REST):', error);
         },
         onAccessEvent: (data, event) => {
           const accessEvent = transformAccessEvent(data, event);
-          store.addAccessEvent(accessEvent);
+          addAccessEvent(accessEvent);
 
           // Show toast for denied access
           if (data.decision === 'denied' && enableToasts) {
@@ -90,7 +99,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         },
         onDeviceStatus: (data, event) => {
           const deviceStatus = transformDeviceStatus(data, event);
-          store.updateDeviceStatus(deviceStatus);
+          updateDeviceStatus(deviceStatus);
 
           // Show toast for device offline
           if (!data.online && enableToasts) {
@@ -99,7 +108,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         },
         onDoorState: (data, event) => {
           const doorStatus = transformDoorStatus(data, event);
-          store.updateDoorStatus(doorStatus);
+          updateDoorStatus(doorStatus);
 
           // Show toast for forced door
           if (data.forced && enableToasts) {
@@ -108,7 +117,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         },
         onAlarmEvent: (data, event) => {
           const alarm = transformAlarmEvent(data, event);
-          store.addAlarm(alarm);
+          addAlarm(alarm);
 
           // Show toast for alarms
           if (enableToasts) {
@@ -129,18 +138,18 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       clientRef.current = client;
 
     } catch (error) {
-      store.setConnectionStatus(false, false);
-      console.error('[useWebSocket] Failed to connect:', error);
+      setConnectionStatus(false, false);
+      console.debug('[useWebSocket] Failed to connect (WS unavailable, app continues via REST):', error);
     }
-  }, [wsOptions, store, options.onConnect, options.onDisconnect, enableToasts, showToast]);
+  }, [wsOptions, setConnectionStatus, addAccessEvent, updateDeviceStatus, updateDoorStatus, addAlarm, options.onConnect, options.onDisconnect, enableToasts, showToast]);
 
   const disconnect = useCallback(() => {
     if (clientRef.current) {
       clientRef.current.disconnect();
       clientRef.current = null;
     }
-    store.setConnectionStatus(false, false);
-  }, [store]);
+    setConnectionStatus(false, false);
+  }, [setConnectionStatus]);
 
   const reconnect = useCallback(async () => {
     disconnect();
@@ -174,15 +183,15 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   // Cleanup old events periodically
   useEffect(() => {
     const cleanup = setInterval(() => {
-      store.clearOldEvents();
+      clearOldEvents();
     }, 60 * 60 * 1000); // Every hour
 
     return () => clearInterval(cleanup);
-  }, [store]);
+  }, [clearOldEvents]);
 
   return {
     isConnected: clientRef.current?.isConnected ?? false,
-    isConnecting: store.connecting,
+    isConnecting: connecting,
     connectionState: clientRef.current?.connectionState ?? 'disconnected',
     connect,
     disconnect,
