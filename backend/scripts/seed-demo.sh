@@ -2,14 +2,14 @@
 # Seed demo data into DM3 database
 set -e
 
-DB_HOST="${DB_HOST:-localhost}"
-DB_PORT="${DB_PORT:-5433}"
+DB_HOST="${DB_HOST:-timescaledb}"
+DB_PORT="${DB_PORT:-5432}"
 DB_USER="${DB_USER:-dm3}"
 DB_PASS="${DB_PASS:-dm3secret}"
 DB_NAME="${DB_NAME:-dm3}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-MIGRATION_FILE="$SCRIPT_DIR/../pkg/db/migrations/008_seed_demo_data.sql"
+MIGRATION_FILE="${MIGRATION_FILE:-/migrations/008_seed_demo_data.sql}"
 
 echo "🌱 Seeding demo data into $DB_NAME..."
 PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$MIGRATION_FILE"
