@@ -1,0 +1,143 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/duali/dm3-backend/internal/authsvc"
+	"github.com/duali/dm3-backend/internal/config"
+	"github.com/duali/dm3-backend/internal/identity"
+	"github.com/duali/dm3-backend/pkg/db"
+	"github.com/duali/dm3-backend/pkg/httputil"
+	"github.com/duali/dm3-backend/pkg/natsutil"
+)
+
+func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	slog.Info("starting identity-svc")
+
+	cfg := config.Load()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Connect to database
+	database, err := db.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		slog.Error("failed to connect to database", "error", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	// Run migrations
+	if err := database.RunMigrations(ctx, "pkg/db/migrations"); err != nil {
+		slog.Warn("migration warning (may already exist)", "error", err)
+	}
+
+	// Connect to NATS
+	natsClient, err := natsutil.Connect(ctx, cfg.NATSURL)
+	if err != nil {
+		slog.Error("failed to connect to nats", "error", err)
+		os.Exit(1)
+	}
+	defer natsClient.Close()
+
+	// Ensure NATS stream for identity events
+	if err := natsClient.EnsureStream(ctx, "IDENTITY", []string{"dm3.identity.>"}); err != nil {
+		slog.Error("failed to ensure nats stream", "error", err)
+		os.Exit(1)
+	}
+
+	// HTTP handlers
+	handlers := identity.NewHandlers(database, natsClient)
+
+	// HTTP routes
+	r := httputil.NewRouter()
+
+	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "identity-svc"})
+	})
+	r.Get("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		if err := database.Pool.Ping(r.Context()); err != nil {
+			httputil.Error(w, http.StatusServiceUnavailable, "database not ready")
+			return
+		}
+		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ready"})
+	})
+
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
+		r.Use(authsvc.RequireCompany())
+
+		// Persons: operator+viewer can read, manager+ can write
+		r.Group(func(pr chi.Router) {
+			pr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			pr.Get("/persons", handlers.ListPersons)
+			pr.Post("/persons", handlers.CreatePerson)
+			pr.Get("/persons/sync", handlers.SyncPersons)
+			pr.Get("/persons/{id}", handlers.GetPerson)
+			pr.Put("/persons/{id}", handlers.UpdatePerson)
+			pr.Delete("/persons/{id}", handlers.DeletePerson)
+			pr.Post("/persons/{id}/photo", handlers.UploadPhoto)
+		})
+
+		// Credentials: operator+viewer can read, manager+ can write
+		r.Group(func(cr chi.Router) {
+			cr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			cr.Get("/persons/{id}/credentials", handlers.ListCredentials)
+			cr.Post("/persons/{id}/credentials", handlers.CreateCredential)
+			cr.Get("/persons/{id}/credentials/{credID}", handlers.GetCredential)
+			cr.Put("/persons/{id}/credentials/{credID}", handlers.UpdateCredential)
+			cr.Delete("/persons/{id}/credentials/{credID}", handlers.DeleteCredential)
+		})
+
+		// Person Groups: operator+viewer can read, manager+ can write
+		r.Group(func(gr chi.Router) {
+			gr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			gr.Get("/groups", handlers.ListGroups)
+			gr.Post("/groups", handlers.CreateGroup)
+			gr.Get("/groups/{id}", handlers.GetGroup)
+			gr.Put("/groups/{id}", handlers.UpdateGroup)
+			gr.Delete("/groups/{id}", handlers.DeleteGroup)
+			gr.Get("/groups/{id}/members", handlers.ListGroupMembers)
+			gr.Post("/groups/{id}/members", handlers.AddGroupMember)
+			gr.Delete("/groups/{id}/members/{personID}", handlers.RemoveGroupMember)
+		})
+
+		// Stats: all roles can read
+		r.Get("/stats", handlers.GetStats)
+	})
+
+	// Start server
+	addr := fmt.Sprintf(":%d", cfg.HTTPPort)
+	srv := &http.Server{Addr: addr, Handler: r}
+
+	go func() {
+		slog.Info("http server starting", "addr", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("http server error", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Graceful shutdown
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+
+	slog.Info("shutting down identity-svc")
+	cancel()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	_ = srv.Shutdown(shutdownCtx)
+	slog.Info("identity-svc shutdown complete")
+}

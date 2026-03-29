@@ -5,7 +5,7 @@
     "name": "Aysee-DM3 Project",
     "invite_link": "https://t.me/+Z9J4nz06YWszODll"
   },
-  "task_aliases": ["dm3-backend", "dm3-webapp", "dm3-terminal", "bd8500", "duall-master", "dmpw-webapp-v3", "dmpw-automation", "duallmaster"],
+  "task_aliases": ["dm3-backend", "dm3-webapp", "dm3-terminal", "duall-master", "dmpw-webapp-v3", "dmpw-automation", "duallmaster"],
   "links": [],
   "services": [
     {
