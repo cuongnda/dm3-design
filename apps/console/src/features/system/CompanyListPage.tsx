@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Building2, Plus, Search } from 'lucide-react';
 import { fetchCompanies, type CompanyDTO } from '@/lib/api';
 
@@ -17,6 +18,7 @@ const statusColors: Record<string, string> = {
 };
 
 export function CompanyListPage() {
+  const { t } = useTranslation('system');
   const [companies, setCompanies] = useState<CompanyDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -41,7 +43,7 @@ export function CompanyListPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-[20px] font-semibold text-[#F8FAFC]">Companies</h1>
+          <h1 className="text-[20px] font-semibold text-[#F8FAFC]">{t('companies.title')}</h1>
           <p className="text-[13px] text-[#64748B] mt-0.5">
             {companies.length} registered {companies.length === 1 ? 'company' : 'companies'}
           </p>
@@ -51,7 +53,7 @@ export function CompanyListPage() {
           className="flex items-center gap-1.5 px-3 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-md text-[13px] font-medium transition-colors"
         >
           <Plus size={15} />
-          Create Company
+          {t('companies.createCompany')}
         </button>
       </div>
 
@@ -61,7 +63,7 @@ export function CompanyListPage() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name or code..."
+          placeholder={t('companies.searchPlaceholder')}
           className="w-full h-9 pl-9 pr-3 bg-[#111827] border border-[#1E293B] rounded-md text-[13px] text-[#F8FAFC] placeholder:text-[#64748B] focus:border-[#F97316] focus:outline-none focus:ring-1 focus:ring-[#F97316]/20"
         />
       </div>
@@ -71,13 +73,13 @@ export function CompanyListPage() {
         <table className="w-full">
           <thead>
             <tr className="bg-[#111827] text-[11px] text-[#64748B] uppercase tracking-wider">
-              <th className="text-left py-2.5 px-4 font-medium">Company</th>
-              <th className="text-left py-2.5 px-4 font-medium">Code</th>
-              <th className="text-left py-2.5 px-4 font-medium">Plan</th>
-              <th className="text-left py-2.5 px-4 font-medium">Status</th>
-              <th className="text-right py-2.5 px-4 font-medium">Users</th>
-              <th className="text-right py-2.5 px-4 font-medium">Devices</th>
-              <th className="text-left py-2.5 px-4 font-medium">Created</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('companies.table.name')}</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('companies.table.code')}</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('companies.table.plan')}</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('companies.table.status')}</th>
+              <th className="text-right py-2.5 px-4 font-medium">{t('companies.table.users')}</th>
+              <th className="text-right py-2.5 px-4 font-medium">{t('companies.table.devices')}</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('companies.table.created')}</th>
             </tr>
           </thead>
           <tbody>

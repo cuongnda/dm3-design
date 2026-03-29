@@ -21,7 +21,7 @@ import type { EventDTO, AccessRuleDTO } from '@/lib/api';
 /* ── Helper Functions ─────────────────────────────────────────────── */
 
 function formatSchedule(rule: AccessRuleDTO): string {
-  // Simplified schedule formatting - in a real implementation, 
+  // Simplified schedule formatting - in a real implementation,
   // you'd parse the schedule JSON properly
   if (rule.schedule) {
     return 'Custom schedule'; // TODO: Parse schedule JSON
@@ -271,7 +271,7 @@ export function DoorDetailPage() {
                   'px-2 py-1 rounded text-[11px] font-medium',
                   rule.enabled ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-[#64748B]/10 text-[#64748B]'
                 )}>
-                  {rule.enabled ? 'Enabled' : 'Disabled'}
+                  {rule.enabled ? /* TODO: add i18n key */'Enabled' : /* TODO: add i18n key */'Disabled'}
                 </span>
               </div>
             ))}
@@ -312,10 +312,10 @@ export function DoorDetailPage() {
               ))}
               <div className="flex items-center gap-4 mt-3 ml-10">
                 <span className="flex items-center gap-1.5 text-[11px] text-[#94A3B8]">
-                  <span className="w-3 h-3 rounded-[2px] bg-[#3B82F6]/60" /> Accessible
+                  <span className="w-3 h-3 rounded-[2px] bg-[#3B82F6]/60" /> {/* TODO: add i18n key */}Accessible
                 </span>
                 <span className="flex items-center gap-1.5 text-[11px] text-[#94A3B8]">
-                  <span className="w-3 h-3 rounded-[2px] bg-[#1E293B]" /> Locked
+                  <span className="w-3 h-3 rounded-[2px] bg-[#1E293B]" /> {t('intrusion.status.armed')}
                 </span>
               </div>
             </div>
@@ -326,28 +326,29 @@ export function DoorDetailPage() {
         <TabsContent value="camera">
           <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-8 flex flex-col items-center justify-center min-h-[300px]">
             <Video size={48} className="text-[#334155] mb-4" />
-            <p className="text-[14px] text-[#94A3B8] font-medium">Camera Feed</p>
-            <p className="text-[12px] text-[#64748B] mt-1">Linked camera stream will appear here</p>
-            <p className="text-[11px] text-[#475569] mt-3">Camera: CAM-001 · Main Entrance</p>
+            <p className="text-[14px] text-[#94A3B8] font-medium">{/* TODO: add i18n key */}Camera Feed</p>
+            <p className="text-[12px] text-[#64748B] mt-1">{/* TODO: add i18n key */}Linked camera stream will appear here</p>
+            <p className="text-[11px] text-[#475569] mt-3">{/* TODO: add i18n key */}Camera: CAM-001 · Main Entrance</p>
           </div>
         </TabsContent>
 
         {/* Settings Tab */}
         <TabsContent value="settings">
           <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-5 max-w-xl space-y-4">
-            <SettingField label="Door Name">
+            <SettingField label={/* TODO: add i18n key */"Door Name"}>
               <input
                 value={settings.name}
                 onChange={(e) => setSettings((s) => ({ ...s, name: e.target.value }))}
                 className="w-full h-8 px-3 bg-[#0A0E1A] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] focus:border-[#3B82F6] focus:outline-none"
               />
             </SettingField>
-            <SettingField label="Mode">
+            <SettingField label={/* TODO: add i18n key */"Mode"}>
               <select
                 value={settings.mode}
                 onChange={(e) => setSettings((s) => ({ ...s, mode: e.target.value }))}
                 className="w-full h-8 px-3 bg-[#0A0E1A] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px]"
               >
+                {/* TODO: add i18n keys for mode options */}
                 <option value="Normal">Normal</option>
                 <option value="Card Only">Card Only</option>
                 <option value="Card + PIN">Card + PIN</option>
@@ -355,7 +356,7 @@ export function DoorDetailPage() {
                 <option value="Free Access">Free Access</option>
               </select>
             </SettingField>
-            <SettingField label="Unlock Duration (seconds)">
+            <SettingField label={/* TODO: add i18n key */"Unlock Duration (seconds)"}>
               <input
                 type="number"
                 value={settings.unlockDuration}
@@ -363,7 +364,7 @@ export function DoorDetailPage() {
                 className="w-full h-8 px-3 bg-[#0A0E1A] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] focus:border-[#3B82F6] focus:outline-none"
               />
             </SettingField>
-            <SettingField label="Anti-Passback">
+            <SettingField label={/* TODO: add i18n key */"Anti-Passback"}>
               <button
                 onClick={() => setSettings((s) => ({ ...s, antiPassback: !s.antiPassback }))}
                 className={cn(
@@ -377,24 +378,24 @@ export function DoorDetailPage() {
                 )} />
               </button>
             </SettingField>
-            <SettingField label="Device ID">
+            <SettingField label={/* TODO: add i18n key */"Device ID"}>
               <p className="text-[13px] text-[#94A3B8]">{door.device_id || '—'}</p>
             </SettingField>
-            <SettingField label="Camera ID">
+            <SettingField label={/* TODO: add i18n key */"Camera ID"}>
               <p className="text-[13px] text-[#94A3B8]">{door.camera_id || '—'}</p>
             </SettingField>
-            <SettingField label="Last Heartbeat">
+            <SettingField label={/* TODO: add i18n key */"Last Heartbeat"}>
               <p className="text-[13px] text-[#64748B]">
                 {door.last_heartbeat_at ? new Date(door.last_heartbeat_at).toLocaleString('vi-VN') : '—'}
               </p>
             </SettingField>
             <div className="pt-2">
-              <button 
+              <button
                 onClick={handleSaveSettings}
                 disabled={updateDoorMutation.isPending}
                 className="px-4 py-2 bg-[#2563EB] text-white text-[13px] font-medium rounded-md hover:bg-[#1D4ED8] transition-colors disabled:opacity-50"
               >
-                {updateDoorMutation.isPending ? 'Saving...' : 'Save Changes'}
+                {updateDoorMutation.isPending ? /* TODO: add i18n key */'Saving...' : /* TODO: add i18n key */'Save Changes'}
               </button>
             </div>
           </div>
@@ -414,7 +415,7 @@ export function DoorDetailPage() {
               </DialogHeader>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setConfirmAction(null)} className="bg-[#1E293B] border-[#334155] text-[#94A3B8]">
-                  Cancel
+                  {/* TODO: add i18n key */}Cancel
                 </Button>
                 <Button
                   variant={confirmLabels[confirmAction].variant}
@@ -422,7 +423,7 @@ export function DoorDetailPage() {
                   disabled={sendCommandMutation.isPending}
                   className={confirmLabels[confirmAction].variant === 'destructive' ? '' : 'bg-[#2563EB] hover:bg-[#1D4ED8]'}
                 >
-                  {sendCommandMutation.isPending ? 'Sending...' : 'Confirm'}
+                  {sendCommandMutation.isPending ? /* TODO: add i18n key */'Sending...' : /* TODO: add i18n key */'Confirm'}
                 </Button>
               </DialogFooter>
             </>

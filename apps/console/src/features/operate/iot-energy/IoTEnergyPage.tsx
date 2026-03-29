@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@dm3/ui';
 import { StatCard } from '@dm3/ui';
 import { cn } from '@/lib/utils';
@@ -12,25 +13,27 @@ const statusColors: Record<string, string> = {
 };
 
 export function IoTEnergyPage() {
+  const { t } = useTranslation('operate');
+
   return (
     <div>
-      <PageHeader title="IoT & Năng lượng" description="Giám sát cảm biến và tiêu thụ năng lượng">
-        <button className="px-3 py-1.5 bg-[#F59E0B] text-[#0F172A] rounded-md text-[12px] font-medium">📊 Báo cáo năng lượng</button>
+      <PageHeader title={t('iotEnergy.title')} description={t('iotEnergy.description')}>
+        <button className="px-3 py-1.5 bg-[#F59E0B] text-[#0F172A] rounded-md text-[12px] font-medium">📊 {t('common.energyReport')}</button>
       </PageHeader>
 
       <div className="grid grid-cols-6 gap-3 mb-6">
-        <StatCard label="Cảm biến" value={String(summary.totalSensors)} sub="Tổng cộng" icon="📡" domain="operate" />
-        <StatCard label="Trực tuyến" value={String(summary.online)} sub="Hoạt động" icon="✅" domain="operate" />
-        <StatCard label="Cảnh báo" value={String(summary.warnings)} sub="Cần chú ý" icon="⚠️" domain="operate" />
-        <StatCard label="Nghiêm trọng" value={String(summary.critical)} sub="Khẩn cấp" icon="🚨" domain="error" />
-        <StatCard label="Điện tháng này" value={summary.monthlyElectricity} sub="kWh" icon="⚡" domain="operate" />
-        <StatCard label="Chi phí" value={summary.monthlyCost} sub="Tháng 2/2025" icon="💰" domain="operate" />
+        <StatCard label={t('iotEnergy.stats.sensors')} value={String(summary.totalSensors)} sub={t('common.sub.total')} icon="📡" domain="operate" />
+        <StatCard label={t('iotEnergy.stats.online')} value={String(summary.online)} sub={t('common.sub.active')} icon="✅" domain="operate" />
+        <StatCard label={t('iotEnergy.stats.warnings')} value={String(summary.warnings)} sub={t('common.sub.needsAttention')} icon="⚠️" domain="operate" />
+        <StatCard label={t('iotEnergy.stats.critical')} value={String(summary.critical)} sub={t('common.sub.critical')} icon="🚨" domain="error" />
+        <StatCard label={t('iotEnergy.stats.monthlyElectricity')} value={summary.monthlyElectricity} sub="kWh" icon="⚡" domain="operate" />
+        <StatCard label={t('iotEnergy.stats.cost')} value={summary.monthlyCost} sub="Tháng 2/2025" icon="💰" domain="operate" />
       </div>
 
       {/* Alerts */}
       {alerts.filter(a => !a.acknowledged).length > 0 && (
         <div className="bg-[#7F1D1D]/20 border border-[#EF4444]/30 rounded-lg p-4 mb-6">
-          <h3 className="text-[14px] font-medium text-[#EF4444] mb-3">🚨 Cảnh báo chưa xử lý</h3>
+          <h3 className="text-[14px] font-medium text-[#EF4444] mb-3">🚨 {t('iotEnergy.alerts.unprocessed')}</h3>
           <div className="space-y-2">
             {alerts.filter(a => !a.acknowledged).map(a => (
               <div key={a.id} className="flex items-center justify-between bg-[#111827] rounded-md p-3">
@@ -49,7 +52,7 @@ export function IoTEnergyPage() {
 
       {/* Energy chart placeholder */}
       <div className="bg-[#1E293B] border border-[#334155] rounded-lg p-4 mb-6">
-        <h3 className="text-[14px] font-medium text-[#F8FAFC] mb-3">Tiêu thụ năng lượng 6 tháng</h3>
+        <h3 className="text-[14px] font-medium text-[#F8FAFC] mb-3">{t('iotEnergy.energyConsumption')}</h3>
         <div className="flex items-end gap-3 h-[200px]">
           {energyData.map(d => {
             const maxE = 50000;
@@ -66,7 +69,7 @@ export function IoTEnergyPage() {
       </div>
 
       {/* Sensor grid */}
-      <h3 className="text-[14px] font-medium text-[#F8FAFC] mb-3">Bảng cảm biến</h3>
+      <h3 className="text-[14px] font-medium text-[#F8FAFC] mb-3">{t('iotEnergy.sensorBoard')}</h3>
       <div className="grid grid-cols-6 gap-2">
         {sensors.map(s => (
           <div key={s.id} className={cn(

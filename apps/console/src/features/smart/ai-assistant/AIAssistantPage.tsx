@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { currentMessages, conversations, suggestedQueries, type Message } from './mock-data';
 
 export function AIAssistantPage() {
+  const { t } = useTranslation('smart');
   const [messages, setMessages] = useState<Message[]>(currentMessages);
   const [input, setInput] = useState('');
 
@@ -24,13 +26,13 @@ export function AIAssistantPage() {
 
   return (
     <div>
-      <PageHeader title="Trợ lý AI" description="Hỏi đáp thông minh về tòa nhà" />
+      <PageHeader title={t('aiAssistant.title')} description={t('aiAssistant.description')} />
 
       <div className="grid grid-cols-4 gap-4" style={{ height: 'calc(100vh - 200px)' }}>
         {/* Sidebar */}
         <div className="col-span-1 bg-[#1E293B] border border-[#334155] rounded-lg p-4 flex flex-col">
-          <button className="w-full px-3 py-2 bg-[#06B6D4] text-[#0F172A] rounded-md text-[12px] font-medium mb-4">+ Cuộc hội thoại mới</button>
-          <h3 className="text-[12px] font-medium text-[#64748B] mb-2 uppercase">Gần đây</h3>
+          <button className="w-full px-3 py-2 bg-[#06B6D4] text-[#0F172A] rounded-md text-[12px] font-medium mb-4">+ {t('aiAssistant.newConversation')}</button>
+          <h3 className="text-[12px] font-medium text-[#64748B] mb-2 uppercase">{t('aiAssistant.recent')}</h3>
           <div className="space-y-1 flex-1 overflow-y-auto">
             {conversations.map((c, i) => (
               <div key={c.id} className={cn(
@@ -80,10 +82,10 @@ export function AIAssistantPage() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSend()}
-                placeholder="Nhập câu hỏi..."
+                placeholder={t('aiAssistant.inputPlaceholder')}
                 className="flex-1 h-10 px-4 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#475569] focus:outline-none focus:border-[#06B6D4]/50"
               />
-              <button onClick={handleSend} className="px-4 h-10 bg-[#06B6D4] text-[#0F172A] rounded-md text-[13px] font-medium">Gửi</button>
+              <button onClick={handleSend} className="px-4 h-10 bg-[#06B6D4] text-[#0F172A] rounded-md text-[13px] font-medium">{t('aiAssistant.chat.send')}</button>
             </div>
           </div>
         </div>

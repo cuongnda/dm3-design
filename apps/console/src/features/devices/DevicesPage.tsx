@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Plus, Clock, Monitor, Cpu, Camera, Radio } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
 import { useDevicesList, useRealtimeStore, useDeviceStatus, type DeviceDTO } from '@dm3/api-client';
@@ -24,6 +25,7 @@ const deviceTypeIcon = (type: string) => {
 
 export function DevicesPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation('devices');
 
   // TanStack Query — auto-refetches every 15s
   const { data: devices = [] } = useDevicesList();
@@ -49,18 +51,18 @@ export function DevicesPage() {
   const columns: Column<any>[] = [
     {
       key: 'device_id',
-      header: 'ID',
+      header: t('devices.table.id'),
       width: '80px',
       render: (r) => <span className="font-mono text-[12px] text-[#F8FAFC]">{r.device_id}</span>,
     },
     {
       key: 'name',
-      header: 'Name',
+      header: t('devices.table.name'),
       render: (r) => <span className="text-[#F8FAFC]">{r.name || '—'}</span>,
     },
     {
       key: 'type',
-      header: 'Type',
+      header: t('devices.table.type'),
       render: (r) => (
         <div className="flex items-center gap-1.5">
           {deviceTypeIcon(r.type)}
@@ -70,7 +72,7 @@ export function DevicesPage() {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('devices.table.status'),
       width: '110px',
       render: (r) => (
         <div className="flex items-center gap-2">
@@ -85,12 +87,12 @@ export function DevicesPage() {
     },
     {
       key: 'location',
-      header: 'Location',
+      header: t('devices.table.location'),
       render: (r) => <span className="text-[#64748B]">{r.location || '—'}</span>,
     },
     {
       key: 'last_seen',
-      header: 'Last Seen',
+      header: t('devices.table.lastSeen'),
       width: '140px',
       render: (r) => {
         const lastSeen = r.last_seen ? new Date(r.last_seen).toLocaleString() : '—';
@@ -121,7 +123,7 @@ export function DevicesPage() {
   return (
     <div>
       <PageHeader
-        title="Devices"
+        title={t('devices.title')}
         description={`${onlineCount}/${totalCount} online • ${isConnected ? 'Live' : 'Offline'}`}
       >
         <div className="flex gap-2">
@@ -129,13 +131,13 @@ export function DevicesPage() {
             onClick={() => navigate('/devices/pending')}
             className="flex items-center gap-1.5 px-3 py-2 bg-[#1E293B] hover:bg-[#334155] text-[#F8FAFC] border border-[#334155] rounded-md text-[13px] font-medium transition-colors"
           >
-            <Clock size={15} /> Pending
+            <Clock size={15} /> {t('devices.pending')}
           </button>
           <button
             onClick={() => navigate('/devices/provision')}
             className="flex items-center gap-1.5 px-3 py-2 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-md text-[13px] font-medium transition-colors"
           >
-            <Plus size={15} /> Add Device
+            <Plus size={15} /> {t('devices.addDevice')}
           </button>
         </div>
       </PageHeader>

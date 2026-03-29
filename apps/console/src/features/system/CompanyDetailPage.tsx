@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Building2, Users, Cpu, DoorOpen, Activity, Save } from 'lucide-react';
 import { fetchCompany, updateCompany, suspendCompany, type CompanyDTO } from '@/lib/api';
 
@@ -12,6 +13,7 @@ const statusColors: Record<string, string> = {
 export function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation('system');
   const [company, setCompany] = useState<CompanyDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -64,10 +66,10 @@ export function CompanyDetailPage() {
   }
 
   const stats = [
-    { label: 'Users', value: company.user_count ?? 0, icon: Users, max: company.max_users },
-    { label: 'Devices', value: company.device_count ?? 0, icon: Cpu, max: company.max_devices },
-    { label: 'Doors', value: company.door_count ?? 0, icon: DoorOpen },
-    { label: 'Events', value: company.event_count ?? 0, icon: Activity },
+    { label: t('companyDetail.stats.users'), value: company.user_count ?? 0, icon: Users, max: company.max_users },
+    { label: t('companyDetail.stats.devices'), value: company.device_count ?? 0, icon: Cpu, max: company.max_devices },
+    { label: t('companyDetail.stats.doors'), value: company.door_count ?? 0, icon: DoorOpen },
+    { label: t('companyDetail.stats.events'), value: company.event_count ?? 0, icon: Activity },
   ];
 
   const inputCls = "w-full h-8 px-2.5 bg-[#0B1120] border border-[#1E293B] rounded text-[13px] text-[#F8FAFC] focus:border-[#F97316] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed";
@@ -103,7 +105,7 @@ export function CompanyDetailPage() {
                 : 'border-[#EF4444]/30 text-[#EF4444] hover:bg-[#EF4444]/10'
             }`}
           >
-            {company.status === 'suspended' ? 'Activate' : 'Suspend'}
+            {company.status === 'suspended' ? t('companyDetail.actions.activate') : t('companyDetail.actions.suspend')}
           </button>
         </div>
       </div>
@@ -132,20 +134,20 @@ export function CompanyDetailPage() {
             <div className="flex gap-2">
               <button onClick={() => setEditing(false)} className="px-2.5 py-1 text-[12px] text-[#94A3B8] hover:text-[#F8FAFC]">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 px-2.5 py-1 bg-[#F97316] hover:bg-[#EA580C] text-white rounded text-[12px] font-medium disabled:opacity-60">
-                <Save size={12} /> {saving ? 'Saving...' : 'Save'}
+                <Save size={12} /> {saving ? 'Saving...' : t('companyDetail.actions.save')}
               </button>
             </div>
           ) : (
-            <button onClick={() => setEditing(true)} className="px-2.5 py-1 text-[12px] text-[#F97316] hover:text-[#EA580C]">Edit</button>
+            <button onClick={() => setEditing(true)} className="px-2.5 py-1 text-[12px] text-[#F97316] hover:text-[#EA580C]">{t('companyDetail.actions.edit')}</button>
           )}
         </div>
         <div className="p-4 grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-[11px] text-[#64748B] mb-1">Name</label>
+            <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.name')}</label>
             <input disabled={!editing} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className={inputCls} />
           </div>
           <div>
-            <label className="block text-[11px] text-[#64748B] mb-1">Plan</label>
+            <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.plan')}</label>
             <select disabled={!editing} value={form.plan} onChange={(e) => setForm((f) => ({ ...f, plan: e.target.value }))} className={inputCls}>
               {['trial', 'starter', 'professional', 'enterprise'].map((p) => (
                 <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
@@ -153,19 +155,19 @@ export function CompanyDetailPage() {
             </select>
           </div>
           <div>
-            <label className="block text-[11px] text-[#64748B] mb-1">Address</label>
+            <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.address')}</label>
             <input disabled={!editing} value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} className={inputCls} />
           </div>
           <div>
-            <label className="block text-[11px] text-[#64748B] mb-1">Phone</label>
+            <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.phone')}</label>
             <input disabled={!editing} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} className={inputCls} />
           </div>
           <div>
-            <label className="block text-[11px] text-[#64748B] mb-1">Max Devices</label>
+            <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.maxDevices')}</label>
             <input disabled={!editing} type="number" value={form.max_devices} onChange={(e) => setForm((f) => ({ ...f, max_devices: +e.target.value }))} className={inputCls} />
           </div>
           <div>
-            <label className="block text-[11px] text-[#64748B] mb-1">Max Users</label>
+            <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.maxUsers')}</label>
             <input disabled={!editing} type="number" value={form.max_users} onChange={(e) => setForm((f) => ({ ...f, max_users: +e.target.value }))} className={inputCls} />
           </div>
           <div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@dm3/ui';
 import { StatCard } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
@@ -12,23 +13,14 @@ const statusConfig: Record<DeviceStatus, { label: string; dot: string; text: str
   busy: { label: 'Busy', dot: 'bg-[#F59E0B] animate-pulse', text: 'text-[#F59E0B]' },
 };
 
-const resultConfig: Record<CallResult, { label: string; cls: string }> = {
-  answered: { label: 'Đã trả lời', cls: 'text-[#22C55E]' },
-  missed: { label: 'Nhỡ', cls: 'text-[#EF4444]' },
-  rejected: { label: 'Từ chối', cls: 'text-[#F59E0B]' },
-  busy: { label: 'Bận', cls: 'text-[#64748B]' },
-};
-
-const callColumns: Column<CallRecord>[] = [
-  { key: 'time', header: 'Thời gian', width: '140px', sortable: true },
-  { key: 'caller', header: 'Gọi từ', sortable: true },
-  { key: 'receiver', header: 'Nhận', sortable: true },
-  { key: 'duration', header: 'Thời lượng', width: '100px' },
-  {
-    key: 'result', header: 'Kết quả',
-    render: (r) => <span className={resultConfig[r.result].cls}>{resultConfig[r.result].label}</span>,
-  },
-];
+function getResultConfig(t: ReturnType<typeof useTranslation<'secure'>>['t']): Record<CallResult, { label: string; cls: string }> {
+  return {
+    answered: { label: t('intercom.calls.answered'), cls: 'text-[#22C55E]' },
+    missed: { label: t('intercom.calls.missed'), cls: 'text-[#EF4444]' },
+    rejected: { label: /* TODO: add i18n key */'Rejected', cls: 'text-[#F59E0B]' },
+    busy: { label: /* TODO: add i18n key */'Busy', cls: 'text-[#64748B]' },
+  };
+}
 
 function DeviceCard({ device, selected, onClick }: { device: IntercomDevice; selected: boolean; onClick: () => void }) {
   const sc = statusConfig[device.status];
@@ -60,15 +52,15 @@ function DeviceCard({ device, selected, onClick }: { device: IntercomDevice; sel
 
 function ConfigPanel({ device }: { device: IntercomDevice | null }) {
   if (!device) return (
-    <div className="p-6 text-center text-[13px] text-[#64748B]">Chọn thiết bị để xem cấu hình</div>
+    <div className="p-6 text-center text-[13px] text-[#64748B]">{/* TODO: add i18n key */}Select a device to view configuration</div>
   );
   const fields = [
-    { label: 'Tên', value: device.name },
-    { label: 'Loại', value: device.type === 'door-station' ? 'Door Station' : 'Indoor Monitor' },
-    { label: 'Vị trí', value: device.location },
+    { label: /* TODO: add i18n key */'Name', value: device.name },
+    { label: /* TODO: add i18n key */'Type', value: device.type === 'door-station' ? 'Door Station' : 'Indoor Monitor' },
+    { label: /* TODO: add i18n key */'Location', value: device.location },
     { label: 'IP', value: device.ip },
-    { label: 'Firmware', value: device.firmware },
-    { label: 'Lần cuối online', value: device.lastSeen },
+    { label: /* TODO: add i18n key */'Firmware', value: device.firmware },
+    { label: /* TODO: add i18n key */'Last Seen', value: device.lastSeen },
   ];
   return (
     <div className="space-y-3">
@@ -79,15 +71,29 @@ function ConfigPanel({ device }: { device: IntercomDevice | null }) {
         </div>
       ))}
       <button className="w-full py-2 bg-[#3B82F6]/10 border border-[#3B82F6]/30 rounded-lg text-[12px] text-[#3B82F6] font-medium hover:bg-[#3B82F6]/20 transition-colors">
-        Khởi động lại thiết bị
+        {/* TODO: add i18n key */}Restart Device
       </button>
     </div>
   );
 }
 
 export function IntercomPage() {
+  const { t } = useTranslation('secure');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedDevice = mockDevices.find((d) => d.id === selectedId) ?? null;
+
+  const resultConfig = getResultConfig(t);
+
+  const callColumns: Column<CallRecord>[] = [
+    { key: 'time', header: /* TODO: add i18n key */'Time', width: '140px', sortable: true },
+    { key: 'caller', header: t('intercom.calls.incoming'), sortable: true },
+    { key: 'receiver', header: t('intercom.calls.answered'), sortable: true },
+    { key: 'duration', header: /* TODO: add i18n key */'Duration', width: '100px' },
+    {
+      key: 'result', header: /* TODO: add i18n key */'Result',
+      render: (r) => <span className={resultConfig[r.result].cls}>{resultConfig[r.result].label}</span>,
+    },
+  ];
 
   const online = mockDevices.filter((d) => d.status === 'online').length;
   const doorStations = mockDevices.filter((d) => d.type === 'door-station').length;
@@ -96,19 +102,19 @@ export function IntercomPage() {
 
   return (
     <div>
-      <PageHeader title="Intercom" description="Hệ thống liên lạc nội bộ và chuông cửa" />
+      <PageHeader title={t('intercom.title')} description={t('intercom.description')} />
 
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <StatCard label="Thiết bị" value={String(mockDevices.length)} sub={`${online} online`} icon="📡" domain="secure" />
-        <StatCard label="Door Station" value={String(doorStations)} sub="Trạm cửa" icon="🚪" domain="secure" />
-        <StatCard label="Đã trả lời" value={String(answered)} sub={`/${mockCallRecords.length} cuộc gọi`} icon="✅" domain="default" />
-        <StatCard label="Cuộc nhỡ" value={String(missed)} sub="Cần kiểm tra" icon="📵" domain="error" />
+        <StatCard label={t('intercom.devices.title')} value={String(mockDevices.length)} sub={`${online} online`} icon="📡" domain="secure" />
+        <StatCard label="Door Station" value={String(doorStations)} sub={/* TODO: add i18n key */"Door stations"} icon="🚪" domain="secure" />
+        <StatCard label={t('intercom.calls.answered')} value={String(answered)} sub={`/${mockCallRecords.length} calls`} icon="✅" domain="default" />
+        <StatCard label={t('intercom.calls.missed')} value={String(missed)} sub={/* TODO: add i18n key */"Needs review"} icon="📵" domain="error" />
       </div>
 
       <div className="grid grid-cols-3 gap-6 mb-6">
         {/* Device list */}
         <div className="col-span-2">
-          <h2 className="text-[14px] font-semibold text-[#F8FAFC] mb-3">Danh sách thiết bị</h2>
+          <h2 className="text-[14px] font-semibold text-[#F8FAFC] mb-3">{t('intercom.devices.title')}</h2>
           <div className="grid grid-cols-2 gap-2">
             {mockDevices.map((d) => (
               <DeviceCard key={d.id} device={d} selected={selectedId === d.id} onClick={() => setSelectedId(d.id)} />
@@ -118,7 +124,7 @@ export function IntercomPage() {
 
         {/* Config panel */}
         <div>
-          <h2 className="text-[14px] font-semibold text-[#F8FAFC] mb-3">Cấu hình thiết bị</h2>
+          <h2 className="text-[14px] font-semibold text-[#F8FAFC] mb-3">{/* TODO: add i18n key */}Device Configuration</h2>
           <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-4">
             <ConfigPanel device={selectedDevice} />
           </div>
@@ -127,7 +133,7 @@ export function IntercomPage() {
 
       {/* Call history */}
       <div>
-        <h2 className="text-[14px] font-semibold text-[#F8FAFC] mb-3">Lịch sử cuộc gọi</h2>
+        <h2 className="text-[14px] font-semibold text-[#F8FAFC] mb-3">{t('intercom.calls.title')}</h2>
         <div className="bg-[#111827] border border-[#1E293B] rounded-lg overflow-hidden">
           <DataTable columns={callColumns} data={mockCallRecords} rowKey={(r) => r.id} />
         </div>

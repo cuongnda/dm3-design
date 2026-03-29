@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Plus, Pencil, Trash2, Shield, Clock, DoorOpen, Users, ChevronDown, ChevronRight } from 'lucide-react';
 import { PageHeader } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
@@ -88,6 +89,7 @@ function ruleToForm(rule: AccessRule): RuleFormData {
 /* ── Component ─────────────────────────────────────────────── */
 
 export function AccessRulesPage() {
+  const { t } = useTranslation('secure');
   const navigate = useNavigate();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -99,7 +101,7 @@ export function AccessRulesPage() {
   const { data: rulesData } = useRules(1, search ? { search } : undefined);
   const { data: doorsData } = useDoors(1, {}, 100); // Get more doors for selection
   const { data: groupsData } = useGroups(1, 100); // Get more groups for selection
-  
+
   const createRuleMutation = useCreateRule();
   const updateRuleMutation = useUpdateRule();
   const deleteRuleMutation = useDeleteRule();
@@ -129,7 +131,7 @@ export function AccessRulesPage() {
   // Save (create or update)
   const handleSave = async () => {
     if (!form.name.trim()) return;
-    
+
     try {
       // Convert form data to API format
       const ruleData = {
@@ -217,7 +219,7 @@ export function AccessRulesPage() {
       ),
     },
     {
-      key: 'name', header: 'Tên quy tắc', sortable: true,
+      key: 'name', header: t('accessRules.title'), sortable: true,
       render: (r) => (
         <span className={cn('font-medium', r.enabled ? 'text-[#F8FAFC]' : 'text-[#64748B]')}>
           {r.name}
@@ -225,7 +227,7 @@ export function AccessRulesPage() {
       ),
     },
     {
-      key: 'doors', header: 'Cửa', width: '100px',
+      key: 'doors', header: /* TODO: add i18n key */'Doors', width: '100px',
       render: (r) => (
         <span className="flex items-center gap-1 text-[#94A3B8] text-[12px]">
           <DoorOpen size={13} className="text-[#3B82F6]" />
@@ -234,7 +236,7 @@ export function AccessRulesPage() {
       ),
     },
     {
-      key: 'groups', header: 'Nhóm', width: '100px',
+      key: 'groups', header: /* TODO: add i18n key */'Groups', width: '100px',
       render: (r) => (
         <span className="flex items-center gap-1 text-[#94A3B8] text-[12px]">
           <Users size={13} className="text-[#8B5CF6]" />
@@ -243,7 +245,7 @@ export function AccessRulesPage() {
       ),
     },
     {
-      key: 'schedule', header: 'Lịch trình', width: '220px',
+      key: 'schedule', header: /* TODO: add i18n key */'Schedule', width: '220px',
       render: (r) => (
         <span className="flex items-center gap-1.5 text-[12px] text-[#94A3B8]">
           <Clock size={13} className="text-[#F59E0B]" />
@@ -252,7 +254,7 @@ export function AccessRulesPage() {
       ),
     },
     {
-      key: 'enabled', header: 'Trạng thái', width: '100px',
+      key: 'enabled', header: t('accessControl.table.status'), width: '100px',
       render: (r) => (
         <button
           onClick={(e) => { e.stopPropagation(); toggleEnabled(r.id); }}
@@ -299,13 +301,13 @@ export function AccessRulesPage() {
         >
           <ArrowLeft size={18} />
         </button>
-        <PageHeader title="Quản lý quy tắc truy cập">
+        <PageHeader title={t('accessRules.title')}>
           <button
             onClick={openCreate}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2563EB] rounded-md text-white text-[12px] font-medium hover:bg-[#1D4ED8] transition-colors"
           >
             <Plus size={14} />
-            Thêm quy tắc
+            {t('accessRules.addRule')}
           </button>
         </PageHeader>
       </div>
@@ -315,7 +317,7 @@ export function AccessRulesPage() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="🔍 Tìm quy tắc..."
+          placeholder={t('accessControl.searchPlaceholder')}
           className="flex-1 h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:border-[#3B82F6] focus:outline-none"
         />
       </div>
@@ -328,7 +330,7 @@ export function AccessRulesPage() {
           </div>
           <div>
             <p className="text-[18px] font-semibold text-[#F8FAFC]">{rules.length}</p>
-            <p className="text-[11px] text-[#64748B]">Tổng quy tắc</p>
+            <p className="text-[11px] text-[#64748B]">{t('accessRules.title')}</p>
           </div>
         </div>
         <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-3 flex items-center gap-3">
@@ -337,7 +339,7 @@ export function AccessRulesPage() {
           </div>
           <div>
             <p className="text-[18px] font-semibold text-[#F8FAFC]">{rules.filter((r) => r.enabled).length}</p>
-            <p className="text-[11px] text-[#64748B]">Đang hoạt động</p>
+            <p className="text-[11px] text-[#64748B]">{/* TODO: add i18n key */}Active</p>
           </div>
         </div>
         <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-3 flex items-center gap-3">
@@ -346,7 +348,7 @@ export function AccessRulesPage() {
           </div>
           <div>
             <p className="text-[18px] font-semibold text-[#F8FAFC]">{rules.reduce((s, r) => s + r.peopleCount, 0)}</p>
-            <p className="text-[11px] text-[#64748B]">Người được cấp quyền</p>
+            <p className="text-[11px] text-[#64748B]">{/* TODO: add i18n key */}People Authorized</p>
           </div>
         </div>
       </div>
@@ -376,21 +378,21 @@ export function AccessRulesPage() {
         <DialogContent className="bg-[#111827] border-[#1E293B] max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-[#F8FAFC]">
-              {editingId ? 'Chỉnh sửa quy tắc' : 'Tạo quy tắc mới'}
+              {editingId ? /* TODO: add i18n key */'Edit Rule' : /* TODO: add i18n key */'Create New Rule'}
             </DialogTitle>
             <DialogDescription className="text-[#94A3B8]">
-              {editingId ? 'Cập nhật thông tin quy tắc truy cập' : 'Thiết lập quy tắc truy cập mới cho hệ thống'}
+              {editingId ? /* TODO: add i18n key */'Update access rule details' : t('accessRules.description')}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
             {/* Rule name */}
             <div>
-              <label className="block text-[12px] text-[#94A3B8] mb-1">Tên quy tắc</label>
+              <label className="block text-[12px] text-[#94A3B8] mb-1">{t('accessRules.title')}</label>
               <input
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="VD: Nhân viên — Giờ hành chính"
+                placeholder={/* TODO: add i18n key */"VD: Nhân viên — Giờ hành chính"}
                 className="w-full h-8 px-3 bg-[#0A0E1A] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#475569] focus:border-[#3B82F6] focus:outline-none"
               />
             </div>
@@ -398,7 +400,7 @@ export function AccessRulesPage() {
             {/* Doors multi-select */}
             <div>
               <label className="block text-[12px] text-[#94A3B8] mb-1">
-                Cửa <span className="text-[#64748B]">({form.doors.length} đã chọn)</span>
+                {/* TODO: add i18n key */}Doors <span className="text-[#64748B]">({form.doors.length} selected)</span>
               </label>
               <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto p-2 bg-[#0A0E1A] border border-[#334155] rounded-md">
                 {availableDoors.map((d) => (
@@ -418,7 +420,7 @@ export function AccessRulesPage() {
             {/* Groups multi-select */}
             <div>
               <label className="block text-[12px] text-[#94A3B8] mb-1">
-                Nhóm truy cập <span className="text-[#64748B]">({form.groups.length} đã chọn)</span>
+                {/* TODO: add i18n key */}Access Groups <span className="text-[#64748B]">({form.groups.length} selected)</span>
               </label>
               <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto p-2 bg-[#0A0E1A] border border-[#334155] rounded-md">
                 {availableGroups.map((g) => (
@@ -437,7 +439,7 @@ export function AccessRulesPage() {
 
             {/* Schedule: days */}
             <div>
-              <label className="block text-[12px] text-[#94A3B8] mb-1">Ngày trong tuần</label>
+              <label className="block text-[12px] text-[#94A3B8] mb-1">{/* TODO: add i18n key */}Days of Week</label>
               <div className="flex gap-1.5">
                 {dayLabels.map((label, i) => (
                   <button
@@ -459,7 +461,7 @@ export function AccessRulesPage() {
             {/* Schedule: time range */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[12px] text-[#94A3B8] mb-1">Từ</label>
+                <label className="block text-[12px] text-[#94A3B8] mb-1">{/* TODO: add i18n key */}From</label>
                 <input
                   type="time"
                   value={form.startTime}
@@ -468,7 +470,7 @@ export function AccessRulesPage() {
                 />
               </div>
               <div>
-                <label className="block text-[12px] text-[#94A3B8] mb-1">Đến</label>
+                <label className="block text-[12px] text-[#94A3B8] mb-1">{/* TODO: add i18n key */}To</label>
                 <input
                   type="time"
                   value={form.endTime}
@@ -480,7 +482,7 @@ export function AccessRulesPage() {
 
             {/* Enable toggle */}
             <div className="flex items-center justify-between">
-              <label className="text-[12px] text-[#94A3B8]">Kích hoạt quy tắc</label>
+              <label className="text-[12px] text-[#94A3B8]">{/* TODO: add i18n key */}Enable Rule</label>
               <button
                 onClick={() => setForm((f) => ({ ...f, enabled: !f.enabled }))}
                 className={cn(
@@ -498,10 +500,10 @@ export function AccessRulesPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)} className="bg-[#1E293B] border-[#334155] text-[#94A3B8]">
-              Hủy
+              {/* TODO: add i18n key */}Cancel
             </Button>
             <Button onClick={handleSave} className="bg-[#2563EB] hover:bg-[#1D4ED8]" disabled={!form.name.trim()}>
-              {editingId ? 'Cập nhật' : 'Tạo quy tắc'}
+              {editingId ? /* TODO: add i18n key */'Update' : t('accessRules.addRule')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -511,17 +513,17 @@ export function AccessRulesPage() {
       <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <DialogContent className="bg-[#111827] border-[#1E293B]">
           <DialogHeader>
-            <DialogTitle className="text-[#F8FAFC]">Xóa quy tắc</DialogTitle>
+            <DialogTitle className="text-[#F8FAFC]">{/* TODO: add i18n key */}Delete Rule</DialogTitle>
             <DialogDescription className="text-[#94A3B8]">
-              Bạn có chắc muốn xóa quy tắc "{rules.find((r) => r.id === deleteId)?.name}"? Hành động này không thể hoàn tác.
+              {/* TODO: add i18n key */}Are you sure you want to delete rule "{rules.find((r) => r.id === deleteId)?.name}"? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)} className="bg-[#1E293B] border-[#334155] text-[#94A3B8]">
-              Hủy
+              {/* TODO: add i18n key */}Cancel
             </Button>
             <Button variant="destructive" onClick={handleDelete}>
-              Xóa
+              {/* TODO: add i18n key */}Delete
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -548,7 +550,7 @@ function ExpandedRuleDetail({
         <div>
           <h4 className="text-[11px] uppercase tracking-wider text-[#64748B] font-medium mb-2 flex items-center gap-1.5">
             <DoorOpen size={12} className="text-[#3B82F6]" />
-            Danh sách cửa ({rule.doors.length})
+            {/* TODO: add i18n key */}Doors ({rule.doors.length})
           </h4>
           <div className="space-y-1">
             {rule.doors.map((id) => (
@@ -563,7 +565,7 @@ function ExpandedRuleDetail({
         <div>
           <h4 className="text-[11px] uppercase tracking-wider text-[#64748B] font-medium mb-2 flex items-center gap-1.5">
             <Users size={12} className="text-[#8B5CF6]" />
-            Nhóm truy cập ({rule.groups.length})
+            {/* TODO: add i18n key */}Access Groups ({rule.groups.length})
           </h4>
           <div className="space-y-1">
             {rule.groups.map((id) => (
@@ -578,22 +580,22 @@ function ExpandedRuleDetail({
         <div>
           <h4 className="text-[11px] uppercase tracking-wider text-[#64748B] font-medium mb-2 flex items-center gap-1.5">
             <Clock size={12} className="text-[#F59E0B]" />
-            Lịch trình
+            {/* TODO: add i18n key */}Schedule
           </h4>
           <div className="space-y-1 mb-3">
             <div className="text-[12px] text-[#94A3B8]">
-              <span className="text-[#64748B]">Ngày:</span>{' '}
+              <span className="text-[#64748B]">{/* TODO: add i18n key */}Days:</span>{' '}
               {rule.schedule.days.map((d) => dayLabelsFull[d]).join(', ')}
             </div>
             <div className="text-[12px] text-[#94A3B8]">
-              <span className="text-[#64748B]">Giờ:</span>{' '}
+              <span className="text-[#64748B]">{/* TODO: add i18n key */}Hours:</span>{' '}
               {rule.schedule.startTime} – {rule.schedule.endTime}
             </div>
           </div>
           <div className="flex items-center gap-2 p-2 bg-[#111827] rounded">
             <Users size={14} className="text-[#22C55E]" />
             <span className="text-[12px] text-[#94A3B8]">
-              <span className="text-[#F8FAFC] font-medium">{rule.peopleCount}</span> người được cấp quyền
+              <span className="text-[#F8FAFC] font-medium">{rule.peopleCount}</span> {/* TODO: add i18n key */}people authorized
             </span>
           </div>
         </div>

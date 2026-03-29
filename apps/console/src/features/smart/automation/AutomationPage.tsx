@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { PageHeader } from '@dm3/ui';
 import { StatCard } from '@dm3/ui';
@@ -5,13 +6,8 @@ import { DataTable, type Column } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { rules, executionLogs, summary, type AutomationRule, type ExecutionLog } from './mock-data';
 
-const resultCfg: Record<string, { color: string; label: string }> = {
-  success: { color: '#22C55E', label: 'Thành công' },
-  failed: { color: '#EF4444', label: 'Thất bại' },
-  skipped: { color: '#64748B', label: 'Bỏ qua' },
-};
-
 export function AutomationPage() {
+  const { t } = useTranslation('smart');
   const [tab, setTab] = useState<'rules' | 'logs'>('rules');
   const [ruleStates, setRuleStates] = useState<Record<string, boolean>>(
     Object.fromEntries(rules.map(r => [r.id, r.enabled]))
@@ -19,6 +15,12 @@ export function AutomationPage() {
 
   const toggleRule = (id: string) => {
     setRuleStates(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const resultCfg: Record<string, { color: string; label: string }> = {
+    success: { color: '#22C55E', label: t('automation.result.success') },
+    failed: { color: '#EF4444', label: t('automation.result.failed') },
+    skipped: { color: '#64748B', label: t('automation.result.skipped') },
   };
 
   const logCols: Column<ExecutionLog>[] = [
@@ -35,8 +37,8 @@ export function AutomationPage() {
 
   return (
     <div>
-      <PageHeader title="Tự động hóa" description="Quản lý quy tắc tự động hóa tòa nhà">
-        <button className="px-3 py-1.5 bg-[#06B6D4] text-[#0F172A] rounded-md text-[12px] font-medium">+ Tạo quy tắc</button>
+      <PageHeader title={t('automation.title')} description={t('automation.description')}>
+        <button className="px-3 py-1.5 bg-[#06B6D4] text-[#0F172A] rounded-md text-[12px] font-medium">+ {t('automation.createRule')}</button>
       </PageHeader>
 
       <div className="grid grid-cols-4 gap-3 mb-6">
@@ -47,12 +49,12 @@ export function AutomationPage() {
       </div>
 
       <div className="flex gap-2 mb-4">
-        {(['rules', 'logs'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} className={cn(
+        {(['rules', 'logs'] as const).map(tabKey => (
+          <button key={tabKey} onClick={() => setTab(tabKey)} className={cn(
             'px-3 py-1.5 rounded-md text-[12px] font-medium border',
-            tab === t ? 'bg-[#06B6D4]/20 border-[#06B6D4]/50 text-[#06B6D4]' : 'bg-[#1E293B] border-[#334155] text-[#94A3B8]'
+            tab === tabKey ? 'bg-[#06B6D4]/20 border-[#06B6D4]/50 text-[#06B6D4]' : 'bg-[#1E293B] border-[#334155] text-[#94A3B8]'
           )}>
-            {t === 'rules' ? '⚡ Quy tắc' : '📋 Nhật ký'}
+            {tabKey === 'rules' ? `⚡ ${t('automation.tab.rules')}` : `📋 ${t('automation.tab.log')}`}
           </button>
         ))}
       </div>

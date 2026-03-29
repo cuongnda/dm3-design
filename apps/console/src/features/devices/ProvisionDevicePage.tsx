@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@dm3/ui';
 import { regenerateQR, type ProvisionResponse, type RegenerateQRResponse } from '@/lib/api';
 import { useProvisionDevice } from '@/lib/hooks';
@@ -8,6 +9,7 @@ import { ArrowLeft, Copy, Check, RefreshCw } from 'lucide-react';
 const DEVICE_TYPES = ['terminal', 'controller', 'sensor', 'camera'] as const;
 
 export function ProvisionDevicePage() {
+  const { t } = useTranslation('devices');
   const [step, setStep] = useState<'form' | 'qr'>('form');
   const [error, setError] = useState('');
   const [result, setResult] = useState<ProvisionResponse | null>(null);
@@ -38,7 +40,7 @@ export function ProvisionDevicePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
+
     try {
       const res = await provisionMutation.mutateAsync({
         device_id: deviceId,
@@ -130,32 +132,32 @@ export function ProvisionDevicePage() {
 
   return (
     <div className="p-6">
-      <PageHeader title="Provision Device" description="Create a new device and generate activation QR code" />
+      <PageHeader title={t('provisionDevice.title')} description="Create a new device and generate activation QR code" />
 
       <form onSubmit={handleSubmit} className="max-w-lg space-y-4">
         <div>
-          <label className={labelCls}>Device ID (6-digit)</label>
-          <input value={deviceId} onChange={(e) => setDeviceId(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000001" required pattern="\d{6}" className={inputCls} />
+          <label className={labelCls}>{t('provisionDevice.form.deviceId')}</label>
+          <input value={deviceId} onChange={(e) => setDeviceId(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder={t('provisionDevice.form.deviceIdPlaceholder')} required pattern="\d{6}" className={inputCls} />
         </div>
         <div>
-          <label className={labelCls}>Device Name</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Lobby A — Gate 1" required className={inputCls} />
+          <label className={labelCls}>{t('provisionDevice.form.deviceName')}</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('provisionDevice.form.deviceNamePlaceholder')} required className={inputCls} />
         </div>
         <div>
-          <label className={labelCls}>Device Type</label>
+          <label className={labelCls}>{t('provisionDevice.form.deviceType')}</label>
           <select value={type} onChange={(e) => setType(e.target.value)} className={inputCls}>
             {DEVICE_TYPES.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
           </select>
         </div>
         <div>
-          <label className={labelCls}>Location</label>
-          <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Building A, Floor 1" className={inputCls} />
+          <label className={labelCls}>{t('provisionDevice.form.location')}</label>
+          <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder={t('provisionDevice.form.locationPlaceholder')} className={inputCls} />
         </div>
 
         {error && <p className="text-[12px] text-[#EF4444]">{error}</p>}
 
         <button type="submit" disabled={provisionMutation.isPending || deviceId.length !== 6 || !name} className="px-4 py-2 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-md text-[13px] font-medium transition-colors disabled:opacity-50">
-          {provisionMutation.isPending ? 'Provisioning...' : 'Create Device & Generate QR'}
+          {provisionMutation.isPending ? 'Provisioning...' : t('provisionDevice.form.submit')}
         </button>
       </form>
     </div>

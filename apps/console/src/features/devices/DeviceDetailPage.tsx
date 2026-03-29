@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
 import { fetchDeviceEvents, type EventDTO } from '@/lib/api';
@@ -16,16 +17,10 @@ const statusColors: Record<string, string> = {
   error: 'bg-[#EF4444]/10 text-[#EF4444]',
 };
 
-const commandButtons = [
-  { id: 'unlock', label: 'Unlock', icon: Unlock, color: 'bg-[#22C55E] hover:bg-[#16A34A]' },
-  { id: 'lock', label: 'Lock', icon: Lock, color: 'bg-[#EF4444] hover:bg-[#DC2626]' },
-  { id: 'reboot', label: 'Reboot', icon: RotateCcw, color: 'bg-[#F97316] hover:bg-[#EA580C]' },
-  { id: 'snapshot', label: 'Snapshot', icon: Camera, color: 'bg-[#3B82F6] hover:bg-[#2563EB]' },
-];
-
 export function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation('devices');
   const [recentEvents, setRecentEvents] = useState<EventDTO[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
 
@@ -36,6 +31,13 @@ export function DeviceDetailPage() {
   const isConnected = useRealtimeStore((s) => s.connected);
   const deviceStatuses = useDeviceStatus() as any[];
   const realtimeStatus = device ? deviceStatuses.find(s => s.deviceId === device.device_id) : null;
+
+  const commandButtons = [
+    { id: 'unlock', label: t('deviceDetail.command.unlock'), icon: Unlock, color: 'bg-[#22C55E] hover:bg-[#16A34A]' },
+    { id: 'lock', label: t('deviceDetail.command.lock'), icon: Lock, color: 'bg-[#EF4444] hover:bg-[#DC2626]' },
+    { id: 'reboot', label: t('deviceDetail.command.reboot'), icon: RotateCcw, color: 'bg-[#F97316] hover:bg-[#EA580C]' },
+    { id: 'snapshot', label: t('deviceDetail.command.snapshot'), icon: Camera, color: 'bg-[#3B82F6] hover:bg-[#2563EB]' },
+  ];
 
   useEffect(() => {
     if (!device) return;
@@ -83,8 +85,8 @@ export function DeviceDetailPage() {
   if (!device) {
     return (
       <div className="p-6">
-        <button 
-          onClick={() => navigate('/devices')} 
+        <button
+          onClick={() => navigate('/devices')}
           className="flex items-center gap-1 text-[13px] text-[#94A3B8] hover:text-[#F8FAFC] mb-4 transition-colors"
         >
           <ArrowLeft size={14} /> Back to Devices
@@ -105,9 +107,9 @@ export function DeviceDetailPage() {
   };
 
   const eventColumns: Column<EventDTO>[] = [
-    { 
-      key: 'time', 
-      header: 'Time', 
+    {
+      key: 'time',
+      header: 'Time',
       width: '140px',
       render: (r) => (
         <span className="text-[12px] text-[#94A3B8] font-mono">
@@ -115,18 +117,18 @@ export function DeviceDetailPage() {
         </span>
       ),
     },
-    { 
-      key: 'person_name', 
-      header: 'Person', 
+    {
+      key: 'person_name',
+      header: 'Person',
       render: (r) => (
         <span className="text-[13px] text-[#F8FAFC]">
           {r.person_name || '—'}
         </span>
       ),
     },
-    { 
-      key: 'decision', 
-      header: 'Decision', 
+    {
+      key: 'decision',
+      header: 'Decision',
       width: '100px',
       render: (r) => {
         const isGranted = r.decision === 'granted';
@@ -134,14 +136,14 @@ export function DeviceDetailPage() {
           <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium ${
             isGranted ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-[#EF4444]/10 text-[#EF4444]'
           }`}>
-            {r.decision}
+            {isGranted ? t('deviceDetail.event.granted') : t('deviceDetail.event.denied')}
           </span>
         );
       },
     },
-    { 
-      key: 'reason', 
-      header: 'Reason', 
+    {
+      key: 'reason',
+      header: 'Reason',
       render: (r) => (
         <span className="text-[12px] text-[#64748B]">
           {r.reason || '—'}
@@ -152,14 +154,14 @@ export function DeviceDetailPage() {
 
   return (
     <div className="p-6">
-      <button 
-        onClick={() => navigate('/devices')} 
+      <button
+        onClick={() => navigate('/devices')}
         className="flex items-center gap-1 text-[13px] text-[#94A3B8] hover:text-[#F8FAFC] mb-4 transition-colors"
       >
         <ArrowLeft size={14} /> Back to Devices
       </button>
 
-      <PageHeader 
+      <PageHeader
         title={`Device: ${deviceWithRealtimeStatus.device_id}`}
         description={deviceWithRealtimeStatus.name || 'Unnamed device'}
       />
@@ -171,15 +173,15 @@ export function DeviceDetailPage() {
           <h3 className="text-[14px] font-medium text-[#F8FAFC] mb-3">Device Information</h3>
           <div className="grid grid-cols-2 gap-4 text-[13px]">
             <div>
-              <span className="text-[#64748B]">ID:</span>
+              <span className="text-[#64748B]">{t('deviceDetail.field.deviceId')}:</span>
               <span className="ml-2 text-[#F8FAFC] font-mono">{device.device_id}</span>
             </div>
             <div>
-              <span className="text-[#64748B]">Type:</span>
+              <span className="text-[#64748B]">{t('deviceDetail.field.type')}:</span>
               <span className="ml-2 text-[#F8FAFC] capitalize">{device.type}</span>
             </div>
             <div>
-              <span className="text-[#64748B]">Status:</span>
+              <span className="text-[#64748B]">{t('deviceDetail.field.status')}:</span>
               <span className={`ml-2 inline-block px-2 py-0.5 rounded text-[11px] font-medium capitalize ${
                 statusColors[deviceWithRealtimeStatus.status] || statusColors.offline
               }`}>
@@ -190,20 +192,20 @@ export function DeviceDetailPage() {
               )}
             </div>
             <div>
-              <span className="text-[#64748B]">Last Seen:</span>
+              <span className="text-[#64748B]">{t('deviceDetail.field.lastSeen')}:</span>
               <span className="ml-2 text-[#F8FAFC] font-mono text-[12px]">
-                {deviceWithRealtimeStatus.last_seen 
+                {deviceWithRealtimeStatus.last_seen
                   ? new Date(deviceWithRealtimeStatus.last_seen).toLocaleString()
                   : '—'
                 }
               </span>
             </div>
             <div>
-              <span className="text-[#64748B]">Firmware:</span>
+              <span className="text-[#64748B]">{t('deviceDetail.field.firmware')}:</span>
               <span className="ml-2 text-[#F8FAFC] font-mono">{device.firmware_version || '—'}</span>
             </div>
             <div>
-              <span className="text-[#64748B]">Location:</span>
+              <span className="text-[#64748B]">{t('deviceDetail.field.location')}:</span>
               <span className="ml-2 text-[#F8FAFC]">{device.location || '—'}</span>
             </div>
           </div>
@@ -211,7 +213,7 @@ export function DeviceDetailPage() {
           {/* Real-time Performance Data */}
           {realtimeStatus && isConnected && (
             <div className="mt-4 pt-4 border-t border-[#1E293B]">
-              <h4 className="text-[13px] font-medium text-[#94A3B8] mb-2">Live Performance</h4>
+              <h4 className="text-[13px] font-medium text-[#94A3B8] mb-2">{t('deviceDetail.livePerformance')}</h4>
               <div className="grid grid-cols-3 gap-4 text-[12px]">
                 <div>
                   <span className="text-[#64748B]">CPU:</span>
@@ -234,7 +236,7 @@ export function DeviceDetailPage() {
 
         {/* Commands */}
         <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-4">
-          <h3 className="text-[14px] font-medium text-[#F8FAFC] mb-3">Device Commands</h3>
+          <h3 className="text-[14px] font-medium text-[#F8FAFC] mb-3">{t('deviceDetail.commands')}</h3>
           <div className="space-y-2">
             {commandButtons.map(({ id, label, icon: Icon, color }) => (
               <button
@@ -248,11 +250,11 @@ export function DeviceDetailPage() {
               </button>
             ))}
           </div>
-          
+
           {sendCommand.isPending && (
             <p className="text-[12px] text-[#3B82F6] mt-2">Sending command...</p>
           )}
-          
+
           {deviceWithRealtimeStatus.status === 'offline' && (
             <p className="text-[12px] text-[#64748B] mt-2">
               <WifiOff size={12} className="inline mr-1" />
@@ -265,7 +267,7 @@ export function DeviceDetailPage() {
       {/* Recent Events */}
       <div className="bg-[#111827] border border-[#1E293B] rounded-lg">
         <div className="p-4 border-b border-[#1E293B]">
-          <h3 className="text-[14px] font-medium text-[#F8FAFC]">Recent Events</h3>
+          <h3 className="text-[14px] font-medium text-[#F8FAFC]">{t('deviceDetail.recentEvents')}</h3>
         </div>
         {eventsLoading ? (
           <div className="p-8 text-center">
@@ -276,9 +278,9 @@ export function DeviceDetailPage() {
             No recent events
           </div>
         ) : (
-          <DataTable 
-            columns={eventColumns} 
-            data={recentEvents} 
+          <DataTable
+            columns={eventColumns}
+            data={recentEvents}
             rowKey={(r) => r.id}
           />
         )}

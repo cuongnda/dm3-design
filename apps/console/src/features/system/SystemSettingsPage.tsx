@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 
@@ -29,6 +30,7 @@ function Field({ label, value, type = 'text', placeholder }: { label: string; va
 }
 
 export function SystemSettingsPage() {
+  const { t } = useTranslation('system');
   const [tab, setTab] = useState<Tab>('general');
   const [security, setSecurity] = useState({
     requireSpecialChars: true,
@@ -44,32 +46,32 @@ export function SystemSettingsPage() {
   const [backup, setBackup] = useState({ autoBackup: true });
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
-    { key: 'general', label: 'Chung', icon: '⚙️' },
-    { key: 'security', label: 'Bảo mật', icon: '🔐' },
+    { key: 'general', label: t('systemSettings.tabs.general'), icon: '⚙️' },
+    { key: 'security', label: t('systemSettings.tabs.security'), icon: '🔐' },
     { key: 'email', label: 'Email / SMTP', icon: '📧' },
-    { key: 'notifications', label: 'Thông báo', icon: '🔔' },
-    { key: 'backup', label: 'Backup', icon: '💾' },
+    { key: 'notifications', label: t('systemSettings.tabs.monitoring'), icon: '🔔' },
+    { key: 'backup', label: t('systemSettings.tabs.backup'), icon: '💾' },
   ];
 
   return (
     <div className="p-6">
-      <PageHeader title="Cài đặt hệ thống" description="Quản lý cấu hình toàn hệ thống" />
+      <PageHeader title={t('systemSettings.title')} description={t('systemSettings.description')} />
 
       <div className="flex gap-6">
         {/* Tab sidebar */}
         <div className="w-48 space-y-1">
-          {tabs.map((t) => (
+          {tabs.map((tabItem) => (
             <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
+              key={tabItem.key}
+              onClick={() => setTab(tabItem.key)}
               className={cn(
                 'w-full text-left px-3 py-2 rounded-md text-[13px] font-medium transition-colors',
-                tab === t.key
+                tab === tabItem.key
                   ? 'bg-[#F97316]/10 text-[#F97316] border border-[#F97316]/30'
                   : 'text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1E293B]'
               )}
             >
-              {t.icon} {t.label}
+              {tabItem.icon} {tabItem.label}
             </button>
           ))}
         </div>
@@ -78,11 +80,11 @@ export function SystemSettingsPage() {
         <div className="flex-1 bg-[#1E293B] border border-[#334155] rounded-lg p-6">
           {tab === 'general' && (
             <div>
-              <h3 className="text-[16px] font-semibold text-[#F8FAFC] mb-4">Cài đặt chung</h3>
+              <h3 className="text-[16px] font-semibold text-[#F8FAFC] mb-4">{t('general.title')}</h3>
               <div className="grid grid-cols-2 gap-4 max-w-xl">
-                <Field label="Tên hệ thống" value="Duall Master" />
+                <Field label={t('general.systemName')} value="Duall Master" />
                 <div>
-                  <label className="block text-[12px] text-[#94A3B8] mb-1">Múi giờ mặc định</label>
+                  <label className="block text-[12px] text-[#94A3B8] mb-1">{t('general.timezone')}</label>
                   <select className="w-full h-9 px-3 bg-[#0B1120] border border-[#1E293B] rounded-md text-[#F8FAFC] text-[13px] focus:border-[#F97316] focus:outline-none">
                     <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (GMT+7)</option>
                     <option value="Asia/Seoul">Asia/Seoul (GMT+9)</option>
@@ -107,23 +109,23 @@ export function SystemSettingsPage() {
 
           {tab === 'security' && (
             <div>
-              <h3 className="text-[16px] font-semibold text-[#F8FAFC] mb-4">Chính sách bảo mật</h3>
+              <h3 className="text-[16px] font-semibold text-[#F8FAFC] mb-4">{t('systemSecurity.title')}</h3>
               <div className="space-y-6 max-w-xl">
                 <div>
-                  <h4 className="text-[13px] font-medium text-[#F8FAFC] mb-3">Chính sách mật khẩu</h4>
+                  <h4 className="text-[13px] font-medium text-[#F8FAFC] mb-3">{t('systemSecurity.passwordPolicy')}</h4>
                   <div className="grid grid-cols-2 gap-4">
-                    <Field label="Độ dài tối thiểu" value="8" type="number" />
+                    <Field label={t('systemSecurity.minLength')} value="8" type="number" />
                     <Field label="Hết hạn sau (ngày)" value="90" type="number" />
                   </div>
                   <div className="flex items-center justify-between bg-[#111827] rounded-md p-3 mt-3">
-                    <span className="text-[13px] text-[#F8FAFC]">Yêu cầu ký tự đặc biệt</span>
+                    <span className="text-[13px] text-[#F8FAFC]">{t('systemSecurity.requireSymbols')}</span>
                     <Toggle checked={security.requireSpecialChars} onChange={() => setSecurity((p) => ({ ...p, requireSpecialChars: !p.requireSpecialChars }))} />
                   </div>
                 </div>
                 <div>
                   <h4 className="text-[13px] font-medium text-[#F8FAFC] mb-3">Đăng nhập</h4>
                   <div className="space-y-3">
-                    <Field label="Số lần đăng nhập sai tối đa" value="5" type="number" />
+                    <Field label={t('systemSecurity.maxAttempts')} value="5" type="number" />
                     <div className="flex items-center justify-between bg-[#111827] rounded-md p-3">
                       <div>
                         <div className="text-[13px] text-[#F8FAFC]">Bắt buộc xác thực 2 lớp (2FA)</div>
@@ -181,7 +183,7 @@ export function SystemSettingsPage() {
 
           {tab === 'notifications' && (
             <div>
-              <h3 className="text-[16px] font-semibold text-[#F8FAFC] mb-4">Cài đặt thông báo</h3>
+              <h3 className="text-[16px] font-semibold text-[#F8FAFC] mb-4">{t('monitoring.alerts')}</h3>
               <div className="space-y-3 max-w-xl">
                 {[
                   { key: 'emailAlerts' as const, label: 'Thông báo qua Email', desc: 'Gửi email khi có cảnh báo mới' },
@@ -215,7 +217,7 @@ export function SystemSettingsPage() {
 
           {tab === 'backup' && (
             <div>
-              <h3 className="text-[16px] font-semibold text-[#F8FAFC] mb-4">Sao lưu dữ liệu</h3>
+              <h3 className="text-[16px] font-semibold text-[#F8FAFC] mb-4">{t('backup.title')}</h3>
               <div className="space-y-4 max-w-xl">
                 <div className="flex items-center justify-between bg-[#111827] rounded-md p-3">
                   <div>
@@ -226,19 +228,19 @@ export function SystemSettingsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[12px] text-[#94A3B8] mb-1">Tần suất</label>
+                    <label className="block text-[12px] text-[#94A3B8] mb-1">{t('backup.frequency')}</label>
                     <select className="w-full h-9 px-3 bg-[#0B1120] border border-[#1E293B] rounded-md text-[#F8FAFC] text-[13px] focus:border-[#F97316] focus:outline-none">
-                      <option value="daily">Hàng ngày</option>
-                      <option value="weekly">Hàng tuần</option>
-                      <option value="monthly">Hàng tháng</option>
+                      <option value="daily">{t('backup.frequency.daily')}</option>
+                      <option value="weekly">{t('backup.frequency.weekly')}</option>
+                      <option value="monthly">{t('backup.frequency.monthly')}</option>
                     </select>
                   </div>
-                  <Field label="Lưu trữ (ngày)" value="30" type="number" />
+                  <Field label={t('backup.retention')} value="30" type="number" />
                 </div>
 
                 {/* Last backup info */}
                 <div className="bg-[#111827] rounded-lg p-4 border border-[#1E293B]">
-                  <h4 className="text-[13px] font-medium text-[#F8FAFC] mb-3">Lần sao lưu gần nhất</h4>
+                  <h4 className="text-[13px] font-medium text-[#F8FAFC] mb-3">{t('backup.lastBackup')}</h4>
                   <div className="grid grid-cols-2 gap-y-2 text-[12px]">
                     <span className="text-[#64748B]">Thời gian:</span>
                     <span className="text-[#F8FAFC]">04/03/2026 04:00</span>
@@ -256,7 +258,7 @@ export function SystemSettingsPage() {
                   Lưu thay đổi
                 </button>
                 <button className="px-4 py-2 rounded-md text-[13px] font-medium text-[#F8FAFC] bg-[#1E293B] border border-[#334155] hover:bg-[#334155] transition-colors">
-                  💾 Sao lưu ngay
+                  💾 {t('backup.backupNow')}
                 </button>
               </div>
             </div>

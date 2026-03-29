@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Check, Copy } from 'lucide-react';
 import { createCompany, type CreateCompanyResponse } from '@/lib/api';
 
@@ -7,6 +8,7 @@ const plans = ['trial', 'starter', 'professional', 'enterprise'];
 
 export function CreateCompanyPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation('system');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<CreateCompanyResponse | null>(null);
@@ -61,7 +63,7 @@ export function CreateCompanyPage() {
 
           <div className="bg-[#0B1120] border border-[#F97316]/30 rounded-md p-4 mb-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] uppercase tracking-wider text-[#F97316] font-medium">Primary Manager Credentials</span>
+              <span className="text-[11px] uppercase tracking-wider text-[#F97316] font-medium">{t('createCompany.credentials')}</span>
               <button onClick={copyCredentials} className="text-[#94A3B8] hover:text-[#F8FAFC]">
                 {copied ? <Check size={14} className="text-[#22C55E]" /> : <Copy size={14} />}
               </button>
@@ -92,7 +94,7 @@ export function CreateCompanyPage() {
       <button onClick={() => navigate('/system/companies')} className="flex items-center gap-1.5 text-[13px] text-[#94A3B8] hover:text-[#F8FAFC] mb-4 transition-colors">
         <ArrowLeft size={15} /> Back to Companies
       </button>
-      <h1 className="text-[20px] font-semibold text-[#F8FAFC] mb-6">Create Company</h1>
+      <h1 className="text-[20px] font-semibold text-[#F8FAFC] mb-6">{t('createCompany.title')}</h1>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {error && (
@@ -101,45 +103,45 @@ export function CreateCompanyPage() {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Company Name *</label>
+            <label className={labelCls}>{t('createCompany.form.name')} *</label>
             <input required value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Acme Corp" className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Company Code *</label>
+            <label className={labelCls}>{t('createCompany.form.code')} *</label>
             <input required value={form.code} onChange={(e) => set('code', e.target.value.toUpperCase())} placeholder="ACME" className={inputCls} />
           </div>
         </div>
 
         <div>
-          <label className={labelCls}>Primary Manager Email *</label>
+          <label className={labelCls}>{t('createCompany.form.managerEmail')} *</label>
           <input required type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="manager@acme.com" className={inputCls} />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Plan</label>
+            <label className={labelCls}>{t('createCompany.form.plan')}</label>
             <select value={form.plan} onChange={(e) => set('plan', e.target.value)} className={inputCls}>
               {plans.map((p) => <option key={p} value={p} className="capitalize">{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
             </select>
           </div>
           <div>
-            <label className={labelCls}>Phone</label>
+            <label className={labelCls}>{t('createCompany.form.phone')}</label>
             <input value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="+84..." className={inputCls} />
           </div>
         </div>
 
         <div>
-          <label className={labelCls}>Address</label>
+          <label className={labelCls}>{t('createCompany.form.address')}</label>
           <input value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="123 Main St" className={inputCls} />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Max Devices</label>
+            <label className={labelCls}>{t('createCompany.form.maxDevices')}</label>
             <input type="number" value={form.max_devices} onChange={(e) => set('max_devices', +e.target.value)} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Max Users</label>
+            <label className={labelCls}>{t('createCompany.form.maxUsers')}</label>
             <input type="number" value={form.max_users} onChange={(e) => set('max_users', +e.target.value)} className={inputCls} />
           </div>
         </div>
@@ -149,7 +151,7 @@ export function CreateCompanyPage() {
           disabled={loading}
           className="h-9 px-6 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-md text-[13px] font-medium transition-colors disabled:opacity-60"
         >
-          {loading ? 'Creating...' : 'Create Company'}
+          {loading ? 'Creating...' : t('createCompany.submit')}
         </button>
       </form>
     </div>

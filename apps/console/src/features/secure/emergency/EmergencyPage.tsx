@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
 import { cn } from '@/lib/utils';
@@ -7,50 +8,28 @@ import type { EmergencyType, EmergencyEvent } from './mock-data';
 
 const typeKeys: EmergencyType[] = ['fire', 'lockdown', 'medical', 'intruder'];
 
-const eventColumns: Column<EmergencyEvent>[] = [
-  { key: 'time', header: 'Thời gian', width: '140px', sortable: true },
-  {
-    key: 'type', header: 'Loại', sortable: true,
-    render: (r) => {
-      const cfg = emergencyTypeConfig[r.type];
-      return <span style={{ color: cfg.color }}>{cfg.icon} {cfg.label}</span>;
-    },
-  },
-  { key: 'activatedBy', header: 'Kích hoạt bởi' },
-  { key: 'duration', header: 'Thời gian XL', width: '100px' },
-  {
-    key: 'status', header: 'Trạng thái',
-    render: (r) => (
-      <span className={r.status === 'active' ? 'text-[#EF4444] font-medium' : 'text-[#22C55E]'}>
-        {r.status === 'active' ? '⚠ Đang hoạt động' : '✓ Đã xử lý'}
-      </span>
-    ),
-  },
-  { key: 'description', header: 'Mô tả' },
-];
-
 function ConfirmDialog({ type, onConfirm, onCancel }: { type: EmergencyType; onConfirm: () => void; onCancel: () => void }) {
   const [count, setCount] = useState(3);
   const cfg = emergencyTypeConfig[type];
 
   useEffect(() => {
     if (count <= 0) { onConfirm(); return; }
-    const t = setTimeout(() => setCount((c) => c - 1), 1000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setCount((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
   }, [count, onConfirm]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
       <div className="bg-[#111827] border border-[#334155] rounded-xl p-8 max-w-md w-full text-center">
         <div className="text-[48px] mb-4">{cfg.icon}</div>
-        <h2 className="text-[20px] font-bold text-[#F8FAFC] mb-2">Kích hoạt {cfg.label}?</h2>
-        <p className="text-[14px] text-[#94A3B8] mb-6">Hệ thống sẽ kích hoạt trong...</p>
+        <h2 className="text-[20px] font-bold text-[#F8FAFC] mb-2">{/* TODO: add i18n key */}Activate {cfg.label}?</h2>
+        <p className="text-[14px] text-[#94A3B8] mb-6">{/* TODO: add i18n key */}System will activate in...</p>
         <div className="text-[64px] font-bold mb-6" style={{ color: cfg.color }}>{count}</div>
         <button
           onClick={onCancel}
           className="px-6 py-3 bg-[#1E293B] border border-[#334155] rounded-lg text-[#F8FAFC] text-[14px] font-medium hover:bg-[#334155] transition-colors"
         >
-          ✕ Hủy bỏ
+          {/* TODO: add i18n key */}✕ Cancel
         </button>
       </div>
     </div>
@@ -58,8 +37,31 @@ function ConfirmDialog({ type, onConfirm, onCancel }: { type: EmergencyType; onC
 }
 
 export function EmergencyPage() {
+  const { t } = useTranslation('secure');
   const [activeEmergency, setActiveEmergency] = useState<EmergencyType | null>(null);
   const [confirming, setConfirming] = useState<EmergencyType | null>(null);
+
+  const eventColumns: Column<EmergencyEvent>[] = [
+    { key: 'time', header: /* TODO: add i18n key */'Time', width: '140px', sortable: true },
+    {
+      key: 'type', header: /* TODO: add i18n key */'Type', sortable: true,
+      render: (r) => {
+        const cfg = emergencyTypeConfig[r.type];
+        return <span style={{ color: cfg.color }}>{cfg.icon} {cfg.label}</span>;
+      },
+    },
+    { key: 'activatedBy', header: /* TODO: add i18n key */'Activated By' },
+    { key: 'duration', header: /* TODO: add i18n key */'Duration', width: '100px' },
+    {
+      key: 'status', header: t('accessControl.table.status'),
+      render: (r) => (
+        <span className={r.status === 'active' ? 'text-[#EF4444] font-medium' : 'text-[#22C55E]'}>
+          {r.status === 'active' ? `⚠ ${t('emergency.status.alert')}` : `✓ ${/* TODO: add i18n key */'Resolved'}`}
+        </span>
+      ),
+    },
+    { key: 'description', header: /* TODO: add i18n key */'Description' },
+  ];
 
   const handleActivate = useCallback(() => {
     if (confirming) {
@@ -74,7 +76,7 @@ export function EmergencyPage() {
     <div>
       {confirming && <ConfirmDialog type={confirming} onConfirm={handleActivate} onCancel={() => setConfirming(null)} />}
 
-      <PageHeader title="Emergency Management" description="Quản lý tình huống khẩn cấp" />
+      <PageHeader title={t('emergency.title')} description={t('emergency.description')} />
 
       {/* Active emergency banner */}
       {activeEmergency && (
@@ -84,16 +86,16 @@ export function EmergencyPage() {
               <span className="text-[32px]">{emergencyTypeConfig[activeEmergency].icon}</span>
               <div>
                 <div className="text-[18px] font-bold" style={{ color: emergencyTypeConfig[activeEmergency].color }}>
-                  ⚠ TÌNH HUỐNG KHẨN CẤP: {emergencyTypeConfig[activeEmergency].label.toUpperCase()}
+                  ⚠ {t('emergency.status.emergency')}: {emergencyTypeConfig[activeEmergency].label.toUpperCase()}
                 </div>
-                <div className="text-[13px] text-[#94A3B8]">Đang hoạt động — Tất cả nhân viên tuân thủ quy trình an toàn</div>
+                <div className="text-[13px] text-[#94A3B8]">{/* TODO: add i18n key */}Active — All personnel follow safety procedures</div>
               </div>
             </div>
             <button
               onClick={handleDeactivate}
               className="px-4 py-2 bg-[#22C55E]/10 border border-[#22C55E]/30 rounded-lg text-[#22C55E] text-[13px] font-medium hover:bg-[#22C55E]/20 transition-colors"
             >
-              ✓ All Clear — Hủy báo động
+              {/* TODO: add i18n key */}✓ All Clear — Cancel Alarm
             </button>
           </div>
         </div>
@@ -122,7 +124,7 @@ export function EmergencyPage() {
             >
               <div className="text-[40px] mb-3">{cfg.icon}</div>
               <div className="text-[16px] font-bold" style={{ color: cfg.color }}>{cfg.label}</div>
-              <div className="text-[12px] text-[#64748B] mt-1">{isActive ? 'ĐANG HOẠT ĐỘNG' : 'Nhấn để kích hoạt'}</div>
+              <div className="text-[12px] text-[#64748B] mt-1">{isActive ? t('emergency.status.emergency') : /* TODO: add i18n key */'Click to activate'}</div>
             </button>
           );
         })}
@@ -130,7 +132,7 @@ export function EmergencyPage() {
 
       {/* Response plans */}
       <div className="mb-6">
-        <h2 className="text-[14px] font-semibold text-[#F8FAFC] mb-3">Phương án ứng phó</h2>
+        <h2 className="text-[14px] font-semibold text-[#F8FAFC] mb-3">{t('emergency.procedures.title')}</h2>
         <div className="grid grid-cols-2 gap-4">
           {mockResponsePlans.map((plan) => {
             const cfg = emergencyTypeConfig[plan.type];
@@ -161,7 +163,7 @@ export function EmergencyPage() {
 
       {/* Event log */}
       <div>
-        <h2 className="text-[14px] font-semibold text-[#F8FAFC] mb-3">Nhật ký sự kiện</h2>
+        <h2 className="text-[14px] font-semibold text-[#F8FAFC] mb-3">{t('emergency.history.title')}</h2>
         <div className="bg-[#111827] border border-[#1E293B] rounded-lg overflow-hidden">
           <DataTable columns={eventColumns} data={mockEmergencyEvents} rowKey={(r) => r.id} />
         </div>

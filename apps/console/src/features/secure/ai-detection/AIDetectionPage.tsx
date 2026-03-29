@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { mockAIEvents, detectionTypeConfig } from './mock-data';
@@ -7,6 +8,7 @@ import type { DetectionType } from './mock-data';
 const typeKeys = Object.keys(detectionTypeConfig) as DetectionType[];
 
 export function AIDetectionPage() {
+  const { t } = useTranslation('secure');
   const [filter, setFilter] = useState<DetectionType | 'all'>('all');
   const [markedFP, setMarkedFP] = useState<Set<string>>(() => new Set(mockAIEvents.filter((e) => e.falsePositive).map((e) => e.id)));
 
@@ -21,15 +23,15 @@ export function AIDetectionPage() {
   };
 
   // Stats
-  const stats = typeKeys.map((t) => ({
-    type: t,
-    ...detectionTypeConfig[t],
-    count: mockAIEvents.filter((e) => e.type === t).length,
+  const stats = typeKeys.map((type) => ({
+    type,
+    ...detectionTypeConfig[type],
+    count: mockAIEvents.filter((e) => e.type === type).length,
   }));
 
   return (
     <div>
-      <PageHeader title="AI Detection" description="Phân tích video thông minh và phát hiện sự kiện" />
+      <PageHeader title={t('aiDetection.title')} description={t('aiDetection.description')} />
 
       {/* Stats cards */}
       <div className="grid grid-cols-5 gap-3 mb-6">
@@ -58,20 +60,20 @@ export function AIDetectionPage() {
             filter === 'all' ? 'bg-[#3B82F6] text-white border-[#3B82F6]' : 'bg-[#1E293B] border-[#334155] text-[#94A3B8] hover:text-[#F8FAFC]'
           )}
         >
-          Tất cả ({mockAIEvents.length})
+          {t('aiDetection.events.title')} ({mockAIEvents.length})
         </button>
-        {typeKeys.map((t) => {
-          const cfg = detectionTypeConfig[t];
-          const count = mockAIEvents.filter((e) => e.type === t).length;
+        {typeKeys.map((type) => {
+          const cfg = detectionTypeConfig[type];
+          const count = mockAIEvents.filter((e) => e.type === type).length;
           return (
             <button
-              key={t}
-              onClick={() => setFilter(filter === t ? 'all' : t)}
+              key={type}
+              onClick={() => setFilter(filter === type ? 'all' : type)}
               className={cn(
                 'px-3 py-1.5 rounded-md text-[12px] font-medium border transition-colors',
-                filter === t ? 'text-white' : 'bg-[#1E293B] border-[#334155] text-[#94A3B8] hover:text-[#F8FAFC]'
+                filter === type ? 'text-white' : 'bg-[#1E293B] border-[#334155] text-[#94A3B8] hover:text-[#F8FAFC]'
               )}
-              style={filter === t ? { backgroundColor: cfg.color, borderColor: cfg.color } : undefined}
+              style={filter === type ? { backgroundColor: cfg.color, borderColor: cfg.color } : undefined}
             >
               {cfg.icon} {cfg.label} ({count})
             </button>
@@ -102,10 +104,10 @@ export function AIDetectionPage() {
                   <span className="text-[11px] text-[#64748B]">{event.time}</span>
                   <span className="text-[11px] text-[#64748B]">·</span>
                   <span className="text-[11px] text-[#64748B]">{event.camera}</span>
-                  {isFP && <span className="px-1.5 py-0.5 rounded bg-[#F59E0B]/15 text-[#F59E0B] text-[10px] font-medium">False Positive</span>}
+                  {isFP && <span className="px-1.5 py-0.5 rounded bg-[#F59E0B]/15 text-[#F59E0B] text-[10px] font-medium">{/* TODO: add i18n key */}False Positive</span>}
                 </div>
                 <div className="text-[13px] text-[#F8FAFC] mb-0.5">{event.description}</div>
-                <div className="text-[11px] text-[#64748B]">📍 {event.location} · Confidence: {event.confidence}%</div>
+                <div className="text-[11px] text-[#64748B]">📍 {event.location} · {t('aiDetection.confidence')}: {event.confidence}%</div>
               </div>
 
               {/* Actions */}
@@ -119,7 +121,7 @@ export function AIDetectionPage() {
                       : 'bg-[#1E293B] border-[#334155] text-[#94A3B8] hover:text-[#F8FAFC]'
                   )}
                 >
-                  {isFP ? '↩ Hoàn tác' : '⚠ False Positive'}
+                  {isFP ? /* TODO: add i18n key */'↩ Undo' : /* TODO: add i18n key */'⚠ False Positive'}
                 </button>
               </div>
             </div>

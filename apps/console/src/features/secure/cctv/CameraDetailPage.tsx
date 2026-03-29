@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { mockCameras, mockNVRs } from './mock-data';
@@ -11,6 +12,7 @@ const statusColor: Record<CameraStatus, { dot: string; text: string }> = {
 };
 
 export function CameraDetailPage() {
+  const { t } = useTranslation('secure');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const camera = mockCameras.find((c) => c.id === id);
@@ -18,7 +20,7 @@ export function CameraDetailPage() {
   if (!camera) {
     return (
       <div className="flex items-center justify-center h-64 text-[#64748B]">
-        Camera not found
+        {/* TODO: add i18n key */}Camera not found
       </div>
     );
   }
@@ -33,7 +35,7 @@ export function CameraDetailPage() {
           onClick={() => navigate('/secure/cctv')}
           className="px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px] font-medium"
         >
-          ← Back to Grid
+          {/* TODO: add i18n key */}← Back to Grid
         </button>
       </PageHeader>
 
@@ -55,7 +57,7 @@ export function CameraDetailPage() {
         )}
         {camera.status === 'offline' && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg">
-            <span className="text-[#EF4444] text-[16px] font-semibold">SIGNAL LOST</span>
+            <span className="text-[#EF4444] text-[16px] font-semibold">{/* TODO: add i18n key */}SIGNAL LOST</span>
           </div>
         )}
       </div>
@@ -63,21 +65,21 @@ export function CameraDetailPage() {
       {/* Details grid */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-4">
-          <h3 className="text-[13px] font-semibold text-[#F8FAFC] mb-3">Camera Info</h3>
+          <h3 className="text-[13px] font-semibold text-[#F8FAFC] mb-3">{t('cameraDetail.title')}</h3>
           <dl className="space-y-2 text-[12px]">
             <div className="flex justify-between">
-              <dt className="text-[#64748B]">Status</dt>
+              <dt className="text-[#64748B]">{t('cctv.table.status')}</dt>
               <dd className="flex items-center gap-1.5">
                 <span className={cn('w-1.5 h-1.5 rounded-full', sc.dot)} />
                 <span className={cn('font-medium capitalize', sc.text)}>{camera.status}</span>
               </dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-[#64748B]">Location</dt>
+              <dt className="text-[#64748B]">{t('cctv.table.location')}</dt>
               <dd className="text-[#F8FAFC]">{camera.location}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-[#64748B]">Floor</dt>
+              <dt className="text-[#64748B]">{/* TODO: add i18n key */}Floor</dt>
               <dd className="text-[#F8FAFC]">{camera.floor}</dd>
             </div>
             <div className="flex justify-between">
@@ -87,14 +89,14 @@ export function CameraDetailPage() {
           </dl>
         </div>
         <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-4">
-          <h3 className="text-[13px] font-semibold text-[#F8FAFC] mb-3">NVR Info</h3>
+          <h3 className="text-[13px] font-semibold text-[#F8FAFC] mb-3">{/* TODO: add i18n key */}NVR Info</h3>
           <dl className="space-y-2 text-[12px]">
             <div className="flex justify-between">
               <dt className="text-[#64748B]">NVR</dt>
               <dd className="text-[#F8FAFC]">{nvr?.name || '—'}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-[#64748B]">Storage</dt>
+              <dt className="text-[#64748B]">{/* TODO: add i18n key */}Storage</dt>
               <dd className="text-[#F8FAFC] font-mono">
                 {nvr ? `${(nvr.storageUsed / 1000).toFixed(1)} / ${(nvr.storageTotal / 1000).toFixed(0)} TB` : '—'}
               </dd>

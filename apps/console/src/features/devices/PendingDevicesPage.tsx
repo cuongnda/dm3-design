@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@dm3/ui';
 import { fetchCompanies, type PendingDevice, type CompanyDTO } from '@/lib/api';
 import { usePendingDevices, useApprovePendingDevice, useRejectPendingDevice } from '@/lib/hooks';
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
+  const { t } = useTranslation('devices');
   const [companies, setCompanies] = useState<CompanyDTO[]>([]);
 
   // Per-row form state
@@ -46,7 +48,7 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
     const row = rowState[d.id];
     if (isSystemAdmin && !row?.company_id) return;
     if (!row?.name) return;
-    
+
     approveDevice.mutate({
       id: d.id,
       data: {
@@ -75,7 +77,7 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
 
   return (
     <div className={isSystemAdmin ? 'p-6' : ''}>
-      <PageHeader title="Pending Device Registrations" description="Devices awaiting approval via bootstrap flow">
+      <PageHeader title={t('pendingDevices.title')} description={t('pendingDevices.description')}>
         <button onClick={() => loadData()} className="flex items-center gap-1 px-3 py-1.5 bg-[#1E293B] hover:bg-[#334155] text-[#94A3B8] rounded-md text-[12px] border border-[#334155] transition-colors">
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
@@ -85,13 +87,13 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
         <table className="w-full">
           <thead>
             <tr className="bg-[#111827] text-[11px] text-[#64748B] uppercase tracking-wider">
-              <th className="text-left py-2.5 px-4 font-medium">RID</th>
-              <th className="text-left py-2.5 px-4 font-medium">Type</th>
-              <th className="text-left py-2.5 px-4 font-medium">Firmware</th>
-              <th className="text-left py-2.5 px-4 font-medium">Signature</th>
-              <th className="text-left py-2.5 px-4 font-medium">Requested</th>
-              {isSystemAdmin && <th className="text-left py-2.5 px-4 font-medium">Company</th>}
-              <th className="text-left py-2.5 px-4 font-medium">Name</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('pendingDevices.table.rid')}</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('pendingDevices.table.type')}</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('pendingDevices.table.firmware')}</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('pendingDevices.table.signature')}</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('pendingDevices.table.requested')}</th>
+              {isSystemAdmin && <th className="text-left py-2.5 px-4 font-medium">{t('devices.table.company')}</th>}
+              <th className="text-left py-2.5 px-4 font-medium">{t('pendingDevices.table.name')}</th>
               <th className="text-right py-2.5 px-4 font-medium">Actions</th>
             </tr>
           </thead>
@@ -116,9 +118,9 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
                   <td className="py-2.5 px-4 text-[13px] text-[#94A3B8] font-mono">{d.firmware_version || '—'}</td>
                   <td className="py-2.5 px-4">
                     {d.signature_verified ? (
-                      <span className="inline-block px-2 py-0.5 rounded text-[11px] font-medium bg-[#22C55E]/10 text-[#22C55E]">✅ Verified</span>
+                      <span className="inline-block px-2 py-0.5 rounded text-[11px] font-medium bg-[#22C55E]/10 text-[#22C55E]">✅ {t('pendingDevices.signature.verified')}</span>
                     ) : (
-                      <span className="inline-block px-2 py-0.5 rounded text-[11px] font-medium bg-[#EAB308]/10 text-[#EAB308]">⚠️ Unverified</span>
+                      <span className="inline-block px-2 py-0.5 rounded text-[11px] font-medium bg-[#EAB308]/10 text-[#EAB308]">⚠️ {t('pendingDevices.signature.unverified')}</span>
                     )}
                   </td>
                   <td className="py-2.5 px-4 text-[13px] text-[#64748B]">{timeAgo(d.created_at)}</td>
@@ -140,14 +142,14 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
                         disabled={approveDevice.isPending || rejectDevice.isPending || !rowState[d.id]?.name || (isSystemAdmin && !rowState[d.id]?.company_id)}
                         className="px-2.5 py-1 rounded text-[11px] font-medium bg-[#22C55E] hover:bg-[#16A34A] text-white disabled:opacity-40 transition-colors"
                       >
-                        {approveDevice.isPending ? 'Approving...' : 'Approve'}
+                        {approveDevice.isPending ? 'Approving...' : t('pendingDevices.actions.approve')}
                       </button>
                       <button
                         onClick={() => handleReject(d)}
                         disabled={approveDevice.isPending || rejectDevice.isPending}
                         className="px-2.5 py-1 rounded text-[11px] font-medium bg-[#EF4444] hover:bg-[#DC2626] text-white disabled:opacity-40 transition-colors"
                       >
-                        {rejectDevice.isPending ? 'Rejecting...' : 'Reject'}
+                        {rejectDevice.isPending ? 'Rejecting...' : t('pendingDevices.actions.reject')}
                       </button>
                     </div>
                   </td>

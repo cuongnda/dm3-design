@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@dm3/ui';
 import { fetchSystemDevices, fetchCompanies, type CompanyDTO } from '@/lib/api';
 import { RefreshCw } from 'lucide-react';
@@ -28,6 +29,7 @@ const statusColors: Record<string, string> = {
 };
 
 export function SystemDevicesPage() {
+  const { t } = useTranslation('system');
   const [devices, setDevices] = useState<SystemDevice[]>([]);
   const [companies, setCompanies] = useState<CompanyDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,7 +63,7 @@ export function SystemDevicesPage() {
 
   return (
     <div className="p-6">
-      <PageHeader title="Global Devices" description={`${devices.length} devices across all companies`}>
+      <PageHeader title={t('systemDevices.title')} description={`${devices.length} devices across all companies`}>
         <button onClick={loadData} className="flex items-center gap-1 px-3 py-1.5 bg-[#1E293B] hover:bg-[#334155] text-[#94A3B8] rounded-md text-[12px] border border-[#334155] transition-colors">
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
@@ -70,23 +72,23 @@ export function SystemDevicesPage() {
       {/* Filters */}
       <div className="flex gap-3 mb-4">
         <select value={filterCompany} onChange={(e) => setFilterCompany(e.target.value)} className={`${inputCls} w-48`}>
-          <option value="">All Companies</option>
+          <option value="">{t('devices.filter.allCompanies')}</option>
           {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={`${inputCls} w-36`}>
-          <option value="">All Status</option>
-          <option value="online">Online</option>
-          <option value="offline">Offline</option>
-          <option value="provisioning">Provisioning</option>
-          <option value="disabled">Disabled</option>
-          <option value="decommissioned">Decommissioned</option>
+          <option value="">{t('systemDevices.filter.allStatus')}</option>
+          <option value="online">{t('systemDevices.status.online')}</option>
+          <option value="offline">{t('systemDevices.status.offline')}</option>
+          <option value="provisioning">{t('systemDevices.status.provisioning')}</option>
+          <option value="disabled">{t('systemDevices.status.disabled')}</option>
+          <option value="decommissioned">{t('systemDevices.status.decommissioned')}</option>
         </select>
         <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className={`${inputCls} w-36`}>
-          <option value="">All Types</option>
-          <option value="terminal">Terminal</option>
-          <option value="controller">Controller</option>
-          <option value="camera">Camera</option>
-          <option value="sensor">Sensor</option>
+          <option value="">{t('systemDevices.filter.allTypes')}</option>
+          <option value="terminal">{t('systemDevices.type.terminal')}</option>
+          <option value="controller">{t('systemDevices.type.controller')}</option>
+          <option value="camera">{t('systemDevices.type.camera')}</option>
+          <option value="sensor">{t('systemDevices.type.sensor')}</option>
         </select>
       </div>
 
@@ -94,13 +96,13 @@ export function SystemDevicesPage() {
         <table className="w-full">
           <thead>
             <tr className="bg-[#111827] text-[11px] text-[#64748B] uppercase tracking-wider">
-              <th className="text-left py-2.5 px-4 font-medium">Device ID</th>
-              <th className="text-left py-2.5 px-4 font-medium">Name</th>
-              <th className="text-left py-2.5 px-4 font-medium">Company</th>
-              <th className="text-left py-2.5 px-4 font-medium">Type</th>
-              <th className="text-left py-2.5 px-4 font-medium">Status</th>
-              <th className="text-left py-2.5 px-4 font-medium">Location</th>
-              <th className="text-left py-2.5 px-4 font-medium">Last Seen</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('systemDevices.table.device')}</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('devices.table.name')}</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('systemDevices.table.company')}</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('systemDevices.table.type')}</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('systemDevices.table.status')}</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('systemDevices.table.location')}</th>
+              <th className="text-left py-2.5 px-4 font-medium">{t('systemDevices.table.lastSeen')}</th>
             </tr>
           </thead>
           <tbody>

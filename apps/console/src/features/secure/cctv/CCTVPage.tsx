@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { mockCameras, mockNVRs } from './mock-data';
@@ -27,13 +28,8 @@ const statusColor: Record<CameraStatus, { dot: string; text: string; border: str
   recording: { dot: 'bg-[#EF4444] animate-pulse', text: 'text-[#F59E0B]', border: 'border-[#1E293B]' },
 };
 
-const statusLabel: Record<CameraStatus, string> = {
-  online: 'Online',
-  offline: 'Offline',
-  recording: '● REC',
-};
-
 function NVRStats() {
+  const { t } = useTranslation('secure');
   const total = mockCameras.length;
   const online = mockCameras.filter((c) => c.status === 'online').length;
   const offline = mockCameras.filter((c) => c.status === 'offline').length;
@@ -42,11 +38,11 @@ function NVRStats() {
   const storageTotal = mockNVRs.reduce((a, n) => a + n.storageTotal, 0);
 
   const stats = [
-    { label: 'Total', value: total, color: 'text-[#F8FAFC]' },
-    { label: 'Online', value: online, color: 'text-[#22C55E]' },
-    { label: 'Recording', value: recording, color: 'text-[#F59E0B]' },
-    { label: 'Offline', value: offline, color: 'text-[#EF4444]' },
-    { label: 'Storage', value: `${(storageUsed / 1000).toFixed(1)}/${(storageTotal / 1000).toFixed(0)} TB`, color: 'text-[#3B82F6]' },
+    { label: t('cctv.tabs.all'), value: total, color: 'text-[#F8FAFC]' },
+    { label: t('cctv.tabs.online'), value: online, color: 'text-[#22C55E]' },
+    { label: t('cctv.status.recording'), value: recording, color: 'text-[#F59E0B]' },
+    { label: t('cctv.tabs.offline'), value: offline, color: 'text-[#EF4444]' },
+    { label: /* TODO: add i18n key */'Storage', value: `${(storageUsed / 1000).toFixed(1)}/${(storageTotal / 1000).toFixed(0)} TB`, color: 'text-[#3B82F6]' },
   ];
 
   return (
@@ -63,7 +59,13 @@ function NVRStats() {
 
 function CameraCard({ camera, compact }: { camera: Camera; compact: boolean }) {
   const navigate = useNavigate();
+  const { t } = useTranslation('secure');
   const sc = statusColor[camera.status];
+  const statusLabel: Record<CameraStatus, string> = {
+    online: t('cctv.tabs.online'),
+    offline: t('cctv.tabs.offline'),
+    recording: '● REC',
+  };
 
   return (
     <div
@@ -95,7 +97,7 @@ function CameraCard({ camera, compact }: { camera: Camera; compact: boolean }) {
         )}
         {camera.status === 'offline' && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-            <span className="text-[#EF4444] text-[11px] font-medium">OFFLINE</span>
+            <span className="text-[#EF4444] text-[11px] font-medium">{t('cctv.tabs.offline').toUpperCase()}</span>
           </div>
         )}
       </div>
@@ -126,6 +128,7 @@ function CameraSidebar({
   collapsed: boolean;
   onToggle: () => void;
 }) {
+  const { t } = useTranslation('secure');
   const grouped = useMemo(() => {
     const map = new Map<string, Camera[]>();
     cameras.forEach((c) => {
@@ -139,7 +142,7 @@ function CameraSidebar({
   return (
     <div className={cn('border-r border-[#1E293B] bg-[#0D1117] shrink-0 transition-all overflow-hidden', collapsed ? 'w-0' : 'w-56')}>
       <div className="p-3 border-b border-[#1E293B] flex items-center justify-between">
-        <span className="text-[12px] font-semibold text-[#F8FAFC] uppercase tracking-wide">Cameras</span>
+        <span className="text-[12px] font-semibold text-[#F8FAFC] uppercase tracking-wide">{t('cctv.allCameras')}</span>
         <button onClick={onToggle} className="text-[#64748B] hover:text-[#F8FAFC] text-[14px]">✕</button>
       </div>
       <div className="overflow-y-auto max-h-[calc(100vh-200px)]">
@@ -168,6 +171,7 @@ function CameraSidebar({
 }
 
 export function CCTVPage() {
+  const { t } = useTranslation('secure');
   const navigate = useNavigate();
   const [grid, setGrid] = useState<GridSize>(16);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -182,13 +186,13 @@ export function CCTVPage() {
         onToggle={() => setSidebarOpen(false)}
       />
       <div className="flex-1 p-6 overflow-y-auto">
-        <PageHeader title="CCTV Surveillance">
+        <PageHeader title={t('cctv.title')}>
           {!sidebarOpen && (
             <button
               onClick={() => setSidebarOpen(true)}
               className="px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px] font-medium"
             >
-              ☰ Cameras
+              ☰ {t('cctv.allCameras')}
             </button>
           )}
           <div className="flex items-center bg-[#111827] border border-[#334155] rounded-md overflow-hidden">
