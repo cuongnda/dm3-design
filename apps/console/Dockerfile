@@ -11,9 +11,8 @@ COPY packages/ui/package.json          ./packages/ui/package.json
 COPY packages/api-client/package.json  ./packages/api-client/package.json
 COPY apps/console/package.json         ./apps/console/package.json
 
-RUN npm ci
-# Ensure rollup native binaries for musl/alpine
-RUN npm rebuild
+# Install with platform-specific native binaries for alpine/musl
+RUN npm ci --prefer-offline && npm install @rollup/rollup-linux-x64-musl --save-optional
 
 # Copy full source
 COPY packages/ ./packages/
