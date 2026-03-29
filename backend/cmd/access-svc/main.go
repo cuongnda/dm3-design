@@ -17,6 +17,7 @@ import (
 	"github.com/duali/dm3-backend/internal/config"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
+	"github.com/duali/dm3-backend/pkg/i18n"
 	"github.com/duali/dm3-backend/pkg/natsutil"
 )
 
@@ -62,18 +63,27 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Load i18n translations
+	if err := i18n.Load("pkg/i18n/locales"); err != nil {
+		slog.Error("failed to load i18n translations", "error", err)
+		os.Exit(1)
+	}
+
 	// HTTP handlers
 	handlers := access.NewHandlers(database)
 
 	// HTTP routes
 	r := httputil.NewRouter()
 
+	// Add i18n middleware to all routes
+	r.Use(i18n.LocaleMiddleware)
+
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "access-svc"})
 	})
 	r.Get("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		if err := database.Pool.Ping(r.Context()); err != nil {
-			httputil.Error(w, http.StatusServiceUnavailable, "database not ready")
+			i18n.ErrorResponse(w, r, http.StatusServiceUnavailable, "system.database_not_ready")
 			return
 		}
 		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ready"})

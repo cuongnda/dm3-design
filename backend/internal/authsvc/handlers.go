@@ -17,6 +17,7 @@ import (
 
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
+	"github.com/duali/dm3-backend/pkg/i18n"
 )
 
 // ─── Claims ──────────────────────────────────────────────────────────────────
@@ -109,11 +110,11 @@ type loginStep2Request struct {
 func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
 		return
 	}
 	if req.Email == "" || req.Password == "" {
-		httputil.Error(w, http.StatusBadRequest, "email and password are required")
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.email_password_required")
 		return
 	}
 
@@ -127,16 +128,16 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 		req.Email,
 	).Scan(&id, &tenantID, &email, &name, &passwordHash, &roles, &status, &companyID, &userRole)
 	if err != nil {
-		httputil.Error(w, http.StatusUnauthorized, "invalid credentials")
+		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.invalid_credentials")
 		return
 	}
 	if status != "active" {
-		httputil.Error(w, http.StatusForbidden, "account is not active")
+		i18n.ErrorResponse(w, r, http.StatusForbidden, "auth.account_not_active")
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
-		httputil.Error(w, http.StatusUnauthorized, "invalid credentials")
+		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.invalid_credentials")
 		return
 	}
 
@@ -152,7 +153,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	if role == "system_admin" {
 		accessToken, err := h.generateAccessToken(id, tenantID, email, name, roles, "", role)
 		if err != nil {
-			httputil.Error(w, http.StatusInternalServerError, "token generation failed")
+			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 			return
 		}
 		refreshToken, _ := h.createRefreshToken(r, id, tenantID)
@@ -200,7 +201,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 		c := companies[0]
 		accessToken, err := h.generateAccessToken(id, tenantID, email, name, roles, c.ID, c.Role)
 		if err != nil {
-			httputil.Error(w, http.StatusInternalServerError, "token generation failed")
+			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 			return
 		}
 		refreshToken, _ := h.createRefreshToken(r, id, tenantID)
@@ -215,14 +216,14 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 
 	// No companies at all
 	if len(companies) == 0 {
-		httputil.Error(w, http.StatusForbidden, "no active company associated with this account")
+		i18n.ErrorResponse(w, r, http.StatusForbidden, "auth.no_active_company")
 		return
 	}
 
 	// Multiple companies — return temp token + company list
 	tempToken, err := h.generateTempToken(id, tenantID)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "token generation failed")
+		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 		return
 	}
 
@@ -237,11 +238,11 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 	var req loginStep2Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
 		return
 	}
 	if req.TemporaryToken == "" || req.CompanyID == "" {
-		httputil.Error(w, http.StatusBadRequest, "temporary_token and company_id are required")
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.temp_token_company_required")
 		return
 	}
 
@@ -253,12 +254,12 @@ func (h *Handlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 		return []byte(h.jwtSecret), nil
 	})
 	if err != nil {
-		httputil.Error(w, http.StatusUnauthorized, "invalid or expired temporary token")
+		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.invalid_temp_token")
 		return
 	}
 	tempClaims, ok := token.Claims.(*TempClaims)
 	if !ok || !token.Valid || tempClaims.Purpose != "company_select" {
-		httputil.Error(w, http.StatusUnauthorized, "invalid temporary token")
+		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.invalid_temp_token")
 		return
 	}
 
@@ -274,7 +275,7 @@ func (h *Handlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 		userID, req.CompanyID,
 	).Scan(&ucRole)
 	if err != nil {
-		httputil.Error(w, http.StatusForbidden, "you do not have access to this company")
+		i18n.ErrorResponse(w, r, http.StatusForbidden, "auth.no_company_access")
 		return
 	}
 
@@ -285,13 +286,13 @@ func (h *Handlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 		`SELECT email, name, roles FROM dm3_auth.users WHERE id = $1::uuid AND status = 'active'`, userID,
 	).Scan(&email, &name, &roles)
 	if err != nil {
-		httputil.Error(w, http.StatusUnauthorized, "user not found or inactive")
+		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.user_not_found")
 		return
 	}
 
 	accessToken, err := h.generateAccessToken(userID, tenantID, email, name, roles, req.CompanyID, ucRole)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "token generation failed")
+		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 		return
 	}
 	refreshToken, _ := h.createRefreshToken(r, userID, tenantID)
@@ -311,7 +312,7 @@ type refreshRequest struct {
 func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req refreshRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
 		return
 	}
 
@@ -325,7 +326,7 @@ func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
 		hash,
 	).Scan(&tokenID, &userID, &tenantID, &expiresAt, &revoked)
 	if err != nil {
-		httputil.Error(w, http.StatusUnauthorized, "invalid refresh token")
+		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.invalid_refresh_token")
 		return
 	}
 
@@ -334,12 +335,12 @@ func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
 		_, _ = h.db.Pool.Exec(r.Context(),
 			`UPDATE dm3_auth.refresh_tokens SET revoked = true WHERE user_id = $1::uuid`, userID)
 		slog.Warn("refresh token replay detected", "user_id", userID)
-		httputil.Error(w, http.StatusUnauthorized, "token reuse detected, all sessions revoked")
+		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.token_reuse_detected")
 		return
 	}
 
 	if time.Now().After(expiresAt) {
-		httputil.Error(w, http.StatusUnauthorized, "refresh token expired")
+		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.refresh_token_expired")
 		return
 	}
 
@@ -355,7 +356,7 @@ func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
 		`SELECT email, name, roles, company_id::text, role FROM dm3_auth.users WHERE id = $1::uuid AND status = 'active'`, userID,
 	).Scan(&email, &name, &roles, &refreshCompanyID, &refreshUserRole)
 	if err != nil {
-		httputil.Error(w, http.StatusUnauthorized, "user not found or inactive")
+		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.user_not_found")
 		return
 	}
 
@@ -382,7 +383,7 @@ func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromContext(r.Context())
 	if claims == nil {
-		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
+		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.unauthorized")
 		return
 	}
 	// Revoke all refresh tokens for this user
@@ -394,7 +395,7 @@ func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Me(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromContext(r.Context())
 	if claims == nil {
-		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
+		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.unauthorized")
 		return
 	}
 
@@ -404,7 +405,7 @@ func (h *Handlers) Me(w http.ResponseWriter, r *http.Request) {
 		claims.Sub,
 	).Scan(&user.ID, &user.TenantID, &user.CompanyID, &user.Email, &user.Name, &user.Roles, &user.Role, &user.Status, &user.LastLogin, &user.CreatedAt)
 	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "user not found")
+		i18n.ErrorResponse(w, r, http.StatusNotFound, "user.not_found")
 		return
 	}
 	httputil.JSON(w, http.StatusOK, user)
@@ -425,17 +426,17 @@ type deviceTokenResponse struct {
 func (h *Handlers) DeviceToken(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromContext(r.Context())
 	if claims == nil {
-		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
+		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.unauthorized")
 		return
 	}
 
 	var req deviceTokenRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
 		return
 	}
 	if req.DeviceID == "" {
-		httputil.Error(w, http.StatusBadRequest, "device_id is required")
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.device_id_required")
 		return
 	}
 	if req.DeviceType == "" {
@@ -448,7 +449,7 @@ func (h *Handlers) DeviceToken(w http.ResponseWriter, r *http.Request) {
 		`SELECT EXISTS(SELECT 1 FROM dm3_devices.devices WHERE device_id = $1)`, req.DeviceID,
 	).Scan(&exists)
 	if !exists {
-		httputil.Error(w, http.StatusNotFound, "device not found")
+		i18n.ErrorResponse(w, r, http.StatusNotFound, "device.not_found")
 		return
 	}
 
@@ -473,7 +474,7 @@ func (h *Handlers) DeviceToken(w http.ResponseWriter, r *http.Request) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, dc)
 	tokenStr, err := token.SignedString([]byte(h.jwtSecret))
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "token generation failed")
+		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 		return
 	}
 
@@ -536,11 +537,11 @@ type createUserRequest struct {
 func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var req createUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
 		return
 	}
 	if req.Email == "" || req.Password == "" {
-		httputil.Error(w, http.StatusBadRequest, "email and password are required")
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.email_password_required")
 		return
 	}
 	if len(req.Roles) == 0 {
@@ -549,7 +550,7 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "password hashing failed")
+		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.password_hashing_failed")
 		return
 	}
 
@@ -562,7 +563,7 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	).Scan(&u.ID, &u.TenantID, &u.CompanyID, &u.Email, &u.Name, &u.Roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt)
 	if err != nil {
 		slog.Error("create user", "error", err)
-		httputil.Error(w, http.StatusConflict, "user already exists or invalid data")
+		i18n.ErrorResponse(w, r, http.StatusConflict, "user.already_exists")
 		return
 	}
 	httputil.JSON(w, http.StatusCreated, u)
@@ -636,24 +637,24 @@ func (h *Handlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req changePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
 		return
 	}
 	if req.Password == "" {
-		httputil.Error(w, http.StatusBadRequest, "password is required")
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.password_required")
 		return
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "password hashing failed")
+		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.password_hashing_failed")
 		return
 	}
 
 	tag, err := h.db.Pool.Exec(r.Context(),
 		`UPDATE dm3_auth.users SET password_hash = $2, updated_at = now() WHERE id = $1::uuid`, id, string(hash))
 	if err != nil || tag.RowsAffected() == 0 {
-		httputil.Error(w, http.StatusNotFound, "user not found")
+		i18n.ErrorResponse(w, r, http.StatusNotFound, "user.not_found")
 		return
 	}
 

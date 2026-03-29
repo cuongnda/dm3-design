@@ -1,0 +1,68 @@
+{
+  "auth.invalid_credentials": "Email hoặc mật khẩu không đúng",
+  "auth.account_not_active": "Tài khoản chưa được kích hoạt",
+  "auth.token_expired": "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại",
+  "auth.unauthorized": "Bạn không có quyền truy cập tài nguyên này",
+  "auth.invalid_token": "Token không hợp lệ hoặc đã hết hạn",
+  "auth.invalid_temp_token": "Token tạm thời không hợp lệ hoặc đã hết hạn",
+  "auth.no_company_access": "Bạn không có quyền truy cập công ty này",
+  "auth.no_active_company": "Không có công ty hoạt động nào được liên kết với tài khoản này",
+  "auth.user_not_found": "Người dùng không tìm thấy hoặc không hoạt động",
+  "auth.token_generation_failed": "Tạo token thất bại",
+  "auth.token_reuse_detected": "Phát hiện sử dụng lại token, tất cả phiên đã được thu hồi",
+  "auth.refresh_token_expired": "Refresh token đã hết hạn",
+  "auth.invalid_refresh_token": "Refresh token không hợp lệ",
+  "auth.password_hashing_failed": "Mã hóa mật khẩu thất bại",
+
+  "validation.invalid_request_body": "Nội dung yêu cầu không hợp lệ",
+  "validation.email_password_required": "Email và mật khẩu là bắt buộc",
+  "validation.temp_token_company_required": "Token tạm thời và ID công ty là bắt buộc",
+  "validation.device_id_required": "ID thiết bị là bắt buộc",
+  "validation.password_required": "Mật khẩu là bắt buộc",
+  "validation.required_field": "{{field}} là bắt buộc",
+  "validation.invalid_email": "Định dạng email không hợp lệ",
+  "validation.first_last_name_required": "Họ và tên là bắt buộc",
+
+  "device.not_found": "Thiết bị không tìm thấy",
+  "device.already_registered": "Thiết bị đã được đăng ký",
+
+  "person.not_found": "Nhân sự không tìm thấy",
+  "person.create_error": "Tạo nhân sự thất bại",
+  "person.update_error": "Cập nhật nhân sự thất bại",
+  "person.delete_error": "Xóa nhân sự thất bại",
+
+  "user.not_found": "Người dùng không tìm thấy",
+  "user.already_exists": "Người dùng đã tồn tại hoặc dữ liệu không hợp lệ",
+  "user.create_error": "Tạo người dùng thất bại",
+  "user.update_error": "Cập nhật người dùng thất bại",
+  "user.delete_error": "Xóa người dùng thất bại",
+
+  "company.not_found": "Công ty không tìm thấy",
+  "company.create_error": "Tạo công ty thất bại",
+  "company.update_error": "Cập nhật công ty thất bại",
+  "company.delete_error": "Xóa công ty thất bại",
+
+  "access.denied": "Truy cập bị từ chối",
+  "access.permission_required": "Bạn không có quyền cần thiết",
+
+  "system.database_error": "Đã xảy ra lỗi cơ sở dữ liệu",
+  "system.internal_error": "Lỗi máy chủ nội bộ",
+  "system.service_unavailable": "Dịch vụ tạm thời không khả dụng",
+  "system.database_not_ready": "Cơ sở dữ liệu chưa sẵn sàng",
+
+  "group.not_found": "Nhóm không tìm thấy",
+  "group.create_error": "Tạo nhóm thất bại",
+  "group.update_error": "Cập nhật nhóm thất bại",
+  "group.delete_error": "Xóa nhóm thất bại",
+  "group.member_add_error": "Thêm thành viên nhóm thất bại",
+  "group.member_remove_error": "Xóa thành viên nhóm thất bại",
+
+  "credential.not_found": "Thông tin xác thực không tìm thấy",
+  "credential.create_error": "Tạo thông tin xác thực thất bại",
+  "credential.update_error": "Cập nhật thông tin xác thực thất bại",
+  "credential.delete_error": "Xóa thông tin xác thực thất bại",
+
+  "photo.upload_error": "Tải ảnh lên thất bại",
+  "photo.invalid_format": "Định dạng ảnh không hợp lệ",
+  "photo.too_large": "Tệp ảnh quá lớn"
+}

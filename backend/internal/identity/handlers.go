@@ -18,6 +18,7 @@ import (
 	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
+	"github.com/duali/dm3-backend/pkg/i18n"
 	"github.com/duali/dm3-backend/pkg/natsutil"
 )
 
@@ -105,7 +106,7 @@ func (h *Handlers) ListPersons(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
 		slog.Error("list persons query error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.database_error")
 		return
 	}
 	defer rows.Close()
@@ -138,11 +139,11 @@ type createPersonRequest struct {
 func (h *Handlers) CreatePerson(w http.ResponseWriter, r *http.Request) {
 	var req createPersonRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
 		return
 	}
 	if req.FirstName == "" || req.LastName == "" {
-		httputil.Error(w, http.StatusBadRequest, "first_name and last_name are required")
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.first_last_name_required")
 		return
 	}
 	if req.Status == "" {
@@ -163,7 +164,7 @@ func (h *Handlers) CreatePerson(w http.ResponseWriter, r *http.Request) {
 		&p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		slog.Error("create person error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "person.create_error")
 		return
 	}
 
@@ -175,7 +176,7 @@ func (h *Handlers) GetPerson(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	p, err := h.scanPerson(r, id)
 	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "person not found")
+		i18n.ErrorResponse(w, r, http.StatusNotFound, "person.not_found")
 		return
 	}
 	httputil.JSON(w, http.StatusOK, p)

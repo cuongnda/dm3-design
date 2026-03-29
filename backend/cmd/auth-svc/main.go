@@ -13,6 +13,7 @@ import (
 	"github.com/duali/dm3-backend/internal/config"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
+	"github.com/duali/dm3-backend/pkg/i18n"
 )
 
 func main() {
@@ -32,8 +33,17 @@ func main() {
 		slog.Warn("migrations", "error", err)
 	}
 
+	// Load i18n translations
+	if err := i18n.Load("pkg/i18n/locales"); err != nil {
+		slog.Error("failed to load i18n translations", "error", err)
+		os.Exit(1)
+	}
+
 	h := authsvc.NewHandlers(database, cfg.JWTSecret)
 	r := httputil.NewRouter()
+
+	// Add i18n middleware to all routes
+	r.Use(i18n.LocaleMiddleware)
 
 	// Health
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
