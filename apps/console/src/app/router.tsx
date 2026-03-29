@@ -8,6 +8,7 @@ import { CompanyListPage } from '@/features/system/CompanyListPage';
 import { CreateCompanyPage } from '@/features/system/CreateCompanyPage';
 import { CompanyDetailPage } from '@/features/system/CompanyDetailPage';
 import { SystemDevicesPage } from '@/features/system/SystemDevicesPage';
+import { ProtectedRoute } from './ProtectedRoute';
 
 // Lazy-loaded feature modules
 const AccessControlPage = lazy(() =>
@@ -135,22 +136,25 @@ export const router = createBrowserRouter([
     element: <LoginPage />,
   },
   {
-    path: '/system',
-    element: <SystemLayout />,
+    element: <ProtectedRoute />,
     children: [
-      { index: true, element: <Navigate to="/system/companies" replace /> },
-      { path: 'companies', element: <CompanyListPage /> },
-      { path: 'companies/new', element: <CreateCompanyPage /> },
-      { path: 'companies/:id', element: <CompanyDetailPage /> },
-      { path: 'devices/pending', element: <LazyWrap><PendingDevicesPage isSystemAdmin={true} /></LazyWrap> },
-      { path: 'devices', element: <SystemDevicesPage /> },
-      { path: 'settings', element: <LazyWrap><SystemSettingsPage /></LazyWrap> },
-    ],
-  },
-  {
-    path: '/',
-    element: <MainLayout />,
-    children: [
+      {
+        path: '/system',
+        element: <SystemLayout />,
+        children: [
+          { index: true, element: <Navigate to="/system/companies" replace /> },
+          { path: 'companies', element: <CompanyListPage /> },
+          { path: 'companies/new', element: <CreateCompanyPage /> },
+          { path: 'companies/:id', element: <CompanyDetailPage /> },
+          { path: 'devices/pending', element: <LazyWrap><PendingDevicesPage isSystemAdmin={true} /></LazyWrap> },
+          { path: 'devices', element: <SystemDevicesPage /> },
+          { path: 'settings', element: <LazyWrap><SystemSettingsPage /></LazyWrap> },
+        ],
+      },
+      {
+        path: '/',
+        element: <MainLayout />,
+        children: [
       { index: true, element: <DashboardPage /> },
       { path: 'alerts', element: <LazyWrap><AlertsPage /></LazyWrap> },
 
@@ -190,8 +194,10 @@ export const router = createBrowserRouter([
       { path: 'devices', element: <LazyWrap><DevicesPage /></LazyWrap> },
       { path: 'devices/provision', element: <LazyWrap><ProvisionDevicePage /></LazyWrap> },
 
-      // SETTINGS
-      { path: 'settings', element: <LazyWrap><SettingsPage /></LazyWrap> },
+          // SETTINGS
+          { path: 'settings', element: <LazyWrap><SettingsPage /></LazyWrap> },
+        ],
+      },
     ],
   },
 ]);

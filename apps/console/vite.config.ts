@@ -20,6 +20,7 @@ export default defineConfig({
       '/api/v1/doors': { target: 'http://localhost:8003', changeOrigin: true },
       '/api/v1/rules': { target: 'http://localhost:8003', changeOrigin: true },
       '/api/v1/events': { target: 'http://localhost:8003', changeOrigin: true },
+      '/api/v1/schedules': { target: 'http://localhost:8003', changeOrigin: true },
       '/api/v1/stats': { target: 'http://localhost:8003', changeOrigin: true },
     },
   },

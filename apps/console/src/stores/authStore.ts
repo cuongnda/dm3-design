@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { clearToken } from '@/lib/api';
+import { getToken, clearToken, apiFetch } from '@/lib/api';
 
 interface User {
   id: string;
@@ -11,11 +11,20 @@ interface User {
   initials: string;
 }
 
+interface MeResponse {
+  id: string;
+  email: string;
+  name?: string | null;
+  role?: string | null;
+  company_id?: string | null;
+}
+
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   login: (user: User) => void;
   logout: () => void;
+  checkAuth: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -27,6 +36,30 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         clearToken();
         set({ user: null, isAuthenticated: false });
+      },
+      checkAuth: async () => {
+        const token = getToken();
+        if (!token) {
+          set({ user: null, isAuthenticated: false });
+          return;
+        }
+        try {
+          const me = await apiFetch<MeResponse>('/api/v1/auth/me');
+          set({
+            isAuthenticated: true,
+            user: {
+              id: me.id,
+              name: me.name || me.email.split('@')[0],
+              email: me.email,
+              role: me.role || 'viewer',
+              initials: (me.name || me.email).slice(0, 2).toUpperCase(),
+            },
+          });
+        } catch {
+          // apiFetch handles redirect on 401; just clear local state
+          clearToken();
+          set({ user: null, isAuthenticated: false });
+        }
       },
     }),
     { name: 'dm3-auth' }

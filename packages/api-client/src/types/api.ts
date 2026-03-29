@@ -12,6 +12,14 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
+// Matches the backend's paginated response format
+export interface Paginated<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export interface ApiError {
   message: string;
   code: string;
