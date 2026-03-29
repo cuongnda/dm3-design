@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { cn } from './utils';
+import { cn } from './lib/utils';
 
 interface Toast {
   id: string;

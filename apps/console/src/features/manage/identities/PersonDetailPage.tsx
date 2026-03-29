@@ -1,15 +1,14 @@
 import { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Upload, Plus, Trash2, CreditCard, Eye, Fingerprint, KeyRound, Smartphone, Shield, Clock, User } from 'lucide-react';
-import { PageHeader } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@dm3/ui';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@dm3/ui';
 import { Button } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { 
-  usePerson, useCredentials, useCreateCredential, useDeleteCredential, 
-  useUploadPhoto, useEvents, useUpdatePerson 
+  usePerson, useCredentials, useCreateCredential, useDeleteCredential,
+  useUploadPhoto, useEvents,
 } from '@/lib/hooks';
 import type { CredentialDTO, EventDTO } from '@/lib/api';
 
@@ -49,12 +48,11 @@ export function PersonDetailPage() {
 
   const { data: person, isLoading: personLoading } = usePerson(id!);
   const { data: credentials, isLoading: credentialsLoading } = useCredentials(id!);
-  const { data: eventsData } = useEvents(1, { person_id: id });
+  const { data: eventsData } = useEvents(1, { person_id: id ?? '' });
   
   const createCredentialMutation = useCreateCredential();
   const deleteCredentialMutation = useDeleteCredential();
   const uploadPhotoMutation = useUploadPhoto();
-  const updatePersonMutation = useUpdatePerson();
 
   if (!id) {
     return <div className="text-center py-8 text-[#EF4444]">ID không hợp lệ</div>;

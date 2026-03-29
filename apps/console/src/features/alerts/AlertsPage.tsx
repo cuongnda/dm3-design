@@ -30,7 +30,7 @@ const tabs: { key: DecisionFilter | 'critical'; label: string; icon: React.React
 
 export function AlertsPage() {
   const [activeTab, setActiveTab] = useState<'all' | 'critical' | DecisionFilter>('all');
-  const [doorFilter, setDoorFilter] = useState('');
+  const [doorFilter] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [page, setPage] = useState(1);
@@ -122,7 +122,7 @@ export function AlertsPage() {
     },
     {
       key: 'door_name', header: 'Cửa / Nguồn', width: '180px',
-      render: (r) => <span className="text-[13px] text-[#94A3B8]">{r.door_name || r.door_id || '—'}</span>,
+      render: (r) => <span className="text-[13px] text-[#94A3B8]">{r.door_id || '—'}</span>,
     },
     {
       key: 'person_name', header: 'Người',

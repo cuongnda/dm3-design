@@ -2,8 +2,6 @@
 
 const AUTH_URL = '/api/v1/auth';
 const DEVICE_URL = '/api/v1/devices';
-const ACCESS_URL = '/api/v1';
-const IDENTITY_URL = '/api/v1';
 
 // ─── Token management ───────────────────────────────────────
 
@@ -47,7 +45,7 @@ async function tryRefreshToken(): Promise<boolean> {
   }
 }
 
-async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

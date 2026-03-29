@@ -1,4 +1,4 @@
-import { getToken, setToken } from './client';
+import { getToken } from './client';
 
 // WebSocket Event Types that match the backend WSEvent struct
 export interface WSEvent {
@@ -74,8 +74,9 @@ export class WebSocketClient {
   private heartbeatInterval?: ReturnType<typeof setInterval>;
   private seenMessageIds = new Set<string>();
   private messageQueue: WSEvent[] = [];
+  private options: WSConnectionOptions;
 
-  constructor(private options: WSConnectionOptions = {}) {
+  constructor(options: WSConnectionOptions = {}) {
     this.options = {
       autoReconnect: true,
       maxReconnectAttempts: 10,
@@ -253,15 +254,6 @@ export class WebSocketClient {
     while (this.messageQueue.length > 0) {
       const event = this.messageQueue.shift()!;
       this.routeEvent(event);
-    }
-  }
-
-  // Queue messages when disconnected, process when reconnected
-  private queueMessage(event: WSEvent): void {
-    this.messageQueue.push(event);
-    // Keep queue size reasonable
-    if (this.messageQueue.length > 50) {
-      this.messageQueue.shift();
     }
   }
 

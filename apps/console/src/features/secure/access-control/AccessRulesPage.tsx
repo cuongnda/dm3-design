@@ -96,7 +96,7 @@ export function AccessRulesPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
-  const { data: rulesData, isLoading: rulesLoading } = useRules(1, search ? { search } : undefined);
+  const { data: rulesData } = useRules(1, search ? { search } : undefined);
   const { data: doorsData } = useDoors(1, {}, 100); // Get more doors for selection
   const { data: groupsData } = useGroups(1, 100); // Get more groups for selection
   

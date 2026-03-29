@@ -121,7 +121,7 @@ export function AccessControlPage() {
   ];
 
   // Apply additional client-side filters not handled by API
-  const filtered = doors.filter((d) => {
+  const filtered = doors.filter(() => {
     // API already handles search and status filter
     return true;
   });

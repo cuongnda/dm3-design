@@ -9,7 +9,7 @@ import {
   useActiveAlarms,
   useDeviceStatus,
 } from '@dm3/api-client';
-import type { AccessEvent, DomainHealth } from '@dm3/api-client';
+import type { AccessEvent, DomainHealth, RealtimeDeviceStatus } from '@dm3/api-client';
 
 // Transform realtime event to UI format
 function realtimeEventToAccessEvent(event: any): AccessEvent {
@@ -93,12 +93,12 @@ export function DashboardPage() {
   const isConnecting = useRealtimeStore((s) => s.connecting);
   const realtimeEvents = useRecentEvents(10);
   const activeAlarms = useActiveAlarms();
-  const deviceStatuses = useDeviceStatus();
+  const deviceStatuses = useDeviceStatus() as RealtimeDeviceStatus[];
 
   // Build stats from real data + real-time status
   const devicesOnline = deviceStatuses.filter(d => d.online).length || 
-                        devicesData?.filter((d) => d.status === 'online').length ?? 0;
-  const devicesTotal = deviceStatuses.length || devicesData?.length ?? 0;
+                        (devicesData?.filter((d) => d.status === 'online').length ?? 0);
+  const devicesTotal = deviceStatuses.length || (devicesData?.length ?? 0);
 
   const stats = [
     {
@@ -164,7 +164,7 @@ export function DashboardPage() {
     : apiEvents.slice(0, 10);
 
   // Convert real-time alarms to alert format
-  const realtimeAlerts = activeAlarms.map((alarm, index) => ({
+  const realtimeAlerts = activeAlarms.map((alarm) => ({
     id: alarm.id,
     title: `${alarm.alarmType}: ${alarm.doorId || alarm.zone || 'Unknown location'}`,
     meta: `Device ${alarm.deviceId} · ${Math.floor((Date.now() - alarm.time.getTime()) / 60000)}m ago`,

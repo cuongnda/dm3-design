@@ -59,8 +59,8 @@ export function DoorDetailPage() {
   });
 
   const { data: door, isLoading: doorLoading } = useDoor(id!);
-  const { data: eventsData } = useEvents(1, { door_id: id });
-  const { data: rulesData } = useRules(1, { door_id: id });
+  const { data: eventsData } = useEvents(1, { door_id: id ?? '' });
+  const { data: rulesData } = useRules(1, { door_id: id ?? '' });
   const updateDoorMutation = useUpdateDoor();
   const sendCommandMutation = useSendCommand();
 
@@ -198,7 +198,7 @@ export function DoorDetailPage() {
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-[20px] font-semibold text-[#F8FAFC]">{door.name}</h1>
-            <StatusBadge status={door.status} />
+            <StatusBadge status={door.status as 'online' | 'offline' | 'alarm' | 'warning'} />
           </div>
           <p className="text-[13px] text-[#94A3B8] mt-0.5">{door.location} · {door.type}</p>
         </div>

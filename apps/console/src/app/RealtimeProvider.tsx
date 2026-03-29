@@ -3,7 +3,7 @@
  * Boots the WebSocket connection and renders in-app critical-event toasts.
  */
 import { useEffect, useState } from 'react';
-import { useWebSocketConnection, useRealtimeStore, type RealtimeAlarm } from '@dm3/api-client';
+import { useWebSocketConnection, useRealtimeStore } from '@dm3/api-client';
 import { cn } from '@/lib/utils';
 
 // ─── Critical event toast ─────────────────────────────────────────────────────

@@ -6,7 +6,6 @@ import { DataTable, type Column } from '@dm3/ui';
 import { StatCard } from '@dm3/ui';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@dm3/ui';
 import { Button } from '@dm3/ui';
-import { cn } from '@/lib/utils';
 import { useGroups, useCreateGroup, useUpdateGroup, useDeleteGroup } from '@/lib/hooks';
 import type { PersonGroupDTO } from '@/lib/api';
 
