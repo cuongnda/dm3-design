@@ -259,6 +259,31 @@ services:
     networks:
       - dm3-internal
 
+  # ── Simulator (staging only) ───────────────────────────────────────────────
+
+  simulator:
+    build:
+      context: ./simulator
+      dockerfile: Dockerfile
+    container_name: dm3-simulator
+    restart: unless-stopped
+    environment:
+      MQTT_HOST: emqx
+      MQTT_PORT: 1883
+      DEVICE_COUNT: 5
+      API_HOST: 0.0.0.0
+      API_PORT: 9090
+      BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET:-dm3-bootstrap-v1-dev-secret}
+    ports:
+      - "9090:9090"
+    depends_on:
+      emqx:
+        condition: service_healthy
+    networks:
+      - dm3-internal
+    profiles:
+      - staging
+
 volumes:
   timescaledb_data:
   emqx_data:
