@@ -29,6 +29,9 @@ COPY --from=builder /build/bin/ /app/bin/
 # Copy migrations (used by migrate service)
 COPY pkg/db/migrations/ /app/migrations/
 
+# Copy i18n locale files
+COPY pkg/i18n/locales/ /app/pkg/i18n/locales/
+
 # Copy migration runner script
 COPY scripts/migrate.sh /app/scripts/migrate.sh
 RUN chmod +x /app/scripts/migrate.sh
