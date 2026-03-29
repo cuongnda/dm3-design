@@ -1,85 +1,123 @@
 import { useState, useMemo } from 'react';
 import { PageHeader } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
-import { Bell, AlertTriangle, ShieldAlert, Info, CheckCircle2 } from 'lucide-react';
+import { Bell, AlertTriangle, ShieldAlert, Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { mockAlerts, severityConfig, statusConfig, type Alert, type AlertSeverity } from './mock-data';
+import { useEvents } from '@/lib/hooks';
+import type { EventDTO } from '@/lib/api';
 
-type FilterTab = 'all' | AlertSeverity | 'resolved';
+type DecisionFilter = 'all' | 'granted' | 'denied';
 
-const tabs: { key: FilterTab; label: string; icon: React.ReactNode }[] = [
+function getSeverity(event: EventDTO): 'critical' | 'warning' | 'info' {
+  if (event.reason === 'forced' || event.reason === 'tamper') return 'critical';
+  if (event.decision === 'denied') return 'warning';
+  return 'info';
+}
+
+const severityConfig = {
+  critical: { label: 'Nghiêm trọng', color: '#EF4444', bg: 'bg-[#7F1D1D]/30 text-[#EF4444]' },
+  warning: { label: 'Từ chối', color: '#F59E0B', bg: 'bg-[#78350F]/30 text-[#F59E0B]' },
+  info: { label: 'Cho phép', color: '#3B82F6', bg: 'bg-[#1E3A5F]/30 text-[#3B82F6]' },
+};
+
+const tabs: { key: DecisionFilter | 'critical'; label: string; icon: React.ReactNode }[] = [
   { key: 'all', label: 'Tất cả', icon: <Bell size={14} /> },
   { key: 'critical', label: 'Nghiêm trọng', icon: <ShieldAlert size={14} /> },
-  { key: 'warning', label: 'Cảnh báo', icon: <AlertTriangle size={14} /> },
-  { key: 'info', label: 'Thông tin', icon: <Info size={14} /> },
-  { key: 'resolved', label: 'Đã xử lý', icon: <CheckCircle2 size={14} /> },
-];
-
-const columns: Column<Alert>[] = [
-  { key: 'timestamp', header: 'Thời gian', width: '150px', sortable: true },
-  {
-    key: 'severity',
-    header: 'Mức độ',
-    width: '130px',
-    sortable: true,
-    render: (r) => {
-      const cfg = severityConfig[r.severity];
-      return (
-        <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium', cfg.bg)}>
-          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cfg.color }} />
-          {cfg.label}
-        </span>
-      );
-    },
-  },
-  { key: 'source', header: 'Nguồn', width: '200px' },
-  { key: 'message', header: 'Nội dung' },
-  {
-    key: 'status',
-    header: 'Trạng thái',
-    width: '130px',
-    render: (r) => {
-      const cfg = statusConfig[r.status];
-      return <span className="text-[12px] font-medium" style={{ color: cfg.color }}>{cfg.label}</span>;
-    },
-  },
+  { key: 'denied', label: 'Từ chối', icon: <AlertTriangle size={14} /> },
+  { key: 'granted', label: 'Cho phép', icon: <Info size={14} /> },
 ];
 
 export function AlertsPage() {
-  const [filter, setFilter] = useState<FilterTab>('all');
-  const [alerts, setAlerts] = useState(mockAlerts);
+  const [activeTab, setActiveTab] = useState<'all' | 'critical' | DecisionFilter>('all');
+  const [doorFilter, setDoorFilter] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [page, setPage] = useState(1);
 
+  const params: Record<string, string> = {};
+  if (doorFilter) params.door_id = doorFilter;
+  if (activeTab === 'granted' || activeTab === 'denied') params.decision = activeTab;
+  if (fromDate) params.from = new Date(fromDate).toISOString();
+  if (toDate) params.to = new Date(toDate + 'T23:59:59').toISOString();
+
+  const { data, isLoading, error } = useEvents(page, params);
+  const events = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.ceil(total / 50);
+
+  // Client-side filter for 'critical' tab (forced/tamper events)
   const filtered = useMemo(() => {
-    if (filter === 'all') return alerts;
-    if (filter === 'resolved') return alerts.filter((a) => a.status === 'resolved');
-    return alerts.filter((a) => a.severity === filter && a.status !== 'resolved');
-  }, [alerts, filter]);
+    if (activeTab === 'critical') {
+      return events.filter(e => getSeverity(e) === 'critical');
+    }
+    return events;
+  }, [events, activeTab]);
 
   const counts = useMemo(() => ({
-    total: alerts.length,
-    critical: alerts.filter((a) => a.severity === 'critical' && a.status !== 'resolved').length,
-    warning: alerts.filter((a) => a.severity === 'warning' && a.status !== 'resolved').length,
-    info: alerts.filter((a) => a.severity === 'info' && a.status !== 'resolved').length,
-  }), [alerts]);
-
-  const handleMarkRead = () => {
-    setAlerts((prev) => prev.map((a) => a.status === 'new' ? { ...a, status: 'acknowledged' as const } : a));
-  };
-
-  const handleResolveAll = () => {
-    setAlerts((prev) => prev.map((a) => ({ ...a, status: 'resolved' as const })));
-  };
+    total,
+    critical: events.filter(e => getSeverity(e) === 'critical').length,
+    denied: events.filter(e => e.decision === 'denied').length,
+    granted: events.filter(e => e.decision === 'granted').length,
+  }), [events, total]);
 
   const stats = [
-    { label: 'Tổng cảnh báo', value: counts.total, color: '#F8FAFC', icon: <Bell size={16} /> },
+    { label: 'Tổng sự kiện', value: total, color: '#F8FAFC', icon: <Bell size={16} /> },
     { label: 'Nghiêm trọng', value: counts.critical, color: '#EF4444', icon: <ShieldAlert size={16} /> },
-    { label: 'Cảnh báo', value: counts.warning, color: '#F59E0B', icon: <AlertTriangle size={16} /> },
-    { label: 'Thông tin', value: counts.info, color: '#3B82F6', icon: <Info size={16} /> },
+    { label: 'Từ chối', value: counts.denied, color: '#F59E0B', icon: <AlertTriangle size={16} /> },
+    { label: 'Cho phép', value: counts.granted, color: '#3B82F6', icon: <Info size={16} /> },
+  ];
+
+  const columns: Column<EventDTO>[] = [
+    {
+      key: 'time', header: 'Thời gian', width: '170px', sortable: true,
+      render: (r) => (
+        <span className="font-mono text-[12px] text-[#94A3B8]">
+          {new Date(r.time).toLocaleString('vi-VN')}
+        </span>
+      ),
+    },
+    {
+      key: 'decision', header: 'Mức độ', width: '130px',
+      render: (r) => {
+        const sev = getSeverity(r);
+        const cfg = severityConfig[sev];
+        return (
+          <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium', cfg.bg)}>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cfg.color }} />
+            {cfg.label}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'door_name', header: 'Cửa / Nguồn', width: '180px',
+      render: (r) => <span className="text-[13px] text-[#94A3B8]">{r.door_name || r.door_id || '—'}</span>,
+    },
+    {
+      key: 'person_name', header: 'Người',
+      render: (r) => (
+        <span className="text-[13px] text-[#F8FAFC]">
+          {r.person_name || <span className="text-[#64748B]">—</span>}
+        </span>
+      ),
+    },
+    {
+      key: 'credential_type', header: 'Credential', width: '110px',
+      render: (r) => (
+        <span className="text-[12px] text-[#94A3B8] capitalize">{r.credential_type || '—'}</span>
+      ),
+    },
+    {
+      key: 'reason', header: 'Lý do', width: '160px',
+      render: (r) => (
+        <span className="text-[12px] text-[#64748B]">{r.reason || '—'}</span>
+      ),
+    },
   ];
 
   return (
     <div>
-      <PageHeader title="Cảnh báo" description="Trung tâm thông báo và cảnh báo hệ thống" />
+      <PageHeader title="Sự kiện & Cảnh báo" description="Nhật ký truy cập và cảnh báo hệ thống" />
 
       {/* Stats bar */}
       <div className="grid grid-cols-4 gap-4 mb-6">
@@ -96,16 +134,16 @@ export function AlertsPage() {
         ))}
       </div>
 
-      {/* Filter tabs + actions */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex gap-1">
+      {/* Filter tabs + date/door filters */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="flex gap-1 flex-1">
           {tabs.map((t) => (
             <button
               key={t.key}
-              onClick={() => setFilter(t.key)}
+              onClick={() => { setActiveTab(t.key as any); setPage(1); }}
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors',
-                filter === t.key
+                activeTab === t.key
                   ? 'bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/30'
                   : 'text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1E293B]'
               )}
@@ -116,25 +154,60 @@ export function AlertsPage() {
           ))}
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={handleMarkRead}
-            className="px-3 py-1.5 text-[12px] font-medium text-[#94A3B8] hover:text-[#F8FAFC] bg-[#1E293B] border border-[#334155] rounded-md transition-colors"
-          >
-            Đánh dấu đã đọc
-          </button>
-          <button
-            onClick={handleResolveAll}
-            className="px-3 py-1.5 text-[12px] font-medium text-[#22C55E] bg-[#22C55E]/10 border border-[#22C55E]/30 rounded-md hover:bg-[#22C55E]/20 transition-colors"
-          >
-            Xử lý tất cả
-          </button>
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => { setFromDate(e.target.value); setPage(1); }}
+            className="h-8 px-2 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px] [color-scheme:dark]"
+          />
+          <span className="self-center text-[#64748B] text-[12px]">→</span>
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => { setToDate(e.target.value); setPage(1); }}
+            className="h-8 px-2 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px] [color-scheme:dark]"
+          />
         </div>
       </div>
 
-      {/* Alert table */}
+      {/* Table */}
       <div className="bg-[#111827] border border-[#1E293B] rounded-lg overflow-hidden">
-        <DataTable columns={columns} data={filtered} rowKey={(r) => r.id} />
+        {isLoading && <div className="text-center py-8 text-[#94A3B8]">Đang tải...</div>}
+        {error && <div className="text-center py-8 text-[#EF4444]">Có lỗi xảy ra khi tải dữ liệu</div>}
+        {!isLoading && !error && (
+          <DataTable
+            columns={columns}
+            data={filtered}
+            rowKey={(r) => r.id}
+            rowClassName={(r) => getSeverity(r) === 'critical' ? 'bg-[#7F1D1D]/10' : ''}
+          />
+        )}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4">
+          <span className="text-[12px] text-[#64748B]">
+            Trang {page} / {totalPages} · {total} sự kiện
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="flex items-center gap-1 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#94A3B8] text-[12px] disabled:opacity-40"
+            >
+              <ChevronLeft size={14} /> Trước
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="flex items-center gap-1 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#94A3B8] text-[12px] disabled:opacity-40"
+            >
+              Sau <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

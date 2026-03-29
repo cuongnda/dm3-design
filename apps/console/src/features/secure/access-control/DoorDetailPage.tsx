@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, DoorOpen, Lock, ShieldAlert, Wrench, Video,
@@ -14,66 +14,19 @@ import {
 } from '@dm3/ui';
 import { Button } from '@dm3/ui';
 import { cn } from '@/lib/utils';
+import { useDoor, useEvents, useRules, useUpdateDoor, useSendCommand } from '@/lib/hooks';
+import type { EventDTO, AccessRuleDTO } from '@/lib/api';
 
-/* ── Mock Data ─────────────────────────────────────────────── */
+/* ── Helper Functions ─────────────────────────────────────────────── */
 
-const mockDoor = {
-  id: '1',
-  name: 'Main Entrance',
-  location: 'Bldg A, Floor 1',
-  type: 'door' as const,
-  status: 'online' as const,
-  state: 'locked' as const,
-  mode: 'Normal',
-  firmware: 'v3.2.1',
-  controller: 'DM3-AC-4200',
-  ip: '192.168.1.101',
-  mac: 'AA:BB:CC:DD:EE:01',
-  lastEvent: '2026-02-19 09:15:22',
-  unlockDuration: 5,
-  antiPassback: true,
-  readerIn: 'HID iCLASS SE',
-  readerOut: 'HID iCLASS SE',
-};
-
-interface DoorEvent {
-  id: string;
-  time: string;
-  personName: string;
-  credentialType: string;
-  result: 'granted' | 'denied';
-  photo?: string;
+function formatSchedule(rule: AccessRuleDTO): string {
+  // Simplified schedule formatting - in a real implementation, 
+  // you'd parse the schedule JSON properly
+  if (rule.schedule) {
+    return 'Custom schedule'; // TODO: Parse schedule JSON
+  }
+  return '24/7';
 }
-
-const mockEvents: DoorEvent[] = [
-  { id: 'e1', time: '2026-02-19 09:15', personName: 'Nguyễn Văn An', credentialType: 'card', result: 'granted' },
-  { id: 'e2', time: '2026-02-19 09:12', personName: 'Trần Thị Bích', credentialType: 'face', result: 'granted' },
-  { id: 'e3', time: '2026-02-19 09:08', personName: 'Lê Minh Cường', credentialType: 'fingerprint', result: 'denied' },
-  { id: 'e4', time: '2026-02-19 08:55', personName: 'Phạm Đức Dũng', credentialType: 'card', result: 'granted' },
-  { id: 'e5', time: '2026-02-19 08:47', personName: 'Hoàng Thị Hoa', credentialType: 'mobile', result: 'granted' },
-  { id: 'e6', time: '2026-02-19 08:33', personName: 'Võ Văn Hùng', credentialType: 'pin', result: 'denied' },
-  { id: 'e7', time: '2026-02-19 08:20', personName: 'Đặng Thanh Linh', credentialType: 'card', result: 'granted' },
-  { id: 'e8', time: '2026-02-19 08:05', personName: 'Bùi Quang Minh', credentialType: 'face', result: 'granted' },
-  { id: 'e9', time: '2026-02-19 07:50', personName: 'Ngô Thị Ngọc', credentialType: 'card', result: 'granted' },
-  { id: 'e10', time: '2026-02-19 07:35', personName: 'Lý Văn Phúc', credentialType: 'fingerprint', result: 'granted' },
-  { id: 'e11', time: '2026-02-19 07:20', personName: 'Trương Thị Quỳnh', credentialType: 'card', result: 'granted' },
-  { id: 'e12', time: '2026-02-19 07:05', personName: 'Mai Văn Sơn', credentialType: 'mobile', result: 'denied' },
-];
-
-interface AccessRule {
-  id: string;
-  name: string;
-  schedule: string;
-  enabled: boolean;
-}
-
-const mockRules: AccessRule[] = [
-  { id: 'r1', name: 'All Staff — Office Hours', schedule: 'Mon–Fri 07:00–19:00', enabled: true },
-  { id: 'r2', name: 'Security Team — 24/7', schedule: 'All days, all hours', enabled: true },
-  { id: 'r3', name: 'Visitors — Escorted', schedule: 'Mon–Fri 08:00–17:00', enabled: true },
-  { id: 'r4', name: 'Maintenance — Weekend', schedule: 'Sat–Sun 08:00–16:00', enabled: false },
-  { id: 'r5', name: 'VIP — Unrestricted', schedule: 'All days, all hours', enabled: true },
-];
 
 // Schedule grid: 7 days x 24 hours
 const scheduleData: boolean[][] = Array.from({ length: 7 }, (_, day) =>
@@ -95,57 +48,84 @@ const credentialIcons: Record<string, React.ReactNode> = {
 /* ── Component ─────────────────────────────────────────────── */
 
 export function DoorDetailPage() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
-  const [rules, setRules] = useState(mockRules);
   const [settings, setSettings] = useState({
-    name: mockDoor.name,
-    mode: mockDoor.mode,
-    unlockDuration: mockDoor.unlockDuration,
-    antiPassback: mockDoor.antiPassback,
+    name: '',
+    mode: 'Normal',
+    unlockDuration: 5,
+    antiPassback: false,
   });
 
-  const door = { ...mockDoor, id: id || '1' };
+  const { data: door, isLoading: doorLoading } = useDoor(id!);
+  const { data: eventsData } = useEvents(1, { door_id: id });
+  const { data: rulesData } = useRules(1, { door_id: id });
+  const updateDoorMutation = useUpdateDoor();
+  const sendCommandMutation = useSendCommand();
+
+  // Initialize settings when door data loads
+  useEffect(() => {
+    if (door) {
+      setSettings({
+        name: door.name,
+        mode: door.mode || 'Normal',
+        unlockDuration: Math.round(door.unlock_duration_ms / 1000),
+        antiPassback: door.anti_passback || false,
+      });
+    }
+  }, [door]);
+
+  if (!id) {
+    return <div className="text-center py-8 text-[#EF4444]">ID không hợp lệ</div>;
+  }
+
+  if (doorLoading) {
+    return <div className="text-center py-8 text-[#94A3B8]">Đang tải...</div>;
+  }
+
+  if (!door) {
+    return <div className="text-center py-8 text-[#EF4444]">Không tìm thấy cửa</div>;
+  }
 
   const stateConfig = {
     locked: { icon: Lock, color: 'text-[#22C55E]', bg: 'bg-[#22C55E]/10', label: 'Locked' },
     unlocked: { icon: DoorOpen, color: 'text-[#F59E0B]', bg: 'bg-[#F59E0B]/10', label: 'Unlocked' },
     alarm: { icon: ShieldAlert, color: 'text-[#EF4444]', bg: 'bg-[#EF4444]/10', label: 'ALARM' },
   };
-  const sc = stateConfig[door.state];
+  const sc = stateConfig[door.state as keyof typeof stateConfig] || stateConfig.locked;
   const StateIcon = sc.icon;
 
-  const eventColumns: Column<DoorEvent>[] = [
+  const eventColumns: Column<EventDTO>[] = [
     {
       key: 'time', header: 'Time', width: '170px', sortable: true,
-      render: (r) => <span className="font-mono text-[12px] text-[#94A3B8]">{r.time}</span>,
+      render: (r) => <span className="font-mono text-[12px] text-[#94A3B8]">{new Date(r.time).toLocaleString('vi-VN')}</span>,
     },
     {
-      key: 'personName', header: 'Person', sortable: true,
+      key: 'person_name', header: 'Person', sortable: true,
       render: (r) => (
         <span className="flex items-center gap-2">
           <span className="w-6 h-6 rounded-full bg-[#1E293B] flex items-center justify-center text-[10px] text-[#94A3B8]">
             <User size={12} />
           </span>
-          <span className="text-[#F8FAFC] font-medium">{r.personName}</span>
+          <span className="text-[#F8FAFC] font-medium">{r.person_name || '—'}</span>
         </span>
       ),
     },
     {
-      key: 'credentialType', header: 'Credential', width: '130px',
+      key: 'credential_type', header: 'Credential', width: '130px',
       render: (r) => (
         <span className="flex items-center gap-1.5 text-[#94A3B8] text-[12px] capitalize">
-          {credentialIcons[r.credentialType]}
-          {r.credentialType}
+          {r.credential_type && credentialIcons[r.credential_type]}
+          {r.credential_type || '—'}
         </span>
       ),
     },
     {
-      key: 'result', header: 'Result', width: '100px',
+      key: 'decision', header: 'Result', width: '100px',
       render: (r) => (
-        <span className={cn('text-[12px] font-semibold', r.result === 'granted' ? 'text-[#22C55E]' : 'text-[#EF4444]')}>
-          {r.result === 'granted' ? '✓ Granted' : '✕ Denied'}
+        <span className={cn('text-[12px] font-semibold', r.decision === 'granted' ? 'text-[#22C55E]' : 'text-[#EF4444]')}>
+          {r.decision === 'granted' ? '✓ Granted' : '✕ Denied'}
         </span>
       ),
     },
@@ -159,14 +139,50 @@ export function DoorDetailPage() {
     setConfirmAction(action);
   };
 
+  const actionCommandMap: Record<string, string> = {
+    open: 'unlock',
+    lockdown: 'lockdown',
+    maintenance: 'maintenance_mode',
+  };
+
   const confirmLabels: Record<string, { title: string; desc: string; variant: 'default' | 'destructive' }> = {
     open: { title: 'Remote Open Door', desc: 'This will unlock the door for the configured duration. Continue?', variant: 'default' },
     lockdown: { title: 'Lock Down Door', desc: 'This will immediately lock the door and deny all access until manually released. This is a critical action.', variant: 'destructive' },
     maintenance: { title: 'Maintenance Mode', desc: 'Door will be set to maintenance mode. Access rules will be suspended.', variant: 'default' },
   };
 
-  const toggleRule = (ruleId: string) => {
-    setRules((prev) => prev.map((r) => r.id === ruleId ? { ...r, enabled: !r.enabled } : r));
+  const handleConfirmAction = async () => {
+    if (!confirmAction || !door?.device_id) {
+      setConfirmAction(null);
+      return;
+    }
+    try {
+      await sendCommandMutation.mutateAsync({
+        deviceId: door.device_id,
+        command: actionCommandMap[confirmAction] ?? confirmAction,
+      });
+    } catch (err) {
+      console.error('Command failed:', err);
+    }
+    setConfirmAction(null);
+  };
+
+  const handleSaveSettings = async () => {
+    try {
+      await updateDoorMutation.mutateAsync({
+        id: id!,
+        data: {
+          name: settings.name,
+          mode: settings.mode,
+          unlock_duration_ms: settings.unlockDuration * 1000,
+          anti_passback: settings.antiPassback,
+        },
+      });
+      // TODO: Show success toast
+    } catch (error) {
+      console.error('Failed to update door:', error);
+      // TODO: Show error toast
+    }
   };
 
   return (
@@ -198,11 +214,11 @@ export function DoorDetailPage() {
             </div>
             <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-4">
               <InfoItem icon={<Lock size={14} />} label="State" value={sc.label} valueClass={sc.color} />
-              <InfoItem icon={<Shield size={14} />} label="Mode" value={door.mode} />
-              <InfoItem icon={<Clock size={14} />} label="Last Event" value={door.lastEvent.split(' ')[1]} />
-              <InfoItem icon={<Cpu size={14} />} label="Controller" value={door.controller} />
-              <InfoItem icon={<Wifi size={14} />} label="IP Address" value={door.ip} />
-              <InfoItem icon={<Settings size={14} />} label="Firmware" value={door.firmware} />
+              <InfoItem icon={<Shield size={14} />} label="Mode" value={door.mode || 'Normal'} />
+              <InfoItem icon={<Clock size={14} />} label="Last Event" value={door.last_event_at ? new Date(door.last_event_at).toLocaleTimeString('vi-VN') : '—'} />
+              <InfoItem icon={<Cpu size={14} />} label="Controller" value={door.controller_id || '—'} />
+              <InfoItem icon={<Wifi size={14} />} label="IP Address" value={door.ip_address || '—'} />
+              <InfoItem icon={<Settings size={14} />} label="Firmware" value={door.firmware_version || '—'} />
             </div>
           </div>
         </div>
@@ -231,13 +247,13 @@ export function DoorDetailPage() {
 
         {/* Events Tab */}
         <TabsContent value="events">
-          <DataTable columns={eventColumns} data={mockEvents} rowKey={(r) => r.id} />
+          <DataTable columns={eventColumns} data={eventsData?.data || []} rowKey={(r) => r.id} />
         </TabsContent>
 
         {/* Access Rules Tab */}
         <TabsContent value="rules">
           <div className="space-y-2">
-            {rules.map((rule) => (
+            {rulesData?.data?.map((rule) => (
               <div
                 key={rule.id}
                 className={cn(
@@ -247,22 +263,19 @@ export function DoorDetailPage() {
               >
                 <div>
                   <p className="text-[13px] font-medium text-[#F8FAFC]">{rule.name}</p>
-                  <p className="text-[12px] text-[#64748B]">{rule.schedule}</p>
+                  <p className="text-[12px] text-[#64748B]">{formatSchedule(rule)}</p>
                 </div>
-                <button
-                  onClick={() => toggleRule(rule.id)}
-                  className={cn(
-                    'w-9 h-5 rounded-full relative transition-colors',
-                    rule.enabled ? 'bg-[#3B82F6]' : 'bg-[#334155]'
-                  )}
-                >
-                  <span className={cn(
-                    'absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform',
-                    rule.enabled ? 'left-[18px]' : 'left-0.5'
-                  )} />
-                </button>
+                <span className={cn(
+                  'px-2 py-1 rounded text-[11px] font-medium',
+                  rule.enabled ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-[#64748B]/10 text-[#64748B]'
+                )}>
+                  {rule.enabled ? 'Enabled' : 'Disabled'}
+                </span>
               </div>
             ))}
+            {!rulesData?.data?.length && (
+              <p className="text-center py-8 text-[#64748B]">Không có quy tắc nào áp dụng cho cửa này</p>
+            )}
           </div>
         </TabsContent>
 
@@ -362,18 +375,24 @@ export function DoorDetailPage() {
                 )} />
               </button>
             </SettingField>
-            <SettingField label="Reader (In)">
-              <p className="text-[13px] text-[#94A3B8]">{door.readerIn}</p>
+            <SettingField label="Device ID">
+              <p className="text-[13px] text-[#94A3B8]">{door.device_id || '—'}</p>
             </SettingField>
-            <SettingField label="Reader (Out)">
-              <p className="text-[13px] text-[#94A3B8]">{door.readerOut}</p>
+            <SettingField label="Camera ID">
+              <p className="text-[13px] text-[#94A3B8]">{door.camera_id || '—'}</p>
             </SettingField>
-            <SettingField label="MAC Address">
-              <p className="text-[13px] text-[#64748B] font-mono">{door.mac}</p>
+            <SettingField label="Last Heartbeat">
+              <p className="text-[13px] text-[#64748B]">
+                {door.last_heartbeat_at ? new Date(door.last_heartbeat_at).toLocaleString('vi-VN') : '—'}
+              </p>
             </SettingField>
             <div className="pt-2">
-              <button className="px-4 py-2 bg-[#2563EB] text-white text-[13px] font-medium rounded-md hover:bg-[#1D4ED8] transition-colors">
-                Save Changes
+              <button 
+                onClick={handleSaveSettings}
+                disabled={updateDoorMutation.isPending}
+                className="px-4 py-2 bg-[#2563EB] text-white text-[13px] font-medium rounded-md hover:bg-[#1D4ED8] transition-colors disabled:opacity-50"
+              >
+                {updateDoorMutation.isPending ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>
@@ -397,10 +416,11 @@ export function DoorDetailPage() {
                 </Button>
                 <Button
                   variant={confirmLabels[confirmAction].variant}
-                  onClick={() => setConfirmAction(null)}
+                  onClick={handleConfirmAction}
+                  disabled={sendCommandMutation.isPending}
                   className={confirmLabels[confirmAction].variant === 'destructive' ? '' : 'bg-[#2563EB] hover:bg-[#1D4ED8]'}
                 >
-                  Confirm
+                  {sendCommandMutation.isPending ? 'Sending...' : 'Confirm'}
                 </Button>
               </DialogFooter>
             </>

@@ -178,12 +178,31 @@ export interface StatsDTO {
 export interface DoorDTO {
   id: string;
   tenant_id: string;
+  site_id?: string;
+  zone_id?: string;
   name: string;
+  description?: string;
   type: string;
   location: string;
-  status: string;
-  state: string;
-  mode: string;
+  floor?: string;
+  building?: string;
+  status: string; // online, offline, alarm, warning
+  state: string; // locked, unlocked, alarm
+  mode?: string;
+  controller_id?: string;
+  device_id?: string;
+  unlock_duration_ms: number;
+  anti_passback?: boolean;
+  emergency_unlock?: boolean;
+  camera_id?: string;
+  firmware_version?: string;
+  ip_address?: string;
+  last_event_at?: string;
+  last_heartbeat_at?: string;
+  config_version?: number;
+  person_db_version?: number;
+  rules_version?: number;
+  metadata?: Record<string, any>;
   created_at: string;
   updated_at: string;
 }
@@ -192,6 +211,8 @@ export interface EventDTO {
   id: string;
   tenant_id: string;
   time: string;
+  door_id?: string;
+  device_id?: string;
   person_id?: string;
   person_name?: string;
   credential_type?: string;
@@ -199,36 +220,159 @@ export interface EventDTO {
   decision: string;
   reason?: string;
   confidence?: number;
-  door_id?: string;
-  door_name?: string;
+  photo_ref?: string;
+  metadata?: Record<string, any>;
 }
 
-export interface RuleDTO {
+export interface AccessRuleDTO {
   id: string;
   tenant_id: string;
+  site_id?: string;
   name: string;
-  doors: string[];
-  groups: string[];
-  schedule: { days: number[]; start_time: string; end_time: string };
+  description?: string;
+  door_ids: string[];
+  person_group_ids: string[];
+  schedule_id?: string;
+  schedule?: any;
+  anti_passback?: boolean;
+  multi_factor?: boolean;
+  max_failed_attempts?: number;
+  lockout_duration_ms?: number;
+  priority: number;
   enabled: boolean;
+  valid_from?: string;
+  valid_until?: string;
+  created_by?: string;
   created_at: string;
   updated_at: string;
 }
 
+export interface ScheduleDTO {
+  id: string;
+  tenant_id: string;
+  name: string;
+  timezone: string;
+  periods: any;
+  holidays_excluded?: boolean;
+  holiday_calendar_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateDoorRequest {
+  name: string;
+  site_id?: string;
+  zone_id?: string;
+  description?: string;
+  type: string;
+  location: string;
+  floor?: string;
+  building?: string;
+  device_id?: string;
+  unlock_duration_ms?: number;
+  anti_passback?: boolean;
+  emergency_unlock?: boolean;
+  camera_id?: string;
+}
+
+export interface CreateRuleRequest {
+  name: string;
+  site_id?: string;
+  description?: string;
+  door_ids: string[];
+  person_group_ids: string[];
+  schedule_id?: string;
+  schedule_inline?: any;
+  anti_passback?: boolean;
+  multi_factor?: boolean;
+  max_failed_attempts?: number;
+  lockout_duration_ms?: number;
+  priority?: number;
+  enabled?: boolean;
+  valid_from?: string;
+  valid_until?: string;
+}
+
+export interface CreateScheduleRequest {
+  name: string;
+  timezone?: string;
+  periods: any;
+  holidays_excluded?: boolean;
+  holiday_calendar_id?: string;
+}
+
 export async function fetchStats(): Promise<StatsDTO> {
-  return apiFetch<StatsDTO>(`${ACCESS_URL}/stats`);
+  return apiFetch<StatsDTO>(`/api/v1/stats`);
 }
 
-export async function fetchDoors(page = 1, limit = 50): Promise<Paginated<DoorDTO>> {
-  return apiFetch<Paginated<DoorDTO>>(`${ACCESS_URL}/doors?page=${page}&limit=${limit}`);
+export async function fetchDoors(page = 1, limit = 50, params?: Record<string, string>): Promise<Paginated<DoorDTO>> {
+  const qs = params ? '&' + new URLSearchParams(params).toString() : '';
+  return apiFetch<Paginated<DoorDTO>>(`/api/v1/doors?page=${page}&limit=${limit}${qs}`);
 }
 
-export async function fetchEvents(page = 1, limit = 50): Promise<Paginated<EventDTO>> {
-  return apiFetch<Paginated<EventDTO>>(`${ACCESS_URL}/events?page=${page}&limit=${limit}`);
+export async function fetchDoor(id: string): Promise<DoorDTO> {
+  return apiFetch<DoorDTO>(`/api/v1/doors/${id}`);
 }
 
-export async function fetchRules(page = 1, limit = 50): Promise<Paginated<RuleDTO>> {
-  return apiFetch<Paginated<RuleDTO>>(`${ACCESS_URL}/rules?page=${page}&limit=${limit}`);
+export async function createDoor(data: CreateDoorRequest): Promise<DoorDTO> {
+  return apiFetch<DoorDTO>(`/api/v1/doors`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateDoor(id: string, data: Partial<CreateDoorRequest>): Promise<DoorDTO> {
+  return apiFetch<DoorDTO>(`/api/v1/doors/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteDoor(id: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/doors/${id}`, { method: 'DELETE' });
+}
+
+export async function fetchEvents(page = 1, limit = 50, params?: Record<string, string>): Promise<Paginated<EventDTO>> {
+  const qs = params ? '&' + new URLSearchParams(params).toString() : '';
+  return apiFetch<Paginated<EventDTO>>(`/api/v1/events?page=${page}&limit=${limit}${qs}`);
+}
+
+export async function fetchRules(page = 1, limit = 50, params?: Record<string, string>): Promise<Paginated<AccessRuleDTO>> {
+  const qs = params ? '&' + new URLSearchParams(params).toString() : '';
+  return apiFetch<Paginated<AccessRuleDTO>>(`/api/v1/rules?page=${page}&limit=${limit}${qs}`);
+}
+
+export async function fetchRule(id: string): Promise<AccessRuleDTO> {
+  return apiFetch<AccessRuleDTO>(`/api/v1/rules/${id}`);
+}
+
+export async function createRule(data: CreateRuleRequest): Promise<AccessRuleDTO> {
+  return apiFetch<AccessRuleDTO>(`/api/v1/rules`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateRule(id: string, data: Partial<CreateRuleRequest>): Promise<AccessRuleDTO> {
+  return apiFetch<AccessRuleDTO>(`/api/v1/rules/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteRule(id: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/rules/${id}`, { method: 'DELETE' });
+}
+
+export async function fetchSchedules(page = 1, limit = 50): Promise<Paginated<ScheduleDTO>> {
+  return apiFetch<Paginated<ScheduleDTO>>(`/api/v1/schedules?page=${page}&limit=${limit}`);
+}
+
+export async function createSchedule(data: CreateScheduleRequest): Promise<ScheduleDTO> {
+  return apiFetch<ScheduleDTO>(`/api/v1/schedules`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
 }
 
 // ─── Identity API (identity-svc :8004) ──────────────────────
@@ -242,14 +386,162 @@ export interface PersonDTO {
   phone?: string;
   department?: string;
   role?: string;
+  employee_id?: string;
   status: string;
-  group_ids?: string[];
+  photo_url?: string;
   created_at: string;
   updated_at: string;
 }
 
-export async function fetchPersons(page = 1, limit = 50): Promise<Paginated<PersonDTO>> {
-  return apiFetch<Paginated<PersonDTO>>(`${IDENTITY_URL}/persons?page=${page}&limit=${limit}`);
+export interface CredentialDTO {
+  id: string;
+  tenant_id: string;
+  person_id: string;
+  type: string; // face, card, pin, qr, fingerprint
+  value: string;
+  status: string;
+  valid_from?: string;
+  valid_until?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PersonGroupDTO {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description?: string;
+  member_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatePersonRequest {
+  first_name: string;
+  last_name: string;
+  email?: string;
+  phone?: string;
+  department?: string;
+  role?: string;
+  employee_id?: string;
+  status?: string;
+}
+
+export interface CreateCredentialRequest {
+  type: string;
+  value: string;
+  status?: string;
+  valid_from?: string;
+  valid_until?: string;
+}
+
+export interface CreateGroupRequest {
+  name: string;
+  description?: string;
+}
+
+export async function fetchPersons(page = 1, limit = 50, params?: Record<string, string>): Promise<Paginated<PersonDTO>> {
+  const qs = params ? '&' + new URLSearchParams(params).toString() : '';
+  return apiFetch<Paginated<PersonDTO>>(`/api/v1/persons?page=${page}&limit=${limit}${qs}`);
+}
+
+export async function fetchPerson(id: string): Promise<PersonDTO> {
+  return apiFetch<PersonDTO>(`/api/v1/persons/${id}`);
+}
+
+export async function createPerson(data: CreatePersonRequest): Promise<PersonDTO> {
+  return apiFetch<PersonDTO>(`/api/v1/persons`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updatePerson(id: string, data: Partial<CreatePersonRequest>): Promise<PersonDTO> {
+  return apiFetch<PersonDTO>(`/api/v1/persons/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deletePerson(id: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/persons/${id}`, { method: 'DELETE' });
+}
+
+export async function fetchCredentials(personId: string): Promise<CredentialDTO[]> {
+  return apiFetch<CredentialDTO[]>(`/api/v1/persons/${personId}/credentials`);
+}
+
+export async function createCredential(personId: string, data: CreateCredentialRequest): Promise<CredentialDTO> {
+  return apiFetch<CredentialDTO>(`/api/v1/persons/${personId}/credentials`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteCredential(personId: string, credId: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/persons/${personId}/credentials/${credId}`, { method: 'DELETE' });
+}
+
+export async function uploadPhoto(personId: string, file: File): Promise<{ photo_url: string }> {
+  const formData = new FormData();
+  formData.append('photo', file);
+
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`/api/v1/persons/${personId}/photo`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchGroups(page = 1, limit = 50): Promise<Paginated<PersonGroupDTO>> {
+  return apiFetch<Paginated<PersonGroupDTO>>(`/api/v1/groups?page=${page}&limit=${limit}`);
+}
+
+export async function createGroup(data: CreateGroupRequest): Promise<PersonGroupDTO> {
+  return apiFetch<PersonGroupDTO>(`/api/v1/groups`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateGroup(id: string, data: Partial<CreateGroupRequest>): Promise<PersonGroupDTO> {
+  return apiFetch<PersonGroupDTO>(`/api/v1/groups/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteGroup(id: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/groups/${id}`, { method: 'DELETE' });
+}
+
+export async function fetchGroupMembers(groupId: string): Promise<PersonDTO[]> {
+  return apiFetch<PersonDTO[]>(`/api/v1/groups/${groupId}/members`);
+}
+
+export async function addGroupMember(groupId: string, personId: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/groups/${groupId}/members`, {
+    method: 'POST',
+    body: JSON.stringify({ person_id: personId }),
+  });
+}
+
+export async function removeGroupMember(groupId: string, personId: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/groups/${groupId}/members/${personId}`, { method: 'DELETE' });
+}
+
+export async function sendDeviceCommand(deviceId: string, command: string, params?: Record<string, any>): Promise<void> {
+  await apiFetch<void>(`/api/v1/devices/${deviceId}/command`, {
+    method: 'POST',
+    body: JSON.stringify({ command, params }),
+  });
 }
 
 // ─── System Admin API (auth-svc :8005) ──────────────────────

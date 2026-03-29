@@ -43,6 +43,12 @@ const EmergencyPage = lazy(() =>
 const IdentitiesPage = lazy(() =>
   import('@/features/manage/identities/IdentitiesPage').then((m) => ({ default: m.IdentitiesPage }))
 );
+const PersonDetailPage = lazy(() =>
+  import('@/features/manage/identities/PersonDetailPage').then((m) => ({ default: m.PersonDetailPage }))
+);
+const GroupsPage = lazy(() =>
+  import('@/features/manage/identities/GroupsPage').then((m) => ({ default: m.GroupsPage }))
+);
 const VisitorsPage = lazy(() =>
   import('@/features/manage/visitors/VisitorsPage').then((m) => ({ default: m.VisitorsPage }))
 );
@@ -171,6 +177,8 @@ export const router = createBrowserRouter([
 
       // MANAGE
       { path: 'manage/identities', element: <LazyWrap><IdentitiesPage /></LazyWrap> },
+      { path: 'manage/identities/:id', element: <LazyWrap><PersonDetailPage /></LazyWrap> },
+      { path: 'manage/identities/groups', element: <LazyWrap><GroupsPage /></LazyWrap> },
       { path: 'manage/visitors', element: <LazyWrap><VisitorsPage /></LazyWrap> },
       { path: 'manage/contractors', element: <LazyWrap><ContractorsPage /></LazyWrap> },
       { path: 'manage/attendance', element: <LazyWrap><AttendancePage /></LazyWrap> },

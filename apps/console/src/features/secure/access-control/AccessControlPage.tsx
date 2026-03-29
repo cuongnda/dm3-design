@@ -4,21 +4,46 @@ import { PageHeader } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
 import { StatusBadge } from '@dm3/ui';
 import { cn } from '@/lib/utils';
-import { useDoors } from '@/lib/hooks';
+import { useDoors, useCreateDoor } from '@/lib/hooks';
 import type { DoorDTO } from '@/lib/api';
-import type { Door } from '@dm3/api-client';
+
+// Remove dependency on @dm3/api-client Door type, define locally
+interface Door {
+  id: string;
+  name: string;
+  location: string;
+  type: 'door' | 'gate' | 'barrier' | 'lift' | 'turnstile';
+  status: 'online' | 'offline' | 'alarm' | 'warning';
+  lastEvent?: { time: string; result: 'granted' | 'denied' | 'forced' };
+}
 
 function mapDoor(d: DoorDTO): Door {
   const statusMap: Record<string, Door['status']> = {
-    locked: 'online', unlocked: 'online', online: 'online',
-    offline: 'offline', alarm: 'alarm', warning: 'warning',
+    online: 'online', 
+    offline: 'offline', 
+    alarm: 'alarm', 
+    warning: 'warning',
   };
+  
+  const typeMap: Record<string, Door['type']> = {
+    door: 'door',
+    gate: 'gate', 
+    barrier: 'barrier',
+    lift: 'lift',
+    turnstile: 'turnstile',
+  };
+  
   return {
     id: d.id,
     name: d.name,
     location: d.location || '—',
-    type: (d.type as Door['type']) || 'door',
+    type: typeMap[d.type] || 'door',
     status: statusMap[d.status] || 'online',
+    // TODO: Get last event from events API
+    lastEvent: d.last_event_at ? {
+      time: new Date(d.last_event_at).toLocaleTimeString('vi-VN'),
+      result: 'granted' // TODO: Get from event data
+    } : undefined,
   };
 }
 
@@ -40,7 +65,17 @@ export function AccessControlPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const { data: doorsData } = useDoors();
+  const [buildingFilter, setBuildingFilter] = useState('');
+  const [floorFilter, setFloorFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+
+  // Build search params for API
+  const params: Record<string, string> = {};
+  if (search) params.search = search;
+  if (activeTab) params.status = activeTab;
+  if (typeFilter) params.type = typeFilter;
+  
+  const { data: doorsData, isLoading, error } = useDoors(1, params);
   const doors: Door[] = (doorsData?.data ?? []).map(mapDoor);
 
   const onlineCount = doors.filter((d) => d.status === 'online').length;
@@ -56,9 +91,9 @@ export function AccessControlPage() {
     { label: 'Warning', count: warningCount, filter: 'warning' },
   ];
 
+  // Apply additional client-side filters not handled by API
   const filtered = doors.filter((d) => {
-    if (activeTab && d.status !== activeTab) return false;
-    if (search && !d.name.toLowerCase().includes(search.toLowerCase())) return false;
+    // API already handles search and status filter
     return true;
   });
 
@@ -148,28 +183,53 @@ export function AccessControlPage() {
           placeholder="🔍 Search doors..."
           className="flex-1 h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:border-[#3B82F6] focus:outline-none"
         />
-        <select className="h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]">
-          <option>All Buildings</option>
+        <select 
+          value={buildingFilter}
+          onChange={(e) => setBuildingFilter(e.target.value)}
+          className="h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]"
+        >
+          <option value="">All Buildings</option>
+          {/* TODO: Get building list from API */}
         </select>
-        <select className="h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]">
-          <option>All Floors</option>
+        <select 
+          value={floorFilter}
+          onChange={(e) => setFloorFilter(e.target.value)}
+          className="h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]"
+        >
+          <option value="">All Floors</option>
+          {/* TODO: Get floor list from API */}
         </select>
-        <select className="h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]">
-          <option>All Types</option>
+        <select 
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]"
+        >
+          <option value="">All Types</option>
+          <option value="door">Door</option>
+          <option value="gate">Gate</option>
+          <option value="barrier">Barrier</option>
+          <option value="lift">Lift</option>
+          <option value="turnstile">Turnstile</option>
         </select>
       </div>
 
+      {/* Loading & Error States */}
+      {isLoading && <div className="text-center py-8 text-[#94A3B8]">Đang tải...</div>}
+      {error && <div className="text-center py-8 text-[#EF4444]">Có lỗi xảy ra khi tải dữ liệu</div>}
+
       {/* Table */}
-      <DataTable
-        columns={columns}
-        data={filtered}
-        rowKey={(r) => r.id}
-        onRowClick={(r) => navigate(`/secure/access-control/${r.id}`)}
-        rowClassName={(r) =>
-          r.status === 'alarm' ? 'bg-[#7F1D1D]/10' :
-          r.status === 'offline' ? 'opacity-60' : ''
-        }
-      />
+      {!isLoading && !error && (
+        <DataTable
+          columns={columns}
+          data={filtered}
+          rowKey={(r) => r.id}
+          onRowClick={(r) => navigate(`/secure/access-control/${r.id}`)}
+          rowClassName={(r) =>
+            r.status === 'alarm' ? 'bg-[#7F1D1D]/10' :
+            r.status === 'offline' ? 'opacity-60' : ''
+          }
+        />
+      )}
     </div>
   );
 }

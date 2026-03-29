@@ -1,11 +1,25 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
 import { StatCard } from '@dm3/ui';
 import { cn } from '@/lib/utils';
-import { usePersons } from '@/lib/hooks';
-import { mockPeople, type Person } from './mock-data';
+import { usePersons, useCreatePerson } from '@/lib/hooks';
 import type { PersonDTO } from '@/lib/api';
+
+interface Person {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  department: string;
+  role: string;
+  status: 'active' | 'inactive' | 'suspended';
+  credentials: { card: boolean; face: boolean; mobile: boolean };
+  cardUid?: string;
+  accessGroups: string[];
+  recentEvents: { time: string; door: string; result: 'granted' | 'denied' }[];
+}
 
 function mapPerson(p: PersonDTO): Person {
   return {
@@ -16,7 +30,7 @@ function mapPerson(p: PersonDTO): Person {
     department: p.department || '—',
     role: p.role || '—',
     status: (p.status as Person['status']) || 'active',
-    credentials: { card: false, face: false, mobile: false },
+    credentials: { card: false, face: false, mobile: false }, // Will be populated by credentials API
     accessGroups: [],
     recentEvents: [],
   };
@@ -41,24 +55,70 @@ const statusStyle: Record<string, string> = {
 };
 
 export function IdentitiesPage() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
   const [selected, setSelected] = useState<Person | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const { data: personsData } = usePersons();
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    department: '',
+    role: '',
+    employee_id: '',
+    status: 'active'
+  });
 
-  // Use API data if available, fall back to mock
-  const people: Person[] = personsData && personsData.data.length > 0
-    ? personsData.data.map(mapPerson)
-    : mockPeople;
+  // Build search params
+  const params: Record<string, string> = {};
+  if (search) params.search = search;
+  if (deptFilter) params.department = deptFilter;
+  
+  const { data: personsData, isLoading, error } = usePersons(1, params);
+  const createPersonMutation = useCreatePerson();
 
+  const people: Person[] = (personsData?.data ?? []).map(mapPerson);
+
+  // API already handles search and department filter; client-side filter only as fallback
   const filtered = people.filter((p) => {
     if (deptFilter && p.department !== deptFilter) return false;
-    if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
   const active = people.filter((p) => p.status === 'active').length;
+
+  const handleCreatePerson = async () => {
+    try {
+      await createPersonMutation.mutateAsync({
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        email: formData.email || undefined,
+        phone: formData.phone || undefined,
+        department: formData.department || undefined,
+        role: formData.role || undefined,
+        employee_id: formData.employee_id || undefined,
+        status: formData.status,
+      });
+      setShowForm(false);
+      setFormData({
+        first_name: '',
+        last_name: '',
+        email: '',
+        phone: '',
+        department: '',
+        role: '',
+        employee_id: '',
+        status: 'active'
+      });
+    } catch (error) {
+      console.error('Failed to create person:', error);
+      // TODO: Show error toast
+    }
+  };
+
+  const isFormValid = formData.first_name.trim() && formData.last_name.trim();
 
   const columns: Column<Person>[] = [
     { key: 'id', header: 'ID', width: '70px', sortable: true, render: (r) => <span className="font-mono text-[11px] text-[#64748B]">{r.id}</span> },
@@ -87,14 +147,33 @@ export function IdentitiesPage() {
       </div>
 
       <div className="flex gap-2 mb-4">
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 Tìm kiếm..." className="flex-1 h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:outline-none" style={{ borderColor: search ? PURPLE : undefined }} />
-        <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} className="h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]">
+        <input 
+          value={search} 
+          onChange={(e) => setSearch(e.target.value)} 
+          placeholder="🔍 Tìm kiếm..." 
+          className="flex-1 h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:outline-none" 
+          style={{ borderColor: search ? PURPLE : undefined }} 
+        />
+        <select 
+          value={deptFilter} 
+          onChange={(e) => setDeptFilter(e.target.value)} 
+          className="h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]"
+        >
           <option value="">Tất cả phòng ban</option>
           {['Kỹ thuật', 'Kinh doanh', 'Hành chính', 'Ban giám đốc'].map(d => <option key={d} value={d}>{d}</option>)}
         </select>
       </div>
 
-      <DataTable columns={columns} data={filtered} rowKey={(r) => r.id} onRowClick={(r) => setSelected(selected?.id === r.id ? null : r)} rowClassName={(r) => selected?.id === r.id ? 'bg-[#8B5CF6]/10' : ''} />
+      {/* Loading & Error States */}
+      {isLoading && <div className="text-center py-8 text-[#94A3B8]">Đang tải...</div>}
+      {error && <div className="text-center py-8 text-[#EF4444]">Có lỗi xảy ra khi tải dữ liệu</div>}
+
+      <DataTable 
+        columns={columns} 
+        data={filtered} 
+        rowKey={(r) => r.id} 
+        onRowClick={(r) => navigate(`/manage/identities/${r.id}`)}
+      />
 
       {/* Person Detail Panel */}
       {selected && (
@@ -145,32 +224,92 @@ export function IdentitiesPage() {
           <div className="bg-[#1E293B] border border-[#334155] rounded-lg p-6 w-[480px]" onClick={e => e.stopPropagation()}>
             <h3 className="text-[16px] font-semibold text-[#F8FAFC] mb-4">Thêm nhân viên mới</h3>
             <div className="space-y-3">
-              {[
-                { label: 'Họ tên', placeholder: 'Nguyễn Văn A' },
-                { label: 'Email', placeholder: 'email@company.vn' },
-                { label: 'Số điện thoại', placeholder: '0901234567' },
-              ].map(f => (
-                <div key={f.label}>
-                  <label className="text-[12px] text-[#94A3B8] mb-1 block">{f.label}</label>
-                  <input placeholder={f.placeholder} className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:outline-none focus:border-[#8B5CF6]" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[12px] text-[#94A3B8] mb-1 block">Họ</label>
+                  <input 
+                    value={formData.first_name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
+                    placeholder="Nguyễn" 
+                    className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:outline-none focus:border-[#8B5CF6]" 
+                  />
                 </div>
-              ))}
+                <div>
+                  <label className="text-[12px] text-[#94A3B8] mb-1 block">Tên</label>
+                  <input 
+                    value={formData.last_name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
+                    placeholder="Văn A" 
+                    className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:outline-none focus:border-[#8B5CF6]" 
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-[12px] text-[#94A3B8] mb-1 block">Email</label>
+                <input 
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="email@company.vn" 
+                  className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:outline-none focus:border-[#8B5CF6]" 
+                />
+              </div>
+              <div>
+                <label className="text-[12px] text-[#94A3B8] mb-1 block">Số điện thoại</label>
+                <input 
+                  value={formData.phone}
+                  onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                  placeholder="0901234567" 
+                  className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:outline-none focus:border-[#8B5CF6]" 
+                />
+              </div>
+              <div>
+                <label className="text-[12px] text-[#94A3B8] mb-1 block">Mã nhân viên</label>
+                <input 
+                  value={formData.employee_id}
+                  onChange={(e) => setFormData(prev => ({ ...prev, employee_id: e.target.value }))}
+                  placeholder="EMP001" 
+                  className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:outline-none focus:border-[#8B5CF6]" 
+                />
+              </div>
               <div>
                 <label className="text-[12px] text-[#94A3B8] mb-1 block">Phòng ban</label>
-                <select className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]">
-                  {['Kỹ thuật', 'Kinh doanh', 'Hành chính', 'Ban giám đốc'].map(d => <option key={d}>{d}</option>)}
+                <select 
+                  value={formData.department}
+                  onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
+                  className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]"
+                >
+                  <option value="">Chọn phòng ban</option>
+                  {['Kỹ thuật', 'Kinh doanh', 'Hành chính', 'Ban giám đốc'].map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
               <div>
                 <label className="text-[12px] text-[#94A3B8] mb-1 block">Chức vụ</label>
-                <select className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]">
-                  {['Nhân viên', 'Trưởng nhóm', 'Quản lý', 'Giám đốc'].map(r => <option key={r}>{r}</option>)}
+                <select 
+                  value={formData.role}
+                  onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
+                  className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]"
+                >
+                  <option value="">Chọn chức vụ</option>
+                  {['Nhân viên', 'Trưởng nhóm', 'Quản lý', 'Giám đốc'].map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-5">
-              <button onClick={() => setShowForm(false)} className="px-3 py-1.5 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]">Hủy</button>
-              <button onClick={() => setShowForm(false)} className="px-3 py-1.5 rounded-md text-white text-[12px] font-medium" style={{ backgroundColor: PURPLE }}>Lưu</button>
+              <button 
+                onClick={() => setShowForm(false)} 
+                className="px-3 py-1.5 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]"
+              >
+                Hủy
+              </button>
+              <button 
+                onClick={handleCreatePerson}
+                disabled={!isFormValid || createPersonMutation.isPending}
+                className="px-3 py-1.5 rounded-md text-white text-[12px] font-medium disabled:opacity-50" 
+                style={{ backgroundColor: PURPLE }}
+              >
+                {createPersonMutation.isPending ? 'Đang lưu...' : 'Lưu'}
+              </button>
             </div>
           </div>
         </div>

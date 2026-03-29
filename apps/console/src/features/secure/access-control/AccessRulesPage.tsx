@@ -9,8 +9,27 @@ import {
 } from '@dm3/ui';
 import { Button } from '@dm3/ui';
 import { cn } from '@/lib/utils';
+import { useRules, useCreateRule, useUpdateRule, useDeleteRule, useDoors, useGroups } from '@/lib/hooks';
+import type { AccessRuleDTO } from '@/lib/api';
 
 /* ── Types ─────────────────────────────────────────────────── */
+
+// Map API data to UI format
+function mapRule(r: AccessRuleDTO): AccessRule {
+  return {
+    id: r.id,
+    name: r.name,
+    doors: r.door_ids,
+    groups: r.person_group_ids,
+    schedule: {
+      days: [0, 1, 2, 3, 4], // TODO: Parse from r.schedule JSON
+      startTime: '08:00',
+      endTime: '17:00',
+    },
+    enabled: r.enabled,
+    peopleCount: 0, // TODO: Get from group membership
+  };
+}
 
 interface AccessRule {
   id: string;
@@ -32,85 +51,8 @@ interface RuleFormData {
   enabled: boolean;
 }
 
-/* ── Mock Data ─────────────────────────────────────────────── */
-
-const availableDoors = [
-  { id: 'd1', name: 'Cổng chính — Tòa A' },
-  { id: 'd2', name: 'Cổng phụ — Tòa A' },
-  { id: 'd3', name: 'Cửa văn phòng — Tầng 2' },
-  { id: 'd4', name: 'Cửa phòng Lab — Tầng 3' },
-  { id: 'd5', name: 'Phòng Server — Tầng 4' },
-  { id: 'd6', name: 'Cửa kho — Tòa B' },
-  { id: 'd7', name: 'Thang máy chính' },
-  { id: 'd8', name: 'Cổng xe vào' },
-  { id: 'd9', name: 'Cổng xe ra' },
-  { id: 'd10', name: 'Cửa thoát hiểm — Tầng trệt' },
-];
-
-const availableGroups = [
-  { id: 'g1', name: 'Nhân viên văn phòng' },
-  { id: 'g2', name: 'Ban giám đốc' },
-  { id: 'g3', name: 'Đội bảo vệ' },
-  { id: 'g4', name: 'Kỹ thuật viên' },
-  { id: 'g5', name: 'Khách thăm quan' },
-  { id: 'g6', name: 'Nhà thầu' },
-  { id: 'g7', name: 'Nhân viên kho' },
-];
-
 const dayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 const dayLabelsFull = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
-
-const initialRules: AccessRule[] = [
-  {
-    id: 'r1', name: 'Nhân viên — Giờ hành chính',
-    doors: ['d1', 'd2', 'd3', 'd7'],
-    groups: ['g1', 'g2'],
-    schedule: { days: [0, 1, 2, 3, 4], startTime: '07:00', endTime: '19:00' },
-    enabled: true, peopleCount: 245,
-  },
-  {
-    id: 'r2', name: 'Bảo vệ — 24/7',
-    doors: ['d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8', 'd9', 'd10'],
-    groups: ['g3'],
-    schedule: { days: [0, 1, 2, 3, 4, 5, 6], startTime: '00:00', endTime: '23:59' },
-    enabled: true, peopleCount: 12,
-  },
-  {
-    id: 'r3', name: 'Khách — Có người đi cùng',
-    doors: ['d1', 'd3'],
-    groups: ['g5'],
-    schedule: { days: [0, 1, 2, 3, 4], startTime: '08:00', endTime: '17:00' },
-    enabled: true, peopleCount: 30,
-  },
-  {
-    id: 'r4', name: 'Kỹ thuật — Cuối tuần',
-    doors: ['d1', 'd4', 'd5', 'd6'],
-    groups: ['g4'],
-    schedule: { days: [5, 6], startTime: '08:00', endTime: '16:00' },
-    enabled: false, peopleCount: 8,
-  },
-  {
-    id: 'r5', name: 'Ban giám đốc — Không giới hạn',
-    doors: ['d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8', 'd9', 'd10'],
-    groups: ['g2'],
-    schedule: { days: [0, 1, 2, 3, 4, 5, 6], startTime: '00:00', endTime: '23:59' },
-    enabled: true, peopleCount: 5,
-  },
-  {
-    id: 'r6', name: 'Nhà thầu — Giờ làm việc',
-    doors: ['d1', 'd6'],
-    groups: ['g6'],
-    schedule: { days: [0, 1, 2, 3, 4], startTime: '08:00', endTime: '17:00' },
-    enabled: true, peopleCount: 15,
-  },
-  {
-    id: 'r7', name: 'Nhân viên kho — Ca sáng',
-    doors: ['d1', 'd6', 'd8', 'd9'],
-    groups: ['g7'],
-    schedule: { days: [0, 1, 2, 3, 4, 5], startTime: '06:00', endTime: '14:00' },
-    enabled: true, peopleCount: 18,
-  },
-];
 
 /* ── Helpers ───────────────────────────────────────────────── */
 
@@ -147,13 +89,24 @@ function ruleToForm(rule: AccessRule): RuleFormData {
 
 export function AccessRulesPage() {
   const navigate = useNavigate();
-  const [rules, setRules] = useState<AccessRule[]>(initialRules);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<RuleFormData>(emptyForm());
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+
+  const { data: rulesData, isLoading: rulesLoading } = useRules(1, search ? { search } : undefined);
+  const { data: doorsData } = useDoors(1, {}, 100); // Get more doors for selection
+  const { data: groupsData } = useGroups(1, 100); // Get more groups for selection
+  
+  const createRuleMutation = useCreateRule();
+  const updateRuleMutation = useUpdateRule();
+  const deleteRuleMutation = useDeleteRule();
+
+  const rules: AccessRule[] = rulesData?.data?.map(mapRule) || [];
+  const availableDoors = doorsData?.data?.map(d => ({ id: d.id, name: d.name })) || [];
+  const availableGroups = groupsData?.data?.map(g => ({ id: g.id, name: g.name })) || [];
 
   const filtered = rules.filter(
     (r) => !search || r.name.toLowerCase().includes(search.toLowerCase())
@@ -174,43 +127,61 @@ export function AccessRulesPage() {
   };
 
   // Save (create or update)
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim()) return;
-    if (editingId) {
-      setRules((prev) =>
-        prev.map((r) =>
-          r.id === editingId
-            ? { ...r, name: form.name, doors: form.doors, groups: form.groups, schedule: { days: form.days, startTime: form.startTime, endTime: form.endTime }, enabled: form.enabled }
-            : r
-        )
-      );
-    } else {
-      const newRule: AccessRule = {
-        id: `r${Date.now()}`,
+    
+    try {
+      // Convert form data to API format
+      const ruleData = {
         name: form.name,
-        doors: form.doors,
-        groups: form.groups,
-        schedule: { days: form.days, startTime: form.startTime, endTime: form.endTime },
+        door_ids: form.doors,
+        person_group_ids: form.groups,
+        schedule_inline: {
+          days: form.days,
+          start_time: form.startTime,
+          end_time: form.endTime,
+        },
         enabled: form.enabled,
-        peopleCount: 0,
+        priority: 0,
       };
-      setRules((prev) => [...prev, newRule]);
+
+      if (editingId) {
+        await updateRuleMutation.mutateAsync({ id: editingId, data: ruleData });
+      } else {
+        await createRuleMutation.mutateAsync(ruleData);
+      }
+      setModalOpen(false);
+    } catch (error) {
+      console.error('Failed to save rule:', error);
     }
-    setModalOpen(false);
   };
 
   // Delete
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteId) {
-      setRules((prev) => prev.filter((r) => r.id !== deleteId));
-      setDeleteId(null);
-      if (expandedId === deleteId) setExpandedId(null);
+      try {
+        await deleteRuleMutation.mutateAsync(deleteId);
+        setDeleteId(null);
+        if (expandedId === deleteId) setExpandedId(null);
+      } catch (error) {
+        console.error('Failed to delete rule:', error);
+      }
     }
   };
 
   // Toggle enabled
-  const toggleEnabled = (id: string) => {
-    setRules((prev) => prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)));
+  const toggleEnabled = async (id: string) => {
+    try {
+      const rule = rules.find(r => r.id === id);
+      if (rule) {
+        await updateRuleMutation.mutateAsync({
+          id,
+          data: { enabled: !rule.enabled },
+        });
+      }
+    } catch (error) {
+      console.error('Failed to toggle rule:', error);
+    }
   };
 
   // Toggle multi-select
