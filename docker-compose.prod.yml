@@ -238,9 +238,7 @@ services:
     image: nginx:alpine
     container_name: dm3-nginx
     restart: unless-stopped
-    ports:
-      - "8280:80"
-      - "8643:443"
+    # No host ports — main reverse proxy (dmpw-net) routes to this container
     volumes:
       - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
@@ -258,6 +256,7 @@ services:
         condition: service_healthy
     networks:
       - dm3-internal
+      - dmpw-net  # join main proxy network for direct container routing
 
   # ── Simulator (staging only) ───────────────────────────────────────────────
 
@@ -294,3 +293,5 @@ volumes:
 networks:
   dm3-internal:
     driver: bridge
+  dmpw-net:
+    external: true  # main reverse proxy network
