@@ -1,0 +1,66 @@
+stages:
+  - test
+  - deploy
+
+# ── Test ─────────────────────────────────────────────────────────────────────
+# Runs on every push to every branch.
+
+test:backend:
+  stage: test
+  image: golang:1.22-alpine
+  before_script:
+    - cd backend
+  script:
+    - go test ./... -race -count=1
+  only:
+    - branches
+    - tags
+
+test:frontend:
+  stage: test
+  image: node:22-alpine
+  before_script:
+    - npm ci
+  script:
+    - npx turbo build --filter=@dm3/console
+  only:
+    - branches
+    - tags
+
+# ── Deploy: Staging ───────────────────────────────────────────────────────────
+# Auto-deploys when develop branch is pushed.
+# Shell executor: docker compose runs directly on demo.demasterpro.com.
+
+deploy:staging:
+  stage: deploy
+  environment:
+    name: staging
+    url: https://dm3.demasterpro.com
+  script:
+    - cp /home/gitlab-runner/.env.dm3 .env
+    - docker compose -f docker-compose.prod.yml build --no-cache
+    - docker compose -f docker-compose.prod.yml up -d --remove-orphans
+  only:
+    - develop
+  tags:
+    - dm3-server
+
+# ── Deploy: Production ────────────────────────────────────────────────────────
+# Manual trigger only, on version tags (e.g. v1.0.0).
+
+deploy:production:
+  stage: deploy
+  environment:
+    name: production
+    url: https://dm3.demasterpro.com
+  script:
+    - cp /home/gitlab-runner/.env.dm3 .env
+    - docker compose -f docker-compose.prod.yml build --no-cache
+    - docker compose -f docker-compose.prod.yml up -d --remove-orphans
+  only:
+    - /^v\d+\.\d+\.\d+$/
+  except:
+    - branches
+  when: manual
+  tags:
+    - dm3-server
