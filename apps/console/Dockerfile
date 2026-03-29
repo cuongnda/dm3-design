@@ -11,14 +11,14 @@ COPY packages/ui/package.json          ./packages/ui/package.json
 COPY packages/api-client/package.json  ./packages/api-client/package.json
 COPY apps/console/package.json         ./apps/console/package.json
 
-# Install deps — use npm install (not ci) to resolve platform-specific optionalDeps
-RUN npm install
-
-# Copy full source
+# Copy full source first
 COPY packages/ ./packages/
 COPY apps/console/ ./apps/console/
 
-# Build: skip tsc type-check, just run vite build directly
+# Fresh install for linux/musl — delete lock to avoid platform mismatch
+RUN rm -f package-lock.json && npm install && npm ls @rollup/rollup-linux-x64-musl 2>/dev/null || true
+
+# Build: vite build directly (skip tsc for Docker)
 RUN cd apps/console && npx vite build
 
 # Stage 2: Serve with nginx
