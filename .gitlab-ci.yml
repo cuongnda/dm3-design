@@ -21,8 +21,6 @@ deploy:staging:
     - docker compose -f docker-compose.prod.yml ps
   only:
     - develop
-  tags:
-    - dmp-staging-2024
 
 # ── Deploy: Production ────────────────────────────────────────────────────────
 deploy:production:
@@ -42,5 +40,3 @@ deploy:production:
   except:
     - branches
   when: manual
-  tags:
-    - dmp-staging-2024
