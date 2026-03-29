@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 import type { WSEvent, AccessEventData, DoorStateData, DeviceStatusData, AlarmData } from './websocket';
 
 export interface RealtimeAccessEvent {
@@ -218,36 +219,39 @@ export function transformAlarmEvent(data: AlarmData, event: WSEvent): RealtimeAl
 }
 
 // Selectors for common use cases
+// NOTE: useShallow prevents infinite re-render loops when selectors return new
+// array/object references (slice, filter, Object.values, object literals).
+// In Zustand v5 the equality fn is no longer a second arg — use useShallow wrapper.
 export const useConnectionStatus = () =>
-  useRealtimeStore(state => ({
+  useRealtimeStore(useShallow(state => ({
     connected: state.connected,
     connecting: state.connecting,
     lastConnected: state.lastConnected,
-  }));
+  })));
 
 export const useRecentEvents = (limit = 10) =>
-  useRealtimeStore(state => state.events.slice(0, limit));
+  useRealtimeStore(useShallow(state => state.events.slice(0, limit)));
 
 export const useDeviceStatus = (deviceId?: string) =>
-  useRealtimeStore(state =>
+  useRealtimeStore(useShallow(state =>
     deviceId
       ? state.deviceStatuses[deviceId]
       : Object.values(state.deviceStatuses)
-  );
+  ));
 
 export const useDoorStatus = (doorId?: string) =>
-  useRealtimeStore(state =>
+  useRealtimeStore(useShallow(state =>
     doorId
       ? state.doorStatuses[doorId]
       : Object.values(state.doorStatuses)
-  );
+  ));
 
 export const useActiveAlarms = () =>
-  useRealtimeStore(state =>
+  useRealtimeStore(useShallow(state =>
     state.alarms.filter(alarm => !alarm.acknowledged)
-  );
+  ));
 
 export const useCriticalAlarms = () =>
-  useRealtimeStore(state =>
+  useRealtimeStore(useShallow(state =>
     state.alarms.filter(alarm => alarm.severity === 'critical' && !alarm.acknowledged)
-  );
+  ));

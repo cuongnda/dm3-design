@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Bell, DoorOpen, Video, ShieldAlert, Phone,
   Bot, AlertTriangle, Users, UserPlus, Wrench, Clock, Package,
   KeyRound, Building2, Car, Hammer, Shield, Key, Zap, Brain,
-  Settings, ChevronLeft, ChevronRight,
+  Settings, ChevronLeft, ChevronRight, LogOut,
 } from 'lucide-react';
 import { useThemeStore } from '@/stores/themeStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -89,6 +90,9 @@ function SectionLabel({ label, color, collapsed }: { label: string; color: strin
 
 export function Sidebar() {
   const { sidebarCollapsed, toggleSidebar } = useThemeStore();
+  const logout = useAuthStore((s) => s.logout);
+  const navigate = useNavigate();
+  const handleLogout = () => { logout(); navigate('/login'); };
   const user = useAuthStore((s) => s.user);
   const unreadCount = useNotificationStore((s) => s.unreadCount);
   const iconSize = 18;
@@ -149,10 +153,13 @@ export function Sidebar() {
         {/* User */}
         <div className={cn('border-t border-[#1E293B] py-2', c ? 'px-2' : 'px-3')}>
           {c ? (
-            <div className="flex justify-center">
+            <div className="flex flex-col items-center gap-1">
               <div className="w-7 h-7 bg-[#3B82F6] rounded-full flex items-center justify-center text-[11px] font-semibold text-white">
                 {user?.initials}
               </div>
+              <button onClick={handleLogout} className="text-[#64748B] hover:text-[#F87171] transition-colors" title="Sign Out">
+                <LogOut size={14} />
+              </button>
             </div>
           ) : (
             <div className="flex items-center gap-2 py-1">
@@ -160,7 +167,9 @@ export function Sidebar() {
                 {user?.initials}
               </div>
               <span className="text-[12px] font-medium text-[#F8FAFC] truncate">{user?.name}</span>
-              <span className="ml-auto text-[#64748B]">▾</span>
+              <button onClick={handleLogout} className="ml-auto text-[#64748B] hover:text-[#F87171] transition-colors" title="Sign Out">
+                <LogOut size={14} />
+              </button>
             </div>
           )}
         </div>
