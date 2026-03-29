@@ -1,15 +1,84 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  fetchDevices, fetchStats, fetchDoors, fetchDoor, fetchEvents, fetchPersons, fetchPerson,
+  fetchDevices, fetchDevice, updateDevice, deleteDevice, fetchStats, fetchDoors, fetchDoor, fetchEvents, fetchPersons, fetchPerson,
   fetchRules, fetchRule, fetchCredentials, fetchGroups, fetchGroupMembers, fetchSchedules,
   createPerson, updatePerson, deletePerson, createCredential, deleteCredential, uploadPhoto,
   createGroup, updateGroup, deleteGroup, addGroupMember, removeGroupMember,
   createDoor, updateDoor, deleteDoor, createRule, updateRule, deleteRule, createSchedule,
-  sendDeviceCommand,
+  sendDeviceCommand, provisionDevice, fetchPendingDevices, approvePendingDevice, rejectPendingDevice,
 } from './api';
 
 export function useDevices() {
   return useQuery({ queryKey: ['devices'], queryFn: fetchDevices, refetchInterval: 15_000 });
+}
+
+export function useDevice(id: string) {
+  return useQuery({ 
+    queryKey: ['device', id], 
+    queryFn: () => fetchDevice(id), 
+    enabled: !!id,
+    refetchInterval: 10_000
+  });
+}
+
+export function useUpdateDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => updateDevice(id, data),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['device', id] });
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+    },
+  });
+}
+
+export function useDeleteDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteDevice,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+    },
+  });
+}
+
+export function useProvisionDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: provisionDevice,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+    },
+  });
+}
+
+export function usePendingDevices() {
+  return useQuery({ 
+    queryKey: ['pending-devices'], 
+    queryFn: fetchPendingDevices, 
+    refetchInterval: 30_000 
+  });
+}
+
+export function useApprovePendingDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => approvePendingDevice(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-devices'] });
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+    },
+  });
+}
+
+export function useRejectPendingDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: rejectPendingDevice,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-devices'] });
+    },
+  });
 }
 
 export function useStats() {

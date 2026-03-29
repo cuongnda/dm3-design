@@ -1,0 +1,253 @@
+import { create } from 'zustand';
+import { subscribeWithSelector } from 'zustand/middleware';
+import type { WSEvent, AccessEventData, DoorStateData, DeviceStatusData, AlarmData } from './websocket';
+
+export interface RealtimeAccessEvent {
+  id: string;
+  time: Date;
+  deviceId: string;
+  tenantId: string;
+  personName?: string;
+  doorId?: string;
+  doorName?: string;
+  decision: string;
+  reason?: string;
+  credentialType?: string;
+  direction?: string;
+  confidence?: number;
+}
+
+// Named RealtimeDeviceStatus to avoid collision with DeviceStatus const in types/enums
+export interface RealtimeDeviceStatus {
+  deviceId: string;
+  online: boolean;
+  lastSeen: Date;
+  firmware?: string;
+  ip?: string;
+  cpuPct?: number;
+  memPct?: number;
+  diskPct?: number;
+  uptimeSeconds?: number;
+}
+
+export interface DoorStatus {
+  doorId: string;
+  state: string;
+  lastUpdate: Date;
+  forced?: boolean;
+  deviceId?: string;
+}
+
+export interface RealtimeAlarm {
+  id: string;
+  time: Date;
+  deviceId: string;
+  doorId?: string;
+  zone?: string;
+  alarmType: string;
+  severity: 'info' | 'warning' | 'critical';
+  acknowledged: boolean;
+}
+
+export interface RealtimeState {
+  // Connection status
+  connected: boolean;
+  connecting: boolean;
+  lastConnected?: Date;
+
+  // Real-time data
+  events: RealtimeAccessEvent[];
+  deviceStatuses: Record<string, RealtimeDeviceStatus>;
+  doorStatuses: Record<string, DoorStatus>;
+  alarms: RealtimeAlarm[];
+
+  // Actions
+  setConnectionStatus: (connected: boolean, connecting?: boolean) => void;
+  addAccessEvent: (event: RealtimeAccessEvent) => void;
+  updateDeviceStatus: (status: RealtimeDeviceStatus) => void;
+  updateDoorStatus: (status: DoorStatus) => void;
+  addAlarm: (alarm: RealtimeAlarm) => void;
+  acknowledgeAlarm: (alarmId: string) => void;
+  clearOldEvents: () => void;
+  reset: () => void;
+}
+
+export const useRealtimeStore = create<RealtimeState>()(
+  subscribeWithSelector((set, get) => ({
+    // Initial state
+    connected: false,
+    connecting: false,
+    events: [],
+    deviceStatuses: {},
+    doorStatuses: {},
+    alarms: [],
+
+    // Actions
+    setConnectionStatus: (connected, connecting = false) =>
+      set({
+        connected,
+        connecting,
+        lastConnected: connected ? new Date() : get().lastConnected,
+      }),
+
+    addAccessEvent: (event) =>
+      set((state) => {
+        // Check for duplicate
+        if (state.events.some(e => e.id === event.id)) {
+          return state;
+        }
+
+        const newEvents = [event, ...state.events]
+          .sort((a, b) => b.time.getTime() - a.time.getTime()) // Latest first
+          .slice(0, 50); // Keep max 50 events
+
+        return { events: newEvents };
+      }),
+
+    updateDeviceStatus: (status) =>
+      set((state) => ({
+        deviceStatuses: {
+          ...state.deviceStatuses,
+          [status.deviceId]: status,
+        },
+      })),
+
+    updateDoorStatus: (status) =>
+      set((state) => ({
+        doorStatuses: {
+          ...state.doorStatuses,
+          [status.doorId]: status,
+        },
+      })),
+
+    addAlarm: (alarm) =>
+      set((state) => {
+        // Check for duplicate
+        if (state.alarms.some(a => a.id === alarm.id)) {
+          return state;
+        }
+
+        const newAlarms = [alarm, ...state.alarms]
+          .sort((a, b) => b.time.getTime() - a.time.getTime()) // Latest first
+          .slice(0, 100); // Keep max 100 alarms
+
+        return { alarms: newAlarms };
+      }),
+
+    acknowledgeAlarm: (alarmId) =>
+      set((state) => ({
+        alarms: state.alarms.map(alarm =>
+          alarm.id === alarmId ? { ...alarm, acknowledged: true } : alarm
+        ),
+      })),
+
+    clearOldEvents: () =>
+      set((state) => {
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        return {
+          events: state.events.filter(e => e.time > oneDayAgo),
+          alarms: state.alarms.filter(a => a.time > oneDayAgo),
+        };
+      }),
+
+    reset: () =>
+      set({
+        connected: false,
+        connecting: false,
+        events: [],
+        deviceStatuses: {},
+        doorStatuses: {},
+        alarms: [],
+      }),
+  }))
+);
+
+// Helper functions to transform WebSocket events to store format
+export function transformAccessEvent(data: AccessEventData, event: WSEvent): RealtimeAccessEvent {
+  return {
+    id: `${event.device_id}-${event.time}-${data.door_id || 'unknown'}`,
+    time: new Date(event.time),
+    deviceId: event.device_id,
+    tenantId: event.tenant_id,
+    personName: data.person_name,
+    doorId: data.door_id,
+    doorName: data.door_id, // TODO: Map to actual door name
+    decision: data.decision,
+    reason: data.reason,
+    credentialType: data.credential_type,
+    direction: data.direction,
+    confidence: data.confidence,
+  };
+}
+
+export function transformDeviceStatus(data: DeviceStatusData, event: WSEvent): RealtimeDeviceStatus {
+  return {
+    deviceId: event.device_id,
+    online: data.online,
+    lastSeen: new Date(event.time),
+    firmware: data.firmware,
+    ip: data.ip,
+    cpuPct: data.cpu_pct,
+    memPct: data.mem_pct,
+    diskPct: data.disk_pct,
+    uptimeSeconds: data.uptime_s,
+  };
+}
+
+export function transformDoorStatus(data: DoorStateData, event: WSEvent): DoorStatus {
+  return {
+    doorId: data.door_id,
+    state: data.state,
+    lastUpdate: new Date(event.time),
+    forced: data.forced,
+    deviceId: event.device_id,
+  };
+}
+
+export function transformAlarmEvent(data: AlarmData, event: WSEvent): RealtimeAlarm {
+  return {
+    id: `${event.device_id}-${event.time}-${data.door_id || 'unknown'}`,
+    time: new Date(event.time),
+    deviceId: event.device_id,
+    doorId: data.door_id,
+    zone: data.zone,
+    alarmType: data.alarm_type,
+    severity: data.severity,
+    acknowledged: false,
+  };
+}
+
+// Selectors for common use cases
+export const useConnectionStatus = () =>
+  useRealtimeStore(state => ({
+    connected: state.connected,
+    connecting: state.connecting,
+    lastConnected: state.lastConnected,
+  }));
+
+export const useRecentEvents = (limit = 10) =>
+  useRealtimeStore(state => state.events.slice(0, limit));
+
+export const useDeviceStatus = (deviceId?: string) =>
+  useRealtimeStore(state =>
+    deviceId
+      ? state.deviceStatuses[deviceId]
+      : Object.values(state.deviceStatuses)
+  );
+
+export const useDoorStatus = (doorId?: string) =>
+  useRealtimeStore(state =>
+    doorId
+      ? state.doorStatuses[doorId]
+      : Object.values(state.doorStatuses)
+  );
+
+export const useActiveAlarms = () =>
+  useRealtimeStore(state =>
+    state.alarms.filter(alarm => !alarm.acknowledged)
+  );
+
+export const useCriticalAlarms = () =>
+  useRealtimeStore(state =>
+    state.alarms.filter(alarm => alarm.severity === 'critical' && !alarm.acknowledged)
+  );

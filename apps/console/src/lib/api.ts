@@ -699,6 +699,21 @@ export async function rejectPendingDevice(id: string): Promise<void> {
   });
 }
 
+export async function fetchDevice(id: string): Promise<DeviceDTO> {
+  return apiFetch<DeviceDTO>(`${DEVICE_URL}/${id}`);
+}
+
+export async function updateDevice(id: string, data: Partial<{ name: string; location: string }>): Promise<DeviceDTO> {
+  return apiFetch<DeviceDTO>(`${DEVICE_URL}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteDevice(id: string): Promise<void> {
+  await apiFetch<void>(`${DEVICE_URL}/${id}`, { method: 'DELETE' });
+}
+
 // ─── JWT Helper ─────────────────────────────────────────────
 
 export function decodeJWT(token: string): Record<string, unknown> {

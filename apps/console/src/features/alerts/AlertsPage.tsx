@@ -4,6 +4,7 @@ import { DataTable, type Column } from '@dm3/ui';
 import { Bell, AlertTriangle, ShieldAlert, Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEvents } from '@/lib/hooks';
+import { useRealtimeStore, useActiveAlarms, useRecentEvents } from '@dm3/api-client';
 import type { EventDTO } from '@/lib/api';
 
 type DecisionFilter = 'all' | 'granted' | 'denied';
@@ -34,6 +35,11 @@ export function AlertsPage() {
   const [toDate, setToDate] = useState('');
   const [page, setPage] = useState(1);
 
+  // Real-time state — connection managed by <RealtimeProvider> in App.tsx
+  const isConnected = useRealtimeStore((s) => s.connected);
+  const activeAlarms = useActiveAlarms();
+  const recentEvents = useRecentEvents(20);
+
   const params: Record<string, string> = {};
   if (doorFilter) params.door_id = doorFilter;
   if (activeTab === 'granted' || activeTab === 'denied') params.decision = activeTab;
@@ -41,9 +47,33 @@ export function AlertsPage() {
   if (toDate) params.to = new Date(toDate + 'T23:59:59').toISOString();
 
   const { data, isLoading, error } = useEvents(page, params);
-  const events = data?.data ?? [];
+  const apiEvents = data?.data ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / 50);
+
+  // Convert real-time events to EventDTO format
+  const realtimeEventDTOs: EventDTO[] = recentEvents.map(event => ({
+    id: event.id,
+    tenant_id: event.tenantId,
+    time: event.time.toISOString(),
+    door_id: event.doorId,
+    device_id: event.deviceId,
+    person_id: undefined,
+    person_name: event.personName,
+    credential_type: event.credentialType,
+    direction: event.direction,
+    decision: event.decision,
+    reason: event.reason,
+    confidence: event.confidence,
+  }));
+
+  // Merge real-time events with API events
+  const events = [
+    ...realtimeEventDTOs,
+    ...apiEvents.filter(apiEvent => 
+      !realtimeEventDTOs.some(rtEvent => rtEvent.id === apiEvent.id)
+    )
+  ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 
   // Client-side filter for 'critical' tab (forced/tamper events)
   const filtered = useMemo(() => {
@@ -54,14 +84,15 @@ export function AlertsPage() {
   }, [events, activeTab]);
 
   const counts = useMemo(() => ({
-    total,
-    critical: events.filter(e => getSeverity(e) === 'critical').length,
+    total: Math.max(total, events.length),
+    critical: events.filter(e => getSeverity(e) === 'critical').length + activeAlarms.filter(a => a.severity === 'critical').length,
     denied: events.filter(e => e.decision === 'denied').length,
     granted: events.filter(e => e.decision === 'granted').length,
-  }), [events, total]);
+    activeAlarms: activeAlarms.length,
+  }), [events, total, activeAlarms]);
 
   const stats = [
-    { label: 'Tổng sự kiện', value: total, color: '#F8FAFC', icon: <Bell size={16} /> },
+    { label: 'Tổng sự kiện', value: counts.total, color: '#F8FAFC', icon: <Bell size={16} /> },
     { label: 'Nghiêm trọng', value: counts.critical, color: '#EF4444', icon: <ShieldAlert size={16} /> },
     { label: 'Từ chối', value: counts.denied, color: '#F59E0B', icon: <AlertTriangle size={16} /> },
     { label: 'Cho phép', value: counts.granted, color: '#3B82F6', icon: <Info size={16} /> },
@@ -117,7 +148,7 @@ export function AlertsPage() {
 
   return (
     <div>
-      <PageHeader title="Sự kiện & Cảnh báo" description="Nhật ký truy cập và cảnh báo hệ thống" />
+      <PageHeader title="Sự kiện & Cảnh báo" description={`Nhật ký truy cập và cảnh báo hệ thống • ${isConnected ? 'Live' : 'Offline'}`} />
 
       {/* Stats bar */}
       <div className="grid grid-cols-4 gap-4 mb-6">

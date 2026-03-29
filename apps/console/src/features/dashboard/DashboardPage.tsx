@@ -1,13 +1,31 @@
-import { useEffect, useRef, useState } from 'react';
 import { PageHeader } from '@dm3/ui';
 import { StatCard } from '@dm3/ui';
 import { EventFeed } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { useStats, useDevices } from '@/lib/hooks';
-import { connectWebSocket, type EventDTO } from '@/lib/api';
+import {
+  useRealtimeStore,
+  useRecentEvents,
+  useActiveAlarms,
+  useDeviceStatus,
+} from '@dm3/api-client';
 import type { AccessEvent, DomainHealth } from '@dm3/api-client';
 
-function eventDtoToAccessEvent(e: EventDTO): AccessEvent {
+// Transform realtime event to UI format
+function realtimeEventToAccessEvent(event: any): AccessEvent {
+  const time = `${String(event.time.getHours()).padStart(2, '0')}:${String(event.time.getMinutes()).padStart(2, '0')}`;
+  return {
+    id: event.id,
+    time,
+    personName: event.personName || 'Unknown',
+    point: event.doorName || event.doorId || '—',
+    result: event.decision === 'granted' ? 'granted' : 'denied',
+    credentialType: event.credentialType,
+  };
+}
+
+// Legacy API event transformer
+function eventDtoToAccessEvent(e: any): AccessEvent {
   const t = new Date(e.time);
   const time = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
   return {
@@ -19,14 +37,6 @@ function eventDtoToAccessEvent(e: EventDTO): AccessEvent {
     credentialType: e.credential_type,
   };
 }
-
-const alerts = [
-  { id: '1', title: 'Door 5 forced open', meta: 'Building A, Floor 3 · 2m ago', severity: 'critical' },
-  { id: '2', title: 'Intrusion alarm — Zone B', meta: 'Perimeter sensor · 5m ago', severity: 'critical' },
-  { id: '3', title: 'NVR-02 storage at 90%', meta: 'Camera storage · 12m ago', severity: 'warning' },
-  { id: '4', title: 'Door 12 reader offline', meta: 'Building B, Floor 1 · 28m ago', severity: 'info' },
-  { id: '5', title: 'Scheduled maintenance due', meta: 'Turnstile 3 · 1h ago', severity: 'info' },
-];
 
 const domainHealthData: { domain: string; color: string; emoji: string; items: DomainHealth[] }[] = [
   {
@@ -74,58 +84,103 @@ const healthStatusClass: Record<string, string> = {
 };
 
 export function DashboardPage() {
+  // API data
   const { data: statsData } = useStats();
   const { data: devicesData } = useDevices();
-  const [wsEvents, setWsEvents] = useState<AccessEvent[]>([]);
-  const wsRef = useRef<WebSocket | null>(null);
 
-  // WebSocket connection for real-time events
-  useEffect(() => {
-    wsRef.current = connectWebSocket((evt) => {
-      setWsEvents((prev) => [eventDtoToAccessEvent(evt), ...prev].slice(0, 20));
-    });
-    return () => { wsRef.current?.close(); };
-  }, []);
+  // Real-time state — connection managed by <RealtimeProvider> in App.tsx
+  const isConnected = useRealtimeStore((s) => s.connected);
+  const isConnecting = useRealtimeStore((s) => s.connecting);
+  const realtimeEvents = useRecentEvents(10);
+  const activeAlarms = useActiveAlarms();
+  const deviceStatuses = useDeviceStatus();
 
-  // Build stats from real data
-  const devicesOnline = devicesData?.filter((d) => d.status === 'online').length ?? 0;
-  const devicesTotal = devicesData?.length ?? 0;
+  // Build stats from real data + real-time status
+  const devicesOnline = deviceStatuses.filter(d => d.online).length || 
+                        devicesData?.filter((d) => d.status === 'online').length ?? 0;
+  const devicesTotal = deviceStatuses.length || devicesData?.length ?? 0;
 
   const stats = [
     {
-      label: 'Events Today', value: String(statsData?.events_today ?? 0),
+      label: 'Events Today', 
+      value: String(statsData?.events_today ?? 0),
       sub: `${statsData?.granted_today ?? 0} granted, ${statsData?.denied_today ?? 0} denied`,
-      trend: { direction: 'up' as const, text: 'real-time' }, icon: '📊', domain: 'default' as const,
+      trend: { 
+        direction: 'up' as const, 
+        text: isConnected ? 'live' : (isConnecting ? 'connecting...' : 'offline')
+      }, 
+      icon: '📊', 
+      domain: 'default' as const,
     },
     {
-      label: 'Doors', value: `${statsData?.doors_online ?? 0}/${statsData?.doors_total ?? 0}`,
+      label: 'Doors', 
+      value: `${statsData?.doors_online ?? 0}/${statsData?.doors_total ?? 0}`,
       sub: 'access points',
-      trend: { direction: (statsData?.doors_offline ?? 0) > 0 ? 'down' as const : 'up' as const, text: `${statsData?.doors_offline ?? 0} offline` },
-      icon: '🔒', domain: 'secure' as const,
+      trend: { 
+        direction: (statsData?.doors_offline ?? 0) > 0 ? 'down' as const : 'up' as const, 
+        text: `${statsData?.doors_offline ?? 0} offline` 
+      },
+      icon: '🔒', 
+      domain: 'secure' as const,
     },
     {
-      label: 'Devices Online', value: `${devicesOnline}/${devicesTotal}`,
+      label: 'Devices Online', 
+      value: `${devicesOnline}/${devicesTotal}`,
       sub: 'connected devices',
-      trend: { direction: devicesOnline === devicesTotal ? 'up' as const : 'down' as const, text: `${devicesTotal - devicesOnline} offline` },
-      icon: '📡', domain: 'default' as const,
+      trend: { 
+        direction: devicesOnline === devicesTotal ? 'up' as const : 'down' as const, 
+        text: `${devicesTotal - devicesOnline} offline` 
+      },
+      icon: '📡', 
+      domain: 'default' as const,
     },
     {
-      label: 'Active Alerts', value: '3', sub: 'need attention',
-      trend: { direction: 'down' as const, text: '2 critical' },
-      icon: '⚠️', domain: 'error' as const,
+      label: 'Active Alerts', 
+      value: String(activeAlarms.length), 
+      sub: 'need attention',
+      trend: { 
+        direction: activeAlarms.filter(a => a.severity === 'critical').length > 0 ? 'down' as const : 'up' as const, 
+        text: `${activeAlarms.filter(a => a.severity === 'critical').length} critical` 
+      },
+      icon: '⚠️', 
+      domain: 'error' as const,
     },
     {
-      label: 'Parking', value: '78%', sub: '312 / 400 spots',
+      label: 'Parking', 
+      value: '78%', 
+      sub: '312 / 400 spots',
       trend: { direction: 'up' as const, text: '5% from last week' },
-      icon: '🅿️', domain: 'operate' as const,
+      icon: '🅿️', 
+      domain: 'operate' as const,
     },
   ];
 
-  // Merge WS events with API recent events
+  // Combine real-time events with API fallback
+  const realtimeAccessEvents = realtimeEvents.map(realtimeEventToAccessEvent);
   const apiEvents: AccessEvent[] = (statsData?.recent_events ?? []).map(eventDtoToAccessEvent);
-  const events = wsEvents.length > 0
-    ? [...wsEvents, ...apiEvents.filter((e) => !wsEvents.some((w) => w.id === e.id))].slice(0, 10)
+  
+  const events = realtimeAccessEvents.length > 0
+    ? [...realtimeAccessEvents, ...apiEvents.filter((e) => !realtimeAccessEvents.some((w) => w.id === e.id))].slice(0, 10)
     : apiEvents.slice(0, 10);
+
+  // Convert real-time alarms to alert format
+  const realtimeAlerts = activeAlarms.map((alarm, index) => ({
+    id: alarm.id,
+    title: `${alarm.alarmType}: ${alarm.doorId || alarm.zone || 'Unknown location'}`,
+    meta: `Device ${alarm.deviceId} · ${Math.floor((Date.now() - alarm.time.getTime()) / 60000)}m ago`,
+    severity: alarm.severity,
+  }));
+
+  // Fallback static alerts for demo
+  const staticAlerts = [
+    { id: '1', title: 'Door 5 forced open', meta: 'Building A, Floor 3 · 2m ago', severity: 'critical' },
+    { id: '2', title: 'Intrusion alarm — Zone B', meta: 'Perimeter sensor · 5m ago', severity: 'critical' },
+    { id: '3', title: 'NVR-02 storage at 90%', meta: 'Camera storage · 12m ago', severity: 'warning' },
+    { id: '4', title: 'Door 12 reader offline', meta: 'Building B, Floor 1 · 28m ago', severity: 'info' },
+    { id: '5', title: 'Scheduled maintenance due', meta: 'Turnstile 3 · 1h ago', severity: 'info' },
+  ];
+
+  const alerts = realtimeAlerts.length > 0 ? realtimeAlerts : staticAlerts;
 
   return (
     <div>
@@ -137,6 +192,16 @@ export function DashboardPage() {
           <button className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px]">
             📅 Today ▾
           </button>
+          {/* Connection Status Indicator */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px]">
+            <span className={cn(
+              'w-2 h-2 rounded-full',
+              isConnected ? 'bg-[#22C55E] animate-pulse' : 
+              isConnecting ? 'bg-[#EAB308] animate-pulse' : 
+              'bg-[#EF4444]'
+            )} />
+            {isConnected ? 'Live' : isConnecting ? 'Connecting' : 'Offline'}
+          </div>
         </div>
       </PageHeader>
 
@@ -153,8 +218,11 @@ export function DashboardPage() {
         <div className="bg-[#1E293B] border border-[#334155] rounded-lg overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-[#334155]">
             <div className="text-[13px] font-semibold flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-[#22C55E] rounded-full animate-pulse-live" />
-              Access Events (Live)
+              <span className={cn(
+                'w-1.5 h-1.5 rounded-full',
+                isConnected ? 'bg-[#22C55E] animate-pulse' : 'bg-[#EF4444]'
+              )} />
+              Access Events ({isConnected ? 'Live' : 'Cached'})
             </div>
             <span className="text-[12px] text-[#3B82F6] cursor-pointer hover:underline">View All →</span>
           </div>

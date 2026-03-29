@@ -1,13 +1,7 @@
-import { useEffect, useRef } from 'react';
-import { WSClient } from '@/lib/websocket';
-
-export function useWebSocket(url: string, onMessage: (data: unknown) => void) {
-  const client = useRef<WSClient | null>(null);
-
-  useEffect(() => {
-    client.current = new WSClient(url);
-    client.current.connect();
-    client.current.onMessage(onMessage);
-    return () => client.current?.disconnect();
-  }, [url, onMessage]);
-}
+// Re-export the full hook from @dm3/api-client.
+// The connection is managed by <RealtimeProvider> in App.tsx — this hook
+// exposes status/controls for components that need them directly.
+export {
+  useWebSocket,
+  useWebSocketConnection,
+} from '@dm3/api-client';

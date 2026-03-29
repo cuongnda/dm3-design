@@ -36,5 +36,8 @@ export * from './components/layout/PageHeader';
 export * from './components/layout/Sidebar';
 export * from './components/layout/Topbar';
 
+// Notifications
+export * from './toast';
+
 // Utilities
 export { cn } from './lib/utils';

@@ -4,7 +4,8 @@ import { PageHeader } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
 import { StatusBadge } from '@dm3/ui';
 import { cn } from '@/lib/utils';
-import { useDoors, useCreateDoor } from '@/lib/hooks';
+import { useDoors } from '@/lib/hooks';
+import { useRealtimeStore, useDoorStatus } from '@dm3/api-client';
 import type { DoorDTO } from '@/lib/api';
 
 // Remove dependency on @dm3/api-client Door type, define locally
@@ -15,9 +16,14 @@ interface Door {
   type: 'door' | 'gate' | 'barrier' | 'lift' | 'turnstile';
   status: 'online' | 'offline' | 'alarm' | 'warning';
   lastEvent?: { time: string; result: 'granted' | 'denied' | 'forced' };
+  realtimeStatus?: {
+    state: string;
+    lastUpdate: Date;
+    forced?: boolean;
+  };
 }
 
-function mapDoor(d: DoorDTO): Door {
+function mapDoor(d: DoorDTO, realtimeStatuses: any[]): Door {
   const statusMap: Record<string, Door['status']> = {
     online: 'online', 
     offline: 'offline', 
@@ -32,17 +38,36 @@ function mapDoor(d: DoorDTO): Door {
     lift: 'lift',
     turnstile: 'turnstile',
   };
+
+  // Check for real-time status override
+  const realtimeStatus = realtimeStatuses.find(s => s.doorId === d.id);
+  let finalStatus = statusMap[d.status] || 'online';
+  
+  if (realtimeStatus) {
+    // Override status based on real-time data
+    if (realtimeStatus.forced) {
+      finalStatus = 'alarm';
+    } else if (realtimeStatus.state === 'alarm') {
+      finalStatus = 'alarm';
+    } else if (realtimeStatus.state === 'locked' || realtimeStatus.state === 'unlocked') {
+      finalStatus = 'online';
+    }
+  }
   
   return {
     id: d.id,
     name: d.name,
     location: d.location || '—',
     type: typeMap[d.type] || 'door',
-    status: statusMap[d.status] || 'online',
-    // TODO: Get last event from events API
+    status: finalStatus,
     lastEvent: d.last_event_at ? {
       time: new Date(d.last_event_at).toLocaleTimeString('vi-VN'),
       result: 'granted' // TODO: Get from event data
+    } : undefined,
+    realtimeStatus: realtimeStatus ? {
+      state: realtimeStatus.state,
+      lastUpdate: realtimeStatus.lastUpdate,
+      forced: realtimeStatus.forced,
     } : undefined,
   };
 }
@@ -69,6 +94,10 @@ export function AccessControlPage() {
   const [floorFilter, setFloorFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
 
+  // Real-time state — connection managed by <RealtimeProvider> in App.tsx
+  const isConnected = useRealtimeStore((s) => s.connected);
+  const doorStatuses = useDoorStatus() as any[];
+
   // Build search params for API
   const params: Record<string, string> = {};
   if (search) params.search = search;
@@ -76,7 +105,7 @@ export function AccessControlPage() {
   if (typeFilter) params.type = typeFilter;
   
   const { data: doorsData, isLoading, error } = useDoors(1, params);
-  const doors: Door[] = (doorsData?.data ?? []).map(mapDoor);
+  const doors: Door[] = (doorsData?.data ?? []).map(d => mapDoor(d, doorStatuses));
 
   const onlineCount = doors.filter((d) => d.status === 'online').length;
   const offlineCount = doors.filter((d) => d.status === 'offline').length;
@@ -120,7 +149,17 @@ export function AccessControlPage() {
     },
     {
       key: 'status', header: 'Status', width: '110px',
-      render: (r) => <StatusBadge status={r.status} />,
+      render: (r) => (
+        <div className="flex items-center gap-2">
+          <StatusBadge status={r.status} />
+          {r.realtimeStatus && (
+            <span className="text-[10px] text-[#64748B]">
+              {isConnected && <span className="text-[#22C55E]">●</span>} 
+              {r.realtimeStatus.state}
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       key: 'lastEvent', header: 'Last Event', width: '180px',

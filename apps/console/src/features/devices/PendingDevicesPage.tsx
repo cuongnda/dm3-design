@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { PageHeader } from '@dm3/ui';
-import { fetchPendingDevices, approvePendingDevice, rejectPendingDevice, fetchCompanies, type PendingDevice, type CompanyDTO } from '@/lib/api';
+import { fetchCompanies, type PendingDevice, type CompanyDTO } from '@/lib/api';
+import { usePendingDevices, useApprovePendingDevice, useRejectPendingDevice } from '@/lib/hooks';
 import { RefreshCw } from 'lucide-react';
 
 interface Props {
@@ -9,37 +10,33 @@ interface Props {
 }
 
 export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
-  const [devices, setDevices] = useState<PendingDevice[]>([]);
   const [companies, setCompanies] = useState<CompanyDTO[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Per-row form state
   const [rowState, setRowState] = useState<Record<string, { company_id: string; name: string; location: string }>>({});
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [devs, comps] = await Promise.all([
-        fetchPendingDevices(),
-        isSystemAdmin ? fetchCompanies() : Promise.resolve([]),
-      ]);
-      setDevices(devs);
-      setCompanies(comps);
-      // Init row state
-      const init: typeof rowState = {};
-      devs.forEach((d) => {
-        init[d.id] = { company_id: '', name: '', location: '' };
-      });
-      setRowState(init);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: devices = [], isLoading: loading, refetch: loadData } = usePendingDevices();
+  const approveDevice = useApprovePendingDevice();
+  const rejectDevice = useRejectPendingDevice();
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    if (isSystemAdmin) {
+      fetchCompanies().then(setCompanies).catch(() => {});
+    }
+  }, [isSystemAdmin]);
+
+  useEffect(() => {
+    // Init row state when devices change
+    const init: typeof rowState = {};
+    devices.forEach((d) => {
+      if (!rowState[d.id]) {
+        init[d.id] = { company_id: '', name: '', location: '' };
+      } else {
+        init[d.id] = rowState[d.id];
+      }
+    });
+    setRowState(init);
+  }, [devices]);
 
   const updateRow = (id: string, field: string, value: string) => {
     setRowState((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));

@@ -116,3 +116,15 @@ export function useEventsList(params?: ListEventsParams) {
     refetchInterval: 10_000,
   });
 }
+
+// ── WebSocket & Realtime ─────────────────────────────────────────────────────
+
+export { useWebSocket, useWebSocketConnection } from './hooks/useWebSocket';
+export { 
+  useConnectionStatus, 
+  useRecentEvents, 
+  useDeviceStatus, 
+  useDoorStatus, 
+  useActiveAlarms, 
+  useCriticalAlarms 
+} from './realtime-store';

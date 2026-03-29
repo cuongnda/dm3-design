@@ -100,6 +100,9 @@ const AutomationPage = lazy(() =>
 const DevicesPage = lazy(() =>
   import('@/features/devices/DevicesPage').then((m) => ({ default: m.DevicesPage }))
 );
+const DeviceDetailPage = lazy(() =>
+  import('@/features/devices/DeviceDetailPage').then((m) => ({ default: m.DeviceDetailPage }))
+);
 const ProvisionDevicePage = lazy(() =>
   import('@/features/devices/ProvisionDevicePage').then((m) => ({ default: m.ProvisionDevicePage }))
 );
@@ -200,6 +203,7 @@ export const router = createBrowserRouter([
 
       // DEVICES
       { path: 'devices', element: <LazyWrap><DevicesPage /></LazyWrap> },
+      { path: 'devices/:id', element: <LazyWrap><DeviceDetailPage /></LazyWrap> },
       { path: 'devices/provision', element: <LazyWrap><ProvisionDevicePage /></LazyWrap> },
 
           // SETTINGS
