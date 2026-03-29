@@ -239,8 +239,8 @@ services:
     container_name: dm3-nginx
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "8280:80"
+      - "8643:443"
     volumes:
       - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
