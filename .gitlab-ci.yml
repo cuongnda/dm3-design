@@ -22,7 +22,7 @@ deploy:staging:
   only:
     - develop
   tags:
-    - hatdaunho
+    - dmp-staging-2024
 
 # ── Deploy: Production ────────────────────────────────────────────────────────
 deploy:production:
@@ -43,4 +43,4 @@ deploy:production:
     - branches
   when: manual
   tags:
-    - hatdaunho
+    - dmp-staging-2024
