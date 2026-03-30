@@ -111,12 +111,14 @@ Ollama for easy Phase 1 deployment. Qwen2.5 models for Vietnamese language. Migr
 - **License/Cost:** MIT/Apache 2.0, free. Models: Apache 2.0 (Qwen2.5)
 - **Migration path:** OpenAI-compatible API — swap backend without app changes
 
-### API Gateway: **Traefik**
+### Reverse Proxy: **Nginx** (Phase 1) → **Traefik** (K8s)
 
-Auto-discovers Docker/K8s services. Built-in Let's Encrypt, JWT, rate limiting. Works identically in Docker Compose and Kubernetes.
+**Phase 1 (current):** Nginx with dynamic upstream resolution via Docker DNS. Proven, lightweight, handles WebSocket + CORS + route-based dispatch. Config: `deploy/nginx/nginx.conf`.
 
-- **License/Cost:** MIT, free
-- **Migration path:** Standard reverse proxy — swap to Kong, Nginx, or Caddy
+**Phase 2+ (K8s):** Traefik for auto-discovery of K8s services, built-in Let's Encrypt, middleware chain for JWT validation & rate limiting.
+
+- **License/Cost:** BSD (Nginx) / MIT (Traefik), free
+- **Migration path:** Standard reverse proxy — Nginx → Traefik when moving to K8s
 
 ### Monitoring: **Prometheus + Grafana + Loki**
 
@@ -134,7 +136,7 @@ Industry standard. All open source. Single stack for metrics, dashboards, and lo
 | Access control engine | **BUILD** | Core IP, competitive advantage |
 | Video analytics (AI) | **BUILD** | Differentiator, on-premise requirement |
 | AI Assistant | **BUILD** (on open models) | Domain-specific, privacy requirement |
-| Identity/SSO | **BUY/USE** Keycloak | Solved problem, Apache 2.0 |
+| Identity/SSO | **BUILD** (Phase 1: custom JWT) / **BUY** (Phase 2+: Keycloak for enterprise SSO) | Custom JWT adequate for MVP; Keycloak added when enterprise SSO needed |
 | MQTT broker | **USE** EMQX | Best-in-class, don't reinvent |
 | Video streaming proxy | **USE** go2rtc | Solved problem |
 | Payment/billing | **BUY** (Stripe/VNPay) | Not core business |

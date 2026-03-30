@@ -90,31 +90,36 @@ Shows the major deployable units inside Duall Master 3.0.
 │             │ HTTPS/WSS        │ HTTPS/WSS        │ HTTPS/WSS              │
 │             ▼                  ▼                  ▼                         │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                API GATEWAY — Traefik                                 │   │
-│  │  TLS termination · JWT validation · Rate limiting · Load balancing  │   │
-│  │  WebSocket upgrade · gRPC proxy · CORS · Request routing            │   │
+│  │                REVERSE PROXY — Nginx                                │   │
+│  │  TLS termination · Route-based service dispatch · Load balancing   │   │
+│  │  WebSocket upgrade · CORS · Dynamic upstream resolution             │   │
+│  │  (Traefik planned for Kubernetes deployments)                       │   │
 │  └──────────────────────────────┬──────────────────────────────────────┘   │
 │                                 │                                           │
 │  ┌──────────────────────────────┼──────────────────────────────────────┐   │
 │  │              CORE SERVICES (Go microservices)                        │   │
 │  │                              │                                       │   │
+│  │  IMPLEMENTED:                                                       │   │
 │  │  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐          │   │
-│  │  │  auth-svc │ │access-svc │ │identity-  │ │facility-  │          │   │
-│  │  │  Keycloak │ │  Access   │ │  svc      │ │  svc      │          │   │
-│  │  │  + custom │ │  Control  │ │ People &  │ │ Operate   │          │   │
-│  │  │  Go shim  │ │  Engine   │ │ Visitors  │ │ domain    │          │   │
+│  │  │  auth-svc │ │device-    │ │access-svc │ │identity-  │          │   │
+│  │  │  :8005    │ │ gateway   │ │  :8003    │ │  svc      │          │   │
+│  │  │  JWT+RBAC │ │  :8002    │ │  Access   │ │  :8004    │          │   │
+│  │  │  bcrypt   │ │ MQTT+NATS │ │  Control  │ │ People &  │          │   │
+│  │  │  Custom   │ │ WebSocket │ │  Engine   │ │ Credential│          │   │
 │  │  └───────────┘ └───────────┘ └───────────┘ └───────────┘          │   │
+│  │                                                                     │   │
+│  │  PLANNED:                                                           │   │
 │  │  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐          │   │
-│  │  │ video-svc │ │ alert-svc │ │ device-   │ │ tenant-   │          │   │
-│  │  │ Streaming │ │ Automate  │ │ gateway   │ │ svc       │          │   │
-│  │  │ & Playback│ │ Rules Eng.│ │ Protocol  │ │ Multi-    │          │   │
-│  │  │           │ │           │ │ Adapters  │ │ tenancy   │          │   │
+│  │  │ video-svc │ │ alert-svc │ │ tenant-   │ │ visitor-  │          │   │
+│  │  │ Streaming │ │ Automate  │ │ svc       │ │ svc       │          │   │
+│  │  │ & Playback│ │ Rules Eng.│ │ Multi-    │ │ Check-in  │          │   │
+│  │  │           │ │           │ │ tenancy   │ │ & badges  │          │   │
 │  │  └───────────┘ └───────────┘ └───────────┘ └───────────┘          │   │
-│  │  ┌───────────┐ ┌───────────┐                                       │   │
-│  │  │ notif-svc │ │ report-   │                                       │   │
-│  │  │ Push/SMS/ │ │ svc       │                                       │   │
-│  │  │ Email     │ │ Analytics │                                       │   │
-│  │  └───────────┘ └───────────┘                                       │   │
+│  │  ┌───────────┐ ┌───────────┐ ┌───────────┐                        │   │
+│  │  │ notif-svc │ │ report-   │ │ attend-   │                        │   │
+│  │  │ Push/SMS/ │ │ svc       │ │ svc       │                        │   │
+│  │  │ Email     │ │ Analytics │ │ Time&Att. │                        │   │
+│  │  └───────────┘ └───────────┘ └───────────┘                        │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                 │                                           │
 │  ┌──────────────────────────────┼──────────────────────────────────────┐   │
@@ -224,7 +229,7 @@ Zooming into `access-svc`. **Note:** access-svc is NOT a real-time decision engi
 ║  🔒 SECURE DOMAIN                                                       ║
 ║  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐       ║
 ║  │ access-svc  │ │ video-svc   │ │ intercom-svc│ │ alarm-svc   │       ║
-║  │ Go          │ │ Go          │ │ Go          │ │ Go          │       ║
+║  │ Go ✅       │ │ Go          │ │ Go          │ │ Go          │       ║
 ║  │ Rule mgmt   │ │ Camera mgmt │ │ SIP calls   │ │ Intrusion   │       ║
 ║  │ + sync orch │ │ live/play   │ │ door station│ │ detection   │       ║
 ║  │ + analytics │ │ clip extract│ │ intercom    │ │ zone mgmt   │       ║
@@ -239,7 +244,7 @@ Zooming into `access-svc`. **Note:** access-svc is NOT a real-time decision engi
 ║  👤 MANAGE DOMAIN                                                       ║
 ║  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐                       ║
 ║  │identity-svc │ │ visitor-svc │ │ attend-svc  │                       ║
-║  │ Go          │ │ Go          │ │ Go          │                       ║
+║  │ Go ✅       │ │ Go          │ │ Go          │                       ║
 ║  │ People,     │ │ Pre-reg,    │ │ Clock-in,   │                       ║
 ║  │ credentials,│ │ check-in,   │ │ shifts,     │                       ║
 ║  │ HR sync,    │ │ badge, host │ │ overtime,   │                       ║
@@ -263,11 +268,11 @@ Zooming into `access-svc`. **Note:** access-svc is NOT a real-time decision engi
 ║                                                                          ║
 ║  ⚙️ PLATFORM DOMAIN                                                     ║
 ║  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐       ║
-║  │ auth-svc    │ │ company-mgmt│ │ device-gw   │ │ notif-svc   │       ║
-║  │ Go (v1)     │ │ (in auth-   │ │ Go          │ │ Go          │       ║
-║  │ JWT, bcrypt │ │  svc)       │ │ Sync coord. │ │ Push, SMS,  │       ║
-║  │ Refresh tok │ │ Company     │ │ Protocol    │ │ email,      │       ║
-║  │ RBAC, roles │ │ CRUD+users  │ │ adapters    │ │ Telegram    │       ║
+║  │ auth-svc ✅ │ │ company-mgmt│ │ device-gw ✅│ │ notif-svc   │       ║
+║  │ Go          │ │ (in auth-   │ │ Go          │ │ Go          │       ║
+║  │ JWT, bcrypt │ │  svc) ✅    │ │ MQTT↔NATS   │ │ Push, SMS,  │       ║
+║  │ Refresh tok │ │ Company     │ │ Sync coord. │ │ email,      │       ║
+║  │ RBAC, roles │ │ CRUD+users  │ │ WebSocket   │ │ Telegram    │       ║
 ║  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘       ║
 ║  ┌─────────────┐                                                        ║
 ║  │ audit-svc   │                                                        ║
@@ -327,7 +332,20 @@ Zooming into `access-svc`. **Note:** access-svc is NOT a real-time decision engi
 - **Docker Compose (on-prem):** DNS-based discovery via Docker internal DNS
 - **Kubernetes (cloud/HA):** Kubernetes Service discovery + CoreDNS
 - **Health checks:** Each service exposes `/healthz` (liveness) and `/readyz` (readiness)
-- **Circuit breaker:** Go services use `sony/gobreaker` for fault isolation
+- **Circuit breaker:** Go services use `sony/gobreaker` for fault isolation (planned)
+
+### 2.4 Reverse Proxy Strategy
+
+| Deployment | Proxy | Rationale |
+|------------|-------|-----------|
+| **Docker Compose (current)** | **Nginx** | Dynamic upstream resolution via Docker DNS (`resolver 127.0.0.11`), graceful degradation when services restart, proven for on-premise |
+| **K3s / K8s (future)** | **Traefik** | Auto-discovers services via K8s Service, built-in Let's Encrypt, middleware chain for JWT validation & rate limiting |
+
+Current Nginx config: `deploy/nginx/nginx.conf`
+- Route-based dispatch: `/api/v1/devices` → device-gateway, `/api/v1/persons` → identity-svc, etc.
+- WebSocket support at `/ws/`
+- CORS headers on API subdomain
+- Dynamic upstreams with `set $upstream` pattern (no crash on service restart)
 
 ---
 
@@ -416,44 +434,61 @@ Headers:
   Sunset: Sat, 01 Jan 2027  (RFC 8594 sunset header)
 ```
 
-### 3.3 Authentication (OAuth 2.0 / OpenID Connect)
+### 3.3 Authentication
+
+#### Current Implementation (Phase 1): Custom JWT Auth
+
+auth-svc handles authentication directly — no external IdP dependency.
 
 ```
 ┌──────────┐                    ┌──────────┐                 ┌──────────┐
-│  Client  │  1. Auth Request   │  auth-svc│  2. Validate   │ Keycloak │
-│  (Web/   │───────────────────►│  (Go)    │────────────────►│ (IdP)    │
-│  Mobile) │                    │          │◄────────────────│          │
-│          │◄───────────────────│          │  3. JWT tokens  │          │
+│  Client  │  1. POST /login    │  auth-svc│  2. Validate   │TimescaleDB│
+│  (Web/   │  (email+password)  │  (Go)    │  credentials   │ (users   │
+│  Mobile) │───────────────────►│  :8005   │────────────────►│  table)  │
+│          │                    │  bcrypt  │◄────────────────│          │
+│          │◄───────────────────│  verify  │  3. User record │          │
 │          │  4. Access Token   │          │                 │          │
 └──────┬───┘   + Refresh Token  └──────────┘                 └──────────┘
        │
        │  5. API call with Bearer token
        ▼
-┌──────────┐  6. Validate JWT   ┌──────────┐
-│ Traefik  │───────────────────►│ auth-svc │
-│ Gateway  │◄─── 7. OK + claims │ (verify) │
-│          │                    └──────────┘
-│          │  8. Forward to service with claims
-└──────────┘
+┌──────────┐  6. JWT middleware  ┌──────────┐
+│  Nginx   │  (each service     │ Service  │
+│  Proxy   │  validates locally) │ (Go)     │
+│          │───────────────────►│          │
+│          │  7. Forward request │          │
+└──────────┘  with JWT intact   └──────────┘
 
 Token Structure (JWT claims):
 {
   "sub": "user-uuid",
-  "tenant_id": "tenant-uuid",
-  "roles": ["security_admin", "guard"],
-  "permissions": ["door.unlock", "camera.view"],
-  "sites": ["site-uuid-1", "site-uuid-2"],
+  "company_id": "company-uuid",
+  "role": "system_admin|company_admin|user",
   "exp": 1740000000,
   "iss": "duall-master"
 }
 
-Supported Flows:
-  • Authorization Code + PKCE  — Web Console, Mobile Apps
-  • Client Credentials         — Service-to-service, 3rd party integrations
-  • Device Authorization       — Android Terminals, Guard Stations
-  • SAML 2.0 bridge            — Enterprise SSO (via Keycloak)
+Current flows:
+  • Email + Password → JWT (access + refresh tokens)
+  • Two-step login: authenticate → select company → get company-scoped token
+  • Refresh token rotation (7-day grace period for offline devices)
+  • Each service validates JWT locally using shared secret
+```
 
-MFA:
+#### Future (Phase 2+): Keycloak Integration for Enterprise SSO
+
+When enterprise customers need SAML/LDAP/AD integration, Keycloak will be
+added as an optional IdP behind auth-svc. The current JWT flow remains the
+default for on-premise customers who don't need SSO.
+
+```
+Planned additional flows:
+  • Authorization Code + PKCE    — Web Console, Mobile Apps (via Keycloak)
+  • Client Credentials           — Service-to-service, 3rd party integrations
+  • Device Authorization         — Android Terminals, Guard Stations
+  • SAML 2.0 bridge              — Enterprise SSO (via Keycloak)
+
+Planned MFA:
   • TOTP (Google Authenticator)
   • WebAuthn/FIDO2 (hardware keys)
   • SMS OTP (fallback)
@@ -1269,12 +1304,12 @@ Data partitioning (TimescaleDB):
 │   │ docker-compose.yml                                           │   │
 │   │                                                              │   │
 │   │ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │   │
-│   │ │ traefik  │ │timescale │ │  valkey  │ │  emqx    │       │   │
-│   │ │ :443     │ │ db       │ │  :6379   │ │  :1883   │       │   │
+│   │ │  nginx   │ │timescale │ │  valkey  │ │  emqx    │       │   │
+│   │ │ :80/:443 │ │ db       │ │  :6380   │ │  :1884   │       │   │
 │   │ └──────────┘ └──────────┘ └──────────┘ └──────────┘       │   │
 │   │ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │   │
-│   │ │  nats    │ │  minio   │ │ keycloak │ │  go2rtc  │       │   │
-│   │ │  :4222   │ │  :9000   │ │  :8080   │ │  :1984   │       │   │
+│   │ │  nats    │ │  minio   │ │simulator │ │  go2rtc  │       │   │
+│   │ │  :4222   │ │  :9002   │ │  :9091   │ │  :1984   │       │   │
 │   │ └──────────┘ └──────────┘ └──────────┘ └──────────┘       │   │
 │   │ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │   │
 │   │ │access-svc│ │identity- │ │visitor-  │ │video-svc │       │   │
@@ -1518,8 +1553,7 @@ Storage:
 │  EMQX              │ Cluster mode (3 nodes)   │ < 10s  │ 0        │
 │  NATS              │ Cluster (3 nodes)        │ < 5s   │ 0        │
 │  MinIO             │ Erasure coding (4 nodes) │ 0      │ 0        │
-│  Traefik           │ Active-standby           │ < 10s  │ N/A      │
-│  Keycloak          │ 2+ replicas              │ < 30s  │ 0        │
+│  Nginx/Traefik     │ Active-standby           │ < 10s  │ N/A      │
 │  Ollama/vLLM       │ Single (non-critical)    │ < 5min │ N/A      │
 └─────────────────────────────────────────────────────────────────────┘
 
@@ -1601,7 +1635,7 @@ Critical path (access control decision):
 
 ```
   ┌──────────────┐
-  │   Traefik    │  Horizontal: active-standby or K8s DaemonSet
+  │ Nginx/Traefik│  Nginx (Docker Compose) / Traefik (K8s DaemonSet)
   └──────┬───────┘
          │
   ┌──────▼───────┐
@@ -1641,7 +1675,7 @@ Critical path (access control decision):
 │  • Flutter: Hive local DB for offline access rules                   │
 │  • React: SWR / React Query with stale-while-revalidate             │
 │                                                                      │
-│  Layer 2: API Gateway (Traefik)                                      │
+│  Layer 2: Reverse Proxy (Nginx / Traefik)                            │
 │  • Static asset caching (dashboard configs, translations)            │
 │  • NOT for dynamic API responses (tenant-specific data)              │
 │                                                                      │
@@ -1688,7 +1722,7 @@ Critical path (access control decision):
 
 | Layer | Technology | Version | License |
 |-------|-----------|---------|---------|
-| API Gateway | Traefik | 3.x | MIT |
+| Reverse Proxy | Nginx (Phase 1) / Traefik (K8s) | 1.27+ / 3.x | BSD / MIT |
 | Backend (core) | Go | 1.22+ | BSD |
 | Backend (AI) | Python / FastAPI | 3.12 / 0.110+ | MIT |
 | Frontend | React + TypeScript | 18+ / 5+ | MIT |
@@ -1701,7 +1735,7 @@ Critical path (access control decision):
 | Video Proxy | go2rtc | latest | MIT |
 | LLM Inference | Ollama → vLLM | latest | MIT / Apache 2.0 |
 | Vision AI | ONNX Runtime | 1.x | MIT |
-| Auth / SSO | Keycloak | 24+ | Apache 2.0 |
+| Auth | Custom JWT (Phase 1) / Keycloak (Phase 2+ SSO) | — / 24+ | — / Apache 2.0 |
 | Monitoring | Prometheus + Grafana + Loki | latest | Apache 2.0 |
 | Tracing | OpenTelemetry | latest | Apache 2.0 |
 | Analytics DB | ClickHouse (Phase 3) | latest | Apache 2.0 |
@@ -1712,40 +1746,44 @@ Critical path (access control decision):
 
 ## Appendix B: Service Port Map (Development)
 
+> **Note:** Ports reflect the actual running code and docker-compose configuration.
+> gRPC ports are reserved for future inter-service communication (not yet implemented).
+
 ```
   Service         │ REST Port │ gRPC Port │ Notes
   ────────────────┼───────────┼───────────┼─────────────
-  traefik         │ 443/80    │ —         │ Entry point
-  auth-svc        │ 8001      │ 9001      │ + Keycloak :8080
-  access-svc      │ 8002      │ 9002      │
-  identity-svc    │ 8003      │ 9003      │
-  visitor-svc     │ 8004      │ 9004      │
-  video-svc       │ 8005      │ 9005      │ + go2rtc :1984
-  alert-svc       │ 8006      │ 9006      │
-  device-gw       │ 8007      │ 9007      │
-  tenant-svc      │ 8008      │ 9008      │
-  notif-svc       │ 8009      │ 9009      │
-  audit-svc       │ 8010      │ 9010      │
-  attend-svc      │ 8011      │ 9011      │
-  parking-svc     │ 8012      │ 9012      │
-  booking-svc     │ 8013      │ 9013      │
-  maint-svc       │ 8014      │ 9014      │
-  iot-svc         │ 8015      │ 9015      │
-  patrol-svc      │ 8016      │ 9016      │
-  ai-asst-svc     │ 8020      │ —         │ Python
-  vision-svc      │ 8021      │ —         │ Python
-  anomaly-svc     │ 8022      │ —         │ Python
-  report-svc      │ 8023      │ —         │ Python
+  nginx           │ 80/443    │ —         │ Reverse proxy (entry point)
+  device-gw       │ 8002      │ 9002      │ MQTT bridge, WebSocket /ws/
+  access-svc      │ 8003      │ 9003      │ Rules, events, doors
+  identity-svc    │ 8004      │ 9004      │ Persons, groups, credentials
+  auth-svc        │ 8005      │ 9005      │ JWT auth, users, companies, RBAC
+  visitor-svc     │ 8006      │ 9006      │ (planned)
+  alert-svc       │ 8007      │ 9007      │ (planned)
+  tenant-svc      │ 8008      │ 9008      │ (planned)
+  notif-svc       │ 8009      │ 9009      │ (planned)
+  audit-svc       │ 8010      │ 9010      │ (planned)
+  attend-svc      │ 8011      │ 9011      │ (planned)
+  parking-svc     │ 8012      │ 9012      │ (planned)
+  booking-svc     │ 8013      │ 9013      │ (planned)
+  maint-svc       │ 8014      │ 9014      │ (planned)
+  iot-svc         │ 8015      │ 9015      │ (planned)
+  patrol-svc      │ 8016      │ 9016      │ (planned)
+  video-svc       │ 8017      │ 9017      │ (planned) + go2rtc :1984
+  ai-asst-svc     │ 8020      │ —         │ Python (planned)
+  vision-svc      │ 8021      │ —         │ Python (planned)
+  anomaly-svc     │ 8022      │ —         │ Python (planned)
+  report-svc      │ 8023      │ —         │ Python (planned)
   ────────────────┼───────────┼───────────┼─────────────
-  timescaledb     │ 5432      │ —         │
-  valkey          │ 6379      │ —         │
+  timescaledb     │ 5433      │ —         │ External port (5432 internal)
+  valkey          │ 6380      │ —         │ External port (6379 internal)
   nats            │ 4222      │ —         │ +8222 (monitor)
-  emqx            │ 1883      │ —         │ +8883 (TLS) +18083 (dashboard)
-  minio           │ 9000      │ —         │ +9001 (console)
-  ollama          │ 11434     │ —         │
-  prometheus      │ 9090      │ —         │
-  grafana         │ 3000      │ —         │
-  loki            │ 3100      │ —         │
+  emqx            │ 1884      │ —         │ External (1883 internal) +18083 (dashboard)
+  minio           │ 9002      │ —         │ API (9000 internal) +9003 console
+  simulator       │ 9091      │ —         │ Staging only (9090 internal)
+  ollama          │ 11434     │ —         │ (planned)
+  prometheus      │ 9090      │ —         │ (planned)
+  grafana         │ 3000      │ —         │ (planned)
+  loki            │ 3100      │ —         │ (planned)
 ```
 
 ---
