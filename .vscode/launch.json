@@ -10,7 +10,7 @@
       "cwd": "${workspaceFolder}/backend",
       "env": {
         "HTTP_PORT": "8002",
-        "DATABASE_URL": "postgres://dm3:dm3secret@localhost:5433/dm3?sslmode=disable",
+        "DATABASE_URL": "postgres://postgres:postgres@localhost:5433/dm3?sslmode=disable",
         "NATS_URL": "nats://localhost:4222",
         "JWT_SECRET": "dm3-dev-secret-key",
         "VALKEY_URL": "localhost:6380"
@@ -25,7 +25,7 @@
       "cwd": "${workspaceFolder}/backend",
       "env": {
         "HTTP_PORT": "8003",
-        "DATABASE_URL": "postgres://dm3:dm3secret@localhost:5433/dm3?sslmode=disable",
+        "DATABASE_URL": "postgres://postgres:postgres@localhost:5433/dm3?sslmode=disable",
         "NATS_URL": "nats://localhost:4222",
         "JWT_SECRET": "dm3-dev-secret-key",
         "VALKEY_URL": "localhost:6380"
@@ -40,7 +40,7 @@
       "cwd": "${workspaceFolder}/backend",
       "env": {
         "HTTP_PORT": "8004",
-        "DATABASE_URL": "postgres://dm3:dm3secret@localhost:5433/dm3?sslmode=disable",
+        "DATABASE_URL": "postgres://postgres:postgres@localhost:5433/dm3?sslmode=disable",
         "NATS_URL": "nats://localhost:4222",
         "JWT_SECRET": "dm3-dev-secret-key",
         "VALKEY_URL": "localhost:6380"
@@ -55,7 +55,7 @@
       "cwd": "${workspaceFolder}/backend",
       "env": {
         "HTTP_PORT": "8005",
-        "DATABASE_URL": "postgres://dm3:dm3secret@localhost:5433/dm3?sslmode=disable",
+        "DATABASE_URL": "postgres://postgres:postgres@localhost:5433/dm3?sslmode=disable",
         "MQTT_BROKER": "tcp://localhost:1884",
         "MQTT_CLIENT_ID": "dm3-device-gateway-debug",
         "NATS_URL": "nats://localhost:4222",
