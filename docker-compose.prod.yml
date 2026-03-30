@@ -313,6 +313,34 @@ services:
       timeout: 5s
       retries: 5
 
+  video-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-video-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: video-svc
+      HTTP_PORT: "8008"
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
+      NATS_URL: nats://nats:4222
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+    networks:
+      - dm3-internal
+    volumes:
+      - video_storage:/var/lib/dm3/video
+      - ./tmp/dm3-video:/tmp/dm3-video
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8008/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ── Frontend ───────────────────────────────────────────────────────────────
 
   webapp:
@@ -389,6 +417,7 @@ volumes:
   valkey_data:
   minio_data:
   certbot_webroot:
+  video_storage:
 
 networks:
   dm3-internal:
