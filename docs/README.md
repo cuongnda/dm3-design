@@ -54,3 +54,37 @@ docs/
 - Edit the source doc directly
 - For major architectural changes, create a changelog entry in `changelog/YYYY-MM-DD-description.md`
 - Keep VISION.md updated when strategy shifts
+- Update `IMPLEMENTATION_STATUS.md` when features are built or specifications change
+- Run `scripts/docs-health-check.sh` after significant changes to verify consistency
+
+## 🔧 Documentation Maintenance
+
+### Health Check Script
+Run `scripts/docs-health-check.sh` to verify:
+- Migration count matches PROJECT.md
+- Referenced paths exist
+- Port assignments are consistent
+- Apps are documented
+- Changelog has recent entries
+- Implementation status is current
+
+**Recommended schedule:**
+- After major changes or releases
+- Weekly via automation
+- Before important presentations or demos
+
+### Changelog Guidelines
+Create changelog entries for:
+- Major architecture decisions (like frontend fork strategy)
+- Significant feature implementations (like WebSocket integration)  
+- Technology stack changes
+- Infrastructure modifications
+- API breaking changes
+
+### Implementation Status
+Keep `docs/IMPLEMENTATION_STATUS.md` updated with:
+- ✅ **Implemented**: Features with working code
+- 📋 **Specified**: Features with detailed specs but no code yet  
+- 🔮 **Vision Only**: High-level ideas without specifications
+
+This helps stakeholders understand project progress and what's ready for development.

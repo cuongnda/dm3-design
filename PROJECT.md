@@ -63,9 +63,13 @@ Console available at **http://localhost:3000**
 - **Device Provisioning:** QR flow (pre-authorized) + Bootstrap flow (self-register)
 
 ## Stack
-- **Backend:** Go monorepo (4 services, see Port Map below)
-- **DB:** TimescaleDB port 5433 (dm3/dm3secret), 7 migrations
+- **Backend:** Go monorepo (4 services: device-gateway:8002, access-svc:8003, identity-svc:8004, auth-svc:8005)
+- **DB:** TimescaleDB port 5433 (dm3/dm3secret), 8 migrations
 - **Infra:** EMQX(:1884), NATS(:4222), Valkey(:6380), MinIO(:9002), Simulator(:9090)
+- **Webapp:** Vite + React 18 + TS + Tailwind + shadcn/ui + React Router v7 + Zustand + TanStack Query
+- **Mobile:** Flutter (Admin + Resident apps)
+- **Android Terminal:** Kotlin + Compose, 15 screens, MQTT live
+- **Theme:** Dark-first cyber (deep navy #0B1120, electric blue accents)
 
 ## Port Map
 
@@ -96,19 +100,17 @@ Console available at **http://localhost:3000**
 |-----|------|-------------|
 | Console (Vite) | 3000 | Webapp dev server |
 | Simulator | 9090 | Python device simulator |
-- **Webapp:** Vite + React 18 + TS + Tailwind + shadcn/ui + React Router v7 + Zustand + TanStack Query
-- **Mobile:** Flutter (Admin + Resident apps)
-- **Android Terminal:** Kotlin + Compose, 15 screens, MQTT live
-- **Theme:** Dark-first cyber (deep navy #0B1120, electric blue accents)
 
 ## Key Paths
 - Backend: `backend/`
-- Webapp: `apps/console/` (24 pages + System Admin UI)
+- Console: `apps/console/` (React + TS + Tailwind, 24 pages + System Admin UI)
+- Shared UI: `packages/ui/` (shadcn/ui components, reusable across verticals)
+- API Client: `packages/api-client/` (OpenAPI-generated client + WebSocket + realtime store)
 - Automation: `automation/` (pytest + Playwright)
 - Simulator: `simulator/` (Python asyncio, Docker)
 - Terminal: `dm3-terminal/` (Kotlin + Compose)
 - Docs: `docs/` (Vision, specs/, architecture/, design/)
-- Feature Specs: `docs/specs/` (25+ docs, single source of truth)
+- Feature Specs: `docs/specs/` (29 specs, single source of truth)
 - Mockups: `mockups/` (webapp, mobile, terminal, guard-station)
 
 ## Automation Tests
