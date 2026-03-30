@@ -33,10 +33,14 @@ docker compose up -d timescaledb emqx nats valkey minio
 The Docker compose creates the DB when running the full stack, but for local debug you need to create it manually:
 
 ```bash
+# If PostgreSQL is running in Docker container:
+docker exec -it postgres-db-timescale psql -U postgres -c "CREATE DATABASE dm3;"
+
+# If PostgreSQL is installed locally:
 psql -h localhost -p 5433 -U postgres -c "CREATE DATABASE dm3;"
 ```
 
-> **Note:** If using the Docker TimescaleDB, credentials are `dm3`/`dm3secret` (see `docker-compose.yml`).  
+> **Note:** If using the project's Docker TimescaleDB (`docker-compose.yml`), credentials are `dm3`/`dm3secret`.  
 > If connecting to an existing PostgreSQL, adjust `DATABASE_URL` in `.vscode/launch.json`.
 
 ### 3. Debug with F5
