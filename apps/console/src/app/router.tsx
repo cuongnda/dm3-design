@@ -4,6 +4,7 @@ import { MainLayout } from '@dm3/ui';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { SystemLayout } from '@/features/system/SystemLayout';
+import { SystemDashboardPage } from '@/features/system/SystemDashboardPage';
 import { CompanyListPage } from '@/features/system/CompanyListPage';
 import { CreateCompanyPage } from '@/features/system/CreateCompanyPage';
 import { CompanyDetailPage } from '@/features/system/CompanyDetailPage';
@@ -151,7 +152,7 @@ export const router = createBrowserRouter([
         path: '/system',
         element: <SystemLayout />,
         children: [
-          { index: true, element: <Navigate to="/system/companies" replace /> },
+          { index: true, element: <SystemDashboardPage /> },
           { path: 'companies', element: <CompanyListPage /> },
           { path: 'companies/new', element: <CreateCompanyPage /> },
           { path: 'companies/:id', element: <CompanyDetailPage /> },

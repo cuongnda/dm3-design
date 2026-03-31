@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Building2, Settings, LogOut, Smartphone, HardDrive } from 'lucide-react';
+import { Building2, Settings, LogOut, Smartphone, HardDrive, LayoutDashboard } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { fetchPendingDevices } from '@/lib/api';
 
 const navItems = [
+  { to: '/system', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/system/companies', icon: Building2, label: 'Companies' },
   { to: '/system/devices/pending', icon: Smartphone, label: 'Pending Devices', badge: true },
   { to: '/system/devices', icon: HardDrive, label: 'All Devices' },
@@ -43,10 +44,11 @@ export function SystemLayout() {
         </div>
 
         <nav className="flex-1 py-3 px-2 space-y-0.5">
-          {navItems.map(({ to, icon: Icon, label, badge }) => (
+          {navItems.map(({ to, icon: Icon, label, badge, end }) => (
             <NavLink
               key={to}
               to={to}
+              end={end}
               className={({ isActive }) =>
                 `flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] transition-colors ${
                   isActive
