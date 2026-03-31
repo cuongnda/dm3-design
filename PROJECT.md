@@ -12,20 +12,20 @@ Next-gen access control & smart building platform. Codename: DM3.
 
 ### 1. Start Infrastructure
 ```bash
-cd ~/db   # hoặc thư mục chứa docker-compose
+cd ~/db   # or wherever your docker-compose file is
 docker compose up -d postgres-db-timescale nats emqx
-# Nếu cần Valkey/MinIO thì thêm vào
+# Add Valkey/MinIO if needed
 ```
 
-Cần có:
+Required services:
 - TimescaleDB `:5433`
 - NATS + JetStream `:4222`
 - EMQX MQTT `:1884` (Dashboard: `http://localhost:18083`, login: admin/public)
 
 ### 2. Start Backend (VSCode)
-Mở project trong VSCode → Run & Debug → chọn **"All Backend Services"** → F5
+Open project in VSCode → Run & Debug → select **"All Backend Services"** → F5
 
-Hoặc chạy từng service:
+Or run individual services:
 - Auth Service (`:8005`)
 - Identity Service (`:8004`)
 - Access Service (`:8003`)
@@ -35,15 +35,15 @@ Hoặc chạy từng service:
 ```bash
 cd duall-master
 
-# Lần đầu hoặc khi gặp lỗi native modules:
+# First time or when native module errors occur:
 rm -rf node_modules apps/console/node_modules package-lock.json
 npm cache clean --force
 npm install --force
 
-# Chạy dev server:
+# Run dev server:
 npm run dev
 ```
-Console mở tại **http://localhost:3000**
+Console available at **http://localhost:3000**
 
 ### Test Accounts
 | Role | Email | Password |
@@ -52,10 +52,10 @@ Console mở tại **http://localhost:3000**
 | Company Admin | admin@duali.com | admin123 |
 
 ### ⚠️ Troubleshooting
-- **NATS stream timeout** → NATS chưa chạy hoặc chưa bật JetStream (`--jetstream` flag)
-- **MQTT connection refused** → EMQX chưa start, check port 1884
-- **rollup/lightningcss native module error** → Xóa node_modules + package-lock.json, `npm install --force`
-- **Node version warning** → Cần Node ≥ 20.19: `nvm install 20 && nvm use 20`
+- **NATS stream timeout** → NATS not running or JetStream not enabled (`--jetstream` flag)
+- **MQTT connection refused** → EMQX not started, check port 1884
+- **rollup/lightningcss native module error** → Delete node_modules + package-lock.json, run `npm install --force`
+- **Node version warning** → Requires Node ≥ 20.19: `nvm install 20 && nvm use 20`
 
 ## Architecture
 - **Three Domains:** SECURE / MANAGE / OPERATE + SMART + PLATFORM
