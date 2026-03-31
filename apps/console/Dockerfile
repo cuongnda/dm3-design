@@ -15,8 +15,11 @@ COPY apps/console/package.json         ./apps/console/package.json
 COPY packages/ ./packages/
 COPY apps/console/ ./apps/console/
 
-# Fresh install for linux/musl — delete lock to avoid platform mismatch
-RUN rm -f package-lock.json && npm install --include=dev
+# Fresh install for linux/musl — force platform and skip optional dep checks
+RUN rm -f package-lock.json && npm install --include=dev --force --no-optional
+
+# Explicitly install musl-compatible native binaries
+RUN npm install @rollup/rollup-linux-x64-musl lightningcss-linux-x64-musl --force 2>/dev/null || true
 
 # Build: vite build from console dir, with NODE_PATH to find hoisted deps
 ENV NODE_PATH=/workspace/node_modules
