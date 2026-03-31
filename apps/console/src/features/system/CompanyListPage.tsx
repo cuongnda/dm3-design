@@ -49,6 +49,7 @@ export function CompanyListPage() {
           </p>
         </div>
         <button
+          data-testid="company-button-create"
           onClick={() => navigate('/system/companies/new')}
           className="flex items-center gap-1.5 px-3 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-md text-[13px] font-medium transition-colors"
         >
@@ -61,6 +62,7 @@ export function CompanyListPage() {
       <div className="relative mb-4 max-w-sm">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" />
         <input
+          data-testid="company-input-search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('companies.searchPlaceholder')}
@@ -70,7 +72,7 @@ export function CompanyListPage() {
 
       {/* Table */}
       <div className="border border-[#1E293B] rounded-lg overflow-hidden">
-        <table className="w-full">
+        <table data-testid="company-table-list" className="w-full">
           <thead>
             <tr className="bg-[#111827] text-[11px] text-[#64748B] uppercase tracking-wider">
               <th className="text-left py-2.5 px-4 font-medium">{t('companies.table.name')}</th>
@@ -101,6 +103,7 @@ export function CompanyListPage() {
             ) : (
               filtered.map((c) => (
                 <tr
+                  data-testid={`company-row-${c.id}`}
                   key={c.id}
                   onClick={() => navigate(`/system/companies/${c.id}`)}
                   className="border-t border-[#1E293B] hover:bg-[#1E293B]/50 cursor-pointer transition-colors"

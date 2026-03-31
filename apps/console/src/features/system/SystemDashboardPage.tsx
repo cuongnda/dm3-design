@@ -11,9 +11,9 @@ interface StatCardProps {
   details: { label: string; value: number; color: string }[];
 }
 
-function StatCard({ title, total, icon: Icon, color, details }: StatCardProps) {
+function StatCard({ title, total, icon: Icon, color, details, testId }: StatCardProps & { testId?: string }) {
   return (
-    <div className="bg-[#1E293B]/60 border border-[#334155] rounded-lg p-5">
+    <div data-testid={testId} className="bg-[#1E293B]/60 border border-[#334155] rounded-lg p-5">
       <div className="flex items-center justify-between mb-4">
         <div className={`w-10 h-10 rounded-lg flex items-center justify-center`} style={{ backgroundColor: `${color}20` }}>
           <Icon size={20} style={{ color }} />
@@ -69,6 +69,7 @@ export function SystemDashboardPage() {
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatCard
+            testId="sys-card-companies"
             title="Companies"
             total={stats.companies.total}
             icon={Building2}
@@ -79,6 +80,7 @@ export function SystemDashboardPage() {
             ]}
           />
           <StatCard
+            testId="sys-card-users"
             title="Users"
             total={stats.users.total}
             icon={Users}
@@ -89,6 +91,7 @@ export function SystemDashboardPage() {
             ]}
           />
           <StatCard
+            testId="sys-card-devices"
             title="Devices"
             total={stats.devices.total}
             icon={HardDrive}
@@ -99,6 +102,7 @@ export function SystemDashboardPage() {
             ]}
           />
           <StatCard
+            testId="sys-card-recent"
             title="Last 7 Days"
             total={stats.recent.new_companies_7d + stats.recent.new_users_7d + stats.recent.new_devices_7d}
             icon={TrendingUp}
@@ -124,7 +128,7 @@ export function SystemDashboardPage() {
           </button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table data-testid="sys-table-recent-companies" className="w-full">
             <thead>
               <tr className="text-[11px] text-[#64748B] uppercase tracking-wider">
                 <th className="text-left px-5 py-3 font-medium">Company</th>
@@ -144,6 +148,7 @@ export function SystemDashboardPage() {
               ) : (
                 companies.map((c) => (
                   <tr
+                    data-testid={`sys-row-company-${c.id}`}
                     key={c.id}
                     onClick={() => navigate(`/system/companies/${c.id}`)}
                     className="border-t border-[#334155]/50 hover:bg-[#334155]/30 cursor-pointer transition-colors"

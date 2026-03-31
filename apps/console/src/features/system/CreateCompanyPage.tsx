@@ -69,8 +69,8 @@ export function CreateCompanyPage() {
               </button>
             </div>
             <div className="space-y-1.5 text-[13px]">
-              <div><span className="text-[#64748B]">Email:</span> <span className="text-[#F8FAFC] font-mono">{result.credentials.email}</span></div>
-              <div><span className="text-[#64748B]">Password:</span> <span className="text-[#F8FAFC] font-mono">{result.credentials.password}</span></div>
+              <div><span className="text-[#64748B]">Email:</span> <span data-testid="company-label-gen-email" className="text-[#F8FAFC] font-mono">{result.credentials.email}</span></div>
+              <div><span className="text-[#64748B]">Password:</span> <span data-testid="company-label-gen-password" className="text-[#F8FAFC] font-mono">{result.credentials.password}</span></div>
             </div>
             <p className="text-[11px] text-[#F59E0B] mt-3">⚠ Save these credentials — the password won't be shown again.</p>
           </div>
@@ -104,55 +104,63 @@ export function CreateCompanyPage() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>{t('createCompany.form.name')} *</label>
-            <input required value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Acme Corp" className={inputCls} />
+            <input data-testid="company-input-name" required value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Acme Corp" className={inputCls} />
           </div>
           <div>
             <label className={labelCls}>{t('createCompany.form.code')} *</label>
-            <input required value={form.code} onChange={(e) => set('code', e.target.value.toUpperCase())} placeholder="ACME" className={inputCls} />
+            <input data-testid="company-input-code" required value={form.code} onChange={(e) => set('code', e.target.value.toUpperCase())} placeholder="ACME" className={inputCls} />
           </div>
         </div>
 
         <div>
           <label className={labelCls}>{t('createCompany.form.managerEmail')} *</label>
-          <input required type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="manager@acme.com" className={inputCls} />
+          <input data-testid="company-input-email" required type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="manager@acme.com" className={inputCls} />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>{t('createCompany.form.plan')}</label>
-            <select value={form.plan} onChange={(e) => set('plan', e.target.value)} className={inputCls}>
+            <select data-testid="company-select-plan" value={form.plan} onChange={(e) => set('plan', e.target.value)} className={inputCls}>
               {plans.map((p) => <option key={p} value={p} className="capitalize">{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
             </select>
           </div>
           <div>
             <label className={labelCls}>{t('createCompany.form.phone')}</label>
-            <input value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="+84..." className={inputCls} />
+            <input data-testid="company-input-phone" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="+84..." className={inputCls} />
           </div>
         </div>
 
         <div>
           <label className={labelCls}>{t('createCompany.form.address')}</label>
-          <input value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="123 Main St" className={inputCls} />
+          <input data-testid="company-input-address" value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="123 Main St" className={inputCls} />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>{t('createCompany.form.maxDevices')}</label>
-            <input type="number" value={form.max_devices} onChange={(e) => set('max_devices', +e.target.value)} className={inputCls} />
+            <input data-testid="company-input-max-devices" type="number" value={form.max_devices} onChange={(e) => set('max_devices', +e.target.value)} className={inputCls} />
           </div>
           <div>
             <label className={labelCls}>{t('createCompany.form.maxUsers')}</label>
-            <input type="number" value={form.max_users} onChange={(e) => set('max_users', +e.target.value)} className={inputCls} />
+            <input data-testid="company-input-max-users" type="number" value={form.max_users} onChange={(e) => set('max_users', +e.target.value)} className={inputCls} />
           </div>
         </div>
 
         <button
+          data-testid="company-button-submit"
           type="submit"
           disabled={loading}
           className="h-9 px-6 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-md text-[13px] font-medium transition-colors disabled:opacity-60"
         >
           {loading ? 'Creating...' : t('createCompany.submit')}
         </button>
+      </form>
+    </div>
+  );
+}
+
+// Add testid to submit button above
+
       </form>
     </div>
   );
