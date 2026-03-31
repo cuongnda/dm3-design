@@ -16,10 +16,10 @@ COPY packages/ ./packages/
 COPY apps/console/ ./apps/console/
 
 # Fresh install for linux/musl — delete lock to avoid platform mismatch
-# Use --install-strategy=nested to ensure native binaries resolve correctly
-RUN rm -f package-lock.json && npm install --include=dev --install-strategy=nested && npm ls vite 2>/dev/null || true
+RUN rm -f package-lock.json && npm install --include=dev
 
-# Build: vite build directly (skip tsc for Docker)
+# Build: vite build from console dir, with NODE_PATH to find hoisted deps
+ENV NODE_PATH=/workspace/node_modules
 RUN cd apps/console && npx vite build
 
 # Stage 2: Serve with nginx
