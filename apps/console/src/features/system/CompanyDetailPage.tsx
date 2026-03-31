@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Building2, Users, Cpu, DoorOpen, Activity, Save } from 'lucide-react';
 import { fetchCompany, updateCompany, suspendCompany, type CompanyDTO } from '@/lib/api';
+import { Button, Input, Select, SelectOption, Label } from '@dm3/ui';
 
 const statusColors: Record<string, string> = {
   active: 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/20',
@@ -47,7 +48,6 @@ export function CompanyDetailPage() {
     if (!confirm(`Are you sure you want to ${company.status === 'suspended' ? 'activate' : 'suspend'} ${company.name}?`)) return;
     try {
       await suspendCompany(id);
-      // Refresh
       const c = await fetchCompany(id);
       setCompany(c);
     } catch { /* */ }
@@ -66,19 +66,23 @@ export function CompanyDetailPage() {
   }
 
   const stats = [
-    { label: t('companyDetail.stats.users'), value: company.user_count ?? 0, icon: Users, max: company.max_users },
-    { label: t('companyDetail.stats.devices'), value: company.device_count ?? 0, icon: Cpu, max: company.max_devices },
-    { label: t('companyDetail.stats.doors'), value: company.door_count ?? 0, icon: DoorOpen },
-    { label: t('companyDetail.stats.events'), value: company.event_count ?? 0, icon: Activity },
+    { key: 'users', label: t('companyDetail.stats.users'), value: company.user_count ?? 0, icon: Users, max: company.max_users },
+    { key: 'devices', label: t('companyDetail.stats.devices'), value: company.device_count ?? 0, icon: Cpu, max: company.max_devices },
+    { key: 'doors', label: t('companyDetail.stats.doors'), value: company.door_count ?? 0, icon: DoorOpen },
+    { key: 'events', label: t('companyDetail.stats.events'), value: company.event_count ?? 0, icon: Activity },
   ];
-
-  const inputCls = "w-full h-8 px-2.5 bg-[#0B1120] border border-[#1E293B] rounded text-[13px] text-[#F8FAFC] focus:border-[#F97316] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed";
 
   return (
     <div className="p-6 max-w-4xl">
-      <button data-testid="detail-button-back" onClick={() => navigate('/system/companies')} className="flex items-center gap-1.5 text-[13px] text-[#94A3B8] hover:text-[#F8FAFC] mb-4 transition-colors">
+      <Button
+        data-testid="detail-button-back"
+        variant="ghost"
+        size="sm"
+        onClick={() => navigate('/system/companies')}
+        className="mb-4 text-[#94A3B8] hover:text-[#F8FAFC]"
+      >
         <ArrowLeft size={15} /> Back
-      </button>
+      </Button>
 
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
@@ -96,25 +100,25 @@ export function CompanyDetailPage() {
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            data-testid="detail-button-suspend"
-            onClick={handleSuspend}
-            className={`px-3 py-1.5 rounded-md text-[12px] font-medium border transition-colors ${
-              company.status === 'suspended'
-                ? 'border-[#22C55E]/30 text-[#22C55E] hover:bg-[#22C55E]/10'
-                : 'border-[#EF4444]/30 text-[#EF4444] hover:bg-[#EF4444]/10'
-            }`}
-          >
-            {company.status === 'suspended' ? t('companyDetail.actions.activate') : t('companyDetail.actions.suspend')}
-          </button>
-        </div>
+        <Button
+          data-testid="detail-button-suspend"
+          variant="outline"
+          size="sm"
+          onClick={handleSuspend}
+          className={
+            company.status === 'suspended'
+              ? 'border-[#22C55E]/30 text-[#22C55E] hover:bg-[#22C55E]/10'
+              : 'border-[#EF4444]/30 text-[#EF4444] hover:bg-[#EF4444]/10'
+          }
+        >
+          {company.status === 'suspended' ? t('companyDetail.actions.activate') : t('companyDetail.actions.suspend')}
+        </Button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3 mb-6">
-        {stats.map(({ label, value, icon: Icon, max }) => (
-          <div key={label} className="border border-[#1E293B] rounded-lg p-3 bg-[#111827]">
+        {stats.map(({ key, label, value, icon: Icon, max }) => (
+          <div key={key} data-testid={`detail-stat-${key}`} className="border border-[#1E293B] rounded-lg p-3 bg-[#111827]">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[11px] text-[#64748B] uppercase tracking-wider">{label}</span>
               <Icon size={14} className="text-[#475569]" />
@@ -133,50 +137,54 @@ export function CompanyDetailPage() {
           <h2 className="text-[14px] font-medium text-[#F8FAFC]">Company Information</h2>
           {editing ? (
             <div className="flex gap-2">
-              <button data-testid="detail-button-cancel" onClick={() => setEditing(false)} className="px-2.5 py-1 text-[12px] text-[#94A3B8] hover:text-[#F8FAFC]">Cancel</button>
-              <button data-testid="detail-button-save" onClick={handleSave} disabled={saving} className="flex items-center gap-1 px-2.5 py-1 bg-[#F97316] hover:bg-[#EA580C] text-white rounded text-[12px] font-medium disabled:opacity-60">
+              <Button data-testid="detail-button-cancel" variant="ghost" size="sm" onClick={() => setEditing(false)}>
+                Cancel
+              </Button>
+              <Button data-testid="detail-button-save" size="sm" onClick={handleSave} disabled={saving}>
                 <Save size={12} /> {saving ? 'Saving...' : t('companyDetail.actions.save')}
-              </button>
+              </Button>
             </div>
           ) : (
-            <button data-testid="detail-button-edit" onClick={() => setEditing(true)} className="px-2.5 py-1 text-[12px] text-[#F97316] hover:text-[#EA580C]">{t('companyDetail.actions.edit')}</button>
+            <Button data-testid="detail-button-edit" variant="ghost" size="sm" onClick={() => setEditing(true)} className="text-[#F97316]">
+              {t('companyDetail.actions.edit')}
+            </Button>
           )}
         </div>
         <div className="p-4 grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.name')}</label>
-            <input data-testid="detail-input-name" disabled={!editing} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className={inputCls} />
+            <Label>{t('companyDetail.form.name')}</Label>
+            <Input data-testid="detail-input-name" disabled={!editing} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
           </div>
           <div>
-            <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.plan')}</label>
-            <select data-testid="detail-select-plan" disabled={!editing} value={form.plan} onChange={(e) => setForm((f) => ({ ...f, plan: e.target.value }))} className={inputCls}>
+            <Label>{t('companyDetail.form.plan')}</Label>
+            <Select data-testid="detail-select-plan" disabled={!editing} value={form.plan} onChange={(e) => setForm((f) => ({ ...f, plan: e.target.value }))}>
               {['trial', 'starter', 'professional', 'enterprise'].map((p) => (
-                <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
+                <SelectOption key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</SelectOption>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
-            <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.address')}</label>
-            <input data-testid="detail-input-address" disabled={!editing} value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} className={inputCls} />
+            <Label>{t('companyDetail.form.address')}</Label>
+            <Input data-testid="detail-input-address" disabled={!editing} value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
           </div>
           <div>
-            <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.phone')}</label>
-            <input data-testid="detail-input-phone" disabled={!editing} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} className={inputCls} />
+            <Label>{t('companyDetail.form.phone')}</Label>
+            <Input data-testid="detail-input-phone" disabled={!editing} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
           </div>
           <div>
-            <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.maxDevices')}</label>
-            <input data-testid="detail-input-maxDevices" disabled={!editing} type="number" value={form.max_devices} onChange={(e) => setForm((f) => ({ ...f, max_devices: +e.target.value }))} className={inputCls} />
+            <Label>{t('companyDetail.form.maxDevices')}</Label>
+            <Input data-testid="detail-input-maxDevices" disabled={!editing} type="number" value={form.max_devices} onChange={(e) => setForm((f) => ({ ...f, max_devices: +e.target.value }))} />
           </div>
           <div>
-            <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.maxUsers')}</label>
-            <input data-testid="detail-input-maxUsers" disabled={!editing} type="number" value={form.max_users} onChange={(e) => setForm((f) => ({ ...f, max_users: +e.target.value }))} className={inputCls} />
+            <Label>{t('companyDetail.form.maxUsers')}</Label>
+            <Input data-testid="detail-input-maxUsers" disabled={!editing} type="number" value={form.max_users} onChange={(e) => setForm((f) => ({ ...f, max_users: +e.target.value }))} />
           </div>
           <div>
-            <label className="block text-[11px] text-[#64748B] mb-1">Created</label>
+            <Label>Created</Label>
             <div className="text-[13px] text-[#94A3B8] py-1.5">{new Date(company.created_at).toLocaleString()}</div>
           </div>
           <div>
-            <label className="block text-[11px] text-[#64748B] mb-1">Email</label>
+            <Label>Email</Label>
             <div className="text-[13px] text-[#94A3B8] py-1.5">{company.email || '—'}</div>
           </div>
         </div>
