@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Users, HardDrive, TrendingUp, ArrowRight, Plus } from 'lucide-react';
+import { Building2, Users, HardDrive, TrendingUp, ArrowRight } from 'lucide-react';
 import { fetchSystemStats, fetchCompanies, type SystemStatsDTO, type CompanyDTO } from '@/lib/api';
 
 interface StatCardProps {
@@ -60,18 +60,9 @@ export function SystemDashboardPage() {
   return (
     <div className="p-6 max-w-[1200px]">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold text-[#F8FAFC]">System Dashboard</h1>
-          <p className="text-[13px] text-[#64748B] mt-1">Overview of all tenants and system health</p>
-        </div>
-        <button
-          onClick={() => navigate('/system/companies/new')}
-          className="flex items-center gap-2 px-4 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white text-[13px] font-medium rounded-lg transition-colors"
-        >
-          <Plus size={16} />
-          New Company
-        </button>
+      <div className="mb-6">
+        <h1 className="text-xl font-semibold text-[#F8FAFC]">System Dashboard</h1>
+        <p className="text-[13px] text-[#64748B] mt-1">Overview of all tenants and system health</p>
       </div>
 
       {/* Stat Cards */}
