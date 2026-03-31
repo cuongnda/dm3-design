@@ -1,0 +1,132 @@
+{
+  "test_company_list_page": {
+    "description": "Verify company list page loads with table and create button",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/companies"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "company-table-list"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "company-button-create"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "company-input-search"
+      }
+    ]
+  },
+  "test_company_search": {
+    "description": "Search for a company by name",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/companies"
+      },
+      {
+        "action": "fill",
+        "testid": "company-input-search",
+        "value": "Demo"
+      },
+      {
+        "action": "wait",
+        "ms": 500
+      },
+      {
+        "action": "assert_visible",
+        "testid": "company-row-00000000-0000-0000-0000-000000000001"
+      }
+    ]
+  },
+  "test_company_navigate_to_detail": {
+    "description": "Click on a company row to navigate to detail page",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/companies"
+      },
+      {
+        "action": "click",
+        "testid": "company-row-00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "detail-text-name"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "detail-badge-status"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "detail-button-edit"
+      }
+    ]
+  },
+  "test_company_detail_edit_mode": {
+    "description": "Enter edit mode and verify form fields are editable",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/companies/00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "action": "click",
+        "testid": "detail-button-edit"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "detail-button-save"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "detail-button-cancel"
+      },
+      {
+        "action": "assert_enabled",
+        "testid": "detail-input-name"
+      },
+      {
+        "action": "click",
+        "testid": "detail-button-cancel"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "detail-button-edit"
+      }
+    ]
+  },
+  "test_create_company_page": {
+    "description": "Navigate to create company page from list",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/companies"
+      },
+      {
+        "action": "click",
+        "testid": "company-button-create"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "create-input-name"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "create-input-code"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "create-input-email"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "create-button-submit"
+      }
+    ]
+  }
+}

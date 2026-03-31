@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Check, Copy } from 'lucide-react';
 import { createCompany, type CreateCompanyResponse } from '@/lib/api';
+import { Button, Input, Select, SelectOption, Label } from '@dm3/ui';
 
 const plans = ['trial', 'starter', 'professional', 'enterprise'];
 
@@ -64,96 +65,91 @@ export function CreateCompanyPage() {
           <div className="bg-[#0B1120] border border-[#F97316]/30 rounded-md p-4 mb-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] uppercase tracking-wider text-[#F97316] font-medium">{t('createCompany.credentials')}</span>
-              <button onClick={copyCredentials} className="text-[#94A3B8] hover:text-[#F8FAFC]">
+              <Button variant="ghost" size="icon-xs" onClick={copyCredentials}>
                 {copied ? <Check size={14} className="text-[#22C55E]" /> : <Copy size={14} />}
-              </button>
+              </Button>
             </div>
             <div className="space-y-1.5 text-[13px]">
-              <div><span className="text-[#64748B]">Email:</span> <span data-testid="company-label-gen-email" className="text-[#F8FAFC] font-mono">{result.credentials.email}</span></div>
-              <div><span className="text-[#64748B]">Password:</span> <span data-testid="company-label-gen-password" className="text-[#F8FAFC] font-mono">{result.credentials.password}</span></div>
+              <div><span className="text-[#64748B]">Email:</span> <span data-testid="create-label-gen-email" className="text-[#F8FAFC] font-mono">{result.credentials.email}</span></div>
+              <div><span className="text-[#64748B]">Password:</span> <span data-testid="create-label-gen-password" className="text-[#F8FAFC] font-mono">{result.credentials.password}</span></div>
             </div>
             <p className="text-[11px] text-[#F59E0B] mt-3">⚠ Save these credentials — the password won't be shown again.</p>
           </div>
 
-          <button
-            onClick={() => navigate('/system/companies')}
-            className="w-full h-9 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-md text-[13px] font-medium transition-colors"
-          >
+          <Button className="w-full" onClick={() => navigate('/system/companies')}>
             Go to Companies
-          </button>
+          </Button>
         </div>
       </div>
     );
   }
 
-  const inputCls = "w-full h-9 px-3 bg-[#0B1120] border border-[#1E293B] rounded-md text-[13px] text-[#F8FAFC] placeholder:text-[#475569] focus:border-[#F97316] focus:outline-none focus:ring-1 focus:ring-[#F97316]/20";
-  const labelCls = "block text-[12px] text-[#94A3B8] mb-1";
-
   return (
     <div className="p-6 max-w-2xl">
-      <button onClick={() => navigate('/system/companies')} className="flex items-center gap-1.5 text-[13px] text-[#94A3B8] hover:text-[#F8FAFC] mb-4 transition-colors">
+      <Button
+        data-testid="create-button-back"
+        variant="ghost"
+        size="sm"
+        onClick={() => navigate('/system/companies')}
+        className="mb-4 text-[#94A3B8] hover:text-[#F8FAFC]"
+      >
         <ArrowLeft size={15} /> Back to Companies
-      </button>
+      </Button>
       <h1 className="text-[20px] font-semibold text-[#F8FAFC] mb-6">{t('createCompany.title')}</h1>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {error && (
-          <div className="px-3 py-2 bg-[#7F1D1D]/20 border border-[#EF4444]/30 rounded-md text-[#EF4444] text-[13px]">{error}</div>
+          <div data-testid="create-text-error" className="px-3 py-2 bg-[#7F1D1D]/20 border border-[#EF4444]/30 rounded-md text-[#EF4444] text-[13px]">{error}</div>
         )}
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>{t('createCompany.form.name')} *</label>
-            <input data-testid="company-input-name" required value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Acme Corp" className={inputCls} />
+            <Label>{t('createCompany.form.name')} *</Label>
+            <Input data-testid="create-input-name" required value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Acme Corp" />
           </div>
           <div>
-            <label className={labelCls}>{t('createCompany.form.code')} *</label>
-            <input data-testid="company-input-code" required value={form.code} onChange={(e) => set('code', e.target.value.toUpperCase())} placeholder="ACME" className={inputCls} />
+            <Label>{t('createCompany.form.code')} *</Label>
+            <Input data-testid="create-input-code" required value={form.code} onChange={(e) => set('code', e.target.value.toUpperCase())} placeholder="ACME" />
           </div>
         </div>
 
         <div>
-          <label className={labelCls}>{t('createCompany.form.managerEmail')} *</label>
-          <input data-testid="company-input-email" required type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="manager@acme.com" className={inputCls} />
+          <Label>{t('createCompany.form.managerEmail')} *</Label>
+          <Input data-testid="create-input-email" required type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="manager@acme.com" />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>{t('createCompany.form.plan')}</label>
-            <select data-testid="company-select-plan" value={form.plan} onChange={(e) => set('plan', e.target.value)} className={inputCls}>
-              {plans.map((p) => <option key={p} value={p} className="capitalize">{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
-            </select>
+            <Label>{t('createCompany.form.plan')}</Label>
+            <Select data-testid="create-select-plan" value={form.plan} onChange={(e) => set('plan', e.target.value)}>
+              {plans.map((p) => <SelectOption key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</SelectOption>)}
+            </Select>
           </div>
           <div>
-            <label className={labelCls}>{t('createCompany.form.phone')}</label>
-            <input data-testid="company-input-phone" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="+84..." className={inputCls} />
+            <Label>{t('createCompany.form.phone')}</Label>
+            <Input data-testid="create-input-phone" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="+84..." />
           </div>
         </div>
 
         <div>
-          <label className={labelCls}>{t('createCompany.form.address')}</label>
-          <input data-testid="company-input-address" value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="123 Main St" className={inputCls} />
+          <Label>{t('createCompany.form.address')}</Label>
+          <Input data-testid="create-input-address" value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="123 Main St" />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>{t('createCompany.form.maxDevices')}</label>
-            <input data-testid="company-input-max-devices" type="number" value={form.max_devices} onChange={(e) => set('max_devices', +e.target.value)} className={inputCls} />
+            <Label>{t('createCompany.form.maxDevices')}</Label>
+            <Input data-testid="create-input-maxDevices" type="number" value={form.max_devices} onChange={(e) => set('max_devices', +e.target.value)} />
           </div>
           <div>
-            <label className={labelCls}>{t('createCompany.form.maxUsers')}</label>
-            <input data-testid="company-input-max-users" type="number" value={form.max_users} onChange={(e) => set('max_users', +e.target.value)} className={inputCls} />
+            <Label>{t('createCompany.form.maxUsers')}</Label>
+            <Input data-testid="create-input-maxUsers" type="number" value={form.max_users} onChange={(e) => set('max_users', +e.target.value)} />
           </div>
         </div>
 
-        <button
-          data-testid="company-button-submit"
-          type="submit"
-          disabled={loading}
-          className="h-9 px-6 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-md text-[13px] font-medium transition-colors disabled:opacity-60"
-        >
+        <Button data-testid="create-button-submit" type="submit" disabled={loading}>
           {loading ? 'Creating...' : t('createCompany.submit')}
-        </button>
+        </Button>
       </form>
     </div>
   );
