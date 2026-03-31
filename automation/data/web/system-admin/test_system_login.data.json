@@ -1,0 +1,81 @@
+[
+  {
+    "case_id": "TC_SYS_ADMIN_01",
+    "description": {
+      "title": "System admin login successfully",
+      "case_id": "TC_SYS_ADMIN_01",
+      "is_reviewed": false,
+      "step": "- Navigate to login page\n- Enter system admin email\n- Enter system admin password\n- Click login button\n- Verify redirect to /system dashboard",
+      "expected": "- Login succeeds without company selection\n- Redirected to /system (System Dashboard)\n- Dashboard header visible\n- Sidebar shows 'System Admin' label"
+    },
+    "steps": [
+      { "action": "goto", "data": { "url": "/login" } },
+      { "action": "fill", "data": { "testid": "login-input-email", "value": "sysadmin@duali.com" } },
+      { "action": "fill", "data": { "testid": "login-input-password", "value": "sysadmin123" } },
+      { "action": "click", "data": { "testid": "login-button-submit" } },
+      { "action": "wait_url", "data": { "url": "/system" } }
+    ],
+    "verification": [
+      { "action": "visible", "data": { "text": "System Dashboard" } },
+      { "action": "visible", "data": { "text": "System Admin" } }
+    ]
+  },
+  {
+    "case_id": "TC_SYS_ADMIN_02",
+    "description": {
+      "title": "System admin login with wrong password",
+      "case_id": "TC_SYS_ADMIN_02",
+      "is_reviewed": false,
+      "step": "- Navigate to login page\n- Enter system admin email\n- Enter wrong password\n- Click login button",
+      "expected": "- Login fails\n- Error message displayed\n- Stay on login page"
+    },
+    "steps": [
+      { "action": "goto", "data": { "url": "/login" } },
+      { "action": "fill", "data": { "testid": "login-input-email", "value": "sysadmin@duali.com" } },
+      { "action": "fill", "data": { "testid": "login-input-password", "value": "wrongpassword" } },
+      { "action": "click", "data": { "testid": "login-button-submit" } },
+      { "action": "wait", "data": { "ms": 1000 } }
+    ],
+    "verification": [
+      { "action": "url_contains", "data": { "url": "/login" } }
+    ]
+  },
+  {
+    "case_id": "TC_SYS_ADMIN_03",
+    "description": {
+      "title": "System dashboard shows stat cards",
+      "case_id": "TC_SYS_ADMIN_03",
+      "is_reviewed": false,
+      "step": "- Login as system admin\n- Navigate to /system\n- Verify all 4 stat cards are visible",
+      "expected": "- Companies card visible with count\n- Users card visible with count\n- Devices card visible with count\n- Last 7 Days card visible"
+    },
+    "steps": [
+      { "action": "login_sysadmin", "data": {} },
+      { "action": "goto", "data": { "url": "/system" } }
+    ],
+    "verification": [
+      { "action": "visible", "data": { "testid": "sys-card-companies" } },
+      { "action": "visible", "data": { "testid": "sys-card-users" } },
+      { "action": "visible", "data": { "testid": "sys-card-devices" } },
+      { "action": "visible", "data": { "testid": "sys-card-recent" } }
+    ]
+  },
+  {
+    "case_id": "TC_SYS_ADMIN_04",
+    "description": {
+      "title": "Navigate to company list from dashboard",
+      "case_id": "TC_SYS_ADMIN_04",
+      "is_reviewed": false,
+      "step": "- Login as system admin\n- Click 'Companies' in sidebar\n- Verify company list page loads",
+      "expected": "- URL changes to /system/companies\n- Company list table visible"
+    },
+    "steps": [
+      { "action": "login_sysadmin", "data": {} },
+      { "action": "click", "data": { "text": "Companies" } }
+    ],
+    "verification": [
+      { "action": "url_contains", "data": { "url": "/system/companies" } },
+      { "action": "visible", "data": { "text": "Companies" } }
+    ]
+  }
+]

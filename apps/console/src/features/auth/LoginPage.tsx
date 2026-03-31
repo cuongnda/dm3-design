@@ -132,6 +132,7 @@ export function LoginPage() {
             )}
             <div>
               <input
+                data-testid="login-input-email"
                 type="email"
                 placeholder={t('email')}
                 value={email}
@@ -141,6 +142,7 @@ export function LoginPage() {
             </div>
             <div className="relative">
               <input
+                data-testid="login-input-password"
                 type={showPass ? 'text' : 'password'}
                 placeholder={t('password')}
                 value={password}
@@ -148,6 +150,7 @@ export function LoginPage() {
                 className="w-full h-9 px-3 pr-10 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:border-[#3B82F6] focus:outline-none focus:ring-1 focus:ring-[#3B82F6]/20"
               />
               <button
+                data-testid="login-button-show-password"
                 type="button"
                 onClick={() => setShowPass(!showPass)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#94A3B8]"
@@ -162,6 +165,7 @@ export function LoginPage() {
             </label>
 
             <button
+              data-testid="login-button-submit"
               type="submit"
               disabled={loading}
               className="w-full h-9 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-[14px] font-medium transition-colors disabled:opacity-60"
@@ -229,6 +233,7 @@ export function LoginPage() {
           <div className="space-y-2">
             {companies.map((company) => (
               <button
+                data-testid={`login-button-company-${company.id}`}
                 key={company.id}
                 onClick={() => handleSelectCompany(company.id)}
                 disabled={selectingId !== null}

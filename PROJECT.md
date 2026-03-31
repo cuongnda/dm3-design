@@ -103,12 +103,33 @@ Console available at **http://localhost:3000**
 
 ## Key Paths
 - Backend: `backend/`
-- Webapp: `webapp/` (24 pages + System Admin UI)
+- Webapp: `apps/console/` (24 pages + System Admin UI)
+- Automation: `automation/` (pytest + Playwright)
 - Simulator: `simulator/` (Python asyncio, Docker)
 - Terminal: `dm3-terminal/` (Kotlin + Compose)
 - Docs: `docs/` (Vision, specs/, architecture/, design/)
 - Feature Specs: `docs/specs/` (25+ docs, single source of truth)
 - Mockups: `mockups/` (webapp, mobile, terminal, guard-station)
+
+## Automation Tests
+```
+automation/
+├── tests/api/          ← Backend API tests (pytest + requests)
+├── tests/web/          ← Frontend UI tests (pytest + Playwright)
+├── data/web/           ← JSON test case data (data-driven)
+├── common/             ← Shared: api_client, web_executor, constants
+├── docs/               ← DATA_TESTID_CONVENTION.md
+└── conftest.py         ← Shared fixtures
+```
+
+### data-testid Convention (mandatory for all FE elements)
+Format: `{module}-{element}-{name}`
+- Modules: `login`, `sys`, `company`, `user`, `device`, `identity`, `access`, `settings`
+- Elements: `input`, `button`, `select`, `table`, `row`, `card`, `modal`, `badge`, `link`
+- Examples: `login-input-email`, `company-button-create`, `sys-card-companies`
+- Full guide: `automation/docs/DATA_TESTID_CONVENTION.md`
+
+**Rule:** Every new/modified FE interactive element MUST have a `data-testid` attribute.
 
 ## Credentials
 - System admin: sysadmin@duali.com / sysadmin123

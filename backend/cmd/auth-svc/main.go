@@ -75,9 +75,10 @@ func main() {
 			ar.Put("/api/v1/users/{id}/password", h.ChangePassword)
 		})
 
-		// System admin only: company management
+		// System admin only: company management + stats
 		pr.Group(func(sr chi.Router) {
 			sr.Use(authsvc.RequireRole("system_admin"))
+			sr.Get("/api/v1/system/stats", h.SystemStats)
 			sr.Get("/api/v1/system/companies", h.ListCompanies)
 			sr.Post("/api/v1/system/companies", h.CreateCompany)
 			sr.Get("/api/v1/system/companies/{id}", h.GetCompany)

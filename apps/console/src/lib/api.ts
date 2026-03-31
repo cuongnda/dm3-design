@@ -589,6 +589,21 @@ export interface CreateCompanyResponse {
   };
 }
 
+// ─── System Stats ───────────────────────────────────────────
+
+export interface SystemStatsDTO {
+  companies: { total: number; active: number; suspended: number };
+  users: { total: number; active: number; inactive: number };
+  devices: { total: number; online: number; offline: number };
+  recent: { new_companies_7d: number; new_users_7d: number; new_devices_7d: number };
+}
+
+export async function fetchSystemStats(): Promise<SystemStatsDTO> {
+  return apiFetch<SystemStatsDTO>(`${SYSTEM_URL}/stats`);
+}
+
+// ─── Companies ──────────────────────────────────────────────
+
 export async function fetchCompanies(): Promise<CompanyDTO[]> {
   const res = await apiFetch<{ data: CompanyDTO[] } | CompanyDTO[]>(`${SYSTEM_URL}/companies`);
   return Array.isArray(res) ? res : res.data;
