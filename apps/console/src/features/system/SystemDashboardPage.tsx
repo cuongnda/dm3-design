@@ -58,7 +58,7 @@ export function SystemDashboardPage() {
   }
 
   return (
-    <div className="p-6 max-w-[1200px]">
+    <div className="p-6 w-full">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-[#F8FAFC]">System Dashboard</h1>
