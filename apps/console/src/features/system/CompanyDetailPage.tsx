@@ -76,7 +76,7 @@ export function CompanyDetailPage() {
 
   return (
     <div className="p-6 max-w-4xl">
-      <button onClick={() => navigate('/system/companies')} className="flex items-center gap-1.5 text-[13px] text-[#94A3B8] hover:text-[#F8FAFC] mb-4 transition-colors">
+      <button data-testid="detail-button-back" onClick={() => navigate('/system/companies')} className="flex items-center gap-1.5 text-[13px] text-[#94A3B8] hover:text-[#F8FAFC] mb-4 transition-colors">
         <ArrowLeft size={15} /> Back
       </button>
 
@@ -87,10 +87,10 @@ export function CompanyDetailPage() {
             <Building2 size={20} className="text-[#F97316]" />
           </div>
           <div>
-            <h1 className="text-[20px] font-semibold text-[#F8FAFC]">{company.name}</h1>
+            <h1 data-testid="detail-text-name" className="text-[20px] font-semibold text-[#F8FAFC]">{company.name}</h1>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-[12px] text-[#64748B] font-mono">{company.code}</span>
-              <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium capitalize border ${statusColors[company.status] || ''}`}>
+              <span data-testid="detail-text-code" className="text-[12px] text-[#64748B] font-mono">{company.code}</span>
+              <span data-testid="detail-badge-status" className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium capitalize border ${statusColors[company.status] || ''}`}>
                 {company.status}
               </span>
             </div>
@@ -98,6 +98,7 @@ export function CompanyDetailPage() {
         </div>
         <div className="flex gap-2">
           <button
+            data-testid="detail-button-suspend"
             onClick={handleSuspend}
             className={`px-3 py-1.5 rounded-md text-[12px] font-medium border transition-colors ${
               company.status === 'suspended'
@@ -132,23 +133,23 @@ export function CompanyDetailPage() {
           <h2 className="text-[14px] font-medium text-[#F8FAFC]">Company Information</h2>
           {editing ? (
             <div className="flex gap-2">
-              <button onClick={() => setEditing(false)} className="px-2.5 py-1 text-[12px] text-[#94A3B8] hover:text-[#F8FAFC]">Cancel</button>
-              <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 px-2.5 py-1 bg-[#F97316] hover:bg-[#EA580C] text-white rounded text-[12px] font-medium disabled:opacity-60">
+              <button data-testid="detail-button-cancel" onClick={() => setEditing(false)} className="px-2.5 py-1 text-[12px] text-[#94A3B8] hover:text-[#F8FAFC]">Cancel</button>
+              <button data-testid="detail-button-save" onClick={handleSave} disabled={saving} className="flex items-center gap-1 px-2.5 py-1 bg-[#F97316] hover:bg-[#EA580C] text-white rounded text-[12px] font-medium disabled:opacity-60">
                 <Save size={12} /> {saving ? 'Saving...' : t('companyDetail.actions.save')}
               </button>
             </div>
           ) : (
-            <button onClick={() => setEditing(true)} className="px-2.5 py-1 text-[12px] text-[#F97316] hover:text-[#EA580C]">{t('companyDetail.actions.edit')}</button>
+            <button data-testid="detail-button-edit" onClick={() => setEditing(true)} className="px-2.5 py-1 text-[12px] text-[#F97316] hover:text-[#EA580C]">{t('companyDetail.actions.edit')}</button>
           )}
         </div>
         <div className="p-4 grid grid-cols-2 gap-4">
           <div>
             <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.name')}</label>
-            <input disabled={!editing} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className={inputCls} />
+            <input data-testid="detail-input-name" disabled={!editing} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className={inputCls} />
           </div>
           <div>
             <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.plan')}</label>
-            <select disabled={!editing} value={form.plan} onChange={(e) => setForm((f) => ({ ...f, plan: e.target.value }))} className={inputCls}>
+            <select data-testid="detail-select-plan" disabled={!editing} value={form.plan} onChange={(e) => setForm((f) => ({ ...f, plan: e.target.value }))} className={inputCls}>
               {['trial', 'starter', 'professional', 'enterprise'].map((p) => (
                 <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
               ))}
@@ -156,19 +157,19 @@ export function CompanyDetailPage() {
           </div>
           <div>
             <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.address')}</label>
-            <input disabled={!editing} value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} className={inputCls} />
+            <input data-testid="detail-input-address" disabled={!editing} value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} className={inputCls} />
           </div>
           <div>
             <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.phone')}</label>
-            <input disabled={!editing} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} className={inputCls} />
+            <input data-testid="detail-input-phone" disabled={!editing} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} className={inputCls} />
           </div>
           <div>
             <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.maxDevices')}</label>
-            <input disabled={!editing} type="number" value={form.max_devices} onChange={(e) => setForm((f) => ({ ...f, max_devices: +e.target.value }))} className={inputCls} />
+            <input data-testid="detail-input-maxDevices" disabled={!editing} type="number" value={form.max_devices} onChange={(e) => setForm((f) => ({ ...f, max_devices: +e.target.value }))} className={inputCls} />
           </div>
           <div>
             <label className="block text-[11px] text-[#64748B] mb-1">{t('companyDetail.form.maxUsers')}</label>
-            <input disabled={!editing} type="number" value={form.max_users} onChange={(e) => setForm((f) => ({ ...f, max_users: +e.target.value }))} className={inputCls} />
+            <input data-testid="detail-input-maxUsers" disabled={!editing} type="number" value={form.max_users} onChange={(e) => setForm((f) => ({ ...f, max_users: +e.target.value }))} className={inputCls} />
           </div>
           <div>
             <label className="block text-[11px] text-[#64748B] mb-1">Created</label>
