@@ -16,7 +16,8 @@ COPY packages/ ./packages/
 COPY apps/console/ ./apps/console/
 
 # Fresh install for linux/musl — delete lock to avoid platform mismatch
-RUN rm -f package-lock.json && npm install && npm ls @rollup/rollup-linux-x64-musl 2>/dev/null || true
+# Use --install-strategy=nested to ensure native binaries resolve correctly
+RUN rm -f package-lock.json && npm install --include=dev --install-strategy=nested && npm ls vite 2>/dev/null || true
 
 # Build: vite build directly (skip tsc for Docker)
 RUN cd apps/console && npx vite build
