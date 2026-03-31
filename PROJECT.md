@@ -3,15 +3,99 @@
 ## Overview
 Next-gen access control & smart building platform. Codename: DM3.
 
+## Quick Start (Dev)
+
+### Prerequisites
+- **Node.js** ≥ 20.19 (check: `node -v`)
+- **Go** ≥ 1.22
+- **Docker** + Docker Compose
+
+### 1. Start Infrastructure
+```bash
+cd ~/db   # hoặc thư mục chứa docker-compose
+docker compose up -d postgres-db-timescale nats emqx
+# Nếu cần Valkey/MinIO thì thêm vào
+```
+
+Cần có:
+- TimescaleDB `:5433`
+- NATS + JetStream `:4222`
+- EMQX MQTT `:1884` (Dashboard: `http://localhost:18083`, login: admin/public)
+
+### 2. Start Backend (VSCode)
+Mở project trong VSCode → Run & Debug → chọn **"All Backend Services"** → F5
+
+Hoặc chạy từng service:
+- Auth Service (`:8005`)
+- Identity Service (`:8004`)
+- Access Service (`:8003`)
+- Device Gateway (`:8002`)
+
+### 3. Start Frontend
+```bash
+cd duall-master
+
+# Lần đầu hoặc khi gặp lỗi native modules:
+rm -rf node_modules apps/console/node_modules package-lock.json
+npm cache clean --force
+npm install --force
+
+# Chạy dev server:
+npm run dev
+```
+Console mở tại **http://localhost:3000**
+
+### Test Accounts
+| Role | Email | Password |
+|------|-------|----------|
+| System Admin | sysadmin@duali.com | sysadmin123 |
+| Company Admin | admin@duali.com | admin123 |
+
+### ⚠️ Troubleshooting
+- **NATS stream timeout** → NATS chưa chạy hoặc chưa bật JetStream (`--jetstream` flag)
+- **MQTT connection refused** → EMQX chưa start, check port 1884
+- **rollup/lightningcss native module error** → Xóa node_modules + package-lock.json, `npm install --force`
+- **Node version warning** → Cần Node ≥ 20.19: `nvm install 20 && nvm use 20`
+
 ## Architecture
 - **Three Domains:** SECURE / MANAGE / OPERATE + SMART + PLATFORM
 - **Multi-tenancy:** Company = Tenant, two-step login
 - **Device Provisioning:** QR flow (pre-authorized) + Bootstrap flow (self-register)
 
 ## Stack
-- **Backend:** Go monorepo (4 services: device-gateway:8002, access-svc:8003, identity-svc:8004, auth-svc:8005)
+- **Backend:** Go monorepo (4 services, see Port Map below)
 - **DB:** TimescaleDB port 5433 (dm3/dm3secret), 7 migrations
-- **Infra:** EMQX(:1884), NATS(:4222), Valkey(:6379), MinIO(:9002), Simulator(:9090)
+- **Infra:** EMQX(:1884), NATS(:4222), Valkey(:6380), MinIO(:9002), Simulator(:9090)
+
+## Port Map
+
+### Backend Services
+| Service | Port | Description |
+|---------|------|-------------|
+| device-gateway | 8002 | MQTT bridge, device provisioning |
+| access-svc | 8003 | Access rules, schedules, logs |
+| identity-svc | 8004 | Users, companies, profiles |
+| auth-svc | 8005 | JWT auth, login, token refresh |
+
+### Infrastructure
+| Service | Port | Description |
+|---------|------|-------------|
+| PostgreSQL | 5432 | Main DB |
+| TimescaleDB | 5433 | Time-series DB (dm3) |
+| NATS + JetStream | 4222 | Event streaming |
+| NATS Monitor | 8222 | NATS dashboard |
+| EMQX (MQTT) | 1884 | Device MQTT broker |
+| EMQX Dashboard | 18083 | EMQX management UI (admin/public) |
+| Valkey | 6380 | Cache / session store |
+| MinIO | 9002 | Object storage |
+| RabbitMQ | 5672 | Legacy messaging |
+| RabbitMQ UI | 15672 | Management console |
+
+### Frontend
+| App | Port | Description |
+|-----|------|-------------|
+| Console (Vite) | 3000 | Webapp dev server |
+| Simulator | 9090 | Python device simulator |
 - **Webapp:** Vite + React 18 + TS + Tailwind + shadcn/ui + React Router v7 + Zustand + TanStack Query
 - **Mobile:** Flutter (Admin + Resident apps)
 - **Android Terminal:** Kotlin + Compose, 15 screens, MQTT live
@@ -33,7 +117,7 @@ Next-gen access control & smart building platform. Codename: DM3.
 
 ## Device
 - DF-970: ADB c5802c96950d5246, Android 12, RK3568, 480×800
-- Docker: EMQX on port 1884 (not 1883 — Roombox RabbitMQ conflict)
+- Docker: EMQX on port 1884 (not 1883 — host RabbitMQ conflict)
 
 ## Frontend Architecture: Shared Core + Fork per Vertical (Decision 2026-03-29)
 
