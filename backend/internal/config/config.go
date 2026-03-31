@@ -31,6 +31,14 @@ type Config struct {
 	// Device Provisioning
 	BootstrapSecret    string
 	KnownAppSignatures []string
+
+	// Bug Reporter (DV Tasks integration)
+	BugReporterEnabled   bool
+	BugReporterURL       string // DV Tasks API base URL
+	BugReporterToken     string
+	BugReporterProjectID string
+	BugReporterSprintID  string
+	BugReporterAssignee  string
 }
 
 func Load() *Config {
@@ -46,6 +54,13 @@ func Load() *Config {
 		ValkeyURL:          env("VALKEY_URL", "localhost:6380"),
 		BootstrapSecret:    env("BOOTSTRAP_SECRET", "dm3-bootstrap-v1-dev-secret"),
 		KnownAppSignatures: envSlice("KNOWN_APP_SIGNATURES"),
+
+		BugReporterEnabled:   env("BUG_REPORTER_ENABLED", "") == "true",
+		BugReporterURL:       env("BUG_REPORTER_URL", "https://tasks.duali.vn/api"),
+		BugReporterToken:     env("BUG_REPORTER_TOKEN", ""),
+		BugReporterProjectID: env("BUG_REPORTER_PROJECT_ID", ""),
+		BugReporterSprintID:  env("BUG_REPORTER_SPRINT_ID", ""),
+		BugReporterAssignee:  env("BUG_REPORTER_ASSIGNEE_ID", ""),
 	}
 }
 

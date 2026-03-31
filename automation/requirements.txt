@@ -1,7 +1,7 @@
-pytest
-playwright
-pytest-html
-requests
-faker
-jsonschema
-python-dotenv
+# DM3 Automation Test Dependencies
+pytest>=7.0
+pytest-html>=4.0
+pytest-json-report>=1.5
+playwright>=1.40
+requests>=2.31
+python-dotenv>=1.0

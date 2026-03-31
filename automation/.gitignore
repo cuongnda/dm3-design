@@ -1,6 +1,6 @@
-venv/
-__pycache__/
-.pytest_cache/
 export/
+logs/
 .env
+__pycache__/
 *.pyc
+.pytest_cache/

@@ -11,6 +11,7 @@ import (
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/config"
+	"github.com/duali/dm3-backend/pkg/bugreporter"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/i18n"
@@ -41,6 +42,18 @@ func main() {
 
 	h := authsvc.NewHandlers(database, cfg.JWTSecret)
 	r := httputil.NewRouter()
+
+	// Bug reporter middleware (auto-reports 5xx to DV Tasks)
+	bugReporter := bugreporter.New(bugreporter.Config{
+		BaseURL:     cfg.BugReporterURL,
+		Token:       cfg.BugReporterToken,
+		ProjectID:   cfg.BugReporterProjectID,
+		SprintID:    cfg.BugReporterSprintID,
+		AssigneeID:  cfg.BugReporterAssignee,
+		ServiceName: "auth-svc",
+		Enabled:     cfg.BugReporterEnabled,
+	})
+	r.Use(bugreporter.Middleware(bugReporter))
 
 	// Add i18n middleware to all routes
 	r.Use(i18n.LocaleMiddleware)
