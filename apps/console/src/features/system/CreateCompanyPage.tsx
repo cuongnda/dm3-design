@@ -158,10 +158,3 @@ export function CreateCompanyPage() {
     </div>
   );
 }
-
-// Add testid to submit button above
-
-      </form>
-    </div>
-  );
-}
