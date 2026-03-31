@@ -11,7 +11,77 @@ Go monorepo for the Duall Master 3.0 platform.
 | identity-svc | 8004 | Persons, credentials, groups |
 | auth-svc | 8005 | JWT auth, two-step company login |
 
-## Full Dev Environment
+## VSCode Debug (Recommended for Development)
+
+Quick way to debug any service with breakpoints.
+
+### Prerequisites
+
+- **Go 1.22+** — `go version`
+- **Docker** — for infra services
+- **VSCode** with [Go extension](https://marketplace.visualstudio.com/items?itemName=golang.Go)
+- Delve debugger — auto-installed by Go extension, or `go install github.com/go-delve/delve/cmd/dlv@latest`
+
+### 1. Start infrastructure only
+
+```bash
+docker compose up -d timescaledb emqx nats valkey minio
+```
+
+### 2. Create the database (first time only)
+
+The Docker compose creates the DB when running the full stack, but for local debug you need to create it manually:
+
+```bash
+# If PostgreSQL is running in Docker container:
+docker exec -it postgres-db-timescale psql -U postgres -c "CREATE DATABASE dm3;"
+
+# If PostgreSQL is installed locally:
+psql -h localhost -p 5433 -U postgres -c "CREATE DATABASE dm3;"
+```
+
+> **Note:** If using the project's Docker TimescaleDB (`docker-compose.yml`), credentials are `dm3`/`dm3secret`.  
+> If connecting to an existing PostgreSQL, adjust `DATABASE_URL` in `.vscode/launch.json`.
+
+### 3. Debug with F5
+
+Open VSCode → **Run & Debug** panel (Ctrl+Shift+D) → pick a service:
+
+| Config | Service | Port |
+|--------|---------|------|
+| Auth Service | auth-svc | 8002 |
+| Identity Service | identity-svc | 8003 |
+| Access Service | access-svc | 8004 |
+| Device Gateway | device-gateway | 8005 |
+| All Backend Services | all 4 above | — |
+| Frontend (React) | webapp dev server | 5173 |
+
+Press **F5** to start debugging. Set breakpoints in any `.go` file.
+
+### 4. Useful VSCode Tasks
+
+**Ctrl+Shift+P** → **Tasks: Run Task**:
+- **Infra: Start** — start all infra containers
+- **Infra: Stop** — stop containers
+- **DB: Seed Demo Data** — populate with test data
+- **Go: Build All** — compile check
+- **Go: Test All** — run tests
+
+### Environment Variables
+
+Debug configs use these defaults (editable in `.vscode/launch.json`):
+
+| Variable | Default |
+|----------|---------|
+| DATABASE_URL | `postgres://postgres:postgres@localhost:5433/dm3?sslmode=disable` |
+| NATS_URL | `nats://localhost:4222` |
+| MQTT_BROKER | `tcp://localhost:1884` |
+| JWT_SECRET | `dm3-dev-secret-key` |
+| VALKEY_URL | `localhost:6380` |
+
+---
+
+## Full Dev Environment (Docker)
 
 ### 1. Start all infrastructure
 

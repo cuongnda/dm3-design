@@ -1,0 +1,91 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Auth Service",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/backend/cmd/auth-svc",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "HTTP_PORT": "8005",
+        "DATABASE_URL": "postgres://postgres:postgres@localhost:5433/dm3?sslmode=disable",
+        "NATS_URL": "nats://localhost:4222",
+        "JWT_SECRET": "dm3-dev-secret-key",
+        "VALKEY_URL": "localhost:6380"
+      }
+    },
+    {
+      "name": "Identity Service",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/backend/cmd/identity-svc",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "HTTP_PORT": "8004",
+        "DATABASE_URL": "postgres://postgres:postgres@localhost:5433/dm3?sslmode=disable",
+        "NATS_URL": "nats://localhost:4222",
+        "JWT_SECRET": "dm3-dev-secret-key",
+        "VALKEY_URL": "localhost:6380"
+      }
+    },
+    {
+      "name": "Access Service",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/backend/cmd/access-svc",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "HTTP_PORT": "8003",
+        "DATABASE_URL": "postgres://postgres:postgres@localhost:5433/dm3?sslmode=disable",
+        "NATS_URL": "nats://localhost:4222",
+        "JWT_SECRET": "dm3-dev-secret-key",
+        "VALKEY_URL": "localhost:6380"
+      }
+    },
+    {
+      "name": "Device Gateway",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/backend/cmd/device-gateway",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "HTTP_PORT": "8002",
+        "DATABASE_URL": "postgres://postgres:postgres@localhost:5433/dm3?sslmode=disable",
+        "MQTT_BROKER": "tcp://localhost:1884",
+        "MQTT_CLIENT_ID": "dm3-device-gateway-debug",
+        "NATS_URL": "nats://localhost:4222",
+        "JWT_SECRET": "dm3-dev-secret-key",
+        "VALKEY_URL": "localhost:6380",
+        "BOOTSTRAP_SECRET": "dm3-bootstrap-v1-dev-secret"
+      }
+    },
+    {
+      "name": "Frontend (React)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "${workspaceFolder}/apps/console",
+      "console": "integratedTerminal",
+      "env": {
+        "BROWSER": "none"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "All Backend Services",
+      "configurations": [
+        "Auth Service",
+        "Identity Service",
+        "Access Service",
+        "Device Gateway"
+      ]
+    }
+  ]
+}
