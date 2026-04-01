@@ -13,6 +13,7 @@ import { UserAccountListPage } from '@/features/system/UserAccountListPage';
 import { UserAccountDetailPage } from '@/features/system/UserAccountDetailPage';
 import { CreateUserAccountPage } from '@/features/system/CreateUserAccountPage';
 import { ProtectedRoute } from './ProtectedRoute';
+import { RoleBasedRoute } from './RoleBasedRoute';
 
 // Lazy-loaded feature modules
 const AccessControlPage = lazy(() =>
@@ -167,11 +168,11 @@ export const router = createBrowserRouter([
           { path: 'settings', element: <LazyWrap><SystemSettingsPage /></LazyWrap> },
         ],
       },
+      { path: '/', element: <RoleBasedRoute /> },
       {
         path: '/',
         element: <MainLayout />,
         children: [
-      { index: true, element: <DashboardPage /> },
       { path: 'alerts', element: <LazyWrap><AlertsPage /></LazyWrap> },
 
       // SECURE
@@ -214,8 +215,11 @@ export const router = createBrowserRouter([
       { path: 'devices/provision', element: <LazyWrap><ProvisionDevicePage /></LazyWrap> },
       { path: 'devices/:id', element: <LazyWrap><DeviceDetailPage /></LazyWrap> },
 
-          // SETTINGS
-          { path: 'settings', element: <LazyWrap><SettingsPage /></LazyWrap> },
+      // SETTINGS
+      { path: 'settings', element: <LazyWrap><SettingsPage /></LazyWrap> },
+
+      // DASHBOARD (for company users)
+      { index: true, element: <DashboardPage /> },
         ],
       },
     ],

@@ -9,7 +9,7 @@ const navItems = [
   { to: '/system/companies', icon: Building2, label: 'Companies' },
   { to: '/system/accounts', icon: Users, label: 'Accounts' },
   { to: '/system/devices/pending', icon: Smartphone, label: 'Pending Devices', badge: true },
-  { to: '/system/devices', icon: HardDrive, label: 'All Devices' },
+  { to: '/system/devices', icon: HardDrive, label: 'All Devices', end: true },
   { to: '/system/settings', icon: Settings, label: 'Settings' },
 ];
 
