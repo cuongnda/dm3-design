@@ -7,7 +7,7 @@ import { fetchPendingDevices } from '@/lib/api';
 const navItems = [
   { to: '/system', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/system/companies', icon: Building2, label: 'Companies' },
-  { to: '/system/users', icon: Users, label: 'User Accounts' },
+  { to: '/system/accounts', icon: Users, label: 'Accounts' },
   { to: '/system/devices/pending', icon: Smartphone, label: 'Pending Devices', badge: true },
   { to: '/system/devices', icon: HardDrive, label: 'All Devices' },
   { to: '/system/settings', icon: Settings, label: 'Settings' },

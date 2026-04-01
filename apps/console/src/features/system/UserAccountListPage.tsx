@@ -61,7 +61,7 @@ export function UserAccountListPage() {
         </div>
         <button
           data-testid="user-button-create"
-          onClick={() => navigate('/system/users/new')}
+          onClick={() => navigate('/system/accounts/new')}
           className="flex items-center gap-1.5 px-3 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-md text-[13px] font-medium transition-colors"
         >
           <Plus size={15} />
@@ -140,7 +140,7 @@ export function UserAccountListPage() {
                 <tr
                   data-testid={`user-row-${user.id}`}
                   key={user.id}
-                  onClick={() => navigate(`/system/users/${user.id}`)}
+                  onClick={() => navigate(`/system/accounts/${user.id}`)}
                   className="border-t border-[#1E293B] hover:bg-[#1E293B]/50 cursor-pointer transition-colors"
                 >
                   <td className="py-3 px-4">

@@ -114,8 +114,8 @@ export function CreateUserAccountPage() {
             <p className="text-[11px] text-[#F59E0B] mt-3">⚠ Save these credentials — the password won't be shown again.</p>
           </div>
 
-          <Button className="w-full" onClick={() => navigate('/system/users')}>
-            Go to User Accounts
+          <Button className="w-full" onClick={() => navigate('/system/accounts')}>
+            Go to Accounts
           </Button>
         </div>
       </div>
@@ -128,10 +128,10 @@ export function CreateUserAccountPage() {
         data-testid="create-button-back"
         variant="ghost"
         size="sm"
-        onClick={() => navigate('/system/users')}
+        onClick={() => navigate('/system/accounts')}
         className="mb-4 text-[#94A3B8] hover:text-[#F8FAFC]"
       >
-        <ArrowLeft size={15} /> Back to User Accounts
+        <ArrowLeft size={15} /> Back to Accounts
       </Button>
       <h1 className="text-[20px] font-semibold text-[#F8FAFC] mb-6">Create User Account</h1>
 
@@ -210,7 +210,7 @@ export function CreateUserAccountPage() {
             data-testid="create-button-cancel"
             type="button"
             variant="ghost"
-            onClick={() => navigate('/system/users')}
+            onClick={() => navigate('/system/accounts')}
             className="flex-1"
           >
             Cancel

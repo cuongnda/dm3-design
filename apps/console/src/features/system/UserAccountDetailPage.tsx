@@ -133,7 +133,7 @@ export function UserAccountDetailPage() {
         data-testid="user-button-back"
         variant="ghost"
         size="sm"
-        onClick={() => navigate('/system/users')}
+        onClick={() => navigate('/system/accounts')}
         className="mb-4 text-[#94A3B8] hover:text-[#F8FAFC]"
       >
         <ArrowLeft size={15} /> Back
