@@ -670,8 +670,7 @@ export interface AuditEntryDTO {
 }
 
 export interface CreateAccountRequest {
-  company_name: string;
-  company_code: string;
+  company_id: string;
   admin_email: string;
   plan?: string;
   max_devices?: number;

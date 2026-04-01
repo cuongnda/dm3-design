@@ -54,8 +54,7 @@ type auditEntry struct {
 }
 
 type createAccountRequest struct {
-	CompanyName string  `json:"company_name"`
-	CompanyCode string  `json:"company_code"`
+	CompanyID   string  `json:"company_id"`
 	AdminEmail  string  `json:"admin_email"`
 	Plan        string  `json:"plan,omitempty"`
 	MaxDevices  *int    `json:"max_devices,omitempty"`
@@ -208,8 +207,8 @@ func (h *Handlers) CreateAccount(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.CompanyName == "" || req.CompanyCode == "" || req.AdminEmail == "" {
-		httputil.Error(w, http.StatusBadRequest, "company_name, company_code, and admin_email are required")
+	if req.CompanyID == "" || req.AdminEmail == "" {
+		httputil.Error(w, http.StatusBadRequest, "company_id and admin_email are required")
 		return
 	}
 
@@ -252,16 +251,21 @@ func (h *Handlers) CreateAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 
-	// 1. Create company
-	var companyID string
+	// 1. Verify company exists and doesn't already have an account
+	var companyName string
 	err = tx.QueryRow(r.Context(),
-		`INSERT INTO dm3_auth.companies (name, code, plan, email, max_devices, max_users)
-		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-		req.CompanyName, req.CompanyCode, plan, req.AdminEmail, maxDevices, maxUsers,
-	).Scan(&companyID)
+		`SELECT c.name FROM dm3_auth.companies c
+		 LEFT JOIN dm3_auth.accounts a ON a.company_id = c.id
+		 WHERE c.id = $1::uuid AND a.id IS NULL`,
+		req.CompanyID,
+	).Scan(&companyName)
 	if err != nil {
-		slog.Error("create account: company insert error", "error", err)
-		httputil.Error(w, http.StatusConflict, "company code already exists or invalid data")
+		if err.Error() == "no rows in result set" {
+			httputil.Error(w, http.StatusBadRequest, "company not found or already has an account")
+		} else {
+			slog.Error("create account: company check error", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "database error")
+		}
 		return
 	}
 
@@ -270,7 +274,7 @@ func (h *Handlers) CreateAccount(w http.ResponseWriter, r *http.Request) {
 	err = tx.QueryRow(r.Context(),
 		`INSERT INTO dm3_auth.users (email, password_hash, name, roles, company_id, role, tenant_id, status)
 		 VALUES ($1, $2, $3, $4, $5::uuid, $6, $5::uuid, 'active') RETURNING id`,
-		req.AdminEmail, string(pwHash), req.CompanyName+" Admin", []string{"admin"}, companyID, "primary_manager",
+		req.AdminEmail, string(pwHash), companyName+" Admin", []string{"admin"}, req.CompanyID, "primary_manager",
 	).Scan(&userID)
 	if err != nil {
 		slog.Error("create account: user insert error", "error", err)
@@ -287,7 +291,7 @@ func (h *Handlers) CreateAccount(w http.ResponseWriter, r *http.Request) {
 	err = tx.QueryRow(r.Context(),
 		`INSERT INTO dm3_auth.accounts (company_id, owner_user_id, plan, max_devices, max_users, max_doors, billing_email, subscription_start)
 		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, now()) RETURNING id`,
-		companyID, userID, plan, maxDevices, maxUsers, maxDoors, billingEmail,
+		req.CompanyID, userID, plan, maxDevices, maxUsers, maxDoors, billingEmail,
 	).Scan(&accountID)
 	if err != nil {
 		slog.Error("create account: account insert error", "error", err)
@@ -295,7 +299,19 @@ func (h *Handlers) CreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. Log audit
+	// 4. Update company with new limits
+	_, err = tx.Exec(r.Context(),
+		`UPDATE dm3_auth.companies SET plan = $2, max_devices = $3, max_users = $4, updated_at = now()
+		 WHERE id = $1::uuid`,
+		req.CompanyID, plan, maxDevices, maxUsers,
+	)
+	if err != nil {
+		slog.Error("create account: company update error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "failed to update company limits")
+		return
+	}
+
+	// 5. Log audit
 	actorID := ""
 	if claims != nil {
 		actorID = claims.Sub
@@ -304,7 +320,7 @@ func (h *Handlers) CreateAccount(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO dm3_auth.account_audit_log (account_id, actor_id, action, changes, ip_address)
 		 VALUES ($1::uuid, $2::uuid, 'created', $3, $4)`,
 		accountID, actorID,
-		fmt.Sprintf(`{"company_name":"%s","company_code":"%s","plan":"%s","admin_email":"%s"}`, req.CompanyName, req.CompanyCode, plan, req.AdminEmail),
+		fmt.Sprintf(`{"company_id":"%s","plan":"%s","admin_email":"%s"}`, req.CompanyID, plan, req.AdminEmail),
 		r.RemoteAddr,
 	)
 
