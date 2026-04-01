@@ -631,6 +631,114 @@ export async function suspendCompany(id: string): Promise<void> {
   await apiFetch<void>(`${SYSTEM_URL}/companies/${id}`, { method: 'DELETE' });
 }
 
+// ─── Accounts ───────────────────────────────────────────────
+
+export interface AccountDTO {
+  id: string;
+  company_id: string;
+  company_name: string;
+  company_code: string;
+  owner_user_id?: string;
+  owner_email?: string;
+  owner_name?: string;
+  plan: string;
+  status: string;
+  max_devices: number;
+  max_users: number;
+  max_doors: number;
+  subscription_start?: string;
+  subscription_end?: string;
+  billing_email?: string;
+  billing_info: Record<string, unknown>;
+  settings: Record<string, unknown>;
+  notes?: string;
+  user_count: number;
+  device_count: number;
+  door_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuditEntryDTO {
+  id: string;
+  actor_id?: string;
+  actor_email?: string;
+  action: string;
+  changes: Record<string, unknown>;
+  ip_address?: string;
+  created_at: string;
+}
+
+export interface CreateAccountRequest {
+  company_id: string;
+  admin_email: string;
+  plan?: string;
+  max_devices?: number;
+  max_users?: number;
+  max_doors?: number;
+  billing_email?: string;
+}
+
+export interface CreateAccountResponse {
+  account: AccountDTO;
+  admin: { email: string; password: string; role: string };
+}
+
+export interface UpdateAccountRequest {
+  plan?: string;
+  status?: string;
+  max_devices?: number;
+  max_users?: number;
+  max_doors?: number;
+  billing_email?: string;
+  billing_info?: Record<string, unknown>;
+  settings?: Record<string, unknown>;
+  notes?: string;
+}
+
+export async function fetchAccounts(
+  page = 1,
+  limit = 20,
+  params?: Record<string, string>,
+): Promise<Paginated<AccountDTO>> {
+  const qs = params ? '&' + new URLSearchParams(params).toString() : '';
+  return apiFetch<Paginated<AccountDTO>>(`${SYSTEM_URL}/accounts?page=${page}&limit=${limit}${qs}`);
+}
+
+export async function fetchAccount(id: string): Promise<AccountDTO> {
+  return apiFetch<AccountDTO>(`${SYSTEM_URL}/accounts/${id}`);
+}
+
+export async function createAccount(data: CreateAccountRequest): Promise<CreateAccountResponse> {
+  return apiFetch<CreateAccountResponse>(`${SYSTEM_URL}/accounts`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateAccount(id: string, data: UpdateAccountRequest): Promise<AccountDTO> {
+  return apiFetch<AccountDTO>(`${SYSTEM_URL}/accounts/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function suspendAccount(id: string): Promise<void> {
+  await apiFetch<void>(`${SYSTEM_URL}/accounts/${id}/suspend`, { method: 'POST' });
+}
+
+export async function reactivateAccount(id: string): Promise<void> {
+  await apiFetch<void>(`${SYSTEM_URL}/accounts/${id}/reactivate`, { method: 'POST' });
+}
+
+export async function fetchAccountAudit(
+  id: string,
+  page = 1,
+  limit = 20,
+): Promise<Paginated<AuditEntryDTO>> {
+  return apiFetch<Paginated<AuditEntryDTO>>(`${SYSTEM_URL}/accounts/${id}/audit?page=${page}&limit=${limit}`);
+}
+
 // ─── System Admin Device APIs ────────────────────────────────
 
 export async function fetchSystemDevices(params?: Record<string, string>): Promise<any[]> {

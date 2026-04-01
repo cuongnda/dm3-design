@@ -97,6 +97,14 @@ func main() {
 			sr.Get("/api/v1/system/companies/{id}", h.GetCompany)
 			sr.Put("/api/v1/system/companies/{id}", h.UpdateCompany)
 			sr.Delete("/api/v1/system/companies/{id}", h.DeleteCompany)
+
+			// Account management
+			sr.Get("/api/v1/system/accounts", h.ListUserAccounts)
+			sr.Post("/api/v1/system/accounts", h.CreateUserAccount)
+			sr.Get("/api/v1/system/accounts/{id}", h.GetUserAccount)
+			sr.Patch("/api/v1/system/accounts/{id}", h.UpdateUserAccount)
+			sr.Delete("/api/v1/system/accounts/{id}", h.DeleteUserAccount)
+			sr.Post("/api/v1/system/accounts/{id}/reset-password", h.ResetUserPassword)
 		})
 	})
 
