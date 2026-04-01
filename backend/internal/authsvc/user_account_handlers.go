@@ -199,8 +199,6 @@ func (h *Handlers) GetUserAccount(w http.ResponseWriter, r *http.Request) {
 // ─── Create User Account ─────────────────────────────────────────────────────
 
 func (h *Handlers) CreateUserAccount(w http.ResponseWriter, r *http.Request) {
-	claims := ClaimsFromContext(r.Context())
-
 	var req createUserAccountRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
