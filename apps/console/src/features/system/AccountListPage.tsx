@@ -58,9 +58,14 @@ export function AccountListPage() {
           <h1 className="text-[20px] font-semibold text-[#F8FAFC]">{t('accounts.title')}</h1>
           <p className="text-[13px] text-[#64748B]">{total} {t('accounts.description')}</p>
         </div>
-        <Button data-testid="account-button-create" onClick={() => navigate('/system/accounts/new')}>
-          <Plus size={16} /> {t('accounts.createAccount')}
-        </Button>
+        <button
+          data-testid="account-button-create"
+          onClick={() => navigate('/system/accounts/new')}
+          className="flex items-center gap-1.5 px-3 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-md text-[13px] font-medium transition-colors"
+        >
+          <Plus size={15} />
+          {t('accounts.createAccount')}
+        </button>
       </div>
 
       {/* Filters */}
@@ -75,26 +80,28 @@ export function AccountListPage() {
             className="pl-10"
           />
         </div>
-        <Select
+        <select
           data-testid="account-select-status"
           value={statusFilter}
-          onChange={(value) => {setStatusFilter(value); setPage(1);}}
+          onChange={(e) => {setStatusFilter(e.target.value); setPage(1);}}
+          className="h-9 px-3 bg-[#0B1120] border border-[#1E293B] rounded-md text-[13px] text-[#F8FAFC] focus:border-[#F97316] focus:outline-none"
         >
-          <SelectOption value="">{t('accounts.filters.allStatuses')}</SelectOption>
-          <SelectOption value="active">{t('accounts.filters.active')}</SelectOption>
-          <SelectOption value="suspended">{t('accounts.filters.suspended')}</SelectOption>
-          <SelectOption value="deactivated">{t('accounts.filters.deactivated')}</SelectOption>
-        </Select>
-        <Select
+          <option value="">{t('accounts.filters.allStatuses')}</option>
+          <option value="active">{t('accounts.filters.active')}</option>
+          <option value="suspended">{t('accounts.filters.suspended')}</option>
+          <option value="deactivated">{t('accounts.filters.deactivated')}</option>
+        </select>
+        <select
           data-testid="account-select-plan"
           value={planFilter}
-          onChange={(value) => {setPlanFilter(value); setPage(1);}}
+          onChange={(e) => {setPlanFilter(e.target.value); setPage(1);}}
+          className="h-9 px-3 bg-[#0B1120] border border-[#1E293B] rounded-md text-[13px] text-[#F8FAFC] focus:border-[#F97316] focus:outline-none"
         >
-          <SelectOption value="">{t('accounts.filters.allPlans')}</SelectOption>
-          <SelectOption value="starter">Starter</SelectOption>
-          <SelectOption value="professional">Professional</SelectOption>
-          <SelectOption value="enterprise">Enterprise</SelectOption>
-        </Select>
+          <option value="">{t('accounts.filters.allPlans')}</option>
+          <option value="starter">Starter</option>
+          <option value="professional">Professional</option>
+          <option value="enterprise">Enterprise</option>
+        </select>
       </div>
 
       {/* Table */}

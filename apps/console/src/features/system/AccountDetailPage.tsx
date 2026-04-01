@@ -242,15 +242,16 @@ export function AccountDetailPage() {
               <>
                 <div>
                   <Label>Plan</Label>
-                  <Select
+                  <select
                     data-testid="account-select-editPlan"
                     value={form.plan}
-                    onChange={(value) => setForm(f => ({ ...f, plan: value }))}
+                    onChange={(e) => setForm(f => ({ ...f, plan: e.target.value }))}
+                    className="h-9 w-full rounded-md border px-3 py-1 text-sm bg-[#0B1120] border-[#1E293B] text-[#F8FAFC] focus:border-[#F97316] focus:outline-none focus:ring-1 focus:ring-[#F97316]/20"
                   >
-                    <SelectOption value="starter">Starter</SelectOption>
-                    <SelectOption value="professional">Professional</SelectOption>
-                    <SelectOption value="enterprise">Enterprise</SelectOption>
-                  </Select>
+                    <option value="starter">Starter</option>
+                    <option value="professional">Professional</option>
+                    <option value="enterprise">Enterprise</option>
+                  </select>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>

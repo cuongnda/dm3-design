@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Check, Copy, Building2, AlertCircle } from 'lucide-react';
 import { createAccount, fetchCompanies, fetchAccounts, type CreateAccountResponse, type CompanyDTO, type CreateAccountRequest } from '@/lib/api';
-import { Button, Input, Select, SelectOption, Label } from '@dm3/ui';
+import { Button, Input, Select, SelectOption, Label, ComboBox, type Option } from '@dm3/ui';
 
 export function CreateAccountPage() {
   const navigate = useNavigate();
@@ -36,9 +36,19 @@ export function CreateAccountPage() {
         const availableCompanies = allCompanies.filter(c => !usedCompanyIds.has(c.id));
         setCompanies(availableCompanies);
       })
-      .catch(() => setError('Failed to load companies'))
+      .catch((err) => {
+        console.error('Failed to load companies:', err);
+        setError('Failed to load companies: ' + err.message);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  const companyOptions: Option[] = companies.map(company => ({
+    value: company.id,
+    label: company.name,
+    description: `(${company.code})`,
+    icon: <Building2 size={14} className="text-[#64748B]" />
+  }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,23 +139,14 @@ export function CreateAccountPage() {
               Loading companies...
             </div>
           ) : (
-            <Select
-              data-testid="create-select-company"
+            <ComboBox
+              options={companyOptions}
               value={form.company_id}
-              onChange={(value) => set('company_id', value)}
-              required
-            >
-              <SelectOption value="">Select a company</SelectOption>
-              {companies.map((company) => (
-                <SelectOption key={company.id} value={company.id}>
-                  <div className="flex items-center gap-2">
-                    <Building2 size={14} className="text-[#64748B]" />
-                    <span>{company.name}</span>
-                    <span className="text-[#64748B] text-xs font-mono ml-auto">({company.code})</span>
-                  </div>
-                </SelectOption>
-              ))}
-            </Select>
+              placeholder="Select a company"
+              searchPlaceholder="Search companies..."
+              onValueChange={(value) => set('company_id', value)}
+              disabled={loading}
+            />
           )}
           {companies.length === 0 && !loading && (
             <p className="text-[11px] text-[#64748B] mt-1">All companies already have accounts</p>
@@ -167,15 +168,16 @@ export function CreateAccountPage() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label>{t('accounts.form.plan')}</Label>
-            <Select
+            <select
               data-testid="create-select-plan"
               value={form.plan}
-              onChange={(value) => set('plan', value)}
+              onChange={(e) => set('plan', e.target.value)}
+              className="h-9 w-full rounded-md border px-3 py-1 text-sm bg-[#0B1120] border-[#1E293B] text-[#F8FAFC] focus:border-[#F97316] focus:outline-none focus:ring-1 focus:ring-[#F97316]/20"
             >
-              <SelectOption value="starter">Starter</SelectOption>
-              <SelectOption value="professional">Professional</SelectOption>
-              <SelectOption value="enterprise">Enterprise</SelectOption>
-            </Select>
+              <option value="starter">Starter</option>
+              <option value="professional">Professional</option>
+              <option value="enterprise">Enterprise</option>
+            </select>
           </div>
           <div>
             <Label>{t('accounts.form.billingEmail')}</Label>
