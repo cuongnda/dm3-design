@@ -102,7 +102,7 @@ func (h *Handlers) ListUserAccounts(w http.ResponseWriter, r *http.Request) {
 
 	// Get users
 	query := fmt.Sprintf(`
-		SELECT u.id, u.email, u.name, u.roles, u.role, u.status, u.last_login, u.created_at, u.updated_at
+		SELECT u.id, u.email, u.name, array_to_json(u.roles), u.role, u.status, u.last_login, u.created_at, u.updated_at
 		FROM dm3_auth.users u
 		%s
 		ORDER BY u.created_at DESC
@@ -163,7 +163,7 @@ func (h *Handlers) GetUserAccount(w http.ResponseWriter, r *http.Request) {
 	var u userAccountResponse
 	var roles []byte
 	err := h.db.Pool.QueryRow(r.Context(), `
-		SELECT id, email, name, roles, role, status, last_login, created_at, updated_at
+		SELECT id, email, name, array_to_json(roles), role, status, last_login, created_at, updated_at
 		FROM dm3_auth.users
 		WHERE id = $1::uuid`, id,
 	).Scan(&u.ID, &u.Email, &u.Name, &roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt, &u.UpdatedAt)
@@ -272,7 +272,7 @@ func (h *Handlers) CreateUserAccount(w http.ResponseWriter, r *http.Request) {
 	var u userAccountResponse
 	var roles []byte
 	_ = h.db.Pool.QueryRow(r.Context(), `
-		SELECT id, email, name, roles, role, status, last_login, created_at, updated_at
+		SELECT id, email, name, array_to_json(roles), role, status, last_login, created_at, updated_at
 		FROM dm3_auth.users
 		WHERE id = $1::uuid`, userID,
 	).Scan(&u.ID, &u.Email, &u.Name, &roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt, &u.UpdatedAt)
@@ -355,7 +355,7 @@ func (h *Handlers) UpdateUserAccount(w http.ResponseWriter, r *http.Request) {
 	var u userAccountResponse
 	var roles []byte
 	_ = h.db.Pool.QueryRow(r.Context(), `
-		SELECT id, email, name, roles, role, status, last_login, created_at, updated_at
+		SELECT id, email, name, array_to_json(roles), role, status, last_login, created_at, updated_at
 		FROM dm3_auth.users
 		WHERE id = $1::uuid`, id,
 	).Scan(&u.ID, &u.Email, &u.Name, &roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt, &u.UpdatedAt)
