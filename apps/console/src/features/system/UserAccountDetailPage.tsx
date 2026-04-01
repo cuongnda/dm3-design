@@ -310,7 +310,7 @@ export function UserAccountDetailPage() {
             <h2 className="text-[14px] font-medium text-[#F8FAFC]">Company Assignments</h2>
           </div>
           <div className="p-4">
-            {user.companies.length === 0 ? (
+            {!user.companies || user.companies.length === 0 ? (
               <div className="text-center py-4">
                 {user.role === 'system_admin' ? (
                   <div className="text-[#64748B] text-[12px]">
@@ -323,7 +323,7 @@ export function UserAccountDetailPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {user.companies.map((company) => (
+                {(user.companies || []).map((company) => (
                   <div
                     data-testid={`user-company-${company.company_id}`}
                     key={company.company_id}

@@ -132,6 +132,7 @@ func (h *Handlers) ListUserAccounts(w http.ResponseWriter, r *http.Request) {
 
 	// Load company info for each user
 	for i := range users {
+		users[i].Companies = []userCompanyInfo{} // Initialize empty slice
 		companyRows, err := h.db.Pool.Query(r.Context(), `
 			SELECT uc.company_id, c.name, c.code, uc.role, uc.status
 			FROM dm3_auth.user_companies uc
@@ -177,6 +178,7 @@ func (h *Handlers) GetUserAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load companies
+	u.Companies = []userCompanyInfo{} // Initialize empty slice
 	companyRows, err := h.db.Pool.Query(r.Context(), `
 		SELECT uc.company_id, c.name, c.code, uc.role, uc.status
 		FROM dm3_auth.user_companies uc

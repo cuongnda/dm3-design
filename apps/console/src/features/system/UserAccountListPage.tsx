@@ -167,7 +167,7 @@ export function UserAccountListPage() {
                     </span>
                   </td>
                   <td className="py-3 px-4">
-                    {user.companies.length > 0 ? (
+                    {user.companies && user.companies.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
                         {user.companies.slice(0, 2).map((company, idx) => (
                           <div key={company.company_id} className="flex items-center gap-1 text-[12px] text-[#94A3B8]">
