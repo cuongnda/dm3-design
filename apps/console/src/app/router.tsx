@@ -168,58 +168,61 @@ export const router = createBrowserRouter([
           { path: 'settings', element: <LazyWrap><SystemSettingsPage /></LazyWrap> },
         ],
       },
-      { path: '/', element: <RoleBasedRoute /> },
       {
         path: '/',
-        element: <MainLayout />,
+        element: <RoleBasedRoute />,
         children: [
-      { path: 'alerts', element: <LazyWrap><AlertsPage /></LazyWrap> },
+          {
+            path: '/',
+            element: <MainLayout />,
+            children: [
+              { index: true, element: <DashboardPage /> },
+              { path: 'alerts', element: <LazyWrap><AlertsPage /></LazyWrap> },
 
-      // SECURE
-      { path: 'secure/access-control', element: <LazyWrap><AccessControlPage /></LazyWrap> },
-      { path: 'secure/access-control/rules', element: <LazyWrap><AccessRulesPage /></LazyWrap> },
-      { path: 'secure/access-control/:id', element: <LazyWrap><DoorDetailPage /></LazyWrap> },
-      { path: 'secure/cctv', element: <LazyWrap><CCTVPage /></LazyWrap> },
-      { path: 'secure/cctv/:id', element: <LazyWrap><CameraDetailPage /></LazyWrap> },
-      { path: 'secure/intrusion', element: <LazyWrap><IntrusionPage /></LazyWrap> },
-      { path: 'secure/intercom', element: <LazyWrap><IntercomPage /></LazyWrap> },
-      { path: 'secure/ai-detection', element: <LazyWrap><AIDetectionPage /></LazyWrap> },
-      { path: 'secure/emergency', element: <LazyWrap><EmergencyPage /></LazyWrap> },
+              // SECURE
+              { path: 'secure/access-control', element: <LazyWrap><AccessControlPage /></LazyWrap> },
+              { path: 'secure/access-control/rules', element: <LazyWrap><AccessRulesPage /></LazyWrap> },
+              { path: 'secure/access-control/:id', element: <LazyWrap><DoorDetailPage /></LazyWrap> },
+              { path: 'secure/cctv', element: <LazyWrap><CCTVPage /></LazyWrap> },
+              { path: 'secure/cctv/:id', element: <LazyWrap><CameraDetailPage /></LazyWrap> },
+              { path: 'secure/intrusion', element: <LazyWrap><IntrusionPage /></LazyWrap> },
+              { path: 'secure/intercom', element: <LazyWrap><IntercomPage /></LazyWrap> },
+              { path: 'secure/ai-detection', element: <LazyWrap><AIDetectionPage /></LazyWrap> },
+              { path: 'secure/emergency', element: <LazyWrap><EmergencyPage /></LazyWrap> },
 
-      // MANAGE
-      { path: 'manage/identities', element: <LazyWrap><IdentitiesPage /></LazyWrap> },
-      { path: 'manage/identities/:id', element: <LazyWrap><PersonDetailPage /></LazyWrap> },
-      { path: 'manage/identities/groups', element: <LazyWrap><GroupsPage /></LazyWrap> },
-      { path: 'manage/visitors', element: <LazyWrap><VisitorsPage /></LazyWrap> },
-      { path: 'manage/contractors', element: <LazyWrap><ContractorsPage /></LazyWrap> },
-      { path: 'manage/attendance', element: <LazyWrap><AttendancePage /></LazyWrap> },
-      { path: 'manage/deliveries', element: <LazyWrap><DeliveriesPage /></LazyWrap> },
-      { path: 'manage/provisioning', element: <LazyWrap><ProvisioningPage /></LazyWrap> },
+              // MANAGE
+              { path: 'manage/identities', element: <LazyWrap><IdentitiesPage /></LazyWrap> },
+              { path: 'manage/identities/:id', element: <LazyWrap><PersonDetailPage /></LazyWrap> },
+              { path: 'manage/identities/groups', element: <LazyWrap><GroupsPage /></LazyWrap> },
+              { path: 'manage/visitors', element: <LazyWrap><VisitorsPage /></LazyWrap> },
+              { path: 'manage/contractors', element: <LazyWrap><ContractorsPage /></LazyWrap> },
+              { path: 'manage/attendance', element: <LazyWrap><AttendancePage /></LazyWrap> },
+              { path: 'manage/deliveries', element: <LazyWrap><DeliveriesPage /></LazyWrap> },
+              { path: 'manage/provisioning', element: <LazyWrap><ProvisioningPage /></LazyWrap> },
 
-      // OPERATE
-      { path: 'operate/room-booking', element: <LazyWrap><RoomBookingPage /></LazyWrap> },
-      { path: 'operate/parking', element: <LazyWrap><ParkingPage /></LazyWrap> },
-      { path: 'operate/maintenance', element: <LazyWrap><MaintenancePage /></LazyWrap> },
-      { path: 'operate/guard-tour', element: <LazyWrap><GuardTourPage /></LazyWrap> },
-      { path: 'operate/keys', element: <LazyWrap><KeyManagementPage /></LazyWrap> },
-      { path: 'operate/iot-energy', element: <LazyWrap><IoTEnergyPage /></LazyWrap> },
+              // OPERATE
+              { path: 'operate/room-booking', element: <LazyWrap><RoomBookingPage /></LazyWrap> },
+              { path: 'operate/parking', element: <LazyWrap><ParkingPage /></LazyWrap> },
+              { path: 'operate/maintenance', element: <LazyWrap><MaintenancePage /></LazyWrap> },
+              { path: 'operate/guard-tour', element: <LazyWrap><GuardTourPage /></LazyWrap> },
+              { path: 'operate/keys', element: <LazyWrap><KeyManagementPage /></LazyWrap> },
+              { path: 'operate/iot-energy', element: <LazyWrap><IoTEnergyPage /></LazyWrap> },
 
-      // SMART
-      { path: 'smart/ai-assistant', element: <LazyWrap><AIAssistantPage /></LazyWrap> },
-      { path: 'smart/analytics', element: <LazyWrap><AnalyticsPage /></LazyWrap> },
-      { path: 'smart/automation', element: <LazyWrap><AutomationPage /></LazyWrap> },
+              // SMART
+              { path: 'smart/ai-assistant', element: <LazyWrap><AIAssistantPage /></LazyWrap> },
+              { path: 'smart/analytics', element: <LazyWrap><AnalyticsPage /></LazyWrap> },
+              { path: 'smart/automation', element: <LazyWrap><AutomationPage /></LazyWrap> },
 
-      // DEVICES
-      { path: 'devices', element: <LazyWrap><DevicesPage /></LazyWrap> },
-      { path: 'devices/pending', element: <LazyWrap><PendingDevicesPage /></LazyWrap> },
-      { path: 'devices/provision', element: <LazyWrap><ProvisionDevicePage /></LazyWrap> },
-      { path: 'devices/:id', element: <LazyWrap><DeviceDetailPage /></LazyWrap> },
+              // DEVICES
+              { path: 'devices', element: <LazyWrap><DevicesPage /></LazyWrap> },
+              { path: 'devices/pending', element: <LazyWrap><PendingDevicesPage /></LazyWrap> },
+              { path: 'devices/provision', element: <LazyWrap><ProvisionDevicePage /></LazyWrap> },
+              { path: 'devices/:id', element: <LazyWrap><DeviceDetailPage /></LazyWrap> },
 
-      // SETTINGS
-      { path: 'settings', element: <LazyWrap><SettingsPage /></LazyWrap> },
-
-      // DASHBOARD (for company users)
-      { index: true, element: <DashboardPage /> },
+              // SETTINGS
+              { path: 'settings', element: <LazyWrap><SettingsPage /></LazyWrap> },
+            ],
+          },
         ],
       },
     ],
