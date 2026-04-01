@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { CreditCard, Plus, Search, X, Check, Building2 } from 'lucide-react';
-import { fetchAccounts, createAccount, fetchCompanies, type AccountDTO, type CreateAccountRequest, type CompanyDTO, type CreateAccountResponse } from '@/lib/api';
-import { Button, Input, Select, SelectOption, Label } from '@dm3/ui';
+import { CreditCard, Plus, Search } from 'lucide-react';
+import { fetchAccounts, type AccountDTO } from '@/lib/api';
+import { Button, Input, Select, SelectOption } from '@dm3/ui';
 
 const statusColors: Record<string, string> = {
   active: 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/20',
@@ -27,9 +27,8 @@ export function AccountListPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [planFilter, setPlanFilter] = useState('');
   const [page, setPage] = useState(1);
-  const [showCreate, setShowCreate] = useState(false);
 
-  const loadAccounts = () => {
+  const loadAccounts = useCallback(() => {
     setLoading(true);
     const params: Record<string, string> = {};
     if (search) params.search = search;
@@ -43,11 +42,11 @@ export function AccountListPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  };
+  }, [page, search, statusFilter, planFilter]);
 
   useEffect(() => {
     loadAccounts();
-  }, [search, statusFilter, planFilter, page]);
+  }, [loadAccounts]);
 
   const totalPages = Math.ceil(total / 20);
 
@@ -59,7 +58,7 @@ export function AccountListPage() {
           <h1 className="text-[20px] font-semibold text-[#F8FAFC]">{t('accounts.title')}</h1>
           <p className="text-[13px] text-[#64748B]">{total} {t('accounts.description')}</p>
         </div>
-        <Button data-testid="account-button-create" onClick={() => setShowCreate(true)}>
+        <Button data-testid="account-button-create" onClick={() => navigate('/system/accounts/new')}>
           <Plus size={16} /> {t('accounts.createAccount')}
         </Button>
       </div>
@@ -191,244 +190,6 @@ export function AccountListPage() {
         </div>
       )}
 
-      {/* Create Modal */}
-      {showCreate && (
-        <CreateAccountModal
-          onClose={() => setShowCreate(false)}
-          onCreated={() => {
-            setShowCreate(false);
-            loadAccounts();
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-interface CreateAccountModalProps {
-  onClose: () => void;
-  onCreated: () => void;
-}
-
-function CreateAccountModal({ onClose, onCreated }: CreateAccountModalProps) {
-  const { t } = useTranslation('system');
-  const [companies, setCompanies] = useState<CompanyDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [result, setResult] = useState<CreateAccountResponse | null>(null);
-  
-  const [form, setForm] = useState<CreateAccountRequest>({
-    company_id: '',
-    admin_email: '',
-    plan: 'starter',
-    max_devices: 50,
-    max_users: 20,
-    max_doors: 10,
-    billing_email: '',
-  });
-
-  const set = (k: string, v: string | number) => setForm(f => ({ ...f, [k]: v }));
-
-  // Load companies without existing accounts
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([fetchCompanies(), fetchAccounts(1, 1000)])
-      .then(([allCompanies, accountsRes]) => {
-        const usedCompanyIds = new Set(accountsRes.data.map(a => a.company_id));
-        const availableCompanies = allCompanies.filter(c => !usedCompanyIds.has(c.id));
-        setCompanies(availableCompanies);
-      })
-      .catch(() => setError('Failed to load companies'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.company_id || !form.admin_email) {
-      setError('Company and admin email are required');
-      return;
-    }
-    
-    setSubmitting(true);
-    setError('');
-    try {
-      const res = await createAccount(form);
-      setResult(res);
-    } catch (err: any) {
-      setError(err.message || 'Failed to create account');
-    }
-    setSubmitting(false);
-  };
-
-  // Success view
-  if (result) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div className="p-6 max-w-lg mx-auto">
-          <div className="border border-[#1E293B] rounded-lg p-6 bg-[#111827]">
-            <div className="w-12 h-12 rounded-full bg-[#22C55E]/10 flex items-center justify-center mx-auto mb-4">
-              <Check size={24} className="text-[#22C55E]" />
-            </div>
-            <h2 className="text-[18px] font-semibold text-[#F8FAFC] text-center mb-1">Account Created</h2>
-            <p className="text-[13px] text-[#64748B] text-center mb-6">
-              <span className="text-[#F8FAFC] font-medium">{result.account.company_name}</span> account has been set up successfully.
-            </p>
-
-            <div className="bg-[#0B1120] border border-[#F97316]/30 rounded-md p-4 mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] uppercase tracking-wider text-[#F97316] font-medium">Admin Credentials</span>
-              </div>
-              <div className="space-y-1.5 text-[13px]">
-                <div><span className="text-[#64748B]">Email:</span> <span data-testid="account-label-gen-email" className="text-[#F8FAFC] font-mono">{result.admin.email}</span></div>
-                <div><span className="text-[#64748B]">Password:</span> <span data-testid="account-label-gen-password" className="text-[#F8FAFC] font-mono">{result.admin.password}</span></div>
-              </div>
-              <p className="text-[11px] text-[#F59E0B] mt-3">⚠ Save these credentials — the password won't be shown again.</p>
-            </div>
-
-            <Button data-testid="account-button-done" className="w-full" onClick={() => { onCreated(); onClose(); }}>
-              Go to Accounts
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-[#111827] border border-[#1E293B] rounded-lg w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-[18px] font-semibold text-[#F8FAFC]">{t('accounts.createAccount')}</h2>
-          <Button data-testid="account-button-closeModal" variant="ghost" size="icon" onClick={onClose}>
-            <X size={18} />
-          </Button>
-        </div>
-
-        {error && (
-          <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-md p-3 mb-4 flex items-center gap-2">
-            <AlertCircle size={16} className="text-[#EF4444]" />
-            <span className="text-[13px] text-[#EF4444]">{error}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <Label>{t('accounts.form.company')} *</Label>
-            <Select
-              data-testid="account-select-company"
-              value={form.company_id}
-              onChange={(value) => set('company_id', value)}
-              disabled={loading}
-            >
-              <SelectOption value="">
-                {loading ? 'Loading companies...' : 'Select a company'}
-              </SelectOption>
-              {companies.map((company) => (
-                <SelectOption key={company.id} value={company.id}>
-                  <div className="flex items-center gap-2">
-                    <Building2 size={14} className="text-[#64748B]" />
-                    <span>{company.name}</span>
-                    <span className="text-[#64748B] text-xs font-mono ml-auto">({company.code})</span>
-                  </div>
-                </SelectOption>
-              ))}
-            </Select>
-            {companies.length === 0 && !loading && (
-              <p className="text-[11px] text-[#64748B] mt-1">All companies already have accounts</p>
-            )}
-          </div>
-
-          <div>
-            <Label>{t('accounts.form.adminEmail')} *</Label>
-            <Input
-              data-testid="account-input-adminEmail"
-              type="email"
-              value={form.admin_email}
-              onChange={(e) => set('admin_email', e.target.value)}
-              placeholder="admin@company.com"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>{t('accounts.form.plan')}</Label>
-              <Select
-                data-testid="account-select-plan"
-                value={form.plan}
-                onChange={(value) => set('plan', value)}
-              >
-                <SelectOption value="starter">Starter</SelectOption>
-                <SelectOption value="professional">Professional</SelectOption>
-                <SelectOption value="enterprise">Enterprise</SelectOption>
-              </Select>
-            </div>
-            <div>
-              <Label>{t('accounts.form.billingEmail')}</Label>
-              <Input
-                data-testid="account-input-billingEmail"
-                type="email"
-                value={form.billing_email || ''}
-                onChange={(e) => set('billing_email', e.target.value)}
-                placeholder="billing@company.com"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <Label>{t('accounts.form.maxUsers')}</Label>
-              <Input
-                data-testid="account-input-maxUsers"
-                type="number"
-                min="1"
-                value={form.max_users}
-                onChange={(e) => set('max_users', parseInt(e.target.value) || 20)}
-              />
-            </div>
-            <div>
-              <Label>{t('accounts.form.maxDevices')}</Label>
-              <Input
-                data-testid="account-input-maxDevices"
-                type="number"
-                min="1"
-                value={form.max_devices}
-                onChange={(e) => set('max_devices', parseInt(e.target.value) || 50)}
-              />
-            </div>
-            <div>
-              <Label>{t('accounts.form.maxDoors')}</Label>
-              <Input
-                data-testid="account-input-maxDoors"
-                type="number"
-                min="1"
-                value={form.max_doors}
-                onChange={(e) => set('max_doors', parseInt(e.target.value) || 10)}
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <Button
-              data-testid="account-button-cancel"
-              type="button"
-              variant="ghost"
-              onClick={onClose}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-            <Button
-              data-testid="account-button-submit"
-              type="submit"
-              disabled={submitting || !form.company_id || !form.admin_email}
-              className="flex-1"
-            >
-              {submitting ? 'Creating...' : t('accounts.createAccount')}
-            </Button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 }

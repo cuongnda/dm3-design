@@ -11,6 +11,7 @@ import { CompanyDetailPage } from '@/features/system/CompanyDetailPage';
 import { SystemDevicesPage } from '@/features/system/SystemDevicesPage';
 import { AccountListPage } from '@/features/system/AccountListPage';
 import { AccountDetailPage } from '@/features/system/AccountDetailPage';
+import { CreateAccountPage } from '@/features/system/CreateAccountPage';
 import { ProtectedRoute } from './ProtectedRoute';
 
 // Lazy-loaded feature modules
@@ -159,6 +160,7 @@ export const router = createBrowserRouter([
           { path: 'companies/new', element: <CreateCompanyPage /> },
           { path: 'companies/:id', element: <CompanyDetailPage /> },
           { path: 'accounts', element: <AccountListPage /> },
+          { path: 'accounts/new', element: <CreateAccountPage /> },
           { path: 'accounts/:id', element: <AccountDetailPage /> },
           { path: 'devices/pending', element: <LazyWrap><PendingDevicesPage isSystemAdmin={true} /></LazyWrap> },
           { path: 'devices', element: <SystemDevicesPage /> },
