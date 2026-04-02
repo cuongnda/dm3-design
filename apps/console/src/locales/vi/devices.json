@@ -3,6 +3,7 @@
   "devices.description": "Quản lý thiết bị và cảm biến kết nối",
   "devices.addDevice": "+ Thêm thiết bị",
   "devices.searchPlaceholder": "🔍 Tìm kiếm thiết bị...",
+  "devices.filter.allCompanies": "Tất cả công ty",
   "devices.tabs.all": "Tất cả thiết bị",
   "devices.tabs.online": "Trực tuyến",
   "devices.tabs.offline": "Ngoại tuyến",

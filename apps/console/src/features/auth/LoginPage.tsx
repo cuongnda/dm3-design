@@ -5,7 +5,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { login as apiLogin, loginStep2, setToken } from '@/lib/api';
 import type { LoginCompany, LoginUser } from '@/lib/api';
 import { Eye, EyeOff, Building2, ChevronRight } from 'lucide-react';
-import { LanguageSwitcher } from '@dm3/ui';
+import { LanguageSwitcher, Button, Input } from '@dm3/ui';
 
 type LoginStep = 'credentials' | 'select_company';
 
@@ -95,25 +95,25 @@ export function LoginPage() {
 
   const roleBadgeColor = (role: string) => {
     const colors: Record<string, string> = {
-      primary_manager: 'bg-[#7C3AED]/20 text-[#A78BFA] border-[#7C3AED]/30',
-      manager: 'bg-[#2563EB]/20 text-[#60A5FA] border-[#2563EB]/30',
-      operator: 'bg-[#059669]/20 text-[#34D399] border-[#059669]/30',
-      viewer: 'bg-[#64748B]/20 text-[#94A3B8] border-[#64748B]/30',
-      admin: 'bg-[#DC2626]/20 text-[#F87171] border-[#DC2626]/30',
+      primary_manager: 'bg-manage/20 text-manage border-manage/30',
+      manager: 'bg-secure/20 text-secure border-secure/30',
+      operator: 'bg-success/20 text-success border-success/30',
+      viewer: 'bg-muted text-muted-foreground border-border',
+      admin: 'bg-error/20 text-error border-error/30',
     };
     return colors[role] || colors.viewer;
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0E1A] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-[400px]">
         {/* Logo */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 bg-[#3B82F6] rotate-45 rounded-[6px]" />
+            <div className="w-8 h-8 bg-secure rotate-45 rounded-[6px]" />
           </div>
-          <h1 className="text-[20px] font-semibold text-[#F8FAFC] tracking-tight">DUALL MASTER 3.0</h1>
-          <p className="text-[13px] text-[#64748B] mt-1">{t('buildingOperatingSystem')}</p>
+          <h1 className="text-[20px] font-semibold text-foreground tracking-tight">DUALL MASTER 3.0</h1>
+          <p className="text-[13px] text-muted-foreground mt-1">{t('buildingOperatingSystem')}</p>
         </div>
 
         {/* Step 1: Credentials */}
@@ -126,49 +126,48 @@ export function LoginPage() {
         >
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && step === 'credentials' && (
-              <div className="px-3 py-2 bg-[#7F1D1D]/20 border border-[#EF4444]/30 rounded-md text-[#EF4444] text-[13px]">
+              <div className="px-3 py-2 bg-error/10 border border-error/30 rounded-md text-error text-[13px]">
                 {error}
               </div>
             )}
             <div>
-              <input
+              <Input
                 data-testid="login-input-email"
                 type="email"
                 placeholder={t('email')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full h-9 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:border-[#3B82F6] focus:outline-none focus:ring-1 focus:ring-[#3B82F6]/20"
               />
             </div>
             <div className="relative">
-              <input
+              <Input
                 data-testid="login-input-password"
                 type={showPass ? 'text' : 'password'}
                 placeholder={t('password')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full h-9 px-3 pr-10 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:border-[#3B82F6] focus:outline-none focus:ring-1 focus:ring-[#3B82F6]/20"
+                className="pr-10"
               />
               <button
                 data-testid="login-button-show-password"
                 type="button"
                 onClick={() => setShowPass(!showPass)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#94A3B8]"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
 
-            <label className="flex items-center gap-2 text-[12px] text-[#94A3B8]">
-              <input type="checkbox" className="rounded border-[#334155]" />
+            <label className="flex items-center gap-2 text-[12px] text-muted-foreground cursor-pointer">
+              <input type="checkbox" className="rounded border-border" />
               {t('rememberDevice')}
             </label>
 
-            <button
+            <Button
               data-testid="login-button-submit"
               type="submit"
               disabled={loading}
-              className="w-full h-9 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-[14px] font-medium transition-colors disabled:opacity-60"
+              className="w-full"
             >
               {loading ? (
                 <span className="inline-flex items-center gap-2">
@@ -178,26 +177,23 @@ export function LoginPage() {
               ) : (
                 t('signIn')
               )}
-            </button>
+            </Button>
 
             <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-[#334155]" />
+                <div className="w-full border-t border-border" />
               </div>
               <div className="relative flex justify-center text-[12px]">
-                <span className="bg-[#0A0E1A] px-3 text-[#64748B]">{t('orContinueWith')}</span>
+                <span className="bg-background px-3 text-muted-foreground">{t('orContinueWith')}</span>
               </div>
             </div>
 
-            <button
-              type="button"
-              className="w-full h-9 bg-[#1E293B] hover:bg-[#334155] border border-[#334155] text-[#F8FAFC] rounded-md text-[13px] font-medium transition-colors"
-            >
+            <Button type="button" variant="outline" className="w-full">
               {t('signInWithSSO')}
-            </button>
+            </Button>
 
             <div className="text-center mt-4">
-              <a href="#" className="text-[12px] text-[#3B82F6] hover:underline">
+              <a href="#" className="text-[12px] text-primary hover:underline">
                 {t('forgotPassword')}
               </a>
             </div>
@@ -214,18 +210,18 @@ export function LoginPage() {
         >
           {user && (
             <div className="text-center mb-6">
-              <div className="w-12 h-12 mx-auto mb-3 bg-[#1E293B] border border-[#334155] rounded-full flex items-center justify-center text-[#F8FAFC] text-[16px] font-semibold">
+              <div className="w-12 h-12 mx-auto mb-3 bg-card border border-border rounded-full flex items-center justify-center text-foreground text-[16px] font-semibold">
                 {(user.name || user.email).slice(0, 2).toUpperCase()}
               </div>
-              <p className="text-[14px] text-[#F8FAFC]">
+              <p className="text-[14px] text-foreground">
                 {t('loggingInAs')} <span className="font-medium">{user.name || user.email}</span>
               </p>
-              <p className="text-[12px] text-[#64748B] mt-1">{t('selectCompany')}</p>
+              <p className="text-[12px] text-muted-foreground mt-1">{t('selectCompany')}</p>
             </div>
           )}
 
           {error && step === 'select_company' && (
-            <div className="px-3 py-2 mb-4 bg-[#7F1D1D]/20 border border-[#EF4444]/30 rounded-md text-[#EF4444] text-[13px]">
+            <div className="px-3 py-2 mb-4 bg-error/10 border border-error/30 rounded-md text-error text-[13px]">
               {error}
             </div>
           )}
@@ -235,19 +231,20 @@ export function LoginPage() {
               <button
                 data-testid={`login-button-company-${company.id}`}
                 key={company.id}
+                type="button"
                 onClick={() => handleSelectCompany(company.id)}
                 disabled={selectingId !== null}
-                className="w-full flex items-center gap-3 p-3 bg-[#111827] hover:bg-[#1E293B] border border-[#334155] hover:border-[#3B82F6]/50 rounded-lg transition-all text-left group disabled:opacity-60"
+                className="w-full flex items-center gap-3 p-3 bg-card hover:bg-muted border border-border hover:border-secure/50 rounded-lg transition-all text-left group disabled:opacity-60 cursor-pointer"
               >
-                <div className="w-10 h-10 bg-[#1E293B] group-hover:bg-[#334155] border border-[#334155] rounded-lg flex items-center justify-center shrink-0 transition-colors">
+                <div className="w-10 h-10 bg-muted border border-border rounded-lg flex items-center justify-center shrink-0 transition-colors">
                   {company.logo_url ? (
                     <img src={company.logo_url} alt="" className="w-6 h-6 rounded" />
                   ) : (
-                    <Building2 size={18} className="text-[#64748B]" />
+                    <Building2 size={18} className="text-muted-foreground" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-[#F8FAFC] truncate">{company.name}</p>
+                  <p className="text-[13px] font-medium text-foreground truncate">{company.name}</p>
                   <span
                     className={`inline-block mt-1 px-1.5 py-0.5 text-[10px] font-medium rounded border ${roleBadgeColor(company.role)}`}
                   >
@@ -255,24 +252,25 @@ export function LoginPage() {
                   </span>
                 </div>
                 {selectingId === company.id ? (
-                  <span className="w-4 h-4 border-2 border-[#3B82F6]/30 border-t-[#3B82F6] rounded-full animate-spin shrink-0" />
+                  <span className="w-4 h-4 border-2 border-secure/30 border-t-secure rounded-full animate-spin shrink-0" />
                 ) : (
-                  <ChevronRight size={16} className="text-[#64748B] group-hover:text-[#94A3B8] shrink-0" />
+                  <ChevronRight size={16} className="text-muted-foreground group-hover:text-foreground shrink-0" />
                 )}
               </button>
             ))}
           </div>
 
           <button
+            type="button"
             onClick={handleBack}
-            className="w-full mt-4 text-[12px] text-[#64748B] hover:text-[#94A3B8] transition-colors"
+            className="w-full mt-4 text-[12px] text-muted-foreground hover:text-foreground transition-colors"
           >
             {t('backToLogin')}
           </button>
         </div>
 
         {/* Footer */}
-        <div className="mt-10 flex items-center justify-between text-[12px] text-[#64748B] border-t border-[#1E293B] pt-4">
+        <div className="mt-10 flex items-center justify-between text-[12px] text-muted-foreground border-t border-border pt-4">
           <span>Building: Landmark 81 ▾</span>
           <LanguageSwitcher />
         </div>

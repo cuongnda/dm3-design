@@ -17,6 +17,16 @@ export * from './components/ui/sheet';
 export * from './components/ui/table';
 export * from './components/ui/tabs';
 export * from './components/ui/tooltip';
+export * from './components/ui/textarea';
+
+// Inputs / pickers
+export * from './components/ui/date-picker';
+export * from './components/ui/date-range-picker';
+export * from './components/ui/datetime-picker';
+export * from './components/ui/datetime-range-picker';
+export * from './components/ui/multiselect';
+export * from './components/ui/popover';
+export * from './components/ui/calendar';
 
 // Common Components
 export * from './components/common/DataTable';

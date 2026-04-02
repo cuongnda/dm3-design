@@ -1,6 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PageHeader } from '@dm3/ui';
+import {
+  Button,
+  Input,
+  PageHeader,
+  Select,
+  SelectOption,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@dm3/ui';
 import { fetchCompanies, type PendingDevice, type CompanyDTO } from '@/lib/api';
 import { usePendingDevices, useApprovePendingDevice, useRejectPendingDevice } from '@/lib/hooks';
 import { RefreshCw } from 'lucide-react';
@@ -73,91 +85,113 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
     return `${Math.floor(hrs / 24)}d ago`;
   };
 
-  const inputCls = 'h-7 px-2 bg-[#111827] border border-[#1E293B] rounded text-[12px] text-[#F8FAFC] placeholder:text-[#475569] focus:border-[#3B82F6] focus:outline-none';
+  const inputCls =
+    'h-7 px-2 text-[12px] bg-input border-border text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]';
 
   return (
     <div className={isSystemAdmin ? 'p-6' : ''}>
       <PageHeader title={t('pendingDevices.title')} description={t('pendingDevices.description')}>
-        <button onClick={() => loadData()} className="flex items-center gap-1 px-3 py-1.5 bg-[#1E293B] hover:bg-[#334155] text-[#94A3B8] rounded-md text-[12px] border border-[#334155] transition-colors">
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
-        </button>
+        <Button variant="outline" size="sm" onClick={() => loadData()} className="gap-2">
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
+        </Button>
       </PageHeader>
 
-      <div className="border border-[#1E293B] rounded-lg overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-[#111827] text-[11px] text-[#64748B] uppercase tracking-wider">
-              <th className="text-left py-2.5 px-4 font-medium">{t('pendingDevices.table.rid')}</th>
-              <th className="text-left py-2.5 px-4 font-medium">{t('pendingDevices.table.type')}</th>
-              <th className="text-left py-2.5 px-4 font-medium">{t('pendingDevices.table.firmware')}</th>
-              <th className="text-left py-2.5 px-4 font-medium">{t('pendingDevices.table.signature')}</th>
-              <th className="text-left py-2.5 px-4 font-medium">{t('pendingDevices.table.requested')}</th>
-              {isSystemAdmin && <th className="text-left py-2.5 px-4 font-medium">{t('devices.table.company')}</th>}
-              <th className="text-left py-2.5 px-4 font-medium">{t('pendingDevices.table.name')}</th>
-              <th className="text-right py-2.5 px-4 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="rounded-lg border border-border bg-card overflow-hidden">
+        <Table>
+          <TableHeader className="bg-muted/30">
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="px-4 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{t('pendingDevices.table.rid')}</TableHead>
+              <TableHead className="px-4 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{t('pendingDevices.table.type')}</TableHead>
+              <TableHead className="px-4 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{t('pendingDevices.table.firmware')}</TableHead>
+              <TableHead className="px-4 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{t('pendingDevices.table.signature')}</TableHead>
+              <TableHead className="px-4 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{t('pendingDevices.table.requested')}</TableHead>
+              {isSystemAdmin && (
+                <TableHead className="px-4 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{t('devices.table.company')}</TableHead>
+              )}
+              <TableHead className="px-4 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{t('pendingDevices.table.name')}</TableHead>
+              <TableHead className="px-4 text-[11px] uppercase tracking-wider text-muted-foreground font-medium text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {loading ? (
-              <tr>
-                <td colSpan={isSystemAdmin ? 8 : 7} className="py-12 text-center">
-                  <div className="w-5 h-5 border-2 border-[#3B82F6]/30 border-t-[#3B82F6] rounded-full animate-spin mx-auto" />
-                </td>
-              </tr>
+              <TableRow>
+                <TableCell colSpan={isSystemAdmin ? 8 : 7} className="py-12 text-center">
+                  <div className="w-5 h-5 border-2 border-ring/30 border-t-ring rounded-full animate-spin mx-auto" />
+                </TableCell>
+              </TableRow>
             ) : devices.length === 0 ? (
-              <tr>
-                <td colSpan={isSystemAdmin ? 8 : 7} className="py-12 text-center text-[13px] text-[#64748B]">
+              <TableRow>
+                <TableCell colSpan={isSystemAdmin ? 8 : 7} className="py-12 text-center text-[13px] text-muted-foreground">
                   No pending registrations
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : (
               devices.map((d) => (
-                <tr key={d.id} className="border-t border-[#1E293B]">
-                  <td className="py-2.5 px-4 text-[13px] text-[#F8FAFC] font-mono">{d.rid}</td>
-                  <td className="py-2.5 px-4 text-[13px] text-[#94A3B8]">{d.device_type}</td>
-                  <td className="py-2.5 px-4 text-[13px] text-[#94A3B8] font-mono">{d.firmware_version || '—'}</td>
-                  <td className="py-2.5 px-4">
+                <TableRow key={d.id}>
+                  <TableCell className="px-4 text-[13px] font-mono text-foreground">{d.rid}</TableCell>
+                  <TableCell className="px-4 text-[13px] text-muted-foreground">{d.device_type}</TableCell>
+                  <TableCell className="px-4 text-[13px] text-muted-foreground font-mono">{d.firmware_version || '—'}</TableCell>
+                  <TableCell className="px-4">
                     {d.signature_verified ? (
-                      <span className="inline-block px-2 py-0.5 rounded text-[11px] font-medium bg-[#22C55E]/10 text-[#22C55E]">✅ {t('pendingDevices.signature.verified')}</span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                        ✅ {t('pendingDevices.signature.verified')}
+                      </span>
                     ) : (
-                      <span className="inline-block px-2 py-0.5 rounded text-[11px] font-medium bg-[#EAB308]/10 text-[#EAB308]">⚠️ {t('pendingDevices.signature.unverified')}</span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                        ⚠️ {t('pendingDevices.signature.unverified')}
+                      </span>
                     )}
-                  </td>
-                  <td className="py-2.5 px-4 text-[13px] text-[#64748B]">{timeAgo(d.created_at)}</td>
+                  </TableCell>
+                  <TableCell className="px-4 text-[13px] text-muted-foreground">{timeAgo(d.created_at)}</TableCell>
                   {isSystemAdmin && (
-                    <td className="py-2.5 px-4">
-                      <select value={rowState[d.id]?.company_id || ''} onChange={(e) => updateRow(d.id, 'company_id', e.target.value)} className={`${inputCls} w-36`}>
-                        <option value="">Select...</option>
-                        {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </td>
+                    <TableCell className="px-4">
+                      <Select
+                        value={rowState[d.id]?.company_id || ''}
+                        onChange={(e) => updateRow(d.id, 'company_id', e.target.value)}
+                        className={`${inputCls} w-36`}
+                      >
+                        <SelectOption value="">Select...</SelectOption>
+                        {companies.map((c) => (
+                          <SelectOption key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectOption>
+                        ))}
+                      </Select>
+                    </TableCell>
                   )}
-                  <td className="py-2.5 px-4">
-                    <input value={rowState[d.id]?.name || ''} onChange={(e) => updateRow(d.id, 'name', e.target.value)} placeholder="Device name" className={`${inputCls} w-36`} />
-                  </td>
-                  <td className="py-2.5 px-4 text-right">
-                    <div className="flex justify-end gap-1">
-                      <button
+                  <TableCell className="px-4">
+                    <Input
+                      value={rowState[d.id]?.name || ''}
+                      onChange={(e) => updateRow(d.id, 'name', e.target.value)}
+                      placeholder="Device name"
+                      className={`${inputCls} w-36`}
+                    />
+                  </TableCell>
+                  <TableCell className="px-4 text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="xs"
                         onClick={() => handleApprove(d)}
                         disabled={approveDevice.isPending || rejectDevice.isPending || !rowState[d.id]?.name || (isSystemAdmin && !rowState[d.id]?.company_id)}
-                        className="px-2.5 py-1 rounded text-[11px] font-medium bg-[#22C55E] hover:bg-[#16A34A] text-white disabled:opacity-40 transition-colors"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
                       >
                         {approveDevice.isPending ? 'Approving...' : t('pendingDevices.actions.approve')}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        size="xs"
                         onClick={() => handleReject(d)}
                         disabled={approveDevice.isPending || rejectDevice.isPending}
-                        className="px-2.5 py-1 rounded text-[11px] font-medium bg-[#EF4444] hover:bg-[#DC2626] text-white disabled:opacity-40 transition-colors"
+                        className="bg-red-600 hover:bg-red-700 text-white"
                       >
                         {rejectDevice.isPending ? 'Rejecting...' : t('pendingDevices.actions.reject')}
-                      </button>
+                      </Button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getToken, clearToken, apiFetch } from '@/lib/api';
+import i18n from '@/i18n';
 
 interface User {
   id: string;
@@ -17,6 +18,7 @@ interface MeResponse {
   name?: string | null;
   role?: string | null;
   company_id?: string | null;
+  preferred_language?: string | null;
 }
 
 interface AuthState {
@@ -45,6 +47,10 @@ export const useAuthStore = create<AuthState>()(
         }
         try {
           const me = await apiFetch<MeResponse>('/api/v1/auth/me');
+          const preferred = (me.preferred_language ?? '').split('-')[0]?.toLowerCase();
+          const normalized = preferred === 'vi' ? 'vi' : 'en';
+          localStorage.setItem('dm3-lang', normalized);
+          i18n.changeLanguage(normalized);
           set({
             isAuthenticated: true,
             user: {

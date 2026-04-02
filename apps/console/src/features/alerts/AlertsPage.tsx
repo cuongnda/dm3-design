@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PageHeader } from '@dm3/ui';
-import { DataTable, type Column } from '@dm3/ui';
+import { PageHeader, DataTable, type Column, Button, Input } from '@dm3/ui';
 import { Bell, AlertTriangle, ShieldAlert, Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEvents } from '@/lib/hooks';
@@ -18,9 +17,9 @@ function getSeverity(event: EventDTO): 'critical' | 'warning' | 'info' {
 
 function getSeverityConfig(t: any) {
   return {
-    critical: { label: t('alerts.severity.critical'), color: '#EF4444', bg: 'bg-[#7F1D1D]/30 text-[#EF4444]' },
-    warning: { label: t('alerts.severity.warning'), color: '#F59E0B', bg: 'bg-[#78350F]/30 text-[#F59E0B]' },
-    info: { label: t('alerts.severity.info'), color: '#3B82F6', bg: 'bg-[#1E3A5F]/30 text-[#3B82F6]' },
+    critical: { label: t('alerts.severity.critical'), bg: 'bg-error/20 text-error' },
+    warning: { label: t('alerts.severity.warning'), bg: 'bg-warning/20 text-warning' },
+    info: { label: t('alerts.severity.info'), bg: 'bg-secure/20 text-secure' },
   };
 }
 
@@ -101,17 +100,17 @@ export function AlertsPage() {
   }), [events, total, activeAlarms]);
 
   const stats = [
-    { label: t('alerts.stats.totalEvents'), value: counts.total, color: '#F8FAFC', icon: <Bell size={16} /> },
-    { label: t('alerts.stats.critical'), value: counts.critical, color: '#EF4444', icon: <ShieldAlert size={16} /> },
-    { label: t('alerts.stats.denied'), value: counts.denied, color: '#F59E0B', icon: <AlertTriangle size={16} /> },
-    { label: t('alerts.stats.granted'), value: counts.granted, color: '#3B82F6', icon: <Info size={16} /> },
+    { label: t('alerts.stats.totalEvents'), value: counts.total, cls: 'text-foreground', bgCls: 'bg-foreground/10', icon: <Bell size={16} /> },
+    { label: t('alerts.stats.critical'), value: counts.critical, cls: 'text-error', bgCls: 'bg-error/10', icon: <ShieldAlert size={16} /> },
+    { label: t('alerts.stats.denied'), value: counts.denied, cls: 'text-warning', bgCls: 'bg-warning/10', icon: <AlertTriangle size={16} /> },
+    { label: t('alerts.stats.granted'), value: counts.granted, cls: 'text-secure', bgCls: 'bg-secure/10', icon: <Info size={16} /> },
   ];
 
   const columns: Column<EventDTO>[] = [
     {
       key: 'time', header: t('alerts.table.time'), width: '170px', sortable: true,
       render: (r) => (
-        <span className="font-mono text-[12px] text-[#94A3B8]">
+        <span className="font-mono text-[12px] text-muted-foreground">
           {new Date(r.time).toLocaleString()}
         </span>
       ),
@@ -123,7 +122,7 @@ export function AlertsPage() {
         const cfg = severityConfig[sev];
         return (
           <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium', cfg.bg)}>
-            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cfg.color }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-current" />
             {cfg.label}
           </span>
         );
@@ -131,26 +130,26 @@ export function AlertsPage() {
     },
     {
       key: 'door_name', header: t('alerts.table.doorSource'), width: '180px',
-      render: (r) => <span className="text-[13px] text-[#94A3B8]">{r.door_id || '—'}</span>,
+      render: (r) => <span className="text-[13px] text-muted-foreground">{r.door_id || '—'}</span>,
     },
     {
       key: 'person_name', header: t('alerts.table.person'),
       render: (r) => (
-        <span className="text-[13px] text-[#F8FAFC]">
-          {r.person_name || <span className="text-[#64748B]">—</span>}
+        <span className="text-[13px] text-foreground">
+          {r.person_name || <span className="text-muted-foreground">—</span>}
         </span>
       ),
     },
     {
       key: 'credential_type', header: t('alerts.table.credential'), width: '110px',
       render: (r) => (
-        <span className="text-[12px] text-[#94A3B8] capitalize">{r.credential_type || '—'}</span>
+        <span className="text-[12px] text-muted-foreground capitalize">{r.credential_type || '—'}</span>
       ),
     },
     {
       key: 'reason', header: t('alerts.table.reason'), width: '160px',
       render: (r) => (
-        <span className="text-[12px] text-[#64748B]">{r.reason || '—'}</span>
+        <span className="text-[12px] text-muted-foreground">{r.reason || '—'}</span>
       ),
     },
   ];
@@ -167,13 +166,13 @@ export function AlertsPage() {
       {/* Stats bar */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         {stats.map((s) => (
-          <div key={s.label} className="bg-[#111827] border border-[#1E293B] rounded-lg p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${s.color}15` }}>
-              <span style={{ color: s.color }}>{s.icon}</span>
+          <div key={s.label} className="bg-card border border-border rounded-lg p-4 flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${s.bgCls}`}>
+              <span className={s.cls}>{s.icon}</span>
             </div>
             <div>
-              <div className="text-[22px] font-bold" style={{ color: s.color }}>{s.value}</div>
-              <div className="text-[11px] text-[#64748B]">{s.label}</div>
+              <div className={`text-[22px] font-bold ${s.cls}`}>{s.value}</div>
+              <div className="text-[11px] text-muted-foreground">{s.label}</div>
             </div>
           </div>
         ))}
@@ -184,13 +183,14 @@ export function AlertsPage() {
         <div className="flex gap-1 flex-1">
           {tabs.map((t) => (
             <button
+              type="button"
               key={t.key}
               onClick={() => { setActiveTab(t.key as any); setPage(1); }}
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors',
                 activeTab === t.key
-                  ? 'bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/30'
-                  : 'text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1E293B]'
+                  ? 'bg-secure/10 text-secure border border-secure/30'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
               )}
             >
               {t.icon}
@@ -198,33 +198,33 @@ export function AlertsPage() {
             </button>
           ))}
         </div>
-        <div className="flex gap-2">
-          <input
+        <div className="flex gap-2 items-center">
+          <Input
             type="date"
             value={fromDate}
             onChange={(e) => { setFromDate(e.target.value); setPage(1); }}
-            className="h-8 px-2 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px] [color-scheme:dark]"
+            className="h-8 text-[12px] scheme-dark"
           />
-          <span className="self-center text-[#64748B] text-[12px]">→</span>
-          <input
+          <span className="text-muted-foreground text-[12px]">→</span>
+          <Input
             type="date"
             value={toDate}
             onChange={(e) => { setToDate(e.target.value); setPage(1); }}
-            className="h-8 px-2 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px] [color-scheme:dark]"
+            className="h-8 text-[12px] scheme-dark"
           />
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-[#111827] border border-[#1E293B] rounded-lg overflow-hidden">
-        {isLoading && <div className="text-center py-8 text-[#94A3B8]">{t('alerts.loading')}</div>}
-        {error && <div className="text-center py-8 text-[#EF4444]">{t('alerts.error')}</div>}
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
+        {isLoading && <div className="text-center py-8 text-muted-foreground">{t('alerts.loading')}</div>}
+        {error && <div className="text-center py-8 text-error">{t('alerts.error')}</div>}
         {!isLoading && !error && (
           <DataTable
             columns={columns}
             data={filtered}
             rowKey={(r) => r.id}
-            rowClassName={(r) => getSeverity(r) === 'critical' ? 'bg-[#7F1D1D]/10' : ''}
+            rowClassName={(r) => getSeverity(r) === 'critical' ? 'bg-error/5' : ''}
           />
         )}
       </div>
@@ -232,24 +232,28 @@ export function AlertsPage() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4">
-          <span className="text-[12px] text-[#64748B]">
+          <span className="text-[12px] text-muted-foreground">
             {t('alerts.pagination.page', { current: page, total: totalPages, count: total })}
           </span>
           <div className="flex gap-2">
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="flex items-center gap-1 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#94A3B8] text-[12px] disabled:opacity-40"
+              className="gap-1"
             >
               <ChevronLeft size={14} /> {t('alerts.pagination.previous')}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="flex items-center gap-1 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#94A3B8] text-[12px] disabled:opacity-40"
+              className="gap-1"
             >
               {t('alerts.pagination.next')} <ChevronRight size={14} />
-            </button>
+            </Button>
           </div>
         </div>
       )}

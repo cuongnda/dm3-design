@@ -1,6 +1,16 @@
-import { useState, useMemo } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { useMemo, useState } from "react"
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUpDown } from "lucide-react"
+
+import { cn } from "../../lib/utils"
+import { Button } from "../ui/button"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../ui/table"
 
 export interface Column<T> {
   key: string;
@@ -49,89 +59,108 @@ export function DataTable<T>({ columns, data, rowKey, onRowClick, rowClassName, 
 
   return (
     <div>
-      <table className="w-full border-collapse">
-        <thead>
-          <tr>
-            {columns.map((col) => (
-              <th
-                key={col.key}
-                style={col.width ? { width: col.width } : undefined}
-                className={cn(
-                  'text-left px-3 py-2 text-[11px] font-medium uppercase tracking-[0.05em] text-[#64748B] bg-[#111827] border-b border-[#1E293B] sticky top-0',
-                  col.sortable && 'cursor-pointer select-none hover:text-[#94A3B8]'
-                )}
-                onClick={() => col.sortable && toggleSort(col.key)}
-              >
-                <span className="flex items-center gap-1">
-                  {col.header}
-                  {col.sortable && (
-                    sortCol === col.key ? (
-                      sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />
-                    ) : (
-                      <ChevronsUpDown size={12} className="opacity-40" />
-                    )
-                  )}
-                </span>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {paged.map((row) => (
-            <tr
-              key={rowKey(row)}
-              onClick={() => onRowClick?.(row)}
-              className={cn(
-                'border-b border-[#1E293B] hover:bg-[#1a2235] transition-colors',
-                onRowClick && 'cursor-pointer',
-                rowClassName?.(row)
-              )}
-            >
+      <div className="rounded-lg border border-border bg-card">
+        <Table>
+          <TableHeader className="bg-muted/30">
+            <TableRow className="hover:bg-transparent">
               {columns.map((col) => (
-                <td key={col.key} className="px-3 py-2.5 text-[13px]">
-                  {col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? '')}
-                </td>
+                <TableHead
+                  key={col.key}
+                  style={col.width ? { width: col.width } : undefined}
+                  className={cn(
+                    "px-3 text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground",
+                    col.sortable && "cursor-pointer select-none hover:text-foreground"
+                  )}
+                  onClick={() => col.sortable && toggleSort(col.key)}
+                >
+                  <span className="flex items-center gap-1">
+                    {col.header}
+                    {col.sortable && (
+                      sortCol === col.key ? (
+                        sortDir === "asc" ? (
+                          <ChevronUp size={12} />
+                        ) : (
+                          <ChevronDown size={12} />
+                        )
+                      ) : (
+                        <ChevronsUpDown size={12} className="opacity-40" />
+                      )
+                    )}
+                  </span>
+                </TableHead>
               ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {paged.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
+                  No data
+                </TableCell>
+              </TableRow>
+            ) : (
+              paged.map((row) => (
+                <TableRow
+                  key={rowKey(row)}
+                  onClick={() => onRowClick?.(row)}
+                  className={cn(
+                    "transition-colors",
+                    onRowClick && "cursor-pointer",
+                    rowClassName?.(row)
+                  )}
+                >
+                  {columns.map((col) => (
+                    <TableCell key={col.key} className="px-3 py-2.5 text-[13px]">
+                      {col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? "")}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between px-3 py-3 mt-2">
-          <span className="text-[12px] text-[#64748B]">
+        <div className="mt-2 flex items-center justify-between px-1 py-1">
+          <span className="text-muted-foreground px-2 text-[12px]">
             Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sorted.length)} of {sorted.length}
           </span>
-          <div className="flex gap-1">
-            <button
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
               onClick={() => setPage(Math.max(1, page - 1))}
               disabled={page === 1}
-              className="px-2.5 py-1 bg-[#1E293B] border border-[#334155] rounded text-[#94A3B8] text-[12px] disabled:opacity-40"
+              aria-label="Previous page"
             >
-              ‹
-            </button>
+              <ChevronLeft className="size-4" />
+            </Button>
+
             {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map((p) => (
-              <button
+              <Button
                 key={p}
+                type="button"
+                variant={p === page ? "default" : "outline"}
+                size="xs"
                 onClick={() => setPage(p)}
-                className={cn(
-                  'px-2.5 py-1 rounded text-[12px] border',
-                  p === page
-                    ? 'bg-[#2563EB] text-white border-[#2563EB]'
-                    : 'bg-[#1E293B] border-[#334155] text-[#94A3B8] hover:text-[#F8FAFC]'
-                )}
               >
                 {p}
-              </button>
+              </Button>
             ))}
-            <button
+
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
               onClick={() => setPage(Math.min(totalPages, page + 1))}
               disabled={page === totalPages}
-              className="px-2.5 py-1 bg-[#1E293B] border border-[#334155] rounded text-[#94A3B8] text-[12px] disabled:opacity-40"
+              aria-label="Next page"
             >
-              ›
-            </button>
+              <ChevronRight className="size-4" />
+            </Button>
           </div>
         </div>
       )}

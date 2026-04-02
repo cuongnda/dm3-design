@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -401,14 +402,90 @@ func (h *Handlers) Me(w http.ResponseWriter, r *http.Request) {
 
 	var user userResponse
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, tenant_id, company_id, email, name, roles, role, status, last_login, created_at FROM dm3_auth.users WHERE id = $1::uuid`,
+		`SELECT id, tenant_id, company_id, email, name, roles, role, status, last_login, created_at,
+		        preferred_language, timezone, session_timeout_minutes
+		 FROM dm3_auth.users WHERE id = $1::uuid`,
 		claims.Sub,
-	).Scan(&user.ID, &user.TenantID, &user.CompanyID, &user.Email, &user.Name, &user.Roles, &user.Role, &user.Status, &user.LastLogin, &user.CreatedAt)
+	).Scan(
+		&user.ID, &user.TenantID, &user.CompanyID, &user.Email, &user.Name, &user.Roles, &user.Role,
+		&user.Status, &user.LastLogin, &user.CreatedAt,
+		&user.PreferredLanguage, &user.Timezone, &user.SessionTimeoutMinutes,
+	)
 	if err != nil {
 		i18n.ErrorResponse(w, r, http.StatusNotFound, "user.not_found")
 		return
 	}
 	httputil.JSON(w, http.StatusOK, user)
+}
+
+type updateMeRequest struct {
+	PreferredLanguage *string `json:"preferred_language,omitempty"`
+	Timezone          *string `json:"timezone,omitempty"`
+	SessionTimeoutMinutes *int `json:"session_timeout_minutes,omitempty"`
+}
+
+func (h *Handlers) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFromContext(r.Context())
+	if claims == nil {
+		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.unauthorized")
+		return
+	}
+
+	var req updateMeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
+		return
+	}
+
+	// If no fields provided, just return current preferences.
+	if req.PreferredLanguage == nil && req.Timezone == nil && req.SessionTimeoutMinutes == nil {
+		h.Me(w, r)
+		return
+	}
+
+	var lang *string
+	if req.PreferredLanguage != nil {
+		normalized := strings.ToLower(*req.PreferredLanguage)
+		if idx := strings.Index(normalized, "-"); idx > 0 {
+			normalized = normalized[:idx]
+		}
+		if normalized != "en" && normalized != "vi" {
+			i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
+			return
+		}
+		lang = &normalized
+	}
+
+	tz := req.Timezone
+	if tz != nil && strings.TrimSpace(*tz) == "" {
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
+		return
+	}
+
+	timeout := req.SessionTimeoutMinutes
+	if timeout != nil {
+		if *timeout < 1 || *timeout > 10080 { // 1 minute .. 7 days
+			i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
+			return
+		}
+	}
+
+	_, err := h.db.Pool.Exec(r.Context(),
+		`UPDATE dm3_auth.users
+		 SET preferred_language = COALESCE($2::text, preferred_language),
+		     timezone = COALESCE($3::text, timezone),
+		     session_timeout_minutes = COALESCE($4::int, session_timeout_minutes),
+		     updated_at = now()
+		 WHERE id = $1::uuid`,
+		claims.Sub, lang, tz, timeout,
+	)
+	if err != nil {
+		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.database_error")
+		return
+	}
+
+	// Return updated me
+	h.Me(w, r)
 }
 
 // ─── Device Token ────────────────────────────────────────────────────────────
@@ -497,6 +574,9 @@ type userResponse struct {
 	Status    string     `json:"status"`
 	LastLogin *time.Time `json:"last_login"`
 	CreatedAt time.Time  `json:"created_at"`
+	PreferredLanguage *string `json:"preferred_language,omitempty"`
+	Timezone          *string `json:"timezone,omitempty"`
+	SessionTimeoutMinutes *int `json:"session_timeout_minutes,omitempty"`
 }
 
 func (h *Handlers) ListUsers(w http.ResponseWriter, r *http.Request) {

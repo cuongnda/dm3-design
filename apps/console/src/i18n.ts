@@ -58,6 +58,8 @@ i18n
     ns: ['common', 'auth', 'dashboard', 'secure', 'manage', 'operate', 'smart', 'devices', 'settings', 'system'],
     fallbackLng: 'en',
     supportedLngs: ['en', 'vi'],
+    // Accept region tags like `vi-VN`/`en-US` and map them to base languages `vi`/`en`.
+    nonExplicitSupportedLngs: true,
     detection: {
       order: ['localStorage', 'navigator'],
       lookupLocalStorage: 'dm3-lang',

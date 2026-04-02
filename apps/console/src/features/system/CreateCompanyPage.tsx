@@ -53,27 +53,27 @@ export function CreateCompanyPage() {
   if (result) {
     return (
       <div className="p-6 max-w-lg mx-auto mt-12">
-        <div className="border border-[#1E293B] rounded-lg p-6 bg-[#111827]">
-          <div className="w-12 h-12 rounded-full bg-[#22C55E]/10 flex items-center justify-center mx-auto mb-4">
-            <Check size={24} className="text-[#22C55E]" />
+        <div className="border border-border rounded-lg p-6 bg-card">
+          <div className="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
+            <Check size={24} className="text-success" />
           </div>
-          <h2 className="text-[18px] font-semibold text-[#F8FAFC] text-center mb-1">Company Created</h2>
-          <p className="text-[13px] text-[#64748B] text-center mb-6">
-            <span className="text-[#F8FAFC] font-medium">{result.company.name}</span> has been set up successfully.
+          <h2 className="text-[18px] font-semibold text-foreground text-center mb-1">Company Created</h2>
+          <p className="text-[13px] text-muted-foreground text-center mb-6">
+            <span className="text-foreground font-medium">{result.company.name}</span> has been set up successfully.
           </p>
 
-          <div className="bg-[#0B1120] border border-[#F97316]/30 rounded-md p-4 mb-4">
+          <div className="bg-background border border-operate/30 rounded-md p-4 mb-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] uppercase tracking-wider text-[#F97316] font-medium">{t('createCompany.credentials')}</span>
+              <span className="text-[11px] uppercase tracking-wider text-operate font-medium">{t('createCompany.credentials')}</span>
               <Button variant="ghost" size="icon-xs" onClick={copyCredentials}>
-                {copied ? <Check size={14} className="text-[#22C55E]" /> : <Copy size={14} />}
+                {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
               </Button>
             </div>
             <div className="space-y-1.5 text-[13px]">
-              <div><span className="text-[#64748B]">Email:</span> <span data-testid="create-label-gen-email" className="text-[#F8FAFC] font-mono">{result.credentials.email}</span></div>
-              <div><span className="text-[#64748B]">Password:</span> <span data-testid="create-label-gen-password" className="text-[#F8FAFC] font-mono">{result.credentials.password}</span></div>
+              <div><span className="text-muted-foreground">Email:</span> <span data-testid="create-label-gen-email" className="text-foreground font-mono">{result.credentials.email}</span></div>
+              <div><span className="text-muted-foreground">Password:</span> <span data-testid="create-label-gen-password" className="text-foreground font-mono">{result.credentials.password}</span></div>
             </div>
-            <p className="text-[11px] text-[#F59E0B] mt-3">⚠ Save these credentials — the password won't be shown again.</p>
+            <p className="text-[11px] text-warning mt-3">⚠ Save these credentials — the password won't be shown again.</p>
           </div>
 
           <Button className="w-full" onClick={() => navigate('/system/companies')}>
@@ -91,15 +91,15 @@ export function CreateCompanyPage() {
         variant="ghost"
         size="sm"
         onClick={() => navigate('/system/companies')}
-        className="mb-4 text-[#94A3B8] hover:text-[#F8FAFC]"
+        className="mb-4 text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft size={15} /> Back to Companies
       </Button>
-      <h1 className="text-[20px] font-semibold text-[#F8FAFC] mb-6">{t('createCompany.title')}</h1>
+      <h1 className="text-[20px] font-semibold text-foreground mb-6">{t('createCompany.title')}</h1>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {error && (
-          <div data-testid="create-text-error" className="px-3 py-2 bg-[#7F1D1D]/20 border border-[#EF4444]/30 rounded-md text-[#EF4444] text-[13px]">{error}</div>
+          <div data-testid="create-text-error" className="px-3 py-2 bg-error/10 border border-error/30 rounded-md text-error text-[13px]">{error}</div>
         )}
 
         <div className="grid grid-cols-2 gap-4">

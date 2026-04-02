@@ -19,6 +19,7 @@
   "profile.changeAvatar": "Change Avatar",
   "profile.removeAvatar": "Remove Avatar",
   "profile.save": "Save Changes",
+  "profile.saveSuccess": "Saved",
   "profile.cancel": "Cancel",
 
   "security.title": "Security Settings",

@@ -36,6 +36,9 @@ export interface MeResponse {
   roles: string[];
   role?: string | null;
   status: string;
+  preferred_language?: string | null;
+  timezone?: string | null;
+  session_timeout_minutes?: number | null;
 }
 
 export function login(email: string, password: string): Promise<LoginResponse> {
@@ -65,4 +68,21 @@ export function logout(): Promise<void> {
 
 export function me(): Promise<MeResponse> {
   return apiFetch<MeResponse>(`${AUTH}/me`);
+}
+
+export async function updatePreferredLanguage(preferredLanguage: 'en' | 'vi'): Promise<void> {
+  await updateMePreferences({ preferred_language: preferredLanguage });
+}
+
+export interface UpdateMePreferencesRequest {
+  preferred_language?: 'en' | 'vi';
+  timezone?: string;
+  session_timeout_minutes?: number;
+}
+
+export async function updateMePreferences(req: UpdateMePreferencesRequest): Promise<void> {
+  await apiFetch<void>(`${AUTH}/me`, {
+    method: 'PATCH',
+    body: JSON.stringify(req),
+  });
 }

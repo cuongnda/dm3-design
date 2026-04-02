@@ -6,14 +6,7 @@ import {
   Clock, Cpu, Wifi, User, CreditCard, Fingerprint,
   KeyRound, Smartphone, Eye, Settings, Calendar, List, Shield,
 } from 'lucide-react';
-import { DataTable, type Column } from '@dm3/ui';
-import { StatusBadge } from '@dm3/ui';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@dm3/ui';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogDescription, DialogFooter,
-} from '@dm3/ui';
-import { Button } from '@dm3/ui';
+import { DataTable, type Column, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, Button, Input, Label, Select, SelectOption } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { useDoor, useEvents, useRules, useUpdateDoor, useSendCommand } from '@/lib/hooks';
 import type { EventDTO, AccessRuleDTO } from '@/lib/api';
@@ -79,21 +72,21 @@ export function DoorDetailPage() {
   }, [door]);
 
   if (!id) {
-    return <div className="text-center py-8 text-[#EF4444]">{/* TODO: add i18n key */}ID không hợp lệ</div>;
+    return <div className="text-center py-8 text-error">{/* TODO: add i18n key */}ID không hợp lệ</div>;
   }
 
   if (doorLoading) {
-    return <div className="text-center py-8 text-[#94A3B8]">{t('accessControl.loading')}</div>;
+    return <div className="text-center py-8 text-muted-foreground">{t('accessControl.loading')}</div>;
   }
 
   if (!door) {
-    return <div className="text-center py-8 text-[#EF4444]">{/* TODO: add i18n key */}Không tìm thấy cửa</div>;
+    return <div className="text-center py-8 text-error">{/* TODO: add i18n key */}Không tìm thấy cửa</div>;
   }
 
   const stateConfig = {
-    locked: { icon: Lock, color: 'text-[#22C55E]', bg: 'bg-[#22C55E]/10', label: t('intrusion.status.armed') },
-    unlocked: { icon: DoorOpen, color: 'text-[#F59E0B]', bg: 'bg-[#F59E0B]/10', label: t('intrusion.status.disarmed') },
-    alarm: { icon: ShieldAlert, color: 'text-[#EF4444]', bg: 'bg-[#EF4444]/10', label: t('intrusion.status.alarm') },
+    locked: { icon: Lock, color: 'text-success', bg: 'bg-success/10', label: t('intrusion.status.armed') },
+    unlocked: { icon: DoorOpen, color: 'text-operate', bg: 'bg-operate/10', label: t('intrusion.status.disarmed') },
+    alarm: { icon: ShieldAlert, color: 'text-error', bg: 'bg-error/10', label: t('intrusion.status.alarm') },
   };
   const sc = stateConfig[door.state as keyof typeof stateConfig] || stateConfig.locked;
   const StateIcon = sc.icon;
@@ -101,23 +94,23 @@ export function DoorDetailPage() {
   const eventColumns: Column<EventDTO>[] = [
     {
       key: 'time', header: t('alerts.table.time'), width: '170px', sortable: true,
-      render: (r) => <span className="font-mono text-[12px] text-[#94A3B8]">{new Date(r.time).toLocaleString('vi-VN')}</span>,
+      render: (r) => <span className="font-mono text-[12px] text-muted-foreground">{new Date(r.time).toLocaleString('vi-VN')}</span>,
     },
     {
       key: 'person_name', header: t('alerts.table.person'), sortable: true,
       render: (r) => (
         <span className="flex items-center gap-2">
-          <span className="w-6 h-6 rounded-full bg-[#1E293B] flex items-center justify-center text-[10px] text-[#94A3B8]">
+          <span className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-[10px] text-muted-foreground">
             <User size={12} />
           </span>
-          <span className="text-[#F8FAFC] font-medium">{r.person_name || '—'}</span>
+          <span className="text-foreground font-medium">{r.person_name || '—'}</span>
         </span>
       ),
     },
     {
       key: 'credential_type', header: t('alerts.table.credential'), width: '130px',
       render: (r) => (
-        <span className="flex items-center gap-1.5 text-[#94A3B8] text-[12px] capitalize">
+        <span className="flex items-center gap-1.5 text-muted-foreground text-[12px] capitalize">
           {r.credential_type && credentialIcons[r.credential_type]}
           {r.credential_type || '—'}
         </span>
@@ -126,7 +119,7 @@ export function DoorDetailPage() {
     {
       key: 'decision', header: t('alerts.table.reason'), width: '100px',
       render: (r) => (
-        <span className={cn('text-[12px] font-semibold', r.decision === 'granted' ? 'text-[#22C55E]' : 'text-[#EF4444]')}>
+        <span className={cn('text-[12px] font-semibold', r.decision === 'granted' ? 'text-success' : 'text-error')}>
           {r.decision === 'granted' ? `✓ ${t('accessControl.events.granted')}` : `✕ ${t('accessControl.events.denied')}`}
         </span>
       ),
@@ -191,25 +184,22 @@ export function DoorDetailPage() {
     <div>
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button
-          onClick={() => navigate('/secure/access-control')}
-          className="p-1.5 rounded-md hover:bg-[#1E293B] text-[#94A3B8] hover:text-[#F8FAFC] transition-colors"
-        >
+        <Button variant="ghost" size="icon-sm" onClick={() => navigate('/secure/access-control')}>
           <ArrowLeft size={18} />
-        </button>
+        </Button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-[20px] font-semibold text-[#F8FAFC]">{door.name}</h1>
+            <h1 className="text-[20px] font-semibold text-foreground">{door.name}</h1>
             <StatusBadge status={door.status as 'online' | 'offline' | 'alarm' | 'warning'} />
           </div>
-          <p className="text-[13px] text-[#94A3B8] mt-0.5">{door.location} · {door.type}</p>
+          <p className="text-[13px] text-muted-foreground mt-0.5">{door.location} · {door.type}</p>
         </div>
       </div>
 
       {/* Status Card + Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         {/* Door Status */}
-        <div className="lg:col-span-2 bg-[#111827] border border-[#1E293B] rounded-lg p-5">
+        <div className="lg:col-span-2 bg-card border border-border rounded-lg p-5">
           <div className="flex items-start gap-5">
             <div className={cn('w-16 h-16 rounded-xl flex items-center justify-center', sc.bg)}>
               <StateIcon size={28} className={sc.color} />
@@ -226,8 +216,8 @@ export function DoorDetailPage() {
         </div>
 
         {/* Quick Actions */}
-        <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-5">
-          <h3 className="text-[13px] font-medium text-[#94A3B8] mb-3">{/* TODO: add i18n key */}Quick Actions</h3>
+        <div className="bg-card border border-border rounded-lg p-5">
+          <h3 className="text-[13px] font-medium text-muted-foreground mb-3">{/* TODO: add i18n key */}Quick Actions</h3>
           <div className="grid grid-cols-2 gap-2">
             <ActionBtn icon={<DoorOpen size={16} />} label={/* TODO: add i18n key */"Remote Open"} color="#3B82F6" onClick={() => handleAction('open')} />
             <ActionBtn icon={<Lock size={16} />} label={/* TODO: add i18n key */"Lock Down"} color="#EF4444" onClick={() => handleAction('lockdown')} />
@@ -239,7 +229,7 @@ export function DoorDetailPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="events">
-        <TabsList variant="line" className="border-b border-[#1E293B] mb-4">
+        <TabsList variant="line" className="border-b border-border mb-4">
           <TabsTrigger value="events" className="gap-1.5 text-[13px]"><List size={14} />{t('doorDetail.events')}</TabsTrigger>
           <TabsTrigger value="rules" className="gap-1.5 text-[13px]"><Shield size={14} />{t('accessRules.title')}</TabsTrigger>
           <TabsTrigger value="schedule" className="gap-1.5 text-[13px]"><Calendar size={14} />{/* TODO: add i18n key */}Schedule</TabsTrigger>
@@ -259,36 +249,36 @@ export function DoorDetailPage() {
               <div
                 key={rule.id}
                 className={cn(
-                  'flex items-center justify-between p-3 bg-[#111827] border border-[#1E293B] rounded-lg transition-opacity',
+                  'flex items-center justify-between p-3 bg-card border border-border rounded-lg transition-opacity',
                   !rule.enabled && 'opacity-50'
                 )}
               >
                 <div>
-                  <p className="text-[13px] font-medium text-[#F8FAFC]">{rule.name}</p>
-                  <p className="text-[12px] text-[#64748B]">{formatSchedule(rule)}</p>
+                  <p className="text-[13px] font-medium text-foreground">{rule.name}</p>
+                  <p className="text-[12px] text-muted-foreground">{formatSchedule(rule)}</p>
                 </div>
                 <span className={cn(
                   'px-2 py-1 rounded text-[11px] font-medium',
-                  rule.enabled ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-[#64748B]/10 text-[#64748B]'
+                  rule.enabled ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
                 )}>
                   {rule.enabled ? /* TODO: add i18n key */'Enabled' : /* TODO: add i18n key */'Disabled'}
                 </span>
               </div>
             ))}
             {!rulesData?.data?.length && (
-              <p className="text-center py-8 text-[#64748B]">{/* TODO: add i18n key */}Không có quy tắc nào áp dụng cho cửa này</p>
+              <p className="text-center py-8 text-muted-foreground">{/* TODO: add i18n key */}Không có quy tắc nào áp dụng cho cửa này</p>
             )}
           </div>
         </TabsContent>
 
         {/* Schedule Tab */}
         <TabsContent value="schedule">
-          <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-4 overflow-x-auto">
+          <div className="bg-card border border-border rounded-lg p-4 overflow-x-auto">
             <div className="min-w-[600px]">
               {/* Hour labels */}
               <div className="flex ml-10 mb-1">
                 {Array.from({ length: 24 }, (_, h) => (
-                  <div key={h} className="flex-1 text-center text-[10px] text-[#64748B]">
+                  <div key={h} className="flex-1 text-center text-[10px] text-muted-foreground">
                     {h.toString().padStart(2, '0')}
                   </div>
                 ))}
@@ -296,14 +286,14 @@ export function DoorDetailPage() {
               {/* Grid rows */}
               {scheduleData.map((hours, dayIdx) => (
                 <div key={dayIdx} className="flex items-center mb-1">
-                  <span className="w-10 text-[11px] text-[#94A3B8] font-medium">{dayLabels[dayIdx]}</span>
-                  <div className="flex flex-1 gap-[1px]">
+                  <span className="w-10 text-[11px] text-muted-foreground font-medium">{dayLabels[dayIdx]}</span>
+                  <div className="flex flex-1 gap-px">
                     {hours.map((active, h) => (
                       <div
                         key={h}
                         className={cn(
                           'flex-1 h-6 rounded-[2px] transition-colors',
-                          active ? 'bg-[#3B82F6]/60' : 'bg-[#1E293B]'
+                          active ? 'bg-secure/60' : 'bg-muted'
                         )}
                       />
                     ))}
@@ -311,11 +301,11 @@ export function DoorDetailPage() {
                 </div>
               ))}
               <div className="flex items-center gap-4 mt-3 ml-10">
-                <span className="flex items-center gap-1.5 text-[11px] text-[#94A3B8]">
-                  <span className="w-3 h-3 rounded-[2px] bg-[#3B82F6]/60" /> {/* TODO: add i18n key */}Accessible
+                <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <span className="w-3 h-3 rounded-[2px] bg-secure/60" /> {/* TODO: add i18n key */}Accessible
                 </span>
-                <span className="flex items-center gap-1.5 text-[11px] text-[#94A3B8]">
-                  <span className="w-3 h-3 rounded-[2px] bg-[#1E293B]" /> {t('intrusion.status.armed')}
+                <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <span className="w-3 h-3 rounded-[2px] bg-muted border border-border" /> {t('intrusion.status.armed')}
                 </span>
               </div>
             </div>
@@ -324,52 +314,53 @@ export function DoorDetailPage() {
 
         {/* Camera Tab */}
         <TabsContent value="camera">
-          <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-8 flex flex-col items-center justify-center min-h-[300px]">
-            <Video size={48} className="text-[#334155] mb-4" />
-            <p className="text-[14px] text-[#94A3B8] font-medium">{/* TODO: add i18n key */}Camera Feed</p>
-            <p className="text-[12px] text-[#64748B] mt-1">{/* TODO: add i18n key */}Linked camera stream will appear here</p>
-            <p className="text-[11px] text-[#475569] mt-3">{/* TODO: add i18n key */}Camera: CAM-001 · Main Entrance</p>
+          <div className="bg-card border border-border rounded-lg p-8 flex flex-col items-center justify-center min-h-[300px]">
+            <Video size={48} className="text-muted-foreground/30 mb-4" />
+            <p className="text-[14px] text-muted-foreground font-medium">{/* TODO: add i18n key */}Camera Feed</p>
+            <p className="text-[12px] text-muted-foreground/70 mt-1">{/* TODO: add i18n key */}Linked camera stream will appear here</p>
+            <p className="text-[11px] text-muted-foreground/50 mt-3">{/* TODO: add i18n key */}Camera: CAM-001 · Main Entrance</p>
           </div>
         </TabsContent>
 
         {/* Settings Tab */}
         <TabsContent value="settings">
-          <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-5 max-w-xl space-y-4">
+          <div className="bg-card border border-border rounded-lg p-5 max-w-xl space-y-4">
             <SettingField label={/* TODO: add i18n key */"Door Name"}>
-              <input
+              <Input
                 value={settings.name}
                 onChange={(e) => setSettings((s) => ({ ...s, name: e.target.value }))}
-                className="w-full h-8 px-3 bg-[#0A0E1A] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] focus:border-[#3B82F6] focus:outline-none"
+                className="h-8 text-[13px]"
               />
             </SettingField>
             <SettingField label={/* TODO: add i18n key */"Mode"}>
-              <select
+              <Select
                 value={settings.mode}
                 onChange={(e) => setSettings((s) => ({ ...s, mode: e.target.value }))}
-                className="w-full h-8 px-3 bg-[#0A0E1A] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px]"
+                className="h-8 text-[13px]"
               >
                 {/* TODO: add i18n keys for mode options */}
-                <option value="Normal">Normal</option>
-                <option value="Card Only">Card Only</option>
-                <option value="Card + PIN">Card + PIN</option>
-                <option value="Locked Down">Locked Down</option>
-                <option value="Free Access">Free Access</option>
-              </select>
+                <SelectOption value="Normal">Normal</SelectOption>
+                <SelectOption value="Card Only">Card Only</SelectOption>
+                <SelectOption value="Card + PIN">Card + PIN</SelectOption>
+                <SelectOption value="Locked Down">Locked Down</SelectOption>
+                <SelectOption value="Free Access">Free Access</SelectOption>
+              </Select>
             </SettingField>
             <SettingField label={/* TODO: add i18n key */"Unlock Duration (seconds)"}>
-              <input
+              <Input
                 type="number"
                 value={settings.unlockDuration}
                 onChange={(e) => setSettings((s) => ({ ...s, unlockDuration: Number(e.target.value) }))}
-                className="w-full h-8 px-3 bg-[#0A0E1A] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] focus:border-[#3B82F6] focus:outline-none"
+                className="h-8 text-[13px]"
               />
             </SettingField>
             <SettingField label={/* TODO: add i18n key */"Anti-Passback"}>
               <button
+                type="button"
                 onClick={() => setSettings((s) => ({ ...s, antiPassback: !s.antiPassback }))}
                 className={cn(
-                  'w-9 h-5 rounded-full relative transition-colors',
-                  settings.antiPassback ? 'bg-[#3B82F6]' : 'bg-[#334155]'
+                  'w-9 h-5 rounded-full relative transition-colors cursor-pointer',
+                  settings.antiPassback ? 'bg-secure' : 'bg-muted'
                 )}
               >
                 <span className={cn(
@@ -379,24 +370,23 @@ export function DoorDetailPage() {
               </button>
             </SettingField>
             <SettingField label={/* TODO: add i18n key */"Device ID"}>
-              <p className="text-[13px] text-[#94A3B8]">{door.device_id || '—'}</p>
+              <p className="text-[13px] text-muted-foreground">{door.device_id || '—'}</p>
             </SettingField>
             <SettingField label={/* TODO: add i18n key */"Camera ID"}>
-              <p className="text-[13px] text-[#94A3B8]">{door.camera_id || '—'}</p>
+              <p className="text-[13px] text-muted-foreground">{door.camera_id || '—'}</p>
             </SettingField>
             <SettingField label={/* TODO: add i18n key */"Last Heartbeat"}>
-              <p className="text-[13px] text-[#64748B]">
+              <p className="text-[13px] text-muted-foreground">
                 {door.last_heartbeat_at ? new Date(door.last_heartbeat_at).toLocaleString('vi-VN') : '—'}
               </p>
             </SettingField>
             <div className="pt-2">
-              <button
+              <Button
                 onClick={handleSaveSettings}
                 disabled={updateDoorMutation.isPending}
-                className="px-4 py-2 bg-[#2563EB] text-white text-[13px] font-medium rounded-md hover:bg-[#1D4ED8] transition-colors disabled:opacity-50"
               >
                 {updateDoorMutation.isPending ? /* TODO: add i18n key */'Saving...' : /* TODO: add i18n key */'Save Changes'}
-              </button>
+              </Button>
             </div>
           </div>
         </TabsContent>
@@ -404,24 +394,23 @@ export function DoorDetailPage() {
 
       {/* Confirmation Dialog */}
       <Dialog open={!!confirmAction} onOpenChange={() => setConfirmAction(null)}>
-        <DialogContent className="bg-[#111827] border-[#1E293B]">
+        <DialogContent>
           {confirmAction && confirmLabels[confirmAction] && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-[#F8FAFC]">{confirmLabels[confirmAction].title}</DialogTitle>
-                <DialogDescription className="text-[#94A3B8]">
+                <DialogTitle>{confirmLabels[confirmAction].title}</DialogTitle>
+                <DialogDescription>
                   {confirmLabels[confirmAction].desc}
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setConfirmAction(null)} className="bg-[#1E293B] border-[#334155] text-[#94A3B8]">
+                <Button variant="outline" onClick={() => setConfirmAction(null)}>
                   {/* TODO: add i18n key */}Cancel
                 </Button>
                 <Button
                   variant={confirmLabels[confirmAction].variant}
                   onClick={handleConfirmAction}
                   disabled={sendCommandMutation.isPending}
-                  className={confirmLabels[confirmAction].variant === 'destructive' ? '' : 'bg-[#2563EB] hover:bg-[#1D4ED8]'}
                 >
                   {sendCommandMutation.isPending ? /* TODO: add i18n key */'Sending...' : /* TODO: add i18n key */'Confirm'}
                 </Button>
@@ -439,8 +428,8 @@ export function DoorDetailPage() {
 function InfoItem({ icon, label, value, valueClass }: { icon: React.ReactNode; label: string; value: string; valueClass?: string }) {
   return (
     <div>
-      <span className="flex items-center gap-1 text-[11px] text-[#64748B] mb-0.5">{icon}{label}</span>
-      <p className={cn('text-[13px] font-medium text-[#F8FAFC]', valueClass)}>{value}</p>
+      <span className="flex items-center gap-1 text-[11px] text-muted-foreground mb-0.5">{icon}{label}</span>
+      <p className={cn('text-[13px] font-medium text-foreground', valueClass)}>{value}</p>
     </div>
   );
 }
@@ -448,12 +437,13 @@ function InfoItem({ icon, label, value, valueClass }: { icon: React.ReactNode; l
 function ActionBtn({ icon, label, color, onClick }: { icon: React.ReactNode; label: string; color: string; onClick: () => void }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-[#1E293B] hover:border-[#334155] hover:bg-[#1a2235] transition-colors"
+      className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-border hover:border-border/80 hover:bg-muted transition-colors cursor-pointer"
       style={{ color }}
     >
       {icon}
-      <span className="text-[11px] font-medium text-[#94A3B8]">{label}</span>
+      <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
     </button>
   );
 }
@@ -461,7 +451,7 @@ function ActionBtn({ icon, label, color, onClick }: { icon: React.ReactNode; lab
 function SettingField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-[12px] text-[#94A3B8] mb-1">{label}</label>
+      <Label className="text-[12px] mb-1 block">{label}</Label>
       {children}
     </div>
   );

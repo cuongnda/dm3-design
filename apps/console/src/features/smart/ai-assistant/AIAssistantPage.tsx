@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PageHeader } from '@dm3/ui';
+import { Button, Input, PageHeader } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { currentMessages, conversations, suggestedQueries, type Message } from './mock-data';
 
@@ -30,45 +30,45 @@ export function AIAssistantPage() {
 
       <div className="grid grid-cols-4 gap-4" style={{ height: 'calc(100vh - 200px)' }}>
         {/* Sidebar */}
-        <div className="col-span-1 bg-[#1E293B] border border-[#334155] rounded-lg p-4 flex flex-col">
-          <button className="w-full px-3 py-2 bg-[#06B6D4] text-[#0F172A] rounded-md text-[12px] font-medium mb-4">+ {t('aiAssistant.newConversation')}</button>
-          <h3 className="text-[12px] font-medium text-[#64748B] mb-2 uppercase">{t('aiAssistant.recent')}</h3>
+        <div className="col-span-1 bg-card border border-border rounded-lg p-4 flex flex-col">
+          <Button className="w-full bg-smart hover:bg-smart/90 text-background mb-4">+ {t('aiAssistant.newConversation')}</Button>
+          <h3 className="text-[12px] font-medium text-muted-foreground mb-2 uppercase">{t('aiAssistant.recent')}</h3>
           <div className="space-y-1 flex-1 overflow-y-auto">
             {conversations.map((c, i) => (
               <div key={c.id} className={cn(
                 'p-2.5 rounded-md cursor-pointer transition-colors',
-                i === 0 ? 'bg-[#06B6D4]/10 border border-[#06B6D4]/30' : 'hover:bg-[#111827]'
+                i === 0 ? 'bg-smart/10 border border-smart/30' : 'hover:bg-muted'
               )}>
-                <div className="text-[13px] font-medium text-[#F8FAFC] truncate">{c.title}</div>
-                <div className="text-[11px] text-[#64748B] truncate">{c.lastMessage}</div>
-                <div className="text-[10px] text-[#475569] mt-1">{c.date} · {c.messageCount} tin nhắn</div>
+                <div className="text-[13px] font-medium text-foreground truncate">{c.title}</div>
+                <div className="text-[11px] text-muted-foreground truncate">{c.lastMessage}</div>
+                <div className="text-[10px] text-muted-foreground mt-1">{c.date} · {c.messageCount} tin nhắn</div>
               </div>
             ))}
           </div>
         </div>
 
         {/* Chat area */}
-        <div className="col-span-3 flex flex-col bg-[#1E293B] border border-[#334155] rounded-lg">
+        <div className="col-span-3 flex flex-col bg-card border border-border rounded-lg">
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.map(m => (
               <div key={m.id} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
                 <div className={cn(
                   'max-w-[70%] rounded-lg p-3',
-                  m.role === 'user' ? 'bg-[#06B6D4]/20 border border-[#06B6D4]/30' : 'bg-[#111827] border border-[#334155]'
+                  m.role === 'user' ? 'bg-smart/20 border border-smart/30' : 'bg-background border border-border'
                 )}>
-                  <div className="text-[13px] text-[#F8FAFC] whitespace-pre-wrap">{m.content}</div>
-                  <div className="text-[10px] text-[#64748B] mt-1 text-right">{m.timestamp}</div>
+                  <div className="text-[13px] text-foreground whitespace-pre-wrap">{m.content}</div>
+                  <div className="text-[10px] text-muted-foreground mt-1 text-right">{m.timestamp}</div>
                 </div>
               </div>
             ))}
           </div>
 
           {/* Suggested queries */}
-          <div className="px-4 py-2 border-t border-[#334155]">
+          <div className="px-4 py-2 border-t border-border">
             <div className="flex gap-2 flex-wrap">
               {suggestedQueries.slice(0, 3).map(q => (
-                <button key={q} onClick={() => setInput(q)} className="px-2.5 py-1 bg-[#111827] border border-[#334155] rounded-md text-[11px] text-[#94A3B8] hover:border-[#06B6D4]/50 hover:text-[#06B6D4] transition-colors">
+                <button type="button" key={q} onClick={() => setInput(q)} className="px-2.5 py-1 bg-background border border-border rounded-md text-[11px] text-muted-foreground hover:border-smart/50 hover:text-smart transition-colors">
                   {q}
                 </button>
               ))}
@@ -76,16 +76,16 @@ export function AIAssistantPage() {
           </div>
 
           {/* Input */}
-          <div className="p-4 border-t border-[#334155]">
+          <div className="p-4 border-t border-border">
             <div className="flex gap-2">
-              <input
+              <Input
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSend()}
                 placeholder={t('aiAssistant.inputPlaceholder')}
-                className="flex-1 h-10 px-4 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#475569] focus:outline-none focus:border-[#06B6D4]/50"
+                className="flex-1 h-10"
               />
-              <button onClick={handleSend} className="px-4 h-10 bg-[#06B6D4] text-[#0F172A] rounded-md text-[13px] font-medium">{t('aiAssistant.chat.send')}</button>
+              <Button onClick={handleSend} className="h-10 bg-smart hover:bg-smart/90 text-background">{t('aiAssistant.chat.send')}</Button>
             </div>
           </div>
         </div>

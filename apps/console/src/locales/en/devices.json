@@ -3,6 +3,7 @@
   "devices.description": "Manage connected devices and sensors",
   "devices.addDevice": "+ Add Device",
   "devices.searchPlaceholder": "🔍 Search devices...",
+  "devices.filter.allCompanies": "All Companies",
   "devices.tabs.all": "All Devices",
   "devices.tabs.online": "Online",
   "devices.tabs.offline": "Offline",

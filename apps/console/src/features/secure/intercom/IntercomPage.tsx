@@ -8,17 +8,17 @@ import { mockDevices, mockCallRecords } from './mock-data';
 import type { IntercomDevice, CallRecord, DeviceStatus, CallResult } from './mock-data';
 
 const statusConfig: Record<DeviceStatus, { label: string; dot: string; text: string }> = {
-  online: { label: 'Online', dot: 'bg-[#22C55E]', text: 'text-[#22C55E]' },
-  offline: { label: 'Offline', dot: 'bg-[#64748B]', text: 'text-[#64748B]' },
-  busy: { label: 'Busy', dot: 'bg-[#F59E0B] animate-pulse', text: 'text-[#F59E0B]' },
+  online: { label: 'Online', dot: 'bg-success', text: 'text-success' },
+  offline: { label: 'Offline', dot: 'bg-muted-foreground', text: 'text-muted-foreground' },
+  busy: { label: 'Busy', dot: 'bg-warning animate-pulse', text: 'text-warning' },
 };
 
 function getResultConfig(t: ReturnType<typeof useTranslation<'secure'>>['t']): Record<CallResult, { label: string; cls: string }> {
   return {
-    answered: { label: t('intercom.calls.answered'), cls: 'text-[#22C55E]' },
-    missed: { label: t('intercom.calls.missed'), cls: 'text-[#EF4444]' },
-    rejected: { label: /* TODO: add i18n key */'Rejected', cls: 'text-[#F59E0B]' },
-    busy: { label: /* TODO: add i18n key */'Busy', cls: 'text-[#64748B]' },
+    answered: { label: t('intercom.calls.answered'), cls: 'text-success' },
+    missed: { label: t('intercom.calls.missed'), cls: 'text-error' },
+    rejected: { label: /* TODO: add i18n key */'Rejected', cls: 'text-warning' },
+    busy: { label: /* TODO: add i18n key */'Busy', cls: 'text-muted-foreground' },
   };
 }
 
@@ -29,17 +29,17 @@ function DeviceCard({ device, selected, onClick }: { device: IntercomDevice; sel
     <div
       onClick={onClick}
       className={cn(
-        'p-3 rounded-lg border bg-[#111827] cursor-pointer transition-all',
-        selected ? 'border-[#3B82F6]' : 'border-[#1E293B] hover:border-[#334155]'
+        'p-3 rounded-lg border bg-card cursor-pointer transition-all',
+        selected ? 'border-secure' : 'border-border hover:border-muted-foreground'
       )}
     >
       <div className="flex items-center gap-3">
-        <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center text-[16px]', isDoor ? 'bg-[#3B82F6]/10' : 'bg-[#8B5CF6]/10')}>
+        <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center text-[16px]', isDoor ? 'bg-secure/10' : 'bg-manage/10')}>
           {isDoor ? '🚪' : '📺'}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[12px] font-medium text-[#F8FAFC] truncate">{device.name}</div>
-          <div className="text-[11px] text-[#64748B] truncate">{device.location}</div>
+          <div className="text-[12px] font-medium text-foreground truncate">{device.name}</div>
+          <div className="text-[11px] text-muted-foreground truncate">{device.location}</div>
         </div>
         <span className="inline-flex items-center gap-1">
           <span className={cn('w-1.5 h-1.5 rounded-full', sc.dot)} />
@@ -52,7 +52,7 @@ function DeviceCard({ device, selected, onClick }: { device: IntercomDevice; sel
 
 function ConfigPanel({ device }: { device: IntercomDevice | null }) {
   if (!device) return (
-    <div className="p-6 text-center text-[13px] text-[#64748B]">{/* TODO: add i18n key */}Select a device to view configuration</div>
+    <div className="p-6 text-center text-[13px] text-muted-foreground">{/* TODO: add i18n key */}Select a device to view configuration</div>
   );
   const fields = [
     { label: /* TODO: add i18n key */'Name', value: device.name },
@@ -65,12 +65,12 @@ function ConfigPanel({ device }: { device: IntercomDevice | null }) {
   return (
     <div className="space-y-3">
       {fields.map((f) => (
-        <div key={f.label} className="flex items-center justify-between px-3 py-2 bg-[#0D1117] rounded border border-[#1E293B]">
-          <span className="text-[11px] text-[#64748B] uppercase tracking-wide">{f.label}</span>
-          <span className="text-[12px] text-[#F8FAFC] font-medium">{f.value}</span>
+        <div key={f.label} className="flex items-center justify-between px-3 py-2 bg-background rounded border border-border">
+          <span className="text-[11px] text-muted-foreground uppercase tracking-wide">{f.label}</span>
+          <span className="text-[12px] text-foreground font-medium">{f.value}</span>
         </div>
       ))}
-      <button className="w-full py-2 bg-[#3B82F6]/10 border border-[#3B82F6]/30 rounded-lg text-[12px] text-[#3B82F6] font-medium hover:bg-[#3B82F6]/20 transition-colors">
+      <button type="button" className="w-full py-2 bg-secure/10 border border-secure/30 rounded-lg text-[12px] text-secure font-medium hover:bg-secure/20 transition-colors">
         {/* TODO: add i18n key */}Restart Device
       </button>
     </div>
@@ -114,7 +114,7 @@ export function IntercomPage() {
       <div className="grid grid-cols-3 gap-6 mb-6">
         {/* Device list */}
         <div className="col-span-2">
-          <h2 className="text-[14px] font-semibold text-[#F8FAFC] mb-3">{t('intercom.devices.title')}</h2>
+          <h2 className="text-[14px] font-semibold text-foreground mb-3">{t('intercom.devices.title')}</h2>
           <div className="grid grid-cols-2 gap-2">
             {mockDevices.map((d) => (
               <DeviceCard key={d.id} device={d} selected={selectedId === d.id} onClick={() => setSelectedId(d.id)} />
@@ -124,8 +124,8 @@ export function IntercomPage() {
 
         {/* Config panel */}
         <div>
-          <h2 className="text-[14px] font-semibold text-[#F8FAFC] mb-3">{/* TODO: add i18n key */}Device Configuration</h2>
-          <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-4">
+          <h2 className="text-[14px] font-semibold text-foreground mb-3">{/* TODO: add i18n key */}Device Configuration</h2>
+          <div className="bg-card border border-border rounded-lg p-4">
             <ConfigPanel device={selectedDevice} />
           </div>
         </div>
@@ -133,8 +133,8 @@ export function IntercomPage() {
 
       {/* Call history */}
       <div>
-        <h2 className="text-[14px] font-semibold text-[#F8FAFC] mb-3">{t('intercom.calls.title')}</h2>
-        <div className="bg-[#111827] border border-[#1E293B] rounded-lg overflow-hidden">
+        <h2 className="text-[14px] font-semibold text-foreground mb-3">{t('intercom.calls.title')}</h2>
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
           <DataTable columns={callColumns} data={mockCallRecords} rowKey={(r) => r.id} />
         </div>
       </div>

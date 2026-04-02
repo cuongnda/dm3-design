@@ -6,6 +6,7 @@ import { useNotificationStore } from '@/stores/notificationStore';
 import { useState, useEffect } from 'react';
 import { SearchCommand } from '../common/SearchCommand';
 import { NotificationPanel } from '../common/NotificationPanel';
+import { LanguageSwitcher } from '../common/LanguageSwitcher';
 
 function getBreadcrumb(
   pathname: string,
@@ -58,9 +59,9 @@ export function Topbar() {
 
   return (
     <>
-      <header className="h-12 bg-[#111827] border-b border-[#1E293B] flex items-center px-6 gap-3 flex-shrink-0">
+      <header className="h-12 bg-sidebar border-b border-sidebar-border flex items-center px-6 gap-3 flex-shrink-0">
         {/* Breadcrumb */}
-        <div className="text-[13px] text-[#94A3B8] flex items-center gap-1">
+        <div className="text-[13px] text-muted-foreground flex items-center gap-1">
           {bc.domain && (
             <>
               <span style={{ color: bc.domainColor }}>{bc.domain}</span>
@@ -69,8 +70,8 @@ export function Topbar() {
           )}
           {bc.segments.map((s, i) => (
             <span key={i}>
-              {i > 0 && <span className="mx-1 text-[#64748B]">/</span>}
-              <span className={i === bc.segments.length - 1 ? 'text-[#F8FAFC]' : ''}>{s}</span>
+              {i > 0 && <span className="mx-1 text-muted-foreground">/</span>}
+              <span className={i === bc.segments.length - 1 ? 'text-foreground' : ''}>{s}</span>
             </span>
           ))}
         </div>
@@ -80,22 +81,25 @@ export function Topbar() {
           {/* Search */}
           <button
             onClick={() => setSearchOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#64748B] text-[12px] hover:border-[#475569] transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border rounded-md text-muted-foreground text-[12px] hover:border-ring/60 transition-colors"
           >
             <Search size={14} />
             <span>{t('actions.search')}</span>
-            <kbd className="bg-[#334155] px-1.5 py-0 rounded text-[10px] ml-1">⌘K</kbd>
+            <kbd className="bg-muted px-1.5 py-0 rounded text-[10px] ml-1">⌘K</kbd>
           </button>
+
+          {/* Language switcher */}
+          <LanguageSwitcher />
 
           {/* Notifications */}
           <div className="relative">
             <button
               onClick={() => setNotifOpen(!notifOpen)}
-              className="w-8 h-8 flex items-center justify-center rounded-md text-[#94A3B8] hover:bg-[#1E293B] hover:text-[#F8FAFC] transition-colors relative"
+              className="w-8 h-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-card hover:text-foreground transition-colors relative"
             >
               <Bell size={18} />
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 w-2 h-2 bg-[#EF4444] rounded-full border-2 border-[#111827]" />
+                <span className="absolute top-1 right-1 w-2 h-2 bg-[#EF4444] rounded-full border-2 border-background" />
               )}
             </button>
             {notifOpen && <NotificationPanel onClose={() => setNotifOpen(false)} />}

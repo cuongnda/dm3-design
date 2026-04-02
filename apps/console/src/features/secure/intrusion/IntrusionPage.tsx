@@ -9,31 +9,31 @@ import type { Zone, Sensor, AlarmEvent, ZoneStatus, SensorStatus, AlarmSeverity,
 
 function getZoneStatusConfig(t: ReturnType<typeof useTranslation<'secure'>>['t']): Record<ZoneStatus, { label: string; bg: string; text: string }> {
   return {
-    armed: { label: t('intrusion.status.armed'), bg: 'bg-[#22C55E]/15', text: 'text-[#22C55E]' },
-    disarmed: { label: t('intrusion.status.disarmed'), bg: 'bg-[#64748B]/15', text: 'text-[#94A3B8]' },
-    alarm: { label: t('intrusion.status.alarm'), bg: 'bg-[#EF4444]/15', text: 'text-[#EF4444]' },
+    armed: { label: t('intrusion.status.armed'), bg: 'bg-success/15', text: 'text-success' },
+    disarmed: { label: t('intrusion.status.disarmed'), bg: 'bg-muted/60', text: 'text-muted-foreground' },
+    alarm: { label: t('intrusion.status.alarm'), bg: 'bg-error/15', text: 'text-error' },
   };
 }
 
 const sensorStatusColor: Record<SensorStatus, string> = {
-  normal: 'bg-[#22C55E]',
-  triggered: 'bg-[#EF4444] animate-pulse',
-  offline: 'bg-[#64748B]',
-  tampered: 'bg-[#EAB308]',
+  normal: 'bg-success',
+  triggered: 'bg-error animate-pulse',
+  offline: 'bg-muted-foreground',
+  tampered: 'bg-warning',
 };
 
 const severityColor: Record<AlarmSeverity, string> = {
-  critical: 'text-[#EF4444]',
-  high: 'text-[#F59E0B]',
-  medium: 'text-[#3B82F6]',
-  low: 'text-[#94A3B8]',
+  critical: 'text-error',
+  high: 'text-warning',
+  medium: 'text-secure',
+  low: 'text-muted-foreground',
 };
 
 function getAlarmStatusConfig(t: ReturnType<typeof useTranslation<'secure'>>['t']): Record<AlarmStatus, { label: string; cls: string }> {
   return {
-    active: { label: /* TODO: add i18n key */'Active', cls: 'text-[#EF4444]' },
-    acknowledged: { label: /* TODO: add i18n key */'Acknowledged', cls: 'text-[#F59E0B]' },
-    resolved: { label: /* TODO: add i18n key */'Resolved', cls: 'text-[#22C55E]' },
+    active: { label: /* TODO: add i18n key */'Active', cls: 'text-error' },
+    acknowledged: { label: /* TODO: add i18n key */'Acknowledged', cls: 'text-warning' },
+    resolved: { label: /* TODO: add i18n key */'Resolved', cls: 'text-success' },
   };
 }
 
@@ -52,27 +52,28 @@ function ZoneCard({ zone, selected, onClick }: { zone: Zone; selected: boolean; 
     <div
       onClick={onClick}
       className={cn(
-        'p-4 rounded-lg border bg-[#111827] cursor-pointer transition-all',
-        selected ? 'border-[#3B82F6]' : 'border-[#1E293B] hover:border-[#334155]',
-        status === 'alarm' && 'border-[#EF4444]/50'
+        'p-4 rounded-lg border bg-card cursor-pointer transition-all',
+        selected ? 'border-secure' : 'border-border hover:border-muted-foreground',
+        status === 'alarm' && 'border-error/50'
       )}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[13px] font-medium text-[#F8FAFC]">{zone.name}</span>
+        <span className="text-[13px] font-medium text-foreground">{zone.name}</span>
         <span className={cn('px-2 py-0.5 rounded text-[11px] font-medium', cfg.bg, cfg.text)}>{cfg.label}</span>
       </div>
-      <div className="text-[11px] text-[#64748B] mb-3">{zone.floor} · {zone.sensorCount} {/* TODO: add i18n key */}sensors</div>
+      <div className="text-[11px] text-muted-foreground mb-3">{zone.floor} · {zone.sensorCount} {/* TODO: add i18n key */}sensors</div>
       <div className="flex items-center justify-between">
-        <span className="text-[10px] text-[#475569]">{/* TODO: add i18n key */}Last event: {zone.lastEvent}</span>
+        <span className="text-[10px] text-muted-foreground">{/* TODO: add i18n key */}Last event: {zone.lastEvent}</span>
         <button
+          type="button"
           onClick={toggle}
           className={cn(
             'px-2.5 py-1 rounded text-[11px] font-medium border transition-colors',
             status === 'armed'
-              ? 'bg-[#22C55E]/10 border-[#22C55E]/30 text-[#22C55E] hover:bg-[#22C55E]/20'
+              ? 'bg-success/10 border-success/30 text-success hover:bg-success/20'
               : status === 'alarm'
-                ? 'bg-[#EF4444]/10 border-[#EF4444]/30 text-[#EF4444] hover:bg-[#EF4444]/20'
-                : 'bg-[#1E293B] border-[#334155] text-[#94A3B8] hover:text-[#F8FAFC]'
+                ? 'bg-error/10 border-error/30 text-error hover:bg-error/20'
+                : 'bg-card border-border text-muted-foreground hover:text-foreground'
           )}
         >
           {status === 'armed' ? t('intrusion.actions.disarm') : t('intrusion.actions.arm')}
@@ -84,17 +85,17 @@ function ZoneCard({ zone, selected, onClick }: { zone: Zone; selected: boolean; 
 
 function SensorList({ sensors }: { sensors: Sensor[] }) {
   const { t } = useTranslation('secure');
-  if (!sensors.length) return <div className="text-[13px] text-[#64748B] p-4">{/* TODO: add i18n key */}Select a zone to view sensors</div>;
+  if (!sensors.length) return <div className="text-[13px] text-muted-foreground p-4">{/* TODO: add i18n key */}Select a zone to view sensors</div>;
   return (
     <div className="space-y-1.5">
       {sensors.map((s) => (
-        <div key={s.id} className="flex items-center gap-3 px-3 py-2 bg-[#111827] rounded-lg border border-[#1E293B]">
+        <div key={s.id} className="flex items-center gap-3 px-3 py-2 bg-card rounded-lg border border-border">
           <span className={cn('w-2 h-2 rounded-full shrink-0', sensorStatusColor[s.status])} />
           <div className="flex-1 min-w-0">
-            <div className="text-[12px] font-medium text-[#F8FAFC]">{s.name} <span className="text-[#64748B]">({s.type})</span></div>
-            <div className="text-[11px] text-[#64748B]">{s.location}</div>
+            <div className="text-[12px] font-medium text-foreground">{s.name} <span className="text-muted-foreground">({s.type})</span></div>
+            <div className="text-[11px] text-muted-foreground">{s.location}</div>
           </div>
-          <div className="text-[11px] text-[#64748B]">{s.battery}%</div>
+          <div className="text-[11px] text-muted-foreground">{s.battery}%</div>
         </div>
       ))}
     </div>
@@ -141,7 +142,7 @@ export function IntrusionPage() {
       <div className="grid grid-cols-3 gap-6 mb-6">
         {/* Zone list */}
         <div className="col-span-2">
-          <h2 className="text-[14px] font-semibold text-[#F8FAFC] mb-3">{t('intrusion.zones.title')}</h2>
+          <h2 className="text-[14px] font-semibold text-foreground mb-3">{t('intrusion.zones.title')}</h2>
           <div className="grid grid-cols-2 gap-3">
             {mockZones.map((z) => (
               <ZoneCard key={z.id} zone={z} selected={selectedZone === z.id} onClick={() => setSelectedZone(z.id)} />
@@ -152,18 +153,18 @@ export function IntrusionPage() {
         {/* Right side: sensors + map */}
         <div className="space-y-4">
           <div>
-            <h2 className="text-[14px] font-semibold text-[#F8FAFC] mb-3">
+            <h2 className="text-[14px] font-semibold text-foreground mb-3">
               {/* TODO: add i18n key */}Sensors {selectedZone ? `- ${mockZones.find((z) => z.id === selectedZone)?.name}` : ''}
             </h2>
             <SensorList sensors={zoneSensors} />
           </div>
           {/* Floor plan placeholder */}
-          <div className="aspect-[4/3] bg-[#0D1117] border border-[#1E293B] rounded-lg flex items-center justify-center">
+          <div className="aspect-4/3 bg-background border border-border rounded-lg flex items-center justify-center">
             <div className="text-center">
-              <svg className="w-8 h-8 text-[#334155] mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <svg className="w-8 h-8 text-muted-foreground mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498 4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 0 0-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0Z" />
               </svg>
-              <span className="text-[13px] text-[#475569] font-medium">{/* TODO: add i18n key */}Floor Plan</span>
+              <span className="text-[13px] text-muted-foreground font-medium">{/* TODO: add i18n key */}Floor Plan</span>
             </div>
           </div>
         </div>
@@ -171,8 +172,8 @@ export function IntrusionPage() {
 
       {/* Alarm history */}
       <div>
-        <h2 className="text-[14px] font-semibold text-[#F8FAFC] mb-3">{t('intrusion.history.title')}</h2>
-        <div className="bg-[#111827] border border-[#1E293B] rounded-lg overflow-hidden">
+        <h2 className="text-[14px] font-semibold text-foreground mb-3">{t('intrusion.history.title')}</h2>
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
           <DataTable columns={alarmColumns} data={mockAlarmEvents} rowKey={(r) => r.id} />
         </div>
       </div>

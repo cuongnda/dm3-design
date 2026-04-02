@@ -5,6 +5,7 @@ interface ThemeState {
   theme: 'dark' | 'light';
   sidebarCollapsed: boolean;
   toggleTheme: () => void;
+  setTheme: (theme: 'dark' | 'light') => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
 }
@@ -16,6 +17,7 @@ export const useThemeStore = create<ThemeState>()(
       sidebarCollapsed: false,
       toggleTheme: () =>
         set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
+      setTheme: (theme) => set({ theme }),
       toggleSidebar: () =>
         set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setSidebarCollapsed: (collapsed) =>

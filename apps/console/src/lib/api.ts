@@ -1,5 +1,7 @@
 // API client layer for DM3 backend services
 
+import i18n from '@/i18n';
+
 const AUTH_URL = '/api/v1/auth';
 const DEVICE_URL = '/api/v1/devices';
 
@@ -27,10 +29,15 @@ async function tryRefreshToken(): Promise<boolean> {
   const refresh = localStorage.getItem('dm3-refresh');
   if (!refresh) return false;
 
+  const lang = i18n.language?.split('-')[0] ?? 'en';
   try {
     const res = await fetch(`${AUTH_URL}/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // Let backend i18n translate error messages if needed.
+        'Accept-Language': lang,
+      },
       body: JSON.stringify({ refresh_token: refresh }),
     });
     if (!res.ok) return false;
@@ -47,8 +54,10 @@ async function tryRefreshToken(): Promise<boolean> {
 
 export async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<T> {
   const token = getToken();
+  const lang = i18n.language?.split('-')[0] ?? 'en';
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'Accept-Language': lang,
     ...(opts.headers as Record<string, string>),
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;

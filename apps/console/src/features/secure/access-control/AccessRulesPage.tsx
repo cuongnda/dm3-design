@@ -2,13 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Plus, Pencil, Trash2, Shield, Clock, DoorOpen, Users, ChevronDown, ChevronRight } from 'lucide-react';
-import { PageHeader } from '@dm3/ui';
-import { DataTable, type Column } from '@dm3/ui';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogDescription, DialogFooter,
-} from '@dm3/ui';
-import { Button } from '@dm3/ui';
+import { PageHeader, DataTable, type Column, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, Button, Input, Label } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { useRules, useCreateRule, useUpdateRule, useDeleteRule, useDoors, useGroups } from '@/lib/hooks';
 import type { AccessRuleDTO } from '@/lib/api';
@@ -210,18 +204,19 @@ export function AccessRulesPage() {
     {
       key: 'expand', header: '', width: '40px',
       render: (r) => (
-        <button
+        <Button
+          variant="ghost"
+          size="icon-xs"
           onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === r.id ? null : r.id); }}
-          className="p-1 text-[#64748B] hover:text-[#F8FAFC]"
         >
           {expandedId === r.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        </button>
+        </Button>
       ),
     },
     {
       key: 'name', header: t('accessRules.title'), sortable: true,
       render: (r) => (
-        <span className={cn('font-medium', r.enabled ? 'text-[#F8FAFC]' : 'text-[#64748B]')}>
+        <span className={cn('font-medium', r.enabled ? 'text-foreground' : 'text-muted-foreground')}>
           {r.name}
         </span>
       ),
@@ -229,8 +224,8 @@ export function AccessRulesPage() {
     {
       key: 'doors', header: /* TODO: add i18n key */'Doors', width: '100px',
       render: (r) => (
-        <span className="flex items-center gap-1 text-[#94A3B8] text-[12px]">
-          <DoorOpen size={13} className="text-[#3B82F6]" />
+        <span className="flex items-center gap-1 text-muted-foreground text-[12px]">
+          <DoorOpen size={13} className="text-secure" />
           {r.doors.length}
         </span>
       ),
@@ -238,8 +233,8 @@ export function AccessRulesPage() {
     {
       key: 'groups', header: /* TODO: add i18n key */'Groups', width: '100px',
       render: (r) => (
-        <span className="flex items-center gap-1 text-[#94A3B8] text-[12px]">
-          <Users size={13} className="text-[#8B5CF6]" />
+        <span className="flex items-center gap-1 text-muted-foreground text-[12px]">
+          <Users size={13} className="text-manage" />
           {r.groups.length}
         </span>
       ),
@@ -247,8 +242,8 @@ export function AccessRulesPage() {
     {
       key: 'schedule', header: /* TODO: add i18n key */'Schedule', width: '220px',
       render: (r) => (
-        <span className="flex items-center gap-1.5 text-[12px] text-[#94A3B8]">
-          <Clock size={13} className="text-[#F59E0B]" />
+        <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+          <Clock size={13} className="text-operate" />
           {scheduleSummary(r)}
         </span>
       ),
@@ -257,10 +252,11 @@ export function AccessRulesPage() {
       key: 'enabled', header: t('accessControl.table.status'), width: '100px',
       render: (r) => (
         <button
+          type="button"
           onClick={(e) => { e.stopPropagation(); toggleEnabled(r.id); }}
           className={cn(
-            'w-9 h-5 rounded-full relative transition-colors',
-            r.enabled ? 'bg-[#3B82F6]' : 'bg-[#334155]'
+            'w-9 h-5 rounded-full relative transition-colors cursor-pointer',
+            r.enabled ? 'bg-secure' : 'bg-muted'
           )}
         >
           <span className={cn(
@@ -274,18 +270,21 @@ export function AccessRulesPage() {
       key: 'actions', header: '', width: '80px',
       render: (r) => (
         <span className="flex gap-1">
-          <button
+          <Button
+            variant="ghost"
+            size="icon-xs"
             onClick={(e) => { e.stopPropagation(); openEdit(r); }}
-            className="p-1.5 text-[#64748B] hover:bg-[#334155] hover:text-[#F8FAFC] rounded"
           >
             <Pencil size={14} />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
             onClick={(e) => { e.stopPropagation(); setDeleteId(r.id); }}
-            className="p-1.5 text-[#64748B] hover:bg-[#7F1D1D]/30 hover:text-[#EF4444] rounded"
+            className="hover:text-error"
           >
             <Trash2 size={14} />
-          </button>
+          </Button>
         </span>
       ),
     },
@@ -295,60 +294,54 @@ export function AccessRulesPage() {
     <div>
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button
-          onClick={() => navigate('/secure/access-control')}
-          className="p-1.5 rounded-md hover:bg-[#1E293B] text-[#94A3B8] hover:text-[#F8FAFC] transition-colors"
-        >
+        <Button variant="ghost" size="icon-sm" onClick={() => navigate('/secure/access-control')}>
           <ArrowLeft size={18} />
-        </button>
+        </Button>
         <PageHeader title={t('accessRules.title')}>
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2563EB] rounded-md text-white text-[12px] font-medium hover:bg-[#1D4ED8] transition-colors"
-          >
+          <Button size="sm" onClick={openCreate}>
             <Plus size={14} />
             {t('accessRules.addRule')}
-          </button>
+          </Button>
         </PageHeader>
       </div>
 
       {/* Search */}
       <div className="flex gap-2 mb-4">
-        <input
+        <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('accessControl.searchPlaceholder')}
-          className="flex-1 h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:border-[#3B82F6] focus:outline-none"
+          className="flex-1 h-8 text-[13px]"
         />
       </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-[#3B82F6]/10 flex items-center justify-center">
-            <Shield size={18} className="text-[#3B82F6]" />
+        <div className="bg-card border border-border rounded-lg p-3 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-secure/10 flex items-center justify-center">
+            <Shield size={18} className="text-secure" />
           </div>
           <div>
-            <p className="text-[18px] font-semibold text-[#F8FAFC]">{rules.length}</p>
-            <p className="text-[11px] text-[#64748B]">{t('accessRules.title')}</p>
+            <p className="text-[18px] font-semibold text-foreground">{rules.length}</p>
+            <p className="text-[11px] text-muted-foreground">{t('accessRules.title')}</p>
           </div>
         </div>
-        <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-[#22C55E]/10 flex items-center justify-center">
-            <Shield size={18} className="text-[#22C55E]" />
+        <div className="bg-card border border-border rounded-lg p-3 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-success/10 flex items-center justify-center">
+            <Shield size={18} className="text-success" />
           </div>
           <div>
-            <p className="text-[18px] font-semibold text-[#F8FAFC]">{rules.filter((r) => r.enabled).length}</p>
-            <p className="text-[11px] text-[#64748B]">{/* TODO: add i18n key */}Active</p>
+            <p className="text-[18px] font-semibold text-foreground">{rules.filter((r) => r.enabled).length}</p>
+            <p className="text-[11px] text-muted-foreground">{/* TODO: add i18n key */}Active</p>
           </div>
         </div>
-        <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-[#F59E0B]/10 flex items-center justify-center">
-            <Users size={18} className="text-[#F59E0B]" />
+        <div className="bg-card border border-border rounded-lg p-3 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-operate/10 flex items-center justify-center">
+            <Users size={18} className="text-operate" />
           </div>
           <div>
-            <p className="text-[18px] font-semibold text-[#F8FAFC]">{rules.reduce((s, r) => s + r.peopleCount, 0)}</p>
-            <p className="text-[11px] text-[#64748B]">{/* TODO: add i18n key */}People Authorized</p>
+            <p className="text-[18px] font-semibold text-foreground">{rules.reduce((s, r) => s + r.peopleCount, 0)}</p>
+            <p className="text-[11px] text-muted-foreground">{/* TODO: add i18n key */}People Authorized</p>
           </div>
         </div>
       </div>
@@ -375,12 +368,12 @@ export function AccessRulesPage() {
 
       {/* Create/Edit Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="bg-[#111827] border-[#1E293B] max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-[#F8FAFC]">
+            <DialogTitle>
               {editingId ? /* TODO: add i18n key */'Edit Rule' : /* TODO: add i18n key */'Create New Rule'}
             </DialogTitle>
-            <DialogDescription className="text-[#94A3B8]">
+            <DialogDescription>
               {editingId ? /* TODO: add i18n key */'Update access rule details' : t('accessRules.description')}
             </DialogDescription>
           </DialogHeader>
@@ -388,28 +381,28 @@ export function AccessRulesPage() {
           <div className="space-y-4 py-2">
             {/* Rule name */}
             <div>
-              <label className="block text-[12px] text-[#94A3B8] mb-1">{t('accessRules.title')}</label>
-              <input
+              <Label className="text-[12px]">{t('accessRules.title')}</Label>
+              <Input
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder={/* TODO: add i18n key */"VD: Nhân viên — Giờ hành chính"}
-                className="w-full h-8 px-3 bg-[#0A0E1A] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#475569] focus:border-[#3B82F6] focus:outline-none"
+                className="mt-1 h-8 text-[13px]"
               />
             </div>
 
             {/* Doors multi-select */}
             <div>
-              <label className="block text-[12px] text-[#94A3B8] mb-1">
-                {/* TODO: add i18n key */}Doors <span className="text-[#64748B]">({form.doors.length} selected)</span>
-              </label>
-              <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto p-2 bg-[#0A0E1A] border border-[#334155] rounded-md">
+              <Label className="text-[12px]">
+                {/* TODO: add i18n key */}Doors <span className="text-muted-foreground">({form.doors.length} selected)</span>
+              </Label>
+              <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto p-2 bg-input border border-border rounded-md mt-1">
                 {availableDoors.map((d) => (
-                  <label key={d.id} className="flex items-center gap-2 text-[12px] text-[#94A3B8] hover:text-[#F8FAFC] cursor-pointer py-0.5">
+                  <label key={d.id} className="flex items-center gap-2 text-[12px] text-muted-foreground hover:text-foreground cursor-pointer py-0.5">
                     <input
                       type="checkbox"
                       checked={form.doors.includes(d.id)}
                       onChange={() => toggleMulti('doors', d.id)}
-                      className="w-3.5 h-3.5 rounded border-[#334155] bg-[#0A0E1A] accent-[#3B82F6]"
+                      className="w-3.5 h-3.5 rounded border-border accent-secure"
                     />
                     {d.name}
                   </label>
@@ -419,17 +412,17 @@ export function AccessRulesPage() {
 
             {/* Groups multi-select */}
             <div>
-              <label className="block text-[12px] text-[#94A3B8] mb-1">
-                {/* TODO: add i18n key */}Access Groups <span className="text-[#64748B]">({form.groups.length} selected)</span>
-              </label>
-              <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto p-2 bg-[#0A0E1A] border border-[#334155] rounded-md">
+              <Label className="text-[12px]">
+                {/* TODO: add i18n key */}Access Groups <span className="text-muted-foreground">({form.groups.length} selected)</span>
+              </Label>
+              <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto p-2 bg-input border border-border rounded-md mt-1">
                 {availableGroups.map((g) => (
-                  <label key={g.id} className="flex items-center gap-2 text-[12px] text-[#94A3B8] hover:text-[#F8FAFC] cursor-pointer py-0.5">
+                  <label key={g.id} className="flex items-center gap-2 text-[12px] text-muted-foreground hover:text-foreground cursor-pointer py-0.5">
                     <input
                       type="checkbox"
                       checked={form.groups.includes(g.id)}
                       onChange={() => toggleMulti('groups', g.id)}
-                      className="w-3.5 h-3.5 rounded border-[#334155] bg-[#0A0E1A] accent-[#3B82F6]"
+                      className="w-3.5 h-3.5 rounded border-border accent-secure"
                     />
                     {g.name}
                   </label>
@@ -439,17 +432,18 @@ export function AccessRulesPage() {
 
             {/* Schedule: days */}
             <div>
-              <label className="block text-[12px] text-[#94A3B8] mb-1">{/* TODO: add i18n key */}Days of Week</label>
-              <div className="flex gap-1.5">
+              <Label className="text-[12px]">{/* TODO: add i18n key */}Days of Week</Label>
+              <div className="flex gap-1.5 mt-1">
                 {dayLabels.map((label, i) => (
                   <button
                     key={i}
+                    type="button"
                     onClick={() => toggleMulti('days', i)}
                     className={cn(
-                      'flex-1 py-1.5 rounded text-[11px] font-medium border transition-colors',
+                      'flex-1 py-1.5 rounded text-[11px] font-medium border transition-colors cursor-pointer',
                       form.days.includes(i)
-                        ? 'bg-[#3B82F6]/20 border-[#3B82F6]/50 text-[#3B82F6]'
-                        : 'bg-[#0A0E1A] border-[#334155] text-[#64748B] hover:border-[#475569]'
+                        ? 'bg-secure/20 border-secure/50 text-secure'
+                        : 'bg-input border-border text-muted-foreground hover:border-border/80'
                     )}
                   >
                     {label}
@@ -461,33 +455,34 @@ export function AccessRulesPage() {
             {/* Schedule: time range */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[12px] text-[#94A3B8] mb-1">{/* TODO: add i18n key */}From</label>
-                <input
+                <Label className="text-[12px]">{/* TODO: add i18n key */}From</Label>
+                <Input
                   type="time"
                   value={form.startTime}
                   onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))}
-                  className="w-full h-8 px-3 bg-[#0A0E1A] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] focus:border-[#3B82F6] focus:outline-none [color-scheme:dark]"
+                  className="mt-1 h-8 text-[13px]"
                 />
               </div>
               <div>
-                <label className="block text-[12px] text-[#94A3B8] mb-1">{/* TODO: add i18n key */}To</label>
-                <input
+                <Label className="text-[12px]">{/* TODO: add i18n key */}To</Label>
+                <Input
                   type="time"
                   value={form.endTime}
                   onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))}
-                  className="w-full h-8 px-3 bg-[#0A0E1A] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] focus:border-[#3B82F6] focus:outline-none [color-scheme:dark]"
+                  className="mt-1 h-8 text-[13px]"
                 />
               </div>
             </div>
 
             {/* Enable toggle */}
             <div className="flex items-center justify-between">
-              <label className="text-[12px] text-[#94A3B8]">{/* TODO: add i18n key */}Enable Rule</label>
+              <Label className="text-[12px]">{/* TODO: add i18n key */}Enable Rule</Label>
               <button
+                type="button"
                 onClick={() => setForm((f) => ({ ...f, enabled: !f.enabled }))}
                 className={cn(
-                  'w-9 h-5 rounded-full relative transition-colors',
-                  form.enabled ? 'bg-[#3B82F6]' : 'bg-[#334155]'
+                  'w-9 h-5 rounded-full relative transition-colors cursor-pointer',
+                  form.enabled ? 'bg-secure' : 'bg-muted'
                 )}
               >
                 <span className={cn(
@@ -499,10 +494,10 @@ export function AccessRulesPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setModalOpen(false)} className="bg-[#1E293B] border-[#334155] text-[#94A3B8]">
+            <Button variant="outline" onClick={() => setModalOpen(false)}>
               {/* TODO: add i18n key */}Cancel
             </Button>
-            <Button onClick={handleSave} className="bg-[#2563EB] hover:bg-[#1D4ED8]" disabled={!form.name.trim()}>
+            <Button onClick={handleSave} disabled={!form.name.trim()}>
               {editingId ? /* TODO: add i18n key */'Update' : t('accessRules.addRule')}
             </Button>
           </DialogFooter>
@@ -511,15 +506,15 @@ export function AccessRulesPage() {
 
       {/* Delete Confirmation */}
       <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <DialogContent className="bg-[#111827] border-[#1E293B]">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-[#F8FAFC]">{/* TODO: add i18n key */}Delete Rule</DialogTitle>
-            <DialogDescription className="text-[#94A3B8]">
+            <DialogTitle>{/* TODO: add i18n key */}Delete Rule</DialogTitle>
+            <DialogDescription>
               {/* TODO: add i18n key */}Are you sure you want to delete rule "{rules.find((r) => r.id === deleteId)?.name}"? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)} className="bg-[#1E293B] border-[#334155] text-[#94A3B8]">
+            <Button variant="outline" onClick={() => setDeleteId(null)}>
               {/* TODO: add i18n key */}Cancel
             </Button>
             <Button variant="destructive" onClick={handleDelete}>
@@ -544,17 +539,17 @@ function ExpandedRuleDetail({
   groupName: (id: string) => string;
 }) {
   return (
-    <div className="bg-[#0D1321] border border-[#1E293B] border-t-0 rounded-b-lg p-4 -mt-1 mb-2">
+    <div className="bg-muted/30 border border-border border-t-0 rounded-b-lg p-4 -mt-1 mb-2">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Doors */}
         <div>
-          <h4 className="text-[11px] uppercase tracking-wider text-[#64748B] font-medium mb-2 flex items-center gap-1.5">
-            <DoorOpen size={12} className="text-[#3B82F6]" />
+          <h4 className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium mb-2 flex items-center gap-1.5">
+            <DoorOpen size={12} className="text-secure" />
             {/* TODO: add i18n key */}Doors ({rule.doors.length})
           </h4>
           <div className="space-y-1">
             {rule.doors.map((id) => (
-              <div key={id} className="text-[12px] text-[#94A3B8] py-0.5 px-2 bg-[#111827] rounded">
+              <div key={id} className="text-[12px] text-muted-foreground py-0.5 px-2 bg-card rounded">
                 {doorName(id)}
               </div>
             ))}
@@ -563,13 +558,13 @@ function ExpandedRuleDetail({
 
         {/* Groups */}
         <div>
-          <h4 className="text-[11px] uppercase tracking-wider text-[#64748B] font-medium mb-2 flex items-center gap-1.5">
-            <Users size={12} className="text-[#8B5CF6]" />
+          <h4 className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium mb-2 flex items-center gap-1.5">
+            <Users size={12} className="text-manage" />
             {/* TODO: add i18n key */}Access Groups ({rule.groups.length})
           </h4>
           <div className="space-y-1">
             {rule.groups.map((id) => (
-              <div key={id} className="text-[12px] text-[#94A3B8] py-0.5 px-2 bg-[#111827] rounded">
+              <div key={id} className="text-[12px] text-muted-foreground py-0.5 px-2 bg-card rounded">
                 {groupName(id)}
               </div>
             ))}
@@ -578,24 +573,24 @@ function ExpandedRuleDetail({
 
         {/* Schedule + Stats */}
         <div>
-          <h4 className="text-[11px] uppercase tracking-wider text-[#64748B] font-medium mb-2 flex items-center gap-1.5">
-            <Clock size={12} className="text-[#F59E0B]" />
+          <h4 className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium mb-2 flex items-center gap-1.5">
+            <Clock size={12} className="text-operate" />
             {/* TODO: add i18n key */}Schedule
           </h4>
           <div className="space-y-1 mb-3">
-            <div className="text-[12px] text-[#94A3B8]">
-              <span className="text-[#64748B]">{/* TODO: add i18n key */}Days:</span>{' '}
+            <div className="text-[12px] text-muted-foreground">
+              <span className="text-muted-foreground/60">{/* TODO: add i18n key */}Days:</span>{' '}
               {rule.schedule.days.map((d) => dayLabelsFull[d]).join(', ')}
             </div>
-            <div className="text-[12px] text-[#94A3B8]">
-              <span className="text-[#64748B]">{/* TODO: add i18n key */}Hours:</span>{' '}
+            <div className="text-[12px] text-muted-foreground">
+              <span className="text-muted-foreground/60">{/* TODO: add i18n key */}Hours:</span>{' '}
               {rule.schedule.startTime} – {rule.schedule.endTime}
             </div>
           </div>
-          <div className="flex items-center gap-2 p-2 bg-[#111827] rounded">
-            <Users size={14} className="text-[#22C55E]" />
-            <span className="text-[12px] text-[#94A3B8]">
-              <span className="text-[#F8FAFC] font-medium">{rule.peopleCount}</span> {/* TODO: add i18n key */}people authorized
+          <div className="flex items-center gap-2 p-2 bg-card rounded">
+            <Users size={14} className="text-success" />
+            <span className="text-[12px] text-muted-foreground">
+              <span className="text-foreground font-medium">{rule.peopleCount}</span> {/* TODO: add i18n key */}people authorized
             </span>
           </div>
         </div>

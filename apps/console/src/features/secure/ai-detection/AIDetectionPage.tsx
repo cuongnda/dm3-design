@@ -40,13 +40,13 @@ export function AIDetectionPage() {
             key={s.type}
             onClick={() => setFilter(filter === s.type ? 'all' : s.type)}
             className={cn(
-              'p-4 rounded-lg border bg-[#111827] cursor-pointer transition-all',
-              filter === s.type ? 'border-[#3B82F6]' : 'border-[#1E293B] hover:border-[#334155]'
+              'p-4 rounded-lg border bg-card cursor-pointer transition-all',
+              filter === s.type ? 'border-secure' : 'border-border hover:border-muted-foreground'
             )}
           >
             <div className="text-[20px] mb-1">{s.icon}</div>
             <div className="text-[24px] font-semibold" style={{ color: s.color }}>{s.count}</div>
-            <div className="text-[12px] text-[#64748B]">{s.label}</div>
+            <div className="text-[12px] text-muted-foreground">{s.label}</div>
           </div>
         ))}
       </div>
@@ -54,10 +54,11 @@ export function AIDetectionPage() {
       {/* Filters */}
       <div className="flex items-center gap-2 mb-4">
         <button
+          type="button"
           onClick={() => setFilter('all')}
           className={cn(
             'px-3 py-1.5 rounded-md text-[12px] font-medium border transition-colors',
-            filter === 'all' ? 'bg-[#3B82F6] text-white border-[#3B82F6]' : 'bg-[#1E293B] border-[#334155] text-[#94A3B8] hover:text-[#F8FAFC]'
+            filter === 'all' ? 'bg-secure text-white border-secure' : 'bg-card border-border text-muted-foreground hover:text-foreground'
           )}
         >
           {t('aiDetection.events.title')} ({mockAIEvents.length})
@@ -68,10 +69,11 @@ export function AIDetectionPage() {
           return (
             <button
               key={type}
+              type="button"
               onClick={() => setFilter(filter === type ? 'all' : type)}
               className={cn(
                 'px-3 py-1.5 rounded-md text-[12px] font-medium border transition-colors',
-                filter === type ? 'text-white' : 'bg-[#1E293B] border-[#334155] text-[#94A3B8] hover:text-[#F8FAFC]'
+                filter === type ? 'text-white' : 'bg-card border-border text-muted-foreground hover:text-foreground'
               )}
               style={filter === type ? { backgroundColor: cfg.color, borderColor: cfg.color } : undefined}
             >
@@ -87,10 +89,10 @@ export function AIDetectionPage() {
           const cfg = detectionTypeConfig[event.type];
           const isFP = markedFP.has(event.id);
           return (
-            <div key={event.id} className={cn('flex gap-4 p-3 rounded-lg border bg-[#111827] transition-all', isFP ? 'border-[#1E293B] opacity-60' : 'border-[#1E293B] hover:border-[#334155]')}>
+            <div key={event.id} className={cn('flex gap-4 p-3 rounded-lg border bg-card transition-all', isFP ? 'border-border opacity-60' : 'border-border hover:border-muted-foreground')}>
               {/* Thumbnail placeholder */}
-              <div className="w-24 h-16 bg-[#0D1117] border border-[#1E293B] rounded flex items-center justify-center shrink-0">
-                <svg className="w-6 h-6 text-[#334155]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <div className="w-24 h-16 bg-background border border-border rounded flex items-center justify-center shrink-0">
+                <svg className="w-6 h-6 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456Z" />
                 </svg>
               </div>
@@ -101,24 +103,25 @@ export function AIDetectionPage() {
                   <span className="px-2 py-0.5 rounded text-[10px] font-medium" style={{ backgroundColor: `${cfg.color}20`, color: cfg.color }}>
                     {cfg.icon} {cfg.label}
                   </span>
-                  <span className="text-[11px] text-[#64748B]">{event.time}</span>
-                  <span className="text-[11px] text-[#64748B]">·</span>
-                  <span className="text-[11px] text-[#64748B]">{event.camera}</span>
-                  {isFP && <span className="px-1.5 py-0.5 rounded bg-[#F59E0B]/15 text-[#F59E0B] text-[10px] font-medium">{/* TODO: add i18n key */}False Positive</span>}
+                  <span className="text-[11px] text-muted-foreground">{event.time}</span>
+                  <span className="text-[11px] text-muted-foreground">·</span>
+                  <span className="text-[11px] text-muted-foreground">{event.camera}</span>
+                  {isFP && <span className="px-1.5 py-0.5 rounded bg-warning/15 text-warning text-[10px] font-medium">{/* TODO: add i18n key */}False Positive</span>}
                 </div>
-                <div className="text-[13px] text-[#F8FAFC] mb-0.5">{event.description}</div>
-                <div className="text-[11px] text-[#64748B]">📍 {event.location} · {t('aiDetection.confidence')}: {event.confidence}%</div>
+                <div className="text-[13px] text-foreground mb-0.5">{event.description}</div>
+                <div className="text-[11px] text-muted-foreground">📍 {event.location} · {t('aiDetection.confidence')}: {event.confidence}%</div>
               </div>
 
               {/* Actions */}
               <div className="shrink-0 flex items-start">
                 <button
+                  type="button"
                   onClick={() => toggleFP(event.id)}
                   className={cn(
                     'px-2.5 py-1.5 rounded text-[11px] font-medium border transition-colors',
                     isFP
-                      ? 'bg-[#F59E0B]/10 border-[#F59E0B]/30 text-[#F59E0B]'
-                      : 'bg-[#1E293B] border-[#334155] text-[#94A3B8] hover:text-[#F8FAFC]'
+                      ? 'bg-warning/10 border-warning/30 text-warning'
+                      : 'bg-card border-border text-muted-foreground hover:text-foreground'
                   )}
                 >
                   {isFP ? /* TODO: add i18n key */'↩ Undo' : /* TODO: add i18n key */'⚠ False Positive'}

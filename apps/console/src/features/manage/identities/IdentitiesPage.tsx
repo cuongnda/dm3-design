@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { PageHeader } from '@dm3/ui';
-import { DataTable, type Column } from '@dm3/ui';
-import { StatCard } from '@dm3/ui';
+import { PageHeader, DataTable, type Column, StatCard, Button, Input, Label, Select, SelectOption } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { usePersons, useCreatePerson } from '@/lib/hooks';
 import type { PersonDTO } from '@/lib/api';
@@ -37,22 +35,20 @@ function mapPerson(p: PersonDTO): Person {
   };
 }
 
-const PURPLE = '#8B5CF6';
-
 function CredentialIcons({ c }: { c: Person['credentials'] }) {
   return (
     <span className="flex gap-1.5 text-[14px]">
-      <span title="Card" className={c.card ? 'text-[#8B5CF6]' : 'text-[#334155]'}>💳</span>
-      <span title="Face" className={c.face ? 'text-[#8B5CF6]' : 'text-[#334155]'}>👤</span>
-      <span title="Mobile" className={c.mobile ? 'text-[#8B5CF6]' : 'text-[#334155]'}>📱</span>
+      <span title="Card" className={c.card ? 'text-manage' : 'text-muted-foreground/30'}>💳</span>
+      <span title="Face" className={c.face ? 'text-manage' : 'text-muted-foreground/30'}>👤</span>
+      <span title="Mobile" className={c.mobile ? 'text-manage' : 'text-muted-foreground/30'}>📱</span>
     </span>
   );
 }
 
 const statusStyle: Record<string, string> = {
-  active: 'text-[#22C55E]',
-  inactive: 'text-[#64748B]',
-  suspended: 'text-[#EF4444]',
+  active: 'text-success',
+  inactive: 'text-muted-foreground',
+  suspended: 'text-error',
 };
 
 export function IdentitiesPage() {
@@ -123,10 +119,10 @@ export function IdentitiesPage() {
   const isFormValid = formData.first_name.trim() && formData.last_name.trim();
 
   const columns: Column<Person>[] = [
-    { key: 'id', header: t('identities.table.id'), width: '70px', sortable: true, render: (r) => <span className="font-mono text-[11px] text-[#64748B]">{r.id}</span> },
-    { key: 'name', header: t('identities.table.name'), sortable: true, render: (r) => <span className="font-medium text-[#F8FAFC]">{r.name}</span> },
-    { key: 'department', header: t('identities.table.department'), sortable: true, render: (r) => <span className="text-[#94A3B8]">{r.department}</span> },
-    { key: 'role', header: t('identities.table.role'), sortable: true, render: (r) => <span className="text-[#94A3B8]">{r.role}</span> },
+    { key: 'id', header: t('identities.table.id'), width: '70px', sortable: true, render: (r) => <span className="font-mono text-[11px] text-muted-foreground">{r.id}</span> },
+    { key: 'name', header: t('identities.table.name'), sortable: true, render: (r) => <span className="font-medium text-foreground">{r.name}</span> },
+    { key: 'department', header: t('identities.table.department'), sortable: true, render: (r) => <span className="text-muted-foreground">{r.department}</span> },
+    { key: 'role', header: t('identities.table.role'), sortable: true, render: (r) => <span className="text-muted-foreground">{r.role}</span> },
     {
       key: 'status', header: t('identities.table.status'), width: '100px',
       render: (r) => <span className={cn('text-[12px] font-medium capitalize', statusStyle[r.status])}>{r.status === 'active' ? t('identities.status.active') : r.status === 'inactive' ? t('identities.status.inactive') : t('identities.status.suspended')}</span>,
@@ -137,8 +133,8 @@ export function IdentitiesPage() {
   return (
     <div>
       <PageHeader title={t('identities.title')} description={t('identities.description')}>
-        <button onClick={() => setShowForm(true)} className="px-3 py-1.5 rounded-md text-white text-[12px] font-medium" style={{ backgroundColor: PURPLE }}>{t('identities.addPerson')}</button>
-        <button className="px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px] font-medium">{t('identities.bulkImport')}</button>
+        <Button size="sm" onClick={() => setShowForm(true)} className="bg-manage hover:bg-manage/90">{t('identities.addPerson')}</Button>
+        <Button size="sm" variant="outline">{t('identities.bulkImport')}</Button>
       </PageHeader>
 
       <div className="grid grid-cols-4 gap-3 mb-6">
@@ -149,26 +145,25 @@ export function IdentitiesPage() {
       </div>
 
       <div className="flex gap-2 mb-4">
-        <input
+        <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('identities.searchPlaceholder')}
-          className="flex-1 h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:outline-none"
-          style={{ borderColor: search ? PURPLE : undefined }}
+          className="flex-1 h-8 text-[13px]"
         />
-        <select
+        <Select
           value={deptFilter}
           onChange={(e) => setDeptFilter(e.target.value)}
-          className="h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]"
+          className="w-48 h-8 text-[12px]"
         >
-          <option value="">{t('identities.filter.allDepartments')}</option>
-          {['Kỹ thuật', 'Kinh doanh', 'Hành chính', 'Ban giám đốc'].map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
+          <SelectOption value="">{t('identities.filter.allDepartments')}</SelectOption>
+          {['Kỹ thuật', 'Kinh doanh', 'Hành chính', 'Ban giám đốc'].map(d => <SelectOption key={d} value={d}>{d}</SelectOption>)}
+        </Select>
       </div>
 
       {/* Loading & Error States */}
-      {isLoading && <div className="text-center py-8 text-[#94A3B8]">{t('identities.loading')}</div>}
-      {error && <div className="text-center py-8 text-[#EF4444]">{t('identities.error')}</div>}
+      {isLoading && <div className="text-center py-8 text-muted-foreground">{t('identities.loading')}</div>}
+      {error && <div className="text-center py-8 text-error">{t('identities.error')}</div>}
 
       <DataTable
         columns={columns}
@@ -179,40 +174,40 @@ export function IdentitiesPage() {
 
       {/* Person Detail Panel */}
       {selected && (
-        <div className="mt-4 bg-[#1E293B] border border-[#334155] rounded-lg p-5">
+        <div className="mt-4 bg-card border border-border rounded-lg p-5">
           <div className="flex justify-between items-start mb-4">
             <div>
-              <h3 className="text-[16px] font-semibold text-[#F8FAFC]">{selected.name}</h3>
-              <p className="text-[12px] text-[#94A3B8]">{selected.department} · {selected.role}</p>
+              <h3 className="text-[16px] font-semibold text-foreground">{selected.name}</h3>
+              <p className="text-[12px] text-muted-foreground">{selected.department} · {selected.role}</p>
             </div>
-            <button onClick={() => setSelected(null)} className="text-[#64748B] hover:text-[#F8FAFC]">✕</button>
+            <Button variant="ghost" size="icon-xs" onClick={() => setSelected(null)}>✕</Button>
           </div>
           <div className="grid grid-cols-3 gap-6 text-[13px]">
             <div>
-              <h4 className="text-[11px] uppercase text-[#64748B] mb-2 font-medium">{t('identities.detail.info')}</h4>
-              <p className="text-[#94A3B8]">Email: <span className="text-[#F8FAFC]">{selected.email}</span></p>
-              <p className="text-[#94A3B8]">Phone: <span className="text-[#F8FAFC]">{selected.phone}</span></p>
-              <p className="text-[#94A3B8]">ID: <span className="text-[#F8FAFC]">{selected.id}</span></p>
+              <h4 className="text-[11px] uppercase text-muted-foreground mb-2 font-medium">{t('identities.detail.info')}</h4>
+              <p className="text-muted-foreground">Email: <span className="text-foreground">{selected.email}</span></p>
+              <p className="text-muted-foreground">Phone: <span className="text-foreground">{selected.phone}</span></p>
+              <p className="text-muted-foreground">ID: <span className="text-foreground">{selected.id}</span></p>
             </div>
             <div>
-              <h4 className="text-[11px] uppercase text-[#64748B] mb-2 font-medium">{t('identities.detail.credentials')}</h4>
-              <p className="text-[#94A3B8]">{t('identities.detail.card')}: <span className={selected.credentials.card ? 'text-[#22C55E]' : 'text-[#64748B]'}>{selected.credentials.card ? selected.cardUid : t('identities.detail.cardNotIssued')}</span></p>
-              <p className="text-[#94A3B8]">{t('identities.detail.face')}: <span className={selected.credentials.face ? 'text-[#22C55E]' : 'text-[#64748B]'}>{selected.credentials.face ? t('identities.detail.faceEnrolled') : t('identities.detail.faceNotEnrolled')}</span></p>
-              <p className="text-[#94A3B8]">{t('identities.detail.mobile')}: <span className={selected.credentials.mobile ? 'text-[#22C55E]' : 'text-[#64748B]'}>{selected.credentials.mobile ? t('identities.detail.mobileActivated') : t('identities.detail.mobileNotActivated')}</span></p>
+              <h4 className="text-[11px] uppercase text-muted-foreground mb-2 font-medium">{t('identities.detail.credentials')}</h4>
+              <p className="text-muted-foreground">{t('identities.detail.card')}: <span className={selected.credentials.card ? 'text-success' : 'text-muted-foreground'}>{selected.credentials.card ? selected.cardUid : t('identities.detail.cardNotIssued')}</span></p>
+              <p className="text-muted-foreground">{t('identities.detail.face')}: <span className={selected.credentials.face ? 'text-success' : 'text-muted-foreground'}>{selected.credentials.face ? t('identities.detail.faceEnrolled') : t('identities.detail.faceNotEnrolled')}</span></p>
+              <p className="text-muted-foreground">{t('identities.detail.mobile')}: <span className={selected.credentials.mobile ? 'text-success' : 'text-muted-foreground'}>{selected.credentials.mobile ? t('identities.detail.mobileActivated') : t('identities.detail.mobileNotActivated')}</span></p>
             </div>
             <div>
-              <h4 className="text-[11px] uppercase text-[#64748B] mb-2 font-medium">{t('identities.detail.accessGroups')}</h4>
-              {selected.accessGroups.map(g => <span key={g} className="inline-block mr-1 mb-1 px-2 py-0.5 rounded text-[11px] font-medium border" style={{ color: PURPLE, borderColor: `${PURPLE}40` }}>{g}</span>)}
+              <h4 className="text-[11px] uppercase text-muted-foreground mb-2 font-medium">{t('identities.detail.accessGroups')}</h4>
+              {selected.accessGroups.map(g => <span key={g} className="inline-block mr-1 mb-1 px-2 py-0.5 rounded text-[11px] font-medium border text-manage border-manage/30">{g}</span>)}
             </div>
           </div>
           <div className="mt-4">
-            <h4 className="text-[11px] uppercase text-[#64748B] mb-2 font-medium">{t('identities.detail.recentEvents')}</h4>
+            <h4 className="text-[11px] uppercase text-muted-foreground mb-2 font-medium">{t('identities.detail.recentEvents')}</h4>
             <div className="grid grid-cols-5 gap-1">
               {selected.recentEvents.map((e, i) => (
-                <div key={i} className="text-[11px] px-2 py-1 bg-[#111827] rounded">
-                  <span className="text-[#64748B] font-mono">{e.time}</span>{' '}
-                  <span className="text-[#94A3B8]">{e.door}</span>{' '}
-                  <span className={e.result === 'granted' ? 'text-[#22C55E]' : 'text-[#EF4444]'}>●</span>
+                <div key={i} className="text-[11px] px-2 py-1 bg-muted rounded">
+                  <span className="text-muted-foreground font-mono">{e.time}</span>{' '}
+                  <span className="text-muted-foreground">{e.door}</span>{' '}
+                  <span className={e.result === 'granted' ? 'text-success' : 'text-error'}>●</span>
                 </div>
               ))}
             </div>
@@ -223,95 +218,92 @@ export function IdentitiesPage() {
       {/* Add/Edit Form Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowForm(false)}>
-          <div className="bg-[#1E293B] border border-[#334155] rounded-lg p-6 w-[480px]" onClick={e => e.stopPropagation()}>
-            <h3 className="text-[16px] font-semibold text-[#F8FAFC] mb-4">{t('identities.form.addTitle')}</h3>
+          <div className="bg-card border border-border rounded-lg p-6 w-[480px]" onClick={e => e.stopPropagation()}>
+            <h3 className="text-[16px] font-semibold text-foreground mb-4">{t('identities.form.addTitle')}</h3>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[12px] text-[#94A3B8] mb-1 block">{t('identities.form.firstName')}</label>
-                  <input
+                  <Label className="text-[12px]">{t('identities.form.firstName')}</Label>
+                  <Input
                     value={formData.first_name}
                     onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
                     placeholder="Nguyễn"
-                    className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:outline-none focus:border-[#8B5CF6]"
+                    className="mt-1 h-8 text-[13px]"
                   />
                 </div>
                 <div>
-                  <label className="text-[12px] text-[#94A3B8] mb-1 block">{t('identities.form.lastName')}</label>
-                  <input
+                  <Label className="text-[12px]">{t('identities.form.lastName')}</Label>
+                  <Input
                     value={formData.last_name}
                     onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
                     placeholder="Văn A"
-                    className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:outline-none focus:border-[#8B5CF6]"
+                    className="mt-1 h-8 text-[13px]"
                   />
                 </div>
               </div>
               <div>
-                <label className="text-[12px] text-[#94A3B8] mb-1 block">{t('identities.form.email')}</label>
-                <input
+                <Label className="text-[12px]">{t('identities.form.email')}</Label>
+                <Input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                   placeholder="email@company.vn"
-                  className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:outline-none focus:border-[#8B5CF6]"
+                  className="mt-1 h-8 text-[13px]"
                 />
               </div>
               <div>
-                <label className="text-[12px] text-[#94A3B8] mb-1 block">{t('identities.form.phone')}</label>
-                <input
+                <Label className="text-[12px]">{t('identities.form.phone')}</Label>
+                <Input
                   value={formData.phone}
                   onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
                   placeholder="0901234567"
-                  className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:outline-none focus:border-[#8B5CF6]"
+                  className="mt-1 h-8 text-[13px]"
                 />
               </div>
               <div>
-                <label className="text-[12px] text-[#94A3B8] mb-1 block">{t('identities.form.employeeId')}</label>
-                <input
+                <Label className="text-[12px]">{t('identities.form.employeeId')}</Label>
+                <Input
                   value={formData.employee_id}
                   onChange={(e) => setFormData(prev => ({ ...prev, employee_id: e.target.value }))}
                   placeholder="EMP001"
-                  className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#64748B] focus:outline-none focus:border-[#8B5CF6]"
+                  className="mt-1 h-8 text-[13px]"
                 />
               </div>
               <div>
-                <label className="text-[12px] text-[#94A3B8] mb-1 block">{t('identities.form.department')}</label>
-                <select
+                <Label className="text-[12px]">{t('identities.form.department')}</Label>
+                <Select
                   value={formData.department}
                   onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
-                  className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]"
+                  className="mt-1 h-8 text-[12px]"
                 >
-                  <option value="">{t('identities.form.selectDepartment')}</option>
-                  {['Kỹ thuật', 'Kinh doanh', 'Hành chính', 'Ban giám đốc'].map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
+                  <SelectOption value="">{t('identities.form.selectDepartment')}</SelectOption>
+                  {['Kỹ thuật', 'Kinh doanh', 'Hành chính', 'Ban giám đốc'].map(d => <SelectOption key={d} value={d}>{d}</SelectOption>)}
+                </Select>
               </div>
               <div>
-                <label className="text-[12px] text-[#94A3B8] mb-1 block">{t('identities.form.role')}</label>
-                <select
+                <Label className="text-[12px]">{t('identities.form.role')}</Label>
+                <Select
                   value={formData.role}
                   onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
-                  className="w-full h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]"
+                  className="mt-1 h-8 text-[12px]"
                 >
-                  <option value="">{t('identities.form.selectRole')}</option>
-                  {['Nhân viên', 'Trưởng nhóm', 'Quản lý', 'Giám đốc'].map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
+                  <SelectOption value="">{t('identities.form.selectRole')}</SelectOption>
+                  {['Nhân viên', 'Trưởng nhóm', 'Quản lý', 'Giám đốc'].map(r => <SelectOption key={r} value={r}>{r}</SelectOption>)}
+                </Select>
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-5">
-              <button
-                onClick={() => setShowForm(false)}
-                className="px-3 py-1.5 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]"
-              >
+              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>
                 {t('common.cancel')}
-              </button>
-              <button
+              </Button>
+              <Button
+                size="sm"
                 onClick={handleCreatePerson}
                 disabled={!isFormValid || createPersonMutation.isPending}
-                className="px-3 py-1.5 rounded-md text-white text-[12px] font-medium disabled:opacity-50"
-                style={{ backgroundColor: PURPLE }}
+                className="bg-manage hover:bg-manage/90"
               >
                 {createPersonMutation.isPending ? t('identities.form.saving') : t('common.save')}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

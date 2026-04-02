@@ -40,15 +40,15 @@ function eventDtoToAccessEvent(e: any): AccessEvent {
 }
 
 const severityDot: Record<string, string> = {
-  critical: 'bg-[#EF4444]',
-  warning: 'bg-[#EAB308]',
-  info: 'bg-[#3B82F6]',
+  critical: 'bg-error',
+  warning: 'bg-warning',
+  info: 'bg-secure',
 };
 
 const healthStatusClass: Record<string, string> = {
-  ok: 'text-[#22C55E]',
-  warning: 'text-[#EAB308]',
-  critical: 'text-[#EF4444]',
+  ok: 'text-success',
+  warning: 'text-warning',
+  critical: 'text-error',
 };
 
 export function DashboardPage() {
@@ -125,9 +125,9 @@ export function DashboardPage() {
     },
   ];
 
-  const domainHealthData: { domain: string; color: string; emoji: string; items: DomainHealth[]; viewLink: string }[] = [
+  const domainHealthData: { domain: string; colorCls: string; emoji: string; items: DomainHealth[]; viewLink: string }[] = [
     {
-      domain: t('domain.secure'), color: '#3B82F6', emoji: '🔒',
+      domain: t('domain.secure'), colorCls: 'text-secure', emoji: '🔒',
       viewLink: t('health.viewSecurity'),
       items: [
         { module: t('modules.accessControl'), status: 'ok', detail: '✓ Online' },
@@ -138,7 +138,7 @@ export function DashboardPage() {
       ],
     },
     {
-      domain: t('domain.manage'), color: '#8B5CF6', emoji: '👤',
+      domain: t('domain.manage'), colorCls: 'text-manage', emoji: '👤',
       viewLink: t('health.viewPeople'),
       items: [
         { module: t('modules.identities'), status: 'ok', detail: '✓ Active' },
@@ -149,7 +149,7 @@ export function DashboardPage() {
       ],
     },
     {
-      domain: t('domain.operate'), color: '#F59E0B', emoji: '🏢',
+      domain: t('domain.operate'), colorCls: 'text-operate', emoji: '🏢',
       viewLink: t('health.viewFacility'),
       items: [
         { module: t('modules.roomBooking'), status: 'ok', detail: '✓ 3/12 in use' },
@@ -192,19 +192,19 @@ export function DashboardPage() {
     <div>
       <PageHeader title={t('title')}>
         <div className="flex gap-2">
-          <button className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px]">
+          <button type="button" className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border rounded-md text-foreground text-[12px]">
             🏢 Landmark 81 ▾
           </button>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px]">
+          <button type="button" className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border rounded-md text-foreground text-[12px]">
             📅 Today ▾
           </button>
           {/* Connection Status Indicator */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px]">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border rounded-md text-foreground text-[12px]">
             <span className={cn(
               'w-2 h-2 rounded-full',
-              isConnected ? 'bg-[#22C55E] animate-pulse' :
-              isConnecting ? 'bg-[#EAB308] animate-pulse' :
-              'bg-[#EF4444]'
+              isConnected ? 'bg-success animate-pulse' :
+              isConnecting ? 'bg-warning animate-pulse' :
+              'bg-error'
             )} />
             {isConnected ? t('events.live') : isConnecting ? t('status.connecting') : t('status.offline')}
           </div>
@@ -221,21 +221,21 @@ export function DashboardPage() {
       {/* Middle: Events + Alerts */}
       <div className="grid grid-cols-[1.8fr_1fr] gap-4 mb-6">
         {/* Live Events */}
-        <div className="bg-[#1E293B] border border-[#334155] rounded-lg overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#334155]">
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div className="text-[13px] font-semibold flex items-center gap-2">
               <span className={cn(
                 'w-1.5 h-1.5 rounded-full',
-                isConnected ? 'bg-[#22C55E] animate-pulse' : 'bg-[#EF4444]'
+                isConnected ? 'bg-success animate-pulse' : 'bg-error'
               )} />
               {t('events.title')} ({isConnected ? t('events.live') : t('events.cached')})
             </div>
-            <span className="text-[12px] text-[#3B82F6] cursor-pointer hover:underline">{t('events.viewAll')}</span>
+            <span className="text-[12px] text-secure cursor-pointer hover:underline">{t('events.viewAll')}</span>
           </div>
           <div className="px-4 py-3">
-            <div className="h-10 mb-3 rounded bg-gradient-to-b from-transparent to-[#3B82F6]/10 relative overflow-hidden">
+            <div className="h-10 mb-3 rounded bg-linear-to-b from-transparent to-secure/10 relative overflow-hidden">
               <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 40" preserveAspectRatio="none">
-                <path d="M0,35 Q20,30 40,28 T80,20 T120,25 T160,15 T200,10 T240,18 T280,8 T320,12 T360,6 T400,10" fill="none" stroke="#3B82F6" strokeWidth="2" />
+                <path d="M0,35 Q20,30 40,28 T80,20 T120,25 T160,15 T200,10 T240,18 T280,8 T320,12 T360,6 T400,10" fill="none" stroke="currentColor" className="text-secure" strokeWidth="2" />
               </svg>
             </div>
             <EventFeed events={events} />
@@ -243,18 +243,18 @@ export function DashboardPage() {
         </div>
 
         {/* Active Alerts */}
-        <div className="bg-[#1E293B] border border-[#334155] rounded-lg overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#334155]">
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div className="text-[13px] font-semibold">⚠️ {t('alerts.title')}</div>
-            <span className="text-[12px] text-[#3B82F6] cursor-pointer hover:underline">{t('alerts.viewAll')}</span>
+            <span className="text-[12px] text-secure cursor-pointer hover:underline">{t('alerts.viewAll')}</span>
           </div>
           <div className="px-4 py-3 space-y-0">
             {alerts.map((a) => (
-              <div key={a.id} className="flex gap-2.5 py-2.5 border-b border-[#1E293B]/50 last:border-0">
-                <span className={cn('w-2 h-2 rounded-full mt-1.5 flex-shrink-0', severityDot[a.severity])} />
+              <div key={a.id} className="flex gap-2.5 py-2.5 border-b border-border/50 last:border-0">
+                <span className={cn('w-2 h-2 rounded-full mt-1.5 shrink-0', severityDot[a.severity])} />
                 <div>
-                  <div className="text-[13px] font-medium text-[#F8FAFC]">{a.title}</div>
-                  <div className="text-[11px] text-[#64748B] mt-0.5">{a.meta}</div>
+                  <div className="text-[13px] font-medium text-foreground">{a.title}</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">{a.meta}</div>
                 </div>
               </div>
             ))}
@@ -265,19 +265,19 @@ export function DashboardPage() {
       {/* Domain Health */}
       <div className="grid grid-cols-3 gap-4">
         {domainHealthData.map((d) => (
-          <div key={d.domain} className="bg-[#1E293B] border border-[#334155] rounded-lg p-4">
+          <div key={d.domain} className="bg-card border border-border rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[16px]">{d.emoji}</span>
-              <span className="font-semibold text-[14px]" style={{ color: d.color }}>{d.domain}</span>
+              <span className={cn('font-semibold text-[14px]', d.colorCls)}>{d.domain}</span>
             </div>
             {d.items.map((item) => (
               <div key={item.module} className="flex items-center justify-between py-1 text-[12px]">
-                <span className="text-[#F8FAFC]">{item.module}</span>
+                <span className="text-foreground">{item.module}</span>
                 <span className={cn('text-[11px]', healthStatusClass[item.status])}>{item.detail}</span>
               </div>
             ))}
             <div className="mt-3">
-              <span className="text-[12px] text-[#3B82F6] cursor-pointer hover:underline">
+              <span className="text-[12px] text-secure cursor-pointer hover:underline">
                 {d.viewLink}
               </span>
             </div>

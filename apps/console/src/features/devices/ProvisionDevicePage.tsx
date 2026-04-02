@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useTranslation } from 'react-i18next';
-import { PageHeader } from '@dm3/ui';
+import { PageHeader, Button, Input, Label, Select, SelectOption } from '@dm3/ui';
 import { regenerateQR, type ProvisionResponse, type RegenerateQRResponse } from '@/lib/api';
 import { useProvisionDevice } from '@/lib/hooks';
 import { ArrowLeft, Copy, Check, RefreshCw } from 'lucide-react';
@@ -77,21 +77,18 @@ export function ProvisionDevicePage() {
   const isExpired = remaining <= 0 && result !== null;
   const mins = Math.floor(remaining / 60);
   const secs = remaining % 60;
-  const timerColor = remaining === 0 ? '#EF4444' : remaining < 300 ? '#F97316' : '#22C55E';
-
-  const inputCls = 'w-full h-9 px-3 bg-[#111827] border border-[#1E293B] rounded-md text-[13px] text-[#F8FAFC] placeholder:text-[#64748B] focus:border-[#3B82F6] focus:outline-none focus:ring-1 focus:ring-[#3B82F6]/20';
-  const labelCls = 'block text-[11px] uppercase text-[#64748B] font-medium mb-1.5';
+  const timerCls = remaining === 0 ? 'text-error' : remaining < 300 ? 'text-operate' : 'text-success';
 
   if (step === 'qr' && result) {
     return (
       <div className="p-6">
-        <button onClick={() => { setStep('form'); setResult(null); }} className="flex items-center gap-1 text-[13px] text-[#94A3B8] hover:text-[#F8FAFC] mb-4 transition-colors">
+        <Button variant="ghost" size="sm" onClick={() => { setStep('form'); setResult(null); }} className="mb-4 gap-1">
           <ArrowLeft size={14} /> Back
-        </button>
+        </Button>
 
         <div className="max-w-md mx-auto text-center">
-          <h2 className="text-[18px] font-semibold text-[#F8FAFC] mb-1">Device Provisioned</h2>
-          <p className="text-[13px] text-[#94A3B8] mb-6">Scan this QR on the device to activate</p>
+          <h2 className="text-[18px] font-semibold text-foreground mb-1">Device Provisioned</h2>
+          <p className="text-[13px] text-muted-foreground mb-6">Scan this QR on the device to activate</p>
 
           {/* QR Code */}
           <div className="inline-block p-6 bg-white rounded-xl mb-4">
@@ -99,13 +96,13 @@ export function ProvisionDevicePage() {
           </div>
 
           <div className="mb-4">
-            <div className="text-[15px] font-medium text-[#F8FAFC]">Device: {result.device.device_id}</div>
-            <div className="text-[13px] text-[#94A3B8]">{result.device.name} • {result.device.type}</div>
+            <div className="text-[15px] font-medium text-foreground">Device: {result.device.device_id}</div>
+            <div className="text-[13px] text-muted-foreground">{result.device.name} • {result.device.type}</div>
           </div>
 
           {/* Timer */}
           <div className="mb-4">
-            <span className="text-[13px] font-mono font-medium" style={{ color: timerColor }}>
+            <span className={`text-[13px] font-mono font-medium ${timerCls}`}>
               {isExpired ? '⏰ Token expired' : `⏱ ${mins}:${String(secs).padStart(2, '0')} remaining`}
             </span>
           </div>
@@ -113,18 +110,18 @@ export function ProvisionDevicePage() {
           {/* Actions */}
           <div className="flex justify-center gap-2">
             {isExpired ? (
-              <button onClick={handleRegenerate} disabled={provisionMutation.isPending} className="flex items-center gap-1.5 px-4 py-2 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-md text-[13px] font-medium transition-colors disabled:opacity-50">
+              <Button onClick={handleRegenerate} disabled={provisionMutation.isPending}>
                 <RefreshCw size={14} className={provisionMutation.isPending ? 'animate-spin' : ''} /> Regenerate QR
-              </button>
+              </Button>
             ) : (
-              <button onClick={handleCopy} className="flex items-center gap-1.5 px-4 py-2 bg-[#1E293B] hover:bg-[#334155] text-[#F8FAFC] rounded-md text-[13px] font-medium transition-colors border border-[#334155]">
-                {copied ? <Check size={14} className="text-[#22C55E]" /> : <Copy size={14} />}
+              <Button variant="outline" onClick={handleCopy}>
+                {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
                 {copied ? 'Copied!' : 'Copy activation token'}
-              </button>
+              </Button>
             )}
           </div>
 
-          {error && <p className="text-[12px] text-[#EF4444] mt-3">{error}</p>}
+          {error && <p className="text-[12px] text-error mt-3">{error}</p>}
         </div>
       </div>
     );
@@ -136,29 +133,29 @@ export function ProvisionDevicePage() {
 
       <form onSubmit={handleSubmit} className="max-w-lg space-y-4">
         <div>
-          <label className={labelCls}>{t('provisionDevice.form.deviceId')}</label>
-          <input value={deviceId} onChange={(e) => setDeviceId(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder={t('provisionDevice.form.deviceIdPlaceholder')} required pattern="\d{6}" className={inputCls} />
+          <Label className="text-[11px] uppercase font-medium">{t('provisionDevice.form.deviceId')}</Label>
+          <Input value={deviceId} onChange={(e) => setDeviceId(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder={t('provisionDevice.form.deviceIdPlaceholder')} required pattern="\d{6}" className="mt-1.5" />
         </div>
         <div>
-          <label className={labelCls}>{t('provisionDevice.form.deviceName')}</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('provisionDevice.form.deviceNamePlaceholder')} required className={inputCls} />
+          <Label className="text-[11px] uppercase font-medium">{t('provisionDevice.form.deviceName')}</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('provisionDevice.form.deviceNamePlaceholder')} required className="mt-1.5" />
         </div>
         <div>
-          <label className={labelCls}>{t('provisionDevice.form.deviceType')}</label>
-          <select value={type} onChange={(e) => setType(e.target.value)} className={inputCls}>
-            {DEVICE_TYPES.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-          </select>
+          <Label className="text-[11px] uppercase font-medium">{t('provisionDevice.form.deviceType')}</Label>
+          <Select value={type} onChange={(e) => setType(e.target.value)} className="mt-1.5">
+            {DEVICE_TYPES.map((dt) => <SelectOption key={dt} value={dt}>{dt.charAt(0).toUpperCase() + dt.slice(1)}</SelectOption>)}
+          </Select>
         </div>
         <div>
-          <label className={labelCls}>{t('provisionDevice.form.location')}</label>
-          <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder={t('provisionDevice.form.locationPlaceholder')} className={inputCls} />
+          <Label className="text-[11px] uppercase font-medium">{t('provisionDevice.form.location')}</Label>
+          <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder={t('provisionDevice.form.locationPlaceholder')} className="mt-1.5" />
         </div>
 
-        {error && <p className="text-[12px] text-[#EF4444]">{error}</p>}
+        {error && <p className="text-[12px] text-error">{error}</p>}
 
-        <button type="submit" disabled={provisionMutation.isPending || deviceId.length !== 6 || !name} className="px-4 py-2 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-md text-[13px] font-medium transition-colors disabled:opacity-50">
+        <Button type="submit" disabled={provisionMutation.isPending || deviceId.length !== 6 || !name}>
           {provisionMutation.isPending ? 'Provisioning...' : t('provisionDevice.form.submit')}
-        </button>
+        </Button>
       </form>
     </div>
   );

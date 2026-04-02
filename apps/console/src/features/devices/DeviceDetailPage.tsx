@@ -1,20 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { PageHeader } from '@dm3/ui';
-import { DataTable, type Column } from '@dm3/ui';
+import { PageHeader, DataTable, type Column, Button } from '@dm3/ui';
 import { fetchDeviceEvents, type EventDTO } from '@/lib/api';
 import { useDevice, useSendCommand } from '@/lib/hooks';
 import { useRealtimeStore, useDeviceStatus } from '@dm3/api-client';
 import { ArrowLeft, Unlock, Lock, RotateCcw, Camera, Wifi, WifiOff } from 'lucide-react';
 
 const statusColors: Record<string, string> = {
-  online: 'bg-[#22C55E]/10 text-[#22C55E]',
-  active: 'bg-[#22C55E]/10 text-[#22C55E]',
-  offline: 'bg-[#64748B]/10 text-[#64748B]',
-  provisioning: 'bg-[#3B82F6]/10 text-[#3B82F6]',
-  disabled: 'bg-[#EF4444]/10 text-[#EF4444]',
-  error: 'bg-[#EF4444]/10 text-[#EF4444]',
+  online: 'bg-success/10 text-success',
+  active: 'bg-success/10 text-success',
+  offline: 'bg-muted text-muted-foreground',
+  provisioning: 'bg-secure/10 text-secure',
+  disabled: 'bg-error/10 text-error',
+  error: 'bg-error/10 text-error',
 };
 
 export function DeviceDetailPage() {
@@ -33,10 +32,10 @@ export function DeviceDetailPage() {
   const realtimeStatus = device ? deviceStatuses.find(s => s.deviceId === device.device_id) : null;
 
   const commandButtons = [
-    { id: 'unlock', label: t('deviceDetail.command.unlock'), icon: Unlock, color: 'bg-[#22C55E] hover:bg-[#16A34A]' },
-    { id: 'lock', label: t('deviceDetail.command.lock'), icon: Lock, color: 'bg-[#EF4444] hover:bg-[#DC2626]' },
-    { id: 'reboot', label: t('deviceDetail.command.reboot'), icon: RotateCcw, color: 'bg-[#F97316] hover:bg-[#EA580C]' },
-    { id: 'snapshot', label: t('deviceDetail.command.snapshot'), icon: Camera, color: 'bg-[#3B82F6] hover:bg-[#2563EB]' },
+    { id: 'unlock', label: t('deviceDetail.command.unlock'), icon: Unlock, color: 'bg-success hover:bg-success/90' },
+    { id: 'lock', label: t('deviceDetail.command.lock'), icon: Lock, color: 'bg-error hover:bg-error/90' },
+    { id: 'reboot', label: t('deviceDetail.command.reboot'), icon: RotateCcw, color: 'bg-operate hover:bg-operate/90' },
+    { id: 'snapshot', label: t('deviceDetail.command.snapshot'), icon: Camera, color: 'bg-secure hover:bg-secure/90' },
   ];
 
   useEffect(() => {
@@ -76,7 +75,7 @@ export function DeviceDetailPage() {
     return (
       <div className="p-6">
         <div className="flex items-center justify-center h-64">
-          <div className="w-6 h-6 border-2 border-[#3B82F6]/30 border-t-[#3B82F6] rounded-full animate-spin" />
+          <div className="w-6 h-6 border-2 border-secure/30 border-t-secure rounded-full animate-spin" />
         </div>
       </div>
     );
@@ -85,14 +84,11 @@ export function DeviceDetailPage() {
   if (!device) {
     return (
       <div className="p-6">
-        <button
-          onClick={() => navigate('/devices')}
-          className="flex items-center gap-1 text-[13px] text-[#94A3B8] hover:text-[#F8FAFC] mb-4 transition-colors"
-        >
+        <Button variant="ghost" size="sm" onClick={() => navigate('/devices')} className="mb-4 gap-1">
           <ArrowLeft size={14} /> Back to Devices
-        </button>
+        </Button>
         <div className="text-center py-12">
-          <p className="text-[#64748B]">Device not found</p>
+          <p className="text-muted-foreground">Device not found</p>
         </div>
       </div>
     );
@@ -112,7 +108,7 @@ export function DeviceDetailPage() {
       header: 'Time',
       width: '140px',
       render: (r) => (
-        <span className="text-[12px] text-[#94A3B8] font-mono">
+        <span className="text-[12px] text-muted-foreground font-mono">
           {new Date(r.time).toLocaleString()}
         </span>
       ),
@@ -121,7 +117,7 @@ export function DeviceDetailPage() {
       key: 'person_name',
       header: 'Person',
       render: (r) => (
-        <span className="text-[13px] text-[#F8FAFC]">
+        <span className="text-[13px] text-foreground">
           {r.person_name || '—'}
         </span>
       ),
@@ -134,7 +130,7 @@ export function DeviceDetailPage() {
         const isGranted = r.decision === 'granted';
         return (
           <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium ${
-            isGranted ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-[#EF4444]/10 text-[#EF4444]'
+            isGranted ? 'bg-success/10 text-success' : 'bg-error/10 text-error'
           }`}>
             {isGranted ? t('deviceDetail.event.granted') : t('deviceDetail.event.denied')}
           </span>
@@ -145,7 +141,7 @@ export function DeviceDetailPage() {
       key: 'reason',
       header: 'Reason',
       render: (r) => (
-        <span className="text-[12px] text-[#64748B]">
+        <span className="text-[12px] text-muted-foreground">
           {r.reason || '—'}
         </span>
       ),
@@ -154,12 +150,9 @@ export function DeviceDetailPage() {
 
   return (
     <div className="p-6">
-      <button
-        onClick={() => navigate('/devices')}
-        className="flex items-center gap-1 text-[13px] text-[#94A3B8] hover:text-[#F8FAFC] mb-4 transition-colors"
-      >
+      <Button variant="ghost" size="sm" onClick={() => navigate('/devices')} className="mb-4 gap-1">
         <ArrowLeft size={14} /> Back to Devices
-      </button>
+      </Button>
 
       <PageHeader
         title={`Device: ${deviceWithRealtimeStatus.device_id}`}
@@ -169,31 +162,31 @@ export function DeviceDetailPage() {
       {/* Device Info Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* Basic Info */}
-        <div className="lg:col-span-2 bg-[#111827] border border-[#1E293B] rounded-lg p-4">
-          <h3 className="text-[14px] font-medium text-[#F8FAFC] mb-3">Device Information</h3>
+        <div className="lg:col-span-2 bg-card border border-border rounded-lg p-4">
+          <h3 className="text-[14px] font-medium text-foreground mb-3">Device Information</h3>
           <div className="grid grid-cols-2 gap-4 text-[13px]">
             <div>
-              <span className="text-[#64748B]">{t('deviceDetail.field.deviceId')}:</span>
-              <span className="ml-2 text-[#F8FAFC] font-mono">{device.device_id}</span>
+              <span className="text-muted-foreground">{t('deviceDetail.field.deviceId')}:</span>
+              <span className="ml-2 text-foreground font-mono">{device.device_id}</span>
             </div>
             <div>
-              <span className="text-[#64748B]">{t('deviceDetail.field.type')}:</span>
-              <span className="ml-2 text-[#F8FAFC] capitalize">{device.type}</span>
+              <span className="text-muted-foreground">{t('deviceDetail.field.type')}:</span>
+              <span className="ml-2 text-foreground capitalize">{device.type}</span>
             </div>
             <div>
-              <span className="text-[#64748B]">{t('deviceDetail.field.status')}:</span>
+              <span className="text-muted-foreground">{t('deviceDetail.field.status')}:</span>
               <span className={`ml-2 inline-block px-2 py-0.5 rounded text-[11px] font-medium capitalize ${
                 statusColors[deviceWithRealtimeStatus.status] || statusColors.offline
               }`}>
                 {deviceWithRealtimeStatus.status}
               </span>
               {realtimeStatus && isConnected && (
-                <Wifi size={12} className="inline ml-1 text-[#22C55E]" />
+                <Wifi size={12} className="inline ml-1 text-success" />
               )}
             </div>
             <div>
-              <span className="text-[#64748B]">{t('deviceDetail.field.lastSeen')}:</span>
-              <span className="ml-2 text-[#F8FAFC] font-mono text-[12px]">
+              <span className="text-muted-foreground">{t('deviceDetail.field.lastSeen')}:</span>
+              <span className="ml-2 text-foreground font-mono text-[12px]">
                 {deviceWithRealtimeStatus.last_seen
                   ? new Date(deviceWithRealtimeStatus.last_seen).toLocaleString()
                   : '—'
@@ -201,31 +194,31 @@ export function DeviceDetailPage() {
               </span>
             </div>
             <div>
-              <span className="text-[#64748B]">{t('deviceDetail.field.firmware')}:</span>
-              <span className="ml-2 text-[#F8FAFC] font-mono">{device.firmware_version || '—'}</span>
+              <span className="text-muted-foreground">{t('deviceDetail.field.firmware')}:</span>
+              <span className="ml-2 text-foreground font-mono">{device.firmware_version || '—'}</span>
             </div>
             <div>
-              <span className="text-[#64748B]">{t('deviceDetail.field.location')}:</span>
-              <span className="ml-2 text-[#F8FAFC]">{device.location || '—'}</span>
+              <span className="text-muted-foreground">{t('deviceDetail.field.location')}:</span>
+              <span className="ml-2 text-foreground">{device.location || '—'}</span>
             </div>
           </div>
 
           {/* Real-time Performance Data */}
           {realtimeStatus && isConnected && (
-            <div className="mt-4 pt-4 border-t border-[#1E293B]">
-              <h4 className="text-[13px] font-medium text-[#94A3B8] mb-2">{t('deviceDetail.livePerformance')}</h4>
+            <div className="mt-4 pt-4 border-t border-border">
+              <h4 className="text-[13px] font-medium text-muted-foreground mb-2">{t('deviceDetail.livePerformance')}</h4>
               <div className="grid grid-cols-3 gap-4 text-[12px]">
                 <div>
-                  <span className="text-[#64748B]">CPU:</span>
-                  <span className="ml-2 text-[#22C55E] font-mono">{realtimeStatus.cpuPct ?? '—'}%</span>
+                  <span className="text-muted-foreground">CPU:</span>
+                  <span className="ml-2 text-success font-mono">{realtimeStatus.cpuPct ?? '—'}%</span>
                 </div>
                 <div>
-                  <span className="text-[#64748B]">Memory:</span>
-                  <span className="ml-2 text-[#22C55E] font-mono">{realtimeStatus.memPct ?? '—'}%</span>
+                  <span className="text-muted-foreground">Memory:</span>
+                  <span className="ml-2 text-success font-mono">{realtimeStatus.memPct ?? '—'}%</span>
                 </div>
                 <div>
-                  <span className="text-[#64748B]">Uptime:</span>
-                  <span className="ml-2 text-[#22C55E] font-mono">
+                  <span className="text-muted-foreground">Uptime:</span>
+                  <span className="ml-2 text-success font-mono">
                     {realtimeStatus.uptimeSeconds ? Math.floor(realtimeStatus.uptimeSeconds / 3600) : '—'}h
                   </span>
                 </div>
@@ -235,11 +228,12 @@ export function DeviceDetailPage() {
         </div>
 
         {/* Commands */}
-        <div className="bg-[#111827] border border-[#1E293B] rounded-lg p-4">
-          <h3 className="text-[14px] font-medium text-[#F8FAFC] mb-3">{t('deviceDetail.commands')}</h3>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <h3 className="text-[14px] font-medium text-foreground mb-3">{t('deviceDetail.commands')}</h3>
           <div className="space-y-2">
             {commandButtons.map(({ id, label, icon: Icon, color }) => (
               <button
+                type="button"
                 key={id}
                 onClick={() => handleCommand(id)}
                 disabled={sendCommand.isPending || deviceWithRealtimeStatus.status === 'offline'}
@@ -252,11 +246,11 @@ export function DeviceDetailPage() {
           </div>
 
           {sendCommand.isPending && (
-            <p className="text-[12px] text-[#3B82F6] mt-2">Sending command...</p>
+            <p className="text-[12px] text-secure mt-2">Sending command...</p>
           )}
 
           {deviceWithRealtimeStatus.status === 'offline' && (
-            <p className="text-[12px] text-[#64748B] mt-2">
+            <p className="text-[12px] text-muted-foreground mt-2">
               <WifiOff size={12} className="inline mr-1" />
               Device offline - commands unavailable
             </p>
@@ -265,16 +259,16 @@ export function DeviceDetailPage() {
       </div>
 
       {/* Recent Events */}
-      <div className="bg-[#111827] border border-[#1E293B] rounded-lg">
-        <div className="p-4 border-b border-[#1E293B]">
-          <h3 className="text-[14px] font-medium text-[#F8FAFC]">{t('deviceDetail.recentEvents')}</h3>
+      <div className="bg-card border border-border rounded-lg">
+        <div className="p-4 border-b border-border">
+          <h3 className="text-[14px] font-medium text-foreground">{t('deviceDetail.recentEvents')}</h3>
         </div>
         {eventsLoading ? (
           <div className="p-8 text-center">
-            <div className="w-5 h-5 border-2 border-[#3B82F6]/30 border-t-[#3B82F6] rounded-full animate-spin mx-auto" />
+            <div className="w-5 h-5 border-2 border-secure/30 border-t-secure rounded-full animate-spin mx-auto" />
           </div>
         ) : recentEvents.length === 0 ? (
-          <div className="p-8 text-center text-[13px] text-[#64748B]">
+          <div className="p-8 text-center text-[13px] text-muted-foreground">
             No recent events
           </div>
         ) : (
