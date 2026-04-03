@@ -753,25 +753,26 @@ def upload_module_report(result: dict, process_id: str):
                             shutil.copy2(f, out_exec / f.name)
                             break
 
-        # Copy screenshots for this module (all subdirs for web tests)
-        ss_dir = EXPORT_DIR / "screenshots"
-        if ss_dir.exists():
-            out_ss = upload_dir / "screenshots"
-            for subdir in ss_dir.iterdir():
-                if subdir.is_dir():
-                    # Check if this screenshot dir belongs to our module
-                    subdir_upper = subdir.name.upper()
-                    match = tc_prefix in subdir_upper
-                    if not match and web_test_titles:
-                        for title in web_test_titles:
-                            sanitized = title.replace(" ", "_").replace("/", "_")
-                            if sanitized.upper() in subdir_upper:
-                                match = True
-                                break
-                    if match:
-                        dest = out_ss / subdir.relative_to(ss_dir)
-                        if subdir.is_dir():
-                            shutil.copytree(subdir, dest, dirs_exist_ok=True)
+        # Copy screenshots for this module
+        # Structure: export/screenshots/steps/<CaseID>/step_001_before.png
+        # HTML refs: ../screenshots/steps/<CaseID>/step_001_before.png
+        ss_steps_dir = EXPORT_DIR / "screenshots" / "steps"
+        if ss_steps_dir.exists():
+            out_ss = upload_dir / "screenshots" / "steps"
+            for case_dir in ss_steps_dir.iterdir():
+                if not case_dir.is_dir():
+                    continue
+                case_upper = case_dir.name.upper()
+                match = tc_prefix in case_upper
+                if not match and web_test_titles:
+                    for title in web_test_titles:
+                        sanitized = title.replace(" ", "_").replace("/", "_")
+                        if sanitized.upper() in case_upper:
+                            match = True
+                            break
+                if match:
+                    dest = out_ss / case_dir.name
+                    shutil.copytree(case_dir, dest, dirs_exist_ok=True)
 
         # Copy videos for this module
         vid_dir = EXPORT_DIR / "videos"
