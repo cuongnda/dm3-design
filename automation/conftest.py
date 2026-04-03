@@ -121,21 +121,30 @@ def pytest_html_results_summary(prefix, summary, postfix):
     ])
 
 
+# Track test index per module for TC_xxx_NN mapping
+_module_test_counter = {}
+
+
 def pytest_html_results_table_row(report, cells):
     """Add Detail Report + Video links and Review status to each test row."""
     test_case_id = getattr(report, 'test_case_id', None)
     is_reviewed = getattr(report, 'is_reviewed', None)
 
-    # Try to find test_case_id from execution reports if not set on report
+    # Only process 'call' phase (skip setup/teardown)
+    if report.when != 'call':
+        cells.append(f'<td class="col-review" style="text-align:center;"><span style="color:#999;font-size:12px;">-</span></td>')
+        return
+
+    # Try to find test_case_id from execution reports if not set
     if not test_case_id and hasattr(report, 'nodeid'):
-        # Extract test function name from nodeid (e.g., test_account_list_page)
-        match = re.search(r'::(\w+)(?:\[|$)', report.nodeid)
-        if match:
-            func_name = match.group(1)
-            # Look for execution reports matching this function name
+        nodeid = report.nodeid
+        
+        # Method 1: Match by function name in web test execution reports
+        func_match = re.search(r'::(\w+)(?:\[|$)', nodeid)
+        if func_match:
+            func_name = func_match.group(1)
             for jf in sorted(glob.glob("export/execution_reports/execution_steps_*.json"), reverse=True):
                 basename = os.path.basename(jf)
-                # Sanitize func name same way as web_executor
                 sanitized = func_name.replace(" ", "_").replace("/", "_")
                 if sanitized in basename:
                     try:
@@ -146,24 +155,52 @@ def pytest_html_results_table_row(report, cells):
                     except Exception:
                         continue
 
+        # Method 2: For API tests — use module + counter to find TC_xxx_NN
+        if not test_case_id:
+            # Extract module from path: tests/api/test_access_time.py -> api-access-time
+            path_match = re.search(r'tests/(api|web)/(?:.*/)?test_(\w+)\.py', nodeid)
+            if path_match:
+                test_type = path_match.group(1)
+                module_name = path_match.group(2).replace("_", "-")
+                module_slug = f"{test_type}-{module_name}"
+                tc_prefix = "TC_" + module_slug.upper().replace("-", "_")
+                
+                # Increment counter for this module
+                if module_slug not in _module_test_counter:
+                    _module_test_counter[module_slug] = 0
+                _module_test_counter[module_slug] += 1
+                tc_num = f"{_module_test_counter[module_slug]:02d}"
+                test_case_id = f"{tc_prefix}_{tc_num}"
+
     if test_case_id:
         # Find latest execution report HTML
         pattern = f"export/execution_reports/execution_steps_{test_case_id}_*.html"
         html_files = sorted(glob.glob(pattern), reverse=True)
+
+        # Find latest execution report JSON (for step detail page generation)
+        json_pattern = f"export/execution_reports/execution_steps_{test_case_id}_*.json"
+        json_files = sorted(glob.glob(json_pattern), reverse=True)
 
         # Find latest video
         video_pattern = f"export/videos/test_execution_{test_case_id}_*.mp4"
         video_files = sorted(glob.glob(video_pattern), reverse=True)
 
         links_html = ""
+        # Detail report link
         if html_files:
             rel = os.path.relpath(html_files[0], 'export')
-            links_html += f'<a href="{rel}" target="_blank" style="margin-right:10px;">Detail</a>'
+            links_html += f'<a href="{rel}" target="_blank" style="margin-right:10px;">📊 Detail</a>'
+        elif json_files:
+            # JSON exists but HTML not yet generated — link to JSON
+            rel = os.path.relpath(json_files[0], 'export')
+            links_html += f'<a href="{rel}" target="_blank" style="margin-right:10px;">📊 Detail</a>'
+        
+        # Video link
         if video_files:
             rel = os.path.relpath(video_files[0], 'export')
             links_html += (
                 f'<a href="#" onclick="openVideoModal(\'{rel}\',\'{test_case_id}\');return false;">'
-                f'Video</a>'
+                f'🎬 Video</a>'
             )
 
         if links_html:
@@ -171,7 +208,7 @@ def pytest_html_results_table_row(report, cells):
 
     # Append Review cell (always, to match header)
     if is_reviewed:
-        review_html = '<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:bold;">OK</span>'
+        review_html = '<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:bold;">✓</span>'
     else:
         review_html = '<span style="color:#999;font-size:12px;">-</span>'
     cells.append(f'<td class="col-review" style="text-align:center;">{review_html}</td>')
