@@ -263,16 +263,16 @@ def _inject_report_links(report_html: Path, module_slug: str):
     json_files = {}
     video_files = {}
     
+    import re as _re
+    
     if exec_dir.exists():
         for f in exec_dir.iterdir():
             if tc_prefix in f.name and f.suffix == '.html':
-                # Extract TC number: TC_API_COMPANY_CRUD_01 -> 01
-                import re
-                m = re.search(rf'{tc_prefix}_(\d+)', f.name)
+                m = _re.search(rf'{tc_prefix}_(\d+)', f.name)
                 if m:
                     html_files[int(m.group(1))] = f"execution_reports/{f.name}"
             elif tc_prefix in f.name and f.suffix == '.json':
-                m = re.search(rf'{tc_prefix}_(\d+)', f.name)
+                m = _re.search(rf'{tc_prefix}_(\d+)', f.name)
                 if m:
                     json_files[int(m.group(1))] = f"execution_reports/{f.name}"
     
@@ -280,8 +280,7 @@ def _inject_report_links(report_html: Path, module_slug: str):
     if vid_dir.exists():
         for f in vid_dir.iterdir():
             if tc_prefix in f.name and f.suffix == '.mp4':
-                import re
-                m = re.search(rf'{tc_prefix}_(\d+)', f.name)
+                m = _re.search(rf'{tc_prefix}_(\d+)', f.name)
                 if m:
                     video_files[int(m.group(1))] = f"videos/{f.name}"
 
@@ -292,8 +291,6 @@ def _inject_report_links(report_html: Path, module_slug: str):
         content = report_html.read_text(encoding='utf-8')
     except Exception:
         return
-
-    import re
     
     # Find all test result rows and inject links
     # pytest-html rows have: <td class="col-links">...</td>
@@ -323,8 +320,69 @@ def _inject_report_links(report_html: Path, module_slug: str):
             return f'<td class="col-links">{links_html}</td>'
         return match.group(0)
     
-    # Replace col-links cells (empty ones from pytest-html)
-    content = re.sub(r'<td class="col-links">\s*</td>', replace_links, content)
+    # pytest-html 4.x stores table data inside a JSON blob (data-jsonblob attribute)
+    # Links cells appear as escaped HTML: &lt;td class=\&quot;col-links\&quot;&gt;&lt;/td&gt;
+    # We need to replace them inside the JSON string
+    
+    # First try: raw HTML replacement (older pytest-html versions)
+    content = _re.sub(r'<td class="col-links">\s*</td>', replace_links, content)
+    
+    # Second: JSON blob replacement (pytest-html 4.x) 
+    # Pattern inside JSON: <td class=\"col-links\"></td>  (with escaped quotes)
+    tc_counter = 0  # Reset counter for JSON blob pass
+    
+    def replace_links_json(match):
+        nonlocal tc_counter
+        tc_counter += 1
+        tc_num = tc_counter
+        
+        links_html = ""
+        if tc_num in html_files:
+            links_html += f'<a href=\\"{html_files[tc_num]}\\" target=\\"_blank\\" style=\\"margin-right:8px;\\">📊 Detail</a>'
+        elif tc_num in json_files:
+            links_html += f'<a href=\\"{json_files[tc_num]}\\" target=\\"_blank\\" style=\\"margin-right:8px;\\">📊 Detail</a>'
+        
+        if tc_num in video_files:
+            tc_id = f"{tc_prefix}_{tc_num:02d}"
+            links_html += f'<a href=\\"#\\" onclick=\\"openVideoModal(\'{video_files[tc_num]}\',\'{tc_id}\');return false;\\">🎬 Video</a>'
+        
+        if links_html:
+            return f'<td class=\\"col-links\\">{links_html}</td>'
+        return match.group(0)
+    
+    content = _re.sub(
+        r'<td class=\\"col-links\\">\\s*</td>|<td class=\\"col-links\\"></td>',
+        replace_links_json,
+        content
+    )
+    
+    # Third: HTML entity encoded (data-jsonblob uses HTML entities)
+    tc_counter = 0
+    
+    def replace_links_entity(match):
+        nonlocal tc_counter
+        tc_counter += 1
+        tc_num = tc_counter
+        
+        links_html = ""
+        if tc_num in html_files:
+            links_html += f'&lt;a href=\\&quot;{html_files[tc_num]}\\&quot; target=\\&quot;_blank\\&quot; style=\\&quot;margin-right:8px;\\&quot;&gt;📊 Detail&lt;/a&gt;'
+        elif tc_num in json_files:
+            links_html += f'&lt;a href=\\&quot;{json_files[tc_num]}\\&quot; target=\\&quot;_blank\\&quot; style=\\&quot;margin-right:8px;\\&quot;&gt;📊 Detail&lt;/a&gt;'
+        
+        if tc_num in video_files:
+            tc_id = f"{tc_prefix}_{tc_num:02d}"
+            links_html += f'&lt;a href=\\&quot;#\\&quot; onclick=\\&quot;openVideoModal(\'{video_files[tc_num]}\',\'{tc_id}\');return false;\\&quot;&gt;🎬 Video&lt;/a&gt;'
+        
+        if links_html:
+            return f'&lt;td class=\\&quot;col-links\\&quot;&gt;{links_html}&lt;/td&gt;'
+        return match.group(0)
+    
+    content = _re.sub(
+        r'&lt;td class=\\&quot;col-links\\&quot;&gt;&lt;/td&gt;',
+        replace_links_entity,
+        content
+    )
     
     try:
         report_html.write_text(content, encoding='utf-8')
