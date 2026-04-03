@@ -30,6 +30,7 @@ function SidebarNavItem({ to, icon, label, badge, collapsed }: NavItemProps) {
         <TooltipTrigger asChild>
           <NavLink
             to={to}
+            end
             className={({ isActive }) =>
               cn(
                 'flex items-center justify-center w-10 h-8 mx-auto rounded-md transition-colors relative',
@@ -57,6 +58,7 @@ function SidebarNavItem({ to, icon, label, badge, collapsed }: NavItemProps) {
   return (
     <NavLink
       to={to}
+      end
       className={({ isActive }) =>
         cn(
           'flex items-center gap-2.5 px-3 py-1.5 mx-2 rounded-md text-[13px] transition-colors',
