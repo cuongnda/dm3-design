@@ -10,10 +10,10 @@
       "cwd": "${workspaceFolder}/backend",
       "env": {
         "HTTP_PORT": "8005",
-        "DATABASE_URL": "postgres://postgres:postgres@localhost:5433/dm3?sslmode=disable",
-        "NATS_URL": "nats://localhost:4222",
+        "DATABASE_URL": "postgres://postgres:postgres@192.168.1.254:5433/dm3?sslmode=disable",
+        "NATS_URL": "nats://192.168.1.254:4222",
         "JWT_SECRET": "dm3-dev-secret-key",
-        "VALKEY_URL": "localhost:6380"
+        "VALKEY_URL": "192.168.1.254:6380"
       }
     },
     {
@@ -25,10 +25,10 @@
       "cwd": "${workspaceFolder}/backend",
       "env": {
         "HTTP_PORT": "8004",
-        "DATABASE_URL": "postgres://postgres:postgres@localhost:5433/dm3?sslmode=disable",
-        "NATS_URL": "nats://localhost:4222",
+        "DATABASE_URL": "postgres://postgres:postgres@192.168.1.254:5433/dm3?sslmode=disable",
+        "NATS_URL": "nats://192.168.1.254:4222",
         "JWT_SECRET": "dm3-dev-secret-key",
-        "VALKEY_URL": "localhost:6380"
+        "VALKEY_URL": "192.168.1.254:6380"
       }
     },
     {
@@ -40,10 +40,10 @@
       "cwd": "${workspaceFolder}/backend",
       "env": {
         "HTTP_PORT": "8003",
-        "DATABASE_URL": "postgres://postgres:postgres@localhost:5433/dm3?sslmode=disable",
-        "NATS_URL": "nats://localhost:4222",
+        "DATABASE_URL": "postgres://postgres:postgres@192.168.1.254:5433/dm3?sslmode=disable",
+        "NATS_URL": "nats://192.168.1.254:4222",
         "JWT_SECRET": "dm3-dev-secret-key",
-        "VALKEY_URL": "localhost:6380"
+        "VALKEY_URL": "192.168.1.254:6380"
       }
     },
     {
@@ -55,12 +55,12 @@
       "cwd": "${workspaceFolder}/backend",
       "env": {
         "HTTP_PORT": "8002",
-        "DATABASE_URL": "postgres://postgres:postgres@localhost:5433/dm3?sslmode=disable",
-        "MQTT_BROKER": "tcp://localhost:1884",
+        "DATABASE_URL": "postgres://postgres:postgres@192.168.1.254:5433/dm3?sslmode=disable",
+        "MQTT_BROKER": "tcp://192.168.1.254:1884",
         "MQTT_CLIENT_ID": "dm3-device-gateway-debug",
-        "NATS_URL": "nats://localhost:4222",
+        "NATS_URL": "nats://192.168.1.254:4222",
         "JWT_SECRET": "dm3-dev-secret-key",
-        "VALKEY_URL": "localhost:6380",
+        "VALKEY_URL": "192.168.1.254:6380",
         "BOOTSTRAP_SECRET": "dm3-bootstrap-v1-dev-secret"
       }
     },
@@ -69,7 +69,10 @@
       "type": "node",
       "request": "launch",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "cwd": "${workspaceFolder}/apps/console",
       "console": "integratedTerminal",
       "env": {

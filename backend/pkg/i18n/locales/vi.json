@@ -64,5 +64,8 @@
 
   "photo.upload_error": "Tải ảnh lên thất bại",
   "photo.invalid_format": "Định dạng ảnh không hợp lệ",
-  "photo.too_large": "Tệp ảnh quá lớn"
+  "photo.too_large": "Tệp ảnh quá lớn",
+
+  "access_time.template_not_found": "Không tìm thấy mẫu khung giờ",
+  "access_time.invalid_timezone": "Múi giờ không hợp lệ"
 }

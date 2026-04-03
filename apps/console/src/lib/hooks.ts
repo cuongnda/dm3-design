@@ -6,6 +6,9 @@ import {
   createGroup, updateGroup, deleteGroup, addGroupMember, removeGroupMember,
   createDoor, updateDoor, deleteDoor, createRule, updateRule, deleteRule, createSchedule,
   sendDeviceCommand, provisionDevice, fetchPendingDevices, approvePendingDevice, rejectPendingDevice,
+  fetchAccessTimeTemplates, fetchAccessTimeTemplate, createAccessTimeTemplate, updateAccessTimeTemplate, deleteAccessTimeTemplate,
+  assignAccessTime, fetchUserAccessTime, validateAccessTime, fetchAccessTimeStats,
+  type CreateAccessTimeTemplateRequest, type UpdateAccessTimeTemplateRequest, type AssignAccessTimeRequest, type ValidateAccessTimeRequest,
 } from './api';
 
 export function useDevices() {
@@ -378,5 +381,85 @@ export function useSendCommand() {
   return useMutation({
     mutationFn: ({ deviceId, command, params }: { deviceId: string; command: string; params?: Record<string, any> }) =>
       sendDeviceCommand(deviceId, command, params),
+  });
+}
+
+// ─── Access Time ──────────────────────────────────────────────────────────────
+
+export function useAccessTimeTemplates(page = 1, params?: Record<string, string>) {
+  return useQuery({
+    queryKey: ['access-time-templates', page, params],
+    queryFn: () => fetchAccessTimeTemplates(page, 50, params),
+  });
+}
+
+export function useAccessTimeTemplate(id: string) {
+  return useQuery({
+    queryKey: ['access-time-template', id],
+    queryFn: () => fetchAccessTimeTemplate(id),
+    enabled: !!id,
+  });
+}
+
+export function useCreateAccessTimeTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateAccessTimeTemplateRequest) => createAccessTimeTemplate(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['access-time-templates'] });
+    },
+  });
+}
+
+export function useUpdateAccessTimeTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateAccessTimeTemplateRequest }) => updateAccessTimeTemplate(id, data),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['access-time-template', id] });
+      queryClient.invalidateQueries({ queryKey: ['access-time-templates'] });
+    },
+  });
+}
+
+export function useDeleteAccessTimeTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteAccessTimeTemplate,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['access-time-templates'] });
+    },
+  });
+}
+
+export function useAssignAccessTime() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: AssignAccessTimeRequest) => assignAccessTime(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['access-time-templates'] });
+    },
+  });
+}
+
+export function useUserAccessTime(userId: string) {
+  return useQuery({
+    queryKey: ['user-access-time', userId],
+    queryFn: () => fetchUserAccessTime(userId),
+    enabled: !!userId,
+  });
+}
+
+export function useValidateAccessTime() {
+  return useMutation({
+    mutationFn: (data: ValidateAccessTimeRequest) => validateAccessTime(data),
+  });
+}
+
+export function useAccessTimeStats() {
+  return useQuery({
+    queryKey: ['access-time-stats'],
+    queryFn: fetchAccessTimeStats,
+    refetchInterval: 30_000,
   });
 }

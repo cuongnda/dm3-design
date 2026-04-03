@@ -61,30 +61,40 @@ function Select({
     return options.filter((opt) => opt.label.toLowerCase().includes(q))
   }, [options, search])
 
-  const updatePanelPosition = React.useCallback(() => {
-    if (!triggerRef.current) return
+  const getPanelPosition = React.useCallback((): React.CSSProperties => {
+    if (!triggerRef.current) return {}
     const rect = triggerRef.current.getBoundingClientRect()
-    setPanelStyle({
+    return {
       position: "fixed",
       top: rect.bottom + 4,
       left: rect.left,
       width: rect.width,
       zIndex: 9999,
-    })
+    }
   }, [])
 
+  // Compute position synchronously when opening
+  const handleToggle = React.useCallback(() => {
+    setOpen((prev) => {
+      if (!prev) {
+        // Opening: compute position immediately
+        setPanelStyle(getPanelPosition())
+      }
+      return !prev
+    })
+  }, [getPanelPosition])
+
+  // Re-position on scroll/resize while open
   React.useEffect(() => {
     if (!open) return
-    updatePanelPosition()
-
-    const onReposition = () => updatePanelPosition()
+    const onReposition = () => setPanelStyle(getPanelPosition())
     window.addEventListener("resize", onReposition)
     window.addEventListener("scroll", onReposition, true)
     return () => {
       window.removeEventListener("resize", onReposition)
       window.removeEventListener("scroll", onReposition, true)
     }
-  }, [open, updatePanelPosition])
+  }, [open, getPanelPosition])
 
   React.useEffect(() => {
     const handleOutside = (e: MouseEvent) => {
@@ -133,7 +143,7 @@ function Select({
         type="button"
         data-slot="select"
         disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
+        onClick={handleToggle}
         className={cn(
           "h-9 w-full min-w-0 rounded-md border px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none",
           "bg-input border-border text-foreground",
@@ -155,20 +165,22 @@ function Select({
           <div
             ref={panelRef}
             style={panelStyle}
-            className="rounded-md border border-border bg-card text-foreground shadow-xl overflow-hidden"
+            className="rounded-md border border-border bg-card text-foreground shadow-xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-100"
           >
-            <div className="p-2 border-b border-border bg-card">
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search..."
-                  className="h-8 pl-10 pr-3 bg-background"
-                  autoFocus
-                />
+            {options.length > 6 && (
+              <div className="p-2 border-b border-border bg-card">
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search..."
+                    className="h-8 pl-10 pr-3 bg-background"
+                    autoFocus
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="max-h-64 overflow-y-auto py-1 bg-card">
               {filteredOptions.length === 0 ? (

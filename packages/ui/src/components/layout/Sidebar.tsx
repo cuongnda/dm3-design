@@ -30,6 +30,7 @@ function SidebarNavItem({ to, icon, label, badge, collapsed }: NavItemProps) {
         <TooltipTrigger asChild>
           <NavLink
             to={to}
+            end
             className={({ isActive }) =>
               cn(
                 'flex items-center justify-center w-10 h-8 mx-auto rounded-md transition-colors relative',
@@ -57,6 +58,7 @@ function SidebarNavItem({ to, icon, label, badge, collapsed }: NavItemProps) {
   return (
     <NavLink
       to={to}
+      end
       className={({ isActive }) =>
         cn(
           'flex items-center gap-2.5 px-3 py-1.5 mx-2 rounded-md text-[13px] transition-colors',
@@ -121,6 +123,7 @@ export function Sidebar() {
 
         <SectionLabel label={t('nav.secure')} color="#3B82F6" collapsed={c} />
         <SidebarNavItem to={ROUTES.accessControl} icon={<DoorOpen size={iconSize} />} label={t('nav.accessControl')} collapsed={c} />
+        <SidebarNavItem to={ROUTES.accessTime} icon={<Clock size={iconSize} />} label={t('nav.accessTime', 'Access Time')} collapsed={c} />
         <SidebarNavItem to={ROUTES.cctv} icon={<Video size={iconSize} />} label={t('nav.cctv')} collapsed={c} />
         <SidebarNavItem to={ROUTES.intrusion} icon={<ShieldAlert size={iconSize} />} label={t('nav.intrusion')} collapsed={c} />
         <SidebarNavItem to={ROUTES.intercom} icon={<Phone size={iconSize} />} label={t('nav.intercom')} collapsed={c} />

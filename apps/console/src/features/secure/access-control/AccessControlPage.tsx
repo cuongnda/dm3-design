@@ -188,7 +188,12 @@ export function AccessControlPage() {
   return (
     <div>
       <PageHeader title={t('accessControl.title')}>
-        <Button size="sm" variant="outline">{t('accessControl.rules')}</Button>
+        <Button size="sm" variant="outline" onClick={() => navigate('/secure/access-control/rules')}>
+          {t('accessControl.rules')}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => navigate('/secure/access-control/access-time')}>
+          Access Time
+        </Button>
         <Button size="sm">{t('accessControl.addDoor')}</Button>
       </PageHeader>
 

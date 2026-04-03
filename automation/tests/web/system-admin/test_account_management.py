@@ -5,7 +5,7 @@ Uses data-driven approach with WebTestExecutor
 import json
 import pytest
 from pathlib import Path
-from automation.common.web_executor import WebTestExecutor
+from common.web_executor import WebTestExecutor
 
 
 DATA_FILE = Path(__file__).parent.parent.parent.parent / "data" / "web" / "system-admin" / "test_account_management.data.json"
@@ -18,7 +18,9 @@ def test_data():
 
 @pytest.fixture(scope="module")
 def executor(test_data):
-    exe = WebTestExecutor(headless=True)
+    import os
+    headless = os.environ.get('HEADLESS', 'true').lower() == 'true'
+    exe = WebTestExecutor(headless=headless)
     # Login as sysadmin first
     exe.login("sysadmin@duali.com", "sysadmin123")
     yield exe
