@@ -287,34 +287,44 @@ def _inject_report_links(report_html: Path, module_slug: str):
     
     # For web tests: map TC number → test title → video by title
     # WebTestExecutor generates videos named: test_execution_<Title>_YYYYMMDD_HHMMSS.mp4
-    # We need to map TC_WEB_*_01 → corresponding test title → find video
+    # TC numbers map to data JSON test case order → title → video filename
     if module_slug.startswith("web-") and vid_dir.exists():
-        # Build TC number → test title mapping from execution report JSONs
-        tc_to_title = {}
+        # Find WebTestExecutor execution report files (title-named, not TC_ prefixed)
+        # These have case_id = title_with_underscores → same as video filename
+        web_case_ids = []
         if exec_dir.exists():
-            for f in exec_dir.iterdir():
-                if tc_prefix in f.name and f.suffix == '.json':
-                    m = _re.search(rf'{tc_prefix}_(\d+)', f.name)
-                    if m:
-                        tc_num = int(m.group(1))
-                        try:
-                            ej = json.loads(f.read_text())
-                            desc = ej.get("test_case_description", "")
-                            if desc:
-                                tc_to_title[tc_num] = desc
-                        except Exception:
-                            pass
+            for f in sorted(exec_dir.iterdir()):
+                if f.suffix == '.json' and not f.name.startswith('execution_steps_TC_'):
+                    try:
+                        ej = json.loads(f.read_text())
+                        cid = ej.get("test_case_id", "")
+                        if cid:
+                            web_case_ids.append(cid)
+                    except Exception:
+                        pass
         
-        # Now find videos by title match
+        # Map TC numbers to case_ids by matching test order
+        # TC_WEB_COMPANY_MANAGEMENT_01 = 1st test, _02 = 2nd test, etc.
+        # WebTestExecutor files are created in same order
+        # Deduplicate case_ids while preserving order
+        seen = set()
+        unique_case_ids = []
+        for cid in web_case_ids:
+            if cid not in seen:
+                seen.add(cid)
+                unique_case_ids.append(cid)
+        
         all_vids = [f for f in vid_dir.iterdir() if f.suffix == '.mp4']
-        for tc_num, title in tc_to_title.items():
+        for tc_num in sorted(html_files.keys()):
             if tc_num in video_files:
-                continue  # already found by TC prefix
-            title_slug = title.replace(" ", "_")
-            for vf in all_vids:
-                if title_slug in vf.name:
-                    video_files[tc_num] = f"videos/{vf.name}"
-                    break
+                continue
+            idx = tc_num - 1  # TC_01 → index 0
+            if idx < len(unique_case_ids):
+                case_id = unique_case_ids[idx]
+                for vf in all_vids:
+                    if case_id in vf.name:
+                        video_files[tc_num] = f"videos/{vf.name}"
+                        break
 
     if not html_files and not json_files:
         return
