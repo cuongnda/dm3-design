@@ -279,35 +279,65 @@ def _inject_report_links(report_html: Path, module_slug: str):
     
     # For web tests: prefer WebTestExecutor HTML files (they have screenshots + video)
     # TC_WEB_ files are stubs with empty screenshot paths
+    # Map TC number → test func name → data JSON title → WebTestExecutor case_id
+    tc_to_case_id = {}
     if is_web and exec_dir.exists():
-        # Build TC number → WebTestExecutor case_id mapping
-        web_case_ids = []
-        for f in sorted(exec_dir.iterdir()):
-            if f.suffix == '.json' and not f.name.startswith('execution_steps_TC_'):
+        # Step 1: Get pytest test order (TC_01=1st test, TC_02=2nd, etc.)
+        report_json_path = EXPORT_DIR / f"report_{module_slug}.json"
+        func_order = []  # ordered list of func names
+        if report_json_path.exists():
+            try:
+                rj = json.loads(report_json_path.read_text())
+                for t in rj.get("tests", []):
+                    parts = t.get("nodeid", "").split("::")
+                    if len(parts) >= 2:
+                        func_order.append(parts[-1])
+            except Exception:
+                pass
+        
+        # Step 2: Map func name → title from data JSON
+        func_to_title = {}
+        test_file = None
+        if report_json_path.exists():
+            try:
+                rj = json.loads(report_json_path.read_text())
+                for t in rj.get("tests", []):
+                    nid = t.get("nodeid", "")
+                    if "/web/" in nid:
+                        test_file = nid.split("::")[0]
+                        break
+            except Exception:
+                pass
+        if test_file:
+            data_path = Path(test_file.replace("tests/", "data/").replace(".py", ".data.json"))
+            data_full = PROJECT_DIR / data_path
+            if data_full.exists():
                 try:
-                    ej = json.loads(f.read_text())
-                    cid = ej.get("test_case_id", "")
-                    if cid:
-                        web_case_ids.append(cid)
+                    dj = json.loads(data_full.read_text())
+                    for func_name, tc_data in dj.items():
+                        if isinstance(tc_data, dict):
+                            desc = tc_data.get("description", "")
+                            if desc:
+                                func_to_title[func_name] = desc
                 except Exception:
                     pass
-        seen = set()
-        unique_case_ids = []
-        for cid in web_case_ids:
-            if cid not in seen:
-                seen.add(cid)
-                unique_case_ids.append(cid)
         
-        # Override TC_ html_files with WebTestExecutor html files
-        for tc_num in list(html_files.keys()):
-            idx = tc_num - 1
-            if idx < len(unique_case_ids):
-                case_id = unique_case_ids[idx]
-                # Find matching WebTestExecutor HTML
-                for f in exec_dir.iterdir():
-                    if f.suffix == '.html' and case_id in f.name and not f.name.startswith('execution_steps_TC_'):
-                        html_files[tc_num] = f"execution_reports/{f.name}"
-                        break
+        # Step 3: Build TC number → case_id mapping
+        # case_id = title with spaces replaced by underscores
+        tc_to_case_id = {}
+        for tc_num, func_name in enumerate(func_order, 1):
+            title = func_to_title.get(func_name, "")
+            if title:
+                tc_to_case_id[tc_num] = title.replace(" ", "_")
+        
+        # Step 4: Override html_files with WebTestExecutor HTML + find videos
+        all_web_htmls = [f for f in exec_dir.iterdir() 
+                         if f.suffix == '.html' and not f.name.startswith('execution_steps_TC_')]
+        for tc_num, case_id in tc_to_case_id.items():
+            for f in all_web_htmls:
+                if case_id in f.name:
+                    html_files[tc_num] = f"execution_reports/{f.name}"
+                    break
     
     vid_dir = EXPORT_DIR / "videos"
     if vid_dir.exists():
@@ -318,46 +348,17 @@ def _inject_report_links(report_html: Path, module_slug: str):
                 if m:
                     video_files[int(m.group(1))] = f"videos/{f.name}"
     
-    # For web tests: map TC number → test title → video by title
-    # WebTestExecutor generates videos named: test_execution_<Title>_YYYYMMDD_HHMMSS.mp4
-    # TC numbers map to data JSON test case order → title → video filename
-    if module_slug.startswith("web-") and vid_dir.exists():
-        # Find WebTestExecutor execution report files (title-named, not TC_ prefixed)
-        # These have case_id = title_with_underscores → same as video filename
-        web_case_ids = []
-        if exec_dir.exists():
-            for f in sorted(exec_dir.iterdir()):
-                if f.suffix == '.json' and not f.name.startswith('execution_steps_TC_'):
-                    try:
-                        ej = json.loads(f.read_text())
-                        cid = ej.get("test_case_id", "")
-                        if cid:
-                            web_case_ids.append(cid)
-                    except Exception:
-                        pass
-        
-        # Map TC numbers to case_ids by matching test order
-        # TC_WEB_COMPANY_MANAGEMENT_01 = 1st test, _02 = 2nd test, etc.
-        # WebTestExecutor files are created in same order
-        # Deduplicate case_ids while preserving order
-        seen = set()
-        unique_case_ids = []
-        for cid in web_case_ids:
-            if cid not in seen:
-                seen.add(cid)
-                unique_case_ids.append(cid)
-        
+    # For web tests: map TC number → video by case_id (reuse tc_to_case_id from above)
+    tc_to_case_id_map = tc_to_case_id
+    if tc_to_case_id_map and vid_dir.exists():
         all_vids = [f for f in vid_dir.iterdir() if f.suffix == '.mp4']
-        for tc_num in sorted(html_files.keys()):
+        for tc_num, case_id in tc_to_case_id_map.items():
             if tc_num in video_files:
                 continue
-            idx = tc_num - 1  # TC_01 → index 0
-            if idx < len(unique_case_ids):
-                case_id = unique_case_ids[idx]
-                for vf in all_vids:
-                    if case_id in vf.name:
-                        video_files[tc_num] = f"videos/{vf.name}"
-                        break
+            for vf in all_vids:
+                if case_id in vf.name:
+                    video_files[tc_num] = f"videos/{vf.name}"
+                    break
 
     if not html_files and not json_files:
         return
