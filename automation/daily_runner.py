@@ -262,6 +262,7 @@ def _inject_report_links(report_html: Path, module_slug: str):
     html_files = {}  # tc_num -> relative path
     json_files = {}
     video_files = {}
+    is_web = module_slug.startswith("web-")
     
     import re as _re
     
@@ -275,6 +276,38 @@ def _inject_report_links(report_html: Path, module_slug: str):
                 m = _re.search(rf'{tc_prefix}_(\d+)', f.name)
                 if m:
                     json_files[int(m.group(1))] = f"execution_reports/{f.name}"
+    
+    # For web tests: prefer WebTestExecutor HTML files (they have screenshots + video)
+    # TC_WEB_ files are stubs with empty screenshot paths
+    if is_web and exec_dir.exists():
+        # Build TC number → WebTestExecutor case_id mapping
+        web_case_ids = []
+        for f in sorted(exec_dir.iterdir()):
+            if f.suffix == '.json' and not f.name.startswith('execution_steps_TC_'):
+                try:
+                    ej = json.loads(f.read_text())
+                    cid = ej.get("test_case_id", "")
+                    if cid:
+                        web_case_ids.append(cid)
+                except Exception:
+                    pass
+        seen = set()
+        unique_case_ids = []
+        for cid in web_case_ids:
+            if cid not in seen:
+                seen.add(cid)
+                unique_case_ids.append(cid)
+        
+        # Override TC_ html_files with WebTestExecutor html files
+        for tc_num in list(html_files.keys()):
+            idx = tc_num - 1
+            if idx < len(unique_case_ids):
+                case_id = unique_case_ids[idx]
+                # Find matching WebTestExecutor HTML
+                for f in exec_dir.iterdir():
+                    if f.suffix == '.html' and case_id in f.name and not f.name.startswith('execution_steps_TC_'):
+                        html_files[tc_num] = f"execution_reports/{f.name}"
+                        break
     
     vid_dir = EXPORT_DIR / "videos"
     if vid_dir.exists():
