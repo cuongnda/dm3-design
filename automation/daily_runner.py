@@ -240,6 +240,106 @@ def _inject_host_web(report_html: Path):
 
 
 # =============================================================================
+# EXECUTION REPORTS (for DV Tasks compatibility)
+# =============================================================================
+
+def _generate_execution_reports(report_json: Path, module_slug: str):
+    """Convert pytest JSON report to execution_reports/*.json files.
+    
+    DV Tasks' _parse_test_cases() expects execution_steps_TC_*.json files
+    with fields: test_case_id, steps, total_steps, steps_completed, steps_failed,
+    total_duration, test_case_description, execution_timestamp.
+    
+    We generate one file per test function from pytest-json-report output.
+    """
+    if not report_json.exists():
+        return
+
+    try:
+        data = json.loads(report_json.read_text())
+    except Exception:
+        return
+
+    exec_dir = EXPORT_DIR / "execution_reports"
+    exec_dir.mkdir(exist_ok=True)
+
+    tests = data.get("tests", [])
+    tc_prefix = "TC_" + module_slug.upper().replace("-", "_")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    for i, test in enumerate(tests, 1):
+        nodeid = test.get("nodeid", "")
+        outcome = test.get("outcome", "unknown")
+        duration = test.get("duration", 0) or 0
+
+        # Build test_case_id: TC_API_ACCESS_TIME_01
+        tc_num = f"{i:02d}"
+        tc_id = f"{tc_prefix}_{tc_num}"
+
+        # Extract test name for title
+        # "tests/api/test_access_time.py::TestCreateTemplate::test_create_template_basic"
+        parts = nodeid.split("::")
+        title = parts[-1] if parts else nodeid
+        class_name = parts[-2] if len(parts) >= 2 else ""
+        if class_name:
+            title = f"{class_name} > {title}"
+
+        # Build steps from call/setup/teardown phases
+        steps = []
+        for phase_name in ["setup", "call", "teardown"]:
+            phase = test.get(phase_name, {})
+            if not phase:
+                continue
+            phase_outcome = phase.get("outcome", "passed")
+            crash = phase.get("crash", {})
+            longrepr = phase.get("longrepr", "")
+            
+            step = {
+                "step_id": f"step_{phase_name}",
+                "description": f"{phase_name}: {title}",
+                "status": "passed" if phase_outcome == "passed" else "failed",
+                "duration": phase.get("duration", 0) or 0,
+                "error": "",
+            }
+            if phase_outcome != "passed":
+                error_msg = ""
+                if crash:
+                    error_msg = f"{crash.get('path', '')}:{crash.get('lineno', '')} - {crash.get('message', '')}"
+                elif longrepr:
+                    error_msg = str(longrepr)[:500]
+                step["error"] = error_msg
+            steps.append(step)
+
+        steps_total = len(steps)
+        steps_failed = sum(1 for s in steps if s["status"] == "failed")
+        steps_completed = sum(1 for s in steps if s["status"] == "passed")
+
+        execution_report = {
+            "test_case_id": tc_id,
+            "test_case_description": {
+                "case_id": tc_id,
+                "title": title,
+                "is_reviewed": False,
+            },
+            "steps": steps,
+            "total_steps": steps_total,
+            "steps_completed": steps_completed,
+            "steps_failed": steps_failed,
+            "total_duration": duration,
+            "execution_timestamp": ts,
+        }
+
+        filename = f"execution_steps_{tc_id}_{ts}.json"
+        (exec_dir / filename).write_text(
+            json.dumps(execution_report, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    if tests:
+        log(f"Generated {len(tests)} execution reports", tag=module_slug)
+
+
+# =============================================================================
 # SINGLE TEST FILE EXECUTION
 # =============================================================================
 
@@ -293,6 +393,10 @@ def run_single_test(test_file: str) -> dict:
 
     # Inject HOST_WEB into report.html so DV Tasks can parse the server column
     _inject_host_web(report_html)
+
+    # Generate execution_reports/*.json from pytest results
+    # DV Tasks counts Pass/Review/All from these files
+    _generate_execution_reports(report_json, module_slug)
 
     status = "PASSED" if proc.returncode == 0 else "FAILED"
     log(f"{status}: {passed}P/{failed}F/{errors}E = {total} total ({duration:.1f}s)", tag=module_slug)
