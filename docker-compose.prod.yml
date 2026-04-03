@@ -260,6 +260,36 @@ services:
 
   # ── Simulator (staging only) ───────────────────────────────────────────────
 
+  # ── Automation test runner ─────────────────────────────────────────────────
+
+  automation:
+    build:
+      context: .
+      dockerfile: automation/Dockerfile
+    container_name: dm3-automation
+    restart: unless-stopped
+    env_file:
+      - automation/.env.docker
+    environment:
+      # CI/CD injects these at deploy time (override .env.docker)
+      CI_COMMIT_SHA: ${CI_COMMIT_SHA:-}
+      CI_COMMIT_BEFORE_SHA: ${CI_COMMIT_BEFORE_SHA:-}
+    depends_on:
+      device-gateway:
+        condition: service_healthy
+      webapp:
+        condition: service_healthy
+      auth-svc:
+        condition: service_healthy
+    networks:
+      - dm3-internal
+    volumes:
+      - automation_export:/app/automation/export
+    profiles:
+      - staging
+
+  # ── Simulator (staging only) ───────────────────────────────────────────────
+
   simulator:
     build:
       context: ./simulator
@@ -289,6 +319,7 @@ volumes:
   valkey_data:
   minio_data:
   certbot_webroot:
+  automation_export:
 
 networks:
   dm3-internal:

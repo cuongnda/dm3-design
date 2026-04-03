@@ -5,3 +5,6 @@ __pycache__/
 *.pyc
 .pytest_cache/
 venv/
+
+# Docker env (contains secrets)
+# .env.docker is tracked as template — copy to runner and fill in secrets
