@@ -121,6 +121,7 @@ export function Sidebar() {
 
         <SectionLabel label={t('nav.secure')} color="#3B82F6" collapsed={c} />
         <SidebarNavItem to={ROUTES.accessControl} icon={<DoorOpen size={iconSize} />} label={t('nav.accessControl')} collapsed={c} />
+        <SidebarNavItem to={ROUTES.accessTime} icon={<Clock size={iconSize} />} label={t('nav.accessTime', 'Access Time')} collapsed={c} />
         <SidebarNavItem to={ROUTES.cctv} icon={<Video size={iconSize} />} label={t('nav.cctv')} collapsed={c} />
         <SidebarNavItem to={ROUTES.intrusion} icon={<ShieldAlert size={iconSize} />} label={t('nav.intrusion')} collapsed={c} />
         <SidebarNavItem to={ROUTES.intercom} icon={<Phone size={iconSize} />} label={t('nav.intercom')} collapsed={c} />

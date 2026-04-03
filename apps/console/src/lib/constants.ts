@@ -29,6 +29,7 @@ export const ROUTES = {
   alerts: '/alerts',
   // SECURE
   accessControl: '/secure/access-control',
+  accessTime: '/secure/access-control/access-time',
   cctv: '/secure/cctv',
   intrusion: '/secure/intrusion',
   intercom: '/secure/intercom',

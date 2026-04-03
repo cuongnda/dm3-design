@@ -352,12 +352,17 @@ export function AccessTimeListPage() {
 
       {/* Templates Table */}
       <Card>
-        <DataTable
-          columns={columns}
-          data={filteredTemplates}
-          loading={loading}
-          emptyMessage="No access time templates found"
-        />
+        {loading ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="text-sm text-gray-500">Loading templates...</div>
+          </div>
+        ) : (
+          <DataTable
+            columns={columns}
+            data={filteredTemplates}
+            rowKey={(template) => template.id}
+          />
+        )}
       </Card>
 
       {/* Delete Confirmation Dialog */}

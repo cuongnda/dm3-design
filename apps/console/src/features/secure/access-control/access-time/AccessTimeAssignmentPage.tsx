@@ -374,12 +374,17 @@ export function AccessTimeAssignmentPage() {
 
       {/* Users Table */}
       <Card>
-        <DataTable
-          columns={columns}
-          data={filteredUsers}
-          loading={loading}
-          emptyMessage="No users found"
-        />
+        {loading ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="text-sm text-gray-500">Loading users...</div>
+          </div>
+        ) : (
+          <DataTable
+            columns={columns}
+            data={filteredUsers}
+            rowKey={(user) => user.id}
+          />
+        )}
       </Card>
 
       {/* Assignment Dialog */}
