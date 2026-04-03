@@ -217,7 +217,7 @@ def run_single_test(test_file: str) -> dict:
     ]
 
     proc = subprocess.Popen(
-        cmd, capture_output=True, text=True, cwd=PROJECT_DIR,
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=PROJECT_DIR,
     )
     with _running_procs_lock:
         _running_procs.append(proc)
