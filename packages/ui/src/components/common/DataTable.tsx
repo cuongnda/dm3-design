@@ -27,11 +27,13 @@ interface DataTableProps<T> {
   onRowClick?: (row: T) => void;
   rowClassName?: (row: T) => string;
   pageSize?: number;
+  "data-testid"?: string;
+  rowTestId?: (row: T) => string;
 }
 
 type SortDir = 'asc' | 'desc' | null;
 
-export function DataTable<T>({ columns, data, rowKey, onRowClick, rowClassName, pageSize = 15 }: DataTableProps<T>) {
+export function DataTable<T>({ columns, data, rowKey, onRowClick, rowClassName, pageSize = 15, "data-testid": testId, rowTestId }: DataTableProps<T>) {
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
   const [page, setPage] = useState(1);
@@ -59,7 +61,7 @@ export function DataTable<T>({ columns, data, rowKey, onRowClick, rowClassName, 
 
   return (
     <div>
-      <div className="rounded-lg border border-border bg-card">
+      <div className="rounded-lg border border-border bg-card" data-testid={testId}>
         <Table>
           <TableHeader className="bg-muted/30">
             <TableRow className="hover:bg-transparent">
@@ -102,6 +104,7 @@ export function DataTable<T>({ columns, data, rowKey, onRowClick, rowClassName, 
               paged.map((row) => (
                 <TableRow
                   key={rowKey(row)}
+                  data-testid={rowTestId?.(row)}
                   onClick={() => onRowClick?.(row)}
                   className={cn(
                     "transition-colors",

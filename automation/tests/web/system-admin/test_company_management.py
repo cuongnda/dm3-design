@@ -18,7 +18,9 @@ def test_data():
 
 @pytest.fixture(scope="module")
 def executor(test_data):
-    exe = WebTestExecutor(headless=True)
+    import os
+    headless = os.environ.get('HEADLESS', 'true').lower() == 'true'
+    exe = WebTestExecutor(headless=headless)
     # Login as sysadmin first
     exe.login("sysadmin@duali.com", "sysadmin123")
     yield exe
