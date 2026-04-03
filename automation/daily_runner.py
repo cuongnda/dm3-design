@@ -278,11 +278,43 @@ def _inject_report_links(report_html: Path, module_slug: str):
     
     vid_dir = EXPORT_DIR / "videos"
     if vid_dir.exists():
+        # First try: TC-prefix matching (for API tests or future TC-named videos)
         for f in vid_dir.iterdir():
             if tc_prefix in f.name and f.suffix == '.mp4':
                 m = _re.search(rf'{tc_prefix}_(\d+)', f.name)
                 if m:
                     video_files[int(m.group(1))] = f"videos/{f.name}"
+    
+    # For web tests: map TC number → test title → video by title
+    # WebTestExecutor generates videos named: test_execution_<Title>_YYYYMMDD_HHMMSS.mp4
+    # We need to map TC_WEB_*_01 → corresponding test title → find video
+    if module_slug.startswith("web-") and vid_dir.exists():
+        # Build TC number → test title mapping from execution report JSONs
+        tc_to_title = {}
+        if exec_dir.exists():
+            for f in exec_dir.iterdir():
+                if tc_prefix in f.name and f.suffix == '.json':
+                    m = _re.search(rf'{tc_prefix}_(\d+)', f.name)
+                    if m:
+                        tc_num = int(m.group(1))
+                        try:
+                            ej = json.loads(f.read_text())
+                            desc = ej.get("test_case_description", "")
+                            if desc:
+                                tc_to_title[tc_num] = desc
+                        except Exception:
+                            pass
+        
+        # Now find videos by title match
+        all_vids = [f for f in vid_dir.iterdir() if f.suffix == '.mp4']
+        for tc_num, title in tc_to_title.items():
+            if tc_num in video_files:
+                continue  # already found by TC prefix
+            title_slug = title.replace(" ", "_")
+            for vf in all_vids:
+                if title_slug in vf.name:
+                    video_files[tc_num] = f"videos/{vf.name}"
+                    break
 
     if not html_files and not json_files:
         return
