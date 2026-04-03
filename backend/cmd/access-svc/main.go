@@ -129,6 +129,24 @@ func main() {
 
 		// Dashboard stats: all roles can read
 		r.Get("/stats", handlers.GetStats)
+
+		// Access Time Management: manager+ can manage, viewer can read
+		r.Group(func(atr chi.Router) {
+			atr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			// Templates
+			atr.Get("/access-time/templates", handlers.ListAccessTimeTemplates)
+			atr.Post("/access-time/templates", handlers.CreateAccessTimeTemplate)
+			atr.Get("/access-time/templates/{id}", handlers.GetAccessTimeTemplate)
+			atr.Put("/access-time/templates/{id}", handlers.UpdateAccessTimeTemplate)
+			atr.Delete("/access-time/templates/{id}", handlers.DeleteAccessTimeTemplate)
+			// User Assignment
+			atr.Post("/access-time/assign", handlers.AssignAccessTime)
+			atr.Get("/access-time/users/{userId}", handlers.GetUserAccessTime)
+		})
+
+		// Access Time Validation & Stats: all roles can access
+		r.Post("/access-time/validate", handlers.ValidateAccess)
+		r.Get("/access-time/stats", handlers.GetAccessTimeStats)
 	})
 
 	// Start server
