@@ -296,10 +296,13 @@ def _generate_execution_reports(report_json: Path, module_slug: str):
             
             step = {
                 "step_id": f"step_{phase_name}",
+                "phase": phase_name if phase_name != "call" else "execute",
                 "description": f"{phase_name}: {title}",
                 "status": "passed" if phase_outcome == "passed" else "failed",
                 "duration": phase.get("duration", 0) or 0,
                 "error": "",
+                "screenshot_before": "",
+                "screenshot_after": "",
             }
             if phase_outcome != "passed":
                 error_msg = ""
