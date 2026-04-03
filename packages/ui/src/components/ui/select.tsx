@@ -155,20 +155,22 @@ function Select({
           <div
             ref={panelRef}
             style={panelStyle}
-            className="rounded-md border border-border bg-card text-foreground shadow-xl overflow-hidden"
+            className="rounded-md border border-border bg-card text-foreground shadow-xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-100"
           >
-            <div className="p-2 border-b border-border bg-card">
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search..."
-                  className="h-8 pl-10 pr-3 bg-background"
-                  autoFocus
-                />
+            {options.length > 6 && (
+              <div className="p-2 border-b border-border bg-card">
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search..."
+                    className="h-8 pl-10 pr-3 bg-background"
+                    autoFocus
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="max-h-64 overflow-y-auto py-1 bg-card">
               {filteredOptions.length === 0 ? (
