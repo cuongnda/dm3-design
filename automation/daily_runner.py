@@ -86,34 +86,45 @@ def log(msg: str, tag: str = "MAIN"):
 # =============================================================================
 
 MODULE_ORDER = {
-    # API modules
-    "system-admin": 1,
-    "company-crud": 2,
-    "account-management": 3,
-    "access-time": 4,
-    # Web modules
-    "system-login": 10,
-    "company-management": 11,
+    # API modules (1-9)
+    "api-system-admin": 1,
+    "api-company-crud": 2,
+    "api-account-management": 3,
+    "api-access-time": 4,
+    # Web modules (10+)
+    "web-system-login": 10,
+    "web-company-management": 11,
+    "web-account-management": 12,
 }
 
 
 def get_module_upload_name(slug: str) -> str:
-    """E.g., 'access-time' -> 'module-4-access-time'"""
+    """E.g., 'api-access-time' -> 'module-4-api-access-time'"""
     num = MODULE_ORDER.get(slug)
     if num:
         return f"module-{num}-{slug}"
     return slug
 
 
+def get_test_type(test_file: str) -> str:
+    """Determine if test is api or web from path."""
+    if "/api/" in test_file or "\\api\\" in test_file:
+        return "api"
+    elif "/web/" in test_file or "\\web\\" in test_file:
+        return "web"
+    return "other"
+
+
 def get_module_slug(test_file: str) -> str:
-    """Extract module slug from test file path.
+    """Extract module slug with api/web prefix.
     
-    tests/api/test_access_time.py -> 'access-time'
-    tests/web/system-admin/test_company_management.py -> 'company-management'
+    tests/api/test_access_time.py -> 'api-access-time'
+    tests/web/system-admin/test_company_management.py -> 'web-company-management'
     """
     p = Path(test_file)
+    test_type = get_test_type(test_file)
     name = p.stem.replace("test_", "").replace("_", "-")
-    return name
+    return f"{test_type}-{name}"
 
 
 # =============================================================================
@@ -194,6 +205,41 @@ def map_changed_to_tests(changed_files: list) -> list:
 
 
 # =============================================================================
+# HOST_WEB INJECTION
+# =============================================================================
+
+def _get_host_web() -> str:
+    """Get HOST_WEB from environment for DV Tasks server column."""
+    from dotenv import load_dotenv
+    env_path = PROJECT_DIR / '.env'
+    if env_path.exists():
+        load_dotenv(env_path, override=False)
+    return os.environ.get("WEB_URL", os.environ.get("BASE_URL", ""))
+
+
+def _inject_host_web(report_html: Path):
+    """Inject HOST_WEB comment into pytest-html report so DV Tasks can parse the server column.
+    
+    DV Tasks' _parse_report_html() looks for: HOST_WEB: <url>
+    """
+    if not report_html.exists():
+        return
+    host_web = _get_host_web()
+    if not host_web:
+        return
+    try:
+        content = report_html.read_text(encoding='utf-8')
+        # Check if already injected
+        if 'HOST_WEB:' in content:
+            return
+        # Inject as HTML comment after <head>
+        content = content.replace('<head>', f'<head>\n<!-- HOST_WEB: {host_web} -->', 1)
+        report_html.write_text(content, encoding='utf-8')
+    except Exception:
+        pass
+
+
+# =============================================================================
 # SINGLE TEST FILE EXECUTION
 # =============================================================================
 
@@ -244,6 +290,9 @@ def run_single_test(test_file: str) -> dict:
             total = s.get("total", 0)
         except Exception:
             pass
+
+    # Inject HOST_WEB into report.html so DV Tasks can parse the server column
+    _inject_host_web(report_html)
 
     status = "PASSED" if proc.returncode == 0 else "FAILED"
     log(f"{status}: {passed}P/{failed}F/{errors}E = {total} total ({duration:.1f}s)", tag=module_slug)
