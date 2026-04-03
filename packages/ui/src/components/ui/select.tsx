@@ -61,30 +61,40 @@ function Select({
     return options.filter((opt) => opt.label.toLowerCase().includes(q))
   }, [options, search])
 
-  const updatePanelPosition = React.useCallback(() => {
-    if (!triggerRef.current) return
+  const getPanelPosition = React.useCallback((): React.CSSProperties => {
+    if (!triggerRef.current) return {}
     const rect = triggerRef.current.getBoundingClientRect()
-    setPanelStyle({
+    return {
       position: "fixed",
       top: rect.bottom + 4,
       left: rect.left,
       width: rect.width,
       zIndex: 9999,
-    })
+    }
   }, [])
 
+  // Compute position synchronously when opening
+  const handleToggle = React.useCallback(() => {
+    setOpen((prev) => {
+      if (!prev) {
+        // Opening: compute position immediately
+        setPanelStyle(getPanelPosition())
+      }
+      return !prev
+    })
+  }, [getPanelPosition])
+
+  // Re-position on scroll/resize while open
   React.useEffect(() => {
     if (!open) return
-    updatePanelPosition()
-
-    const onReposition = () => updatePanelPosition()
+    const onReposition = () => setPanelStyle(getPanelPosition())
     window.addEventListener("resize", onReposition)
     window.addEventListener("scroll", onReposition, true)
     return () => {
       window.removeEventListener("resize", onReposition)
       window.removeEventListener("scroll", onReposition, true)
     }
-  }, [open, updatePanelPosition])
+  }, [open, getPanelPosition])
 
   React.useEffect(() => {
     const handleOutside = (e: MouseEvent) => {
@@ -133,7 +143,7 @@ function Select({
         type="button"
         data-slot="select"
         disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
+        onClick={handleToggle}
         className={cn(
           "h-9 w-full min-w-0 rounded-md border px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none",
           "bg-input border-border text-foreground",
