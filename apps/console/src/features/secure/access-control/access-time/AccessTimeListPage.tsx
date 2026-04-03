@@ -8,7 +8,7 @@ import { useAccessTimeTemplates, useAccessTimeStats, useDeleteAccessTimeTemplate
 import type { AccessTimeTemplateDTO } from '@/lib/api';
 
 export function AccessTimeListPage() {
-  const { t } = useTranslation();
+  const { t } = useTranslation('secure');
   const navigate = useNavigate();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -24,9 +24,9 @@ export function AccessTimeListPage() {
 
   const templates = templatesData?.templates ?? [];
 
-  const filtered = templates.filter(t =>
-    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filtered = templates.filter(tmpl =>
+    tmpl.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    tmpl.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleToggleActive = (template: AccessTimeTemplateDTO) => {
@@ -34,7 +34,7 @@ export function AccessTimeListPage() {
   };
 
   const handleDelete = (template: AccessTimeTemplateDTO) => {
-    if (window.confirm(`Delete "${template.name}"? This cannot be undone.`)) {
+    if (window.confirm(`Delete "${template.name}"?`)) {
       deleteMutation.mutate(template.id);
     }
   };
@@ -42,7 +42,7 @@ export function AccessTimeListPage() {
   const columns: Column<AccessTimeTemplateDTO>[] = [
     {
       key: 'name',
-      header: 'Template Name',
+      header: t('accessTime.templateName'),
       sortable: true,
       render: (row) => (
         <div className="flex items-center gap-3">
@@ -56,16 +56,15 @@ export function AccessTimeListPage() {
     },
     {
       key: 'timezone',
-      header: 'Timezone',
+      header: t('accessTime.timezone'),
       render: (row) => <span className="text-sm text-muted-foreground">{row.timezone}</span>,
     },
-
     {
       key: 'is_active',
-      header: 'Status',
+      header: t('accessTime.status'),
       render: (row) => (
         <Badge variant={row.is_active ? 'default' : 'secondary'}>
-          {row.is_active ? 'Active' : 'Inactive'}
+          {row.is_active ? t('accessTime.active') : t('accessTime.inactive')}
         </Badge>
       ),
     },
@@ -90,28 +89,28 @@ export function AccessTimeListPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Access Time Management">
+      <PageHeader title={t('accessTime.title')}>
         <Button size="sm" onClick={() => navigate('/secure/access-control/access-time/new')}>
-          <Plus className="w-4 h-4 mr-1" /> New Template
+          <Plus className="w-4 h-4 mr-1" /> {t('accessTime.newTemplate')}
         </Button>
       </PageHeader>
 
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <Card className="p-3"><div className="text-2xl font-bold">{stats.templates_active}</div><div className="text-xs text-muted-foreground">Active</div></Card>
-          <Card className="p-3"><div className="text-2xl font-bold">{stats.templates_total}</div><div className="text-xs text-muted-foreground">Total</div></Card>
-          <Card className="p-3"><div className="text-2xl font-bold">{stats.templates_total - stats.templates_active}</div><div className="text-xs text-muted-foreground">Inactive</div></Card>
+          <Card className="p-3"><div className="text-2xl font-bold">{stats.templates_active}</div><div className="text-xs text-muted-foreground">{t('accessTime.stats.active')}</div></Card>
+          <Card className="p-3"><div className="text-2xl font-bold">{stats.templates_total}</div><div className="text-xs text-muted-foreground">{t('accessTime.stats.total')}</div></Card>
+          <Card className="p-3"><div className="text-2xl font-bold">{stats.templates_total - stats.templates_active}</div><div className="text-xs text-muted-foreground">{t('accessTime.stats.inactive')}</div></Card>
         </div>
       )}
 
       {/* Filters */}
       <div className="flex gap-2">
-        <Input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search templates..." className="flex-1 h-8 text-[13px]" />
+        <Input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={t('accessTime.search')} className="flex-1 h-8 text-[13px]" />
         <Select value={activeFilter} onChange={(e) => setActiveFilter(e.target.value)} className="w-40 h-8 text-[12px]">
-          <SelectOption value="">All</SelectOption>
-          <SelectOption value="true">Active</SelectOption>
-          <SelectOption value="false">Inactive</SelectOption>
+          <SelectOption value="">{t('accessTime.filter.all')}</SelectOption>
+          <SelectOption value="true">{t('accessTime.filter.active')}</SelectOption>
+          <SelectOption value="false">{t('accessTime.filter.inactive')}</SelectOption>
         </Select>
       </div>
 
