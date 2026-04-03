@@ -13,9 +13,11 @@ BASE = "/api/v1/access-time"
 
 @pytest.fixture(scope="module")
 def client():
-    """Login as company admin with access to access-svc."""
-    c = APIClient(base_url="http://localhost:8003")
+    """Login via auth-svc, then talk to access-svc."""
+    c = APIClient()  # uses API_AUTH (auth-svc) for login
     c.login("admin@duali.com", "admin123")
+    # Switch base_url to access-svc for API calls
+    c.base_url = "http://localhost:8003"
     return c
 
 
