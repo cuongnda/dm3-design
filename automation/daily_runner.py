@@ -356,30 +356,32 @@ def _inject_report_links(report_html: Path, module_slug: str):
         content
     )
     
-    # Third: HTML entity encoded (data-jsonblob uses HTML entities)
+    # Third: HTML numeric entity encoded (pytest-html 4.x data-jsonblob uses &#34; for quotes)
+    # Actual pattern: &lt;td class=\&#34;col-links\&#34;&gt;&lt;/td&gt;
     tc_counter = 0
-    
+    Q = '\\&#34;'  # escaped quote in jsonblob
+
     def replace_links_entity(match):
         nonlocal tc_counter
         tc_counter += 1
         tc_num = tc_counter
-        
+
         links_html = ""
         if tc_num in html_files:
-            links_html += f'&lt;a href=\\&quot;{html_files[tc_num]}\\&quot; target=\\&quot;_blank\\&quot; style=\\&quot;margin-right:8px;\\&quot;&gt;📊 Detail&lt;/a&gt;'
+            links_html += f'&lt;a href={Q}{html_files[tc_num]}{Q} target={Q}_blank{Q} style={Q}margin-right:8px;{Q}&gt;\U0001f4ca Detail&lt;/a&gt;'
         elif tc_num in json_files:
-            links_html += f'&lt;a href=\\&quot;{json_files[tc_num]}\\&quot; target=\\&quot;_blank\\&quot; style=\\&quot;margin-right:8px;\\&quot;&gt;📊 Detail&lt;/a&gt;'
-        
+            links_html += f'&lt;a href={Q}{json_files[tc_num]}{Q} target={Q}_blank{Q} style={Q}margin-right:8px;{Q}&gt;\U0001f4ca Detail&lt;/a&gt;'
+
         if tc_num in video_files:
             tc_id = f"{tc_prefix}_{tc_num:02d}"
-            links_html += f'&lt;a href=\\&quot;#\\&quot; onclick=\\&quot;openVideoModal(\'{video_files[tc_num]}\',\'{tc_id}\');return false;\\&quot;&gt;🎬 Video&lt;/a&gt;'
-        
+            links_html += f'&lt;a href={Q}#{Q} onclick={Q}openVideoModal(\'{video_files[tc_num]}\',\'{tc_id}\');return false;{Q}&gt;\U0001f3ac Video&lt;/a&gt;'
+
         if links_html:
-            return f'&lt;td class=\\&quot;col-links\\&quot;&gt;{links_html}&lt;/td&gt;'
+            return f'&lt;td class={Q}col-links{Q}&gt;{links_html}&lt;/td&gt;'
         return match.group(0)
-    
+
     content = _re.sub(
-        r'&lt;td class=\\&quot;col-links\\&quot;&gt;&lt;/td&gt;',
+        r'&lt;td class=\\&#34;col-links\\&#34;&gt;&lt;/td&gt;',
         replace_links_entity,
         content
     )
@@ -551,10 +553,6 @@ def run_single_test(test_file: str) -> dict:
     # Generate execution_reports/*.json from pytest results
     # DV Tasks counts Pass/Review/All from these files
     _generate_execution_reports(report_json, module_slug)
-
-    # Inject Detail Report + Video links into pytest-html report
-    # (must be AFTER execution reports are generated)
-    _inject_report_links(report_html, module_slug)
 
     status = "PASSED" if proc.returncode == 0 else "FAILED"
     log(f"{status}: {passed}P/{failed}F/{errors}E = {total} total ({duration:.1f}s)", tag=module_slug)
@@ -882,7 +880,12 @@ def run_all_tests(test_type: str = "all", upload: bool = True) -> dict:
         # Generate step HTML reports + videos for THIS module BEFORE uploading
         _generate_module_artifacts(result["module"])
 
-        # NOW upload with all artifacts (JSON + HTML + videos)
+        # Inject Detail Report + Video links into pytest-html report
+        # (must be AFTER step reports + videos are generated)
+        report_html = EXPORT_DIR / f"report_{result['module']}.html"
+        _inject_report_links(report_html, result["module"])
+
+        # NOW upload with all artifacts (JSON + HTML + videos + links)
         if upload:
             try:
                 upload_module_report(result, process_id)
