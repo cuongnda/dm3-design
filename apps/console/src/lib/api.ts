@@ -382,6 +382,155 @@ export async function createSchedule(data: CreateScheduleRequest): Promise<Sched
   });
 }
 
+// ─── Access Time API (access-svc :8003) ─────────────────────
+
+export interface AccessTimeTemplateDTO {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description?: string;
+  timezone: string;
+  is_active: boolean;
+  created_by?: string;
+  time_slots?: AccessTimeSlotDTO[];
+  user_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccessTimeSlotDTO {
+  id: string;
+  template_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  slot_name?: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface UserAccessTimeDTO {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  template_id: string;
+  template?: AccessTimeTemplateDTO;
+  effective_from: string;
+  effective_to?: string;
+  assigned_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccessTimeStatsDTO {
+  templates_active: number;
+  templates_total: number;
+  users_assigned: number;
+  validations_today: number;
+  validations_allowed: number;
+  validations_denied: number;
+}
+
+export interface ValidateAccessResponseDTO {
+  is_allowed: boolean;
+  reason: string;
+  matched_slot?: AccessTimeSlotDTO;
+  template?: AccessTimeTemplateDTO;
+  next_allowed?: string;
+}
+
+export interface CreateAccessTimeTemplateRequest {
+  name: string;
+  description?: string;
+  timezone: string;
+  time_slots: {
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+    slot_name?: string;
+    is_active: boolean;
+  }[];
+}
+
+export interface UpdateAccessTimeTemplateRequest {
+  name?: string;
+  description?: string;
+  timezone?: string;
+  is_active?: boolean;
+  time_slots?: {
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+    slot_name?: string;
+    is_active: boolean;
+  }[];
+}
+
+export interface AssignAccessTimeRequest {
+  user_ids: string[];
+  template_id: string;
+  effective_from: string;
+  effective_to?: string;
+}
+
+export interface ValidateAccessTimeRequest {
+  user_id: string;
+  requested_time: string;
+  door_id?: string;
+}
+
+// Access Time Templates
+export async function fetchAccessTimeTemplates(page = 1, limit = 50, params?: Record<string, string>): Promise<{ templates: AccessTimeTemplateDTO[]; pagination: { page: number; limit: number; total: number } }> {
+  const qs = params ? '&' + new URLSearchParams(params).toString() : '';
+  return apiFetch(`/api/v1/access-time/templates?page=${page}&limit=${limit}${qs}`);
+}
+
+export async function fetchAccessTimeTemplate(id: string): Promise<AccessTimeTemplateDTO> {
+  return apiFetch<AccessTimeTemplateDTO>(`/api/v1/access-time/templates/${id}`);
+}
+
+export async function createAccessTimeTemplate(data: CreateAccessTimeTemplateRequest): Promise<{ id: string; message: string }> {
+  return apiFetch(`/api/v1/access-time/templates`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateAccessTimeTemplate(id: string, data: UpdateAccessTimeTemplateRequest): Promise<{ message: string }> {
+  return apiFetch(`/api/v1/access-time/templates/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteAccessTimeTemplate(id: string): Promise<{ message: string }> {
+  return apiFetch(`/api/v1/access-time/templates/${id}`, { method: 'DELETE' });
+}
+
+// Access Time User Assignment
+export async function assignAccessTime(data: AssignAccessTimeRequest): Promise<{ message: string; assigned_users: number }> {
+  return apiFetch(`/api/v1/access-time/assign`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function fetchUserAccessTime(userId: string): Promise<{ user_id: string; assignments: UserAccessTimeDTO[] }> {
+  return apiFetch(`/api/v1/access-time/users/${userId}`);
+}
+
+// Access Time Validation & Stats
+export async function validateAccessTime(data: ValidateAccessTimeRequest): Promise<ValidateAccessResponseDTO> {
+  return apiFetch(`/api/v1/access-time/validate`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function fetchAccessTimeStats(): Promise<AccessTimeStatsDTO> {
+  return apiFetch(`/api/v1/access-time/stats`);
+}
+
 // ─── Identity API (identity-svc :8004) ──────────────────────
 
 export interface PersonDTO {
