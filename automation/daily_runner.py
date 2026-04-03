@@ -575,6 +575,45 @@ def run_single_test(test_file: str) -> dict:
 # UPLOAD PER-MODULE (matching DMPW pattern)
 # =============================================================================
 
+def _get_web_test_titles(pytest_json: dict) -> set:
+    """Extract web test case titles from pytest JSON report.
+    
+    WebTestExecutor names files by test case title.
+    We need these to match execution_reports files for web test modules.
+    """
+    titles = set()
+    for t in pytest_json.get("tests", []):
+        nodeid = t.get("nodeid", "")
+        if "/web/" not in nodeid:
+            continue
+        # Extract the parameterized name or function name
+        # e.g., tests/web/.../test_company_management.py::test_data_driven[test_case0]
+        parts = nodeid.split("::")
+        if len(parts) >= 2:
+            func = parts[-1]
+            # For parameterized tests, the title comes from the test data
+            # But we can also try matching by the test function name parts
+            titles.add(func)
+    
+    # Also scan execution_reports for files that DON'T start with TC_ prefix
+    # These are WebTestExecutor-generated files
+    exec_dir = EXPORT_DIR / "execution_reports"
+    if exec_dir.exists():
+        for f in exec_dir.iterdir():
+            if f.is_file() and f.suffix == '.json' and not f.name.startswith('execution_steps_TC_'):
+                # Extract title from filename: execution_steps_TITLE_TIMESTAMP.json
+                name = f.stem  # execution_steps_TITLE_TIMESTAMP
+                if name.startswith('execution_steps_'):
+                    rest = name[len('execution_steps_'):]
+                    # Remove timestamp suffix: _YYYYMMDD_HHMMSS
+                    import re as _re2
+                    rest = _re2.sub(r'_\d{8}_\d{6}$', '', rest)
+                    if rest:
+                        titles.add(rest)
+    
+    return titles
+
+
 def upload_module_report(result: dict, process_id: str):
     """Upload a single module's test report to DV Tasks.
     
@@ -598,25 +637,65 @@ def upload_module_report(result: dict, process_id: str):
             shutil.copy2(result["report_html"], upload_dir / "report.html")
 
         # Copy execution reports for this module (if any)
+        # Both TC_xxx_ prefixed (from _generate_execution_reports) and
+        # title-named (from WebTestExecutor) files need to be included
         exec_dir = EXPORT_DIR / "execution_reports"
         tc_prefix = "TC_" + module_slug.upper().replace("-", "_")
+
+        # Build list of web test titles from pytest JSON report
+        web_test_titles = set()
+        if result.get("report_json") and Path(result["report_json"]).exists():
+            try:
+                rj = json.loads(Path(result["report_json"]).read_text())
+                for t in rj.get("tests", []):
+                    # Extract test title from nodeid for web tests
+                    nodeid = t.get("nodeid", "")
+                    if "/web/" in nodeid:
+                        # Web tests store title as parameterized ID
+                        # e.g., test_company_management.py::test_data_driven[test_case0]
+                        # The WebTestExecutor uses the test case title as filename
+                        pass  # Will be matched below
+                web_test_titles = _get_web_test_titles(rj)
+            except Exception:
+                pass
+
         if exec_dir.exists():
             out_exec = upload_dir / "execution_reports"
             out_exec.mkdir(exist_ok=True)
             for f in exec_dir.iterdir():
-                if f.is_file() and tc_prefix in f.name.upper():
+                if not f.is_file():
+                    continue
+                # Match by TC prefix
+                if tc_prefix in f.name.upper():
                     shutil.copy2(f, out_exec / f.name)
+                # Match WebTestExecutor files by title
+                elif web_test_titles:
+                    fname_upper = f.name.upper()
+                    for title in web_test_titles:
+                        sanitized = title.replace(" ", "_").replace("/", "_")
+                        if sanitized.upper() in fname_upper:
+                            shutil.copy2(f, out_exec / f.name)
+                            break
 
-        # Copy screenshots for this module
+        # Copy screenshots for this module (all subdirs for web tests)
         ss_dir = EXPORT_DIR / "screenshots"
         if ss_dir.exists():
             out_ss = upload_dir / "screenshots"
-            out_ss.mkdir(exist_ok=True)
-            for f in ss_dir.rglob("*"):
-                if f.is_file() and tc_prefix in f.name.upper():
-                    dest = out_ss / f.relative_to(ss_dir)
-                    dest.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(f, dest)
+            for subdir in ss_dir.iterdir():
+                if subdir.is_dir():
+                    # Check if this screenshot dir belongs to our module
+                    subdir_upper = subdir.name.upper()
+                    match = tc_prefix in subdir_upper
+                    if not match and web_test_titles:
+                        for title in web_test_titles:
+                            sanitized = title.replace(" ", "_").replace("/", "_")
+                            if sanitized.upper() in subdir_upper:
+                                match = True
+                                break
+                    if match:
+                        dest = out_ss / subdir.relative_to(ss_dir)
+                        if subdir.is_dir():
+                            shutil.copytree(subdir, dest, dirs_exist_ok=True)
 
         # Copy videos for this module
         vid_dir = EXPORT_DIR / "videos"
@@ -624,7 +703,17 @@ def upload_module_report(result: dict, process_id: str):
             out_vid = upload_dir / "videos"
             out_vid.mkdir(exist_ok=True)
             for f in vid_dir.iterdir():
-                if f.is_file() and tc_prefix in f.name.upper():
+                if not f.is_file():
+                    continue
+                fname_upper = f.name.upper()
+                match = tc_prefix in fname_upper
+                if not match and web_test_titles:
+                    for title in web_test_titles:
+                        sanitized = title.replace(" ", "_").replace("/", "_")
+                        if sanitized.upper() in fname_upper:
+                            match = True
+                            break
+                if match:
                     shutil.copy2(f, out_vid / f.name)
 
         log(f"Uploading {upload_name} (P={result['passed']} F={result['failed']} T={result['total']})...", tag=module_slug)
