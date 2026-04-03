@@ -25,6 +25,18 @@ const DoorDetailPage = lazy(() =>
 const AccessRulesPage = lazy(() =>
   import('@/features/secure/access-control/AccessRulesPage').then((m) => ({ default: m.AccessRulesPage }))
 );
+const AccessTimeListPage = lazy(() =>
+  import('@/features/secure/access-control/access-time/AccessTimeListPage').then((m) => ({ default: m.AccessTimeListPage }))
+);
+const AccessTimeFormPage = lazy(() =>
+  import('@/features/secure/access-control/access-time/AccessTimeFormPage').then((m) => ({ default: m.AccessTimeFormPage }))
+);
+const AccessTimeAssignmentPage = lazy(() =>
+  import('@/features/secure/access-control/access-time/AccessTimeAssignmentPage').then((m) => ({ default: m.AccessTimeAssignmentPage }))
+);
+const AccessTimeValidationPage = lazy(() =>
+  import('@/features/secure/access-control/access-time/AccessTimeValidationPage').then((m) => ({ default: m.AccessTimeValidationPage }))
+);
 const CCTVPage = lazy(() =>
   import('@/features/secure/cctv/CCTVPage').then((m) => ({ default: m.CCTVPage }))
 );
@@ -182,6 +194,12 @@ export const router = createBrowserRouter([
               // SECURE
               { path: 'secure/access-control', element: <LazyWrap><AccessControlPage /></LazyWrap> },
               { path: 'secure/access-control/rules', element: <LazyWrap><AccessRulesPage /></LazyWrap> },
+              { path: 'secure/access-control/access-time', element: <LazyWrap><AccessTimeListPage /></LazyWrap> },
+              { path: 'secure/access-control/access-time/new', element: <LazyWrap><AccessTimeFormPage /></LazyWrap> },
+              { path: 'secure/access-control/access-time/:id', element: <LazyWrap><AccessTimeFormPage /></LazyWrap> },
+              { path: 'secure/access-control/access-time/assign', element: <LazyWrap><AccessTimeAssignmentPage /></LazyWrap> },
+              { path: 'secure/access-control/access-time/assign/:templateId', element: <LazyWrap><AccessTimeAssignmentPage /></LazyWrap> },
+              { path: 'secure/access-control/access-time/validate', element: <LazyWrap><AccessTimeValidationPage /></LazyWrap> },
               { path: 'secure/access-control/:id', element: <LazyWrap><DoorDetailPage /></LazyWrap> },
               { path: 'secure/cctv', element: <LazyWrap><CCTVPage /></LazyWrap> },
               { path: 'secure/cctv/:id', element: <LazyWrap><CameraDetailPage /></LazyWrap> },
