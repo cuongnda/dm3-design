@@ -240,6 +240,99 @@ def _inject_host_web(report_html: Path):
 
 
 # =============================================================================
+# INJECT DETAIL/VIDEO LINKS INTO PYTEST HTML REPORT
+# =============================================================================
+
+def _inject_report_links(report_html: Path, module_slug: str):
+    """Post-process pytest-html report to add Detail Report + Video links.
+    
+    Conftest hooks can't add these because execution_reports are generated
+    AFTER pytest finishes. So we parse the HTML and inject links per test row.
+    
+    Each row in pytest-html has a 'Links' column (last <td> before Review column).
+    We match test rows by index to TC_xxx_NN execution reports.
+    """
+    if not report_html.exists():
+        return
+
+    exec_dir = EXPORT_DIR / "execution_reports"
+    tc_prefix = "TC_" + module_slug.upper().replace("-", "_")
+    
+    # Find all execution report files for this module
+    html_files = {}  # tc_num -> relative path
+    json_files = {}
+    video_files = {}
+    
+    if exec_dir.exists():
+        for f in exec_dir.iterdir():
+            if tc_prefix in f.name and f.suffix == '.html':
+                # Extract TC number: TC_API_COMPANY_CRUD_01 -> 01
+                import re
+                m = re.search(rf'{tc_prefix}_(\d+)', f.name)
+                if m:
+                    html_files[int(m.group(1))] = f"execution_reports/{f.name}"
+            elif tc_prefix in f.name and f.suffix == '.json':
+                m = re.search(rf'{tc_prefix}_(\d+)', f.name)
+                if m:
+                    json_files[int(m.group(1))] = f"execution_reports/{f.name}"
+    
+    vid_dir = EXPORT_DIR / "videos"
+    if vid_dir.exists():
+        for f in vid_dir.iterdir():
+            if tc_prefix in f.name and f.suffix == '.mp4':
+                import re
+                m = re.search(rf'{tc_prefix}_(\d+)', f.name)
+                if m:
+                    video_files[int(m.group(1))] = f"videos/{f.name}"
+
+    if not html_files and not json_files:
+        return
+
+    try:
+        content = report_html.read_text(encoding='utf-8')
+    except Exception:
+        return
+
+    import re
+    
+    # Find all test result rows and inject links
+    # pytest-html rows have: <td class="col-links">...</td>
+    # We need to replace each row's links cell with Detail + Video links
+    
+    # Count test rows (each <td class="col-result"> is one test)
+    # Strategy: find all <td class="col-links"> and replace them in order
+    
+    tc_counter = 0
+    
+    def replace_links(match):
+        nonlocal tc_counter
+        tc_counter += 1
+        tc_num = tc_counter
+        
+        links_html = ""
+        if tc_num in html_files:
+            links_html += f'<a href="{html_files[tc_num]}" target="_blank" style="margin-right:8px;">📊 Detail</a>'
+        elif tc_num in json_files:
+            links_html += f'<a href="{json_files[tc_num]}" target="_blank" style="margin-right:8px;">📊 Detail</a>'
+        
+        if tc_num in video_files:
+            tc_id = f"{tc_prefix}_{tc_num:02d}"
+            links_html += f'<a href="#" onclick="openVideoModal(\'{video_files[tc_num]}\',\'{tc_id}\');return false;">🎬 Video</a>'
+        
+        if links_html:
+            return f'<td class="col-links">{links_html}</td>'
+        return match.group(0)
+    
+    # Replace col-links cells (empty ones from pytest-html)
+    content = re.sub(r'<td class="col-links">\s*</td>', replace_links, content)
+    
+    try:
+        report_html.write_text(content, encoding='utf-8')
+    except Exception:
+        pass
+
+
+# =============================================================================
 # EXECUTION REPORTS (for DV Tasks compatibility)
 # =============================================================================
 
@@ -400,6 +493,10 @@ def run_single_test(test_file: str) -> dict:
     # Generate execution_reports/*.json from pytest results
     # DV Tasks counts Pass/Review/All from these files
     _generate_execution_reports(report_json, module_slug)
+
+    # Inject Detail Report + Video links into pytest-html report
+    # (must be AFTER execution reports are generated)
+    _inject_report_links(report_html, module_slug)
 
     status = "PASSED" if proc.returncode == 0 else "FAILED"
     log(f"{status}: {passed}P/{failed}F/{errors}E = {total} total ({duration:.1f}s)", tag=module_slug)
