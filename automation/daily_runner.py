@@ -2,67 +2,130 @@
 """
 DM3 Automation Daily Runner
 
-Runs pytest tests, captures screenshots, generates videos + HTML reports,
-and uploads results to DV Tasks server API.
-
-Pipeline: test -> screenshots -> video -> step report -> upload
+Watches git commits and runs pytest tests automatically.
+Uploads results per-module to DV Tasks, matching DMPW report format.
 
 Usage:
-    python daily_runner.py                  # Run all tests once
-    python daily_runner.py --api            # API tests only
-    python daily_runner.py --web            # Web tests only
-    python daily_runner.py --watch          # Watch mode (check every 3 min)
+    python daily_runner.py                  # Auto mode (watch + nightly)
+    python daily_runner.py --once           # Run once, all tests
+    python daily_runner.py --once --api     # Run once, API tests only
+    python daily_runner.py --once --web     # Run once, Web tests only
+    python daily_runner.py --module access-time  # Run single module
+    python daily_runner.py status           # Check if running
+    python daily_runner.py stop             # Stop running instance
 
 Background:
-    nohup python daily_runner.py --watch >> logs/runner.log 2>&1 &
+    nohup python daily_runner.py >> logs/runner.log 2>&1 &
 """
 
 import argparse
+import glob
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
 import time
-from datetime import datetime
+import threading
+from datetime import datetime, timedelta
 from pathlib import Path
 
+# Project paths
 PROJECT_DIR = Path(__file__).parent.absolute()
 TESTS_DIR = PROJECT_DIR / "tests"
+TESTS_API_DIR = TESTS_DIR / "api"
+TESTS_WEB_DIR = TESTS_DIR / "web"
 EXPORT_DIR = PROJECT_DIR / "export"
 LOGS_DIR = PROJECT_DIR / "logs"
 STATE_FILE = LOGS_DIR / "runner_state.json"
 
+# Ensure dirs exist
 LOGS_DIR.mkdir(exist_ok=True)
 EXPORT_DIR.mkdir(exist_ok=True)
 
+# Thread-safe print
+_print_lock = threading.Lock()
 
-def log(msg: str):
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{ts}] {msg}", flush=True)
-
-
-# ── State Management ──────────────────────────────────────────
-
-def load_state() -> dict:
-    if STATE_FILE.exists():
-        return json.loads(STATE_FILE.read_text())
-    return {"last_commit": "", "last_run": "", "runs": 0}
+# Track running subprocesses for clean shutdown
+_running_procs = []
+_running_procs_lock = threading.Lock()
 
 
-def save_state(state: dict):
-    STATE_FILE.write_text(json.dumps(state, indent=2))
+def _kill_all_procs():
+    with _running_procs_lock:
+        for proc in list(_running_procs):
+            try:
+                proc.terminate()
+            except Exception:
+                pass
 
 
-# ── Git Operations ────────────────────────────────────────────
+def _signal_handler(sig, frame):
+    print("\n[SIGNAL] Stopping all test processes...", flush=True)
+    _kill_all_procs()
+    pid_file = LOGS_DIR / "automation.pid"
+    if pid_file.exists():
+        pid_file.unlink(missing_ok=True)
+    sys.exit(1)
+
+
+signal.signal(signal.SIGINT, _signal_handler)
+signal.signal(signal.SIGTERM, _signal_handler)
+
+
+def log(msg: str, tag: str = "MAIN"):
+    ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    with _print_lock:
+        print(f"[{ts}] [{tag}] {msg}", flush=True)
+
+
+# =============================================================================
+# MODULE ORDER — controls upload naming (dm3-module-{N}-{slug})
+# =============================================================================
+
+MODULE_ORDER = {
+    # API modules
+    "system-admin": 1,
+    "company-crud": 2,
+    "account-management": 3,
+    "access-time": 4,
+    # Web modules
+    "system-login": 10,
+    "company-management": 11,
+}
+
+
+def get_module_upload_name(slug: str) -> str:
+    """E.g., 'access-time' -> 'module-4-access-time'"""
+    num = MODULE_ORDER.get(slug)
+    if num:
+        return f"module-{num}-{slug}"
+    return slug
+
+
+def get_module_slug(test_file: str) -> str:
+    """Extract module slug from test file path.
+    
+    tests/api/test_access_time.py -> 'access-time'
+    tests/web/system-admin/test_company_management.py -> 'company-management'
+    """
+    p = Path(test_file)
+    name = p.stem.replace("test_", "").replace("_", "-")
+    return name
+
+
+# =============================================================================
+# GIT OPERATIONS
+# =============================================================================
 
 def get_current_commit() -> str:
-    repo_dir = PROJECT_DIR.parent
+    repo_dir = PROJECT_DIR.parent  # duall-master root
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
-            capture_output=True, text=True, cwd=repo_dir
+            capture_output=True, text=True, cwd=repo_dir,
         )
         return result.stdout.strip()
     except Exception:
@@ -74,7 +137,7 @@ def get_changed_files(since_commit: str) -> list:
     try:
         result = subprocess.run(
             ["git", "diff", "--name-only", since_commit, "HEAD"],
-            capture_output=True, text=True, cwd=repo_dir
+            capture_output=True, text=True, cwd=repo_dir,
         )
         files = result.stdout.strip().split("\n")
         return [f for f in files if f.startswith("automation/") or f.startswith("backend/")]
@@ -82,67 +145,309 @@ def get_changed_files(since_commit: str) -> list:
         return []
 
 
-# ── Test Execution ────────────────────────────────────────────
+# =============================================================================
+# STATE MANAGEMENT
+# =============================================================================
 
-def run_tests(test_type: str = "all") -> dict:
-    """Run pytest and return results summary."""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_html = EXPORT_DIR / f"report_{timestamp}.html"
-    report_json = EXPORT_DIR / f"report_{timestamp}.json"
+def load_state() -> dict:
+    if STATE_FILE.exists():
+        try:
+            return json.loads(STATE_FILE.read_text())
+        except Exception:
+            pass
+    return {"last_commit": "", "last_run": "", "runs": 0}
+
+
+def save_state(state: dict):
+    STATE_FILE.write_text(json.dumps(state, indent=2))
+
+
+# =============================================================================
+# TEST DISCOVERY
+# =============================================================================
+
+def discover_test_files(test_type: str = "all") -> list:
+    """Find all test files."""
+    files = []
+    if test_type in ("api", "all"):
+        files.extend(sorted(glob.glob(str(TESTS_API_DIR / "test_*.py"))))
+    if test_type in ("web", "all"):
+        files.extend(sorted(glob.glob(str(TESTS_WEB_DIR / "**/test_*.py"), recursive=True)))
+    return files
+
+
+def map_changed_to_tests(changed_files: list) -> list:
+    """Map changed files to test files that should run."""
+    test_files = set()
+    for f in changed_files:
+        p = Path(f)
+        # Direct test file change
+        if f.startswith("automation/tests/") and f.endswith(".py"):
+            full = PROJECT_DIR / f.replace("automation/", "", 1)
+            if full.exists():
+                test_files.add(str(full))
+        # Backend change -> run API tests
+        elif f.startswith("backend/"):
+            for tf in TESTS_API_DIR.glob("test_*.py"):
+                test_files.add(str(tf))
+    return sorted(test_files)
+
+
+# =============================================================================
+# SINGLE TEST FILE EXECUTION
+# =============================================================================
+
+def run_single_test(test_file: str) -> dict:
+    """Run a single test file with pytest. Returns result dict."""
+    module_slug = get_module_slug(test_file)
+    report_html = EXPORT_DIR / f"report_{module_slug}.html"
+    report_json = EXPORT_DIR / f"report_{module_slug}.json"
+
+    log(f"Running: {Path(test_file).name}", tag=module_slug)
+    start = time.time()
 
     cmd = [
         sys.executable, "-m", "pytest",
-        "--tb=short",
+        test_file,
+        "-v", "--tb=short",
         f"--html={report_html}",
         "--self-contained-html",
-        "--json-report", f"--json-report-file={report_json}",
-        "-v",
+        "--json-report",
+        f"--json-report-file={report_json}",
     ]
 
-    if test_type == "api":
-        cmd.append("tests/api/")
-    elif test_type == "web":
-        cmd.append("tests/web/")
-    else:
-        cmd.append("tests/")
+    proc = subprocess.Popen(
+        cmd, capture_output=True, text=True, cwd=PROJECT_DIR,
+    )
+    with _running_procs_lock:
+        _running_procs.append(proc)
+    try:
+        proc.communicate()
+    finally:
+        with _running_procs_lock:
+            try:
+                _running_procs.remove(proc)
+            except ValueError:
+                pass
 
-    log(f"Running: {' '.join(cmd)}")
-    start = time.time()
-
-    # Stream output in real-time so user can see progress
-    result = subprocess.run(cmd, cwd=PROJECT_DIR)
     duration = time.time() - start
 
-    summary = {
-        "timestamp": timestamp,
-        "duration": round(duration, 1),
-        "returncode": result.returncode,
-        "passed": 0,
-        "failed": 0,
-        "errors": 0,
-        "total": 0,
-        "report_html": str(report_html) if report_html.exists() else None,
-        "report_json": str(report_json) if report_json.exists() else None,
-    }
-
+    # Parse JSON report
+    passed = failed = errors = total = 0
     if report_json.exists():
         try:
             data = json.loads(report_json.read_text())
             s = data.get("summary", {})
-            summary["passed"] = s.get("passed", 0)
-            summary["failed"] = s.get("failed", 0)
-            summary["errors"] = s.get("error", 0)
-            summary["total"] = s.get("total", 0)
+            passed = s.get("passed", 0)
+            failed = s.get("failed", 0)
+            errors = s.get("error", 0)
+            total = s.get("total", 0)
         except Exception:
             pass
 
-    log(f"Results: {summary['passed']} passed, {summary['failed']} failed, "
-        f"{summary['errors']} errors / {summary['total']} total ({summary['duration']}s)")
+    status = "PASSED" if proc.returncode == 0 else "FAILED"
+    log(f"{status}: {passed}P/{failed}F/{errors}E = {total} total ({duration:.1f}s)", tag=module_slug)
 
-    return summary
+    return {
+        "file": test_file,
+        "module": module_slug,
+        "passed": passed,
+        "failed": failed,
+        "errors": errors,
+        "total": total,
+        "duration": round(duration, 1),
+        "report_html": str(report_html) if report_html.exists() else None,
+        "report_json": str(report_json) if report_json.exists() else None,
+        "success": proc.returncode == 0,
+    }
 
 
-# ── Post-test: Generate Videos & Step Reports ─────────────────
+# =============================================================================
+# UPLOAD PER-MODULE (matching DMPW pattern)
+# =============================================================================
+
+def upload_module_report(result: dict, process_id: str):
+    """Upload a single module's test report to DV Tasks.
+    
+    Creates a ZIP with:
+    - report.html (pytest HTML report for this module)
+    - execution_reports/*.json (if web tests have them)
+    """
+    from common.report_uploader import ReportUploader
+
+    uploader = ReportUploader()
+    if not uploader.enabled:
+        return
+
+    module_slug = result["module"]
+    upload_name = get_module_upload_name(module_slug)
+
+    upload_dir = Path(tempfile.mkdtemp(prefix=f"dm3_upload_{module_slug}_"))
+    try:
+        # Copy pytest HTML report as report.html
+        if result.get("report_html") and Path(result["report_html"]).exists():
+            shutil.copy2(result["report_html"], upload_dir / "report.html")
+
+        # Copy execution reports for this module (if any)
+        exec_dir = EXPORT_DIR / "execution_reports"
+        tc_prefix = "TC_" + module_slug.upper().replace("-", "_")
+        if exec_dir.exists():
+            out_exec = upload_dir / "execution_reports"
+            out_exec.mkdir(exist_ok=True)
+            for f in exec_dir.iterdir():
+                if f.is_file() and tc_prefix in f.name.upper():
+                    shutil.copy2(f, out_exec / f.name)
+
+        # Copy screenshots for this module
+        ss_dir = EXPORT_DIR / "screenshots"
+        if ss_dir.exists():
+            out_ss = upload_dir / "screenshots"
+            out_ss.mkdir(exist_ok=True)
+            for f in ss_dir.rglob("*"):
+                if f.is_file() and tc_prefix in f.name.upper():
+                    dest = out_ss / f.relative_to(ss_dir)
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(f, dest)
+
+        # Copy videos for this module
+        vid_dir = EXPORT_DIR / "videos"
+        if vid_dir.exists():
+            out_vid = upload_dir / "videos"
+            out_vid.mkdir(exist_ok=True)
+            for f in vid_dir.iterdir():
+                if f.is_file() and tc_prefix in f.name.upper():
+                    shutil.copy2(f, out_vid / f.name)
+
+        log(f"Uploading {upload_name} (P={result['passed']} F={result['failed']} T={result['total']})...", tag=module_slug)
+
+        success = uploader.zip_and_upload(
+            source_dir=str(upload_dir),
+            test_case_name=upload_name,
+            process_id=process_id,
+            passed=result["passed"],
+            failed=result["failed"],
+            total=result["total"],
+        )
+        if success:
+            log(f"Upload OK: {upload_name}", tag=module_slug)
+        else:
+            log(f"Upload FAILED: {upload_name}", tag=module_slug)
+
+    except Exception as e:
+        log(f"Upload error: {e}", tag=module_slug)
+    finally:
+        shutil.rmtree(upload_dir, ignore_errors=True)
+
+
+def upload_summary_report(results: list, process_id: str):
+    """Upload combined 'all' summary to DV Tasks (like DMPW's dmpw-all).
+    
+    Creates a summary HTML + merged execution reports.
+    """
+    from common.report_uploader import ReportUploader
+
+    uploader = ReportUploader()
+    if not uploader.enabled:
+        return
+
+    total_passed = sum(r["passed"] for r in results)
+    total_failed = sum(r["failed"] for r in results)
+    total_errors = sum(r["errors"] for r in results)
+    total_tests = sum(r["total"] for r in results)
+    total_modules = len(results)
+    total_duration = sum(r["duration"] for r in results)
+
+    pass_rate = round(total_passed / max(total_tests, 1) * 100, 1)
+    host_web = os.environ.get("WEB_URL", os.environ.get("BASE_URL", ""))
+
+    upload_dir = Path(tempfile.mkdtemp(prefix="dm3_upload_all_"))
+    try:
+        # Generate summary HTML (matching DMPW style)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>DM3 Automation Summary</title></head>
+<body style="margin:0;padding:20px;font-family:Segoe UI,Arial,sans-serif;background:linear-gradient(135deg,#1E3A5F,#3B82F6);min-height:100vh;display:flex;align-items:center;justify-content:center;">
+<!-- HOST_WEB: {host_web} -->
+<div style="background:#fff;border-radius:16px;padding:40px;max-width:520px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+<h1 style="text-align:center;color:#2d3748;font-size:24px;margin:0 0 4px;">🔒 DM3 Automation</h1>
+<p style="text-align:center;color:#a0aec0;font-size:13px;margin:0 0 28px;">Duall Master 3.0 — Test Summary</p>
+<table style="width:100%;border-collapse:separate;border-spacing:12px;" cellpadding="0">
+<tr>
+<td colspan="2" style="background:#f7fafc;border-radius:12px;padding:20px;text-align:center;">
+<div style="font-size:42px;font-weight:700;color:#4a5568;">{total_tests}</div>
+<div style="font-size:12px;color:#718096;margin-top:4px;text-transform:uppercase;letter-spacing:.5px;">Total Tests</div>
+</td>
+</tr>
+<tr>
+<td style="background:#f0fff4;border-radius:12px;padding:18px;text-align:center;width:50%;">
+<div style="font-size:36px;font-weight:700;color:#38a169;">{total_passed}</div>
+<div style="font-size:12px;color:#718096;margin-top:4px;text-transform:uppercase;">Passed</div>
+</td>
+<td style="background:#fff5f5;border-radius:12px;padding:18px;text-align:center;width:50%;">
+<div style="font-size:36px;font-weight:700;color:#e53e3e;">{total_failed + total_errors}</div>
+<div style="font-size:12px;color:#718096;margin-top:4px;text-transform:uppercase;">Failed</div>
+</td>
+</tr>
+<tr>
+<td style="background:#ebf8ff;border-radius:12px;padding:18px;text-align:center;">
+<div style="font-size:36px;font-weight:700;color:#3182ce;">{total_modules}</div>
+<div style="font-size:12px;color:#718096;margin-top:4px;text-transform:uppercase;">Modules</div>
+</td>
+<td style="background:#faf5ff;border-radius:12px;padding:18px;text-align:center;">
+<div style="font-size:36px;font-weight:700;color:#805ad5;">{int(total_duration)}s</div>
+<div style="font-size:12px;color:#718096;margin-top:4px;text-transform:uppercase;">Duration</div>
+</td>
+</tr>
+</table>
+<div style="margin:20px 12px 0;">
+<div style="display:flex;justify-content:space-between;font-size:12px;color:#718096;margin-bottom:4px;"><span>Pass Rate</span><span>{pass_rate}%</span></div>
+<div style="background:#edf2f7;border-radius:8px;height:10px;overflow:hidden;">
+<div style="width:{pass_rate}%;height:100%;border-radius:8px;background:linear-gradient(90deg,#38a169,#48bb78);"></div>
+</div>
+</div>
+<div style="margin:16px 12px 0;">
+<h3 style="font-size:13px;color:#4a5568;margin:0 0 8px;">Module Results</h3>
+{''.join(f'<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid #edf2f7;"><span style="color:#4a5568;">{r["module"]}</span><span style="color:{"#38a169" if r["success"] else "#e53e3e"};font-weight:600;">{r["passed"]}/{r["total"]} {"✓" if r["success"] else "✗"}</span></div>' for r in results)}
+</div>
+<p style="text-align:center;color:#cbd5e0;font-size:11px;margin:24px 0 0;padding-top:16px;border-top:1px solid #edf2f7;">Generated: {timestamp} • Process: {process_id}</p>
+</div>
+</body></html>"""
+
+        (upload_dir / "report.html").write_text(html, encoding="utf-8")
+
+        # Copy all execution reports
+        exec_dir = EXPORT_DIR / "execution_reports"
+        if exec_dir.exists():
+            out_exec = upload_dir / "execution_reports"
+            out_exec.mkdir(exist_ok=True)
+            for f in exec_dir.iterdir():
+                if f.is_file() and f.suffix in ('.json', '.html'):
+                    shutil.copy2(f, out_exec / f.name)
+
+        log(f"Uploading summary: all (P={total_passed} F={total_failed} T={total_tests})", tag="ALL")
+
+        success = uploader.zip_and_upload(
+            source_dir=str(upload_dir),
+            test_case_name="all",
+            process_id=process_id,
+            passed=total_passed,
+            failed=total_failed + total_errors,
+            total=total_tests,
+        )
+        if success:
+            log(f"Summary upload OK (process_id={process_id})", tag="ALL")
+        else:
+            log("Summary upload FAILED", tag="ALL")
+
+    except Exception as e:
+        log(f"Summary upload error: {e}", tag="ALL")
+    finally:
+        shutil.rmtree(upload_dir, ignore_errors=True)
+
+
+# =============================================================================
+# REPORT GENERATION (videos + step reports for web tests)
+# =============================================================================
 
 def generate_reports():
     """Generate video + HTML step reports from execution JSONs."""
@@ -153,6 +458,8 @@ def generate_reports():
         from generate_step_report import generate_reports_for_all
         reports = generate_reports_for_all(report_dir)
         log(f"Generated {len(reports)} step reports")
+    except ImportError:
+        pass  # Optional: only if web tests produce execution JSONs
     except Exception as e:
         log(f"Step report generation failed: {e}")
 
@@ -162,182 +469,317 @@ def generate_reports():
             from generate_test_video import generate_videos_for_reports
             videos = generate_videos_for_reports(report_dir)
             log(f"Generated {len(videos)} videos")
+        except ImportError:
+            pass
         except Exception as e:
             log(f"Video generation failed: {e}")
 
 
-# ── Upload ────────────────────────────────────────────────────
+# =============================================================================
+# RUN PIPELINE
+# =============================================================================
 
-def upload_report(summary: dict):
-    """Upload test results to DV Tasks server."""
-    from common.report_uploader import ReportUploader
+def run_all_tests(test_type: str = "all", upload: bool = True) -> dict:
+    """Full pipeline: discover → run each module → upload per-module → upload summary."""
+    process_id = datetime.now().strftime('%Y%m%d%H%M%S')
+    log(f"{'='*60}")
+    log(f"  DM3 TEST RUN — type={test_type}, process_id={process_id}")
+    log(f"{'='*60}")
 
-    uploader = ReportUploader()
-    if not uploader.enabled:
-        log("Report upload disabled (missing REPORT_UPLOAD_URL or REPORT_UPLOAD_TOKEN)")
-        return
+    # Clean old exports
+    if EXPORT_DIR.exists():
+        shutil.rmtree(EXPORT_DIR)
+    EXPORT_DIR.mkdir(exist_ok=True)
+    (EXPORT_DIR / "execution_reports").mkdir(exist_ok=True)
+    (EXPORT_DIR / "screenshots").mkdir(exist_ok=True)
+    (EXPORT_DIR / "videos").mkdir(exist_ok=True)
 
-    # Prepare upload directory with all artifacts
-    upload_dir = Path(tempfile.mkdtemp(prefix="dm3_upload_"))
-    try:
-        # Copy pytest HTML report
-        if summary.get("report_html") and Path(summary["report_html"]).exists():
-            shutil.copy2(summary["report_html"], upload_dir / "report.html")
+    # Discover test files
+    test_files = discover_test_files(test_type)
+    if not test_files:
+        log("No test files found")
+        return {"results": [], "process_id": process_id}
 
-        # Copy execution reports (JSON + HTML)
-        exec_dir = EXPORT_DIR / "execution_reports"
-        if exec_dir.exists():
-            dst = upload_dir / "execution_reports"
-            dst.mkdir(exist_ok=True)
-            for f in exec_dir.iterdir():
-                if f.is_file() and f.suffix in ('.json', '.html'):
-                    shutil.copy2(f, dst / f.name)
+    log(f"Found {len(test_files)} test files")
+    for tf in test_files:
+        log(f"  - {Path(tf).name}")
 
-        # Copy screenshots
-        screenshots_dir = EXPORT_DIR / "screenshots"
-        if screenshots_dir.exists():
-            shutil.copytree(screenshots_dir, upload_dir / "screenshots", dirs_exist_ok=True)
+    # Run each test file and upload per-module
+    results = []
+    for test_file in test_files:
+        result = run_single_test(test_file)
+        results.append(result)
 
-        # Copy videos
-        videos_dir = EXPORT_DIR / "videos"
-        if videos_dir.exists():
-            dst = upload_dir / "videos"
-            dst.mkdir(exist_ok=True)
-            for f in videos_dir.glob("*.mp4"):
-                shutil.copy2(f, dst / f.name)
-
-        success = uploader.zip_and_upload(
-            source_dir=str(upload_dir),
-            test_case_name="dm3-automation",
-            process_id=summary["timestamp"],
-            passed=summary["passed"],
-            failed=summary["failed"],
-            total=summary["total"],
-        )
-        if success:
-            log("Report uploaded to DV Tasks")
-        else:
-            log("Report upload failed")
-    except Exception as e:
-        log(f"Upload error: {e}")
-    finally:
-        shutil.rmtree(upload_dir, ignore_errors=True)
-
-
-# ── Cleanup ───────────────────────────────────────────────────
-
-def cleanup_old_files(retention_days: int = 2):
-    """Remove old export files to save disk."""
-    cutoff = time.time() - retention_days * 86400
-    removed = 0
-
-    for pattern in ["export/screenshots/steps/*", "export/videos/*.mp4",
-                    "export/execution_reports/*", "export/report_*.html",
-                    "export/report_*.json"]:
-        import glob
-        for f in glob.glob(str(PROJECT_DIR / pattern)):
-            p = Path(f)
+        # Upload this module's report immediately
+        if upload:
             try:
-                if p.is_file() and p.stat().st_mtime < cutoff:
-                    p.unlink()
-                    removed += 1
-                elif p.is_dir() and p.stat().st_mtime < cutoff:
-                    shutil.rmtree(p, ignore_errors=True)
-                    removed += 1
-            except Exception:
-                pass
+                upload_module_report(result, process_id)
+            except Exception as e:
+                log(f"Upload error for {result['module']}: {e}")
 
-    if removed:
-        log(f"Cleaned up {removed} old files (>{retention_days} days)")
-
-
-# ── Run Modes ─────────────────────────────────────────────────
-
-def run_once(test_type: str = "all"):
-    """Full pipeline: test -> video -> report -> upload."""
-    log(f"Starting test run (type={test_type})")
-
-    # Cleanup old files
-    cleanup_old_files()
-
-    # 1. Run tests (screenshots captured automatically by WebTestExecutor)
-    summary = run_tests(test_type)
-
-    # 2. Generate videos + step reports from execution JSONs
+    # Generate web test reports (videos, step reports) if applicable
     if test_type in ("web", "all"):
         generate_reports()
 
-    # 3. Upload everything
-    try:
-        upload_report(summary)
-    except Exception as e:
-        log(f"Upload failed: {e}")
+    # Upload combined summary ("all")
+    if upload and results:
+        try:
+            upload_summary_report(results, process_id)
+        except Exception as e:
+            log(f"Summary upload error: {e}")
 
-    # Save state
+    # Print summary
+    total_p = sum(r["passed"] for r in results)
+    total_f = sum(r["failed"] for r in results)
+    total_e = sum(r["errors"] for r in results)
+    total_t = sum(r["total"] for r in results)
+
+    log(f"\n{'='*60}")
+    log(f"  SUMMARY: {total_p} passed, {total_f} failed, {total_e} errors / {total_t} total")
+    log(f"  Modules: {len(results)}")
+    for r in results:
+        status = "✓" if r["success"] else "✗"
+        log(f"    {status} {r['module']}: {r['passed']}/{r['total']} ({r['duration']}s)")
+    log(f"{'='*60}")
+
+    return {"results": results, "process_id": process_id}
+
+
+def run_module(module_name: str, upload: bool = True) -> dict:
+    """Run tests for a specific module."""
+    process_id = datetime.now().strftime('%Y%m%d%H%M%S')
+
+    # Find test files matching module name
+    test_files = []
+    for pattern in [
+        str(TESTS_API_DIR / f"test_{module_name.replace('-', '_')}.py"),
+        str(TESTS_WEB_DIR / f"**/*{module_name}*/test_*.py"),
+        str(TESTS_WEB_DIR / f"**/test_{module_name.replace('-', '_')}.py"),
+    ]:
+        test_files.extend(glob.glob(pattern, recursive=True))
+
+    if not test_files:
+        log(f"No test files found for module: {module_name}")
+        return {"results": [], "process_id": process_id}
+
+    results = []
+    for test_file in sorted(set(test_files)):
+        result = run_single_test(test_file)
+        results.append(result)
+        if upload:
+            try:
+                upload_module_report(result, process_id)
+            except Exception as e:
+                log(f"Upload error: {e}")
+
+    return {"results": results, "process_id": process_id}
+
+
+# =============================================================================
+# WATCH / AUTO MODE
+# =============================================================================
+
+def check_and_run():
+    """Check for new commits, run affected tests."""
+    log("Checking for new commits...")
+
     state = load_state()
-    state["last_commit"] = get_current_commit()
+    current = get_current_commit()
+
+    if not current:
+        log("Could not get current commit")
+        return
+
+    last = state.get("last_commit", "")
+    if not last:
+        log("First run — saving baseline commit")
+        state["last_commit"] = current
+        save_state(state)
+        return
+
+    if current == last:
+        log("No new commits")
+        return
+
+    log(f"New commits: {last[:8]} -> {current[:8]}")
+    changed = get_changed_files(last)
+
+    if not changed:
+        log("No relevant files changed")
+        state["last_commit"] = current
+        save_state(state)
+        return
+
+    log(f"Changed files: {len(changed)}")
+    test_files = map_changed_to_tests(changed)
+
+    if test_files:
+        log(f"Running {len(test_files)} affected test files")
+        process_id = datetime.now().strftime('%Y%m%d%H%M%S')
+        results = []
+        for tf in test_files:
+            result = run_single_test(tf)
+            results.append(result)
+            try:
+                upload_module_report(result, process_id)
+            except Exception as e:
+                log(f"Upload error: {e}")
+    else:
+        log("No test files affected by changes")
+
+    state["last_commit"] = current
     state["last_run"] = datetime.now().isoformat()
     state["runs"] = state.get("runs", 0) + 1
-    state["last_summary"] = summary
     save_state(state)
 
-    return summary
 
+def auto_mode(check_interval: int = 180):
+    """Fully automatic: watch commits + nightly full run."""
+    # PID file
+    pid_file = LOGS_DIR / "automation.pid"
+    pid_file.write_text(f"{os.getpid()}\n{datetime.now().isoformat()}\n")
 
-def watch_mode(interval: int = 180):
-    """Watch for git commits and run tests on changes."""
-    log(f"Watch mode started (interval={interval}s)")
-    state = load_state()
+    log("=" * 60)
+    log(f"  DM3 AUTO MODE (PID: {os.getpid()})")
+    log(f"  Check interval: {check_interval // 60} min")
+    log(f"  Nightly full run: 00:00-06:00")
+    log("=" * 60)
+
+    # Background git pull
+    stop_event = threading.Event()
+    pull_thread = threading.Thread(
+        target=_git_pull_worker, args=(check_interval, stop_event),
+        daemon=True, name="GitPull",
+    )
+    pull_thread.start()
+
+    last_nightly = None
 
     while True:
         try:
-            current = get_current_commit()
-
-            if current and current != state.get("last_commit"):
-                changed = get_changed_files(state.get("last_commit", ""))
-                if changed:
-                    log(f"New commit: {current[:8]} ({len(changed)} changed files)")
-                    run_once("all")
-                    state = load_state()
-                else:
-                    log("New commit but no test-related changes")
-                    state["last_commit"] = current
-                    save_state(state)
-
-            # Full run at midnight
             now = datetime.now()
-            if now.hour == 0 and now.minute < 5:
-                log("Midnight full test run")
-                run_once("all")
-                time.sleep(300)
+
+            # Nightly full run
+            if 0 <= now.hour < 6 and last_nightly != now.date():
+                log("NIGHTLY FULL TEST RUN")
+                run_all_tests("all", upload=True)
+                last_nightly = now.date()
+            else:
+                check_and_run()
+
+            log(f"Next check: {(now + timedelta(seconds=check_interval)).strftime('%H:%M:%S')}")
+            time.sleep(check_interval)
 
         except KeyboardInterrupt:
-            log("Watch mode stopped")
+            log("Stopping...")
+            stop_event.set()
+            pull_thread.join(timeout=5)
+            pid_file.unlink(missing_ok=True)
             break
         except Exception as e:
-            log(f"Error in watch loop: {e}")
+            log(f"Error: {e}")
+            time.sleep(60)
 
-        time.sleep(interval)
 
+def _git_pull_worker(interval: int, stop_event: threading.Event):
+    """Background thread: git pull periodically."""
+    repo_dir = PROJECT_DIR.parent
+    while not stop_event.is_set():
+        try:
+            result = subprocess.run(
+                ["git", "pull", "--quiet"],
+                capture_output=True, text=True, cwd=repo_dir,
+            )
+            if result.returncode == 0:
+                log(f"Pull OK (HEAD: {get_current_commit()[:8]})", tag="PULL")
+            else:
+                log(f"Pull failed: {result.stderr.strip()}", tag="PULL")
+        except Exception as e:
+            log(f"Pull error: {e}", tag="PULL")
+        stop_event.wait(interval)
+
+
+# =============================================================================
+# STATUS / STOP
+# =============================================================================
+
+def check_status():
+    pid_file = LOGS_DIR / "automation.pid"
+    if not pid_file.exists():
+        print("📊 Automation is NOT running (no PID file)")
+        return False
+    try:
+        lines = pid_file.read_text().strip().split("\n")
+        pid = int(lines[0])
+        os.kill(pid, 0)  # Check if alive
+        print(f"✅ Automation is RUNNING (PID: {pid}, started: {lines[1] if len(lines) > 1 else '?'})")
+        return True
+    except (OSError, ValueError):
+        print("❌ PID file exists but process is dead — cleaning up")
+        pid_file.unlink(missing_ok=True)
+        return False
+
+
+def stop_automation():
+    pid_file = LOGS_DIR / "automation.pid"
+    if not pid_file.exists():
+        print("📊 Automation is not running")
+        return
+    try:
+        pid = int(pid_file.read_text().strip().split("\n")[0])
+        os.kill(pid, signal.SIGTERM)
+        time.sleep(2)
+        try:
+            os.kill(pid, 0)
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+        print(f"✅ Automation stopped (PID: {pid})")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+    pid_file.unlink(missing_ok=True)
+
+
+# =============================================================================
+# MAIN
+# =============================================================================
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] in ("status", "stop", "help", "--help", "-h"):
+        cmd = sys.argv[1]
+        if cmd == "status":
+            check_status()
+        elif cmd == "stop":
+            stop_automation()
+        else:
+            print(__doc__)
+        return
+
     parser = argparse.ArgumentParser(description="DM3 Automation Daily Runner")
-    parser.add_argument("--watch", action="store_true", help="Watch mode")
+    parser.add_argument("--once", action="store_true", help="Run once and exit")
     parser.add_argument("--api", action="store_true", help="API tests only")
     parser.add_argument("--web", action="store_true", help="Web tests only")
-    parser.add_argument("--interval", type=int, default=180, help="Watch interval (seconds)")
+    parser.add_argument("--module", type=str, help="Run specific module")
+    parser.add_argument("--no-upload", action="store_true", help="Skip upload")
     parser.add_argument("--no-video", action="store_true", help="Skip video generation")
+    parser.add_argument("--interval", type=int, default=180, help="Check interval (seconds)")
     args = parser.parse_args()
 
     if args.no_video:
         os.environ["GENERATE_VIDEO"] = "false"
 
-    if args.watch:
-        watch_mode(args.interval)
-    else:
+    upload = not args.no_upload
+
+    if args.module:
+        run_module(args.module, upload=upload)
+    elif args.once:
         test_type = "api" if args.api else "web" if args.web else "all"
-        summary = run_once(test_type)
-        sys.exit(0 if summary["failed"] == 0 else 1)
+        data = run_all_tests(test_type, upload=upload)
+        has_failures = any(not r["success"] for r in data["results"])
+        sys.exit(1 if has_failures else 0)
+    else:
+        # Auto mode (default)
+        auto_mode(check_interval=args.interval)
 
 
 if __name__ == "__main__":

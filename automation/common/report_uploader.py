@@ -69,7 +69,12 @@ class ReportUploader:
             print(f"ZIP created: {count} files, {zip_path.stat().st_size / 1024:.1f} KB")
 
             # Upload via curl
-            upload_name = f"{self.prefix}{test_case_name}" if self.prefix else test_case_name
+            # Prefix with dash separator: "dm3" + "module-1-foo" -> "dm3-module-1-foo"
+            if self.prefix:
+                sep = "-" if self.prefix and not self.prefix.endswith("-") else ""
+                upload_name = f"{self.prefix}{sep}{test_case_name}"
+            else:
+                upload_name = test_case_name
             if not process_id:
                 process_id = ts
 
