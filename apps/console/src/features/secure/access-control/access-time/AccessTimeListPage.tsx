@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus, Clock, Users, Settings, Play, Pause, Trash2 } from 'lucide-react';
+import { Plus, Clock, Settings, Play, Pause, Trash2 } from 'lucide-react';
 import { PageHeader, DataTable, type Column, Button, Card, Badge, Input, Select, SelectOption } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { useAccessTimeTemplates, useAccessTimeStats, useDeleteAccessTimeTemplate, useUpdateAccessTimeTemplate } from '@/lib/hooks';
@@ -59,16 +59,7 @@ export function AccessTimeListPage() {
       header: 'Timezone',
       render: (row) => <span className="text-sm text-muted-foreground">{row.timezone}</span>,
     },
-    {
-      key: 'user_count',
-      header: 'Users',
-      render: (row) => (
-        <div className="flex items-center gap-1.5">
-          <Users className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-sm">{row.user_count ?? 0}</span>
-        </div>
-      ),
-    },
+
     {
       key: 'is_active',
       header: 'Status',
@@ -100,12 +91,6 @@ export function AccessTimeListPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Access Time Management">
-        <Button size="sm" variant="outline" onClick={() => navigate('/secure/access-control/access-time/assign')}>
-          Assign Users
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => navigate('/secure/access-control/access-time/validate')}>
-          Validate
-        </Button>
         <Button size="sm" onClick={() => navigate('/secure/access-control/access-time/new')}>
           <Plus className="w-4 h-4 mr-1" /> New Template
         </Button>
@@ -113,13 +98,10 @@ export function AccessTimeListPage() {
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <Card className="p-3"><div className="text-2xl font-bold">{stats.templates_active}</div><div className="text-xs text-muted-foreground">Active</div></Card>
           <Card className="p-3"><div className="text-2xl font-bold">{stats.templates_total}</div><div className="text-xs text-muted-foreground">Total</div></Card>
-          <Card className="p-3"><div className="text-2xl font-bold">{stats.users_assigned}</div><div className="text-xs text-muted-foreground">Users</div></Card>
-          <Card className="p-3"><div className="text-2xl font-bold">{stats.validations_today}</div><div className="text-xs text-muted-foreground">Today</div></Card>
-          <Card className="p-3"><div className="text-2xl font-bold text-green-600">{stats.validations_allowed}</div><div className="text-xs text-muted-foreground">Allowed</div></Card>
-          <Card className="p-3"><div className="text-2xl font-bold text-red-600">{stats.validations_denied}</div><div className="text-xs text-muted-foreground">Denied</div></Card>
+          <Card className="p-3"><div className="text-2xl font-bold">{stats.templates_total - stats.templates_active}</div><div className="text-xs text-muted-foreground">Inactive</div></Card>
         </div>
       )}
 
