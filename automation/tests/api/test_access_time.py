@@ -6,7 +6,7 @@ Service: access-svc :8003
 """
 import pytest
 import uuid
-from automation.common.api_client import APIClient
+from common.api_client import APIClient
 
 BASE = "/api/v1/access-time"
 

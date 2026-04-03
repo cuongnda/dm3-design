@@ -143,7 +143,7 @@ def run_tests(test_type: str = "all", markers: str = "") -> dict:
 
 def upload_report(summary: dict):
     """Upload test report to DV Tasks server API."""
-    from automation.common.report_uploader import ReportUploader
+    from common.report_uploader import ReportUploader
 
     uploader = ReportUploader()
     if not uploader.enabled:
