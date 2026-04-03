@@ -1,6 +1,7 @@
 package access
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -153,13 +154,13 @@ func (h *Handlers) GetAccessTimeTemplate(w http.ResponseWriter, r *http.Request)
 
 func (h *Handlers) CreateAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateAccessTimeTemplateRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_json")
 		return
 	}
 
 	companyID := authsvc.CompanyIDFromContext(r.Context())
-	userID := authsvc.UserIDFromContext(r.Context())
+	userID := authsvc.ClaimsFromContext(r.Context()).Sub
 
 	// Validate timezone
 	if _, err := time.LoadLocation(req.Timezone); err != nil {
@@ -225,7 +226,7 @@ func (h *Handlers) UpdateAccessTimeTemplate(w http.ResponseWriter, r *http.Reque
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 
 	var req models.UpdateAccessTimeTemplateRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_json")
 		return
 	}
@@ -365,13 +366,13 @@ func (h *Handlers) DeleteAccessTimeTemplate(w http.ResponseWriter, r *http.Reque
 
 func (h *Handlers) AssignAccessTime(w http.ResponseWriter, r *http.Request) {
 	var req models.AssignAccessTimeRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_json")
 		return
 	}
 
 	companyID := authsvc.CompanyIDFromContext(r.Context())
-	assignedBy := authsvc.UserIDFromContext(r.Context())
+	assignedBy := authsvc.ClaimsFromContext(r.Context()).Sub
 
 	// Start transaction
 	tx, err := h.db.Pool.Begin(r.Context())
@@ -482,7 +483,7 @@ func (h *Handlers) GetUserAccessTime(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) ValidateAccess(w http.ResponseWriter, r *http.Request) {
 	var req models.ValidateAccessRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_json")
 		return
 	}
