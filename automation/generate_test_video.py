@@ -159,6 +159,16 @@ class TestVideoGenerator:
             return None
 
 
+def generate_video_for_report(json_file: str, fps: int = 1, duration_per_step: int = 2) -> str:
+    """Generate video for a single execution report JSON. Returns video path or None."""
+    try:
+        gen = TestVideoGenerator(json_file)
+        return gen.generate_video(fps=fps, duration_per_step=duration_per_step)
+    except Exception as e:
+        print(f"Failed: {json_file}: {e}")
+        return None
+
+
 def generate_videos_for_reports(report_dir: str = "export/execution_reports"):
     """Generate videos for all execution report JSONs."""
     json_files = glob.glob(f"{report_dir}/*.json")

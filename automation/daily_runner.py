@@ -602,24 +602,82 @@ def upload_summary_report(results: list, process_id: str):
 
 
 # =============================================================================
-# REPORT GENERATION (videos + step reports for web tests)
+# REPORT GENERATION (step reports + videos)
 # =============================================================================
 
+def _generate_module_artifacts(module_slug: str):
+    """Generate step HTML reports + videos for a specific module.
+    
+    Must be called BEFORE upload so that ZIP includes HTML + videos.
+    """
+    exec_dir = EXPORT_DIR / "execution_reports"
+    tc_prefix = "TC_" + module_slug.upper().replace("-", "_")
+    
+    # Find JSON files for this module
+    module_json_files = []
+    if exec_dir.exists():
+        for f in exec_dir.iterdir():
+            if f.is_file() and f.suffix == '.json' and tc_prefix in f.name:
+                module_json_files.append(str(f))
+
+    if not module_json_files:
+        return
+
+    # Generate step HTML reports from JSON
+    html_count = 0
+    try:
+        from generate_step_report import generate_html_report
+        for jf in module_json_files:
+            try:
+                generate_html_report(jf)
+                html_count += 1
+            except Exception as e:
+                log(f"Step report failed: {Path(jf).name}: {e}", tag=module_slug)
+    except ImportError:
+        pass
+
+    # Generate videos from screenshots (if any)
+    video_count = 0
+    if os.environ.get("GENERATE_VIDEO", "true").lower() == "true":
+        try:
+            from generate_test_video import generate_video_for_report
+            for jf in module_json_files:
+                try:
+                    result = generate_video_for_report(jf)
+                    if result:
+                        video_count += 1
+                except Exception:
+                    pass
+        except ImportError:
+            # Try the batch function
+            try:
+                from generate_test_video import generate_videos_for_reports
+                videos = generate_videos_for_reports(str(exec_dir), tc_prefix=tc_prefix)
+                video_count = len(videos)
+            except ImportError:
+                pass
+            except Exception:
+                pass
+
+    if html_count or video_count:
+        log(f"Generated {html_count} step reports, {video_count} videos", tag=module_slug)
+
+
 def generate_reports():
-    """Generate video + HTML step reports from execution JSONs."""
+    """Generate ALL step reports + videos (fallback for any missed during per-module)."""
     report_dir = str(EXPORT_DIR / "execution_reports")
 
-    # Generate step HTML reports
+    # Generate step HTML reports for any remaining JSON without HTML
     try:
         from generate_step_report import generate_reports_for_all
         reports = generate_reports_for_all(report_dir)
         log(f"Generated {len(reports)} step reports")
     except ImportError:
-        pass  # Optional: only if web tests produce execution JSONs
+        pass
     except Exception as e:
         log(f"Step report generation failed: {e}")
 
-    # Generate videos (requires ffmpeg)
+    # Generate videos for any remaining
     if os.environ.get("GENERATE_VIDEO", "true").lower() == "true":
         try:
             from generate_test_video import generate_videos_for_reports
@@ -660,24 +718,23 @@ def run_all_tests(test_type: str = "all", upload: bool = True) -> dict:
     for tf in test_files:
         log(f"  - {Path(tf).name}")
 
-    # Run each test file and upload per-module
+    # Run each test file → generate reports → upload per-module
     results = []
     for test_file in test_files:
         result = run_single_test(test_file)
         results.append(result)
 
-        # Upload this module's report immediately
+        # Generate step HTML reports + videos for THIS module BEFORE uploading
+        _generate_module_artifacts(result["module"])
+
+        # NOW upload with all artifacts (JSON + HTML + videos)
         if upload:
             try:
                 upload_module_report(result, process_id)
             except Exception as e:
                 log(f"Upload error for {result['module']}: {e}")
 
-    # Generate web test reports (videos, step reports) if applicable
-    if test_type in ("web", "all"):
-        generate_reports()
-
-    # Upload combined summary ("all")
+    # Upload combined summary ("all") — all artifacts already generated
     if upload and results:
         try:
             upload_summary_report(results, process_id)

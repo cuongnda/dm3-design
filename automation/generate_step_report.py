@@ -215,10 +215,13 @@ document.addEventListener('keydown',function(e){{ if(e.key==='Escape')closeVideo
 
 
 def generate_reports_for_all(report_dir: str = "export/execution_reports"):
-    """Generate HTML reports for all JSON execution files."""
+    """Generate HTML reports for all JSON execution files (skips if HTML already exists)."""
     json_files = glob.glob(f"{report_dir}/*.json")
     reports = []
     for jf in json_files:
+        html_path = jf.replace('.json', '.html')
+        if os.path.exists(html_path):
+            continue  # Already generated
         try:
             html = generate_html_report(jf)
             reports.append(html)
