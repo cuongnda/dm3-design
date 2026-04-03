@@ -14,7 +14,6 @@
   "dependencies": {
     "@dm3/api-client": "*",
     "@dm3/ui": "*",
-    "@rollup/rollup-linux-x64-gnu": "^4.57.1",
     "@tailwindcss/vite": "^4.2.0",
     "@tanstack/react-query": "^5.90.21",
     "class-variance-authority": "^0.7.1",
