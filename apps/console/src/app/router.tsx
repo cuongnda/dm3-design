@@ -9,6 +9,9 @@ import { CompanyListPage } from '@/features/system/CompanyListPage';
 import { CreateCompanyPage } from '@/features/system/CreateCompanyPage';
 import { CompanyDetailPage } from '@/features/system/CompanyDetailPage';
 import { SystemDevicesPage } from '@/features/system/SystemDevicesPage';
+import { FirmwareListPage } from '@/features/system/FirmwareListPage';
+import { FirmwareUploadPage } from '@/features/system/FirmwareUploadPage';
+import { FirmwareDetailPage } from '@/features/system/FirmwareDetailPage';
 import { UserAccountListPage } from '@/features/system/UserAccountListPage';
 import { UserAccountDetailPage } from '@/features/system/UserAccountDetailPage';
 import { CreateUserAccountPage } from '@/features/system/CreateUserAccountPage';
@@ -172,6 +175,9 @@ export const router = createBrowserRouter([
           { path: 'accounts/:id', element: <UserAccountDetailPage /> },
           { path: 'devices/pending', element: <LazyWrap><PendingDevicesPage isSystemAdmin={true} /></LazyWrap> },
           { path: 'devices', element: <SystemDevicesPage /> },
+          { path: 'firmware', element: <FirmwareListPage /> },
+          { path: 'firmware/upload', element: <FirmwareUploadPage /> },
+          { path: 'firmware/:id', element: <FirmwareDetailPage /> },
           { path: 'settings', element: <LazyWrap><SystemSettingsPage /></LazyWrap> },
         ],
       },

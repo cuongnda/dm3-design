@@ -1041,3 +1041,109 @@ export function connectWebSocket(onEvent: WSEventHandler): WebSocket | null {
 
   return ws;
 }
+
+// ─── Firmware API ───────────────────────────────────────────
+
+const FIRMWARE_URL = '/api/v1/system/firmware';
+
+export interface FirmwareDTO {
+  id: string;
+  version: string;
+  device_type: string;
+  description: string | null;
+  file_path: string;
+  file_size: number;
+  checksum: string | null;
+  is_active: boolean;
+  uploaded_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FirmwareListResponse {
+  firmwares: FirmwareDTO[];
+  pagination: { page: number; limit: number; total: number };
+}
+
+export interface FirmwareUploadResponse {
+  id: string;
+  checksum: string;
+  size: number;
+  message: string;
+}
+
+export async function fetchFirmwares(params?: Record<string, string>): Promise<FirmwareListResponse> {
+  const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+  return apiFetch<FirmwareListResponse>(`${FIRMWARE_URL}${qs}`);
+}
+
+export async function fetchFirmware(id: string): Promise<FirmwareDTO> {
+  return apiFetch<FirmwareDTO>(`${FIRMWARE_URL}/${id}`);
+}
+
+export async function uploadFirmware(
+  file: File,
+  version: string,
+  deviceType: string,
+  description: string,
+  onProgress?: (pct: number) => void,
+): Promise<FirmwareUploadResponse> {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('version', version);
+  formData.append('device_type', deviceType);
+  formData.append('description', description);
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', FIRMWARE_URL);
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(JSON.parse(xhr.responseText));
+      } else {
+        reject(new Error(`Upload failed: ${xhr.status} ${xhr.responseText}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Upload network error'));
+    xhr.send(formData);
+  });
+}
+
+export async function updateFirmware(
+  id: string,
+  data: { version?: string; description?: string; is_active?: boolean },
+): Promise<FirmwareDTO> {
+  return apiFetch<FirmwareDTO>(`${FIRMWARE_URL}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteFirmware(id: string, hard = false): Promise<void> {
+  await apiFetch<void>(`${FIRMWARE_URL}/${id}${hard ? '?hard=true' : ''}`, { method: 'DELETE' });
+}
+
+export async function deployFirmware(firmwareId: string, deviceId: string): Promise<{ message: string; status: string }> {
+  return apiFetch<{ message: string; status: string }>(`${FIRMWARE_URL}/${firmwareId}/deploy`, {
+    method: 'POST',
+    body: JSON.stringify({ device_id: deviceId }),
+  });
+}
+
+export async function fetchFirmwareDeviceTypes(): Promise<{ device_types: string[] }> {
+  return apiFetch<{ device_types: string[] }>(`${FIRMWARE_URL}/device-types`);
+}
+
+export function getFirmwareDownloadUrl(id: string): string {
+  return `${FIRMWARE_URL}/${id}/download`;
+}

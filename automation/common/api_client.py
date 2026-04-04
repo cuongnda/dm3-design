@@ -65,7 +65,11 @@ class DM3Client:
         return self.session.get(self._url(path), headers=self.headers, timeout=constants.TIMEOUT_API, **kwargs)
 
     def post(self, path: str, **kwargs) -> requests.Response:
-        return self.session.post(self._url(path), headers=self.headers, timeout=constants.TIMEOUT_API, **kwargs)
+        headers = self.headers
+        # Don't set Content-Type for multipart uploads — requests sets it automatically
+        if "files" in kwargs:
+            headers = {k: v for k, v in headers.items() if k.lower() != "content-type"}
+        return self.session.post(self._url(path), headers=headers, timeout=constants.TIMEOUT_API, **kwargs)
 
     def put(self, path: str, **kwargs) -> requests.Response:
         return self.session.put(self._url(path), headers=self.headers, timeout=constants.TIMEOUT_API, **kwargs)
