@@ -70,6 +70,9 @@ class DM3Client:
     def put(self, path: str, **kwargs) -> requests.Response:
         return self.session.put(self._url(path), headers=self.headers, timeout=constants.TIMEOUT_API, **kwargs)
 
+    def patch(self, path: str, **kwargs) -> requests.Response:
+        return self.session.patch(self._url(path), headers=self.headers, timeout=constants.TIMEOUT_API, **kwargs)
+
     def delete(self, path: str, **kwargs) -> requests.Response:
         return self.session.delete(self._url(path), headers=self.headers, timeout=constants.TIMEOUT_API, **kwargs)
 

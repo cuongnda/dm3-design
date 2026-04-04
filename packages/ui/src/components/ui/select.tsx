@@ -136,8 +136,13 @@ function Select({
     setSearch("")
   }
 
+  // Forward data-* attributes to root div for test automation
+  const dataAttrs = Object.fromEntries(
+    Object.entries(props).filter(([k]) => k.startsWith("data-"))
+  )
+
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative" {...dataAttrs}>
       <button
         ref={triggerRef}
         type="button"

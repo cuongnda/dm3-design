@@ -243,7 +243,7 @@ func (h *Handlers) CreateUserAccount(w http.ResponseWriter, r *http.Request) {
 	err = tx.QueryRow(r.Context(),
 		`INSERT INTO dm3_auth.users (email, password_hash, name, roles, role, status)
 		 VALUES ($1, $2, $3, $4, $5, 'active') RETURNING id`,
-		req.Email, string(pwHash), req.Name, fmt.Sprintf(`["%s"]`, role), role,
+		req.Email, string(pwHash), req.Name, []string{role}, role,
 	).Scan(&userID)
 	if err != nil {
 		slog.Error("create user account: user insert error", "error", err)

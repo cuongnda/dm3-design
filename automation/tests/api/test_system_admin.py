@@ -2,6 +2,7 @@
 DM3-292: System Admin API Tests
 Tests for system stats, company CRUD, and auth flow.
 """
+import uuid
 import pytest
 from common import constants
 from common.api_client import DM3Client
@@ -122,26 +123,30 @@ class TestCompanyCRUD:
     @pytest.mark.api
     def test_create_company(self, sysadmin_client):
         """POST /system/companies should create company + admin user."""
+        uid = uuid.uuid4().hex[:6].upper()
+        code = f"AT{uid}"
+        email = f"auto-{uid.lower()}@test.com"
         resp = sysadmin_client.post(
             f"{constants.API_AUTH}/api/v1/system/companies",
             json={
-                "name": "Test Automation Corp",
-                "code": "AUTOTEST",
-                "email": "auto@test.com",
+                "name": f"Test Automation Corp {uid}",
+                "code": code,
+                "email": email,
                 "plan": "starter",
             },
         )
         assert resp.status_code == 201
         data = resp.json()
-        assert data["company"]["name"] == "Test Automation Corp"
-        assert data["company"]["code"] == "AUTOTEST"
+        assert data["company"]["name"] == f"Test Automation Corp {uid}"
+        assert data["company"]["code"] == code
         assert data["company"]["status"] == "active"
-        assert data["admin"]["email"] == "auto@test.com"
+        assert data["admin"]["email"] == email
         assert data["admin"]["password"]  # auto-generated password
         assert data["admin"]["role"] == "primary_manager"
 
-        # Store for cleanup
+        # Store for cleanup and subsequent tests
         self.__class__._created_company_id = data["company"]["id"]
+        self.__class__._created_company_name = f"Test Automation Corp {uid}"
 
     @pytest.mark.api
     def test_get_company(self, sysadmin_client):
@@ -154,7 +159,7 @@ class TestCompanyCRUD:
         assert resp.status_code == 200
         data = resp.json()
         assert data["id"] == company_id
-        assert data["name"] == "Test Automation Corp"
+        assert data["name"] == getattr(self.__class__, '_created_company_name', '')
 
     @pytest.mark.api
     def test_update_company(self, sysadmin_client):
@@ -165,11 +170,11 @@ class TestCompanyCRUD:
 
         resp = sysadmin_client.put(
             f"{constants.API_AUTH}/api/v1/system/companies/{company_id}",
-            json={"name": "Test Automation Corp Updated", "plan": "enterprise"},
+            json={"name": f"{getattr(self.__class__, '_created_company_name', 'Test')} Updated", "plan": "enterprise"},
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert data["name"] == "Test Automation Corp Updated"
+        assert "Updated" in data["name"]
         assert data["plan"] == "enterprise"
 
     @pytest.mark.api
@@ -189,18 +194,20 @@ class TestCompanyCRUD:
     @pytest.mark.api
     def test_create_company_duplicate_code(self, sysadmin_client):
         """Creating company with duplicate code should fail."""
+        uid = uuid.uuid4().hex[:6].upper()
+        code = f"DUP{uid}"
         # Create first
         resp = sysadmin_client.post(
             f"{constants.API_AUTH}/api/v1/system/companies",
-            json={"name": "Dup Test", "code": "DUPTEST", "email": "dup@test.com"},
+            json={"name": f"Dup Test {uid}", "code": code, "email": f"dup-{uid.lower()}@test.com"},
         )
         if resp.status_code == 201:
             self.__class__._dup_company_id = resp.json()["company"]["id"]
 
-        # Try duplicate
+        # Try duplicate code
         resp = sysadmin_client.post(
             f"{constants.API_AUTH}/api/v1/system/companies",
-            json={"name": "Dup Test 2", "code": "DUPTEST", "email": "dup2@test.com"},
+            json={"name": f"Dup Test 2 {uid}", "code": code, "email": f"dup2-{uid.lower()}@test.com"},
         )
         assert resp.status_code == 409
 

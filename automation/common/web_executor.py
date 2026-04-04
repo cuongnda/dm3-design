@@ -5,6 +5,7 @@ Captures before/after screenshots and generates execution report JSON.
 """
 import json
 import os
+import re
 import time
 from datetime import datetime
 from typing import Dict, Any, List
@@ -14,6 +15,9 @@ from playwright.sync_api import Page
 from . import constants
 
 PROJECT_ROOT = Path(__file__).parent.parent
+
+# Timestamp for template variables — unique per session
+_SESSION_TS = datetime.now().strftime("%Y%m%d%H%M%S")
 
 
 class WebTestExecutor:
@@ -178,6 +182,34 @@ class WebTestExecutor:
         if failed:
             raise AssertionError(failed[-1]["error"])
 
+    # ── Helpers ─────────────────────────────────────────────────
+
+    def _resolve_template(self, value: str) -> str:
+        """Replace {{timestamp}} and similar template variables."""
+        if not isinstance(value, str):
+            return value
+        return value.replace("{{timestamp}}", _SESSION_TS)
+
+    def _locator(self, data: Dict[str, Any], *, first: bool = False):
+        """Build a Playwright locator from step data (testid, css, or text)."""
+        testid = data.get("testid")
+        css = data.get("css")
+        text = data.get("text")
+        use_first = first or data.get("first", False)
+
+        if testid:
+            loc = self.page.locator(f'[data-testid="{testid}"]')
+        elif css:
+            loc = self.page.locator(css)
+        elif text:
+            loc = self.page.get_by_text(text, exact=False)
+        else:
+            return None
+
+        if use_first:
+            loc = loc.first
+        return loc
+
     # ── Step Execution ─────────────────────────────────────────
 
     def _resolve_data(self, step: Dict[str, Any]) -> Dict[str, Any]:
@@ -201,26 +233,40 @@ class WebTestExecutor:
         if action in ("goto", "navigate"):
             url = data.get("url", "/")
             self.page.goto(f"{self.base_url}{url}")
+            self.page.wait_for_load_state("networkidle", timeout=10000)
 
         elif action == "fill":
-            testid = data.get("testid")
-            value = data.get("value", "")
-            if testid:
-                self.page.locator(f'[data-testid="{testid}"]').fill(value)
+            value = self._resolve_template(data.get("value", ""))
+            loc = self._locator(data)
+            if loc:
+                loc.fill(value)
 
         elif action == "click":
-            testid = data.get("testid")
-            text = data.get("text")
-            if testid:
-                self.page.locator(f'[data-testid="{testid}"]').click()
-            elif text:
-                self.page.get_by_text(text, exact=False).first.click()
+            loc = self._locator(data, first=True)
+            if loc:
+                loc.click()
 
         elif action in ("select", "select_option"):
+            # Custom Select component: click trigger → click option by text/value
             testid = data.get("testid")
             value = data.get("value")
             if testid and value:
-                self.page.locator(f'[data-testid="{testid}"]').select_option(value)
+                # Find trigger button inside the custom Select wrapper
+                wrapper = self.page.locator(f'[data-testid="{testid}"]')
+                if wrapper.count() == 0:
+                    raise AssertionError(f'Select [data-testid="{testid}"] not found — frontend rebuild may be needed')
+                trigger = wrapper.locator('button[data-slot="select"]')
+                if trigger.count() == 0:
+                    trigger = wrapper.locator('button').first
+                trigger.wait_for(state="visible", timeout=5000)
+                trigger.click()
+                time.sleep(0.4)
+                # Options rendered as portal buttons in document.body
+                option = self.page.locator('div[style*="position: fixed"] button').filter(has_text=value).last
+                if option.count() == 0:
+                    option = self.page.get_by_text(value, exact=True).last
+                option.click()
+                time.sleep(0.3)
 
         elif action == "wait":
             ms = data.get("ms", 1000)
@@ -254,61 +300,49 @@ class WebTestExecutor:
         data = check.get("data", {})
 
         if action == "visible":
-            testid = data.get("testid")
-            text = data.get("text")
-            if testid:
-                assert self.page.locator(f'[data-testid="{testid}"]').is_visible(), \
-                    f"Element [data-testid=\"{testid}\"] not visible"
-            elif text:
-                assert self.page.get_by_text(text, exact=False).first.is_visible(), \
-                    f"Text '{text}' not visible"
+            loc = self._locator(data, first=True)
+            assert loc is not None, f"No locator found for: {data}"
+            loc.wait_for(state="visible", timeout=5000)
 
         elif action == "not_visible":
-            testid = data.get("testid")
-            text = data.get("text")
-            if testid:
-                assert not self.page.locator(f'[data-testid="{testid}"]').is_visible(), \
-                    f"Element [data-testid=\"{testid}\"] should not be visible"
-            elif text:
-                assert not self.page.get_by_text(text, exact=False).first.is_visible(), \
-                    f"Text '{text}' should not be visible"
+            loc = self._locator(data, first=True)
+            assert loc is not None, f"No locator found for: {data}"
+            assert not loc.is_visible(), f"Element should not be visible: {data}"
 
         elif action == "url_contains":
-            url = data.get("url", "")
+            url = data.get("url") or data.get("value", "")
             current = self.page.url
             assert url in current, f"URL '{current}' does not contain '{url}'"
 
         elif action == "value_equals":
-            testid = data.get("testid")
+            loc = self._locator(data)
             expected = data.get("value")
-            if testid:
-                actual = self.page.locator(f'[data-testid="{testid}"]').input_value()
+            if loc:
+                actual = loc.input_value()
                 assert actual == expected, f"Value '{actual}' != '{expected}'"
 
         elif action == "count":
-            testid = data.get("testid")
+            loc = self._locator(data)
             expected = data.get("count", 0)
-            actual = self.page.locator(f'[data-testid="{testid}"]').count()
+            actual = loc.count() if loc else 0
             assert actual >= expected, f"Count {actual} < {expected}"
 
         elif action == "text_contains":
-            testid = data.get("testid")
-            expected = data.get("text")
-            if testid:
-                actual = self.page.locator(f'[data-testid="{testid}"]').text_content()
-                assert expected in (actual or ""), f"Text '{actual}' doesn't contain '{expected}'"
+            loc = self._locator(data, first=True)
+            expected = data.get("text") or data.get("value", "")
+            assert loc is not None, f"No locator found for: {data}"
+            actual = loc.text_content()
+            assert expected in (actual or ""), f"Text '{actual}' doesn't contain '{expected}'"
 
         elif action == "enabled":
-            testid = data.get("testid")
-            if testid:
-                assert self.page.locator(f'[data-testid="{testid}"]').is_enabled(), \
-                    f"Element [data-testid=\"{testid}\"] is not enabled"
+            loc = self._locator(data)
+            assert loc is not None, f"No locator found for: {data}"
+            assert loc.is_enabled(), f"Element is not enabled: {data}"
 
         elif action == "disabled":
-            testid = data.get("testid")
-            if testid:
-                assert not self.page.locator(f'[data-testid="{testid}"]').is_enabled(), \
-                    f"Element [data-testid=\"{testid}\"] should be disabled"
+            loc = self._locator(data)
+            assert loc is not None, f"No locator found for: {data}"
+            assert not loc.is_enabled(), f"Element should be disabled: {data}"
 
         else:
             raise ValueError(f"Unknown verification: {action}")
@@ -316,10 +350,11 @@ class WebTestExecutor:
     def _login(self, email: str, password: str):
         """Helper: login via UI."""
         self.page.goto(f"{self.base_url}/login")
+        self.page.wait_for_load_state("networkidle", timeout=10000)
         self.page.locator('[data-testid="login-input-email"]').fill(email)
         self.page.locator('[data-testid="login-input-password"]').fill(password)
         self.page.locator('[data-testid="login-button-submit"]').click()
-        self.page.wait_for_timeout(2000)
+        self.page.wait_for_timeout(3000)
 
 
 def load_test_data(file_path: str) -> List[Dict]:

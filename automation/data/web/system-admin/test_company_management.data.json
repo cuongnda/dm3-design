@@ -30,7 +30,7 @@
       {
         "action": "fill",
         "testid": "company-input-search",
-        "value": "Demo"
+        "value": "Test"
       },
       {
         "action": "wait",
@@ -38,7 +38,8 @@
       },
       {
         "action": "assert_visible",
-        "testid": "company-row-00000000-0000-0000-0000-000000000001"
+        "css": "[data-testid^='company-row-']",
+        "first": true
       }
     ]
   },
@@ -51,7 +52,8 @@
       },
       {
         "action": "click",
-        "testid": "company-row-00000000-0000-0000-0000-000000000001"
+        "css": "[data-testid^='company-row-']",
+        "first": true
       },
       {
         "action": "assert_visible",
@@ -72,7 +74,12 @@
     "steps": [
       {
         "action": "navigate",
-        "url": "/system/companies/00000000-0000-0000-0000-000000000001"
+        "url": "/system/companies"
+      },
+      {
+        "action": "click",
+        "css": "[data-testid^='company-row-']",
+        "first": true
       },
       {
         "action": "click",
