@@ -105,6 +105,7 @@ func main() {
 	// HTTP handlers
 	handlers := gateway.NewHandlers(database, mqttClient)
 	provHandlers := gateway.NewProvisioningHandlers(database, mqttClient, cfg)
+	firmwareHandlers := gateway.NewFirmwareHandlers(database)
 
 	// HTTP routes
 	r := httputil.NewRouter()
@@ -134,6 +135,16 @@ func main() {
 			sr.Post("/devices/pending/{id}/reject", provHandlers.RejectPending)
 			// Global device list for system admin (no company filter required)
 			sr.Get("/system/devices", handlers.ListDevicesGlobal)
+
+			// Firmware management
+			sr.Get("/system/firmware", firmwareHandlers.ListFirmwares)
+			sr.Post("/system/firmware", firmwareHandlers.UploadFirmware)
+			sr.Get("/system/firmware/device-types", firmwareHandlers.ListDeviceTypes)
+			sr.Get("/system/firmware/{id}", firmwareHandlers.GetFirmware)
+			sr.Put("/system/firmware/{id}", firmwareHandlers.UpdateFirmware)
+			sr.Delete("/system/firmware/{id}", firmwareHandlers.DeleteFirmware)
+			sr.Post("/system/firmware/{id}/deploy", firmwareHandlers.DeployFirmware)
+			sr.Get("/system/firmware/{id}/download", firmwareHandlers.DownloadFirmware)
 		})
 
 		// Company-scoped endpoints
