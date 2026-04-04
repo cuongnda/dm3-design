@@ -126,10 +126,10 @@ export function DevicesPage() {
         description={`${onlineCount}/${totalCount} online • ${isConnected ? 'Live' : 'Offline'}`}
       >
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => navigate('/devices/pending')} className="gap-1.5">
+          <Button data-testid="device-button-pending" variant="outline" size="sm" onClick={() => navigate('/devices/pending')} className="gap-1.5">
             <Clock size={15} /> {t('devices.pending')}
           </Button>
-          <Button size="sm" onClick={() => navigate('/devices/provision')} className="gap-1.5">
+          <Button data-testid="device-button-add" size="sm" onClick={() => navigate('/devices/provision')} className="gap-1.5">
             <Plus size={15} /> {t('devices.addDevice')}
           </Button>
         </div>
@@ -140,6 +140,8 @@ export function DevicesPage() {
         data={devicesWithRealtimeStatus}
         rowKey={(r) => r.id}
         onRowClick={handleRowClick}
+        data-testid="device-table-list"
+        rowTestId={(r) => `device-row-${r.id}`}
       />
     </div>
   );
