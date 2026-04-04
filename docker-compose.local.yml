@@ -299,14 +299,15 @@ services:
     container_name: dm3-local-automation
     environment:
       # ── Service URLs (Docker internal) ──
-      API_BASE_URL: http://device-gateway:8002
+      API_BASE_URL: http://nginx:80
       API_URL: http://nginx:80
       API_AUTH: http://nginx:80
       API_IDENTITY: http://nginx:80
       API_ACCESS: http://nginx:80
       API_GATEWAY: http://nginx:80
       WEB_URL: http://nginx:80
-      HOST_WEB: http://localhost:3000
+      WEB_BASE_URL: http://nginx:80
+      HOST_WEB: http://nginx:80
       BASE_URL: http://nginx:80
       # ── Auth ──
       SYSADMIN_EMAIL: sysadmin@duali.com

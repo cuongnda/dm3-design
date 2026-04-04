@@ -1109,9 +1109,16 @@ def run_all_tests(test_type: str = "all", upload: bool = True) -> dict:
     log(f"  DM3 TEST RUN — type={test_type}, process_id={process_id}")
     log(f"{'='*60}")
 
-    # Clean old exports
+    # Clean old exports (keep dir if it's a mount point)
     if EXPORT_DIR.exists():
-        shutil.rmtree(EXPORT_DIR)
+        for item in EXPORT_DIR.iterdir():
+            try:
+                if item.is_dir():
+                    shutil.rmtree(item)
+                else:
+                    item.unlink()
+            except OSError:
+                pass
     EXPORT_DIR.mkdir(exist_ok=True)
     (EXPORT_DIR / "execution_reports").mkdir(exist_ok=True)
     (EXPORT_DIR / "screenshots").mkdir(exist_ok=True)

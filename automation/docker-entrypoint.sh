@@ -36,8 +36,8 @@ echo "[1/3] Waiting for services to be healthy..."
 
 WAITED=0
 while [ "$WAITED" -lt "$HEALTH_TIMEOUT" ]; do
-    API_OK=$(curl -sf "${API_BASE_URL}/healthz" 2>/dev/null && echo "1" || echo "0")
-    WEB_OK=$(curl -sf "${WEB_BASE_URL}" 2>/dev/null && echo "1" || echo "0")
+    API_OK=$(curl -sf -o /dev/null "${API_BASE_URL}/healthz" 2>/dev/null && echo "1" || echo "0")
+    WEB_OK=$(curl -sf -o /dev/null "${WEB_BASE_URL}" 2>/dev/null && echo "1" || echo "0")
 
     if [ "$API_OK" = "1" ] && [ "$WEB_OK" = "1" ]; then
         echo "  ✓ Services ready (${WAITED}s)"
