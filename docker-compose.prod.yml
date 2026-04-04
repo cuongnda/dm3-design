@@ -282,6 +282,56 @@ services:
     profiles:
       - staging
 
+  # ── Automation Test Runner ─────────────────────────────────────────────────
+
+  automation:
+    build:
+      context: .
+      dockerfile: automation/Dockerfile
+    container_name: dm3-automation
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: http://nginx:80
+      API_URL: http://nginx:80
+      API_AUTH: http://nginx:80
+      API_IDENTITY: http://nginx:80
+      API_ACCESS: http://nginx:80
+      API_GATEWAY: http://nginx:80
+      WEB_URL: http://nginx:80
+      WEB_BASE_URL: http://nginx:80
+      HOST_WEB: http://dm3.demasterpro.com
+      BASE_URL: http://nginx:80
+      SYSADMIN_EMAIL: sysadmin@duali.com
+      SYSADMIN_PASSWORD: sysadmin123
+      ADMIN_EMAIL: admin@duali.com
+      ADMIN_PASSWORD: admin123
+      REPORT_UPLOAD_URL: https://tasks.duali.vn/api/automation/upload
+      REPORT_UPLOAD_TOKEN: ${REPORT_UPLOAD_TOKEN:-}
+      REPORT_PREFIX: dm3
+      HEADLESS: "true"
+      GENERATE_VIDEO: "true"
+      TZ: Asia/Bangkok
+      HEALTH_TIMEOUT: "180"
+      RUN_ON_STARTUP: ${AUTOMATION_RUN_ON_STARTUP:-changed}
+      CRON_SCHEDULE: ${AUTOMATION_CRON:-0 2 * * *}
+      CI_COMMIT_SHA: ${CI_COMMIT_SHA:-}
+      CI_COMMIT_BEFORE_SHA: ${CI_COMMIT_BEFORE_SHA:-}
+    volumes:
+      - automation_data:/app/automation/export
+    depends_on:
+      nginx:
+        condition: service_started
+      auth-svc:
+        condition: service_healthy
+      access-svc:
+        condition: service_healthy
+      device-gateway:
+        condition: service_healthy
+    networks:
+      - dm3-internal
+    profiles:
+      - test
+
 volumes:
   timescaledb_data:
   emqx_data:
@@ -289,6 +339,7 @@ volumes:
   valkey_data:
   minio_data:
   certbot_webroot:
+  automation_data:
 
 networks:
   dm3-internal:
