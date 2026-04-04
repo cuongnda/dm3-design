@@ -1,0 +1,53 @@
+{
+  "test_firmware_list_page": {
+    "description": "Verify firmware list page loads with table and upload button",
+    "steps": [
+      {"action": "navigate", "url": "/system/firmware"},
+      {"action": "assert_visible", "testid": "fw-table-list"},
+      {"action": "assert_visible", "testid": "fw-button-upload"},
+      {"action": "assert_visible", "testid": "fw-input-search"}
+    ]
+  },
+  "test_firmware_search": {
+    "description": "Search firmware by version",
+    "steps": [
+      {"action": "navigate", "url": "/system/firmware"},
+      {"action": "fill", "testid": "fw-input-search", "value": "1.0"},
+      {"action": "wait", "ms": 800},
+      {"action": "assert_visible", "testid": "fw-table-list"}
+    ]
+  },
+  "test_navigate_to_upload": {
+    "description": "Navigate from firmware list to upload page",
+    "steps": [
+      {"action": "navigate", "url": "/system/firmware"},
+      {"action": "click", "testid": "fw-button-upload"},
+      {"action": "assert_url_contains", "value": "/system/firmware/upload"},
+      {"action": "assert_visible", "testid": "upload-input-version"},
+      {"action": "assert_visible", "testid": "upload-select-device-type"},
+      {"action": "assert_visible", "testid": "upload-textarea-description"},
+      {"action": "assert_visible", "testid": "upload-button-submit"}
+    ]
+  },
+  "test_upload_form_validation": {
+    "description": "Upload form should require file and version",
+    "steps": [
+      {"action": "navigate", "url": "/system/firmware/upload"},
+      {"action": "assert_visible", "testid": "upload-button-submit"},
+      {"action": "assert_disabled", "testid": "upload-button-submit"}
+    ]
+  },
+  "test_firmware_detail_page": {
+    "description": "Navigate to firmware detail from list",
+    "steps": [
+      {"action": "navigate", "url": "/system/firmware"},
+      {"action": "click", "css": "[data-testid^='fw-row-']", "first": true},
+      {"action": "wait", "ms": 500},
+      {"action": "assert_url_contains", "value": "/system/firmware/"},
+      {"action": "assert_visible", "testid": "detail-text-version"},
+      {"action": "assert_visible", "testid": "detail-badge-status"},
+      {"action": "assert_visible", "testid": "detail-button-edit"},
+      {"action": "assert_visible", "testid": "detail-button-download"}
+    ]
+  }
+}
