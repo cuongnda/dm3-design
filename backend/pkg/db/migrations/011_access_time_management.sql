@@ -62,17 +62,17 @@ CREATE TABLE IF NOT EXISTS dm3_access.access_time_validations (
     is_allowed BOOLEAN NOT NULL,
     reason VARCHAR(255), -- Why allowed/denied
     matched_slot_id UUID REFERENCES dm3_access.access_time_slots(id),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    
-    -- Performance indexes
-    INDEX idx_validation_user_time (user_id, validation_time),
-    INDEX idx_validation_tenant_time (tenant_id, validation_time)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Performance indexes for validation log
+CREATE INDEX IF NOT EXISTS idx_validation_user_time ON dm3_access.access_time_validations(user_id, validation_time);
+CREATE INDEX IF NOT EXISTS idx_validation_tenant_time ON dm3_access.access_time_validations(tenant_id, validation_time);
 
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_access_templates_tenant_active ON dm3_access.access_time_templates(tenant_id, is_active);
 CREATE INDEX IF NOT EXISTS idx_time_slots_template_day ON dm3_access.access_time_slots(template_id, day_of_week, is_active);
-CREATE INDEX IF NOT EXISTS idx_user_access_active ON dm3_access.user_access_times(user_id, effective_from, effective_to) WHERE effective_to IS NULL OR effective_to >= CURRENT_DATE;
+CREATE INDEX IF NOT EXISTS idx_user_access_active ON dm3_access.user_access_times(user_id, effective_from, effective_to);
 CREATE INDEX IF NOT EXISTS idx_user_access_tenant ON dm3_access.user_access_times(tenant_id, effective_from, effective_to);
 
 -- Add update triggers for timestamps

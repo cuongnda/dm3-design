@@ -28,13 +28,13 @@ func (h *Handlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.Reques
 	idx := 1
 
 	if cid := authsvc.CompanyIDFromContext(r.Context()); cid != "" {
-		where += fmt.Sprintf(" AND tenant_id = $%d::uuid", idx)
+		where += fmt.Sprintf(" AND t.tenant_id = $%d::uuid", idx)
 		args = append(args, cid)
 		idx++
 	}
 
 	if v := r.URL.Query().Get("active"); v != "" {
-		where += fmt.Sprintf(" AND is_active = $%d", idx)
+		where += fmt.Sprintf(" AND t.is_active = $%d", idx)
 		args = append(args, v == "true")
 		idx++
 	}
@@ -161,6 +161,12 @@ func (h *Handlers) CreateAccessTimeTemplate(w http.ResponseWriter, r *http.Reque
 
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 	userID := authsvc.ClaimsFromContext(r.Context()).Sub
+
+	// Validate required fields
+	if req.Name == "" {
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.name_required")
+		return
+	}
 
 	// Validate timezone
 	if _, err := time.LoadLocation(req.Timezone); err != nil {

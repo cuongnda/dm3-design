@@ -48,7 +48,7 @@ class TestListTemplates:
         resp = client.get(f"{BASE}/templates?active=false")
         assert resp.status_code == 200
         body = resp.json()
-        for tmpl in body.get("templates", []):
+        for tmpl in body.get("templates") or []:
             assert tmpl["is_active"] is False
 
 

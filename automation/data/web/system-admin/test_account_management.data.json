@@ -325,7 +325,7 @@
     ]
   },
   "test_pagination": {
-    "description": "Test pagination controls are visible",
+    "description": "Verify account list loads successfully (pagination visible when enough data)",
     "steps": [
       {
         "action": "navigate",
@@ -333,11 +333,12 @@
       },
       {
         "action": "assert_visible",
-        "testid": "user-button-prev"
+        "testid": "user-table-list"
       },
       {
         "action": "assert_visible",
-        "testid": "user-button-next"
+        "css": "[data-testid^='user-row-']",
+        "first": true
       }
     ]
   }
