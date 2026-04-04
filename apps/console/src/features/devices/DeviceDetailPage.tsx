@@ -157,12 +157,13 @@ export function DeviceDetailPage() {
       <PageHeader
         title={`Device: ${deviceWithRealtimeStatus.device_id}`}
         description={deviceWithRealtimeStatus.name || 'Unnamed device'}
+        data-testid="device-detail-header"
       />
 
       {/* Device Info Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* Basic Info */}
-        <div className="lg:col-span-2 bg-card border border-border rounded-lg p-4">
+        <div className="lg:col-span-2 bg-card border border-border rounded-lg p-4" data-testid="detail-card-info">
           <h3 className="text-[14px] font-medium text-foreground mb-3">Device Information</h3>
           <div className="grid grid-cols-2 gap-4 text-[13px]">
             <div>
@@ -229,7 +230,7 @@ export function DeviceDetailPage() {
 
         {/* Commands */}
         <div className="bg-card border border-border rounded-lg p-4">
-          <h3 className="text-[14px] font-medium text-foreground mb-3">{t('deviceDetail.commands')}</h3>
+          <h3 className="text-[14px] font-medium text-foreground mb-3" data-testid="detail-section-commands">{t('deviceDetail.commands')}</h3>
           <div className="space-y-2">
             {commandButtons.map(({ id, label, icon: Icon, color }) => (
               <button
@@ -237,6 +238,7 @@ export function DeviceDetailPage() {
                 key={id}
                 onClick={() => handleCommand(id)}
                 disabled={sendCommand.isPending || deviceWithRealtimeStatus.status === 'offline'}
+                data-testid={`detail-button-cmd-${id}`}
                 className={`w-full flex items-center gap-2 px-3 py-2 ${color} text-white rounded-md text-[13px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
               >
                 <Icon size={14} />

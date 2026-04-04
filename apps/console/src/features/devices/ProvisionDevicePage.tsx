@@ -134,15 +134,15 @@ export function ProvisionDevicePage() {
       <form onSubmit={handleSubmit} className="max-w-lg space-y-4">
         <div>
           <Label className="text-[11px] uppercase font-medium">{t('provisionDevice.form.deviceId')}</Label>
-          <Input value={deviceId} onChange={(e) => setDeviceId(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder={t('provisionDevice.form.deviceIdPlaceholder')} required pattern="\d{6}" className="mt-1.5" />
+          <Input data-testid="provision-input-device-id" value={deviceId} onChange={(e) => setDeviceId(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder={t('provisionDevice.form.deviceIdPlaceholder')} required pattern="\d{6}" className="mt-1.5" />
         </div>
         <div>
           <Label className="text-[11px] uppercase font-medium">{t('provisionDevice.form.deviceName')}</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('provisionDevice.form.deviceNamePlaceholder')} required className="mt-1.5" />
+          <Input data-testid="provision-input-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('provisionDevice.form.deviceNamePlaceholder')} required className="mt-1.5" />
         </div>
         <div>
           <Label className="text-[11px] uppercase font-medium">{t('provisionDevice.form.deviceType')}</Label>
-          <Select value={type} onChange={(e) => setType(e.target.value)} className="mt-1.5">
+          <Select data-testid="provision-select-type" value={type} onChange={(e) => setType(e.target.value)} className="mt-1.5">
             {DEVICE_TYPES.map((dt) => <SelectOption key={dt} value={dt}>{dt.charAt(0).toUpperCase() + dt.slice(1)}</SelectOption>)}
           </Select>
         </div>
@@ -153,7 +153,7 @@ export function ProvisionDevicePage() {
 
         {error && <p className="text-[12px] text-error">{error}</p>}
 
-        <Button type="submit" disabled={provisionMutation.isPending || deviceId.length !== 6 || !name}>
+        <Button data-testid="provision-button-submit" type="submit" disabled={provisionMutation.isPending || deviceId.length !== 6 || !name}>
           {provisionMutation.isPending ? 'Provisioning...' : t('provisionDevice.form.submit')}
         </Button>
       </form>

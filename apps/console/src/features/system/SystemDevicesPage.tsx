@@ -63,7 +63,7 @@ export function SystemDevicesPage() {
   return (
     <div className="p-6">
       <PageHeader title={tSystem('systemDevices.title')} description={`${devices.length} devices across all companies`}>
-        <Button variant="outline" size="sm" onClick={loadData} className="gap-1">
+        <Button data-testid="sysdevice-button-refresh" variant="outline" size="sm" onClick={loadData} className="gap-1">
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
         </Button>
       </PageHeader>
@@ -91,7 +91,7 @@ export function SystemDevicesPage() {
         </Select>
       </div>
 
-      <div className="border border-border rounded-lg overflow-hidden">
+      <div className="border border-border rounded-lg overflow-hidden" data-testid="sysdevice-table-list">
         <table className="w-full">
           <thead>
             <tr className="bg-card text-[11px] text-muted-foreground uppercase tracking-wider">
@@ -119,7 +119,7 @@ export function SystemDevicesPage() {
               </tr>
             ) : (
               devices.map((d) => (
-                <tr key={d.id} className="border-t border-border hover:bg-muted/50">
+                <tr key={d.id} data-testid={`sysdevice-row-${d.id}`} className="border-t border-border hover:bg-muted/50">
                   <td className="py-2.5 px-4 text-[13px] text-foreground font-mono">{d.device_id}</td>
                   <td className="py-2.5 px-4 text-[13px] text-foreground">{d.name || '—'}</td>
                   <td className="py-2.5 px-4 text-[13px] text-muted-foreground">{d.company_name || '—'}</td>
