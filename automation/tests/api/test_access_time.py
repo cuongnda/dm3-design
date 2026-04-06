@@ -15,10 +15,8 @@ BASE = "/api/v1/access-time"
 @pytest.fixture(scope="module")
 def client():
     """Login via auth-svc, then talk to access-svc."""
-    c = APIClient()  # uses API_AUTH (auth-svc) for login
+    c = APIClient()
     c.login(constants.ADMIN_EMAIL, constants.ADMIN_PASSWORD)
-    # Switch base_url to access-svc for API calls
-    c.base_url = constants.API_ACCESS
     # Verify access-time tables exist (migration applied)
     check = c.get(f"{BASE}/templates")
     if check.status_code == 500:

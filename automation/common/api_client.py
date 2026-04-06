@@ -9,7 +9,7 @@ class DM3Client:
     """Authenticated API client for DM3 backend."""
 
     def __init__(self, base_url: str = None):
-        self.base_url = (base_url or constants.API_AUTH).rstrip("/")
+        self.base_url = (base_url or constants.API_URL).rstrip("/")
         self.auth_url = self.base_url
         self.session = requests.Session()
         self.token = None

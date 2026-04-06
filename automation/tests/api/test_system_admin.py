@@ -30,7 +30,7 @@ class TestSystemAdminAuth:
         client = DM3Client()
         import requests
         resp = client.session.post(
-            f"{constants.API_AUTH}/api/v1/auth/login",
+            f"{constants.API_URL}/api/v1/auth/login",
             json={"email": constants.SYSADMIN_EMAIL, "password": "wrongpassword"},
         )
         assert resp.status_code == 401
@@ -41,7 +41,7 @@ class TestSystemAdminAuth:
         client = DM3Client()
         import requests
         resp = client.session.post(
-            f"{constants.API_AUTH}/api/v1/auth/login",
+            f"{constants.API_URL}/api/v1/auth/login",
             json={"email": "notexist@duali.com", "password": "test123"},
         )
         assert resp.status_code == 401
@@ -49,7 +49,7 @@ class TestSystemAdminAuth:
     @pytest.mark.api
     def test_sysadmin_me_endpoint(self, sysadmin_client):
         """GET /auth/me should return system admin profile."""
-        resp = sysadmin_client.get(f"{constants.API_AUTH}/api/v1/auth/me")
+        resp = sysadmin_client.get(f"{constants.API_URL}/api/v1/auth/me")
         assert resp.status_code == 200
         data = resp.json()
         assert data["email"] == constants.SYSADMIN_EMAIL
@@ -65,7 +65,7 @@ class TestSystemStats:
     @pytest.mark.smoke
     def test_get_system_stats(self, sysadmin_client):
         """GET /system/stats should return all stat categories."""
-        resp = sysadmin_client.get(f"{constants.API_AUTH}/api/v1/system/stats")
+        resp = sysadmin_client.get(f"{constants.API_URL}/api/v1/system/stats")
         assert resp.status_code == 200
         data = resp.json()
 
@@ -94,13 +94,13 @@ class TestSystemStats:
     def test_stats_requires_auth(self):
         """Stats endpoint should reject unauthenticated requests."""
         client = DM3Client()
-        resp = client.get(f"{constants.API_AUTH}/api/v1/system/stats")
+        resp = client.get(f"{constants.API_URL}/api/v1/system/stats")
         assert resp.status_code == 401
 
     @pytest.mark.api
     def test_stats_requires_system_admin(self, admin_client):
         """Stats endpoint should reject non-system-admin users."""
-        resp = admin_client.get(f"{constants.API_AUTH}/api/v1/system/stats")
+        resp = admin_client.get(f"{constants.API_URL}/api/v1/system/stats")
         assert resp.status_code == 403
 
 
@@ -113,7 +113,7 @@ class TestCompanyCRUD:
     @pytest.mark.smoke
     def test_list_companies(self, sysadmin_client):
         """GET /system/companies should return paginated list."""
-        resp = sysadmin_client.get(f"{constants.API_AUTH}/api/v1/system/companies")
+        resp = sysadmin_client.get(f"{constants.API_URL}/api/v1/system/companies")
         assert resp.status_code == 200
         data = resp.json()
         assert "data" in data
@@ -127,7 +127,7 @@ class TestCompanyCRUD:
         code = f"AT{uid}"
         email = f"auto-{uid.lower()}@test.com"
         resp = sysadmin_client.post(
-            f"{constants.API_AUTH}/api/v1/system/companies",
+            f"{constants.API_URL}/api/v1/system/companies",
             json={
                 "name": f"Test Automation Corp {uid}",
                 "code": code,
@@ -155,7 +155,7 @@ class TestCompanyCRUD:
         if not company_id:
             pytest.skip("No company created")
 
-        resp = sysadmin_client.get(f"{constants.API_AUTH}/api/v1/system/companies/{company_id}")
+        resp = sysadmin_client.get(f"{constants.API_URL}/api/v1/system/companies/{company_id}")
         assert resp.status_code == 200
         data = resp.json()
         assert data["id"] == company_id
@@ -169,7 +169,7 @@ class TestCompanyCRUD:
             pytest.skip("No company created")
 
         resp = sysadmin_client.put(
-            f"{constants.API_AUTH}/api/v1/system/companies/{company_id}",
+            f"{constants.API_URL}/api/v1/system/companies/{company_id}",
             json={"name": f"{getattr(self.__class__, '_created_company_name', 'Test')} Updated", "plan": "enterprise"},
         )
         assert resp.status_code == 200
@@ -184,11 +184,11 @@ class TestCompanyCRUD:
         if not company_id:
             pytest.skip("No company created")
 
-        resp = sysadmin_client.delete(f"{constants.API_AUTH}/api/v1/system/companies/{company_id}")
+        resp = sysadmin_client.delete(f"{constants.API_URL}/api/v1/system/companies/{company_id}")
         assert resp.status_code == 204
 
         # Verify suspended
-        resp = sysadmin_client.get(f"{constants.API_AUTH}/api/v1/system/companies/{company_id}")
+        resp = sysadmin_client.get(f"{constants.API_URL}/api/v1/system/companies/{company_id}")
         assert resp.json()["status"] == "suspended"
 
     @pytest.mark.api
@@ -198,7 +198,7 @@ class TestCompanyCRUD:
         code = f"DUP{uid}"
         # Create first
         resp = sysadmin_client.post(
-            f"{constants.API_AUTH}/api/v1/system/companies",
+            f"{constants.API_URL}/api/v1/system/companies",
             json={"name": f"Dup Test {uid}", "code": code, "email": f"dup-{uid.lower()}@test.com"},
         )
         if resp.status_code == 201:
@@ -206,7 +206,7 @@ class TestCompanyCRUD:
 
         # Try duplicate code
         resp = sysadmin_client.post(
-            f"{constants.API_AUTH}/api/v1/system/companies",
+            f"{constants.API_URL}/api/v1/system/companies",
             json={"name": f"Dup Test 2 {uid}", "code": code, "email": f"dup2-{uid.lower()}@test.com"},
         )
         assert resp.status_code == 409
@@ -215,7 +215,7 @@ class TestCompanyCRUD:
     def test_create_company_missing_fields(self, sysadmin_client):
         """Creating company without required fields should fail."""
         resp = sysadmin_client.post(
-            f"{constants.API_AUTH}/api/v1/system/companies",
+            f"{constants.API_URL}/api/v1/system/companies",
             json={"name": "No Code"},
         )
         assert resp.status_code == 400
@@ -224,7 +224,7 @@ class TestCompanyCRUD:
     def test_company_not_found(self, sysadmin_client):
         """Getting non-existent company should return 404."""
         resp = sysadmin_client.get(
-            f"{constants.API_AUTH}/api/v1/system/companies/00000000-0000-0000-0000-000000000000"
+            f"{constants.API_URL}/api/v1/system/companies/00000000-0000-0000-0000-000000000000"
         )
         assert resp.status_code == 404
 
@@ -237,7 +237,7 @@ class TestUserManagement:
     @pytest.mark.api
     def test_list_users(self, sysadmin_client):
         """GET /users should return paginated list."""
-        resp = sysadmin_client.get(f"{constants.API_AUTH}/api/v1/users")
+        resp = sysadmin_client.get(f"{constants.API_URL}/api/v1/users")
         assert resp.status_code == 200
         data = resp.json()
         assert "data" in data
@@ -246,7 +246,7 @@ class TestUserManagement:
     @pytest.mark.api
     def test_list_roles(self, sysadmin_client):
         """GET /roles should return available roles."""
-        resp = sysadmin_client.get(f"{constants.API_AUTH}/api/v1/roles")
+        resp = sysadmin_client.get(f"{constants.API_URL}/api/v1/roles")
         assert resp.status_code == 200
         roles = resp.json()
         assert isinstance(roles, list)

@@ -32,7 +32,7 @@ def seed_firmware(executor):
 
     session = requests.Session()
     login_resp = session.post(
-        f"{constants.API_AUTH}/api/v1/auth/login",
+        f"{constants.API_URL}/api/v1/auth/login",
         json={"email": constants.SYSADMIN_EMAIL, "password": constants.SYSADMIN_PASSWORD},
     )
     if login_resp.status_code != 200:
@@ -44,7 +44,7 @@ def seed_firmware(executor):
     uid = uuid.uuid4().hex[:6]
     files = {"file": (f"webtest_{uid}.bin", io.BytesIO(b"WEB_TEST_FW"), "application/octet-stream")}
     data = {"version": f"0.1.0-webtest-{uid}", "device_type": "dq_mini_plus", "description": "Web test seed"}
-    session.post(f"{constants.API_AUTH}/api/v1/system/firmware", headers=headers, files=files, data=data)
+    session.post(f"{constants.API_URL}/api/v1/system/firmware", headers=headers, files=files, data=data)
 
 
 def test_firmware_list_page(executor, test_data):

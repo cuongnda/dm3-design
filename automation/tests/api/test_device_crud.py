@@ -65,7 +65,7 @@ class TestListDevices:
     def test_list_requires_auth(self):
         """Unauthenticated request should fail."""
         import requests
-        resp = requests.get(f"{constants.API_AUTH}{BASE}", timeout=5)
+        resp = requests.get(f"{constants.API_URL}{BASE}", timeout=5)
         assert resp.status_code in [401, 403]
 
 
