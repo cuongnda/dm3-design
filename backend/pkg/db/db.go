@@ -35,6 +35,8 @@ func (d *DB) Close() {
 }
 
 // RunMigrations applies pending database migrations using golang-migrate.
+// If the database is in a dirty state (failed migration), it automatically
+// rolls back to the last clean version so migration can resume on restart.
 func (d *DB) RunMigrations(dir string) error {
 	m, err := migrate.New("file://"+dir, d.dsn)
 	if err != nil {
@@ -42,11 +44,30 @@ func (d *DB) RunMigrations(dir string) error {
 	}
 	defer m.Close()
 
+	// Auto-fix dirty state: force back to the last clean version so m.Up() can proceed.
+	version, dirty, vErr := m.Version()
+	if vErr == nil && dirty {
+		slog.Warn("dirty migration state detected, rolling back to last clean version",
+			"dirty_version", version)
+		if err := m.Force(int(version) - 1); err != nil {
+			return fmt.Errorf("migrate force clean: %w", err)
+		}
+	}
+
+	versionBefore, _, _ := m.Version()
+
 	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("migrate up: %w", err)
 	}
 
-	version, dirty, _ := m.Version()
-	slog.Info("migrations complete", "version", version, "dirty", dirty)
+	version, dirty, _ = m.Version()
+	if version != versionBefore {
+		slog.Info("migrations applied", "from", versionBefore, "to", version)
+	} else {
+		slog.Info("migrations up to date", "version", version)
+	}
+	if dirty {
+		slog.Warn("database still dirty after migration", "version", version)
+	}
 	return nil
 }

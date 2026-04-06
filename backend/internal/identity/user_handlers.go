@@ -373,7 +373,7 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var accountID string
 	err := h.db.Pool.QueryRow(r.Context(), `
 		SELECT id FROM dm3_auth.accounts
-		WHERE username = $1 AND company_id = $2::uuid AND is_deleted = false
+		WHERE email = $1 AND company_id = $2::uuid AND status != 'deleted'
 	`, req.Email, companyID).Scan(&accountID)
 
 	if err == pgx.ErrNoRows {
@@ -387,8 +387,8 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if scanErr := h.db.Pool.QueryRow(r.Context(), `
-			INSERT INTO dm3_auth.accounts (company_id, username, password_hash, type, created_on, updated_on)
-			VALUES ($1::uuid, $2, $3, 1, NOW(), NOW())
+			INSERT INTO dm3_auth.accounts (company_id, email, password_hash, role, status, created_at, updated_at)
+			VALUES ($1::uuid, $2, $3, 'viewer', 'active', NOW(), NOW())
 			RETURNING id
 		`, companyID, req.Email, string(hashed)).Scan(&accountID); scanErr != nil {
 			httputil.Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to create account: %v", scanErr))

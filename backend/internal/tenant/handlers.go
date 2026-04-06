@@ -217,7 +217,7 @@ func (h *Handlers) GetTenantStats(w http.ResponseWriter, r *http.Request) {
 	// Get user count
 	var userCount int
 	err = h.db.Pool.QueryRow(r.Context(),
-		"SELECT COUNT(*) FROM dm3_auth.users WHERE company_id = $1::uuid",
+		"SELECT COUNT(*) FROM dm3_auth.accounts WHERE company_id = $1::uuid",
 		tenantID,
 	).Scan(&userCount)
 	if err != nil {
@@ -297,7 +297,7 @@ func (h *Handlers) ValidateTenantLimits(w http.ResponseWriter, r *http.Request) 
 	case "user":
 		var count int
 		err = h.db.Pool.QueryRow(r.Context(),
-			"SELECT COUNT(*) FROM dm3_auth.users WHERE company_id = $1::uuid",
+			"SELECT COUNT(*) FROM dm3_auth.accounts WHERE company_id = $1::uuid",
 			tenantID,
 		).Scan(&count)
 		if err == nil && count >= info.MaxUsers {

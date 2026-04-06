@@ -3,6 +3,12 @@
 -- Company: 00000000-0000-0000-0000-000000000001 (Duali Demo)
 
 -- ============================================================
+-- Clear stale credentials (person_id refs may point to deleted persons)
+-- They will be re-seeded below.
+-- ============================================================
+DELETE FROM dm3_identity.credentials;
+
+-- ============================================================
 -- Fix credentials FK to reference dm3_auth.users instead of users
 -- ============================================================
 ALTER TABLE dm3_identity.credentials
