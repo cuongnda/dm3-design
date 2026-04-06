@@ -39,23 +39,23 @@ type MQTTEnvelope struct {
 
 // ParsedTopic holds the extracted fields from an MQTT topic.
 type ParsedTopic struct {
-	TenantID string
+	CompanyID string
 	DeviceID string
 	Category string // "evt", "sta", "cmd/resp", "cfg/ack"
 }
 
-// ParseTopic extracts tenant_id, device_id and category from MQTT topic.
-// Topics: dm/{tenant_id}/device/{device_id}/{category}
+// ParseTopic extracts company_id, device_id and category from MQTT topic.
+// Topics: dm/{company_id}/device/{device_id}/{category}
 func ParseTopic(topic string) (ParsedTopic, error) {
 	parts := strings.Split(topic, "/")
-	// dm/{tid}/device/{did}/evt          => 5 parts
-	// dm/{tid}/device/{did}/cmd/resp     => 6 parts
-	// dm/{tid}/device/{did}/cfg/ack      => 6 parts
+	// dm/{cid}/device/{did}/evt          => 5 parts
+	// dm/{cid}/device/{did}/cmd/resp     => 6 parts
+	// dm/{cid}/device/{did}/cfg/ack      => 6 parts
 	if len(parts) < 5 || parts[0] != "dm" || parts[2] != "device" {
 		return ParsedTopic{}, fmt.Errorf("invalid topic: %s", topic)
 	}
 	pt := ParsedTopic{
-		TenantID: parts[1],
+		CompanyID: parts[1],
 		DeviceID: parts[3],
 	}
 	if len(parts) == 5 {
@@ -116,7 +116,7 @@ func (h *MQTTHandler) Handle(topic string, payload []byte) {
 	}
 
 	// Bridge all messages to NATS
-	natsSubject := fmt.Sprintf("dm3.devices.%s.%s.%s", pt.TenantID, pt.DeviceID, strings.ReplaceAll(pt.Category, "/", "."))
+	natsSubject := fmt.Sprintf("dm3.devices.%s.%s.%s", pt.CompanyID, pt.DeviceID, strings.ReplaceAll(pt.Category, "/", "."))
 	if err := h.nats.Publish(ctx, natsSubject, payload); err != nil {
 		slog.Error("nats publish failed", "subject", natsSubject, "error", err)
 	}
@@ -125,7 +125,7 @@ func (h *MQTTHandler) Handle(topic string, payload []byte) {
 	h.hub.Broadcast(WSEvent{
 		Type:     env.Type,
 		DeviceID: pt.DeviceID,
-		TenantID: pt.TenantID,
+		CompanyID: pt.CompanyID,
 		Data:     env.Data,
 		Time:     time.UnixMilli(env.TS),
 	})
@@ -213,18 +213,18 @@ func (h *MQTTHandler) handleStatus(ctx context.Context, pt ParsedTopic, env MQTT
 		// Auto-sync: if device reports local_db_version == 0, push config
 		if data.LocalDBVersion == 0 && data.Online && h.sync != nil {
 			go func() {
-				// Look up tenant_id for this device
-				var tenantID string
+				// Look up company_id for this device
+				var companyID string
 				err := h.db.Pool.QueryRow(context.Background(),
-					`SELECT tenant_id FROM dm3_devices.devices WHERE device_id = $1`, pt.DeviceID,
-				).Scan(&tenantID)
+					`SELECT company_id FROM dm3_devices.devices WHERE device_id = $1`, pt.DeviceID,
+				).Scan(&companyID)
 				if err != nil {
-					slog.Warn("sync: could not find tenant for device", "device", pt.DeviceID, "error", err)
+					slog.Warn("sync: could not find company for device", "device", pt.DeviceID, "error", err)
 					return
 				}
 				syncCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
-				if err := h.sync.PushSyncToDevice(syncCtx, tenantID, pt.DeviceID); err != nil {
+				if err := h.sync.PushSyncToDevice(syncCtx, companyID, pt.DeviceID); err != nil {
 					slog.Error("sync: auto-push failed", "device", pt.DeviceID, "error", err)
 				}
 			}()

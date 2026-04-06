@@ -5,7 +5,7 @@ const BASE = '/api/v1/devices';
 
 export interface DeviceDTO {
   id: string;
-  tenant_id?: string;
+  company_id?: string;
   device_id: string;
   name?: string;
   type: string;

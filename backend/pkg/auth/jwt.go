@@ -9,8 +9,7 @@ import (
 
 type Claims struct {
 	Sub      string   `json:"sub"`
-	TID      string   `json:"tid"`
-	CID      string   `json:"cid,omitempty"`
+	CID      string   `json:"cid"`
 	Email    string   `json:"email"`
 	Name     string   `json:"name,omitempty"`
 	Roles    []string `json:"roles"`
@@ -19,20 +18,20 @@ type Claims struct {
 
 	// Compat aliases
 	UserID   string `json:"-"`
-	TenantID string `json:"-"`
+	CompanyID string `json:"-"`
 }
 
 // Populate compat fields after parsing.
 func (c *Claims) Fixup() {
 	c.UserID = c.Sub
-	c.TenantID = c.TID
+	c.CompanyID = c.CID
 }
 
-func GenerateToken(userID, email, tenantID string, roles []string, secret string) (string, error) {
+func GenerateToken(userID, email, companyID string, roles []string, secret string) (string, error) {
 	claims := Claims{
 		UserID:   userID,
 		Email:    email,
-		TenantID: tenantID,
+		CompanyID: companyID,
 		Roles:    roles,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),

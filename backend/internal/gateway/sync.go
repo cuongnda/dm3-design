@@ -75,15 +75,15 @@ type cfgFullPayload struct {
 	Blacklist     []any            `json:"blacklist"`
 }
 
-// PushSyncToDevice assembles all config data for a device's tenant and pushes via MQTT.
-func (s *SyncService) PushSyncToDevice(ctx context.Context, tenantID, deviceID string) error {
-	slog.Info("sync: assembling config", "tenant", tenantID, "device", deviceID)
+// PushSyncToDevice assembles all config data for a device's company and pushes via MQTT.
+func (s *SyncService) PushSyncToDevice(ctx context.Context, companyID, deviceID string) error {
+	slog.Info("sync: assembling config", "company", companyID, "device", deviceID)
 
-	// Fetch persons for tenant
+	// Fetch persons for company
 	persons := []syncPerson{}
 	rows, err := s.db.Pool.Query(ctx,
-		`SELECT id, CONCAT(first_name, ' ', last_name), status FROM dm3_identity.persons WHERE tenant_id = $1::uuid AND status = 'active'`,
-		tenantID)
+		`SELECT id, CONCAT(first_name, ' ', last_name), status FROM dm3_identity.persons WHERE company_id = $1::uuid AND status = 'active'`,
+		companyID)
 	if err != nil {
 		return fmt.Errorf("sync: query persons: %w", err)
 	}
@@ -96,14 +96,14 @@ func (s *SyncService) PushSyncToDevice(ctx context.Context, tenantID, deviceID s
 	}
 	rows.Close()
 
-	// Fetch credentials for tenant
+	// Fetch credentials for company
 	credentials := []syncCredential{}
 	rows, err = s.db.Pool.Query(ctx,
 		`SELECT c.id, c.person_id, c.type, c.value, c.status
 		 FROM dm3_identity.credentials c
 		 JOIN dm3_identity.persons p ON p.id = c.person_id
-		 WHERE p.tenant_id = $1::uuid AND c.status = 'active'`,
-		tenantID)
+		 WHERE p.company_id = $1::uuid AND c.status = 'active'`,
+		companyID)
 	if err != nil {
 		return fmt.Errorf("sync: query credentials: %w", err)
 	}
@@ -116,12 +116,12 @@ func (s *SyncService) PushSyncToDevice(ctx context.Context, tenantID, deviceID s
 	}
 	rows.Close()
 
-	// Fetch access rules for tenant
+	// Fetch access rules for company
 	accessRules := []syncAccessRule{}
 	rows, err = s.db.Pool.Query(ctx,
 		`SELECT id, name, COALESCE(door_ids, '{}'), COALESCE(person_group_ids, '{}'), schedule, priority, enabled
-		 FROM dm3_access.access_rules WHERE tenant_id = $1::uuid AND enabled = true`,
-		tenantID)
+		 FROM dm3_access.access_rules WHERE company_id = $1::uuid AND enabled = true`,
+		companyID)
 	if err != nil {
 		return fmt.Errorf("sync: query access rules: %w", err)
 	}
@@ -156,9 +156,9 @@ func (s *SyncService) PushSyncToDevice(ctx context.Context, tenantID, deviceID s
 		`SELECT g.id, g.id, ARRAY_AGG(gm.person_id::text)
 		 FROM dm3_identity.person_groups g
 		 JOIN dm3_identity.person_group_members gm ON gm.group_id = g.id
-		 WHERE g.tenant_id = $1::uuid
+		 WHERE g.company_id = $1::uuid
 		 GROUP BY g.id`,
-		tenantID)
+		companyID)
 	if err != nil {
 		slog.Warn("sync: query person groups failed (may not exist)", "error", err)
 	} else {
@@ -201,14 +201,14 @@ func (s *SyncService) PushSyncToDevice(ctx context.Context, tenantID, deviceID s
 		return fmt.Errorf("sync: marshal envelope: %w", err)
 	}
 
-	topic := fmt.Sprintf("dm/%s/device/%s/cfg", tenantID, deviceID)
+	topic := fmt.Sprintf("dm/%s/device/%s/cfg", companyID, deviceID)
 	if err := s.mqtt.Publish(ctx, topic, 1, payload); err != nil {
 		return fmt.Errorf("sync: publish to %s: %w", topic, err)
 	}
 
 	slog.Info("sync: pushed cfg.full",
 		"device", deviceID,
-		"tenant", tenantID,
+		"company", companyID,
 		"persons", len(persons),
 		"credentials", len(credentials),
 		"rules", len(accessRules),
@@ -222,16 +222,16 @@ func (s *SyncService) HandleSyncRequest(w http.ResponseWriter, r *http.Request) 
 	id := chi.URLParam(r, "id")
 
 	// Look up device
-	var tenantID, deviceID string
+	var companyID, deviceID string
 	err := s.db.Pool.QueryRow(r.Context(),
-		`SELECT tenant_id, device_id FROM dm3_devices.devices WHERE id = $1::uuid`, id,
-	).Scan(&tenantID, &deviceID)
+		`SELECT company_id, device_id FROM dm3_devices.devices WHERE id = $1::uuid`, id,
+	).Scan(&companyID, &deviceID)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
 	}
 
-	if err := s.PushSyncToDevice(r.Context(), tenantID, deviceID); err != nil {
+	if err := s.PushSyncToDevice(r.Context(), companyID, deviceID); err != nil {
 		slog.Error("sync: push failed", "error", err, "device", deviceID)
 		httputil.Error(w, http.StatusInternalServerError, fmt.Sprintf("sync failed: %v", err))
 		return
@@ -240,7 +240,7 @@ func (s *SyncService) HandleSyncRequest(w http.ResponseWriter, r *http.Request) 
 	httputil.JSON(w, http.StatusOK, map[string]string{
 		"status":    "sync_pushed",
 		"device_id": deviceID,
-		"tenant_id": tenantID,
+		"company_id": companyID,
 	})
 }
 

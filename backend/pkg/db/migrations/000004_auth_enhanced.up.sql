@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS dm3_auth.refresh_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES dm3_auth.users(id) ON DELETE CASCADE,
-    tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    tenant_id UUID,
     token_hash VARCHAR(64) NOT NULL UNIQUE,
     expires_at TIMESTAMPTZ NOT NULL,
     revoked BOOLEAN DEFAULT false,

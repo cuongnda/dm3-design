@@ -34,7 +34,7 @@ func (h *Handlers) ListDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := `SELECT id, tenant_id, device_id, COALESCE(name,''), type, status, COALESCE(firmware_version,''), COALESCE(site_id,''), COALESCE(location,''), last_seen, created_at, updated_at FROM dm3_devices.devices WHERE tenant_id = $1::uuid`
+	query := `SELECT id, company_id, device_id, COALESCE(name,''), type, status, COALESCE(firmware_version,''), COALESCE(site_id,''), COALESCE(location,''), last_seen, created_at, updated_at FROM dm3_devices.devices WHERE company_id = $1::uuid`
 	args := []any{cid}
 	argIdx := 2
 
@@ -69,7 +69,7 @@ func (h *Handlers) ListDevices(w http.ResponseWriter, r *http.Request) {
 	devices := []models.Device{}
 	for rows.Next() {
 		var d models.Device
-		if err := rows.Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type, &d.Status, &d.FirmwareVersion, &d.SiteID, &d.Location, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt); err != nil {
+		if err := rows.Scan(&d.ID, &d.CompanyID, &d.DeviceID, &d.Name, &d.Type, &d.Status, &d.FirmwareVersion, &d.SiteID, &d.Location, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -80,13 +80,13 @@ func (h *Handlers) ListDevices(w http.ResponseWriter, r *http.Request) {
 
 // ListDevicesGlobal handles GET /api/v1/system/devices (system admin only, all companies)
 func (h *Handlers) ListDevicesGlobal(w http.ResponseWriter, r *http.Request) {
-	query := `SELECT d.id, d.tenant_id, d.device_id, COALESCE(d.name,''), d.type, d.status, COALESCE(d.firmware_version,''), COALESCE(d.site_id,''), COALESCE(d.location,''), d.last_seen, d.created_at, d.updated_at, COALESCE(c.name,'') as company_name
-	FROM dm3_devices.devices d LEFT JOIN dm3_auth.companies c ON c.id = d.tenant_id WHERE 1=1`
+	query := `SELECT d.id, d.company_id, d.device_id, COALESCE(d.name,''), d.type, d.status, COALESCE(d.firmware_version,''), COALESCE(d.site_id,''), COALESCE(d.location,''), d.last_seen, d.created_at, d.updated_at, COALESCE(c.name,'') as company_name
+	FROM dm3_devices.devices d LEFT JOIN dm3_auth.companies c ON c.id = d.company_id WHERE 1=1`
 	args := []any{}
 	argIdx := 1
 
 	if cid := r.URL.Query().Get("company_id"); cid != "" {
-		query += fmt.Sprintf(" AND d.tenant_id = $%d::uuid", argIdx)
+		query += fmt.Sprintf(" AND d.company_id = $%d::uuid", argIdx)
 		args = append(args, cid)
 		argIdx++
 	}
@@ -117,7 +117,7 @@ func (h *Handlers) ListDevicesGlobal(w http.ResponseWriter, r *http.Request) {
 	devices := []deviceWithCompany{}
 	for rows.Next() {
 		var d deviceWithCompany
-		if err := rows.Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type, &d.Status, &d.FirmwareVersion, &d.SiteID, &d.Location, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt, &d.CompanyName); err != nil {
+		if err := rows.Scan(&d.ID, &d.CompanyID, &d.DeviceID, &d.Name, &d.Type, &d.Status, &d.FirmwareVersion, &d.SiteID, &d.Location, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt, &d.CompanyName); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -153,11 +153,11 @@ func (h *Handlers) CreateDevice(w http.ResponseWriter, r *http.Request) {
 
 	var d models.Device
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_devices.devices (device_id, name, type, site_id, location, tenant_id)
+		`INSERT INTO dm3_devices.devices (device_id, name, type, site_id, location, company_id)
 		 VALUES ($1, $2, $3, $4, $5, $6::uuid)
-		 RETURNING id, tenant_id, device_id, COALESCE(name,''), type, status, COALESCE(firmware_version,''), COALESCE(site_id,''), COALESCE(location,''), last_seen, created_at, updated_at`,
+		 RETURNING id, company_id, device_id, COALESCE(name,''), type, status, COALESCE(firmware_version,''), COALESCE(site_id,''), COALESCE(location,''), last_seen, created_at, updated_at`,
 		req.DeviceID, req.Name, req.Type, req.SiteID, req.Location, cid,
-	).Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type, &d.Status, &d.FirmwareVersion, &d.SiteID, &d.Location, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt)
+	).Scan(&d.ID, &d.CompanyID, &d.DeviceID, &d.Name, &d.Type, &d.Status, &d.FirmwareVersion, &d.SiteID, &d.Location, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
 		if isUniqueViolation(err) {
 			httputil.Error(w, http.StatusConflict, "device_id already exists")
@@ -173,16 +173,16 @@ func (h *Handlers) CreateDevice(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) GetDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
-	query := `SELECT id, tenant_id, device_id, COALESCE(name,''), type, status, COALESCE(firmware_version,''), COALESCE(site_id,''), COALESCE(location,''), last_seen, created_at, updated_at
+	query := `SELECT id, company_id, device_id, COALESCE(name,''), type, status, COALESCE(firmware_version,''), COALESCE(site_id,''), COALESCE(location,''), last_seen, created_at, updated_at
 		 FROM dm3_devices.devices WHERE id = $1::uuid`
 	args := []any{id}
 	if cid != "" {
-		query += " AND tenant_id = $2::uuid"
+		query += " AND company_id = $2::uuid"
 		args = append(args, cid)
 	}
 	var d models.Device
 	err := h.db.Pool.QueryRow(r.Context(), query, args...
-	).Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type, &d.Status, &d.FirmwareVersion, &d.SiteID, &d.Location, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt)
+	).Scan(&d.ID, &d.CompanyID, &d.DeviceID, &d.Name, &d.Type, &d.Status, &d.FirmwareVersion, &d.SiteID, &d.Location, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
@@ -217,14 +217,14 @@ func (h *Handlers) UpdateDevice(w http.ResponseWriter, r *http.Request) {
 		 WHERE id = $1::uuid`
 	args := []any{id, req.Name, req.SiteID, req.Location, req.Status}
 	if cid != "" {
-		query += " AND tenant_id = $6::uuid"
+		query += " AND company_id = $6::uuid"
 		args = append(args, cid)
 	}
-	query += ` RETURNING id, tenant_id, device_id, COALESCE(name,''), type, status, COALESCE(firmware_version,''), COALESCE(site_id,''), COALESCE(location,''), last_seen, created_at, updated_at`
+	query += ` RETURNING id, company_id, device_id, COALESCE(name,''), type, status, COALESCE(firmware_version,''), COALESCE(site_id,''), COALESCE(location,''), last_seen, created_at, updated_at`
 
 	var d models.Device
 	err := h.db.Pool.QueryRow(r.Context(), query, args...,
-	).Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type, &d.Status, &d.FirmwareVersion, &d.SiteID, &d.Location, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt)
+	).Scan(&d.ID, &d.CompanyID, &d.DeviceID, &d.Name, &d.Type, &d.Status, &d.FirmwareVersion, &d.SiteID, &d.Location, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
@@ -240,7 +240,7 @@ func (h *Handlers) DeleteDevice(w http.ResponseWriter, r *http.Request) {
 	query := `DELETE FROM dm3_devices.devices WHERE id = $1::uuid`
 	args := []any{id}
 	if cid != "" {
-		query += " AND tenant_id = $2::uuid"
+		query += " AND company_id = $2::uuid"
 		args = append(args, cid)
 	}
 
@@ -275,16 +275,16 @@ func (h *Handlers) SendCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Look up device to get tenant_id and device_id (tenant-scoped)
+	// Look up device to get company_id and device_id (company-scoped)
 	cid := authsvc.CompanyIDFromContext(r.Context())
-	var tenantID, deviceID string
-	cmdQuery := `SELECT tenant_id, device_id FROM dm3_devices.devices WHERE id = $1::uuid`
+	var companyID, deviceID string
+	cmdQuery := `SELECT company_id, device_id FROM dm3_devices.devices WHERE id = $1::uuid`
 	cmdArgs := []any{id}
 	if cid != "" {
-		cmdQuery += " AND tenant_id = $2::uuid"
+		cmdQuery += " AND company_id = $2::uuid"
 		cmdArgs = append(cmdArgs, cid)
 	}
-	err := h.db.Pool.QueryRow(r.Context(), cmdQuery, cmdArgs...).Scan(&tenantID, &deviceID)
+	err := h.db.Pool.QueryRow(r.Context(), cmdQuery, cmdArgs...).Scan(&companyID, &deviceID)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
@@ -302,7 +302,7 @@ func (h *Handlers) SendCommand(w http.ResponseWriter, r *http.Request) {
 	}
 	payload, _ := json.Marshal(envelope)
 
-	topic := fmt.Sprintf("dm/%s/device/%s/cmd", tenantID, deviceID)
+	topic := fmt.Sprintf("dm/%s/device/%s/cmd", companyID, deviceID)
 	if err := h.mqtt.Publish(r.Context(), topic, 2, payload); err != nil {
 		slog.Error("failed to publish command", "error", err, "topic", topic)
 		httputil.Error(w, http.StatusInternalServerError, "failed to send command")
@@ -328,7 +328,7 @@ func (h *Handlers) GetDeviceEvents(w http.ResponseWriter, r *http.Request) {
 		`SELECT COUNT(*) FROM dm3_access.access_events WHERE device_id = $1::uuid`, id).Scan(&total)
 
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, tenant_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''), COALESCE(person_id::text,''), COALESCE(person_name,''), COALESCE(credential_type,''), COALESCE(direction,''), decision, COALESCE(reason,''), metadata
+		`SELECT id, company_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''), COALESCE(person_id::text,''), COALESCE(person_name,''), COALESCE(credential_type,''), COALESCE(direction,''), decision, COALESCE(reason,''), metadata
 		 FROM dm3_access.access_events WHERE device_id = $1::uuid ORDER BY time DESC LIMIT $2 OFFSET $3`,
 		id, limit, offset)
 	if err != nil {
@@ -340,7 +340,7 @@ func (h *Handlers) GetDeviceEvents(w http.ResponseWriter, r *http.Request) {
 	events := []models.AccessEvent{}
 	for rows.Next() {
 		var e models.AccessEvent
-		if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.DoorID, &e.DeviceID, &e.PersonID, &e.PersonName, &e.CredentialType, &e.Direction, &e.Decision, &e.Reason, &e.Metadata); err != nil {
+		if err := rows.Scan(&e.ID, &e.CompanyID, &e.Time, &e.DoorID, &e.DeviceID, &e.PersonID, &e.PersonName, &e.CredentialType, &e.Direction, &e.Decision, &e.Reason, &e.Metadata); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -357,7 +357,7 @@ func (h *Handlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 
 	var total int64
 	if cid != "" {
-		h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE tenant_id = $1::uuid`, cid).Scan(&total)
+		h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE company_id = $1::uuid`, cid).Scan(&total)
 	} else {
 		h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events`).Scan(&total)
 	}
@@ -365,11 +365,11 @@ func (h *Handlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	var evtQuery string
 	var evtArgs []any
 	if cid != "" {
-		evtQuery = `SELECT id, tenant_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''), COALESCE(person_id::text,''), COALESCE(person_name,''), COALESCE(credential_type,''), COALESCE(direction,''), decision, COALESCE(reason,''), metadata
-		 FROM dm3_access.access_events WHERE tenant_id = $1::uuid ORDER BY time DESC LIMIT $2 OFFSET $3`
+		evtQuery = `SELECT id, company_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''), COALESCE(person_id::text,''), COALESCE(person_name,''), COALESCE(credential_type,''), COALESCE(direction,''), decision, COALESCE(reason,''), metadata
+		 FROM dm3_access.access_events WHERE company_id = $1::uuid ORDER BY time DESC LIMIT $2 OFFSET $3`
 		evtArgs = []any{cid, limit, offset}
 	} else {
-		evtQuery = `SELECT id, tenant_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''), COALESCE(person_id::text,''), COALESCE(person_name,''), COALESCE(credential_type,''), COALESCE(direction,''), decision, COALESCE(reason,''), metadata
+		evtQuery = `SELECT id, company_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''), COALESCE(person_id::text,''), COALESCE(person_name,''), COALESCE(credential_type,''), COALESCE(direction,''), decision, COALESCE(reason,''), metadata
 		 FROM dm3_access.access_events ORDER BY time DESC LIMIT $1 OFFSET $2`
 		evtArgs = []any{limit, offset}
 	}
@@ -384,7 +384,7 @@ func (h *Handlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	events := []models.AccessEvent{}
 	for rows.Next() {
 		var e models.AccessEvent
-		if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.DoorID, &e.DeviceID, &e.PersonID, &e.PersonName, &e.CredentialType, &e.Direction, &e.Decision, &e.Reason, &e.Metadata); err != nil {
+		if err := rows.Scan(&e.ID, &e.CompanyID, &e.Time, &e.DoorID, &e.DeviceID, &e.PersonID, &e.PersonName, &e.CredentialType, &e.Direction, &e.Decision, &e.Reason, &e.Metadata); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}

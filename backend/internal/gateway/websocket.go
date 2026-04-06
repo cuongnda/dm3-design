@@ -20,7 +20,7 @@ var upgrader = websocket.Upgrader{
 type WSEvent struct {
 	Type     string          `json:"type"`
 	DeviceID string          `json:"device_id"`
-	TenantID string          `json:"tenant_id"`
+	CompanyID string          `json:"company_id"`
 	Data     json.RawMessage `json:"data"`
 	Time     time.Time       `json:"time"`
 }

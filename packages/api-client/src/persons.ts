@@ -5,7 +5,7 @@ const BASE = '/api/v1/persons';
 
 export interface PersonDTO {
   id: string;
-  tenant_id: string;
+  company_id: string;
   first_name: string;
   last_name: string;
   email?: string;

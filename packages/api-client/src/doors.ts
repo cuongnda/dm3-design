@@ -5,7 +5,7 @@ const BASE = '/api/v1/doors';
 
 export interface DoorDTO {
   id: string;
-  tenant_id: string;
+  company_id: string;
   site_id?: string;
   zone_id?: string;
   name: string;

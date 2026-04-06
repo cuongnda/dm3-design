@@ -30,8 +30,7 @@ func main() {
 	}
 	defer database.Close()
 
-	// Run migrations
-	if err := database.RunMigrations(ctx, "pkg/db/migrations"); err != nil {
+	if err := database.RunMigrations("pkg/db/migrations"); err != nil {
 		slog.Warn("migrations", "error", err)
 	}
 

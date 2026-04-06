@@ -2,6 +2,7 @@
 FROM golang:1.22-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
+RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.1
 
 WORKDIR /build
 
@@ -25,6 +26,7 @@ WORKDIR /app
 
 # Copy binaries
 COPY --from=builder /build/bin/ /app/bin/
+COPY --from=builder /go/bin/migrate /usr/local/bin/migrate
 
 # Copy migrations (used by migrate service)
 COPY pkg/db/migrations/ /app/migrations/

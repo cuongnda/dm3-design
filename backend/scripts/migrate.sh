@@ -1,5 +1,5 @@
 #!/bin/sh
-# Run all DM3 migrations idempotently.
+# Run DM3 database migrations using golang-migrate.
 # Called by the "migrate" service in docker-compose.prod.yml.
 # Requires DATABASE_URL to be set.
 set -e
@@ -11,38 +11,31 @@ fi
 
 MIGRATIONS_DIR="${MIGRATIONS_DIR:-/app/migrations}"
 
-echo "==> Creating migration tracking table if not exists..."
-psql "$DATABASE_URL" <<'SQL'
-CREATE TABLE IF NOT EXISTS _schema_migrations (
-    filename   TEXT PRIMARY KEY,
-    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-SQL
+# Transition: if old _schema_migrations table exists but golang-migrate's
+# schema_migrations does not, seed the version from old tracking table.
+OLD_TABLE_EXISTS=$(psql "$DATABASE_URL" -tAc \
+  "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = '_schema_migrations')")
 
-run_migration() {
-    local file="$1"
-    local name
-    name=$(basename "$file")
+NEW_TABLE_EXISTS=$(psql "$DATABASE_URL" -tAc \
+  "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'schema_migrations')")
 
-    local already_applied
-    already_applied=$(psql "$DATABASE_URL" -tAc \
-        "SELECT COUNT(*) FROM _schema_migrations WHERE filename = '$name'")
+if [ "$OLD_TABLE_EXISTS" = "t" ] && [ "$NEW_TABLE_EXISTS" = "f" ]; then
+  echo "==> Migrating from old _schema_migrations to golang-migrate..."
+  # Get the highest migration number that was applied
+  LAST_VERSION=$(psql "$DATABASE_URL" -tAc \
+    "SELECT COALESCE(MAX(CAST(SUBSTRING(filename FROM '^([0-9]+)') AS INTEGER)), 0) FROM _schema_migrations")
+  echo "  Last applied version: $LAST_VERSION"
 
-    if [ "$already_applied" -gt "0" ]; then
-        echo "  [skip] $name (already applied)"
-        return
-    fi
+  if [ "$LAST_VERSION" -gt 0 ]; then
+    # Force-set the version so golang-migrate knows where we are
+    migrate -path "$MIGRATIONS_DIR" -database "$DATABASE_URL" force "$LAST_VERSION"
+    echo "  Set golang-migrate version to $LAST_VERSION"
+  fi
 
-    echo "  [apply] $name ..."
-    psql "$DATABASE_URL" -f "$file"
-    psql "$DATABASE_URL" -c \
-        "INSERT INTO _schema_migrations (filename) VALUES ('$name')"
-    echo "  [done]  $name"
-}
+  echo "  Old tracking table preserved as _schema_migrations (can be dropped manually)"
+fi
 
 echo "==> Running migrations from $MIGRATIONS_DIR ..."
-for f in $(ls "$MIGRATIONS_DIR"/*.sql | sort); do
-    run_migration "$f"
-done
+migrate -path "$MIGRATIONS_DIR" -database "$DATABASE_URL" up
 
 echo "==> All migrations complete."

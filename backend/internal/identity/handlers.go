@@ -66,7 +66,7 @@ func (h *Handlers) ListPersons(w http.ResponseWriter, r *http.Request) {
 	idx := 1
 
 	if cid := authsvc.CompanyIDFromContext(r.Context()); cid != "" {
-		where += fmt.Sprintf(" AND tenant_id = $%d::uuid", idx)
+		where += fmt.Sprintf(" AND company_id = $%d::uuid", idx)
 		args = append(args, cid)
 		idx++
 	}
@@ -97,7 +97,7 @@ func (h *Handlers) ListPersons(w http.ResponseWriter, r *http.Request) {
 	copy(countArgs, args)
 	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_identity.persons "+where, countArgs...).Scan(&total)
 
-	query := fmt.Sprintf(`SELECT id, tenant_id, first_name, last_name, COALESCE(email,''), COALESCE(phone,''),
+	query := fmt.Sprintf(`SELECT id, company_id, first_name, last_name, COALESCE(email,''), COALESCE(phone,''),
 		COALESCE(department,''), COALESCE(role,''), COALESCE(employee_id,''), status, COALESCE(photo_url,''),
 		created_at, updated_at
 		FROM dm3_identity.persons %s ORDER BY last_name, first_name ASC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
@@ -114,7 +114,7 @@ func (h *Handlers) ListPersons(w http.ResponseWriter, r *http.Request) {
 	persons := []models.Person{}
 	for rows.Next() {
 		var p models.Person
-		if err := rows.Scan(&p.ID, &p.TenantID, &p.FirstName, &p.LastName, &p.Email, &p.Phone,
+		if err := rows.Scan(&p.ID, &p.CompanyID, &p.FirstName, &p.LastName, &p.Email, &p.Phone,
 			&p.Department, &p.Role, &p.EmployeeID, &p.Status, &p.PhotoURL,
 			&p.CreatedAt, &p.UpdatedAt); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -154,12 +154,12 @@ func (h *Handlers) CreatePerson(w http.ResponseWriter, r *http.Request) {
 	err := h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO dm3_identity.persons (first_name, last_name, email, phone, department, role, employee_id, status)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-		 RETURNING id, tenant_id, first_name, last_name, COALESCE(email,''), COALESCE(phone,''),
+		 RETURNING id, company_id, first_name, last_name, COALESCE(email,''), COALESCE(phone,''),
 		 COALESCE(department,''), COALESCE(role,''), COALESCE(employee_id,''), status, COALESCE(photo_url,''),
 		 created_at, updated_at`,
 		req.FirstName, req.LastName, nilIfEmpty(req.Email), nilIfEmpty(req.Phone),
 		nilIfEmpty(req.Department), nilIfEmpty(req.Role), nilIfEmpty(req.EmployeeID), req.Status,
-	).Scan(&p.ID, &p.TenantID, &p.FirstName, &p.LastName, &p.Email, &p.Phone,
+	).Scan(&p.ID, &p.CompanyID, &p.FirstName, &p.LastName, &p.Email, &p.Phone,
 		&p.Department, &p.Role, &p.EmployeeID, &p.Status, &p.PhotoURL,
 		&p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
@@ -210,12 +210,12 @@ func (h *Handlers) UpdatePerson(w http.ResponseWriter, r *http.Request) {
 			employee_id = COALESCE($8, employee_id), status = COALESCE($9, status),
 			updated_at = now()
 		 WHERE id = $1::uuid
-		 RETURNING id, tenant_id, first_name, last_name, COALESCE(email,''), COALESCE(phone,''),
+		 RETURNING id, company_id, first_name, last_name, COALESCE(email,''), COALESCE(phone,''),
 		 COALESCE(department,''), COALESCE(role,''), COALESCE(employee_id,''), status, COALESCE(photo_url,''),
 		 created_at, updated_at`,
 		id, req.FirstName, req.LastName, req.Email, req.Phone,
 		req.Department, req.Role, req.EmployeeID, req.Status,
-	).Scan(&p.ID, &p.TenantID, &p.FirstName, &p.LastName, &p.Email, &p.Phone,
+	).Scan(&p.ID, &p.CompanyID, &p.FirstName, &p.LastName, &p.Email, &p.Phone,
 		&p.Department, &p.Role, &p.EmployeeID, &p.Status, &p.PhotoURL,
 		&p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
@@ -322,7 +322,7 @@ func (h *Handlers) ListCredentials(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, tenant_id, person_id, type, value, status, valid_from, valid_until, created_at, COALESCE(updated_at, created_at)
+		`SELECT id, company_id, person_id, type, value, status, valid_from, valid_until, created_at, COALESCE(updated_at, created_at)
 		 FROM dm3_identity.credentials WHERE person_id = $1::uuid ORDER BY created_at DESC`, personID)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -333,7 +333,7 @@ func (h *Handlers) ListCredentials(w http.ResponseWriter, r *http.Request) {
 	creds := []models.Credential{}
 	for rows.Next() {
 		var c models.Credential
-		if err := rows.Scan(&c.ID, &c.TenantID, &c.PersonID, &c.Type, &c.Value,
+		if err := rows.Scan(&c.ID, &c.CompanyID, &c.PersonID, &c.Type, &c.Value,
 			&c.Status, &c.ValidFrom, &c.ValidUntil, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -383,9 +383,9 @@ func (h *Handlers) CreateCredential(w http.ResponseWriter, r *http.Request) {
 	err := h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO dm3_identity.credentials (person_id, type, value, status, valid_from, valid_until, updated_at)
 		 VALUES ($1::uuid,$2,$3,$4,$5,$6, now())
-		 RETURNING id, tenant_id, person_id, type, value, status, valid_from, valid_until, created_at, updated_at`,
+		 RETURNING id, company_id, person_id, type, value, status, valid_from, valid_until, created_at, updated_at`,
 		personID, req.Type, req.Value, req.Status, req.ValidFrom, req.ValidUntil,
-	).Scan(&c.ID, &c.TenantID, &c.PersonID, &c.Type, &c.Value, &c.Status,
+	).Scan(&c.ID, &c.CompanyID, &c.PersonID, &c.Type, &c.Value, &c.Status,
 		&c.ValidFrom, &c.ValidUntil, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		slog.Error("create credential error", "error", err)
@@ -401,10 +401,10 @@ func (h *Handlers) GetCredential(w http.ResponseWriter, r *http.Request) {
 
 	var c models.Credential
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, tenant_id, person_id, type, value, status, valid_from, valid_until, created_at, COALESCE(updated_at, created_at)
+		`SELECT id, company_id, person_id, type, value, status, valid_from, valid_until, created_at, COALESCE(updated_at, created_at)
 		 FROM dm3_identity.credentials WHERE id = $1::uuid AND person_id = $2::uuid`,
 		credID, personID,
-	).Scan(&c.ID, &c.TenantID, &c.PersonID, &c.Type, &c.Value, &c.Status,
+	).Scan(&c.ID, &c.CompanyID, &c.PersonID, &c.Type, &c.Value, &c.Status,
 		&c.ValidFrom, &c.ValidUntil, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "credential not found")
@@ -430,9 +430,9 @@ func (h *Handlers) UpdateCredential(w http.ResponseWriter, r *http.Request) {
 			status = COALESCE(NULLIF($5,''), status), valid_from = COALESCE($6, valid_from),
 			valid_until = COALESCE($7, valid_until), updated_at = now()
 		 WHERE id = $1::uuid AND person_id = $2::uuid
-		 RETURNING id, tenant_id, person_id, type, value, status, valid_from, valid_until, created_at, updated_at`,
+		 RETURNING id, company_id, person_id, type, value, status, valid_from, valid_until, created_at, updated_at`,
 		credID, personID, req.Type, req.Value, req.Status, req.ValidFrom, req.ValidUntil,
-	).Scan(&c.ID, &c.TenantID, &c.PersonID, &c.Type, &c.Value, &c.Status,
+	).Scan(&c.ID, &c.CompanyID, &c.PersonID, &c.Type, &c.Value, &c.Status,
 		&c.ValidFrom, &c.ValidUntil, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "credential not found")
@@ -467,7 +467,7 @@ func (h *Handlers) ListGroups(w http.ResponseWriter, r *http.Request) {
 
 	var total int64
 	if cid != "" {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_identity.person_groups WHERE tenant_id = $1::uuid`, cid).Scan(&total)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_identity.person_groups WHERE company_id = $1::uuid`, cid).Scan(&total)
 	} else {
 		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_identity.person_groups`).Scan(&total)
 	}
@@ -475,12 +475,12 @@ func (h *Handlers) ListGroups(w http.ResponseWriter, r *http.Request) {
 	var grpQuery string
 	var grpArgs []any
 	if cid != "" {
-		grpQuery = `SELECT g.id, g.tenant_id, g.name, COALESCE(g.description,''), g.created_at, g.updated_at,
+		grpQuery = `SELECT g.id, g.company_id, g.name, COALESCE(g.description,''), g.created_at, g.updated_at,
 		 (SELECT COUNT(*) FROM dm3_identity.person_group_members m WHERE m.group_id = g.id)
-		 FROM dm3_identity.person_groups g WHERE g.tenant_id = $1::uuid ORDER BY g.name ASC LIMIT $2 OFFSET $3`
+		 FROM dm3_identity.person_groups g WHERE g.company_id = $1::uuid ORDER BY g.name ASC LIMIT $2 OFFSET $3`
 		grpArgs = []any{cid, limit, offset}
 	} else {
-		grpQuery = `SELECT g.id, g.tenant_id, g.name, COALESCE(g.description,''), g.created_at, g.updated_at,
+		grpQuery = `SELECT g.id, g.company_id, g.name, COALESCE(g.description,''), g.created_at, g.updated_at,
 		 (SELECT COUNT(*) FROM dm3_identity.person_group_members m WHERE m.group_id = g.id)
 		 FROM dm3_identity.person_groups g ORDER BY g.name ASC LIMIT $1 OFFSET $2`
 		grpArgs = []any{limit, offset}
@@ -496,7 +496,7 @@ func (h *Handlers) ListGroups(w http.ResponseWriter, r *http.Request) {
 	groups := []models.PersonGroup{}
 	for rows.Next() {
 		var g models.PersonGroup
-		if err := rows.Scan(&g.ID, &g.TenantID, &g.Name, &g.Description, &g.CreatedAt, &g.UpdatedAt, &g.MemberCount); err != nil {
+		if err := rows.Scan(&g.ID, &g.CompanyID, &g.Name, &g.Description, &g.CreatedAt, &g.UpdatedAt, &g.MemberCount); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -524,9 +524,9 @@ func (h *Handlers) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	var g models.PersonGroup
 	err := h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO dm3_identity.person_groups (name, description) VALUES ($1,$2)
-		 RETURNING id, tenant_id, name, COALESCE(description,''), created_at, updated_at`,
+		 RETURNING id, company_id, name, COALESCE(description,''), created_at, updated_at`,
 		req.Name, nilIfEmpty(req.Description),
-	).Scan(&g.ID, &g.TenantID, &g.Name, &g.Description, &g.CreatedAt, &g.UpdatedAt)
+	).Scan(&g.ID, &g.CompanyID, &g.Name, &g.Description, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		slog.Error("create group error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -539,10 +539,10 @@ func (h *Handlers) GetGroup(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var g models.PersonGroup
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT g.id, g.tenant_id, g.name, COALESCE(g.description,''), g.created_at, g.updated_at,
+		`SELECT g.id, g.company_id, g.name, COALESCE(g.description,''), g.created_at, g.updated_at,
 		 (SELECT COUNT(*) FROM dm3_identity.person_group_members m WHERE m.group_id = g.id)
 		 FROM dm3_identity.person_groups g WHERE g.id = $1::uuid`, id,
-	).Scan(&g.ID, &g.TenantID, &g.Name, &g.Description, &g.CreatedAt, &g.UpdatedAt, &g.MemberCount)
+	).Scan(&g.ID, &g.CompanyID, &g.Name, &g.Description, &g.CreatedAt, &g.UpdatedAt, &g.MemberCount)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "group not found")
 		return
@@ -563,9 +563,9 @@ func (h *Handlers) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 		`UPDATE dm3_identity.person_groups SET
 			name = COALESCE(NULLIF($2,''), name), description = COALESCE($3, description), updated_at = now()
 		 WHERE id = $1::uuid
-		 RETURNING id, tenant_id, name, COALESCE(description,''), created_at, updated_at`,
+		 RETURNING id, company_id, name, COALESCE(description,''), created_at, updated_at`,
 		id, req.Name, nilIfEmpty(req.Description),
-	).Scan(&g.ID, &g.TenantID, &g.Name, &g.Description, &g.CreatedAt, &g.UpdatedAt)
+	).Scan(&g.ID, &g.CompanyID, &g.Name, &g.Description, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "group not found")
 		return
@@ -593,7 +593,7 @@ func (h *Handlers) ListGroupMembers(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "id")
 
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT p.id, p.tenant_id, p.first_name, p.last_name, COALESCE(p.email,''), COALESCE(p.phone,''),
+		`SELECT p.id, p.company_id, p.first_name, p.last_name, COALESCE(p.email,''), COALESCE(p.phone,''),
 		 COALESCE(p.department,''), COALESCE(p.role,''), COALESCE(p.employee_id,''), p.status, COALESCE(p.photo_url,''),
 		 p.created_at, p.updated_at
 		 FROM dm3_identity.persons p
@@ -608,7 +608,7 @@ func (h *Handlers) ListGroupMembers(w http.ResponseWriter, r *http.Request) {
 	persons := []models.Person{}
 	for rows.Next() {
 		var p models.Person
-		if err := rows.Scan(&p.ID, &p.TenantID, &p.FirstName, &p.LastName, &p.Email, &p.Phone,
+		if err := rows.Scan(&p.ID, &p.CompanyID, &p.FirstName, &p.LastName, &p.Email, &p.Phone,
 			&p.Department, &p.Role, &p.EmployeeID, &p.Status, &p.PhotoURL,
 			&p.CreatedAt, &p.UpdatedAt); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -681,7 +681,7 @@ func (h *Handlers) SyncPersons(w http.ResponseWriter, r *http.Request) {
 
 	// Get persons changed since timestamp
 	personRows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, tenant_id, first_name, last_name, COALESCE(email,''), COALESCE(phone,''),
+		`SELECT id, company_id, first_name, last_name, COALESCE(email,''), COALESCE(phone,''),
 		 COALESCE(department,''), COALESCE(role,''), COALESCE(employee_id,''), status, COALESCE(photo_url,''),
 		 created_at, updated_at
 		 FROM dm3_identity.persons WHERE updated_at > $1 ORDER BY updated_at ASC`, since)
@@ -694,7 +694,7 @@ func (h *Handlers) SyncPersons(w http.ResponseWriter, r *http.Request) {
 	persons := []models.Person{}
 	for personRows.Next() {
 		var p models.Person
-		if err := personRows.Scan(&p.ID, &p.TenantID, &p.FirstName, &p.LastName, &p.Email, &p.Phone,
+		if err := personRows.Scan(&p.ID, &p.CompanyID, &p.FirstName, &p.LastName, &p.Email, &p.Phone,
 			&p.Department, &p.Role, &p.EmployeeID, &p.Status, &p.PhotoURL,
 			&p.CreatedAt, &p.UpdatedAt); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -705,7 +705,7 @@ func (h *Handlers) SyncPersons(w http.ResponseWriter, r *http.Request) {
 
 	// Get credentials changed since timestamp
 	credRows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, tenant_id, person_id, type, value, status, valid_from, valid_until, created_at, COALESCE(updated_at, created_at)
+		`SELECT id, company_id, person_id, type, value, status, valid_from, valid_until, created_at, COALESCE(updated_at, created_at)
 		 FROM dm3_identity.credentials WHERE COALESCE(updated_at, created_at) > $1 ORDER BY COALESCE(updated_at, created_at) ASC`, since)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -716,7 +716,7 @@ func (h *Handlers) SyncPersons(w http.ResponseWriter, r *http.Request) {
 	creds := []models.Credential{}
 	for credRows.Next() {
 		var c models.Credential
-		if err := credRows.Scan(&c.ID, &c.TenantID, &c.PersonID, &c.Type, &c.Value,
+		if err := credRows.Scan(&c.ID, &c.CompanyID, &c.PersonID, &c.Type, &c.Value,
 			&c.Status, &c.ValidFrom, &c.ValidUntil, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -744,8 +744,8 @@ func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
 	if cid != "" {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_identity.persons WHERE tenant_id = $1::uuid`, cid).Scan(&stats.TotalPersons)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_identity.person_groups WHERE tenant_id = $1::uuid`, cid).Scan(&stats.TotalGroups)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_identity.persons WHERE company_id = $1::uuid`, cid).Scan(&stats.TotalPersons)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_identity.person_groups WHERE company_id = $1::uuid`, cid).Scan(&stats.TotalGroups)
 	} else {
 		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_identity.persons`).Scan(&stats.TotalPersons)
 		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_identity.person_groups`).Scan(&stats.TotalGroups)
@@ -755,7 +755,7 @@ func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	var statusQuery string
 	var statusArgs []any
 	if cid != "" {
-		statusQuery = `SELECT status, COUNT(*) FROM dm3_identity.persons WHERE tenant_id = $1::uuid GROUP BY status`
+		statusQuery = `SELECT status, COUNT(*) FROM dm3_identity.persons WHERE company_id = $1::uuid GROUP BY status`
 		statusArgs = []any{cid}
 	} else {
 		statusQuery = `SELECT status, COUNT(*) FROM dm3_identity.persons GROUP BY status`
@@ -776,7 +776,7 @@ func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	var deptQuery string
 	var deptArgs []any
 	if cid != "" {
-		deptQuery = `SELECT COALESCE(department,'unassigned'), COUNT(*) FROM dm3_identity.persons WHERE tenant_id = $1::uuid GROUP BY department`
+		deptQuery = `SELECT COALESCE(department,'unassigned'), COUNT(*) FROM dm3_identity.persons WHERE company_id = $1::uuid GROUP BY department`
 		deptArgs = []any{cid}
 	} else {
 		deptQuery = `SELECT COALESCE(department,'unassigned'), COUNT(*) FROM dm3_identity.persons GROUP BY department`
@@ -797,7 +797,7 @@ func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	var credQuery string
 	var credArgs []any
 	if cid != "" {
-		credQuery = `SELECT type, COUNT(*) FROM dm3_identity.credentials WHERE tenant_id = $1::uuid GROUP BY type`
+		credQuery = `SELECT type, COUNT(*) FROM dm3_identity.credentials WHERE company_id = $1::uuid GROUP BY type`
 		credArgs = []any{cid}
 	} else {
 		credQuery = `SELECT type, COUNT(*) FROM dm3_identity.credentials GROUP BY type`
@@ -822,11 +822,11 @@ func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) scanPerson(r *http.Request, id string) (models.Person, error) {
 	var p models.Person
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, tenant_id, first_name, last_name, COALESCE(email,''), COALESCE(phone,''),
+		`SELECT id, company_id, first_name, last_name, COALESCE(email,''), COALESCE(phone,''),
 		 COALESCE(department,''), COALESCE(role,''), COALESCE(employee_id,''), status, COALESCE(photo_url,''),
 		 created_at, updated_at
 		 FROM dm3_identity.persons WHERE id = $1::uuid`, id,
-	).Scan(&p.ID, &p.TenantID, &p.FirstName, &p.LastName, &p.Email, &p.Phone,
+	).Scan(&p.ID, &p.CompanyID, &p.FirstName, &p.LastName, &p.Email, &p.Phone,
 		&p.Department, &p.Role, &p.EmployeeID, &p.Status, &p.PhotoURL,
 		&p.CreatedAt, &p.UpdatedAt)
 	if err != nil {

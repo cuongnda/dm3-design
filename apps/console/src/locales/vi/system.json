@@ -1,6 +1,6 @@
 {
   "companies.title": "Công ty",
-  "companies.description": "Quản lý công ty và tổ chức thuê",
+  "companies.description": "Quản lý công ty và tổ chức",
   "companies.addCompany": "+ Thêm công ty",
   "companies.searchPlaceholder": "🔍 Tìm kiếm công ty...",
   "companies.tabs.all": "Tất cả công ty",
@@ -48,7 +48,7 @@
   "createCompany.form.maxDevices": "Thiết bị tối đa",
   "createCompany.form.maxUsers": "Người dùng tối đa",
   "systemDevices.title": "Thiết bị hệ thống",
-  "systemDevices.description": "Quản lý thiết bị toàn cầu trên tất cả tenant",
+  "systemDevices.description": "Quản lý thiết bị toàn cầu trên tất cả công ty",
   "systemDevices.searchPlaceholder": "🔍 Tìm kiếm thiết bị hệ thống...",
   "systemDevices.filter.allStatus": "Tất cả trạng thái",
   "systemDevices.filter.allTypes": "Tất cả loại",

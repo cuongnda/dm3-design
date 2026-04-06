@@ -37,9 +37,8 @@ func main() {
 	}
 	defer database.Close()
 
-	// Run migrations
-	if err := database.RunMigrations(ctx, "pkg/db/migrations"); err != nil {
-		slog.Warn("migration warning (may already exist)", "error", err)
+	if err := database.RunMigrations("pkg/db/migrations"); err != nil {
+		slog.Warn("migrations", "error", err)
 	}
 
 	// Connect to NATS

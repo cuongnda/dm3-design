@@ -7,7 +7,7 @@ import (
 
 type Door struct {
 	ID               string          `json:"id"`
-	TenantID         string          `json:"tenant_id"`
+	CompanyID        string          `json:"company_id"`
 	SiteID           *string         `json:"site_id,omitempty"`
 	ZoneID           *string         `json:"zone_id,omitempty"`
 	Name             string          `json:"name"`
@@ -39,7 +39,7 @@ type Door struct {
 
 type AccessRule struct {
 	ID                string          `json:"id"`
-	TenantID          string          `json:"tenant_id"`
+	CompanyID         string          `json:"company_id"`
 	SiteID            *string         `json:"site_id,omitempty"`
 	Name              string          `json:"name"`
 	Description       *string         `json:"description,omitempty"`
@@ -62,7 +62,7 @@ type AccessRule struct {
 
 type Schedule struct {
 	ID                string          `json:"id"`
-	TenantID          string          `json:"tenant_id"`
+	CompanyID         string          `json:"company_id"`
 	Name              string          `json:"name"`
 	Timezone          string          `json:"timezone"`
 	Periods           json.RawMessage `json:"periods"`
@@ -93,7 +93,7 @@ type SyncPackage struct {
 
 type AccessTimeTemplate struct {
 	ID          string               `json:"id"`
-	TenantID    string               `json:"tenant_id"`
+	CompanyID   string               `json:"company_id"`
 	Name        string               `json:"name"`
 	Description *string              `json:"description,omitempty"`
 	Timezone    string               `json:"timezone"`
@@ -118,7 +118,7 @@ type AccessTimeSlot struct {
 
 type UserAccessTime struct {
 	ID            string               `json:"id"`
-	TenantID      string               `json:"tenant_id"`
+	CompanyID     string               `json:"company_id"`
 	UserID        string               `json:"user_id"`
 	TemplateID    string               `json:"template_id"`
 	Template      *AccessTimeTemplate  `json:"template,omitempty"` // For detailed view
@@ -131,7 +131,7 @@ type UserAccessTime struct {
 
 type AccessTimeValidation struct {
 	ID            string               `json:"id"`
-	TenantID      string               `json:"tenant_id"`
+	CompanyID     string               `json:"company_id"`
 	UserID        string               `json:"user_id"`
 	TemplateID    *string              `json:"template_id,omitempty"`
 	DoorID        *string              `json:"door_id,omitempty"`

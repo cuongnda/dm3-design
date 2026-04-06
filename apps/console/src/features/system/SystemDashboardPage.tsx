@@ -67,7 +67,7 @@ export function SystemDashboardPage() {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-foreground">System Dashboard</h1>
-        <p className="text-[13px] text-muted-foreground mt-1">Overview of all tenants and system health</p>
+        <p className="text-[13px] text-muted-foreground mt-1">Overview of all companies and system health</p>
       </div>
 
       {/* Stat Cards */}

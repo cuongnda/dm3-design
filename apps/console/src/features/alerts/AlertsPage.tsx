@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Bell, AlertTriangle, ShieldAlert, Info, Search } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, Input, Button } from '@dm3/ui';
+import { Card, CardContent, Input, Button } from '@dm3/ui';
 
 interface Alert {
   id: string;
@@ -44,7 +43,6 @@ const mockAlerts: Alert[] = [
 ];
 
 export function AlertsPage() {
-  const { t } = useTranslation();
   const [alerts] = useState<Alert[]>(mockAlerts);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'critical' | 'warning' | 'info'>('all');

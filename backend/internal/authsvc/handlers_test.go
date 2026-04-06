@@ -13,7 +13,7 @@ const testSecret = "test-secret-key"
 func TestGenerateAndValidateAccessToken(t *testing.T) {
 	h := &Handlers{jwtSecret: testSecret}
 
-	tokenStr, err := h.generateAccessToken("user-1", "tenant-1", "test@example.com", "Test User", []string{"admin"}, "tenant-1", "admin")
+	tokenStr, err := h.generateAccessToken("user-1", "company-1", "test@example.com", "Test User", []string{"admin"}, "company-1", "admin")
 	if err != nil {
 		t.Fatalf("generateAccessToken: %v", err)
 	}
@@ -34,8 +34,8 @@ func TestGenerateAndValidateAccessToken(t *testing.T) {
 	if claims.Sub != "user-1" {
 		t.Errorf("sub = %q, want user-1", claims.Sub)
 	}
-	if claims.TID != "tenant-1" {
-		t.Errorf("tid = %q, want tenant-1", claims.TID)
+	if claims.CID != "company-1" {
+		t.Errorf("cid = %q, want company-1", claims.CID)
 	}
 	if claims.Email != "test@example.com" {
 		t.Errorf("email = %q, want test@example.com", claims.Email)
@@ -56,7 +56,7 @@ func TestAccessTokenExpired(t *testing.T) {
 	now := time.Now().Add(-1 * time.Hour)
 	claims := AccessClaims{
 		Sub:   "user-1",
-		TID:   "tenant-1",
+		CID:   "company-1",
 		Email: "test@example.com",
 		Roles: []string{"admin"},
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -78,7 +78,7 @@ func TestAccessTokenExpired(t *testing.T) {
 
 func TestInvalidSecret(t *testing.T) {
 	h := &Handlers{jwtSecret: testSecret}
-	tokenStr, _ := h.generateAccessToken("user-1", "tenant-1", "test@example.com", "Test", []string{"admin"}, "tenant-1", "admin")
+	tokenStr, _ := h.generateAccessToken("user-1", "company-1", "test@example.com", "Test", []string{"admin"}, "company-1", "admin")
 
 	_, err := jwt.ParseWithClaims(tokenStr, &AccessClaims{}, func(t *jwt.Token) (interface{}, error) {
 		return []byte("wrong-secret"), nil
