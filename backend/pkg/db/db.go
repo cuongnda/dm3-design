@@ -2,17 +2,19 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
-	"sort"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type DB struct {
 	Pool *pgxpool.Pool
+	dsn  string
 }
 
 func Connect(ctx context.Context, dsn string) (*DB, error) {
@@ -25,30 +27,26 @@ func Connect(ctx context.Context, dsn string) (*DB, error) {
 		return nil, fmt.Errorf("db ping: %w", err)
 	}
 	slog.Info("connected to database")
-	return &DB{Pool: pool}, nil
+	return &DB{Pool: pool, dsn: dsn}, nil
 }
 
 func (d *DB) Close() {
 	d.Pool.Close()
 }
 
-func (d *DB) RunMigrations(ctx context.Context, dir string) error {
-	files, err := filepath.Glob(filepath.Join(dir, "*.sql"))
+// RunMigrations applies pending database migrations using golang-migrate.
+func (d *DB) RunMigrations(dir string) error {
+	m, err := migrate.New("file://"+dir, d.dsn)
 	if err != nil {
-		return fmt.Errorf("glob migrations: %w", err)
+		return fmt.Errorf("migrate init: %w", err)
 	}
-	sort.Strings(files)
+	defer m.Close()
 
-	for _, f := range files {
-		slog.Info("running migration", "file", filepath.Base(f))
-		sql, err := os.ReadFile(f)
-		if err != nil {
-			return fmt.Errorf("read migration %s: %w", f, err)
-		}
-		if _, err := d.Pool.Exec(ctx, string(sql)); err != nil {
-			return fmt.Errorf("exec migration %s: %w", filepath.Base(f), err)
-		}
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("migrate up: %w", err)
 	}
-	slog.Info("migrations complete", "count", len(files))
+
+	version, dirty, _ := m.Version()
+	slog.Info("migrations complete", "version", version, "dirty", dirty)
 	return nil
 }

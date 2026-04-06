@@ -28,7 +28,7 @@ func (h *Handlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.Reques
 	idx := 1
 
 	if cid := authsvc.CompanyIDFromContext(r.Context()); cid != "" {
-		where += fmt.Sprintf(" AND t.tenant_id = $%d::uuid", idx)
+		where += fmt.Sprintf(" AND t.company_id = $%d::uuid", idx)
 		args = append(args, cid)
 		idx++
 	}
@@ -40,15 +40,15 @@ func (h *Handlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.Reques
 	}
 
 	query := fmt.Sprintf(`
-		SELECT 
-			t.id, t.tenant_id, t.name, t.description, t.timezone, 
+		SELECT
+			t.id, t.company_id, t.name, t.description, t.timezone,
 			t.is_active, t.created_by, t.created_at, t.updated_at,
 			COUNT(ua.user_id) as user_count
 		FROM dm3_access.access_time_templates t
-		LEFT JOIN dm3_access.user_access_times ua ON t.id = ua.template_id 
+		LEFT JOIN dm3_access.user_access_times ua ON t.id = ua.template_id
 			AND (ua.effective_to IS NULL OR ua.effective_to >= CURRENT_DATE)
 		%s
-		GROUP BY t.id, t.tenant_id, t.name, t.description, t.timezone, 
+		GROUP BY t.id, t.company_id, t.name, t.description, t.timezone,
 				 t.is_active, t.created_by, t.created_at, t.updated_at
 		ORDER BY t.created_at DESC
 		LIMIT $%d OFFSET $%d
@@ -68,7 +68,7 @@ func (h *Handlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.Reques
 	for rows.Next() {
 		var t models.AccessTimeTemplate
 		err := rows.Scan(
-			&t.ID, &t.TenantID, &t.Name, &t.Description, &t.Timezone,
+			&t.ID, &t.CompanyID, &t.Name, &t.Description, &t.Timezone,
 			&t.IsActive, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.UserCount,
 		)
 		if err != nil {
@@ -96,13 +96,13 @@ func (h *Handlers) GetAccessTimeTemplate(w http.ResponseWriter, r *http.Request)
 	// Get template
 	var template models.AccessTimeTemplate
 	query := `
-		SELECT id, tenant_id, name, description, timezone, is_active, 
+		SELECT id, company_id, name, description, timezone, is_active,
 			   created_by, created_at, updated_at
-		FROM dm3_access.access_time_templates 
-		WHERE id = $1::uuid AND tenant_id = $2::uuid
+		FROM dm3_access.access_time_templates
+		WHERE id = $1::uuid AND company_id = $2::uuid
 	`
 	err := h.db.Pool.QueryRow(r.Context(), query, templateID, companyID).Scan(
-		&template.ID, &template.TenantID, &template.Name, &template.Description,
+		&template.ID, &template.CompanyID, &template.Name, &template.Description,
 		&template.Timezone, &template.IsActive, &template.CreatedBy,
 		&template.CreatedAt, &template.UpdatedAt,
 	)
@@ -186,8 +186,8 @@ func (h *Handlers) CreateAccessTimeTemplate(w http.ResponseWriter, r *http.Reque
 	// Insert template
 	var templateID string
 	insertQuery := `
-		INSERT INTO dm3_access.access_time_templates 
-		(tenant_id, name, description, timezone, created_by) 
+		INSERT INTO dm3_access.access_time_templates
+		(company_id, name, description, timezone, created_by)
 		VALUES ($1::uuid, $2, $3, $4, $5::uuid)
 		RETURNING id
 	`
@@ -282,13 +282,13 @@ func (h *Handlers) UpdateAccessTimeTemplate(w http.ResponseWriter, r *http.Reque
 
 	if len(setParts) > 0 {
 		updateQuery := fmt.Sprintf(`
-			UPDATE dm3_access.access_time_templates 
+			UPDATE dm3_access.access_time_templates
 			SET %s, updated_at = now()
-			WHERE id = $1::uuid AND tenant_id = $2::uuid
+			WHERE id = $1::uuid AND company_id = $2::uuid
 		`, string(setParts[0])) // Join setParts
-		
+
 		for i := 1; i < len(setParts); i++ {
-			updateQuery = updateQuery[:len(updateQuery)-len(" WHERE")] + ", " + setParts[i] + " WHERE id = $1::uuid AND tenant_id = $2::uuid"
+			updateQuery = updateQuery[:len(updateQuery)-len(" WHERE")] + ", " + setParts[i] + " WHERE id = $1::uuid AND company_id = $2::uuid"
 		}
 
 		result, err := tx.Exec(r.Context(), updateQuery, args...)
@@ -349,8 +349,8 @@ func (h *Handlers) DeleteAccessTimeTemplate(w http.ResponseWriter, r *http.Reque
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 
 	result, err := h.db.Pool.Exec(r.Context(), `
-		DELETE FROM dm3_access.access_time_templates 
-		WHERE id = $1::uuid AND tenant_id = $2::uuid
+		DELETE FROM dm3_access.access_time_templates
+		WHERE id = $1::uuid AND company_id = $2::uuid
 	`, templateID, companyID)
 	if err != nil {
 		slog.Error("failed to delete access time template", "error", err)
@@ -392,8 +392,8 @@ func (h *Handlers) AssignAccessTime(w http.ResponseWriter, r *http.Request) {
 	// Verify template exists and belongs to company
 	var templateExists bool
 	err = tx.QueryRow(r.Context(), `
-		SELECT EXISTS(SELECT 1 FROM dm3_access.access_time_templates 
-		WHERE id = $1::uuid AND tenant_id = $2::uuid)
+		SELECT EXISTS(SELECT 1 FROM dm3_access.access_time_templates
+		WHERE id = $1::uuid AND company_id = $2::uuid)
 	`, req.TemplateID, companyID).Scan(&templateExists)
 	if err != nil || !templateExists {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "access_time.template_not_found")
@@ -403,8 +403,8 @@ func (h *Handlers) AssignAccessTime(w http.ResponseWriter, r *http.Request) {
 	// Insert assignments for each user
 	for _, userID := range req.UserIDs {
 		_, err = tx.Exec(r.Context(), `
-			INSERT INTO dm3_access.user_access_times 
-			(tenant_id, user_id, template_id, effective_from, effective_to, assigned_by) 
+			INSERT INTO dm3_access.user_access_times
+			(company_id, user_id, template_id, effective_from, effective_to, assigned_by)
 			VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6::uuid)
 			ON CONFLICT (user_id, template_id, effective_from) 
 			DO UPDATE SET 
@@ -437,14 +437,14 @@ func (h *Handlers) GetUserAccessTime(w http.ResponseWriter, r *http.Request) {
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 
 	query := `
-		SELECT 
-			ua.id, ua.tenant_id, ua.user_id, ua.template_id,
+		SELECT
+			ua.id, ua.company_id, ua.user_id, ua.template_id,
 			ua.effective_from, ua.effective_to, ua.assigned_by,
 			ua.created_at, ua.updated_at,
 			t.name, t.description, t.timezone, t.is_active
 		FROM dm3_access.user_access_times ua
 		JOIN dm3_access.access_time_templates t ON ua.template_id = t.id
-		WHERE ua.user_id = $1::uuid AND ua.tenant_id = $2::uuid
+		WHERE ua.user_id = $1::uuid AND ua.company_id = $2::uuid
 			AND (ua.effective_to IS NULL OR ua.effective_to >= CURRENT_DATE)
 		ORDER BY ua.effective_from DESC
 	`
@@ -463,7 +463,7 @@ func (h *Handlers) GetUserAccessTime(w http.ResponseWriter, r *http.Request) {
 		var template models.AccessTimeTemplate
 		
 		err := rows.Scan(
-			&ua.ID, &ua.TenantID, &ua.UserID, &ua.TemplateID,
+			&ua.ID, &ua.CompanyID, &ua.UserID, &ua.TemplateID,
 			&ua.EffectiveFrom, &ua.EffectiveTo, &ua.AssignedBy,
 			&ua.CreatedAt, &ua.UpdatedAt,
 			&template.Name, &template.Description, &template.Timezone, &template.IsActive,
@@ -498,11 +498,11 @@ func (h *Handlers) ValidateAccess(w http.ResponseWriter, r *http.Request) {
 	
 	// Get user's current access time template
 	query := `
-		SELECT 
+		SELECT
 			ua.template_id, t.name, t.timezone, t.is_active
 		FROM dm3_access.user_access_times ua
 		JOIN dm3_access.access_time_templates t ON ua.template_id = t.id
-		WHERE ua.user_id = $1::uuid AND ua.tenant_id = $2::uuid
+		WHERE ua.user_id = $1::uuid AND ua.company_id = $2::uuid
 			AND ua.effective_from <= $3
 			AND (ua.effective_to IS NULL OR ua.effective_to >= $3)
 			AND t.is_active = true
@@ -637,11 +637,11 @@ func (h *Handlers) GetAccessTimeStats(w http.ResponseWriter, r *http.Request) {
 	
 	// Get template stats
 	err := h.db.Pool.QueryRow(r.Context(), `
-		SELECT 
+		SELECT
 			COUNT(*) FILTER (WHERE is_active = true) as active,
 			COUNT(*) as total
-		FROM dm3_access.access_time_templates 
-		WHERE tenant_id = $1::uuid
+		FROM dm3_access.access_time_templates
+		WHERE company_id = $1::uuid
 	`, companyID).Scan(&stats.TemplatesActive, &stats.TemplatesTotal)
 	if err != nil {
 		slog.Error("failed to get template stats", "error", err)
@@ -650,8 +650,8 @@ func (h *Handlers) GetAccessTimeStats(w http.ResponseWriter, r *http.Request) {
 	// Get user assignment stats
 	err = h.db.Pool.QueryRow(r.Context(), `
 		SELECT COUNT(DISTINCT user_id)
-		FROM dm3_access.user_access_times 
-		WHERE tenant_id = $1::uuid
+		FROM dm3_access.user_access_times
+		WHERE company_id = $1::uuid
 			AND (effective_to IS NULL OR effective_to >= CURRENT_DATE)
 	`, companyID).Scan(&stats.UsersAssigned)
 	if err != nil {
@@ -664,8 +664,8 @@ func (h *Handlers) GetAccessTimeStats(w http.ResponseWriter, r *http.Request) {
 			COUNT(*) as total,
 			COUNT(*) FILTER (WHERE is_allowed = true) as allowed,
 			COUNT(*) FILTER (WHERE is_allowed = false) as denied
-		FROM dm3_access.access_time_validations 
-		WHERE tenant_id = $1::uuid 
+		FROM dm3_access.access_time_validations
+		WHERE company_id = $1::uuid 
 			AND validation_time >= CURRENT_DATE
 			AND validation_time < CURRENT_DATE + INTERVAL '1 day'
 	`, companyID).Scan(&stats.ValidationsToday, &stats.ValidationsAllowed, &stats.ValidationsDenied)
@@ -678,7 +678,7 @@ func (h *Handlers) GetAccessTimeStats(w http.ResponseWriter, r *http.Request) {
 
 // ─── Helper Functions ───────────────────────────────────────────────────────
 
-func (h *Handlers) logValidation(ctx context.Context, tenantID, userID, templateID string, doorID *string, requestedTime time.Time, isAllowed bool, reason, matchedSlotID string) {
+func (h *Handlers) logValidation(ctx context.Context, companyID, userID, templateID string, doorID *string, requestedTime time.Time, isAllowed bool, reason, matchedSlotID string) {
 	var templatePtr, doorPtr, slotPtr interface{}
 	if templateID != "" {
 		templatePtr = templateID
@@ -691,10 +691,10 @@ func (h *Handlers) logValidation(ctx context.Context, tenantID, userID, template
 	}
 
 	_, err := h.db.Pool.Exec(ctx, `
-		INSERT INTO dm3_access.access_time_validations 
-		(tenant_id, user_id, template_id, door_id, requested_time, is_allowed, reason, matched_slot_id) 
+		INSERT INTO dm3_access.access_time_validations
+		(company_id, user_id, template_id, door_id, requested_time, is_allowed, reason, matched_slot_id)
 		VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8::uuid)
-	`, tenantID, userID, templatePtr, doorPtr, requestedTime, isAllowed, reason, slotPtr)
+	`, companyID, userID, templatePtr, doorPtr, requestedTime, isAllowed, reason, slotPtr)
 	if err != nil {
 		slog.Error("failed to log access time validation", "error", err)
 	}

@@ -38,6 +38,10 @@ func main() {
 	}
 	defer database.Close()
 
+	if err := database.RunMigrations("pkg/db/migrations"); err != nil {
+		slog.Warn("migrations", "error", err)
+	}
+
 	// Connect to MQTT
 	mqttClient, err := mqtt.Connect(ctx, mqtt.Options{
 		Broker:   cfg.MQTTBroker,

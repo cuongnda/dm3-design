@@ -26,8 +26,6 @@ func setupTestDB(t *testing.T) *db.DB {
 	if err != nil {
 		t.Skipf("database not available: %v", err)
 	}
-	// Run migrations
-	_ = database.RunMigrations(context.Background(), "../../../pkg/db/migrations")
 	return database
 }
 

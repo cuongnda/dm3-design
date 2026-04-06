@@ -59,7 +59,7 @@ export function AlertsPage() {
   // Convert real-time events to EventDTO format
   const realtimeEventDTOs: EventDTO[] = recentEvents.map(event => ({
     id: event.id,
-    tenant_id: event.tenantId,
+    company_id: event.companyId,
     time: event.time.toISOString(),
     door_id: event.doorId,
     device_id: event.deviceId,

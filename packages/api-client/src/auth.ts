@@ -29,8 +29,7 @@ export interface LoginResponse {
 
 export interface MeResponse {
   id: string;
-  tenant_id: string;
-  company_id?: string | null;
+  company_id: string;
   email: string;
   name?: string | null;
   roles: string[];

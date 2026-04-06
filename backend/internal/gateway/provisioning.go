@@ -82,7 +82,7 @@ func (h *ProvisioningHandlers) ProvisionDevice(w http.ResponseWriter, r *http.Re
 	// Create device with status=provisioning
 	var deviceDBID string
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_devices.devices (device_id, name, type, site_id, location, tenant_id, status, status_detail)
+		`INSERT INTO dm3_devices.devices (device_id, name, type, site_id, location, company_id, status, status_detail)
 		 VALUES ($1, $2, $3, $4, $5, $6::uuid, 'provisioning', 'awaiting_activation')
 		 RETURNING id`,
 		req.DeviceID, req.Name, req.Type, req.SiteID, req.Location, companyID,
@@ -139,7 +139,7 @@ func (h *ProvisioningHandlers) RegenerateQR(w http.ResponseWriter, r *http.Reque
 	// Get device info
 	var companyID, deviceType, status string
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT tenant_id, type, status FROM dm3_devices.devices WHERE id = $1::uuid`, deviceDBID,
+		`SELECT company_id, type, status FROM dm3_devices.devices WHERE id = $1::uuid`, deviceDBID,
 	).Scan(&companyID, &deviceType, &status)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "device not found")
@@ -251,7 +251,7 @@ func (h *ProvisioningHandlers) ActivateDevice(w http.ResponseWriter, r *http.Req
 	var deviceID, companyName string
 	_ = h.db.Pool.QueryRow(r.Context(),
 		`SELECT d.device_id, COALESCE(c.name, '') FROM dm3_devices.devices d
-		 LEFT JOIN dm3_auth.companies c ON c.id = d.tenant_id
+		 LEFT JOIN dm3_auth.companies c ON c.id = d.company_id
 		 WHERE d.id = $1::uuid`, qrClaims.DID,
 	).Scan(&deviceID, &companyName)
 
@@ -279,7 +279,7 @@ func (h *ProvisioningHandlers) ActivateDevice(w http.ResponseWriter, r *http.Req
 		"config": map[string]any{
 			"heartbeat_interval_sec": 30,
 			"sync_url":               "/api/v1",
-			"tenant_id":              qrClaims.CID,
+			"company_id":              qrClaims.CID,
 		},
 	})
 }
@@ -388,9 +388,9 @@ func (h *ProvisioningHandlers) ApprovePending(w http.ResponseWriter, r *http.Req
 	}
 	var deviceDBID string
 	err = h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_devices.devices (device_id, name, type, site_id, location, tenant_id, status, status_detail, firmware_version, hardware_fingerprint, provisioned_at, provisioned_by)
+		`INSERT INTO dm3_devices.devices (device_id, name, type, site_id, location, company_id, status, status_detail, firmware_version, hardware_fingerprint, provisioned_at, provisioned_by)
 		 VALUES ($1, $2, $3, $4, $5, $6::uuid, 'online', 'bootstrap_approved', $7, $8, now(), $9)
-		 ON CONFLICT (device_id) DO UPDATE SET status = 'online', name = $2, type = $3, site_id = $4, location = $5, tenant_id = $6::uuid, firmware_version = $7, hardware_fingerprint = $8, provisioned_at = now(), provisioned_by = $9, status_detail = 'bootstrap_approved', updated_at = now()
+		 ON CONFLICT (device_id) DO UPDATE SET status = 'online', name = $2, type = $3, site_id = $4, location = $5, company_id = $6::uuid, firmware_version = $7, hardware_fingerprint = $8, provisioned_at = now(), provisioned_by = $9, status_detail = 'bootstrap_approved', updated_at = now()
 		 RETURNING id`,
 		rid, name, deviceType, req.SiteID, req.Location, req.CompanyID, firmwareVersion, fp, assignedBy,
 	).Scan(&deviceDBID)
@@ -423,7 +423,7 @@ func (h *ProvisioningHandlers) ApprovePending(w http.ResponseWriter, r *http.Req
 		"config": map[string]any{
 			"heartbeat_interval_sec": 30,
 			"sync_url":               "/api/v1",
-			"tenant_id":              req.CompanyID,
+			"company_id":              req.CompanyID,
 		},
 	})
 	topic := fmt.Sprintf("dm/bootstrap/%s/response", rid)

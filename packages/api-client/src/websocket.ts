@@ -4,7 +4,7 @@ import { getToken } from './client';
 export interface WSEvent {
   type: string;
   device_id: string;
-  tenant_id: string;
+  company_id: string;
   data: any;
   time: string;
 }

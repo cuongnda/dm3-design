@@ -6,7 +6,7 @@ import { RefreshCw } from 'lucide-react';
 
 interface SystemDevice {
   id: string;
-  tenant_id: string;
+  company_id: string;
   device_id: string;
   name: string;
   type: string;

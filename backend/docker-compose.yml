@@ -99,7 +99,7 @@ services:
         condition: service_healthy
       timescaledb:
         condition: service_healthy
-    command: run --devices 5 --broker mqtt://emqx:1883 --site-id site-001 --tenant-id 00000000-0000-0000-0000-000000000001 --api-port 9090 --device-prefix dm3-dev
+    command: run --devices 5 --broker mqtt://emqx:1883 --site-id site-001 --company-id 00000000-0000-0000-0000-000000000001 --api-port 9090 --device-prefix dm3-dev
     restart: unless-stopped
     environment:
       - DM3_BROKER_URL=mqtt://emqx:1883

@@ -4,7 +4,7 @@ import "time"
 
 type Device struct {
 	ID              string          `json:"id"`
-	TenantID        string          `json:"tenant_id"`
+	CompanyID       string          `json:"company_id"`
 	DeviceID        string          `json:"device_id"`
 	Name            string          `json:"name,omitempty"`
 	Type            string          `json:"type"`

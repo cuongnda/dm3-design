@@ -4,7 +4,7 @@ import "time"
 
 type Person struct {
 	ID         string    `json:"id"`
-	TenantID   string    `json:"tenant_id"`
+	CompanyID  string    `json:"company_id"`
 	FirstName  string    `json:"first_name"`
 	LastName   string    `json:"last_name"`
 	Email      string    `json:"email,omitempty"`
@@ -20,7 +20,7 @@ type Person struct {
 
 type Credential struct {
 	ID         string     `json:"id"`
-	TenantID   string     `json:"tenant_id"`
+	CompanyID  string     `json:"company_id"`
 	PersonID   string     `json:"person_id"`
 	Type       string     `json:"type"`       // face, card, pin, qr, fingerprint
 	Value      string     `json:"value"`       // NOTE: would be encrypted in production
@@ -33,7 +33,7 @@ type Credential struct {
 
 type PersonGroup struct {
 	ID          string    `json:"id"`
-	TenantID    string    `json:"tenant_id"`
+	CompanyID   string    `json:"company_id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description,omitempty"`
 	MemberCount int       `json:"member_count,omitempty"`

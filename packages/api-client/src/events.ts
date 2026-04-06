@@ -5,7 +5,7 @@ const BASE = '/api/v1/events';
 
 export interface AccessEventDTO {
   id: string;
-  tenant_id: string;
+  company_id: string;
   time: string;
   person_id?: string;
   person_name?: string;

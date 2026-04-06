@@ -13,27 +13,27 @@ func TestParseTopic(t *testing.T) {
 		wantErr  bool
 	}{
 		{
-			topic: "dm/tenant-1/device/term-001/evt",
-			want:  ParsedTopic{TenantID: "tenant-1", DeviceID: "term-001", Category: "evt"},
+			topic: "dm/company-1/device/term-001/evt",
+			want:  ParsedTopic{CompanyID: "company-1", DeviceID: "term-001", Category: "evt"},
 		},
 		{
-			topic: "dm/tenant-1/device/term-001/sta",
-			want:  ParsedTopic{TenantID: "tenant-1", DeviceID: "term-001", Category: "sta"},
+			topic: "dm/company-1/device/term-001/sta",
+			want:  ParsedTopic{CompanyID: "company-1", DeviceID: "term-001", Category: "sta"},
 		},
 		{
-			topic: "dm/tenant-1/device/term-001/cmd/resp",
-			want:  ParsedTopic{TenantID: "tenant-1", DeviceID: "term-001", Category: "cmd/resp"},
+			topic: "dm/company-1/device/term-001/cmd/resp",
+			want:  ParsedTopic{CompanyID: "company-1", DeviceID: "term-001", Category: "cmd/resp"},
 		},
 		{
-			topic: "dm/tenant-1/device/term-001/cfg/ack",
-			want:  ParsedTopic{TenantID: "tenant-1", DeviceID: "term-001", Category: "cfg/ack"},
+			topic: "dm/company-1/device/term-001/cfg/ack",
+			want:  ParsedTopic{CompanyID: "company-1", DeviceID: "term-001", Category: "cfg/ack"},
 		},
 		{
 			topic:   "invalid/topic",
 			wantErr: true,
 		},
 		{
-			topic:   "dm/tenant/notdevice/id/evt",
+			topic:   "dm/company/notdevice/id/evt",
 			wantErr: true,
 		},
 	}

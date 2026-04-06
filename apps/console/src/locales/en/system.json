@@ -1,6 +1,6 @@
 {
   "companies.title": "Companies",
-  "companies.description": "Manage tenant companies and organizations",
+  "companies.description": "Manage companies and organizations",
   "companies.addCompany": "+ Add Company",
   "companies.searchPlaceholder": "🔍 Search companies...",
   "companies.tabs.all": "All Companies",
@@ -48,7 +48,7 @@
   "createCompany.form.maxDevices": "Max Devices",
   "createCompany.form.maxUsers": "Max Users",
   "systemDevices.title": "System Devices",
-  "systemDevices.description": "Global device management across all tenants",
+  "systemDevices.description": "Global device management across all companies",
   "systemDevices.searchPlaceholder": "🔍 Search system devices...",
   "systemDevices.filter.allStatus": "All Statuses",
   "systemDevices.filter.allTypes": "All Types",

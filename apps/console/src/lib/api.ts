@@ -145,7 +145,7 @@ export async function loginStep2(temporaryToken: string, companyId: string): Pro
 
 export interface DeviceDTO {
   id: string;
-  tenant_id: string;
+  company_id: string;
   device_id: string;
   name?: string;
   type: string;
@@ -184,7 +184,7 @@ export interface StatsDTO {
 
 export interface DoorDTO {
   id: string;
-  tenant_id: string;
+  company_id: string;
   site_id?: string;
   zone_id?: string;
   name: string;
@@ -216,7 +216,7 @@ export interface DoorDTO {
 
 export interface EventDTO {
   id: string;
-  tenant_id: string;
+  company_id: string;
   time: string;
   door_id?: string;
   device_id?: string;
@@ -233,7 +233,7 @@ export interface EventDTO {
 
 export interface AccessRuleDTO {
   id: string;
-  tenant_id: string;
+  company_id: string;
   site_id?: string;
   name: string;
   description?: string;
@@ -256,7 +256,7 @@ export interface AccessRuleDTO {
 
 export interface ScheduleDTO {
   id: string;
-  tenant_id: string;
+  company_id: string;
   name: string;
   timezone: string;
   periods: any;
@@ -386,7 +386,7 @@ export async function createSchedule(data: CreateScheduleRequest): Promise<Sched
 
 export interface AccessTimeTemplateDTO {
   id: string;
-  tenant_id: string;
+  company_id: string;
   name: string;
   description?: string;
   timezone: string;
@@ -411,7 +411,7 @@ export interface AccessTimeSlotDTO {
 
 export interface UserAccessTimeDTO {
   id: string;
-  tenant_id: string;
+  company_id: string;
   user_id: string;
   template_id: string;
   template?: AccessTimeTemplateDTO;
@@ -535,7 +535,7 @@ export async function fetchAccessTimeStats(): Promise<AccessTimeStatsDTO> {
 
 export interface PersonDTO {
   id: string;
-  tenant_id: string;
+  company_id: string;
   first_name: string;
   last_name: string;
   email?: string;
@@ -551,7 +551,7 @@ export interface PersonDTO {
 
 export interface CredentialDTO {
   id: string;
-  tenant_id: string;
+  company_id: string;
   person_id: string;
   type: string; // face, card, pin, qr, fingerprint
   value: string;
@@ -564,7 +564,7 @@ export interface CredentialDTO {
 
 export interface PersonGroupDTO {
   id: string;
-  tenant_id: string;
+  company_id: string;
   name: string;
   description?: string;
   member_count?: number;

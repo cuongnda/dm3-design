@@ -36,7 +36,7 @@ func (h *Handlers) ListDoors(w http.ResponseWriter, r *http.Request) {
 	idx := 1
 
 	if cid := authsvc.CompanyIDFromContext(r.Context()); cid != "" {
-		where += fmt.Sprintf(" AND tenant_id = $%d::uuid", idx)
+		where += fmt.Sprintf(" AND company_id = $%d::uuid", idx)
 		args = append(args, cid)
 		idx++
 	}
@@ -77,7 +77,7 @@ func (h *Handlers) ListDoors(w http.ResponseWriter, r *http.Request) {
 	copy(countArgs, args)
 	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_access.doors "+where, countArgs...).Scan(&total)
 
-	query := fmt.Sprintf(`SELECT id, tenant_id, site_id, zone_id, name, description, type, COALESCE(location,''), floor, building,
+	query := fmt.Sprintf(`SELECT id, company_id, site_id, zone_id, name, description, type, COALESCE(location,''), floor, building,
 		status, state, mode, controller_id, device_id, unlock_duration_ms, anti_passback, emergency_unlock,
 		camera_id, firmware_version, ip_address, last_event_at, last_heartbeat_at,
 		config_version, person_db_version, rules_version, metadata, created_at, updated_at
@@ -95,7 +95,7 @@ func (h *Handlers) ListDoors(w http.ResponseWriter, r *http.Request) {
 	doors := []models.Door{}
 	for rows.Next() {
 		var d models.Door
-		if err := rows.Scan(&d.ID, &d.TenantID, &d.SiteID, &d.ZoneID, &d.Name, &d.Description, &d.Type, &d.Location,
+		if err := rows.Scan(&d.ID, &d.CompanyID, &d.SiteID, &d.ZoneID, &d.Name, &d.Description, &d.Type, &d.Location,
 			&d.Floor, &d.Building, &d.Status, &d.State, &d.Mode, &d.ControllerID, &d.DeviceID,
 			&d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock, &d.CameraID, &d.FirmwareVersion,
 			&d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt, &d.ConfigVersion, &d.PersonDBVersion,
@@ -151,15 +151,15 @@ func (h *Handlers) CreateDoor(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	var d models.Door
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_access.doors (name, site_id, zone_id, description, type, location, floor, building, device_id, unlock_duration_ms, anti_passback, emergency_unlock, camera_id, tenant_id)
+		`INSERT INTO dm3_access.doors (name, site_id, zone_id, description, type, location, floor, building, device_id, unlock_duration_ms, anti_passback, emergency_unlock, camera_id, company_id)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::uuid)
-		 RETURNING id, tenant_id, site_id, zone_id, name, description, type, COALESCE(location,''), floor, building,
+		 RETURNING id, company_id, site_id, zone_id, name, description, type, COALESCE(location,''), floor, building,
 		 status, state, mode, controller_id, device_id, unlock_duration_ms, anti_passback, emergency_unlock,
 		 camera_id, firmware_version, ip_address, last_event_at, last_heartbeat_at,
 		 config_version, person_db_version, rules_version, metadata, created_at, updated_at`,
 		req.Name, req.SiteID, req.ZoneID, req.Description, req.Type, req.Location, req.Floor, req.Building,
 		req.DeviceID, unlockMs, antiPassback, emergencyUnlock, req.CameraID, cid,
-	).Scan(&d.ID, &d.TenantID, &d.SiteID, &d.ZoneID, &d.Name, &d.Description, &d.Type, &d.Location,
+	).Scan(&d.ID, &d.CompanyID, &d.SiteID, &d.ZoneID, &d.Name, &d.Description, &d.Type, &d.Location,
 		&d.Floor, &d.Building, &d.Status, &d.State, &d.Mode, &d.ControllerID, &d.DeviceID,
 		&d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock, &d.CameraID, &d.FirmwareVersion,
 		&d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt, &d.ConfigVersion, &d.PersonDBVersion,
@@ -217,14 +217,14 @@ func (h *Handlers) UpdateDoor(w http.ResponseWriter, r *http.Request) {
 			floor = COALESCE($7, floor), building = COALESCE($8, building),
 			status = COALESCE($9, status), state = COALESCE($10, state), mode = COALESCE($11, mode),
 			device_id = COALESCE($12, device_id), camera_id = COALESCE($13, camera_id), updated_at = now()
-		 WHERE id = $1::uuid AND ($14::uuid IS NULL OR tenant_id = $14::uuid)
-		 RETURNING id, tenant_id, site_id, zone_id, name, description, type, COALESCE(location,''), floor, building,
+		 WHERE id = $1::uuid AND ($14::uuid IS NULL OR company_id = $14::uuid)
+		 RETURNING id, company_id, site_id, zone_id, name, description, type, COALESCE(location,''), floor, building,
 		 status, state, mode, controller_id, device_id, unlock_duration_ms, anti_passback, emergency_unlock,
 		 camera_id, firmware_version, ip_address, last_event_at, last_heartbeat_at,
 		 config_version, person_db_version, rules_version, metadata, created_at, updated_at`,
 		id, req.Name, req.SiteID, req.ZoneID, req.Description, req.Location, req.Floor, req.Building,
 		req.Status, req.State, req.Mode, req.DeviceID, req.CameraID, nilIfEmpty(cid),
-	).Scan(&d.ID, &d.TenantID, &d.SiteID, &d.ZoneID, &d.Name, &d.Description, &d.Type, &d.Location,
+	).Scan(&d.ID, &d.CompanyID, &d.SiteID, &d.ZoneID, &d.Name, &d.Description, &d.Type, &d.Location,
 		&d.Floor, &d.Building, &d.Status, &d.State, &d.Mode, &d.ControllerID, &d.DeviceID,
 		&d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock, &d.CameraID, &d.FirmwareVersion,
 		&d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt, &d.ConfigVersion, &d.PersonDBVersion,
@@ -242,7 +242,7 @@ func (h *Handlers) DeleteDoor(w http.ResponseWriter, r *http.Request) {
 	query := `DELETE FROM dm3_access.doors WHERE id = $1::uuid`
 	args := []any{id}
 	if cid != "" {
-		query += " AND tenant_id = $2::uuid"
+		query += " AND company_id = $2::uuid"
 		args = append(args, cid)
 	}
 	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
@@ -268,7 +268,7 @@ func (h *Handlers) ListRules(w http.ResponseWriter, r *http.Request) {
 	idx := 1
 
 	if cid := authsvc.CompanyIDFromContext(r.Context()); cid != "" {
-		where += fmt.Sprintf(" AND tenant_id = $%d::uuid", idx)
+		where += fmt.Sprintf(" AND company_id = $%d::uuid", idx)
 		args = append(args, cid)
 		idx++
 	}
@@ -294,7 +294,7 @@ func (h *Handlers) ListRules(w http.ResponseWriter, r *http.Request) {
 	copy(countArgs, args)
 	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_access.access_rules "+where, countArgs...).Scan(&total)
 
-	query := fmt.Sprintf(`SELECT id, tenant_id, site_id, name, description, door_ids, person_group_ids,
+	query := fmt.Sprintf(`SELECT id, company_id, site_id, name, description, door_ids, person_group_ids,
 		schedule_id, schedule, anti_passback, multi_factor, max_failed_attempts, lockout_duration_ms,
 		priority, enabled, valid_from, valid_until, created_by, created_at, updated_at
 		FROM dm3_access.access_rules %s ORDER BY priority DESC, name ASC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
@@ -311,7 +311,7 @@ func (h *Handlers) ListRules(w http.ResponseWriter, r *http.Request) {
 	rules := []models.AccessRule{}
 	for rows.Next() {
 		var ar models.AccessRule
-		if err := rows.Scan(&ar.ID, &ar.TenantID, &ar.SiteID, &ar.Name, &ar.Description,
+		if err := rows.Scan(&ar.ID, &ar.CompanyID, &ar.SiteID, &ar.Name, &ar.Description,
 			&ar.DoorIDs, &ar.PersonGroupIDs, &ar.ScheduleID, &ar.Schedule,
 			&ar.AntiPassback, &ar.MultiFactor, &ar.MaxFailedAttempts, &ar.LockoutDurationMs,
 			&ar.Priority, &ar.Enabled, &ar.ValidFrom, &ar.ValidUntil, &ar.CreatedBy,
@@ -375,12 +375,12 @@ func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO dm3_access.access_rules (name, site_id, description, door_ids, person_group_ids, schedule_id, schedule,
 		 anti_passback, multi_factor, max_failed_attempts, lockout_duration_ms, priority, enabled, valid_from, valid_until)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-		 RETURNING id, tenant_id, site_id, name, description, door_ids, person_group_ids, schedule_id, schedule,
+		 RETURNING id, company_id, site_id, name, description, door_ids, person_group_ids, schedule_id, schedule,
 		 anti_passback, multi_factor, max_failed_attempts, lockout_duration_ms, priority, enabled, valid_from, valid_until, created_by, created_at, updated_at`,
 		req.Name, req.SiteID, req.Description, req.DoorIDs, req.PersonGroupIDs, req.ScheduleID, req.ScheduleInline,
 		boolVal(req.AntiPassback, false), boolVal(req.MultiFactor, false), maxFailed, lockoutMs, priority, enabled,
 		req.ValidFrom, req.ValidUntil,
-	).Scan(&ar.ID, &ar.TenantID, &ar.SiteID, &ar.Name, &ar.Description, &ar.DoorIDs, &ar.PersonGroupIDs,
+	).Scan(&ar.ID, &ar.CompanyID, &ar.SiteID, &ar.Name, &ar.Description, &ar.DoorIDs, &ar.PersonGroupIDs,
 		&ar.ScheduleID, &ar.Schedule, &ar.AntiPassback, &ar.MultiFactor, &ar.MaxFailedAttempts,
 		&ar.LockoutDurationMs, &ar.Priority, &ar.Enabled, &ar.ValidFrom, &ar.ValidUntil, &ar.CreatedBy,
 		&ar.CreatedAt, &ar.UpdatedAt)
@@ -396,10 +396,10 @@ func (h *Handlers) GetRule(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var ar models.AccessRule
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, tenant_id, site_id, name, description, door_ids, person_group_ids, schedule_id, schedule,
+		`SELECT id, company_id, site_id, name, description, door_ids, person_group_ids, schedule_id, schedule,
 		 anti_passback, multi_factor, max_failed_attempts, lockout_duration_ms, priority, enabled, valid_from, valid_until, created_by, created_at, updated_at
 		 FROM dm3_access.access_rules WHERE id = $1::uuid`, id,
-	).Scan(&ar.ID, &ar.TenantID, &ar.SiteID, &ar.Name, &ar.Description, &ar.DoorIDs, &ar.PersonGroupIDs,
+	).Scan(&ar.ID, &ar.CompanyID, &ar.SiteID, &ar.Name, &ar.Description, &ar.DoorIDs, &ar.PersonGroupIDs,
 		&ar.ScheduleID, &ar.Schedule, &ar.AntiPassback, &ar.MultiFactor, &ar.MaxFailedAttempts,
 		&ar.LockoutDurationMs, &ar.Priority, &ar.Enabled, &ar.ValidFrom, &ar.ValidUntil, &ar.CreatedBy,
 		&ar.CreatedAt, &ar.UpdatedAt)
@@ -428,11 +428,11 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 			valid_from = COALESCE($11, valid_from), valid_until = COALESCE($12, valid_until),
 			updated_at = now()
 		 WHERE id = $1::uuid
-		 RETURNING id, tenant_id, site_id, name, description, door_ids, person_group_ids, schedule_id, schedule,
+		 RETURNING id, company_id, site_id, name, description, door_ids, person_group_ids, schedule_id, schedule,
 		 anti_passback, multi_factor, max_failed_attempts, lockout_duration_ms, priority, enabled, valid_from, valid_until, created_by, created_at, updated_at`,
 		id, req.Name, req.SiteID, req.Description, req.DoorIDs, req.PersonGroupIDs, req.ScheduleID, req.ScheduleInline,
 		req.Priority, req.Enabled, req.ValidFrom, req.ValidUntil,
-	).Scan(&ar.ID, &ar.TenantID, &ar.SiteID, &ar.Name, &ar.Description, &ar.DoorIDs, &ar.PersonGroupIDs,
+	).Scan(&ar.ID, &ar.CompanyID, &ar.SiteID, &ar.Name, &ar.Description, &ar.DoorIDs, &ar.PersonGroupIDs,
 		&ar.ScheduleID, &ar.Schedule, &ar.AntiPassback, &ar.MultiFactor, &ar.MaxFailedAttempts,
 		&ar.LockoutDurationMs, &ar.Priority, &ar.Enabled, &ar.ValidFrom, &ar.ValidUntil, &ar.CreatedBy,
 		&ar.CreatedAt, &ar.UpdatedAt)
@@ -449,7 +449,7 @@ func (h *Handlers) DeleteRule(w http.ResponseWriter, r *http.Request) {
 	query := `DELETE FROM dm3_access.access_rules WHERE id = $1::uuid`
 	args := []any{id}
 	if cid != "" {
-		query += " AND tenant_id = $2::uuid"
+		query += " AND company_id = $2::uuid"
 		args = append(args, cid)
 	}
 	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
@@ -473,7 +473,7 @@ func (h *Handlers) ListSchedules(w http.ResponseWriter, r *http.Request) {
 
 	var total int64
 	if cid != "" {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.schedules WHERE tenant_id = $1::uuid`, cid).Scan(&total)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.schedules WHERE company_id = $1::uuid`, cid).Scan(&total)
 	} else {
 		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.schedules`).Scan(&total)
 	}
@@ -481,11 +481,11 @@ func (h *Handlers) ListSchedules(w http.ResponseWriter, r *http.Request) {
 	var schedQuery string
 	var schedArgs []any
 	if cid != "" {
-		schedQuery = `SELECT id, tenant_id, name, timezone, periods, holidays_excluded, holiday_calendar_id, created_at, updated_at
-		 FROM dm3_access.schedules WHERE tenant_id = $1::uuid ORDER BY name ASC LIMIT $2 OFFSET $3`
+		schedQuery = `SELECT id, company_id, name, timezone, periods, holidays_excluded, holiday_calendar_id, created_at, updated_at
+		 FROM dm3_access.schedules WHERE company_id = $1::uuid ORDER BY name ASC LIMIT $2 OFFSET $3`
 		schedArgs = []any{cid, limit, offset}
 	} else {
-		schedQuery = `SELECT id, tenant_id, name, timezone, periods, holidays_excluded, holiday_calendar_id, created_at, updated_at
+		schedQuery = `SELECT id, company_id, name, timezone, periods, holidays_excluded, holiday_calendar_id, created_at, updated_at
 		 FROM dm3_access.schedules ORDER BY name ASC LIMIT $1 OFFSET $2`
 		schedArgs = []any{limit, offset}
 	}
@@ -500,7 +500,7 @@ func (h *Handlers) ListSchedules(w http.ResponseWriter, r *http.Request) {
 	schedules := []models.Schedule{}
 	for rows.Next() {
 		var s models.Schedule
-		if err := rows.Scan(&s.ID, &s.TenantID, &s.Name, &s.Timezone, &s.Periods,
+		if err := rows.Scan(&s.ID, &s.CompanyID, &s.Name, &s.Timezone, &s.Periods,
 			&s.HolidaysExcluded, &s.HolidayCalendarID, &s.CreatedAt, &s.UpdatedAt); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -536,9 +536,9 @@ func (h *Handlers) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 	err := h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO dm3_access.schedules (name, timezone, periods, holidays_excluded, holiday_calendar_id)
 		 VALUES ($1,$2,$3,$4,$5)
-		 RETURNING id, tenant_id, name, timezone, periods, holidays_excluded, holiday_calendar_id, created_at, updated_at`,
+		 RETURNING id, company_id, name, timezone, periods, holidays_excluded, holiday_calendar_id, created_at, updated_at`,
 		req.Name, req.Timezone, req.Periods, boolVal(req.HolidaysExcluded, true), req.HolidayCalendarID,
-	).Scan(&s.ID, &s.TenantID, &s.Name, &s.Timezone, &s.Periods, &s.HolidaysExcluded, &s.HolidayCalendarID, &s.CreatedAt, &s.UpdatedAt)
+	).Scan(&s.ID, &s.CompanyID, &s.Name, &s.Timezone, &s.Periods, &s.HolidaysExcluded, &s.HolidayCalendarID, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		slog.Error("create schedule error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -551,9 +551,9 @@ func (h *Handlers) GetSchedule(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var s models.Schedule
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, tenant_id, name, timezone, periods, holidays_excluded, holiday_calendar_id, created_at, updated_at
+		`SELECT id, company_id, name, timezone, periods, holidays_excluded, holiday_calendar_id, created_at, updated_at
 		 FROM dm3_access.schedules WHERE id = $1::uuid`, id,
-	).Scan(&s.ID, &s.TenantID, &s.Name, &s.Timezone, &s.Periods, &s.HolidaysExcluded, &s.HolidayCalendarID, &s.CreatedAt, &s.UpdatedAt)
+	).Scan(&s.ID, &s.CompanyID, &s.Name, &s.Timezone, &s.Periods, &s.HolidaysExcluded, &s.HolidayCalendarID, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "schedule not found")
 		return
@@ -576,9 +576,9 @@ func (h *Handlers) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 			periods = COALESCE($4, periods), holidays_excluded = COALESCE($5, holidays_excluded),
 			holiday_calendar_id = COALESCE($6, holiday_calendar_id), updated_at = now()
 		 WHERE id = $1::uuid
-		 RETURNING id, tenant_id, name, timezone, periods, holidays_excluded, holiday_calendar_id, created_at, updated_at`,
+		 RETURNING id, company_id, name, timezone, periods, holidays_excluded, holiday_calendar_id, created_at, updated_at`,
 		id, req.Name, req.Timezone, req.Periods, req.HolidaysExcluded, req.HolidayCalendarID,
-	).Scan(&s.ID, &s.TenantID, &s.Name, &s.Timezone, &s.Periods, &s.HolidaysExcluded, &s.HolidayCalendarID, &s.CreatedAt, &s.UpdatedAt)
+	).Scan(&s.ID, &s.CompanyID, &s.Name, &s.Timezone, &s.Periods, &s.HolidaysExcluded, &s.HolidayCalendarID, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "schedule not found")
 		return
@@ -592,7 +592,7 @@ func (h *Handlers) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
 	query := `DELETE FROM dm3_access.schedules WHERE id = $1::uuid`
 	args := []any{id}
 	if cid != "" {
-		query += " AND tenant_id = $2::uuid"
+		query += " AND company_id = $2::uuid"
 		args = append(args, cid)
 	}
 	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
@@ -618,7 +618,7 @@ func (h *Handlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	idx := 1
 
 	if cid := authsvc.CompanyIDFromContext(r.Context()); cid != "" {
-		where += fmt.Sprintf(" AND tenant_id = $%d::uuid", idx)
+		where += fmt.Sprintf(" AND company_id = $%d::uuid", idx)
 		args = append(args, cid)
 		idx++
 	}
@@ -663,7 +663,7 @@ func (h *Handlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	copy(countArgs, args)
 	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_access.access_events "+where, countArgs...).Scan(&total)
 
-	query := fmt.Sprintf(`SELECT id, tenant_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''),
+	query := fmt.Sprintf(`SELECT id, company_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''),
 		COALESCE(person_id::text,''), COALESCE(person_name,''), COALESCE(credential_type,''),
 		COALESCE(direction,''), decision, COALESCE(reason,''), confidence, COALESCE(photo_ref,''), metadata
 		FROM dm3_access.access_events %s ORDER BY time DESC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
@@ -680,7 +680,7 @@ func (h *Handlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	events := []eventResponse{}
 	for rows.Next() {
 		var e eventResponse
-		if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.DoorID, &e.DeviceID,
+		if err := rows.Scan(&e.ID, &e.CompanyID, &e.Time, &e.DoorID, &e.DeviceID,
 			&e.PersonID, &e.PersonName, &e.CredentialType, &e.Direction, &e.Decision,
 			&e.Reason, &e.Confidence, &e.PhotoRef, &e.Metadata); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -693,7 +693,7 @@ func (h *Handlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 
 type eventResponse struct {
 	ID             string         `json:"id"`
-	TenantID       string         `json:"tenant_id"`
+	CompanyID      string         `json:"company_id"`
 	Time           time.Time      `json:"time"`
 	DoorID         string         `json:"door_id,omitempty"`
 	DeviceID       string         `json:"device_id,omitempty"`
@@ -715,10 +715,10 @@ func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
 	if cid != "" {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE tenant_id = $1::uuid`, cid).Scan(&stats.DoorsTotal)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='online' AND tenant_id = $1::uuid`, cid).Scan(&stats.DoorsOnline)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='offline' AND tenant_id = $1::uuid`, cid).Scan(&stats.DoorsOffline)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='alarm' AND tenant_id = $1::uuid`, cid).Scan(&stats.DoorsAlarm)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE company_id = $1::uuid`, cid).Scan(&stats.DoorsTotal)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='online' AND company_id = $1::uuid`, cid).Scan(&stats.DoorsOnline)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='offline' AND company_id = $1::uuid`, cid).Scan(&stats.DoorsOffline)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='alarm' AND company_id = $1::uuid`, cid).Scan(&stats.DoorsAlarm)
 	} else {
 		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors`).Scan(&stats.DoorsTotal)
 		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='online'`).Scan(&stats.DoorsOnline)
@@ -728,9 +728,9 @@ func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
 
 	today := time.Now().Truncate(24 * time.Hour)
 	if cid != "" {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND tenant_id = $2::uuid`, today, cid).Scan(&stats.EventsToday)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='granted' AND tenant_id = $2::uuid`, today, cid).Scan(&stats.GrantedToday)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='denied' AND tenant_id = $2::uuid`, today, cid).Scan(&stats.DeniedToday)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND company_id = $2::uuid`, today, cid).Scan(&stats.EventsToday)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='granted' AND company_id = $2::uuid`, today, cid).Scan(&stats.GrantedToday)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='denied' AND company_id = $2::uuid`, today, cid).Scan(&stats.DeniedToday)
 	} else {
 		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1`, today).Scan(&stats.EventsToday)
 		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='granted'`, today).Scan(&stats.GrantedToday)
@@ -741,13 +741,13 @@ func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	var recentQuery string
 	var recentArgs []any
 	if cid != "" {
-		recentQuery = `SELECT id, tenant_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''),
+		recentQuery = `SELECT id, company_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''),
 		 COALESCE(person_id::text,''), COALESCE(person_name,''), COALESCE(credential_type,''),
 		 COALESCE(direction,''), decision, COALESCE(reason,''), metadata
-		 FROM dm3_access.access_events WHERE tenant_id = $1::uuid ORDER BY time DESC LIMIT 10`
+		 FROM dm3_access.access_events WHERE company_id = $1::uuid ORDER BY time DESC LIMIT 10`
 		recentArgs = []any{cid}
 	} else {
-		recentQuery = `SELECT id, tenant_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''),
+		recentQuery = `SELECT id, company_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''),
 		 COALESCE(person_id::text,''), COALESCE(person_name,''), COALESCE(credential_type,''),
 		 COALESCE(direction,''), decision, COALESCE(reason,''), metadata
 		 FROM dm3_access.access_events ORDER BY time DESC LIMIT 10`
@@ -757,7 +757,7 @@ func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close()
 		for rows.Next() {
 			var e models.AccessEvent
-			if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.DoorID, &e.DeviceID, &e.PersonID,
+			if err := rows.Scan(&e.ID, &e.CompanyID, &e.Time, &e.DoorID, &e.DeviceID, &e.PersonID,
 				&e.PersonName, &e.CredentialType, &e.Direction, &e.Decision, &e.Reason, &e.Metadata); err == nil {
 				stats.RecentEvents = append(stats.RecentEvents, e)
 			}
@@ -787,7 +787,7 @@ func (h *Handlers) GetSyncPackage(w http.ResponseWriter, r *http.Request) {
 
 	// Get rules that apply to this door
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, tenant_id, site_id, name, description, door_ids, person_group_ids, schedule_id, schedule,
+		`SELECT id, company_id, site_id, name, description, door_ids, person_group_ids, schedule_id, schedule,
 		 anti_passback, multi_factor, max_failed_attempts, lockout_duration_ms, priority, enabled, valid_from, valid_until, created_by, created_at, updated_at
 		 FROM dm3_access.access_rules WHERE $1::uuid = ANY(door_ids) AND enabled = true ORDER BY priority DESC`, id)
 	if err != nil {
@@ -799,7 +799,7 @@ func (h *Handlers) GetSyncPackage(w http.ResponseWriter, r *http.Request) {
 	rules := []models.AccessRule{}
 	for rows.Next() {
 		var ar models.AccessRule
-		if err := rows.Scan(&ar.ID, &ar.TenantID, &ar.SiteID, &ar.Name, &ar.Description,
+		if err := rows.Scan(&ar.ID, &ar.CompanyID, &ar.SiteID, &ar.Name, &ar.Description,
 			&ar.DoorIDs, &ar.PersonGroupIDs, &ar.ScheduleID, &ar.Schedule,
 			&ar.AntiPassback, &ar.MultiFactor, &ar.MaxFailedAttempts, &ar.LockoutDurationMs,
 			&ar.Priority, &ar.Enabled, &ar.ValidFrom, &ar.ValidUntil, &ar.CreatedBy,
@@ -823,12 +823,12 @@ func (h *Handlers) GetSyncPackage(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) scanDoor(r *http.Request, id string) (models.Door, error) {
 	var d models.Door
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, tenant_id, site_id, zone_id, name, description, type, COALESCE(location,''), floor, building,
+		`SELECT id, company_id, site_id, zone_id, name, description, type, COALESCE(location,''), floor, building,
 		 status, state, mode, controller_id, device_id, unlock_duration_ms, anti_passback, emergency_unlock,
 		 camera_id, firmware_version, ip_address, last_event_at, last_heartbeat_at,
 		 config_version, person_db_version, rules_version, metadata, created_at, updated_at
 		 FROM dm3_access.doors WHERE id = $1::uuid`, id,
-	).Scan(&d.ID, &d.TenantID, &d.SiteID, &d.ZoneID, &d.Name, &d.Description, &d.Type, &d.Location,
+	).Scan(&d.ID, &d.CompanyID, &d.SiteID, &d.ZoneID, &d.Name, &d.Description, &d.Type, &d.Location,
 		&d.Floor, &d.Building, &d.Status, &d.State, &d.Mode, &d.ControllerID, &d.DeviceID,
 		&d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock, &d.CameraID, &d.FirmwareVersion,
 		&d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt, &d.ConfigVersion, &d.PersonDBVersion,

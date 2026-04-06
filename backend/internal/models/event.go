@@ -4,7 +4,7 @@ import "time"
 
 type AccessEvent struct {
 	ID             string         `json:"id"`
-	TenantID       string         `json:"tenant_id"`
+	CompanyID      string         `json:"company_id"`
 	Time           time.Time      `json:"time"`
 	DoorID         string         `json:"door_id,omitempty"`
 	DeviceID       string         `json:"device_id,omitempty"`
