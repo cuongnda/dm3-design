@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Upload, Plus, Trash2, CreditCard, Eye, Fingerprint, KeyRound, Smartphone, Shield, Clock, User } from 'lucide-react';
 import { DataTable, type Column } from '@dm3/ui';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@dm3/ui';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@dm3/ui';
-import { Button } from '@dm3/ui';
+import { AppModal } from '@dm3/ui';
+import { Button, Input, Label, Select, SelectOption } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import {
   usePerson, useCredentials, useCreateCredential, useDeleteCredential,
@@ -338,111 +338,89 @@ export function PersonDetailPage() {
       </Tabs>
 
       {/* Create Credential Modal */}
-      <Dialog open={showCredentialForm} onOpenChange={setShowCredentialForm}>
-        <DialogContent className="bg-[#111827] border-[#1E293B] max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-[#F8FAFC]">{t('personDetail.credential.form.title')}</DialogTitle>
-            <DialogDescription className="text-[#94A3B8]">
-              {t('personDetail.credential.form.description', { name: `${person.first_name} ${person.last_name}` })}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div>
-              <label className="block text-[12px] text-[#94A3B8] mb-1">{t('personDetail.credential.form.type')}</label>
-              <select
-                value={credentialForm.type}
-                onChange={(e) => setCredentialForm(prev => ({ ...prev, type: e.target.value }))}
-                className="w-full h-8 px-3 bg-[#0A0E1A] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px]"
-              >
-                <option value="card">{t('personDetail.credential.card')}</option>
-                <option value="face">{t('personDetail.credential.face')}</option>
-                <option value="fingerprint">{t('personDetail.credential.fingerprint')}</option>
-                <option value="pin">{t('personDetail.credential.pin')}</option>
-                <option value="mobile">{t('personDetail.credential.mobile')}</option>
-                <option value="qr">{t('personDetail.credential.qr')}</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[12px] text-[#94A3B8] mb-1">{t('personDetail.credential.form.value')}</label>
-              <input
-                value={credentialForm.value}
-                onChange={(e) => setCredentialForm(prev => ({ ...prev, value: e.target.value }))}
-                placeholder={credentialForm.type === 'pin' ? t('personDetail.credential.form.valuePlaceholderPin') : t('personDetail.credential.form.valuePlaceholder')}
-                type={credentialForm.type === 'pin' ? 'password' : 'text'}
-                className="w-full h-8 px-3 bg-[#0A0E1A] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] placeholder:text-[#475569] focus:border-[#3B82F6] focus:outline-none"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[12px] text-[#94A3B8] mb-1">{t('personDetail.credential.form.validFrom')}</label>
-                <input
-                  type="date"
-                  value={credentialForm.valid_from}
-                  onChange={(e) => setCredentialForm(prev => ({ ...prev, valid_from: e.target.value }))}
-                  className="w-full h-8 px-3 bg-[#0A0E1A] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] focus:border-[#3B82F6] focus:outline-none [color-scheme:dark]"
-                />
-              </div>
-              <div>
-                <label className="block text-[12px] text-[#94A3B8] mb-1">{t('personDetail.credential.form.validUntil')}</label>
-                <input
-                  type="date"
-                  value={credentialForm.valid_until}
-                  onChange={(e) => setCredentialForm(prev => ({ ...prev, valid_until: e.target.value }))}
-                  className="w-full h-8 px-3 bg-[#0A0E1A] border border-[#334155] rounded-md text-[#F8FAFC] text-[13px] focus:border-[#3B82F6] focus:outline-none [color-scheme:dark]"
-                />
-              </div>
-            </div>
+      <AppModal
+        open={showCredentialForm}
+        onOpenChange={setShowCredentialForm}
+        title={t('personDetail.credential.form.title')}
+        description={t('personDetail.credential.form.description', { name: `${person.first_name} ${person.last_name}` })}
+        size="md"
+        showCancelButton
+        cancelLabel={t('common.cancel')}
+        cancelDisabled={createCredentialMutation.isPending}
+        submitDisabled={!isCredentialFormValid}
+        primaryAction={{
+          label: createCredentialMutation.isPending ? t('personDetail.credential.form.creating') : t('personDetail.credential.form.create'),
+          onClick: handleCreateCredential,
+          loading: createCredentialMutation.isPending,
+          disabled: createCredentialMutation.isPending,
+          className: 'bg-[#8B5CF6] text-white hover:bg-[#7C3AED]',
+        }}
+      >
+        <div className="space-y-4">
+          <div>
+            <Label>{t('personDetail.credential.form.type')}</Label>
+            <Select
+              value={credentialForm.type}
+              onChange={(e) => setCredentialForm(prev => ({ ...prev, type: e.target.value }))}
+            >
+              <SelectOption value="card">{t('personDetail.credential.card')}</SelectOption>
+              <SelectOption value="face">{t('personDetail.credential.face')}</SelectOption>
+              <SelectOption value="fingerprint">{t('personDetail.credential.fingerprint')}</SelectOption>
+              <SelectOption value="pin">{t('personDetail.credential.pin')}</SelectOption>
+              <SelectOption value="mobile">{t('personDetail.credential.mobile')}</SelectOption>
+              <SelectOption value="qr">{t('personDetail.credential.qr')}</SelectOption>
+            </Select>
           </div>
 
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowCredentialForm(false)}
-              className="bg-[#1E293B] border-[#334155] text-[#94A3B8]"
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              onClick={handleCreateCredential}
-              disabled={!isCredentialFormValid || createCredentialMutation.isPending}
-              style={{ backgroundColor: PURPLE }}
-            >
-              {createCredentialMutation.isPending ? t('personDetail.credential.form.creating') : t('personDetail.credential.form.create')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div>
+            <Label>{t('personDetail.credential.form.value')}</Label>
+            <Input
+              value={credentialForm.value}
+              onChange={(e) => setCredentialForm(prev => ({ ...prev, value: e.target.value }))}
+              placeholder={credentialForm.type === 'pin' ? t('personDetail.credential.form.valuePlaceholderPin') : t('personDetail.credential.form.valuePlaceholder')}
+              type={credentialForm.type === 'pin' ? 'password' : 'text'}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>{t('personDetail.credential.form.validFrom')}</Label>
+              <Input
+                type="date"
+                value={credentialForm.valid_from}
+                onChange={(e) => setCredentialForm(prev => ({ ...prev, valid_from: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>{t('personDetail.credential.form.validUntil')}</Label>
+              <Input
+                type="date"
+                value={credentialForm.valid_until}
+                onChange={(e) => setCredentialForm(prev => ({ ...prev, valid_until: e.target.value }))}
+              />
+            </div>
+          </div>
+        </div>
+      </AppModal>
 
       {/* Delete Credential Confirmation */}
-      <Dialog open={!!deleteCredentialId} onOpenChange={() => setDeleteCredentialId(null)}>
-        <DialogContent className="bg-[#111827] border-[#1E293B]">
-          <DialogHeader>
-            <DialogTitle className="text-[#F8FAFC]">{t('personDetail.credential.delete.title')}</DialogTitle>
-            <DialogDescription className="text-[#94A3B8]">
-              {t('personDetail.credential.delete.description')}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteCredentialId(null)}
-              className="bg-[#1E293B] border-[#334155] text-[#94A3B8]"
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteCredential}
-              disabled={deleteCredentialMutation.isPending}
-            >
-              {deleteCredentialMutation.isPending ? t('personDetail.credential.deleting') : t('personDetail.credential.delete')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AppModal
+        open={!!deleteCredentialId}
+        onOpenChange={(open) => { if (!open) setDeleteCredentialId(null); }}
+        title={t('personDetail.credential.delete.title')}
+        description={t('personDetail.credential.delete.description')}
+        size="md"
+        showCancelButton
+        cancelLabel={t('common.cancel')}
+        cancelDisabled={deleteCredentialMutation.isPending}
+        primaryAction={{
+          label: deleteCredentialMutation.isPending ? t('personDetail.credential.deleting') : t('personDetail.credential.delete'),
+          variant: 'destructive',
+          onClick: handleDeleteCredential,
+          loading: deleteCredentialMutation.isPending,
+          disabled: deleteCredentialMutation.isPending,
+        }}
+      />
     </div>
   );
 }

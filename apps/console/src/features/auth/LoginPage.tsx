@@ -152,7 +152,7 @@ export function LoginPage() {
                 data-testid="login-button-show-password"
                 type="button"
                 onClick={() => setShowPass(!showPass)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
               >
                 {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -189,7 +189,7 @@ export function LoginPage() {
             </div>
 
             <Button type="button" variant="outline" className="w-full">
-              {t('signInWithSSO')}
+              🏢 {t('signInWithSSO')}
             </Button>
 
             <div className="text-center mt-4">

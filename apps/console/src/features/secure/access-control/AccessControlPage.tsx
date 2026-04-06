@@ -1,277 +1,232 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { PageHeader, DataTable, type Column, StatusBadge, Button, Input, Select, SelectOption } from '@dm3/ui';
-import { cn } from '@/lib/utils';
-import { useDoors } from '@/lib/hooks';
-import { useRealtimeStore, useDoorStatus } from '@dm3/api-client';
-import type { DoorDTO } from '@/lib/api';
+import { Plus, Search, DoorOpen, Lock, Unlock, Settings } from 'lucide-react';
+import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@dm3/ui';
 
-// Remove dependency on @dm3/api-client Door type, define locally
 interface Door {
   id: string;
   name: string;
   location: string;
-  type: 'door' | 'gate' | 'barrier' | 'lift' | 'turnstile';
-  status: 'online' | 'offline' | 'alarm' | 'warning';
-  lastEvent?: { time: string; result: 'granted' | 'denied' | 'forced' };
-  realtimeStatus?: {
-    state: string;
-    lastUpdate: Date;
-    forced?: boolean;
-  };
+  type: string;
+  status: 'online' | 'offline' | 'locked' | 'unlocked';
+  last_activity: string;
 }
 
-function mapDoor(d: DoorDTO, realtimeStatuses: any[]): Door {
-  const statusMap: Record<string, Door['status']> = {
-    online: 'online', 
-    offline: 'offline', 
-    alarm: 'alarm', 
-    warning: 'warning',
-  };
-  
-  const typeMap: Record<string, Door['type']> = {
-    door: 'door',
-    gate: 'gate', 
-    barrier: 'barrier',
-    lift: 'lift',
-    turnstile: 'turnstile',
-  };
-
-  // Check for real-time status override
-  const realtimeStatus = realtimeStatuses.find(s => s.doorId === d.id);
-  let finalStatus = statusMap[d.status] || 'online';
-  
-  if (realtimeStatus) {
-    // Override status based on real-time data
-    if (realtimeStatus.forced) {
-      finalStatus = 'alarm';
-    } else if (realtimeStatus.state === 'alarm') {
-      finalStatus = 'alarm';
-    } else if (realtimeStatus.state === 'locked' || realtimeStatus.state === 'unlocked') {
-      finalStatus = 'online';
-    }
+const mockDoors: Door[] = [
+  {
+    id: '1',
+    name: 'Main Entrance',
+    location: 'Ground Floor',
+    type: 'door',
+    status: 'locked',
+    last_activity: '2026-04-04 18:30:00'
+  },
+  {
+    id: '2',
+    name: 'Server Room',
+    location: 'Floor 2',
+    type: 'door',
+    status: 'locked',
+    last_activity: '2026-04-04 18:25:00'
+  },
+  {
+    id: '3',
+    name: 'Emergency Exit',
+    location: 'Ground Floor',
+    type: 'door',
+    status: 'unlocked',
+    last_activity: '2026-04-04 17:15:00'
+  },
+  {
+    id: '4',
+    name: 'Parking Gate',
+    location: 'Basement',
+    type: 'gate',
+    status: 'online',
+    last_activity: '2026-04-04 18:45:00'
   }
-  
-  return {
-    id: d.id,
-    name: d.name,
-    location: d.location || '—',
-    type: typeMap[d.type] || 'door',
-    status: finalStatus,
-    lastEvent: d.last_event_at ? {
-      time: new Date(d.last_event_at).toLocaleTimeString('vi-VN'),
-      result: 'granted' // TODO: Get from event data
-    } : undefined,
-    realtimeStatus: realtimeStatus ? {
-      state: realtimeStatus.state,
-      lastUpdate: realtimeStatus.lastUpdate,
-      forced: realtimeStatus.forced,
-    } : undefined,
-  };
-}
-
-const typeColors: Record<string, { text: string; border: string }> = {
-  door: { text: 'text-secure', border: 'border-secure/30' },
-  gate: { text: 'text-manage', border: 'border-manage/30' },
-  barrier: { text: 'text-operate', border: 'border-operate/30' },
-  lift: { text: 'text-smart', border: 'border-smart/30' },
-  turnstile: { text: 'text-success', border: 'border-success/30' },
-};
-
-const resultClass: Record<string, string> = {
-  granted: 'text-success',
-  denied: 'text-error',
-  forced: 'text-error font-bold',
-};
+];
 
 export function AccessControlPage() {
-  const navigate = useNavigate();
-  const { t } = useTranslation('secure');
-  const [activeTab, setActiveTab] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [buildingFilter, setBuildingFilter] = useState('');
-  const [floorFilter, setFloorFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
+  const { t } = useTranslation();
+  const [doors] = useState<Door[]>(mockDoors);
+  const [searchTerm, setSearchTerm] = useState('');
 
-  // Real-time state — connection managed by <RealtimeProvider> in App.tsx
-  const isConnected = useRealtimeStore((s) => s.connected);
-  const doorStatuses = useDoorStatus() as any[];
+  const filteredDoors = doors.filter(door =>
+    door.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    door.location.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  // Build search params for API
-  const params: Record<string, string> = {};
-  if (search) params.search = search;
-  if (activeTab) params.status = activeTab;
-  if (typeFilter) params.type = typeFilter;
-  
-  const { data: doorsData, isLoading, error } = useDoors(1, params);
-  const doors: Door[] = (doorsData?.data ?? []).map(d => mapDoor(d, doorStatuses));
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'online': return 'bg-green-100 text-green-800';
+      case 'offline': return 'bg-gray-100 text-gray-800';
+      case 'locked': return 'bg-blue-100 text-blue-800';
+      case 'unlocked': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
 
-  const onlineCount = doors.filter((d) => d.status === 'online').length;
-  const offlineCount = doors.filter((d) => d.status === 'offline').length;
-  const alarmCount = doors.filter((d) => d.status === 'alarm').length;
-  const warningCount = doors.filter((d) => d.status === 'warning').length;
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'locked': return <Lock size={20} className="text-blue-600" />;
+      case 'unlocked': return <Unlock size={20} className="text-yellow-600" />;
+      default: return <DoorOpen size={20} className="text-green-600" />;
+    }
+  };
 
-  const tabs = [
-    { label: t('accessControl.tabs.all'), count: doors.length, filter: null },
-    { label: t('accessControl.tabs.online'), count: onlineCount, filter: 'online' },
-    { label: t('accessControl.tabs.offline'), count: offlineCount, filter: 'offline' },
-    { label: t('accessControl.tabs.alarm'), count: alarmCount, filter: 'alarm' },
-    { label: t('accessControl.tabs.warning'), count: warningCount, filter: 'warning' },
-  ];
-
-  // Apply additional client-side filters not handled by API
-  const filtered = doors.filter(() => {
-    // API already handles search and status filter
-    return true;
-  });
-
-  const columns: Column<Door>[] = [
-    {
-      key: 'name', header: t('accessControl.table.name'), sortable: true,
-      render: (r) => (
-        <span className={cn('font-medium', r.status === 'alarm' && 'text-error')}>
-          {r.status === 'alarm' && '⚠ '}{r.name}
-        </span>
-      ),
-    },
-    { key: 'location', header: t('accessControl.table.location'), sortable: true, render: (r) => <span className="text-muted-foreground">{r.location}</span> },
-    {
-      key: 'type', header: t('accessControl.table.type'), width: '100px',
-      render: (r) => {
-        const tc = typeColors[r.type];
-        return (
-          <span className={cn('inline-block px-2 py-0.5 rounded text-[11px] font-medium border', tc.text, tc.border)}>
-            {t(`accessControl.types.${r.type}`)}
-          </span>
-        );
-      },
-    },
-    {
-      key: 'status', header: t('accessControl.table.status'), width: '110px',
-      render: (r) => (
-        <div className="flex items-center gap-2">
-          <StatusBadge status={r.status} />
-          {r.realtimeStatus && (
-            <span className="text-[10px] text-muted-foreground">
-              {isConnected && <span className="text-success">●</span>} 
-              {r.realtimeStatus.state}
-            </span>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'lastEvent', header: t('accessControl.table.lastEvent'), width: '180px',
-      render: (r) => {
-        if (!r.lastEvent) return <span className="text-muted-foreground">—</span>;
-        return (
-          <span>
-            <span className="font-mono text-[11px] text-muted-foreground mr-2">{r.lastEvent.time}</span>
-            <span className={cn('text-[12px] font-medium', resultClass[r.lastEvent.result])}>
-              {r.lastEvent.result === 'granted' ? t('accessControl.events.granted') : 
-               r.lastEvent.result === 'denied' ? t('accessControl.events.denied') : 
-               t('accessControl.events.forced')}
-            </span>
-          </span>
-        );
-      },
-    },
-    {
-      key: 'actions', header: '', width: '50px',
-      render: () => (
-        <Button variant="ghost" size="icon-xs" className="text-[14px]">⋮</Button>
-      ),
-    },
-  ];
+  const onlineCount = doors.filter(d => d.status === 'online').length;
+  const lockedCount = doors.filter(d => d.status === 'locked').length;
+  const unlockedCount = doors.filter(d => d.status === 'unlocked').length;
 
   return (
-    <div>
-      <PageHeader title={t('accessControl.title')}>
-        <Button size="sm" variant="outline">{t('accessControl.rules')}</Button>
-        <Button size="sm">{t('accessControl.addDoor')}</Button>
-      </PageHeader>
-
-      {/* Tabs */}
-      <div className="flex border-b border-border mb-4">
-        {tabs.map((tab) => (
-          <button
-            key={tab.label}
-            type="button"
-            onClick={() => setActiveTab(tab.filter)}
-            className={cn(
-              'px-4 py-2 text-[13px] font-medium border-b-2 transition-colors cursor-pointer',
-              activeTab === tab.filter
-                ? 'text-foreground border-secure'
-                : 'text-muted-foreground border-transparent hover:text-foreground'
-            )}
-          >
-            {tab.label}
-            <span className={cn(
-              'ml-1.5 text-[11px] px-1.5 py-0 rounded-full',
-              activeTab === tab.filter ? 'bg-secure/15 text-secure' : 'bg-muted text-muted-foreground'
-            )}>
-              {tab.count}
-            </span>
-          </button>
-        ))}
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Access Control</h1>
+          <p className="text-muted-foreground">Monitor and control door access systems</p>
+        </div>
+        <Button>
+          <Plus size={16} className="mr-2" />
+          Add Door
+        </Button>
       </div>
 
-      {/* Filter bar */}
-      <div className="flex gap-2 mb-4">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                <DoorOpen size={20} className="text-primary" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-primary">{doors.length}</div>
+                <div className="text-sm text-muted-foreground">Total Doors</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <DoorOpen size={20} className="text-green-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-green-600">{onlineCount}</div>
+                <div className="text-sm text-muted-foreground">Online</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Lock size={20} className="text-blue-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-blue-600">{lockedCount}</div>
+                <div className="text-sm text-muted-foreground">Locked</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                <Unlock size={20} className="text-yellow-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-yellow-600">{unlockedCount}</div>
+                <div className="text-sm text-muted-foreground">Unlocked</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
         <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t('accessControl.searchPlaceholder')}
-          className="flex-1 h-8 text-[13px]"
+          type="text"
+          placeholder="Search doors by name or location..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
         />
-        <Select
-          value={buildingFilter}
-          onChange={(e) => setBuildingFilter(e.target.value)}
-          className="w-40 h-8 text-[12px]"
-        >
-          <SelectOption value="">{t('accessControl.filters.allBuildings')}</SelectOption>
-          {/* TODO: Get building list from API */}
-        </Select>
-        <Select
-          value={floorFilter}
-          onChange={(e) => setFloorFilter(e.target.value)}
-          className="w-36 h-8 text-[12px]"
-        >
-          <SelectOption value="">{t('accessControl.filters.allFloors')}</SelectOption>
-          {/* TODO: Get floor list from API */}
-        </Select>
-        <Select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="w-36 h-8 text-[12px]"
-        >
-          <SelectOption value="">{t('accessControl.filters.allTypes')}</SelectOption>
-          <SelectOption value="door">{t('accessControl.types.door')}</SelectOption>
-          <SelectOption value="gate">{t('accessControl.types.gate')}</SelectOption>
-          <SelectOption value="barrier">{t('accessControl.types.barrier')}</SelectOption>
-          <SelectOption value="lift">{t('accessControl.types.lift')}</SelectOption>
-          <SelectOption value="turnstile">{t('accessControl.types.turnstile')}</SelectOption>
-        </Select>
       </div>
 
-      {/* Loading & Error States */}
-      {isLoading && <div className="text-center py-8 text-muted-foreground">{t('accessControl.loading')}</div>}
-      {error && <div className="text-center py-8 text-error">{t('accessControl.error')}</div>}
+      {/* Doors Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredDoors.map((door) => (
+          <Card key={door.id} className="hover:shadow-md transition-shadow">
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                    {getStatusIcon(door.status)}
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">{door.name}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{door.location}</p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm">
+                  <Settings size={16} />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Type</span>
+                  <span className="text-sm font-medium capitalize">{door.type}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Status</span>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(door.status)}`}>
+                    {door.status}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Last Activity</span>
+                  <span className="text-sm text-muted-foreground">{door.last_activity}</span>
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <Button variant="outline" size="sm" className="flex-1">
+                    <Lock size={16} className="mr-1" />
+                    Lock
+                  </Button>
+                  <Button variant="outline" size="sm" className="flex-1">
+                    <Unlock size={16} className="mr-1" />
+                    Unlock
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
 
-      {/* Table */}
-      {!isLoading && !error && (
-        <DataTable
-          columns={columns}
-          data={filtered}
-          rowKey={(r) => r.id}
-          onRowClick={(r) => navigate(`/secure/access-control/${r.id}`)}
-          rowClassName={(r) =>
-            r.status === 'alarm' ? 'bg-error/5' :
-            r.status === 'offline' ? 'opacity-60' : ''
-          }
-        />
-      )}
+        {filteredDoors.length === 0 && (
+          <div className="col-span-full">
+            <Card>
+              <CardContent className="text-center py-12">
+                <DoorOpen size={48} className="mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No doors found</h3>
+                <p className="text-muted-foreground">No doors match your search criteria</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

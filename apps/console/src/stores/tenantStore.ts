@@ -93,7 +93,7 @@ export const useTenantStore = create<TenantState>()(
           
           const response = await fetch('/api/v1/tenant/current', {
             headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+              'Authorization': `Bearer ${localStorage.getItem('dm3-token')}`,
             },
           })
           
@@ -120,7 +120,7 @@ export const useTenantStore = create<TenantState>()(
           
           const response = await fetch('/api/v1/tenant/stats', {
             headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+              'Authorization': `Bearer ${localStorage.getItem('dm3-token')}`,
             },
           })
           
@@ -210,7 +210,7 @@ export const useTenantUsage = () => {
 export const useTenantAutoRefresh = (intervalMs: number = 60000) => {
   const refreshTenantData = useTenantStore((state) => state.refreshTenantData)
   
-  React.useEffect(() => {
+  useEffect(() => {
     // Initial fetch
     refreshTenantData()
     
@@ -221,5 +221,4 @@ export const useTenantAutoRefresh = (intervalMs: number = 60000) => {
   }, [refreshTenantData, intervalMs])
 }
 
-// React import for useEffect
-import React from 'react'
+import { useEffect } from 'react'

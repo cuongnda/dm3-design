@@ -1,19 +1,27 @@
 import { useLocation } from 'react-router-dom';
-import { Search, Bell } from 'lucide-react';
+import { Search, Bell, Sun, Moon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { useThemeStore } from '@/stores/themeStore';
 import { useState, useEffect } from 'react';
 import { SearchCommand } from '../common/SearchCommand';
 import { NotificationPanel } from '../common/NotificationPanel';
 import { LanguageSwitcher } from '../common/LanguageSwitcher';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
+import { Button } from '../ui/button';
 
 function getBreadcrumb(
   pathname: string,
-  domainMap: Record<string, { label: string; color: string }>,
+  domainMap: Record<string, { label: string; colorClass: string }>,
   overviewLabel: string,
   dashboardLabel: string,
-): { domain?: string; domainColor?: string; segments: string[] } {
+): { domain?: string; domainColorClass?: string; segments: string[] } {
   const parts = pathname.split('/').filter(Boolean);
   if (parts.length === 0) return { segments: [overviewLabel, dashboardLabel] };
 
@@ -23,7 +31,7 @@ function getBreadcrumb(
   );
 
   if (domain) {
-    return { domain: domain.label, domainColor: domain.color, segments: segments.slice(1) };
+    return { domain: domain.label, domainColorClass: domain.colorClass, segments: segments.slice(1) };
   }
   return { segments };
 }
@@ -33,14 +41,15 @@ export function Topbar() {
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
   const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const { theme, setTheme } = useThemeStore();
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
-  const domainMap: Record<string, { label: string; color: string }> = {
-    secure: { label: t('nav.secure'), color: '#3B82F6' },
-    manage: { label: t('nav.manage'), color: '#8B5CF6' },
-    operate: { label: t('nav.operate'), color: '#F59E0B' },
-    smart: { label: '🧠 SMART', color: '#06B6D4' },
+  const domainMap: Record<string, { label: string; colorClass: string }> = {
+    secure: { label: t('nav.secure'), colorClass: 'text-secure' },
+    manage: { label: t('nav.manage'), colorClass: 'text-manage' },
+    operate: { label: t('nav.operate'), colorClass: 'text-operate' },
+    smart: { label: '🧠 SMART', colorClass: 'text-smart' },
   };
 
   const bc = getBreadcrumb(location.pathname, domainMap, t('breadcrumb.overview'), t('nav.dashboard'));
@@ -59,12 +68,12 @@ export function Topbar() {
 
   return (
     <>
-      <header className="h-12 bg-sidebar border-b border-sidebar-border flex items-center px-6 gap-3 flex-shrink-0">
+      <header className="h-12 bg-background border-b border-border flex items-center px-6 gap-3 shrink-0">
         {/* Breadcrumb */}
         <div className="text-[13px] text-muted-foreground flex items-center gap-1">
           {bc.domain && (
             <>
-              <span style={{ color: bc.domainColor }}>{bc.domain}</span>
+              <span className={bc.domainColorClass}>{bc.domain}</span>
               {bc.segments.length > 0 && <span className="mx-1">/</span>}
             </>
           )}
@@ -91,6 +100,40 @@ export function Topbar() {
           {/* Language switcher */}
           <LanguageSwitcher />
 
+          {/* Theme toggle */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 hover:bg-card hover:text-foreground"
+                aria-label="Toggle theme"
+              >
+                <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                <span className="sr-only">Toggle theme</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => setTheme('light')}
+                className="cursor-pointer"
+              >
+                <Sun className="mr-2 h-4 w-4" />
+                <span>Light</span>
+                {theme === 'light' && <span className="ml-auto">✓</span>}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setTheme('dark')}
+                className="cursor-pointer"
+              >
+                <Moon className="mr-2 h-4 w-4" />
+                <span>Dark</span>
+                {theme === 'dark' && <span className="ml-auto">✓</span>}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           {/* Notifications */}
           <div className="relative">
             <button
@@ -99,14 +142,14 @@ export function Topbar() {
             >
               <Bell size={18} />
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 w-2 h-2 bg-[#EF4444] rounded-full border-2 border-background" />
+                <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full border-2 border-background" />
               )}
             </button>
             {notifOpen && <NotificationPanel onClose={() => setNotifOpen(false)} />}
           </div>
 
           {/* User */}
-          <div className="w-7 h-7 bg-[#3B82F6] rounded-full flex items-center justify-center text-[11px] font-semibold text-white cursor-pointer">
+          <div className="w-7 h-7 bg-sidebar-primary rounded-full flex items-center justify-center text-[11px] font-semibold text-sidebar-primary-foreground cursor-pointer">
             {user?.initials}
           </div>
         </div>

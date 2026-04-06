@@ -1,6 +1,17 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PageHeader, DataTable, type Column, StatCard, Button, Input, Label, Select, SelectOption } from '@dm3/ui';
+import {
+  PageHeader,
+  DataTable,
+  type Column,
+  StatCard,
+  Button,
+  AppModal,
+  Input,
+  Label,
+  Select,
+  SelectOption,
+} from '@dm3/ui';
 import { mockDeliveries, type Delivery } from './mock-data';
 
 function isOver24h(d: Delivery) {
@@ -63,31 +74,36 @@ export function DeliveriesPage() {
         rowClassName={r => isOver24h(r) ? 'bg-error/5' : ''}
       />
 
-      {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowForm(false)}>
-          <div className="bg-card border border-border rounded-lg p-6 w-[480px]" onClick={e => e.stopPropagation()}>
-            <h3 className="text-[16px] font-semibold text-foreground mb-4">{t('deliveries.form.title')}</h3>
-            <div className="space-y-3">
-              {[{ l: t('deliveries.form.packageId'), p: 'PKG-...' }, { l: t('deliveries.form.recipient'), p: t('deliveries.form.recipientPlaceholder') }, { l: t('deliveries.form.sender'), p: t('deliveries.form.senderPlaceholder') }].map(f => (
-                <div key={f.l}>
-                  <Label className="text-[12px]">{f.l}</Label>
-                  <Input placeholder={f.p} className="mt-1 h-8 text-[13px]" />
-                </div>
-              ))}
-              <div>
-                <Label className="text-[12px]">{t('deliveries.form.courier')}</Label>
-                <Select className="mt-1 h-8 text-[12px]">
-                  {['GHN', 'J&T Express', 'Viettel Post', 'GHTK', 'Grab Express', 'Khác'].map(c => <SelectOption key={c}>{c}</SelectOption>)}
-                </Select>
-              </div>
+      <AppModal
+        open={showForm}
+        onOpenChange={setShowForm}
+        title={t('deliveries.form.title')}
+        size="md"
+        className="w-[480px] max-w-[calc(100%-2rem)]"
+        showCancelButton
+        cancelLabel={t('common.cancel')}
+        primaryAction={{
+          label: t('common.save'),
+          size: 'sm',
+          className: 'bg-manage hover:bg-manage/90',
+          onClick: () => setShowForm(false),
+        }}
+      >
+        <div className="space-y-3">
+          {[{ l: t('deliveries.form.packageId'), p: 'PKG-...' }, { l: t('deliveries.form.recipient'), p: t('deliveries.form.recipientPlaceholder') }, { l: t('deliveries.form.sender'), p: t('deliveries.form.senderPlaceholder') }].map(f => (
+            <div key={f.l}>
+              <Label className="text-[12px]">{f.l}</Label>
+              <Input placeholder={f.p} className="mt-1 h-8 text-[13px]" />
             </div>
-            <div className="flex justify-end gap-2 mt-5">
-              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
-              <Button size="sm" onClick={() => setShowForm(false)} className="bg-manage hover:bg-manage/90">{t('common.save')}</Button>
-            </div>
+          ))}
+          <div>
+            <Label className="text-[12px]">{t('deliveries.form.courier')}</Label>
+            <Select className="mt-1 h-8 text-[12px]">
+              {['GHN', 'J&T Express', 'Viettel Post', 'GHTK', 'Grab Express', 'Khác'].map(c => <SelectOption key={c}>{c}</SelectOption>)}
+            </Select>
           </div>
         </div>
-      )}
+      </AppModal>
     </div>
   );
 }

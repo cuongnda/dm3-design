@@ -1,10 +1,22 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { PageHeader, DataTable, type Column, StatCard, Button, Input, Label, Select, SelectOption } from '@dm3/ui';
-import { cn } from '@/lib/utils';
-import { usePersons, useCreatePerson } from '@/lib/hooks';
-import type { PersonDTO } from '@/lib/api';
+import { Plus, Search, Eye, Edit, Trash2, User } from 'lucide-react';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  AppModal,
+  Input,
+  Label,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@dm3/ui';
 
 interface Person {
   id: string;
@@ -13,301 +25,287 @@ interface Person {
   phone: string;
   department: string;
   role: string;
-  status: 'active' | 'inactive' | 'suspended';
-  credentials: { card: boolean; face: boolean; mobile: boolean };
-  cardUid?: string;
-  accessGroups: string[];
-  recentEvents: { time: string; door: string; result: 'granted' | 'denied' }[];
+  status: string;
+  last_access: string;
 }
 
-function mapPerson(p: PersonDTO): Person {
-  return {
-    id: p.id,
-    name: `${p.first_name} ${p.last_name}`.trim(),
-    email: p.email || '',
-    phone: p.phone || '',
-    department: p.department || '—',
-    role: p.role || '—',
-    status: (p.status as Person['status']) || 'active',
-    credentials: { card: false, face: false, mobile: false }, // Will be populated by credentials API
-    accessGroups: [],
-    recentEvents: [],
-  };
-}
-
-function CredentialIcons({ c }: { c: Person['credentials'] }) {
-  return (
-    <span className="flex gap-1.5 text-[14px]">
-      <span title="Card" className={c.card ? 'text-manage' : 'text-muted-foreground/30'}>💳</span>
-      <span title="Face" className={c.face ? 'text-manage' : 'text-muted-foreground/30'}>👤</span>
-      <span title="Mobile" className={c.mobile ? 'text-manage' : 'text-muted-foreground/30'}>📱</span>
-    </span>
-  );
-}
-
-const statusStyle: Record<string, string> = {
-  active: 'text-success',
-  inactive: 'text-muted-foreground',
-  suspended: 'text-error',
-};
+const mockPersons: Person[] = [
+  {
+    id: '1',
+    name: 'John Smith',
+    email: 'john.smith@company.com',
+    phone: '+1234567890',
+    department: 'Engineering',
+    role: 'Developer',
+    status: 'active',
+    last_access: '2026-04-04 17:30:00'
+  },
+  {
+    id: '2',
+    name: 'Jane Doe',
+    email: 'jane.doe@company.com',
+    phone: '+1234567891',
+    department: 'Marketing',
+    role: 'Manager',
+    status: 'active',
+    last_access: '2026-04-04 16:45:00'
+  },
+  {
+    id: '3',
+    name: 'Bob Wilson',
+    email: 'bob.wilson@company.com',
+    phone: '+1234567892',
+    department: 'Sales',
+    role: 'Representative',
+    status: 'inactive',
+    last_access: '2026-04-03 14:20:00'
+  }
+];
 
 export function IdentitiesPage() {
-  const navigate = useNavigate();
-  const { t } = useTranslation('manage');
-  const [search, setSearch] = useState('');
-  const [deptFilter, setDeptFilter] = useState('');
-  const [selected, setSelected] = useState<Person | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: '',
-    department: '',
-    role: '',
-    employee_id: '',
-    status: 'active'
-  });
+  const { t } = useTranslation();
+  const [persons] = useState<Person[]>(mockPersons);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // Build search params
-  const params: Record<string, string> = {};
-  if (search) params.search = search;
-  if (deptFilter) params.department = deptFilter;
+  const filteredPersons = persons.filter(person =>
+    person.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    person.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    person.department.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const { data: personsData, isLoading, error } = usePersons(1, params);
-  const createPersonMutation = useCreatePerson();
-
-  const people: Person[] = (personsData?.data ?? []).map(mapPerson);
-
-  // API already handles search and department filter; client-side filter only as fallback
-  const filtered = people.filter((p) => {
-    if (deptFilter && p.department !== deptFilter) return false;
-    return true;
-  });
-
-  const active = people.filter((p) => p.status === 'active').length;
-
-  const handleCreatePerson = async () => {
-    try {
-      await createPersonMutation.mutateAsync({
-        first_name: formData.first_name,
-        last_name: formData.last_name,
-        email: formData.email || undefined,
-        phone: formData.phone || undefined,
-        department: formData.department || undefined,
-        role: formData.role || undefined,
-        employee_id: formData.employee_id || undefined,
-        status: formData.status,
-      });
-      setShowForm(false);
-      setFormData({
-        first_name: '',
-        last_name: '',
-        email: '',
-        phone: '',
-        department: '',
-        role: '',
-        employee_id: '',
-        status: 'active'
-      });
-    } catch (error) {
-      console.error('Failed to create person:', error);
-      // TODO: Show error toast
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'inactive': return 'bg-gray-100 text-gray-800';
+      case 'suspended': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const isFormValid = formData.first_name.trim() && formData.last_name.trim();
-
-  const columns: Column<Person>[] = [
-    { key: 'id', header: t('identities.table.id'), width: '70px', sortable: true, render: (r) => <span className="font-mono text-[11px] text-muted-foreground">{r.id}</span> },
-    { key: 'name', header: t('identities.table.name'), sortable: true, render: (r) => <span className="font-medium text-foreground">{r.name}</span> },
-    { key: 'department', header: t('identities.table.department'), sortable: true, render: (r) => <span className="text-muted-foreground">{r.department}</span> },
-    { key: 'role', header: t('identities.table.role'), sortable: true, render: (r) => <span className="text-muted-foreground">{r.role}</span> },
-    {
-      key: 'status', header: t('identities.table.status'), width: '100px',
-      render: (r) => <span className={cn('text-[12px] font-medium capitalize', statusStyle[r.status])}>{r.status === 'active' ? t('identities.status.active') : r.status === 'inactive' ? t('identities.status.inactive') : t('identities.status.suspended')}</span>,
-    },
-    { key: 'credentials', header: t('identities.table.credentials'), width: '100px', render: (r) => <CredentialIcons c={r.credentials} /> },
-  ];
+  const activeCount = persons.filter(p => p.status === 'active').length;
+  const inactiveCount = persons.filter(p => p.status === 'inactive').length;
 
   return (
-    <div>
-      <PageHeader title={t('identities.title')} description={t('identities.description')}>
-        <Button size="sm" onClick={() => setShowForm(true)} className="bg-manage hover:bg-manage/90">{t('identities.addPerson')}</Button>
-        <Button size="sm" variant="outline">{t('identities.bulkImport')}</Button>
-      </PageHeader>
-
-      <div className="grid grid-cols-4 gap-3 mb-6">
-        <StatCard label={t('identities.stats.total')} value={String(people.length)} sub="people" domain="manage" />
-        <StatCard label={t('identities.stats.active')} value={String(active)} sub={`${people.length > 0 ? Math.round(active / people.length * 100) : 0}%`} domain="manage" />
-        <StatCard label={t('identities.stats.cardEnrolled')} value={String(people.filter(p => p.credentials.card).length)} sub="card enrolled" domain="manage" />
-        <StatCard label={t('identities.stats.faceEnrolled')} value={String(people.filter(p => p.credentials.face).length)} sub="face enrolled" domain="manage" />
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Identity Management</h1>
+          <p className="text-muted-foreground">Manage people and their access credentials</p>
+        </div>
+        <Button onClick={() => setShowCreateModal(true)}>
+          <Plus size={16} className="mr-2" />
+          Add Person
+        </Button>
       </div>
 
-      <div className="flex gap-2 mb-4">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                <User size={20} className="text-primary" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-primary">{persons.length}</div>
+                <div className="text-sm text-muted-foreground">Total People</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <User size={20} className="text-green-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-green-600">{activeCount}</div>
+                <div className="text-sm text-muted-foreground">Active</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                <User size={20} className="text-gray-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-600">{inactiveCount}</div>
+                <div className="text-sm text-muted-foreground">Inactive</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
         <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t('identities.searchPlaceholder')}
-          className="flex-1 h-8 text-[13px]"
+          type="text"
+          placeholder="Search people by name, email, or department..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
         />
-        <Select
-          value={deptFilter}
-          onChange={(e) => setDeptFilter(e.target.value)}
-          className="w-48 h-8 text-[12px]"
-        >
-          <SelectOption value="">{t('identities.filter.allDepartments')}</SelectOption>
-          {['Kỹ thuật', 'Kinh doanh', 'Hành chính', 'Ban giám đốc'].map(d => <SelectOption key={d} value={d}>{d}</SelectOption>)}
-        </Select>
       </div>
 
-      {/* Loading & Error States */}
-      {isLoading && <div className="text-center py-8 text-muted-foreground">{t('identities.loading')}</div>}
-      {error && <div className="text-center py-8 text-error">{t('identities.error')}</div>}
-
-      <DataTable
-        columns={columns}
-        data={filtered}
-        rowKey={(r) => r.id}
-        onRowClick={(r) => navigate(`/manage/identities/${r.id}`)}
-      />
-
-      {/* Person Detail Panel */}
-      {selected && (
-        <div className="mt-4 bg-card border border-border rounded-lg p-5">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h3 className="text-[16px] font-semibold text-foreground">{selected.name}</h3>
-              <p className="text-[12px] text-muted-foreground">{selected.department} · {selected.role}</p>
-            </div>
-            <Button variant="ghost" size="icon-xs" onClick={() => setSelected(null)}>✕</Button>
-          </div>
-          <div className="grid grid-cols-3 gap-6 text-[13px]">
-            <div>
-              <h4 className="text-[11px] uppercase text-muted-foreground mb-2 font-medium">{t('identities.detail.info')}</h4>
-              <p className="text-muted-foreground">Email: <span className="text-foreground">{selected.email}</span></p>
-              <p className="text-muted-foreground">Phone: <span className="text-foreground">{selected.phone}</span></p>
-              <p className="text-muted-foreground">ID: <span className="text-foreground">{selected.id}</span></p>
-            </div>
-            <div>
-              <h4 className="text-[11px] uppercase text-muted-foreground mb-2 font-medium">{t('identities.detail.credentials')}</h4>
-              <p className="text-muted-foreground">{t('identities.detail.card')}: <span className={selected.credentials.card ? 'text-success' : 'text-muted-foreground'}>{selected.credentials.card ? selected.cardUid : t('identities.detail.cardNotIssued')}</span></p>
-              <p className="text-muted-foreground">{t('identities.detail.face')}: <span className={selected.credentials.face ? 'text-success' : 'text-muted-foreground'}>{selected.credentials.face ? t('identities.detail.faceEnrolled') : t('identities.detail.faceNotEnrolled')}</span></p>
-              <p className="text-muted-foreground">{t('identities.detail.mobile')}: <span className={selected.credentials.mobile ? 'text-success' : 'text-muted-foreground'}>{selected.credentials.mobile ? t('identities.detail.mobileActivated') : t('identities.detail.mobileNotActivated')}</span></p>
-            </div>
-            <div>
-              <h4 className="text-[11px] uppercase text-muted-foreground mb-2 font-medium">{t('identities.detail.accessGroups')}</h4>
-              {selected.accessGroups.map(g => <span key={g} className="inline-block mr-1 mb-1 px-2 py-0.5 rounded text-[11px] font-medium border text-manage border-manage/30">{g}</span>)}
-            </div>
-          </div>
-          <div className="mt-4">
-            <h4 className="text-[11px] uppercase text-muted-foreground mb-2 font-medium">{t('identities.detail.recentEvents')}</h4>
-            <div className="grid grid-cols-5 gap-1">
-              {selected.recentEvents.map((e, i) => (
-                <div key={i} className="text-[11px] px-2 py-1 bg-muted rounded">
-                  <span className="text-muted-foreground font-mono">{e.time}</span>{' '}
-                  <span className="text-muted-foreground">{e.door}</span>{' '}
-                  <span className={e.result === 'granted' ? 'text-success' : 'text-error'}>●</span>
-                </div>
+      {/* People Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>People ({filteredPersons.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Department</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Last Access</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredPersons.map((person) => (
+                <TableRow key={person.id}>
+                  <TableCell className="font-medium">{person.name}</TableCell>
+                  <TableCell>{person.email}</TableCell>
+                  <TableCell>{person.phone}</TableCell>
+                  <TableCell>{person.department}</TableCell>
+                  <TableCell>{person.role}</TableCell>
+                  <TableCell>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(person.status)}`}>
+                      {person.status}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {person.last_access}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" title="View">
+                        <Eye size={16} />
+                      </Button>
+                      <Button variant="ghost" size="sm" title="Edit">
+                        <Edit size={16} />
+                      </Button>
+                      <Button variant="ghost" size="sm" title="Delete">
+                        <Trash2 size={16} />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ))}
-            </div>
-          </div>
-        </div>
-      )}
+            </TableBody>
+          </Table>
 
-      {/* Add/Edit Form Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowForm(false)}>
-          <div className="bg-card border border-border rounded-lg p-6 w-[480px]" onClick={e => e.stopPropagation()}>
-            <h3 className="text-[16px] font-semibold text-foreground mb-4">{t('identities.form.addTitle')}</h3>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-[12px]">{t('identities.form.firstName')}</Label>
-                  <Input
-                    value={formData.first_name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
-                    placeholder="Nguyễn"
-                    className="mt-1 h-8 text-[13px]"
-                  />
-                </div>
-                <div>
-                  <Label className="text-[12px]">{t('identities.form.lastName')}</Label>
-                  <Input
-                    value={formData.last_name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
-                    placeholder="Văn A"
-                    className="mt-1 h-8 text-[13px]"
-                  />
-                </div>
-              </div>
-              <div>
-                <Label className="text-[12px]">{t('identities.form.email')}</Label>
-                <Input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  placeholder="email@company.vn"
-                  className="mt-1 h-8 text-[13px]"
-                />
-              </div>
-              <div>
-                <Label className="text-[12px]">{t('identities.form.phone')}</Label>
-                <Input
-                  value={formData.phone}
-                  onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                  placeholder="0901234567"
-                  className="mt-1 h-8 text-[13px]"
-                />
-              </div>
-              <div>
-                <Label className="text-[12px]">{t('identities.form.employeeId')}</Label>
-                <Input
-                  value={formData.employee_id}
-                  onChange={(e) => setFormData(prev => ({ ...prev, employee_id: e.target.value }))}
-                  placeholder="EMP001"
-                  className="mt-1 h-8 text-[13px]"
-                />
-              </div>
-              <div>
-                <Label className="text-[12px]">{t('identities.form.department')}</Label>
-                <Select
-                  value={formData.department}
-                  onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
-                  className="mt-1 h-8 text-[12px]"
-                >
-                  <SelectOption value="">{t('identities.form.selectDepartment')}</SelectOption>
-                  {['Kỹ thuật', 'Kinh doanh', 'Hành chính', 'Ban giám đốc'].map(d => <SelectOption key={d} value={d}>{d}</SelectOption>)}
-                </Select>
-              </div>
-              <div>
-                <Label className="text-[12px]">{t('identities.form.role')}</Label>
-                <Select
-                  value={formData.role}
-                  onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
-                  className="mt-1 h-8 text-[12px]"
-                >
-                  <SelectOption value="">{t('identities.form.selectRole')}</SelectOption>
-                  {['Nhân viên', 'Trưởng nhóm', 'Quản lý', 'Giám đốc'].map(r => <SelectOption key={r} value={r}>{r}</SelectOption>)}
-                </Select>
-              </div>
+          {filteredPersons.length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No people found</p>
             </div>
-            <div className="flex justify-end gap-2 mt-5">
-              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>
-                {t('common.cancel')}
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleCreatePerson}
-                disabled={!isFormValid || createPersonMutation.isPending}
-                className="bg-manage hover:bg-manage/90"
-              >
-                {createPersonMutation.isPending ? t('identities.form.saving') : t('common.save')}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+          )}
+        </CardContent>
+      </Card>
+
+      <CreatePersonModal open={showCreateModal} onClose={() => setShowCreateModal(false)} />
     </div>
+  );
+}
+
+function CreatePersonModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    department: '',
+    role: ''
+  });
+
+  const save = () => {
+    console.log('Creating person:', formData);
+    onClose();
+  };
+
+  const valid = Boolean(formData.name.trim() && formData.email.trim());
+
+  return (
+    <AppModal
+      open={open}
+      onOpenChange={(v) => { if (!v) onClose(); }}
+      title="Add Person"
+      size="md"
+      submitDisabled={!valid}
+      showCancelButton
+      cancelLabel="Cancel"
+      primaryAction={{ label: 'Add Person', onClick: save }}
+    >
+      <div className="space-y-4">
+        <div className="space-y-1">
+          <Label htmlFor="create-person-name">Name *</Label>
+          <Input
+            id="create-person-name"
+            type="text"
+            value={formData.name}
+            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            placeholder="John Smith"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor="create-person-email">Email *</Label>
+          <Input
+            id="create-person-email"
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+            placeholder="john.smith@company.com"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor="create-person-phone">Phone</Label>
+          <Input
+            id="create-person-phone"
+            type="text"
+            value={formData.phone}
+            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+            placeholder="+1234567890"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor="create-person-dept">Department</Label>
+          <Input
+            id="create-person-dept"
+            type="text"
+            value={formData.department}
+            onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
+            placeholder="Engineering"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor="create-person-role">Role</Label>
+          <Input
+            id="create-person-role"
+            type="text"
+            value={formData.role}
+            onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
+            placeholder="Developer"
+          />
+        </div>
+      </div>
+    </AppModal>
   );
 }

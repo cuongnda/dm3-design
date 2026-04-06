@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Users, Save, Edit3, Shield, Play, Pause, Key, Building2, AlertTriangle } from 'lucide-react';
-import { fetchUserAccount, updateUserAccount, deleteUserAccount, resetUserPassword, type UserAccountDTO, type UpdateUserAccountRequest } from '@/lib/api-users';
+import { fetchUserAccount, updateUserAccount, deleteUserAccount, resetUserPassword, changeUserPassword, type UserAccountDTO, type UpdateUserAccountRequest } from '@/lib/api-users';
 import { fetchCompanies, type CompanyDTO } from '@/lib/api';
-import { Button, Input, Label, ComboBox, Select, SelectOption, type Option } from '@dm3/ui';
+import { Button, Input, Label, Select, SelectOption, Checkbox, type SelectRichOption as Option } from '@dm3/ui';
 
 const statusColors: Record<string, string> = {
   active: 'bg-success/10 text-success border-success/20',
@@ -34,6 +34,9 @@ export function UserAccountDetailPage() {
     role: '',
     status: '',
     company_id: '',
+    change_password: false,
+    new_password: '',
+    confirm_password: '',
   });
 
   const loadUser = () => {
@@ -46,6 +49,9 @@ export function UserAccountDetailPage() {
           role: u.role,
           status: u.status,
           company_id: u.companies[0]?.company_id || '',
+          change_password: false,
+          new_password: '',
+          confirm_password: '',
         });
       })
       .catch(() => {})
@@ -54,10 +60,18 @@ export function UserAccountDetailPage() {
 
   useEffect(() => {
     loadUser();
-    fetchCompanies().then(setCompanies).catch(() => {});
   }, [id]);
 
-  const companyOptions: Option[] = [
+  useEffect(() => {
+    // Load companies only once, not dependent on id changes
+    if (companies.length === 0) {
+      fetchCompanies().then(setCompanies).catch(() => {});
+    }
+  }, [companies.length]);
+
+
+
+  const companyOptions: Option[] = useMemo(() => [
     {
       value: '',
       label: 'No Company (System Admin only)',
@@ -69,12 +83,30 @@ export function UserAccountDetailPage() {
       description: `(${company.code})`,
       icon: <Building2 size={14} className="text-muted-foreground" />
     }))
-  ];
+  ], [companies]);
 
   const handleSave = async () => {
     if (!id) return;
     setSaving(true);
     try {
+      // Validate password if changing
+      if (form.change_password) {
+        if (!form.new_password || form.new_password.length < 6) {
+          alert('Password must be at least 6 characters long');
+          setSaving(false);
+          return;
+        }
+        if (form.new_password !== form.confirm_password) {
+          alert('Passwords do not match');
+          setSaving(false);
+          return;
+        }
+        
+        // Change password first
+        await changeUserPassword(id, form.new_password);
+      }
+
+      // Update user account
       const updateData: UpdateUserAccountRequest = {
         name: form.name,
         role: form.company_id ? form.role : 'system_admin',
@@ -84,7 +116,17 @@ export function UserAccountDetailPage() {
       const updated = await updateUserAccount(id, updateData);
       setUser(updated);
       setEditing(false);
-    } catch { /* */ }
+
+      // Reset password fields
+      setForm(f => ({ ...f, change_password: false, new_password: '', confirm_password: '' }));
+      
+      if (form.change_password) {
+        alert('User account and password updated successfully!');
+      }
+    } catch (error) {
+      console.error('Failed to save user account:', error);
+      alert('Failed to save changes. Please try again.');
+    }
     setSaving(false);
   };
 
@@ -237,9 +279,10 @@ export function UserAccountDetailPage() {
                     onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
                   />
                 </div>
+                
                 <div>
                   <Label>Company</Label>
-                  <ComboBox
+                  <Select
                     options={companyOptions}
                     value={form.company_id}
                     placeholder="Select a company"
@@ -247,35 +290,80 @@ export function UserAccountDetailPage() {
                     onValueChange={(value) => setForm(f => ({ ...f, company_id: value }))}
                   />
                 </div>
-                <div>
-                  <Label>Role</Label>
-                  <Select
-                    data-testid="user-select-editRole"
-                    value={form.role}
-                    onChange={(e) => setForm(f => ({ ...f, role: e.target.value }))}
-                    disabled={!form.company_id}
-                    className="w-full"
-                  >
-                    <SelectOption value="viewer">Viewer</SelectOption>
-                    <SelectOption value="operator">Operator</SelectOption>
-                    <SelectOption value="manager">Manager</SelectOption>
-                    <SelectOption value="primary_manager">Primary Manager</SelectOption>
-                  </Select>
-                  {!form.company_id && (
-                    <p className="text-[11px] text-muted-foreground mt-1">System admin role will be assigned automatically</p>
+                  <div>
+                    <Label>Role</Label>
+                    <Select
+                      data-testid="user-select-editRole"
+                      value={form.role}
+                      onValueChange={(value) => setForm(f => ({ ...f, role: value }))}
+                      disabled={!form.company_id}
+                      className="w-full"
+                    >
+                      <SelectOption value="viewer">Viewer</SelectOption>
+                      <SelectOption value="operator">Operator</SelectOption>
+                      <SelectOption value="manager">Manager</SelectOption>
+                      <SelectOption value="primary_manager">Primary Manager</SelectOption>
+                    </Select>
+                    {!form.company_id && (
+                      <p className="text-[11px] text-muted-foreground mt-1">System admin role will be assigned automatically</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label>Status</Label>
+                    <Select
+                      data-testid="user-select-editStatus"
+                      value={form.status}
+                      onValueChange={(value) => setForm(f => ({ ...f, status: value }))}
+                      className="w-full"
+                    >
+                      <SelectOption value="active">Active</SelectOption>
+                      <SelectOption value="inactive">Inactive</SelectOption>
+                    </Select>
+                  </div>
+
+                {/* Custom Password Change Section */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="change_password"
+                      checked={form.change_password}
+                      onCheckedChange={(checked) => setForm(f => ({ ...f, change_password: !!checked, new_password: '', confirm_password: '' }))}
+                    />
+                    <Label htmlFor="change_password">
+                      Set custom password (instead of using Reset Password)
+                    </Label>
+                  </div>
+
+                  {form.change_password && (
+                    <div className="space-y-3">
+                      <div>
+                        <Label>New Password</Label>
+                        <Input
+                          type="password"
+                          placeholder="Enter new password"
+                          value={form.new_password}
+                          onChange={(e) => setForm(f => ({ ...f, new_password: e.target.value }))}
+                          className="w-full"
+                        />
+                        {form.new_password && form.new_password.length < 6 && (
+                          <p className="text-[11px] text-error mt-1">Password must be at least 6 characters</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label>Confirm Password</Label>
+                        <Input
+                          type="password"
+                          placeholder="Confirm new password"
+                          value={form.confirm_password}
+                          onChange={(e) => setForm(f => ({ ...f, confirm_password: e.target.value }))}
+                          className="w-full"
+                        />
+                        {form.confirm_password && form.new_password !== form.confirm_password && (
+                          <p className="text-[11px] text-error mt-1">Passwords do not match</p>
+                        )}
+                      </div>
+                    </div>
                   )}
-                </div>
-                <div>
-                  <Label>Status</Label>
-                  <Select
-                    data-testid="user-select-editStatus"
-                    value={form.status}
-                    onChange={(e) => setForm(f => ({ ...f, status: e.target.value }))}
-                    className="w-full"
-                  >
-                    <SelectOption value="active">Active</SelectOption>
-                    <SelectOption value="inactive">Inactive</SelectOption>
-                  </Select>
                 </div>
               </>
             ) : (

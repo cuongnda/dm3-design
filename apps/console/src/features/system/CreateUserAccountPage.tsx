@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Check, Copy, Building2, AlertCircle, Shield, Users } from 'lucide-react';
 import { createUserAccount, type CreateUserAccountResponse, type CreateUserAccountRequest } from '@/lib/api-users';
 import { fetchCompanies, type CompanyDTO } from '@/lib/api';
-import { Button, Input, Label, ComboBox, Select, SelectOption, type Option } from '@dm3/ui';
+import { Button, Input, Label, Select, SelectOption, type SelectRichOption as Option } from '@dm3/ui';
 
 export function CreateUserAccountPage() {
   const navigate = useNavigate();
@@ -174,7 +174,7 @@ export function CreateUserAccountPage() {
               Loading companies...
             </div>
           ) : (
-            <ComboBox
+            <Select
               options={companyOptions}
               value={form.company_id || ''}
               placeholder="Select a company or leave empty for system admin"

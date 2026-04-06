@@ -1,7 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PageHeader } from '@dm3/ui';
-import { DataTable, type Column } from '@dm3/ui';
+import {
+  PageHeader,
+  DataTable,
+  type Column,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Button,
+} from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { mockResponsePlans, mockEmergencyEvents, emergencyTypeConfig } from './mock-data';
 import type { EmergencyType, EmergencyEvent } from './mock-data';
@@ -9,6 +18,7 @@ import type { EmergencyType, EmergencyEvent } from './mock-data';
 const typeKeys: EmergencyType[] = ['fire', 'lockdown', 'medical', 'intruder'];
 
 function ConfirmDialog({ type, onConfirm, onCancel }: { type: EmergencyType; onConfirm: () => void; onCancel: () => void }) {
+  const [open, setOpen] = useState(true);
   const [count, setCount] = useState(3);
   const cfg = emergencyTypeConfig[type];
 
@@ -19,20 +29,39 @@ function ConfirmDialog({ type, onConfirm, onCancel }: { type: EmergencyType; onC
   }, [count, onConfirm]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-      <div className="bg-[#111827] border border-[#334155] rounded-xl p-8 max-w-md w-full text-center">
-        <div className="text-[48px] mb-4">{cfg.icon}</div>
-        <h2 className="text-[20px] font-bold text-[#F8FAFC] mb-2">{/* TODO: add i18n key */}Activate {cfg.label}?</h2>
-        <p className="text-[14px] text-[#94A3B8] mb-6">{/* TODO: add i18n key */}System will activate in...</p>
-        <div className="text-[64px] font-bold mb-6" style={{ color: cfg.color }}>{count}</div>
-        <button
-          onClick={onCancel}
-          className="px-6 py-3 bg-[#1E293B] border border-[#334155] rounded-lg text-[#F8FAFC] text-[14px] font-medium hover:bg-[#334155] transition-colors"
-        >
-          {/* TODO: add i18n key */}✕ Cancel
-        </button>
-      </div>
-    </div>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          setOpen(false);
+          onCancel();
+        }
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        className="max-w-md border-[#334155] bg-[#111827] text-center sm:max-w-md"
+      >
+        <DialogHeader className="text-center sm:text-center">
+          <div className="text-[48px] mb-2">{cfg.icon}</div>
+          <DialogTitle className="text-[20px] font-bold text-[#F8FAFC]">
+            {/* TODO: add i18n key */}Activate {cfg.label}?
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-[14px] text-[#94A3B8]">{/* TODO: add i18n key */}System will activate in...</p>
+        <div className="text-[64px] font-bold" style={{ color: cfg.color }}>{count}</div>
+        <DialogFooter className="sm:justify-center">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCancel}
+            className="border-[#334155] bg-[#1E293B] px-6 py-3 text-[14px] font-medium text-[#F8FAFC] hover:bg-[#334155]"
+          >
+            {/* TODO: add i18n key */}✕ Cancel
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

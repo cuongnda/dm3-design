@@ -8,11 +8,18 @@ export default defineConfig({
   server: {
     port: 3000,
     allowedHosts: true,
+    watch: {
+      followSymlinks: true,
+    },
     proxy: {
       '/api/v1/auth': { target: 'http://localhost:8005', changeOrigin: true },
       '/api/v1/system/devices': { target: 'http://localhost:8002', changeOrigin: true },
       '/api/v1/system': { target: 'http://localhost:8005', changeOrigin: true },
-      '/api/v1/users': { target: 'http://localhost:8005', changeOrigin: true },
+      '/api/v1/users': { target: 'http://localhost:8004', changeOrigin: true },
+      '/api/v1/departments': { target: 'http://localhost:8004', changeOrigin: true },
+      '/photos': { target: 'http://localhost:8004', changeOrigin: true },
+      '/api/v1/accounts': { target: 'http://localhost:8005', changeOrigin: true },
+      '/api/v1/tenant': { target: 'http://localhost:8005', changeOrigin: true },
       '/api/v1/roles': { target: 'http://localhost:8005', changeOrigin: true },
       '/api/v1/devices': { target: 'http://localhost:8002', changeOrigin: true },
       '/ws/events': { 

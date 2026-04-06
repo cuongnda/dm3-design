@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect } from 'react'
-import { useTenantStore, TenantInfo, TenantUsage } from '../../stores/tenantStore'
+import { useTenantStore, type TenantInfo, type TenantUsage } from '../../stores/tenantStore'
 
 interface TenantContextType {
   tenant: TenantInfo | null

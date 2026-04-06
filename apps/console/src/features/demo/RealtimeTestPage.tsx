@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PageHeader } from '@dm3/ui';
+import { PageHeader, Button, Select, SelectOption } from '@dm3/ui';
 import { WebSocketDemo } from './WebSocketDemo';
 import { useWebSocket } from '@dm3/api-client';
 
@@ -29,21 +29,14 @@ export function RealtimeTestPage() {
     <div>
       <PageHeader title="Real-time System Test">
         <div className="flex gap-2">
-          <select 
-            value={toastMode}
-            onChange={(e) => setToastMode(e.target.value as any)}
-            className="px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px]"
-          >
-            <option value="custom">Custom Toasts</option>
-            <option value="notification">Browser Notifications</option>
-            <option value="console">Console Only</option>
-          </select>
-          <button 
-            onClick={sendTestEvent}
-            className="px-3 py-1.5 bg-[#3B82F6] text-white rounded-md text-[12px]"
-          >
+          <Select value={toastMode} onChange={(e) => setToastMode(e.target.value as any)} className="w-40">
+            <SelectOption value="custom">Custom Toasts</SelectOption>
+            <SelectOption value="notification">Browser Notifications</SelectOption>
+            <SelectOption value="console">Console Only</SelectOption>
+          </Select>
+          <Button onClick={sendTestEvent}>
             Test Toast
-          </button>
+          </Button>
         </div>
       </PageHeader>
 

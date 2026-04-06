@@ -6,7 +6,7 @@ import {
   Clock, Cpu, Wifi, User, CreditCard, Fingerprint,
   KeyRound, Smartphone, Eye, Settings, Calendar, List, Shield,
 } from 'lucide-react';
-import { DataTable, type Column, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, Button, Input, Label, Select, SelectOption } from '@dm3/ui';
+import { DataTable, type Column, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, AppModal, Button, Input, Label, Select, SelectOption } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { useDoor, useEvents, useRules, useUpdateDoor, useSendCommand } from '@/lib/hooks';
 import type { EventDTO, AccessRuleDTO } from '@/lib/api';
@@ -393,32 +393,27 @@ export function DoorDetailPage() {
       </Tabs>
 
       {/* Confirmation Dialog */}
-      <Dialog open={!!confirmAction} onOpenChange={() => setConfirmAction(null)}>
-        <DialogContent>
-          {confirmAction && confirmLabels[confirmAction] && (
-            <>
-              <DialogHeader>
-                <DialogTitle>{confirmLabels[confirmAction].title}</DialogTitle>
-                <DialogDescription>
-                  {confirmLabels[confirmAction].desc}
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setConfirmAction(null)}>
-                  {/* TODO: add i18n key */}Cancel
-                </Button>
-                <Button
-                  variant={confirmLabels[confirmAction].variant}
-                  onClick={handleConfirmAction}
-                  disabled={sendCommandMutation.isPending}
-                >
-                  {sendCommandMutation.isPending ? /* TODO: add i18n key */'Sending...' : /* TODO: add i18n key */'Confirm'}
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      <AppModal
+        open={!!confirmAction}
+        onOpenChange={(open) => { if (!open) setConfirmAction(null); }}
+        title={confirmAction && confirmLabels[confirmAction] ? confirmLabels[confirmAction].title : ''}
+        description={confirmAction && confirmLabels[confirmAction] ? confirmLabels[confirmAction].desc : undefined}
+        size="md"
+        showCancelButton
+        cancelLabel={/* TODO: add i18n key */'Cancel'}
+        cancelDisabled={sendCommandMutation.isPending}
+        primaryAction={
+          confirmAction && confirmLabels[confirmAction]
+            ? {
+                label: sendCommandMutation.isPending ? /* TODO: add i18n key */'Sending...' : /* TODO: add i18n key */'Confirm',
+                variant: confirmLabels[confirmAction].variant,
+                onClick: handleConfirmAction,
+                loading: sendCommandMutation.isPending,
+                disabled: sendCommandMutation.isPending,
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }

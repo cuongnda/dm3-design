@@ -12,6 +12,6 @@ export {
 } from '../../stores/tenantStore'
 
 export type {
-  TenantInfo,
-  TenantUsage,
+  TenantInfo as TenantInfoType,
+  TenantUsage as TenantUsageType,
 } from '../../stores/tenantStore'

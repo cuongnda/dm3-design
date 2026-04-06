@@ -27,32 +27,14 @@ export type StatusKey = keyof typeof STATUS_COLORS;
 export const ROUTES = {
   dashboard: '/',
   alerts: '/alerts',
-  // SECURE
-  accessControl: '/secure/access-control',
-  cctv: '/secure/cctv',
-  intrusion: '/secure/intrusion',
-  intercom: '/secure/intercom',
-  aiDetection: '/secure/ai-detection',
-  emergency: '/secure/emergency',
   // MANAGE
+  users: '/manage/users',
+  departments: '/manage/departments', 
   identities: '/manage/identities',
-  visitors: '/manage/visitors',
-  contractors: '/manage/contractors',
-  attendance: '/manage/attendance',
-  deliveries: '/manage/deliveries',
+  // ACCESS CONTROL
+  accessControl: '/access-control',
+  // DEVICES
   devices: '/devices',
-  provisioning: '/manage/provisioning',
-  // OPERATE
-  roomBooking: '/operate/room-booking',
-  parking: '/operate/parking',
-  maintenance: '/operate/maintenance',
-  guardTour: '/operate/guard-tour',
-  keys: '/operate/keys',
-  iotEnergy: '/operate/iot-energy',
-  // SMART
-  aiAssistant: '/smart/ai-assistant',
-  analytics: '/smart/analytics',
-  automation: '/smart/automation',
   // SETTINGS
   settings: '/settings',
   // AUTH

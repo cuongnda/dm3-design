@@ -82,9 +82,25 @@ func main() {
 		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
 
+	// Serve uploaded photos/avatars
+	r.Handle("/photos/*", http.StripPrefix("/photos/", http.FileServer(http.Dir("data/photos"))))
+
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
 		r.Use(authsvc.RequireCompany())
+
+		// Users (identity): manager+ can read/write
+		r.Group(func(ur chi.Router) {
+			ur.Use(authsvc.RequireRole("manager", "primary_manager", "system_admin"))
+			ur.Get("/users", handlers.ListUsers)
+			ur.Post("/users", handlers.CreateUser)
+			ur.Get("/users/{id}", handlers.GetUser)
+			ur.Put("/users/{id}", handlers.UpdateUser)
+			ur.Delete("/users/{id}", handlers.DeleteUser)
+			ur.Post("/users/bulk-delete", handlers.BulkDeleteUsers)
+			ur.Post("/users/{id}/avatar", handlers.UploadUserAvatar)
+			ur.Get("/departments", handlers.ListUserDepartments)
+		})
 
 		// Persons: operator+viewer can read, manager+ can write
 		r.Group(func(pr chi.Router) {

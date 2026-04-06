@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { PageHeader } from '@dm3/ui';
+import { PageHeader, Select, SelectOption } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { mockAttendance, summary, type AttendanceRecord } from './mock-data';
@@ -80,10 +80,10 @@ export function AttendancePage() {
       </div>
 
       <div className="flex gap-2 mb-4">
-        <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)} className="h-8 px-3 bg-[#111827] border border-[#334155] rounded-md text-[#94A3B8] text-[12px]">
-          <option value="">{t('attendance.filter.allDepartments')}</option>
-          {['Kỹ thuật', 'Kinh doanh', 'Hành chính', 'Ban giám đốc'].map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
+        <Select value={deptFilter} onChange={e => setDeptFilter(e.target.value)} className="w-44">
+          <SelectOption value="">{t('attendance.filter.allDepartments')}</SelectOption>
+          {['Kỹ thuật', 'Kinh doanh', 'Hành chính', 'Ban giám đốc'].map(d => <SelectOption key={d} value={d}>{d}</SelectOption>)}
+        </Select>
       </div>
 
       <DataTable columns={columns} data={filtered} rowKey={r => r.id} rowClassName={r => r.status === 'absent' ? 'bg-[#7F1D1D]/10' : r.status === 'late' ? 'bg-[#713F12]/10' : ''} />

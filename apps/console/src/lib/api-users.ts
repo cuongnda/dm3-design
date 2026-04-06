@@ -1,4 +1,15 @@
-import { apiFetch, type PaginatedResponse } from './api';
+import { apiFetch } from './api';
+
+// Helper type for paginated responses
+interface PaginatedResponse<T> {
+  data: T;
+  pagination: {
+    page: number;
+    page_size: number;
+    total: number;
+    total_pages: number;
+  };
+}
 
 const SYSTEM_URL = '/api/v1/system';
 
@@ -74,4 +85,11 @@ export async function deleteUserAccount(id: string): Promise<void> {
 
 export async function resetUserPassword(id: string): Promise<{ password: string; message: string }> {
   return apiFetch<{ password: string; message: string }>(`${SYSTEM_URL}/accounts/${id}/reset-password`, { method: 'POST' });
+}
+
+export async function changeUserPassword(id: string, newPassword: string): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`${SYSTEM_URL}/accounts/${id}/change-password`, {
+    method: 'PUT',
+    body: JSON.stringify({ password: newPassword }),
+  });
 }

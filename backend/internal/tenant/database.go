@@ -177,7 +177,7 @@ func ValidateAndFilterByTenant(ctx context.Context, resourceTenantID string) err
 
 // AddTenantToInsert automatically adds tenant_id to INSERT queries
 func AddTenantToInsert(ctx context.Context, query string, args []interface{}) (string, []interface{}, error) {
-	tenantID, err := TenantIDFromContext(ctx)
+	_, err := TenantIDFromContext(ctx)
 	if err != nil {
 		return query, args, err
 	}

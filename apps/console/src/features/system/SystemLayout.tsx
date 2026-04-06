@@ -4,6 +4,7 @@ import { Building2, Settings, LogOut, Smartphone, HardDrive, LayoutDashboard, Us
 import { useAuthStore } from '@/stores/authStore';
 import { fetchPendingDevices } from '@/lib/api';
 import { useTranslation } from 'react-i18next';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const navItems = [
   { to: '/system', icon: LayoutDashboard, labelKey: 'systemAdminNav.dashboard', end: true },
@@ -74,10 +75,11 @@ export function SystemLayout() {
             <div className="w-7 h-7 rounded-full bg-operate/20 flex items-center justify-center text-[11px] font-medium text-operate">
               {user?.initials || 'SA'}
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
             <div className="text-[12px] text-foreground truncate">{user?.name || 'System Admin'}</div>
             <div className="text-[10px] text-muted-foreground truncate">{user?.email}</div>
             </div>
+            <ThemeToggle />
           </div>
           <button
             type="button"

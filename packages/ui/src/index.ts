@@ -1,4 +1,5 @@
 // UI Primitives
+export * from './components/ui/alert';
 export * from './components/ui/avatar';
 export * from './components/ui/badge';
 export * from './components/ui/button';
@@ -8,7 +9,6 @@ export * from './components/ui/dialog';
 export * from './components/ui/dropdown-menu';
 export * from './components/ui/input';
 export * from './components/ui/select';
-export * from './components/ui/combobox';
 export * from './components/ui/checkbox';
 export * from './components/ui/label';
 export * from './components/ui/scroll-area';
@@ -18,6 +18,7 @@ export * from './components/ui/table';
 export * from './components/ui/tabs';
 export * from './components/ui/tooltip';
 export * from './components/ui/textarea';
+export * from './components/ui/collapsible';
 
 // Inputs / pickers
 export * from './components/ui/date-picker';
@@ -38,6 +39,9 @@ export * from './components/common/SearchCommand';
 export * from './components/common/StatCard';
 export * from './components/common/StatusBadge';
 export * from './components/common/LanguageSwitcher';
+export * from './components/common/DataTableCard';
+export * from './components/common/TablePaginationFooter';
+export * from './components/common/AppModal';
 
 // Charts
 export * from './components/charts/AreaChart';

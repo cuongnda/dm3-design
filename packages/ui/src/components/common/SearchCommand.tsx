@@ -34,26 +34,25 @@ export function SearchCommand({ open, onOpenChange }: SearchCommandProps) {
           <CommandItem onSelect={() => go(ROUTES.identities)}>
             🕐 Nguyen Van A — Employee
           </CommandItem>
-          <CommandItem onSelect={() => go(ROUTES.cctv)}>
-            🕐 Camera Grid — Floor 3
+          <CommandItem onSelect={() => go(ROUTES.users)}>
+            🕐 User Management
           </CommandItem>
         </CommandGroup>
         <CommandGroup heading="Quick Actions">
           <CommandItem>⚡ Lock all doors</CommandItem>
-          <CommandItem onSelect={() => go(ROUTES.visitors)}>
-            ⚡ Open visitor check-in
+          <CommandItem onSelect={() => go(ROUTES.departments)}>
+            ⚡ Manage departments
           </CommandItem>
-          <CommandItem onSelect={() => go(ROUTES.attendance)}>
-            ⚡ Generate attendance report
+          <CommandItem onSelect={() => go(ROUTES.users)}>
+            ⚡ Add new user
           </CommandItem>
         </CommandGroup>
         <CommandGroup heading="Pages">
           <CommandItem onSelect={() => go(ROUTES.dashboard)}>📊 Dashboard</CommandItem>
           <CommandItem onSelect={() => go(ROUTES.accessControl)}>🚪 Access Control</CommandItem>
-          <CommandItem onSelect={() => go(ROUTES.cctv)}>📹 CCTV</CommandItem>
-          <CommandItem onSelect={() => go(ROUTES.visitors)}>🧑‍💼 Visitors</CommandItem>
-          <CommandItem onSelect={() => go(ROUTES.parking)}>🅿️ Parking</CommandItem>
-          <CommandItem onSelect={() => go(ROUTES.aiAssistant)}>🧠 AI Assistant</CommandItem>
+          <CommandItem onSelect={() => go(ROUTES.users)}>👤 Users</CommandItem>
+          <CommandItem onSelect={() => go(ROUTES.departments)}>🏢 Departments</CommandItem>
+          <CommandItem onSelect={() => go(ROUTES.devices)}>💻 Devices</CommandItem>
           <CommandItem onSelect={() => go(ROUTES.settings)}>⚙️ Settings</CommandItem>
         </CommandGroup>
       </CommandList>

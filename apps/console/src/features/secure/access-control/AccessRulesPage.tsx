@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Plus, Pencil, Trash2, Shield, Clock, DoorOpen, Users, ChevronDown, ChevronRight } from 'lucide-react';
-import { PageHeader, DataTable, type Column, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, Button, Input, Label } from '@dm3/ui';
+import { PageHeader, DataTable, type Column, AppModal, Button, Input, Label } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { useRules, useCreateRule, useUpdateRule, useDeleteRule, useDoors, useGroups } from '@/lib/hooks';
 import type { AccessRuleDTO } from '@/lib/api';
@@ -367,18 +367,25 @@ export function AccessRulesPage() {
       </div>
 
       {/* Create/Edit Modal */}
-      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editingId ? /* TODO: add i18n key */'Edit Rule' : /* TODO: add i18n key */'Create New Rule'}
-            </DialogTitle>
-            <DialogDescription>
-              {editingId ? /* TODO: add i18n key */'Update access rule details' : t('accessRules.description')}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
+      <AppModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        title={editingId ? /* TODO: add i18n key */'Edit Rule' : /* TODO: add i18n key */'Create New Rule'}
+        description={editingId ? /* TODO: add i18n key */'Update access rule details' : t('accessRules.description')}
+        size="xl"
+        className="max-h-[85vh]"
+        showCancelButton
+        cancelLabel={/* TODO: add i18n key */'Cancel'}
+        cancelDisabled={createRuleMutation.isPending || updateRuleMutation.isPending}
+        submitDisabled={!form.name.trim()}
+        primaryAction={{
+          label: editingId ? /* TODO: add i18n key */'Update' : t('accessRules.addRule'),
+          onClick: handleSave,
+          loading: createRuleMutation.isPending || updateRuleMutation.isPending,
+          disabled: createRuleMutation.isPending || updateRuleMutation.isPending,
+        }}
+      >
+        <div className="space-y-4">
             {/* Rule name */}
             <div>
               <Label className="text-[12px]">{t('accessRules.title')}</Label>
@@ -492,37 +499,26 @@ export function AccessRulesPage() {
               </button>
             </div>
           </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setModalOpen(false)}>
-              {/* TODO: add i18n key */}Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={!form.name.trim()}>
-              {editingId ? /* TODO: add i18n key */'Update' : t('accessRules.addRule')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </AppModal>
 
       {/* Delete Confirmation */}
-      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{/* TODO: add i18n key */}Delete Rule</DialogTitle>
-            <DialogDescription>
-              {/* TODO: add i18n key */}Are you sure you want to delete rule "{rules.find((r) => r.id === deleteId)?.name}"? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>
-              {/* TODO: add i18n key */}Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              {/* TODO: add i18n key */}Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AppModal
+        open={!!deleteId}
+        onOpenChange={(open) => { if (!open) setDeleteId(null); }}
+        title={/* TODO: add i18n key */'Delete Rule'}
+        description={/* TODO: add i18n key */`Are you sure you want to delete rule "${rules.find((r) => r.id === deleteId)?.name}"? This action cannot be undone.`}
+        size="md"
+        showCancelButton
+        cancelLabel={/* TODO: add i18n key */'Cancel'}
+        cancelDisabled={deleteRuleMutation.isPending}
+        primaryAction={{
+          label: /* TODO: add i18n key */'Delete',
+          variant: 'destructive',
+          onClick: handleDelete,
+          loading: deleteRuleMutation.isPending,
+          disabled: deleteRuleMutation.isPending,
+        }}
+      />
     </div>
   );
 }

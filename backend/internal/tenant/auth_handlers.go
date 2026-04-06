@@ -53,45 +53,45 @@ type LoginResponse struct {
 func (ah *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.ErrorResponse(w, http.StatusBadRequest, "invalid request body")
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	// Validate input
 	if req.Email == "" || req.Password == "" || req.CompanyID == "" {
-		httputil.ErrorResponse(w, http.StatusBadRequest, "email, password, and company_id are required")
+		httputil.Error(w, http.StatusBadRequest, "email, password, and company_id are required")
 		return
 	}
 
 	// Get account with permissions
 	account, err := ah.authSvc.GetAccountByEmailAndCompany(r.Context(), req.Email, req.CompanyID)
 	if err != nil {
-		httputil.ErrorResponse(w, http.StatusUnauthorized, "invalid credentials")
+		httputil.Error(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
 
 	// Validate password
 	if !ah.authSvc.ValidatePassword(account.PasswordHash, req.Password) {
-		httputil.ErrorResponse(w, http.StatusUnauthorized, "invalid credentials")
+		httputil.Error(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
 
 	// Check account status
 	if account.Status != "active" {
-		httputil.ErrorResponse(w, http.StatusForbidden, "account is not active")
+		httputil.Error(w, http.StatusForbidden, "account is not active")
 		return
 	}
 
 	// Get tenant information
 	tenantInfo, err := loadTenantInfo(ah.db, req.CompanyID)
 	if err != nil {
-		httputil.ErrorResponse(w, http.StatusInternalServerError, "failed to load tenant information")
+		httputil.Error(w, http.StatusInternalServerError, "failed to load tenant information")
 		return
 	}
 
 	// Validate tenant status
 	if tenantInfo.Status != "active" {
-		httputil.ErrorResponse(w, http.StatusForbidden, "company account is not active")
+		httputil.Error(w, http.StatusForbidden, "company account is not active")
 		return
 	}
 
@@ -109,14 +109,14 @@ func (ah *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	// Create session
 	session, token, err := ah.authSvc.CreateSession(r.Context(), account.ID, req.CompanyID, sessionData)
 	if err != nil {
-		httputil.ErrorResponse(w, http.StatusInternalServerError, "failed to create session")
+		httputil.Error(w, http.StatusInternalServerError, "failed to create session")
 		return
 	}
 
 	// Generate JWT token
 	jwtToken, err := ah.generateJWTToken(account, tenantInfo)
 	if err != nil {
-		httputil.ErrorResponse(w, http.StatusInternalServerError, "failed to generate token")
+		httputil.Error(w, http.StatusInternalServerError, "failed to generate token")
 		return
 	}
 
@@ -142,7 +142,7 @@ func (ah *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
 	// Extract token from Authorization header
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-		httputil.ErrorResponse(w, http.StatusBadRequest, "missing authorization token")
+		httputil.Error(w, http.StatusBadRequest, "missing authorization token")
 		return
 	}
 
@@ -165,14 +165,14 @@ func (ah *AuthHandlers) GetCurrentAccount(w http.ResponseWriter, r *http.Request
 	// Extract account from context (set by auth middleware)
 	claims := authsvc.ClaimsFromContext(r.Context())
 	if claims == nil {
-		httputil.ErrorResponse(w, http.StatusUnauthorized, "unauthorized")
+		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	// Get full account information
 	account, err := ah.authSvc.GetAccountByEmailAndCompany(r.Context(), claims.Email, claims.CID)
 	if err != nil {
-		httputil.ErrorResponse(w, http.StatusNotFound, "account not found")
+		httputil.Error(w, http.StatusNotFound, "account not found")
 		return
 	}
 
@@ -185,7 +185,7 @@ func (ah *AuthHandlers) GetCurrentAccount(w http.ResponseWriter, r *http.Request
 func (ah *AuthHandlers) UpdateAccountProfile(w http.ResponseWriter, r *http.Request) {
 	claims := authsvc.ClaimsFromContext(r.Context())
 	if claims == nil {
-		httputil.ErrorResponse(w, http.StatusUnauthorized, "unauthorized")
+		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -198,7 +198,7 @@ func (ah *AuthHandlers) UpdateAccountProfile(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.ErrorResponse(w, http.StatusBadRequest, "invalid request body")
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -219,7 +219,7 @@ func (ah *AuthHandlers) UpdateAccountProfile(w http.ResponseWriter, r *http.Requ
 		req.Locale, req.Timezone, claims.CID)
 
 	if err != nil {
-		httputil.ErrorResponse(w, http.StatusInternalServerError, "failed to update profile")
+		httputil.Error(w, http.StatusInternalServerError, "failed to update profile")
 		return
 	}
 
@@ -232,7 +232,7 @@ func (ah *AuthHandlers) UpdateAccountProfile(w http.ResponseWriter, r *http.Requ
 func (ah *AuthHandlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	claims := authsvc.ClaimsFromContext(r.Context())
 	if claims == nil {
-		httputil.ErrorResponse(w, http.StatusUnauthorized, "unauthorized")
+		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -243,33 +243,33 @@ func (ah *AuthHandlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.ErrorResponse(w, http.StatusBadRequest, "invalid request body")
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	// Validate input
 	if req.NewPassword != req.ConfirmPassword {
-		httputil.ErrorResponse(w, http.StatusBadRequest, "passwords do not match")
+		httputil.Error(w, http.StatusBadRequest, "passwords do not match")
 		return
 	}
 
 	// Get current account
 	account, err := ah.authSvc.GetAccountByEmailAndCompany(r.Context(), claims.Email, claims.CID)
 	if err != nil {
-		httputil.ErrorResponse(w, http.StatusNotFound, "account not found")
+		httputil.Error(w, http.StatusNotFound, "account not found")
 		return
 	}
 
 	// Verify current password
 	if !ah.authSvc.ValidatePassword(account.PasswordHash, req.CurrentPassword) {
-		httputil.ErrorResponse(w, http.StatusUnauthorized, "current password is incorrect")
+		httputil.Error(w, http.StatusUnauthorized, "current password is incorrect")
 		return
 	}
 
 	// Hash new password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		httputil.ErrorResponse(w, http.StatusInternalServerError, "failed to process new password")
+		httputil.Error(w, http.StatusInternalServerError, "failed to process new password")
 		return
 	}
 
@@ -281,7 +281,7 @@ func (ah *AuthHandlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	`, claims.Sub, string(hashedPassword))
 
 	if err != nil {
-		httputil.ErrorResponse(w, http.StatusInternalServerError, "failed to update password")
+		httputil.Error(w, http.StatusInternalServerError, "failed to update password")
 		return
 	}
 
@@ -297,7 +297,7 @@ func (ah *AuthHandlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 func (ah *AuthHandlers) ListActiveSessions(w http.ResponseWriter, r *http.Request) {
 	claims := authsvc.ClaimsFromContext(r.Context())
 	if claims == nil {
-		httputil.ErrorResponse(w, http.StatusUnauthorized, "unauthorized")
+		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -311,7 +311,7 @@ func (ah *AuthHandlers) ListActiveSessions(w http.ResponseWriter, r *http.Reques
 
 	rows, err := ah.db.Pool.Query(r.Context(), query, claims.Sub)
 	if err != nil {
-		httputil.ErrorResponse(w, http.StatusInternalServerError, "failed to fetch sessions")
+		httputil.Error(w, http.StatusInternalServerError, "failed to fetch sessions")
 		return
 	}
 	defer rows.Close()

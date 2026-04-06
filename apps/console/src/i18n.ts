@@ -12,6 +12,8 @@ import enSmart from './locales/en/smart.json';
 import enDevices from './locales/en/devices.json';
 import enSettings from './locales/en/settings.json';
 import enSystem from './locales/en/system.json';
+import enDepartments from './locales/en/departments.json';
+import enUsers from './locales/en/users.json';
 
 import viCommon from './locales/vi/common.json';
 import viAuth from './locales/vi/auth.json';
@@ -23,6 +25,8 @@ import viSmart from './locales/vi/smart.json';
 import viDevices from './locales/vi/devices.json';
 import viSettings from './locales/vi/settings.json';
 import viSystem from './locales/vi/system.json';
+import viDepartments from './locales/vi/departments.json';
+import viUsers from './locales/vi/users.json';
 
 i18n
   .use(LanguageDetector)
@@ -40,6 +44,8 @@ i18n
         devices: enDevices,
         settings: enSettings,
         system: enSystem,
+        departments: enDepartments,
+        users: enUsers,
       },
       vi: {
         common: viCommon,
@@ -52,10 +58,12 @@ i18n
         devices: viDevices,
         settings: viSettings,
         system: viSystem,
+        departments: viDepartments,
+        users: viUsers,
       },
     },
     defaultNS: 'common',
-    ns: ['common', 'auth', 'dashboard', 'secure', 'manage', 'operate', 'smart', 'devices', 'settings', 'system'],
+    ns: ['common', 'auth', 'dashboard', 'secure', 'manage', 'operate', 'smart', 'devices', 'settings', 'system', 'departments', 'users'],
     fallbackLng: 'en',
     supportedLngs: ['en', 'vi'],
     // Accept region tags like `vi-VN`/`en-US` and map them to base languages `vi`/`en`.

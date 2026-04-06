@@ -11,8 +11,8 @@ export function PageHeader({ title, description, actions, children }: PageHeader
   return (
     <div className="flex items-start justify-between mb-6">
       <div>
-        <h1 className="text-[20px] font-semibold tracking-tight text-[#F8FAFC]">{title}</h1>
-        {description && <p className="text-[13px] text-[#94A3B8] mt-1">{description}</p>}
+        <h1 className="text-[20px] font-semibold tracking-tight text-foreground">{title}</h1>
+        {description && <p className="text-[13px] text-muted-foreground mt-1">{description}</p>}
       </div>
       <div className="flex items-center gap-2">
         {actions}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/config"
+	"github.com/duali/dm3-backend/internal/tenant"
 	"github.com/duali/dm3-backend/pkg/bugreporter"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
@@ -58,6 +59,9 @@ func main() {
 	// Add i18n middleware to all routes
 	r.Use(i18n.LocaleMiddleware)
 
+	// Register tenant routes (after all global middleware)
+	tenant.RegisterRoutes(r, database, cfg.JWTSecret)
+
 	// Health
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "auth-svc"})
@@ -78,17 +82,6 @@ func main() {
 		pr.Post("/api/v1/auth/device-token", h.DeviceToken)
 		pr.Get("/api/v1/roles", h.ListRoles)
 
-		// User management: primary_manager and system_admin only
-		pr.Group(func(ar chi.Router) {
-			ar.Use(authsvc.RequireRole("primary_manager", "system_admin"))
-			ar.Get("/api/v1/users", h.ListUsers)
-			ar.Post("/api/v1/users", h.CreateUser)
-			ar.Get("/api/v1/users/{id}", h.GetUser)
-			ar.Put("/api/v1/users/{id}", h.UpdateUser)
-			ar.Delete("/api/v1/users/{id}", h.DeleteUser)
-			ar.Put("/api/v1/users/{id}/password", h.ChangePassword)
-		})
-
 		// System admin only: company management + stats
 		pr.Group(func(sr chi.Router) {
 			sr.Use(authsvc.RequireRole("system_admin"))
@@ -106,6 +99,7 @@ func main() {
 			sr.Patch("/api/v1/system/accounts/{id}", h.UpdateUserAccount)
 			sr.Delete("/api/v1/system/accounts/{id}", h.DeleteUserAccount)
 			sr.Post("/api/v1/system/accounts/{id}/reset-password", h.ResetUserPassword)
+			sr.Put("/api/v1/system/accounts/{id}/change-password", h.ChangeUserPassword)
 		})
 	})
 

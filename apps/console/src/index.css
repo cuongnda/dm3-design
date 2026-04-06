@@ -104,6 +104,8 @@
   --sidebar-accent-foreground: #3B82F6;
   --sidebar-border: #1E293B;
   --sidebar-ring: #3B82F6;
+  --sidebar-nav-active: #243B58;
+  --sidebar-nav-active-text: #F8FAFC;
 }
 
 /* DM3 Light Theme */
@@ -126,19 +128,29 @@
   --border: #E2E8F0;
   --input: #E2E8F0;
   --ring: #3B82F6;
-  --sidebar: #F8FAFC;
+  /* Cooler than main #FFFFFF so rail vs content is obvious */
+  --sidebar: #EFF3F8;
   --sidebar-foreground: #0F172A;
   --sidebar-primary: #2563EB;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #F1F5F9;
+  --sidebar-accent: #E2E8F0;
   --sidebar-accent-foreground: #0F172A;
-  --sidebar-border: #E2E8F0;
+  --sidebar-border: #D8DEE9;
   --sidebar-ring: #3B82F6;
+  --sidebar-nav-active: #DBEAFE;
+  --sidebar-nav-active-text: #1D4ED8;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+  #root {
+    height: 100%;
   }
   body {
     @apply bg-background text-foreground;

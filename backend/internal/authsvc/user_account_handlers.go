@@ -391,41 +391,291 @@ func (h *Handlers) DeleteUserAccount(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, map[string]string{"status": "inactive"})
 }
 
-// ─── Reset User Password ─────────────────────────────────────────────────────
+// ─── Multi-Company Management ───────────────────────────────────────────────
 
-func (h *Handlers) ResetUserPassword(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+type addUserToCompanyRequest struct {
+	CompanyID string `json:"company_id"`
+	Role      string `json:"role"` // role for this specific company
+}
 
-	// Generate new password
-	pwBytes := make([]byte, 8)
-	if _, err := rand.Read(pwBytes); err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to generate password")
+type updateUserCompanyRoleRequest struct {
+	Role string `json:"role"`
+}
+
+type userCompanyAssignmentResponse struct {
+	UserID      string `json:"user_id"`
+	CompanyID   string `json:"company_id"`
+	CompanyName string `json:"company_name"`
+	Role        string `json:"role"`
+	Status      string `json:"status"`
+	AssignedAt  string `json:"assigned_at"`
+}
+
+// AddUserToCompany assigns a user to an additional company
+func (h *Handlers) AddUserToCompany(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
+	
+	var req addUserToCompanyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	password := hex.EncodeToString(pwBytes)
-
-	pwHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "password hashing failed")
+	
+	if req.CompanyID == "" || req.Role == "" {
+		httputil.Error(w, http.StatusBadRequest, "company_id and role are required")
 		return
 	}
-
-	// Update password
-	tag, err := h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_auth.users SET password_hash = $2, updated_at = now() WHERE id = $1::uuid`,
-		id, string(pwHash),
-	)
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+	
+	// Validate role
+	validRoles := map[string]bool{
+		"primary_manager": true,
+		"manager":         true,
+		"operator":        true,
+		"viewer":          true,
+	}
+	if !validRoles[req.Role] {
+		httputil.Error(w, http.StatusBadRequest, "invalid role")
 		return
 	}
-	if tag.RowsAffected() == 0 {
+	
+	// Check if user exists
+	var userExists bool
+	err := h.db.Pool.QueryRow(r.Context(),
+		"SELECT EXISTS(SELECT 1 FROM dm3_auth.users WHERE id = $1::uuid)", userID).Scan(&userExists)
+	if err != nil || !userExists {
 		httputil.Error(w, http.StatusNotFound, "user not found")
 		return
 	}
+	
+	// Check if company exists
+	var companyName string
+	err = h.db.Pool.QueryRow(r.Context(),
+		"SELECT name FROM dm3_auth.companies WHERE id = $1::uuid", req.CompanyID).Scan(&companyName)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "company not found")
+		return
+	}
+	
+	// Check if user is already assigned to this company
+	var alreadyAssigned bool
+	err = h.db.Pool.QueryRow(r.Context(),
+		"SELECT EXISTS(SELECT 1 FROM dm3_auth.user_companies WHERE user_id = $1::uuid AND company_id = $2::uuid)",
+		userID, req.CompanyID).Scan(&alreadyAssigned)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to check existing assignment")
+		return
+	}
+	if alreadyAssigned {
+		httputil.Error(w, http.StatusConflict, "user is already assigned to this company")
+		return
+	}
+	
+	// Add user to company
+	_, err = h.db.Pool.Exec(r.Context(),
+		`INSERT INTO dm3_auth.user_companies (user_id, company_id, role, status, created_at)
+		 VALUES ($1::uuid, $2::uuid, $3, 'active', now())`,
+		userID, req.CompanyID, req.Role)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to assign user to company")
+		return
+	}
+	
+	// Return assignment details
+	response := userCompanyAssignmentResponse{
+		UserID:      userID,
+		CompanyID:   req.CompanyID,
+		CompanyName: companyName,
+		Role:        req.Role,
+		Status:      "active",
+		AssignedAt:  time.Now().Format(time.RFC3339),
+	}
+	
+	httputil.JSON(w, http.StatusCreated, response)
+}
 
-	httputil.JSON(w, http.StatusOK, map[string]string{
-		"password": password,
-		"message":  "Password reset successfully",
+// RemoveUserFromCompany removes a user from a specific company
+func (h *Handlers) RemoveUserFromCompany(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
+	companyID := chi.URLParam(r, "companyId")
+	
+	// Check if this is the user's only company
+	var companyCount int
+	err := h.db.Pool.QueryRow(r.Context(),
+		"SELECT COUNT(*) FROM dm3_auth.user_companies WHERE user_id = $1::uuid AND status = 'active'",
+		userID).Scan(&companyCount)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to check company count")
+		return
+	}
+	
+	if companyCount <= 1 {
+		httputil.Error(w, http.StatusBadRequest, "cannot remove user from their only company")
+		return
+	}
+	
+	// Remove assignment
+	result, err := h.db.Pool.Exec(r.Context(),
+		`DELETE FROM dm3_auth.user_companies 
+		 WHERE user_id = $1::uuid AND company_id = $2::uuid`,
+		userID, companyID)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to remove user from company")
+		return
+	}
+	
+	if result.RowsAffected() == 0 {
+		httputil.Error(w, http.StatusNotFound, "user not assigned to this company")
+		return
+	}
+	
+	httputil.JSON(w, http.StatusOK, map[string]interface{}{
+		"message": "user removed from company successfully",
+		"user_id": userID,
+		"company_id": companyID,
 	})
 }
+
+// UpdateUserCompanyRole updates a user's role in a specific company
+func (h *Handlers) UpdateUserCompanyRole(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
+	companyID := chi.URLParam(r, "companyId")
+	
+	var req updateUserCompanyRoleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	
+	// Validate role
+	validRoles := map[string]bool{
+		"primary_manager": true,
+		"manager":         true,
+		"operator":        true,
+		"viewer":          true,
+	}
+	if !validRoles[req.Role] {
+		httputil.Error(w, http.StatusBadRequest, "invalid role")
+		return
+	}
+	
+	// Update role
+	result, err := h.db.Pool.Exec(r.Context(),
+		`UPDATE dm3_auth.user_companies 
+		 SET role = $3, updated_at = now()
+		 WHERE user_id = $1::uuid AND company_id = $2::uuid`,
+		userID, companyID, req.Role)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to update role")
+		return
+	}
+	
+	if result.RowsAffected() == 0 {
+		httputil.Error(w, http.StatusNotFound, "user not assigned to this company")
+		return
+	}
+	
+	httputil.JSON(w, http.StatusOK, map[string]interface{}{
+		"message": "role updated successfully",
+		"user_id": userID,
+		"company_id": companyID,
+		"new_role": req.Role,
+	})
+}
+
+// GetAvailableCompanies returns companies that a user can be added to
+func (h *Handlers) GetAvailableCompanies(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
+	
+	// Get companies the user is NOT already assigned to
+	rows, err := h.db.Pool.Query(r.Context(), `
+		SELECT c.id, c.name, c.code, c.status
+		FROM dm3_auth.companies c
+		WHERE c.status = 'active'
+		  AND c.id NOT IN (
+		    SELECT uc.company_id 
+		    FROM dm3_auth.user_companies uc 
+		    WHERE uc.user_id = $1::uuid
+		  )
+		ORDER BY c.name`, userID)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to fetch available companies")
+		return
+	}
+	defer rows.Close()
+	
+	type availableCompany struct {
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		Code   string `json:"code"`
+		Status string `json:"status"`
+	}
+	
+	var companies []availableCompany
+	for rows.Next() {
+		var company availableCompany
+		if err := rows.Scan(&company.ID, &company.Name, &company.Code, &company.Status); err != nil {
+			continue
+		}
+		companies = append(companies, company)
+	}
+	
+	httputil.JSON(w, http.StatusOK, map[string]interface{}{
+		"companies": companies,
+	})
+}
+
+// GetUserCompanyMatrix returns a detailed view of user's roles across companies
+func (h *Handlers) GetUserCompanyMatrix(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
+	
+	// Get user basic info
+	var userName, userEmail string
+	err := h.db.Pool.QueryRow(r.Context(),
+		"SELECT name, email FROM dm3_auth.users WHERE id = $1::uuid", userID).Scan(&userName, &userEmail)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+	
+	// Get company assignments
+	rows, err := h.db.Pool.Query(r.Context(), `
+		SELECT uc.company_id, c.name, c.code, uc.role, uc.status, uc.created_at, uc.updated_at
+		FROM dm3_auth.user_companies uc
+		JOIN dm3_auth.companies c ON c.id = uc.company_id
+		WHERE uc.user_id = $1::uuid
+		ORDER BY c.name`, userID)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to fetch company assignments")
+		return
+	}
+	defer rows.Close()
+	
+	type companyAssignment struct {
+		CompanyID   string    `json:"company_id"`
+		CompanyName string    `json:"company_name"`
+		CompanyCode string    `json:"company_code"`
+		Role        string    `json:"role"`
+		Status      string    `json:"status"`
+		AssignedAt  time.Time `json:"assigned_at"`
+		UpdatedAt   time.Time `json:"updated_at"`
+	}
+	
+	var assignments []companyAssignment
+	for rows.Next() {
+		var assignment companyAssignment
+		if err := rows.Scan(&assignment.CompanyID, &assignment.CompanyName, &assignment.CompanyCode,
+			&assignment.Role, &assignment.Status, &assignment.AssignedAt, &assignment.UpdatedAt); err != nil {
+			continue
+		}
+		assignments = append(assignments, assignment)
+	}
+	
+	httputil.JSON(w, http.StatusOK, map[string]interface{}{
+		"user_id":     userID,
+		"user_name":   userName,
+		"user_email":  userEmail,
+		"assignments": assignments,
+	})
+}
+
+// ResetUserPassword is now implemented in handlers.go with the new schema

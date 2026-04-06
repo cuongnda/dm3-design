@@ -1,0 +1,27 @@
+{
+  "name": "dm3-tests",
+  "version": "1.0.0",
+  "description": "E2E and integration tests for DM3 application",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:ui": "playwright test --ui",
+    "test:department": "playwright test department-management.spec.ts",
+    "test:components": "playwright test reusable-components.spec.ts",
+    "test:mobile": "playwright test --project=mobile-chrome",
+    "test:firefox": "playwright test --project=firefox",
+    "test:webkit": "playwright test --project=webkit",
+    "test:parallel": "playwright test --workers=4",
+    "test:retry": "playwright test --retries=2",
+    "show-report": "playwright show-report",
+    "install": "playwright install",
+    "install-deps": "playwright install-deps"
+  },
+  "dependencies": {
+    "@playwright/test": "^1.40.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

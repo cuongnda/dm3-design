@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	mathrand "math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -839,4 +840,106 @@ func parsePagination(r *http.Request) (int, int) {
 		}
 	}
 	return page, limit
+}
+
+// ResetUserPassword generates a new random password for a user
+func (h *Handlers) ResetUserPassword(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
+	if userID == "" {
+		httputil.Error(w, http.StatusBadRequest, "user ID required")
+		return
+	}
+
+	// Generate random password
+	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	password := make([]byte, 12)
+	for i := range password {
+		password[i] = chars[mathrand.Intn(len(chars))]
+	}
+	newPassword := string(password)
+
+	// Hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to hash password")
+		return
+	}
+
+	// Update password in database
+	result, err := h.db.Pool.Exec(r.Context(), `
+		UPDATE dm3_auth.accounts 
+		SET password_hash = $1, updated_on = NOW()
+		WHERE id = $2::uuid
+	`, string(hashedPassword), userID)
+
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to update password")
+		return
+	}
+
+	if result.RowsAffected() == 0 {
+		httputil.Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	httputil.JSON(w, http.StatusOK, map[string]interface{}{
+		"password": newPassword,
+		"message":  "password reset successfully",
+	})
+}
+
+// ChangeUserPassword sets a custom password for a user
+func (h *Handlers) ChangeUserPassword(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
+	if userID == "" {
+		httputil.Error(w, http.StatusBadRequest, "user ID required")
+		return
+	}
+
+	var req struct {
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Password == "" {
+		httputil.Error(w, http.StatusBadRequest, "password is required")
+		return
+	}
+
+	if len(req.Password) < 6 {
+		httputil.Error(w, http.StatusBadRequest, "password must be at least 6 characters")
+		return
+	}
+
+	// Hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to hash password")
+		return
+	}
+
+	// Update password in database
+	result, err := h.db.Pool.Exec(r.Context(), `
+		UPDATE dm3_auth.accounts 
+		SET password_hash = $1, updated_on = NOW()
+		WHERE id = $2::uuid
+	`, string(hashedPassword), userID)
+
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to update password")
+		return
+	}
+
+	if result.RowsAffected() == 0 {
+		httputil.Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	httputil.JSON(w, http.StatusOK, map[string]interface{}{
+		"message": "password changed successfully",
+	})
 }

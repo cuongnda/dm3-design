@@ -1,262 +1,227 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PageHeader, DataTable, type Column, Button, Input } from '@dm3/ui';
-import { Bell, AlertTriangle, ShieldAlert, Info, ChevronLeft, ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useEvents } from '@/lib/hooks';
-import { useRealtimeStore, useActiveAlarms, useRecentEvents } from '@dm3/api-client';
-import type { EventDTO } from '@/lib/api';
+import { Bell, AlertTriangle, ShieldAlert, Info, Search } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, Input, Button } from '@dm3/ui';
 
-type DecisionFilter = 'all' | 'granted' | 'denied';
-
-function getSeverity(event: EventDTO): 'critical' | 'warning' | 'info' {
-  if (event.reason === 'forced' || event.reason === 'tamper') return 'critical';
-  if (event.decision === 'denied') return 'warning';
-  return 'info';
+interface Alert {
+  id: string;
+  type: 'critical' | 'warning' | 'info';
+  title: string;
+  message: string;
+  timestamp: string;
+  location: string;
+  acknowledged: boolean;
 }
 
-function getSeverityConfig(t: any) {
-  return {
-    critical: { label: t('alerts.severity.critical'), bg: 'bg-error/20 text-error' },
-    warning: { label: t('alerts.severity.warning'), bg: 'bg-warning/20 text-warning' },
-    info: { label: t('alerts.severity.info'), bg: 'bg-secure/20 text-secure' },
-  };
-}
-
-function getTabs(t: any): { key: DecisionFilter | 'critical'; label: string; icon: React.ReactNode }[] {
-  return [
-    { key: 'all', label: t('alerts.tabs.all'), icon: <Bell size={14} /> },
-    { key: 'critical', label: t('alerts.tabs.critical'), icon: <ShieldAlert size={14} /> },
-    { key: 'denied', label: t('alerts.tabs.denied'), icon: <AlertTriangle size={14} /> },
-    { key: 'granted', label: t('alerts.tabs.granted'), icon: <Info size={14} /> },
-  ];
-}
+const mockAlerts: Alert[] = [
+  {
+    id: '1',
+    type: 'critical',
+    title: 'Security Breach',
+    message: 'Unauthorized access attempt detected at Main Entrance',
+    timestamp: '2026-04-04 18:30:00',
+    location: 'Main Entrance',
+    acknowledged: false
+  },
+  {
+    id: '2',
+    type: 'warning', 
+    title: 'Door Left Open',
+    message: 'Server Room door has been open for 10 minutes',
+    timestamp: '2026-04-04 18:25:00',
+    location: 'Server Room',
+    acknowledged: false
+  },
+  {
+    id: '3',
+    type: 'info',
+    title: 'System Update',
+    message: 'Security system updated successfully',
+    timestamp: '2026-04-04 18:00:00',
+    location: 'System',
+    acknowledged: true
+  }
+];
 
 export function AlertsPage() {
-  const { t } = useTranslation('secure');
-  const [activeTab, setActiveTab] = useState<'all' | 'critical' | DecisionFilter>('all');
-  const [doorFilter] = useState('');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [page, setPage] = useState(1);
+  const { t } = useTranslation();
+  const [alerts] = useState<Alert[]>(mockAlerts);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'critical' | 'warning' | 'info'>('all');
 
-  // Real-time state — connection managed by <RealtimeProvider> in App.tsx
-  const isConnected = useRealtimeStore((s) => s.connected);
-  const activeAlarms = useActiveAlarms();
-  const recentEvents = useRecentEvents(20);
+  const filteredAlerts = alerts.filter(alert => {
+    const matchesSearch = alert.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         alert.message.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = filterType === 'all' || alert.type === filterType;
+    return matchesSearch && matchesType;
+  });
 
-  const params: Record<string, string> = {};
-  if (doorFilter) params.door_id = doorFilter;
-  if (activeTab === 'granted' || activeTab === 'denied') params.decision = activeTab;
-  if (fromDate) params.from = new Date(fromDate).toISOString();
-  if (toDate) params.to = new Date(toDate + 'T23:59:59').toISOString();
-
-  const { data, isLoading, error } = useEvents(page, params);
-  const apiEvents = data?.data ?? [];
-  const total = data?.total ?? 0;
-  const totalPages = Math.ceil(total / 50);
-
-  // Convert real-time events to EventDTO format
-  const realtimeEventDTOs: EventDTO[] = recentEvents.map(event => ({
-    id: event.id,
-    tenant_id: event.tenantId,
-    time: event.time.toISOString(),
-    door_id: event.doorId,
-    device_id: event.deviceId,
-    person_id: undefined,
-    person_name: event.personName,
-    credential_type: event.credentialType,
-    direction: event.direction,
-    decision: event.decision,
-    reason: event.reason,
-    confidence: event.confidence,
-  }));
-
-  // Merge real-time events with API events
-  const events = [
-    ...realtimeEventDTOs,
-    ...apiEvents.filter(apiEvent => 
-      !realtimeEventDTOs.some(rtEvent => rtEvent.id === apiEvent.id)
-    )
-  ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-
-  // Client-side filter for 'critical' tab (forced/tamper events)
-  const filtered = useMemo(() => {
-    if (activeTab === 'critical') {
-      return events.filter(e => getSeverity(e) === 'critical');
+  const getAlertIcon = (type: string) => {
+    switch (type) {
+      case 'critical': return <ShieldAlert size={20} className="text-red-500" />;
+      case 'warning': return <AlertTriangle size={20} className="text-yellow-500" />;
+      case 'info': return <Info size={20} className="text-blue-500" />;
+      default: return <Bell size={20} className="text-gray-500" />;
     }
-    return events;
-  }, [events, activeTab]);
+  };
 
-  const severityConfig = getSeverityConfig(t);
-  const tabs = getTabs(t);
+  const getAlertColor = (type: string) => {
+    switch (type) {
+      case 'critical': return 'border-l-red-500 bg-red-50';
+      case 'warning': return 'border-l-yellow-500 bg-yellow-50';
+      case 'info': return 'border-l-blue-500 bg-blue-50';
+      default: return 'border-l-gray-500 bg-gray-50';
+    }
+  };
 
-  const counts = useMemo(() => ({
-    total: Math.max(total, events.length),
-    critical: events.filter(e => getSeverity(e) === 'critical').length + activeAlarms.filter(a => a.severity === 'critical').length,
-    denied: events.filter(e => e.decision === 'denied').length,
-    granted: events.filter(e => e.decision === 'granted').length,
-    activeAlarms: activeAlarms.length,
-  }), [events, total, activeAlarms]);
-
-  const stats = [
-    { label: t('alerts.stats.totalEvents'), value: counts.total, cls: 'text-foreground', bgCls: 'bg-foreground/10', icon: <Bell size={16} /> },
-    { label: t('alerts.stats.critical'), value: counts.critical, cls: 'text-error', bgCls: 'bg-error/10', icon: <ShieldAlert size={16} /> },
-    { label: t('alerts.stats.denied'), value: counts.denied, cls: 'text-warning', bgCls: 'bg-warning/10', icon: <AlertTriangle size={16} /> },
-    { label: t('alerts.stats.granted'), value: counts.granted, cls: 'text-secure', bgCls: 'bg-secure/10', icon: <Info size={16} /> },
-  ];
-
-  const columns: Column<EventDTO>[] = [
-    {
-      key: 'time', header: t('alerts.table.time'), width: '170px', sortable: true,
-      render: (r) => (
-        <span className="font-mono text-[12px] text-muted-foreground">
-          {new Date(r.time).toLocaleString()}
-        </span>
-      ),
-    },
-    {
-      key: 'decision', header: t('alerts.table.severity'), width: '130px',
-      render: (r) => {
-        const sev = getSeverity(r);
-        const cfg = severityConfig[sev];
-        return (
-          <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium', cfg.bg)}>
-            <span className="w-1.5 h-1.5 rounded-full bg-current" />
-            {cfg.label}
-          </span>
-        );
-      },
-    },
-    {
-      key: 'door_name', header: t('alerts.table.doorSource'), width: '180px',
-      render: (r) => <span className="text-[13px] text-muted-foreground">{r.door_id || '—'}</span>,
-    },
-    {
-      key: 'person_name', header: t('alerts.table.person'),
-      render: (r) => (
-        <span className="text-[13px] text-foreground">
-          {r.person_name || <span className="text-muted-foreground">—</span>}
-        </span>
-      ),
-    },
-    {
-      key: 'credential_type', header: t('alerts.table.credential'), width: '110px',
-      render: (r) => (
-        <span className="text-[12px] text-muted-foreground capitalize">{r.credential_type || '—'}</span>
-      ),
-    },
-    {
-      key: 'reason', header: t('alerts.table.reason'), width: '160px',
-      render: (r) => (
-        <span className="text-[12px] text-muted-foreground">{r.reason || '—'}</span>
-      ),
-    },
-  ];
+  const criticalCount = alerts.filter(a => a.type === 'critical').length;
+  const warningCount = alerts.filter(a => a.type === 'warning').length;
+  const infoCount = alerts.filter(a => a.type === 'info').length;
 
   return (
-    <div>
-      <PageHeader 
-        title={t('alerts.title')} 
-        description={t('alerts.description', { 
-          status: isConnected ? t('alerts.status.live') : t('alerts.status.offline') 
-        })} 
-      />
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Security Alerts</h1>
+          <p className="text-muted-foreground">Monitor and manage security events</p>
+        </div>
+        <Button>
+          <Bell size={16} className="mr-2" />
+          Mark All Read
+        </Button>
+      </div>
 
-      {/* Stats bar */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        {stats.map((s) => (
-          <div key={s.label} className="bg-card border border-border rounded-lg p-4 flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${s.bgCls}`}>
-              <span className={s.cls}>{s.icon}</span>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                <ShieldAlert size={20} className="text-red-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-red-600">{criticalCount}</div>
+                <div className="text-sm text-muted-foreground">Critical</div>
+              </div>
             </div>
-            <div>
-              <div className={`text-[22px] font-bold ${s.cls}`}>{s.value}</div>
-              <div className="text-[11px] text-muted-foreground">{s.label}</div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                <AlertTriangle size={20} className="text-yellow-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-yellow-600">{warningCount}</div>
+                <div className="text-sm text-muted-foreground">Warning</div>
+              </div>
             </div>
-          </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Info size={20} className="text-blue-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-blue-600">{infoCount}</div>
+                <div className="text-sm text-muted-foreground">Info</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search and Filter */}
+      <div className="flex gap-4">
+        <div className="flex-1 relative">
+          <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search alerts..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            variant={filterType === 'all' ? 'default' : 'outline'} 
+            onClick={() => setFilterType('all')}
+          >
+            All
+          </Button>
+          <Button 
+            variant={filterType === 'critical' ? 'default' : 'outline'} 
+            onClick={() => setFilterType('critical')}
+          >
+            Critical
+          </Button>
+          <Button 
+            variant={filterType === 'warning' ? 'default' : 'outline'} 
+            onClick={() => setFilterType('warning')}
+          >
+            Warning
+          </Button>
+          <Button 
+            variant={filterType === 'info' ? 'default' : 'outline'} 
+            onClick={() => setFilterType('info')}
+          >
+            Info
+          </Button>
+        </div>
+      </div>
+
+      {/* Alerts List */}
+      <div className="space-y-4">
+        {filteredAlerts.map((alert) => (
+          <Card key={alert.id} className={`border-l-4 ${getAlertColor(alert.type)}`}>
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between">
+                <div className="flex items-start gap-3 flex-1">
+                  {getAlertIcon(alert.type)}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold">{alert.title}</h3>
+                      {!alert.acknowledged && (
+                        <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                      )}
+                    </div>
+                    <p className="text-muted-foreground mb-2">{alert.message}</p>
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <span>{alert.timestamp}</span>
+                      <span>{alert.location}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm">
+                    Acknowledge
+                  </Button>
+                  <Button variant="outline" size="sm">
+                    Details
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         ))}
-      </div>
 
-      {/* Filter tabs + date/door filters */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <div className="flex gap-1 flex-1">
-          {tabs.map((t) => (
-            <button
-              type="button"
-              key={t.key}
-              onClick={() => { setActiveTab(t.key as any); setPage(1); }}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors',
-                activeTab === t.key
-                  ? 'bg-secure/10 text-secure border border-secure/30'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-              )}
-            >
-              {t.icon}
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-2 items-center">
-          <Input
-            type="date"
-            value={fromDate}
-            onChange={(e) => { setFromDate(e.target.value); setPage(1); }}
-            className="h-8 text-[12px] scheme-dark"
-          />
-          <span className="text-muted-foreground text-[12px]">→</span>
-          <Input
-            type="date"
-            value={toDate}
-            onChange={(e) => { setToDate(e.target.value); setPage(1); }}
-            className="h-8 text-[12px] scheme-dark"
-          />
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-card border border-border rounded-lg overflow-hidden">
-        {isLoading && <div className="text-center py-8 text-muted-foreground">{t('alerts.loading')}</div>}
-        {error && <div className="text-center py-8 text-error">{t('alerts.error')}</div>}
-        {!isLoading && !error && (
-          <DataTable
-            columns={columns}
-            data={filtered}
-            rowKey={(r) => r.id}
-            rowClassName={(r) => getSeverity(r) === 'critical' ? 'bg-error/5' : ''}
-          />
+        {filteredAlerts.length === 0 && (
+          <Card>
+            <CardContent className="text-center py-12">
+              <Bell size={48} className="mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No alerts found</h3>
+              <p className="text-muted-foreground">All clear! No security alerts match your criteria.</p>
+            </CardContent>
+          </Card>
         )}
       </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <span className="text-[12px] text-muted-foreground">
-            {t('alerts.pagination.page', { current: page, total: totalPages, count: total })}
-          </span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="gap-1"
-            >
-              <ChevronLeft size={14} /> {t('alerts.pagination.previous')}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="gap-1"
-            >
-              {t('alerts.pagination.next')} <ChevronRight size={14} />
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

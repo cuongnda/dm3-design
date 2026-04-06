@@ -1,6 +1,8 @@
 package tenant
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/pkg/db"
@@ -10,11 +12,11 @@ import (
 func RegisterRoutes(r chi.Router, database *db.DB, jwtSecret string) {
 	handlers := NewHandlers(database)
 
-	// Public tenant routes (require authentication only)
+	// Public tenant routes (require authentication + tenant context)
 	r.Route("/api/v1/tenant", func(r chi.Router) {
-		// Basic auth middleware
 		r.Use(authsvc.AuthMiddleware(jwtSecret))
-		
+		r.Use(Middleware(database, IsolationModeSystemAdmin))
+
 		// Current tenant info (any authenticated user)
 		r.Get("/current", handlers.GetCurrentTenant)
 		r.Get("/stats", handlers.GetTenantStats)

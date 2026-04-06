@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Plus, Users, Pencil, Trash2, UserPlus } from 'lucide-react';
-import { PageHeader, DataTable, type Column, StatCard, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, Button, Input, Label, Textarea } from '@dm3/ui';
+import { PageHeader, DataTable, type Column, StatCard, AppModal, Button, Input, Label, Textarea } from '@dm3/ui';
 import { useGroups, useCreateGroup, useUpdateGroup, useDeleteGroup } from '@/lib/hooks';
 import type { PersonGroupDTO } from '@/lib/api';
 
@@ -195,81 +195,66 @@ export function GroupsPage() {
       )}
 
       {/* Create/Edit Form Modal */}
-      <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {editingId ? t('groups.form.editTitle') : t('groups.form.createTitle')}
-            </DialogTitle>
-            <DialogDescription>
-              {editingId ? t('groups.form.editDesc') : t('groups.form.createDesc')}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div>
-              <Label className="text-[12px]">{t('groups.form.nameLabel')}</Label>
-              <Input
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                placeholder={t('groups.form.namePlaceholder')}
-                className="mt-1 h-8 text-[13px]"
-              />
-            </div>
-
-            <div>
-              <Label className="text-[12px]">{t('groups.form.descLabel')}</Label>
-              <Textarea
-                value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder={t('groups.form.descPlaceholder')}
-                rows={3}
-                className="mt-1 resize-none text-[13px]"
-              />
-            </div>
+      <AppModal
+        open={showForm}
+        onOpenChange={setShowForm}
+        title={editingId ? t('groups.form.editTitle') : t('groups.form.createTitle')}
+        description={editingId ? t('groups.form.editDesc') : t('groups.form.createDesc')}
+        size="md"
+        showCancelButton
+        cancelLabel={t('common.cancel')}
+        submitDisabled={!isFormValid}
+        primaryAction={{
+          label: (createGroupMutation.isPending || updateGroupMutation.isPending)
+            ? t('groups.form.saving')
+            : editingId ? t('groups.form.update') : t('groups.form.createBtn'),
+          className: 'bg-manage hover:bg-manage/90',
+          loading: createGroupMutation.isPending || updateGroupMutation.isPending,
+          disabled: createGroupMutation.isPending || updateGroupMutation.isPending,
+          onClick: handleSubmit,
+        }}
+      >
+        <div className="space-y-4">
+          <div>
+            <Label className="text-[12px]">{t('groups.form.nameLabel')}</Label>
+            <Input
+              value={formData.name}
+              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              placeholder={t('groups.form.namePlaceholder')}
+              className="mt-1 h-8 text-[13px]"
+            />
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={!isFormValid || createGroupMutation.isPending || updateGroupMutation.isPending}
-              className="bg-manage hover:bg-manage/90"
-            >
-              {(createGroupMutation.isPending || updateGroupMutation.isPending)
-                ? t('groups.form.saving')
-                : editingId ? t('groups.form.update') : t('groups.form.createBtn')
-              }
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div>
+            <Label className="text-[12px]">{t('groups.form.descLabel')}</Label>
+            <Textarea
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder={t('groups.form.descPlaceholder')}
+              rows={3}
+              className="mt-1 resize-none text-[13px]"
+            />
+          </div>
+        </div>
+      </AppModal>
 
       {/* Delete Confirmation */}
-      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('groups.delete.title')}</DialogTitle>
-            <DialogDescription>
-              {t('groups.delete.description', { name: groups.find(g => g.id === deleteId)?.name ?? '' })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleteGroupMutation.isPending}
-            >
-              {deleteGroupMutation.isPending ? t('groups.delete.deleting') : t('groups.delete.confirm')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AppModal
+        open={!!deleteId}
+        onOpenChange={(open) => { if (!open) setDeleteId(null); }}
+        title={t('groups.delete.title')}
+        description={t('groups.delete.description', { name: groups.find(g => g.id === deleteId)?.name ?? '' })}
+        size="md"
+        showCancelButton
+        cancelLabel={t('common.cancel')}
+        primaryAction={{
+          label: deleteGroupMutation.isPending ? t('groups.delete.deleting') : t('groups.delete.confirm'),
+          variant: 'destructive',
+          onClick: handleDelete,
+          loading: deleteGroupMutation.isPending,
+          disabled: deleteGroupMutation.isPending,
+        }}
+      />
     </div>
   );
 }

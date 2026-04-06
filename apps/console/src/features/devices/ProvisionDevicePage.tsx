@@ -128,7 +128,7 @@ export function ProvisionDevicePage() {
   }
 
   return (
-    <div className="p-6">
+    <div>
       <PageHeader title={t('provisionDevice.title')} description="Create a new device and generate activation QR code" />
 
       <form onSubmit={handleSubmit} className="max-w-lg space-y-4">

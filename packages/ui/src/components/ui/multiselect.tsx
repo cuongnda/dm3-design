@@ -1,9 +1,10 @@
 import * as React from "react"
 import { createPortal } from "react-dom"
-import { Check, ChevronDown, Search, X } from "lucide-react"
+import { ChevronDown, Search, X } from "lucide-react"
 
 import { cn } from "../../lib/utils"
 import { Input } from "./input"
+import { Checkbox } from "./checkbox"
 
 export interface MultiselectOption {
   value: string
@@ -42,71 +43,113 @@ export function Multiselect({
 
   const filteredOptions = React.useMemo(() => {
     if (!search) return options
-    const query = search.toLowerCase()
-    return options.filter((o) => {
-      return (
-        o.label.toLowerCase().includes(query) ||
-        o.value.toLowerCase().includes(query) ||
-        o.description?.toLowerCase().includes(query)
-      )
-    })
+    const q = search.toLowerCase()
+    return options.filter(
+      (o) =>
+        o.label.toLowerCase().includes(q) ||
+        o.value.toLowerCase().includes(q) ||
+        o.description?.toLowerCase().includes(q)
+    )
   }, [options, search])
 
-  const selectedOptions = React.useMemo(() => {
-    const set = new Set(values)
-    return options.filter((o) => set.has(o.value))
-  }, [options, values])
+  const selectedSet = React.useMemo(() => new Set(values), [values])
 
   const displayText = React.useMemo(() => {
-    if (selectedOptions.length === 0) return placeholder
-    const firstTwo = selectedOptions.slice(0, 2).map((o) => o.label)
-    const restCount = selectedOptions.length - firstTwo.length
-    if (restCount > 0) return `${firstTwo.join(", ")} +${restCount} more`
-    return firstTwo.join(", ")
-  }, [placeholder, selectedOptions])
+    if (values.length === 0) return null
+    const labels = options.filter((o) => selectedSet.has(o.value)).map((o) => o.label)
+    if (labels.length === 0) return null
+    const first2 = labels.slice(0, 2).join(", ")
+    return labels.length > 2 ? `${first2} +${labels.length - 2}` : first2
+  }, [options, values, selectedSet])
 
-  const toggleValue = (optionValue: string) => {
+  const allFilteredSelected =
+    filteredOptions.length > 0 && filteredOptions.every((o) => selectedSet.has(o.value))
+  const someFilteredSelected = filteredOptions.some((o) => selectedSet.has(o.value))
+
+  const toggleValue = (val: string) => {
     if (disabled) return
-
-    const has = values.includes(optionValue)
-    if (has) {
-      onValuesChange(values.filter((v) => v !== optionValue))
-      return
+    if (selectedSet.has(val)) {
+      onValuesChange(values.filter((v) => v !== val))
+    } else {
+      if (typeof maxSelected === "number" && values.length >= maxSelected) return
+      onValuesChange([...values, val])
     }
+  }
 
-    if (typeof maxSelected === "number" && values.length >= maxSelected) return
-    onValuesChange([...values, optionValue])
+  const selectAll = () => {
+    const toAdd = filteredOptions
+      .filter((o) => !selectedSet.has(o.value))
+      .map((o) => o.value)
+    if (typeof maxSelected === "number") {
+      const remaining = maxSelected - values.length
+      onValuesChange([...values, ...toAdd.slice(0, remaining)])
+    } else {
+      onValuesChange([...values, ...toAdd])
+    }
+  }
+
+  const unselectAll = () => {
+    const filteredVals = new Set(filteredOptions.map((o) => o.value))
+    onValuesChange(values.filter((v) => !filteredVals.has(v)))
   }
 
   const updatePanelPosition = React.useCallback(() => {
     if (!triggerRef.current) return
-    const rect = triggerRef.current.getBoundingClientRect()
-    setPanelStyle({
+    const tr = triggerRef.current.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const GAP = 4
+    const PAD = 8
+    const MAX_H = 280
+    const MIN_BELOW = 200
+
+    let left = tr.left
+    if (left + tr.width > vw - PAD) {
+      left = Math.max(PAD, vw - tr.width - PAD)
+    }
+
+    const spaceBelow = vh - tr.bottom - GAP - PAD
+    const spaceAbove = tr.top - GAP - PAD
+    const openBelow = spaceBelow >= MIN_BELOW || spaceBelow >= spaceAbove
+
+    const base: React.CSSProperties = {
       position: "fixed",
-      top: rect.bottom + 4,
-      left: rect.left,
-      width: rect.width,
-      zIndex: 9999,
-    })
+      left,
+      width: tr.width,
+      minWidth: tr.width,
+      maxHeight: openBelow
+        ? Math.min(MAX_H, Math.max(80, spaceBelow))
+        : Math.min(MAX_H, Math.max(80, spaceAbove)),
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden",
+      zIndex: 2147483647,
+    }
+
+    setPanelStyle(
+      openBelow
+        ? { ...base, top: tr.bottom + GAP, bottom: "auto" }
+        : { ...base, top: "auto", bottom: vh - tr.top + GAP }
+    )
   }, [])
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     if (!open) return
     updatePanelPosition()
-
-    const onReposition = () => updatePanelPosition()
-    window.addEventListener("resize", onReposition)
-    window.addEventListener("scroll", onReposition, true)
+    const raf = requestAnimationFrame(() => updatePanelPosition())
+    window.addEventListener("resize", updatePanelPosition)
+    window.addEventListener("scroll", updatePanelPosition, true)
     return () => {
-      window.removeEventListener("resize", onReposition)
-      window.removeEventListener("scroll", onReposition, true)
+      cancelAnimationFrame(raf)
+      window.removeEventListener("resize", updatePanelPosition)
+      window.removeEventListener("scroll", updatePanelPosition, true)
     }
-  }, [open, updatePanelPosition])
+  }, [open, updatePanelPosition, filteredOptions.length])
 
   React.useEffect(() => {
     const handleOutside = (e: MouseEvent) => {
       const target = e.target as Node
-      if (rootRef.current?.contains(target)) return
+      if (triggerRef.current?.contains(target)) return
       if (panelRef.current?.contains(target)) return
       setOpen(false)
     }
@@ -126,52 +169,61 @@ export function Multiselect({
       <button
         ref={triggerRef}
         type="button"
+        data-slot="multiselect"
         disabled={disabled}
-        onClick={() => !disabled && setOpen(!open)}
+        onClick={() => !disabled && setOpen((v) => !v)}
         aria-expanded={open}
         className={cn(
-          "flex h-9 w-full items-center justify-between rounded-md border px-3 py-1 text-sm transition-colors",
+          "h-9 w-full min-w-0 rounded-md border px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none",
           "bg-input border-border text-foreground",
-          "hover:bg-muted disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed",
-          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/20 focus-visible:border-ring",
+          "focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/20",
+          "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+          "flex items-center justify-between gap-2",
           open && "border-ring ring-1 ring-ring/20"
         )}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className={cn(selectedOptions.length === 0 && "text-muted-foreground", "truncate")}>
-            {displayText}
+        <span className={cn("truncate flex-1 text-left", !displayText && "text-muted-foreground")}>
+          {displayText ?? placeholder}
+        </span>
+        {values.length > 0 && (
+          <span
+            className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground shrink-0"
+          >
+            {values.length}
           </span>
-        </div>
-
-        <ChevronDown size={16} className={cn("transition-transform text-muted-foreground", open && "rotate-180")} />
+        )}
+        <ChevronDown
+          size={16}
+          className={cn("text-muted-foreground transition-transform shrink-0", open && "rotate-180")}
+        />
       </button>
 
-      {open &&
+      {open && !disabled &&
         createPortal(
           <div
             ref={panelRef}
             style={panelStyle}
-            className="rounded-md border border-border bg-card shadow-lg"
+            className="rounded-md border border-border bg-card text-foreground shadow-xl"
           >
-            <div className="flex items-center gap-2 border-b border-border p-2">
-              <div className="relative flex-1">
+            {/* Search */}
+            <div className="shrink-0 border-b border-border bg-card p-2">
+              <div className="relative">
                 <Search
                   size={14}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
                 />
                 <Input
-                  type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={searchPlaceholder}
-                  className="h-8 pl-9 pr-9 bg-background"
+                  className="h-8 pl-9 pr-8 bg-background"
                   autoFocus
                 />
                 {search && (
                   <button
                     type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     onClick={() => setSearch("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
                     <X size={14} />
                   </button>
@@ -179,14 +231,39 @@ export function Multiselect({
               </div>
             </div>
 
-            <div className="max-h-80 overflow-y-auto p-1">
+            {/* Select All / Unselect All */}
+            {filteredOptions.length > 0 && (
+              <div className="shrink-0 border-b border-border bg-card">
+                {someFilteredSelected ? (
+                  <button
+                    type="button"
+                    onClick={unselectAll}
+                    className="w-full cursor-pointer px-3 py-1.5 text-left text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
+                    Unselect all
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={selectAll}
+                    disabled={typeof maxSelected === "number" && values.length >= maxSelected}
+                    className="w-full cursor-pointer px-3 py-1.5 text-left text-xs text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Select all
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Options */}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-card py-1">
               {filteredOptions.length === 0 ? (
                 <div className="px-3 py-2 text-sm text-muted-foreground">No options found</div>
               ) : (
                 filteredOptions.map((option) => {
-                  const selected = values.includes(option.value)
+                  const checked = selectedSet.has(option.value)
                   const disabledOption =
-                    !selected && typeof maxSelected === "number" && values.length >= maxSelected
+                    !checked && typeof maxSelected === "number" && values.length >= maxSelected
 
                   return (
                     <button
@@ -195,21 +272,18 @@ export function Multiselect({
                       disabled={disabledOption}
                       onClick={() => toggleValue(option.value)}
                       className={cn(
-                        "flex w-full items-start gap-2 rounded px-3 py-2 text-left text-sm transition-colors",
-                        "hover:bg-muted",
-                        selected && "bg-muted",
+                        "flex w-full cursor-pointer items-center gap-2.5 px-3 py-2 text-left text-sm",
+                        "hover:bg-muted focus:bg-muted focus:outline-none transition-colors",
+                        checked && "bg-primary/5",
                         disabledOption && "opacity-50 cursor-not-allowed"
                       )}
                     >
-                      <span
-                        className={cn(
-                          "mt-0.5 flex size-5 items-center justify-center rounded border border-border",
-                          selected && "border-ring text-ring"
-                        )}
-                      >
-                        {selected ? <Check size={14} /> : null}
-                      </span>
-
+                      <Checkbox
+                        checked={checked}
+                        readOnly
+                        tabIndex={-1}
+                        className="pointer-events-none shrink-0"
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           {option.icon}
@@ -232,4 +306,3 @@ export function Multiselect({
     </div>
   )
 }
-

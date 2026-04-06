@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PageHeader, Button, Select, SelectOption } from '@dm3/ui';
+import { PageHeader, Button, Select, SelectOption, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@dm3/ui';
 import { fetchSystemDevices, fetchCompanies, type CompanyDTO } from '@/lib/api';
 import { RefreshCw } from 'lucide-react';
 
@@ -92,50 +92,50 @@ export function SystemDevicesPage() {
       </div>
 
       <div className="border border-border rounded-lg overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-card text-[11px] text-muted-foreground uppercase tracking-wider">
-              <th className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.device')}</th>
-              <th className="text-left py-2.5 px-4 font-medium">{tDevices('devices.table.name')}</th>
-              <th className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.company')}</th>
-              <th className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.type')}</th>
-              <th className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.status')}</th>
-              <th className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.location')}</th>
-              <th className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.lastSeen')}</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table className="w-full">
+          <TableHeader>
+            <TableRow className="bg-card text-[11px] text-muted-foreground uppercase tracking-wider">
+              <TableHead className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.device')}</TableHead>
+              <TableHead className="text-left py-2.5 px-4 font-medium">{tDevices('devices.table.name')}</TableHead>
+              <TableHead className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.company')}</TableHead>
+              <TableHead className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.type')}</TableHead>
+              <TableHead className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.status')}</TableHead>
+              <TableHead className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.location')}</TableHead>
+              <TableHead className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.lastSeen')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {loading ? (
-              <tr>
-                <td colSpan={7} className="py-12 text-center">
+              <TableRow>
+                <TableCell colSpan={7} className="py-12 text-center">
                   <div className="w-5 h-5 border-2 border-secure/30 border-t-secure rounded-full animate-spin mx-auto" />
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : devices.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="py-12 text-center text-[13px] text-muted-foreground">
+              <TableRow>
+                <TableCell colSpan={7} className="py-12 text-center text-[13px] text-muted-foreground">
                   No devices found
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : (
               devices.map((d) => (
-                <tr key={d.id} className="border-t border-border hover:bg-muted/50">
-                  <td className="py-2.5 px-4 text-[13px] text-foreground font-mono">{d.device_id}</td>
-                  <td className="py-2.5 px-4 text-[13px] text-foreground">{d.name || '—'}</td>
-                  <td className="py-2.5 px-4 text-[13px] text-muted-foreground">{d.company_name || '—'}</td>
-                  <td className="py-2.5 px-4 text-[13px] text-muted-foreground capitalize">{d.type}</td>
-                  <td className="py-2.5 px-4">
+                <TableRow key={d.id} className="border-t border-border hover:bg-muted/50">
+                  <TableCell className="py-2.5 px-4 text-[13px] text-foreground font-mono">{d.device_id}</TableCell>
+                  <TableCell className="py-2.5 px-4 text-[13px] text-foreground">{d.name || '—'}</TableCell>
+                  <TableCell className="py-2.5 px-4 text-[13px] text-muted-foreground">{d.company_name || '—'}</TableCell>
+                  <TableCell className="py-2.5 px-4 text-[13px] text-muted-foreground capitalize">{d.type}</TableCell>
+                  <TableCell className="py-2.5 px-4">
                     <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium capitalize ${statusColors[d.status] || statusColors.offline}`}>{d.status}</span>
-                  </td>
-                  <td className="py-2.5 px-4 text-[13px] text-muted-foreground">{d.location || '—'}</td>
-                  <td className="py-2.5 px-4 text-[13px] text-muted-foreground">
+                  </TableCell>
+                  <TableCell className="py-2.5 px-4 text-[13px] text-muted-foreground">{d.location || '—'}</TableCell>
+                  <TableCell className="py-2.5 px-4 text-[13px] text-muted-foreground">
                     {d.last_seen ? new Date(d.last_seen).toLocaleString() : '—'}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   );

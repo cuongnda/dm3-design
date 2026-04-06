@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import i18n from '@/i18n';
 import { useThemeStore } from '@/stores/themeStore';
+import { TenantProvider } from '@/components/tenant';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -20,7 +21,11 @@ export function Providers({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    document.documentElement.classList.toggle('light', theme === 'light');
+    const root = document.documentElement;
+    const isLight = theme === 'light';
+    // .light overrides CSS variables; .dark is required for Tailwind @custom-variant dark (&:is(.dark *))
+    root.classList.toggle('light', isLight);
+    root.classList.toggle('dark', !isLight);
   }, [theme]);
 
   return (
@@ -28,7 +33,9 @@ export function Providers({ children }: { children: ReactNode }) {
       <ToastProvider>
         <QueryClientProvider client={queryClient}>
           <TooltipProvider delayDuration={200}>
-            {children}
+            <TenantProvider>
+              {children}
+            </TenantProvider>
           </TooltipProvider>
         </QueryClientProvider>
       </ToastProvider>

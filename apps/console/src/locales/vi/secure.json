@@ -124,7 +124,7 @@
   "alerts.table.severity": "Mức độ",
   "alerts.table.doorSource": "Cửa / Nguồn",
   "alerts.table.person": "Người",
-  "alerts.table.credential": "Credential",
+  "alerts.table.credential": "Thông tin xác thực",
   "alerts.table.reason": "Lý do",
   "alerts.severity.critical": "Nghiêm trọng",
   "alerts.severity.warning": "Từ chối",
