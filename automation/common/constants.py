@@ -11,11 +11,8 @@ env_path = Path(__file__).parent.parent / '.env'
 if env_path.exists():
     load_dotenv(env_path)
 
-# Backend API endpoints
-API_AUTH = os.getenv('API_AUTH', 'http://localhost:8005')
-API_IDENTITY = os.getenv('API_IDENTITY', 'http://localhost:8004')
-API_ACCESS = os.getenv('API_ACCESS', 'http://localhost:8003')
-API_GATEWAY = os.getenv('API_GATEWAY', 'http://localhost:8002')
+# Backend API endpoint
+API_URL = os.getenv('API_URL', 'http://localhost:8080')
 
 # Frontend
 WEB_URL = os.getenv('WEB_URL', 'http://localhost:3000')

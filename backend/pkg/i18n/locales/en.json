@@ -64,5 +64,8 @@
 
   "photo.upload_error": "Failed to upload photo",
   "photo.invalid_format": "Invalid photo format",
-  "photo.too_large": "Photo file is too large"
+  "photo.too_large": "Photo file is too large",
+
+  "access_time.template_not_found": "Access time template not found",
+  "access_time.invalid_timezone": "Invalid timezone"
 }

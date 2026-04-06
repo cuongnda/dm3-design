@@ -85,6 +85,8 @@ export function CompanyListPage() {
         </div>
       ) : (
         <DataTable
+          data-testid="company-table-list"
+          rowTestId={(c) => `company-row-${c.id}`}
           columns={[
             { key: 'name', header: t('companies.table.name'), sortable: true, render: (c) => <span className="font-medium">{c.name}</span> },
             { key: 'code', header: t('companies.table.code'), sortable: true, render: (c) => <span className="font-mono">{c.code}</span> },

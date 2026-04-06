@@ -401,12 +401,12 @@ const SelectItem = React.forwardRef<
 ))
 SelectItem.displayName = "SelectItem"
 
-export { 
-  Select, 
-  SelectOption, 
+export {
+  Select,
+  SelectOption,
   SelectTrigger,
   SelectValue,
   SelectContent,
   SelectItem,
-  ComboBox 
+  ComboBox
 }

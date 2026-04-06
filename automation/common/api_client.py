@@ -9,9 +9,16 @@ class DM3Client:
     """Authenticated API client for DM3 backend."""
 
     def __init__(self, base_url: str = None):
-        self.auth_url = base_url or constants.API_AUTH
+        self.base_url = (base_url or constants.API_URL).rstrip("/")
+        self.auth_url = self.base_url
         self.session = requests.Session()
         self.token = None
+
+    def _url(self, path: str) -> str:
+        """Build full URL from relative path."""
+        if path.startswith("http"):
+            return path
+        return f"{self.base_url}{path}"
 
     def login(self, email: str = None, password: str = None) -> dict:
         """Login and store access token."""
@@ -19,7 +26,7 @@ class DM3Client:
         password = password or constants.SYSADMIN_PASSWORD
 
         resp = self.session.post(
-            f"{self.auth_url}/api/v1/auth/login",
+            self._url("/api/v1/auth/login"),
             json={"email": email, "password": password},
             timeout=constants.TIMEOUT_API,
         )
@@ -38,7 +45,7 @@ class DM3Client:
     def login_step2(self, temp_token: str, company_id: str) -> dict:
         """Complete two-step login with company selection."""
         resp = self.session.post(
-            f"{self.auth_url}/api/v1/auth/login-step2",
+            self._url("/api/v1/auth/login-step2"),
             json={"temporary_token": temp_token, "company_id": company_id},
             timeout=constants.TIMEOUT_API,
         )
@@ -54,14 +61,24 @@ class DM3Client:
             h["Authorization"] = f"Bearer {self.token}"
         return h
 
-    def get(self, url: str, **kwargs) -> requests.Response:
-        return self.session.get(url, headers=self.headers, timeout=constants.TIMEOUT_API, **kwargs)
+    def get(self, path: str, **kwargs) -> requests.Response:
+        return self.session.get(self._url(path), headers=self.headers, timeout=constants.TIMEOUT_API, **kwargs)
 
-    def post(self, url: str, **kwargs) -> requests.Response:
-        return self.session.post(url, headers=self.headers, timeout=constants.TIMEOUT_API, **kwargs)
+    def post(self, path: str, **kwargs) -> requests.Response:
+        headers = self.headers
+        # Don't set Content-Type for multipart uploads — requests sets it automatically
+        if "files" in kwargs:
+            headers = {k: v for k, v in headers.items() if k.lower() != "content-type"}
+        return self.session.post(self._url(path), headers=headers, timeout=constants.TIMEOUT_API, **kwargs)
 
-    def put(self, url: str, **kwargs) -> requests.Response:
-        return self.session.put(url, headers=self.headers, timeout=constants.TIMEOUT_API, **kwargs)
+    def put(self, path: str, **kwargs) -> requests.Response:
+        return self.session.put(self._url(path), headers=self.headers, timeout=constants.TIMEOUT_API, **kwargs)
 
-    def delete(self, url: str, **kwargs) -> requests.Response:
-        return self.session.delete(url, headers=self.headers, timeout=constants.TIMEOUT_API, **kwargs)
+    def patch(self, path: str, **kwargs) -> requests.Response:
+        return self.session.patch(self._url(path), headers=self.headers, timeout=constants.TIMEOUT_API, **kwargs)
+
+    def delete(self, path: str, **kwargs) -> requests.Response:
+        return self.session.delete(self._url(path), headers=self.headers, timeout=constants.TIMEOUT_API, **kwargs)
+
+# Alias for backward compatibility
+APIClient = DM3Client

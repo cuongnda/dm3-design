@@ -64,6 +64,8 @@ interface DataTableProps<T> {
   sortState?: { col: string | null; dir: "asc" | "desc" | null }
   /** Called when the user clicks a sortable column header (server-side sort mode). */
   onSortChange?: (col: string | null, dir: "asc" | "desc" | null) => void
+  "data-testid"?: string
+  rowTestId?: (row: T) => string
 }
 
 type SortDir = "asc" | "desc" | null
@@ -81,6 +83,8 @@ export function DataTable<T>({
   selection,
   sortState,
   onSortChange,
+  "data-testid": testId,
+  rowTestId,
 }: DataTableProps<T>) {
   const [sortCol, setSortCol] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>(null)
@@ -180,6 +184,7 @@ export function DataTable<T>({
   return (
     <div className={cn(!embedded && "space-y-2")}>
       <div
+        data-testid={testId}
         className={cn(
           !embedded && "overflow-hidden rounded-lg border border-border bg-card"
         )}
@@ -272,6 +277,7 @@ export function DataTable<T>({
                 return (
                   <TableRow
                     key={id}
+                    data-testid={rowTestId?.(row)}
                     data-state={isSel ? "selected" : undefined}
                     onClick={() => handleRowClick(row)}
                     className={cn(

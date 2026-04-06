@@ -1,0 +1,357 @@
+# docker-compose.local.yml — Full DM3 stack for local testing
+#
+# Usage:
+#   docker compose -f docker-compose.local.yml up -d
+#   docker compose -f docker-compose.local.yml --profile test up -d   # with automation
+#   docker compose -f docker-compose.local.yml down -v                # clean teardown
+#
+# Ports exposed on host:
+#   3000  — Web UI (via nginx)
+#   5433  — TimescaleDB (for direct DB access)
+#   1884  — EMQX MQTT
+#   8083  — EMQX WebSocket
+#   9091  — Simulator API
+
+services:
+  # ── Infrastructure ─────────────────────────────────────────────────────────
+
+  timescaledb:
+    image: timescale/timescaledb:2.17.2-pg16
+    container_name: dm3-local-timescaledb
+    environment:
+      POSTGRES_DB: dm3
+      POSTGRES_USER: dm3
+      POSTGRES_PASSWORD: dm3local
+    ports:
+      - "5433:5432"
+    volumes:
+      - dm3_local_pgdata:/var/lib/postgresql/data
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dm3"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  emqx:
+    image: emqx/emqx:5.8.3
+    container_name: dm3-local-emqx
+    environment:
+      EMQX_NAME: dm3
+    ports:
+      - "1884:1883"
+      - "8083:8083"
+    volumes:
+      - dm3_local_emqx:/opt/emqx/data
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "emqx", "ctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: dm3-local-nats
+    command: ["--jetstream", "--store_dir=/data", "-m", "8222"]
+    volumes:
+      - dm3_local_nats:/data
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  valkey:
+    image: valkey/valkey:8.0-alpine
+    container_name: dm3-local-valkey
+    volumes:
+      - dm3_local_valkey:/data
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: dm3-local-minio
+    environment:
+      MINIO_ROOT_USER: dm3admin
+      MINIO_ROOT_PASSWORD: dm3local123
+    command: server /data --console-address ":9001"
+    volumes:
+      - dm3_local_minio:/data
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Migration ──────────────────────────────────────────────────────────────
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-migrate
+    environment:
+      SERVICE_NAME: migrate
+      DATABASE_URL: postgres://dm3:dm3local@timescaledb:5432/dm3?sslmode=disable
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    restart: "no"
+
+  # ── Backend ────────────────────────────────────────────────────────────────
+
+  auth-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-auth-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: auth-svc
+      HTTP_PORT: "8005"
+      DATABASE_URL: postgres://dm3:dm3local@timescaledb:5432/dm3?sslmode=disable
+      JWT_SECRET: dm3-local-jwt-secret-change-me
+      NATS_URL: nats://nats:4222
+      MQTT_BROKER: tcp://emqx:1883
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8005/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  identity-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-identity-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: identity-svc
+      HTTP_PORT: "8004"
+      DATABASE_URL: postgres://dm3:dm3local@timescaledb:5432/dm3?sslmode=disable
+      JWT_SECRET: dm3-local-jwt-secret-change-me
+      NATS_URL: nats://nats:4222
+      MQTT_BROKER: tcp://emqx:1883
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8004/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  access-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-access-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: access-svc
+      HTTP_PORT: "8003"
+      DATABASE_URL: postgres://dm3:dm3local@timescaledb:5432/dm3?sslmode=disable
+      JWT_SECRET: dm3-local-jwt-secret-change-me
+      NATS_URL: nats://nats:4222
+      MQTT_BROKER: tcp://emqx:1883
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8003/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  device-gateway:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-device-gateway
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: device-gateway
+      HTTP_PORT: "8002"
+      DATABASE_URL: postgres://dm3:dm3local@timescaledb:5432/dm3?sslmode=disable
+      JWT_SECRET: dm3-local-jwt-secret-change-me
+      NATS_URL: nats://nats:4222
+      MQTT_BROKER: tcp://emqx:1883
+      VALKEY_URL: valkey:6379
+      BOOTSTRAP_SECRET: dm3-bootstrap-v1-dev-secret
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      emqx:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8002/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Frontend ───────────────────────────────────────────────────────────────
+
+  webapp:
+    build:
+      context: .
+      dockerfile: apps/console/Dockerfile
+      args:
+        VITE_API_BASE_URL: ""
+        VITE_MQTT_WS_URL: "ws://localhost:8083/mqtt"
+    container_name: dm3-local-webapp
+    restart: unless-stopped
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:80"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Nginx reverse proxy ────────────────────────────────────────────────────
+
+  nginx:
+    image: nginx:alpine
+    container_name: dm3-local-nginx
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    volumes:
+      - ./deploy/nginx/nginx.local.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      webapp:
+        condition: service_healthy
+      auth-svc:
+        condition: service_healthy
+      identity-svc:
+        condition: service_healthy
+      access-svc:
+        condition: service_healthy
+      device-gateway:
+        condition: service_healthy
+    networks:
+      - dm3-local
+
+  # ── Simulator ──────────────────────────────────────────────────────────────
+
+  simulator:
+    build:
+      context: ./simulator
+      dockerfile: Dockerfile
+    container_name: dm3-local-simulator
+    restart: unless-stopped
+    environment:
+      DM3_BROKER: mqtt://emqx:1883
+      DM3_DEVICES: 5
+      DM3_API_PORT: 9090
+      DM3_BOOTSTRAP_SECRET: dm3-bootstrap-v1-dev-secret
+    ports:
+      - "9091:9090"
+    depends_on:
+      emqx:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    command: ["run", "--broker", "mqtt://emqx:1883", "--devices", "5"]
+
+  # ── Automation (test profile) ──────────────────────────────────────────────
+
+  automation:
+    build:
+      context: .
+      dockerfile: automation/Dockerfile
+    container_name: dm3-local-automation
+    environment:
+      # ── Service URLs (Docker internal) ──
+      API_BASE_URL: http://nginx:80
+      API_URL: http://nginx:80
+      API_AUTH: http://nginx:80
+      API_IDENTITY: http://nginx:80
+      API_ACCESS: http://nginx:80
+      API_GATEWAY: http://nginx:80
+      WEB_URL: http://nginx:80
+      WEB_BASE_URL: http://nginx:80
+      HOST_WEB: http://nginx:80
+      BASE_URL: http://nginx:80
+      # ── Auth ──
+      SYSADMIN_EMAIL: sysadmin@duali.com
+      SYSADMIN_PASSWORD: sysadmin123
+      ADMIN_EMAIL: admin@duali.com
+      ADMIN_PASSWORD: admin123
+      # ── Report ──
+      REPORT_UPLOAD_URL: https://tasks.duali.vn/api/automation/upload
+      REPORT_UPLOAD_TOKEN: ""
+      REPORT_PREFIX: dm3-local
+      # ── Options ──
+      HEADLESS: "true"
+      GENERATE_VIDEO: "true"
+      TZ: Asia/Bangkok
+      HEALTH_TIMEOUT: "180"
+      RUN_ON_STARTUP: full
+      CRON_SCHEDULE: "0 0 * * *"
+      # ── MQTT ──
+      MQTT_HOST: emqx
+      MQTT_PORT: "1883"
+    volumes:
+      - dm3_local_automation:/app/automation/export
+    depends_on:
+      nginx:
+        condition: service_started
+      auth-svc:
+        condition: service_healthy
+      access-svc:
+        condition: service_healthy
+      device-gateway:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    profiles:
+      - test
+
+volumes:
+  dm3_local_pgdata:
+  dm3_local_emqx:
+  dm3_local_nats:
+  dm3_local_valkey:
+  dm3_local_minio:
+  dm3_local_automation:
+
+networks:
+  dm3-local:
+    driver: bridge

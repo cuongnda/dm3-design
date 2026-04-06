@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { MainLayout } from '@dm3/ui';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
@@ -9,6 +9,9 @@ import { CompanyListPage } from '@/features/system/CompanyListPage';
 import { CreateCompanyPage } from '@/features/system/CreateCompanyPage';
 import { CompanyDetailPage } from '@/features/system/CompanyDetailPage';
 import { SystemDevicesPage } from '@/features/system/SystemDevicesPage';
+import { FirmwareListPage } from '@/features/system/FirmwareListPage';
+import { FirmwareUploadPage } from '@/features/system/FirmwareUploadPage';
+import { FirmwareDetailPage } from '@/features/system/FirmwareDetailPage';
 import { UserAccountListPage } from '@/features/system/UserAccountListPage';
 import { UserAccountDetailPage } from '@/features/system/UserAccountDetailPage';
 import { CreateUserAccountPage } from '@/features/system/CreateUserAccountPage';
@@ -24,6 +27,31 @@ const DoorDetailPage = lazy(() =>
 );
 const AccessRulesPage = lazy(() =>
   import('@/features/secure/access-control/AccessRulesPage').then((m) => ({ default: m.AccessRulesPage }))
+);
+const AccessTimeListPage = lazy(() =>
+  import('@/features/secure/access-control/access-time/AccessTimeListPage').then((m) => ({ default: m.AccessTimeListPage }))
+);
+const AccessTimeFormPage = lazy(() =>
+  import('@/features/secure/access-control/access-time/AccessTimeFormPage').then((m) => ({ default: m.AccessTimeFormPage }))
+);
+
+const CCTVPage = lazy(() =>
+  import('@/features/secure/cctv/CCTVPage').then((m) => ({ default: m.CCTVPage }))
+);
+const CameraDetailPage = lazy(() =>
+  import('@/features/secure/cctv/CameraDetailPage').then((m) => ({ default: m.CameraDetailPage }))
+);
+const IntrusionPage = lazy(() =>
+  import('@/features/secure/intrusion/IntrusionPage').then((m) => ({ default: m.IntrusionPage }))
+);
+const IntercomPage = lazy(() =>
+  import('@/features/secure/intercom/IntercomPage').then((m) => ({ default: m.IntercomPage }))
+);
+const AIDetectionPage = lazy(() =>
+  import('@/features/secure/ai-detection/AIDetectionPage').then((m) => ({ default: m.AIDetectionPage }))
+);
+const EmergencyPage = lazy(() =>
+  import('@/features/secure/emergency/EmergencyPage').then((m) => ({ default: m.EmergencyPage }))
 );
 
 // MANAGE  
@@ -72,7 +100,7 @@ const SystemSettingsPage = lazy(() =>
 );
 
 /** Suspense renders no DOM node; this wrapper keeps flex height so pages can min-h-0 + flex-1 into the viewport. */
-function LazyWrap({ children }: { children: React.ReactNode }) {
+export function LazyWrap({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <Suspense
@@ -88,7 +116,7 @@ function LazyWrap({ children }: { children: React.ReactNode }) {
   );
 }
 
-export const router = createBrowserRouter([
+export const Router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />,
@@ -109,6 +137,9 @@ export const router = createBrowserRouter([
           { path: 'accounts/:id', element: <UserAccountDetailPage /> },
           { path: 'devices/pending', element: <LazyWrap><PendingDevicesPage isSystemAdmin={true} /></LazyWrap> },
           { path: 'devices', element: <SystemDevicesPage /> },
+          { path: 'firmware', element: <FirmwareListPage /> },
+          { path: 'firmware/upload', element: <FirmwareUploadPage /> },
+          { path: 'firmware/:id', element: <FirmwareDetailPage /> },
           { path: 'settings', element: <LazyWrap><SystemSettingsPage /></LazyWrap> },
         ],
       },
@@ -122,6 +153,20 @@ export const router = createBrowserRouter([
             children: [
               { index: true, element: <DashboardPage /> },
               { path: 'alerts', element: <LazyWrap><AlertsPage /></LazyWrap> },
+
+              // SECURE
+              { path: 'secure/access-control', element: <LazyWrap><AccessControlPage /></LazyWrap> },
+              { path: 'secure/access-control/rules', element: <LazyWrap><AccessRulesPage /></LazyWrap> },
+              { path: 'secure/access-control/access-time', element: <LazyWrap><AccessTimeListPage /></LazyWrap> },
+              { path: 'secure/access-control/access-time/new', element: <LazyWrap><AccessTimeFormPage /></LazyWrap> },
+              { path: 'secure/access-control/access-time/:id', element: <LazyWrap><AccessTimeFormPage /></LazyWrap> },
+              { path: 'secure/access-control/:id', element: <LazyWrap><DoorDetailPage /></LazyWrap> },
+              { path: 'secure/cctv', element: <LazyWrap><CCTVPage /></LazyWrap> },
+              { path: 'secure/cctv/:id', element: <LazyWrap><CameraDetailPage /></LazyWrap> },
+              { path: 'secure/intrusion', element: <LazyWrap><IntrusionPage /></LazyWrap> },
+              { path: 'secure/intercom', element: <LazyWrap><IntercomPage /></LazyWrap> },
+              { path: 'secure/ai-detection', element: <LazyWrap><AIDetectionPage /></LazyWrap> },
+              { path: 'secure/emergency', element: <LazyWrap><EmergencyPage /></LazyWrap> },
 
               // MANAGE
               { path: 'manage/users', element: <LazyWrap><UserManagementPage /></LazyWrap> },

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PageHeader, Button, Select, SelectOption, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@dm3/ui';
+import { PageHeader, Button, Select, SelectOption, DataTable, type Column } from '@dm3/ui';
 import { fetchSystemDevices, fetchCompanies, type CompanyDTO } from '@/lib/api';
 import { RefreshCw } from 'lucide-react';
 
@@ -60,10 +60,52 @@ export function SystemDevicesPage() {
 
   useEffect(() => { loadData(); }, [filterCompany, filterStatus, filterType]);
 
+  const columns = useMemo<Column<SystemDevice>[]>(() => [
+    {
+      key: 'device_id',
+      header: tSystem('systemDevices.table.device'),
+      render: (d) => <span className="font-mono">{d.device_id}</span>,
+    },
+    {
+      key: 'name',
+      header: tDevices('devices.table.name'),
+      render: (d) => d.name || '—',
+    },
+    {
+      key: 'company_name',
+      header: tSystem('systemDevices.table.company'),
+      render: (d) => d.company_name || '—',
+    },
+    {
+      key: 'type',
+      header: tSystem('systemDevices.table.type'),
+      render: (d) => <span className="capitalize">{d.type}</span>,
+    },
+    {
+      key: 'status',
+      header: tSystem('systemDevices.table.status'),
+      render: (d) => (
+        <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium capitalize ${statusColors[d.status] || statusColors.offline}`}>
+          {d.status}
+        </span>
+      ),
+    },
+    {
+      key: 'location',
+      header: tSystem('systemDevices.table.location'),
+      render: (d) => d.location || '—',
+    },
+    {
+      key: 'last_seen',
+      header: tSystem('systemDevices.table.lastSeen'),
+      render: (d) => d.last_seen ? new Date(d.last_seen).toLocaleString() : '—',
+    },
+  ], [tSystem, tDevices]);
+
   return (
     <div className="p-6">
       <PageHeader title={tSystem('systemDevices.title')} description={`${devices.length} devices across all companies`}>
-        <Button variant="outline" size="sm" onClick={loadData} className="gap-1">
+        <Button data-testid="sysdevice-button-refresh" variant="outline" size="sm" onClick={loadData} className="gap-1">
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
         </Button>
       </PageHeader>
@@ -91,52 +133,14 @@ export function SystemDevicesPage() {
         </Select>
       </div>
 
-      <div className="border border-border rounded-lg overflow-hidden">
-        <Table className="w-full">
-          <TableHeader>
-            <TableRow className="bg-card text-[11px] text-muted-foreground uppercase tracking-wider">
-              <TableHead className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.device')}</TableHead>
-              <TableHead className="text-left py-2.5 px-4 font-medium">{tDevices('devices.table.name')}</TableHead>
-              <TableHead className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.company')}</TableHead>
-              <TableHead className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.type')}</TableHead>
-              <TableHead className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.status')}</TableHead>
-              <TableHead className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.location')}</TableHead>
-              <TableHead className="text-left py-2.5 px-4 font-medium">{tSystem('systemDevices.table.lastSeen')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={7} className="py-12 text-center">
-                  <div className="w-5 h-5 border-2 border-secure/30 border-t-secure rounded-full animate-spin mx-auto" />
-                </TableCell>
-              </TableRow>
-            ) : devices.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="py-12 text-center text-[13px] text-muted-foreground">
-                  No devices found
-                </TableCell>
-              </TableRow>
-            ) : (
-              devices.map((d) => (
-                <TableRow key={d.id} className="border-t border-border hover:bg-muted/50">
-                  <TableCell className="py-2.5 px-4 text-[13px] text-foreground font-mono">{d.device_id}</TableCell>
-                  <TableCell className="py-2.5 px-4 text-[13px] text-foreground">{d.name || '—'}</TableCell>
-                  <TableCell className="py-2.5 px-4 text-[13px] text-muted-foreground">{d.company_name || '—'}</TableCell>
-                  <TableCell className="py-2.5 px-4 text-[13px] text-muted-foreground capitalize">{d.type}</TableCell>
-                  <TableCell className="py-2.5 px-4">
-                    <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium capitalize ${statusColors[d.status] || statusColors.offline}`}>{d.status}</span>
-                  </TableCell>
-                  <TableCell className="py-2.5 px-4 text-[13px] text-muted-foreground">{d.location || '—'}</TableCell>
-                  <TableCell className="py-2.5 px-4 text-[13px] text-muted-foreground">
-                    {d.last_seen ? new Date(d.last_seen).toLocaleString() : '—'}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable
+        data-testid="sysdevice-table-list"
+        columns={columns}
+        data={devices}
+        rowKey={(d) => d.id}
+        rowTestId={(d) => `sysdevice-row-${d.id}`}
+        paginate={false}
+      />
     </div>
   );
 }

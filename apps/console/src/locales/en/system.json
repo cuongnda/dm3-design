@@ -20,10 +20,8 @@
   "companies.plans.starter": "Starter",
   "companies.plans.professional": "Professional",
   "companies.plans.enterprise": "Enterprise",
-
   "companies.table.code": "Code",
   "companies.createCompany": "Create Company",
-
   "companyDetail.stats.users": "Users",
   "companyDetail.stats.devices": "Devices",
   "companyDetail.stats.doors": "Doors",
@@ -38,7 +36,6 @@
   "companyDetail.form.phone": "Phone",
   "companyDetail.form.maxDevices": "Max Devices",
   "companyDetail.form.maxUsers": "Max Users",
-
   "createCompany.title": "Create Company",
   "createCompany.submit": "Create Company",
   "createCompany.credentials": "Admin Credentials",
@@ -50,7 +47,6 @@
   "createCompany.form.phone": "Phone",
   "createCompany.form.maxDevices": "Max Devices",
   "createCompany.form.maxUsers": "Max Users",
-
   "systemDevices.title": "System Devices",
   "systemDevices.description": "Global device management across all tenants",
   "systemDevices.searchPlaceholder": "🔍 Search system devices...",
@@ -79,7 +75,6 @@
   "systemDevices.bulkActions.update": "Update Firmware",
   "systemDevices.bulkActions.restart": "Restart Selected",
   "systemDevices.bulkActions.export": "Export Data",
-
   "systemPending.title": "Pending Registrations",
   "systemPending.description": "Review system-wide device registration requests",
   "systemPending.searchPlaceholder": "🔍 Search pending requests...",
@@ -94,7 +89,6 @@
   "systemPending.actions.approve": "Approve",
   "systemPending.actions.reject": "Reject",
   "systemPending.actions.details": "Details",
-
   "systemSettings.title": "System Settings",
   "systemSettings.description": "Global system configuration and administration",
   "systemSettings.tabs.general": "General",
@@ -113,7 +107,6 @@
   "systemAdminNav.pendingDevices": "Pending Devices",
   "systemAdminNav.allDevices": "All Devices",
   "systemAdminNav.settings": "Settings",
-
   "general.title": "General Settings",
   "general.systemName": "System Name",
   "general.systemDescription": "System Description",
@@ -127,11 +120,9 @@
   "general.logs": "System Logs",
   "general.logsLevel": "Log Level",
   "general.logsRetention": "Log Retention (days)",
-
   "systemTheme.title": "Theme",
   "systemTheme.dark": "Dark",
   "systemTheme.light": "Light",
-
   "systemSecurity.title": "System Security",
   "systemSecurity.passwordPolicy": "Password Policy",
   "systemSecurity.minLength": "Minimum length",
@@ -150,7 +141,6 @@
   "systemSecurity.twoFactorAppliesToAll": "Applies to all users",
   "systemSecurity.ipWhitelist": "IP Whitelist",
   "systemSecurity.ipWhitelist.placeholder": "Enter one CIDR per line...",
-
   "emailSmtp.title": "Email / SMTP",
   "emailSmtp.smtpHost": "SMTP Host",
   "emailSmtp.port": "Port",
@@ -160,7 +150,6 @@
   "emailSmtp.tlsLabel": "Enable TLS/SSL",
   "emailSmtp.tlsDesc": "Encrypt SMTP connection",
   "emailSmtp.sendTest": "📤 Send test email",
-
   "monitoring.title": "System Monitoring",
   "monitoring.health": "System Health",
   "monitoring.uptime": "System Uptime",
@@ -185,7 +174,6 @@
   "monitoring.alertThresholds.doorOpenDuration": "Door open duration (minutes)",
   "monitoring.alertThresholds.cameraOfflineDuration": "Camera offline duration (minutes)",
   "monitoring.alertThresholds.wrongLoginStreak": "Consecutive wrong login attempts",
-
   "backup.title": "Backup & Recovery",
   "backup.schedule": "Backup Schedule",
   "backup.frequency": "Backup Frequency",
@@ -205,7 +193,6 @@
   "backup.backupNow": "Backup Now",
   "backup.restore": "Restore System",
   "backup.download": "Download Backup",
-
   "accounts.title": "Accounts",
   "accounts.description": "accounts",
   "accounts.createAccount": "Create Account",
@@ -251,5 +238,47 @@
   "accounts.audit.actor": "Actor",
   "accounts.audit.changes": "Changes",
   "accounts.audit.time": "Time",
-  "accounts.audit.empty": "No audit entries yet"
+  "accounts.audit.empty": "No audit entries yet",
+  "systemAdminNav.firmware": "Firmware",
+  "firmware.title": "Firmware Management",
+  "firmware.description": "firmware files",
+  "firmware.upload": "Upload Firmware",
+  "firmware.uploadTitle": "Upload Firmware",
+  "firmware.searchPlaceholder": "🔍 Search by version or device type...",
+  "firmware.allDeviceTypes": "All Device Types",
+  "firmware.allStatuses": "All Statuses",
+  "firmware.statusActive": "Active",
+  "firmware.statusInactive": "Inactive",
+  "firmware.noResults": "No firmware matches your search",
+  "firmware.empty": "No firmware uploaded yet",
+  "firmware.table.version": "Version",
+  "firmware.table.deviceType": "Device Type",
+  "firmware.table.description": "Description",
+  "firmware.table.size": "Size",
+  "firmware.table.status": "Status",
+  "firmware.table.uploadedAt": "Uploaded At",
+  "firmware.form.file": "Firmware File",
+  "firmware.form.version": "Version",
+  "firmware.form.deviceType": "Device Type",
+  "firmware.form.description": "Description",
+  "firmware.selectDeviceType": "Select device type",
+  "firmware.descriptionPlaceholder": "Release notes, changelog...",
+  "firmware.dropHere": "Drop firmware file here or click to browse",
+  "firmware.fileTooLarge": "File exceeds 100MB limit",
+  "firmware.fillRequired": "File, version and device type are required",
+  "firmware.uploading": "Uploading...",
+  "firmware.uploadSuccess": "Firmware Uploaded Successfully",
+  "firmware.backToList": "Back to Firmware",
+  "firmware.details": "Firmware Details",
+  "firmware.edit": "Edit",
+  "firmware.save": "Save",
+  "firmware.saving": "Saving...",
+  "firmware.cancel": "Cancel",
+  "firmware.download": "Download",
+  "firmware.deploy": "Deploy",
+  "firmware.delete": "Delete",
+  "firmware.confirmDelete": "Are you sure you want to delete this firmware?",
+  "firmware.notFound": "Firmware not found",
+  "firmware.uploadedBy": "Uploaded By",
+  "firmware.deployPlaceholder": "Firmware deploy is not yet implemented. This is a placeholder."
 }

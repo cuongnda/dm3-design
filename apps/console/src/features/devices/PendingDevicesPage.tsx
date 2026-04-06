@@ -91,12 +91,12 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
   return (
     <div className={isSystemAdmin ? 'p-6' : ''}>
       <PageHeader title={t('pendingDevices.title')} description={t('pendingDevices.description')}>
-        <Button variant="outline" size="sm" onClick={() => loadData()} className="gap-2">
+        <Button data-testid="pending-button-refresh" variant="outline" size="sm" onClick={() => loadData()} className="gap-2">
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
         </Button>
       </PageHeader>
 
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="rounded-lg border border-border bg-card overflow-hidden" data-testid="pending-table-list">
         <Table>
           <TableHeader className="bg-muted/30">
             <TableRow className="hover:bg-transparent">
@@ -127,7 +127,7 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
               </TableRow>
             ) : (
               devices.map((d) => (
-                <TableRow key={d.id}>
+                <TableRow key={d.id} data-testid={`pending-row-${d.id}`}>
                   <TableCell className="px-4 text-[13px] font-mono text-foreground">{d.rid}</TableCell>
                   <TableCell className="px-4 text-[13px] text-muted-foreground">{d.device_type}</TableCell>
                   <TableCell className="px-4 text-[13px] text-muted-foreground font-mono">{d.firmware_version || '—'}</TableCell>
@@ -170,6 +170,7 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
                   <TableCell className="px-4 text-right">
                     <div className="flex justify-end gap-2">
                       <Button
+                        data-testid={`pending-button-approve-${d.id}`}
                         size="xs"
                         onClick={() => handleApprove(d)}
                         disabled={approveDevice.isPending || rejectDevice.isPending || !rowState[d.id]?.name || (isSystemAdmin && !rowState[d.id]?.company_id)}
@@ -178,6 +179,7 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
                         {approveDevice.isPending ? 'Approving...' : t('pendingDevices.actions.approve')}
                       </Button>
                       <Button
+                        data-testid={`pending-button-reject-${d.id}`}
                         size="xs"
                         onClick={() => handleReject(d)}
                         disabled={approveDevice.isPending || rejectDevice.isPending}

@@ -257,6 +257,11 @@ services:
     networks:
       - dm3-internal
       - dmpw-net  # join main proxy network for direct container routing
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:80/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ── Simulator (staging only) ───────────────────────────────────────────────
 
@@ -282,6 +287,46 @@ services:
     profiles:
       - staging
 
+  # ── Automation Test Runner ─────────────────────────────────────────────────
+
+  automation:
+    build:
+      context: .
+      dockerfile: automation/Dockerfile
+    container_name: dm3-automation
+    restart: unless-stopped
+    environment:
+      API_URL: http://nginx:80
+      WEB_URL: http://nginx:80
+      REPORT_PREFIX: dm3
+      HEADLESS: "true"
+      GENERATE_VIDEO: "true"
+      TZ: Asia/Bangkok
+      HEALTH_TIMEOUT: "180"
+      RUN_ON_STARTUP: ${AUTOMATION_RUN_ON_STARTUP:-changed}
+      CRON_SCHEDULE: ${AUTOMATION_CRON:-0 2 * * *}
+      CI_COMMIT_SHA: ${CI_COMMIT_SHA:-}
+      CI_COMMIT_BEFORE_SHA: ${CI_COMMIT_BEFORE_SHA:-}
+    env_file:
+      - /home/gitlab-runner/.env.dm3.automation
+    volumes:
+      - automation_data:/app/automation/export
+    depends_on:
+      nginx:
+        condition: service_healthy
+      auth-svc:
+        condition: service_healthy
+      identity-svc:
+        condition: service_healthy
+      access-svc:
+        condition: service_healthy
+      device-gateway:
+        condition: service_healthy
+    networks:
+      - dm3-internal
+    profiles:
+      - test
+
 volumes:
   timescaledb_data:
   emqx_data:
@@ -289,6 +334,7 @@ volumes:
   valkey_data:
   minio_data:
   certbot_webroot:
+  automation_data:
 
 networks:
   dm3-internal:

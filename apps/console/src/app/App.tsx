@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { Providers } from './providers';
-import { router } from './router';
+import { Router as router } from './router';
 import { RealtimeProvider } from './RealtimeProvider';
 import { useAuthStore } from '@/stores/authStore';
 import { useTranslation } from 'react-i18next';

@@ -13,12 +13,19 @@ deploy:staging:
   script:
     - echo "=== Deploying DM3 to staging ==="
     - cp /home/gitlab-runner/.env.dm3 .env || true
-    - docker compose -f docker-compose.prod.yml down --timeout 30 || true
-    - docker compose -f docker-compose.prod.yml build --no-cache
+    - docker compose -f docker-compose.prod.yml --profile test down --timeout 30 || true
+    - docker compose -f docker-compose.prod.yml --profile test build --no-cache
     - docker compose -f docker-compose.prod.yml up -d --remove-orphans
     - sleep 15
     - echo "=== Service status ==="
     - docker compose -f docker-compose.prod.yml ps
+    # Ensure nginx is on the main proxy network (external network reconnect)
+    - docker network connect dmpw-net dm3-nginx 2>/dev/null || true
+    # Start automation after services are healthy
+    - echo "=== Starting automation tests ==="
+    - docker compose -f docker-compose.prod.yml --profile test up -d automation
+    - sleep 5
+    - docker compose -f docker-compose.prod.yml --profile test ps
   only:
     - develop
 

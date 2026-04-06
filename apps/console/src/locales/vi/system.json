@@ -20,10 +20,8 @@
   "companies.plans.starter": "Khởi đầu",
   "companies.plans.professional": "Chuyên nghiệp",
   "companies.plans.enterprise": "Doanh nghiệp",
-
   "companies.table.code": "Mã",
   "companies.createCompany": "Tạo công ty",
-
   "companyDetail.stats.users": "Người dùng",
   "companyDetail.stats.devices": "Thiết bị",
   "companyDetail.stats.doors": "Cửa",
@@ -38,7 +36,6 @@
   "companyDetail.form.phone": "Điện thoại",
   "companyDetail.form.maxDevices": "Thiết bị tối đa",
   "companyDetail.form.maxUsers": "Người dùng tối đa",
-
   "createCompany.title": "Tạo công ty",
   "createCompany.submit": "Tạo công ty",
   "createCompany.credentials": "Thông tin đăng nhập quản trị",
@@ -50,7 +47,6 @@
   "createCompany.form.phone": "Điện thoại",
   "createCompany.form.maxDevices": "Thiết bị tối đa",
   "createCompany.form.maxUsers": "Người dùng tối đa",
-
   "systemDevices.title": "Thiết bị hệ thống",
   "systemDevices.description": "Quản lý thiết bị toàn cầu trên tất cả tenant",
   "systemDevices.searchPlaceholder": "🔍 Tìm kiếm thiết bị hệ thống...",
@@ -79,7 +75,6 @@
   "systemDevices.bulkActions.update": "Cập nhật firmware",
   "systemDevices.bulkActions.restart": "Khởi động lại đã chọn",
   "systemDevices.bulkActions.export": "Xuất dữ liệu",
-
   "systemPending.title": "Đăng ký chờ duyệt",
   "systemPending.description": "Xem xét yêu cầu đăng ký thiết bị toàn hệ thống",
   "systemPending.searchPlaceholder": "🔍 Tìm kiếm yêu cầu chờ duyệt...",
@@ -94,7 +89,6 @@
   "systemPending.actions.approve": "Phê duyệt",
   "systemPending.actions.reject": "Từ chối",
   "systemPending.actions.details": "Chi tiết",
-
   "systemSettings.title": "Cài đặt hệ thống",
   "systemSettings.description": "Cấu hình hệ thống toàn cầu và quản trị",
   "systemSettings.tabs.general": "Tổng quát",
@@ -113,7 +107,6 @@
   "systemAdminNav.pendingDevices": "Thiết bị chờ duyệt",
   "systemAdminNav.allDevices": "Tất cả thiết bị",
   "systemAdminNav.settings": "Cài đặt",
-
   "general.title": "Cài đặt tổng quát",
   "general.systemName": "Tên hệ thống",
   "general.systemDescription": "Mô tả hệ thống",
@@ -127,11 +120,9 @@
   "general.logs": "Nhật ký hệ thống",
   "general.logsLevel": "Mức độ nhật ký",
   "general.logsRetention": "Lưu trữ nhật ký (ngày)",
-
   "systemTheme.title": "Giao diện",
   "systemTheme.dark": "Tối",
   "systemTheme.light": "Sáng",
-
   "systemSecurity.title": "Bảo mật hệ thống",
   "systemSecurity.passwordPolicy": "Chính sách mật khẩu",
   "systemSecurity.minLength": "Độ dài tối thiểu",
@@ -150,7 +141,6 @@
   "systemSecurity.twoFactorAppliesToAll": "Áp dụng cho tất cả người dùng",
   "systemSecurity.ipWhitelist": "Danh sách IP được phép",
   "systemSecurity.ipWhitelist.placeholder": "Mỗi dòng một CIDR...",
-
   "emailSmtp.title": "Cấu hình Email / SMTP",
   "emailSmtp.smtpHost": "SMTP Host",
   "emailSmtp.port": "Port",
@@ -160,7 +150,6 @@
   "emailSmtp.tlsLabel": "Bật TLS/SSL",
   "emailSmtp.tlsDesc": "Mã hóa kết nối SMTP",
   "emailSmtp.sendTest": "📤 Gửi email test",
-
   "monitoring.title": "Giám sát hệ thống",
   "monitoring.health": "Sức khỏe hệ thống",
   "monitoring.uptime": "Thời gian hoạt động hệ thống",
@@ -185,7 +174,6 @@
   "monitoring.alertThresholds.doorOpenDuration": "Thời gian cửa mở (phút)",
   "monitoring.alertThresholds.cameraOfflineDuration": "Camera offline (phút)",
   "monitoring.alertThresholds.wrongLoginStreak": "Đăng nhập sai liên tiếp",
-
   "backup.title": "Sao lưu & Khôi phục",
   "backup.schedule": "Lịch trình sao lưu",
   "backup.frequency": "Tần suất sao lưu",
@@ -205,7 +193,6 @@
   "backup.backupNow": "Sao lưu ngay",
   "backup.restore": "Khôi phục hệ thống",
   "backup.download": "Tải xuống bản sao lưu",
-
   "accounts.title": "Tài khoản",
   "accounts.description": "tài khoản",
   "accounts.createAccount": "Tạo tài khoản",
@@ -251,5 +238,47 @@
   "accounts.audit.actor": "Người thực hiện",
   "accounts.audit.changes": "Thay đổi",
   "accounts.audit.time": "Thời gian",
-  "accounts.audit.empty": "Chưa có hoạt động nào"
+  "accounts.audit.empty": "Chưa có hoạt động nào",
+  "systemAdminNav.firmware": "Firmware",
+  "firmware.title": "Quản lý Firmware",
+  "firmware.description": "file firmware",
+  "firmware.upload": "Tải lên Firmware",
+  "firmware.uploadTitle": "Tải lên Firmware",
+  "firmware.searchPlaceholder": "🔍 Tìm theo phiên bản hoặc loại thiết bị...",
+  "firmware.allDeviceTypes": "Tất cả loại thiết bị",
+  "firmware.allStatuses": "Tất cả trạng thái",
+  "firmware.statusActive": "Hoạt động",
+  "firmware.statusInactive": "Ngừng hoạt động",
+  "firmware.noResults": "Không tìm thấy firmware phù hợp",
+  "firmware.empty": "Chưa có firmware nào",
+  "firmware.table.version": "Phiên bản",
+  "firmware.table.deviceType": "Loại thiết bị",
+  "firmware.table.description": "Mô tả",
+  "firmware.table.size": "Kích thước",
+  "firmware.table.status": "Trạng thái",
+  "firmware.table.uploadedAt": "Ngày tải lên",
+  "firmware.form.file": "File Firmware",
+  "firmware.form.version": "Phiên bản",
+  "firmware.form.deviceType": "Loại thiết bị",
+  "firmware.form.description": "Mô tả",
+  "firmware.selectDeviceType": "Chọn loại thiết bị",
+  "firmware.descriptionPlaceholder": "Ghi chú phát hành, changelog...",
+  "firmware.dropHere": "Kéo thả file firmware hoặc nhấn để chọn",
+  "firmware.fileTooLarge": "File vượt quá giới hạn 100MB",
+  "firmware.fillRequired": "File, phiên bản và loại thiết bị là bắt buộc",
+  "firmware.uploading": "Đang tải lên...",
+  "firmware.uploadSuccess": "Tải Firmware Thành Công",
+  "firmware.backToList": "Quay lại Firmware",
+  "firmware.details": "Chi tiết Firmware",
+  "firmware.edit": "Chỉnh sửa",
+  "firmware.save": "Lưu",
+  "firmware.saving": "Đang lưu...",
+  "firmware.cancel": "Hủy",
+  "firmware.download": "Tải xuống",
+  "firmware.deploy": "Triển khai",
+  "firmware.delete": "Xóa",
+  "firmware.confirmDelete": "Bạn có chắc chắn muốn xóa firmware này?",
+  "firmware.notFound": "Không tìm thấy firmware",
+  "firmware.uploadedBy": "Người tải lên",
+  "firmware.deployPlaceholder": "Chức năng triển khai firmware chưa được triển khai. Đây là placeholder."
 }

@@ -5,7 +5,7 @@ Requires: sysadmin login (system_admin role)
 """
 import pytest
 import uuid
-from automation.common.api_client import APIClient
+from common.api_client import APIClient
 
 BASE = "/api/v1/system"
 

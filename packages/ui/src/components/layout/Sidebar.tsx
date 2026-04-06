@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Bell, DoorOpen, Users, UserCheck, Building2, Cpu, Settings, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
+import { LayoutDashboard, Bell, DoorOpen, UserCheck, Building2, Cpu, Settings, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useThemeStore } from '@/stores/themeStore';
 import { useAuthStore } from '@/stores/authStore';

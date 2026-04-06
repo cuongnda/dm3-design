@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Plus, Search, DoorOpen, Lock, Unlock, Settings } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@dm3/ui';
 
@@ -48,7 +47,6 @@ const mockDoors: Door[] = [
 ];
 
 export function AccessControlPage() {
-  const { t } = useTranslation();
   const [doors] = useState<Door[]>(mockDoors);
   const [searchTerm, setSearchTerm] = useState('');
 

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Plus, Search, Monitor, Camera, Cpu, Radio, Settings, Eye } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@dm3/ui';
 
@@ -53,7 +52,6 @@ const mockDevices: Device[] = [
 ];
 
 export function DevicesPage() {
-  const { t } = useTranslation();
   const [devices] = useState<Device[]>(mockDevices);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'camera' | 'reader' | 'controller' | 'sensor'>('all');

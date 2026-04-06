@@ -27,12 +27,18 @@ export type StatusKey = keyof typeof STATUS_COLORS;
 export const ROUTES = {
   dashboard: '/',
   alerts: '/alerts',
+  // SECURE
+  accessControl: '/secure/access-control',
+  accessTime: '/secure/access-control/access-time',
+  cctv: '/secure/cctv',
+  intrusion: '/secure/intrusion',
+  intercom: '/secure/intercom',
+  aiDetection: '/secure/ai-detection',
+  emergency: '/secure/emergency',
   // MANAGE
   users: '/manage/users',
   departments: '/manage/departments', 
   identities: '/manage/identities',
-  // ACCESS CONTROL
-  accessControl: '/access-control',
   // DEVICES
   devices: '/devices',
   // SETTINGS

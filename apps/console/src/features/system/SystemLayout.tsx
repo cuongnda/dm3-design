@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Building2, Settings, LogOut, Smartphone, HardDrive, LayoutDashboard, Users } from 'lucide-react';
+import { Building2, Settings, LogOut, Smartphone, HardDrive, LayoutDashboard, Users, Package } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { fetchPendingDevices } from '@/lib/api';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,7 @@ const navItems = [
   { to: '/system/accounts', icon: Users, labelKey: 'systemAdminNav.accounts' },
   { to: '/system/devices/pending', icon: Smartphone, labelKey: 'systemAdminNav.pendingDevices', badge: true },
   { to: '/system/devices', icon: HardDrive, labelKey: 'systemAdminNav.allDevices', end: true },
+  { to: '/system/firmware', icon: Package, labelKey: 'systemAdminNav.firmware' },
   { to: '/system/settings', icon: Settings, labelKey: 'systemAdminNav.settings' },
 ];
 
