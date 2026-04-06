@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect } from 'react'
 import { useTenantStore, type TenantInfo, type TenantUsage } from '../../stores/tenantStore'
+import { useAuthStore } from '../../stores/authStore'
 
 interface TenantContextType {
   tenant: TenantInfo | null
@@ -38,14 +39,17 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({
     canCreateUser,
   } = useTenantStore()
 
-  // Initial data load
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+
+  // Fetch tenant data when authenticated — skip on unauthenticated pages like /login
   useEffect(() => {
+    if (!isAuthenticated) return
     refreshTenantData()
-  }, [refreshTenantData])
+  }, [isAuthenticated, refreshTenantData])
 
   // Auto-refresh setup
   useEffect(() => {
-    if (!autoRefresh) return
+    if (!autoRefresh || !isAuthenticated) return
 
     const interval = setInterval(() => {
       refreshTenantData()

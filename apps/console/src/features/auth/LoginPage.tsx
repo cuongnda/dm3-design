@@ -28,6 +28,9 @@ export function LoginPage() {
   const completeLogin = (accessToken: string, refreshToken: string, userInfo: LoginUser) => {
     setToken(accessToken, refreshToken);
     const role = userInfo.role || 'user';
+    // Ensure isAuthenticated transitions false→true so TenantProvider re-fetches.
+    // logout() only resets zustand state without touching localStorage tokens.
+    useAuthStore.setState({ user: null, isAuthenticated: false });
     login({
       id: userInfo.id,
       name: userInfo.name || userInfo.email.split('@')[0],
@@ -45,8 +48,8 @@ export function LoginPage() {
     try {
       const res = await apiLogin(email, password);
 
-      if (res.step === 'complete' && res.access_token && res.refresh_token && res.user) {
-        completeLogin(res.access_token, res.refresh_token, res.user);
+      if (res.step === 'complete' && res.access_token && res.user) {
+        completeLogin(res.access_token, res.refresh_token ?? '', res.user);
       } else if (res.step === 'select_company' && res.temporary_token && res.companies) {
         setTempToken(res.temporary_token);
         setCompanies(res.companies);
@@ -65,8 +68,8 @@ export function LoginPage() {
     setError('');
     try {
       const res = await loginStep2(tempToken, companyId);
-      if (res.step === 'complete' && res.access_token && res.refresh_token && res.user) {
-        completeLogin(res.access_token, res.refresh_token, res.user);
+      if (res.step === 'complete' && res.access_token && res.user) {
+        completeLogin(res.access_token, res.refresh_token ?? '', res.user);
       }
     } catch {
       setError(t('error.failedSelectCompany'));

@@ -26,6 +26,7 @@ import (
 
 type AccessClaims struct {
 	Sub      string   `json:"sub"`
+	TID      string   `json:"tid,omitempty"` // tenant_id
 	CID      string   `json:"cid,omitempty"` // company_id
 	Email    string   `json:"email"`
 	Name     string   `json:"name"`
@@ -304,7 +305,10 @@ func (h *Handlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 		return
 	}
-	refreshToken, _ := h.createRefreshToken(r, userID, companyID)
+	refreshToken, err := h.createRefreshToken(r, userID, req.CompanyID)
+	if err != nil {
+		slog.Error("failed to create refresh token in step2", "error", err, "user_id", userID)
+	}
 
 	httputil.JSON(w, http.StatusOK, loginStepResponse{
 		Step:         "complete",
