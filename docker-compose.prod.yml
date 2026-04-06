@@ -257,6 +257,11 @@ services:
     networks:
       - dm3-internal
       - dmpw-net  # join main proxy network for direct container routing
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:80 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ── Simulator (staging only) ───────────────────────────────────────────────
 
