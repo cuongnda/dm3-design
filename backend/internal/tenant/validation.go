@@ -75,7 +75,7 @@ func (rv *ResourceValidator) ValidateUserAccess(ctx context.Context, userID stri
 
 	var resourceTenantID string
 	err = rv.db.Pool.QueryRow(ctx,
-		"SELECT company_id FROM dm3_auth.accounts WHERE id = $1::uuid",
+		"SELECT tenant_id FROM dm3_auth.accounts WHERE id = $1::uuid",
 		userID,
 	).Scan(&resourceTenantID)
 
@@ -174,7 +174,7 @@ func (sa *SecurityAuditor) AuditDataIntegrity(ctx context.Context) ([]string, er
 		"credentials without tenant_id":  "SELECT COUNT(*) FROM dm3_identity.credentials WHERE tenant_id IS NULL",
 		"access_rules without tenant_id": "SELECT COUNT(*) FROM dm3_access.access_rules WHERE tenant_id IS NULL",
 		"doors without tenant_id":       "SELECT COUNT(*) FROM dm3_access.doors WHERE tenant_id IS NULL",
-		"users without company_id":      "SELECT COUNT(*) FROM dm3_auth.accounts WHERE company_id IS NULL AND role != 'system_admin'",
+		"users without tenant_id":      "SELECT COUNT(*) FROM dm3_auth.accounts WHERE tenant_id IS NULL AND role != 'system_admin'",
 	}
 
 	for description, query := range queries {
@@ -192,12 +192,12 @@ func (sa *SecurityAuditor) AuditDataIntegrity(ctx context.Context) ([]string, er
 	crossTenantQueries := map[string]string{
 		"credentials referencing persons from different tenants": `
 			SELECT COUNT(*) FROM dm3_identity.credentials c
-			JOIN dm3_identity.persons p ON c.person_id = p.id
+			JOIN dm3_identity.persons p ON c.user_id = p.id
 			WHERE c.tenant_id != p.tenant_id
 		`,
 		"access_events referencing persons from different tenants": `
 			SELECT COUNT(*) FROM dm3_access.access_events e
-			JOIN dm3_identity.persons p ON e.person_id = p.id
+			JOIN dm3_identity.persons p ON e.user_id = p.id
 			WHERE e.tenant_id != p.tenant_id
 		`,
 	}
@@ -280,7 +280,7 @@ func (tlc *TenantLimitChecker) CheckUserLimit(ctx context.Context) error {
 
 	var count int
 	err = tlc.db.Pool.QueryRow(ctx,
-		"SELECT COUNT(*) FROM dm3_auth.accounts WHERE company_id = $1::uuid",
+		"SELECT COUNT(*) FROM dm3_auth.accounts WHERE tenant_id = $1::uuid",
 		info.ID,
 	).Scan(&count)
 	if err != nil {

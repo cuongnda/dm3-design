@@ -494,7 +494,7 @@
 - Card with header: title + live indicator (pulsing green dot — indicates events streaming from devices)
 - Mini area chart: last 60 minutes of access volume
 - Event list: auto-scrolling (newest on top), max 20 visible
-- Each row: time (mono, `--text-xs`) | person (avatar+name) | point (door/gate) | status (✅/❌)
+- Each row: time (mono, `--text-xs`) | user (avatar+name) | point (door/gate) | status (✅/❌)
 - Denied events: `--error` colored row highlight
 - Events are logged by devices locally, then synced to server for display
 - "View All →" link at bottom
@@ -715,7 +715,7 @@ Each domain has its own focused dashboard accessible via sidebar or domain healt
 
 **Status Card:**
 - Door state icon (locked/unlocked indicator)
-- Key-value pairs: state, mode, last event, device model, firmware, **sync status** (last sync time, person DB version, rules version)
+- Key-value pairs: state, mode, last event, device model, firmware, **sync status** (last sync time, user DB version, rules version)
 - Status badge: large, prominent
 
 **Quick Actions:**
@@ -726,9 +726,9 @@ Each domain has its own focused dashboard accessible via sidebar or domain healt
 - View Camera: ghost, opens linked camera
 
 **Events Tab:**
-- Table: time (mono), person (avatar+name), credential type, result (colored), photo thumbnail
+- Table: time (mono), user (avatar+name), credential type, result (colored), photo thumbnail
 - Photo: click to expand in modal with video clip if available
-- Filter: date range, result type, person search
+- Filter: date range, result type, user search
 
 **Access Rules Tab:**
 - List of rules that apply to this door
@@ -803,7 +803,7 @@ Each domain has its own focused dashboard accessible via sidebar or domain healt
 - Live mode: new events slide in at top with highlight animation (`--accent-900` bg fade)
 - Pause button: stops auto-scroll, shows "X new events" badge to resume
 - Denied events: `--error-muted` bg
-- Click event row → slide-out detail panel (photo, video clip, person info)
+- Click event row → slide-out detail panel (photo, video clip, user info)
 - Bottom status bar: summary stats
 - Export: CSV/PDF for filtered results
 
@@ -879,7 +879,7 @@ Each domain has its own focused dashboard accessible via sidebar or domain healt
 │  │  Camera Info                   │ │  Linked Events               │   │
 │  │  Model: Hikvision DS-2CD2xx   │ │  09:15 Access granted Door 1 │   │
 │  │  IP: 192.168.1.101            │ │  09:12 Motion detected        │   │
-│  │  NVR: NVR-01, Ch 3            │ │  09:08 AI: Person detected    │   │
+│  │  NVR: NVR-01, Ch 3            │ │  09:08 AI: User detected    │   │
 │  │  Status: Recording ● 30fps    │ │  [View All →]                │   │
 │  └────────────────────────────────┘ └──────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -920,7 +920,7 @@ Each domain has its own focused dashboard accessible via sidebar or domain healt
 │  EVENTS ON TIMELINE                                                    │
 │  ● 09:15  Access Granted — Nguyen Van A                                │
 │  ● 09:12  Motion Detected                                             │
-│  ● 09:08  AI: Person detected                                         │
+│  ● 09:08  AI: User detected                                         │
 │  ● 08:45  Access Denied — Unknown card                                 │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -1182,7 +1182,7 @@ When emergency is active, the entire UI changes:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  People                                    [+ Add Person]  [📥 Import] │
+│  People                                    [+ Add User]  [📥 Import] │
 │  ─────────────────────────────────────────────────────────────────────  │
 │  [All 1,247] [Employees 1,180] [Visitors 42] [Contractors 25]         │
 │  🔍 Search people...    🏢 Dept ▾    🏷 Role ▾    📊 Status ▾        │
@@ -1203,7 +1203,7 @@ When emergency is active, the entire UI changes:
 
 **Credential Icons:** 🪪 Card, 📱 Mobile, 🖐 Biometric, 🔑 PIN
 
-#### Person Detail (`/manage/identities/:id`)
+#### User Detail (`/manage/identities/:id`)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -1236,7 +1236,7 @@ When emergency is active, the entire UI changes:
 **Tabs:**
 - **Credentials:** list + add/revoke actions
 - **Access:** access groups assigned, effective door list
-- **Events:** recent access events for this person (reuses event table)
+- **Events:** recent access events for this user (reuses event table)
 - **Attendance:** recent attendance records
 - **Documents:** uploaded compliance docs (photo ID, contracts)
 
@@ -1643,7 +1643,7 @@ Standard table: visitor name, host, purpose, company, check-in time, check-out t
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-- Checkout: select key → scan badge or select person → set due time → confirm
+- Checkout: select key → scan badge or select user → set due time → confirm
 - Return: scan key tag or select from checked-out list → confirm
 - Overdue: `--warning` highlight, automatic notification to holder + security
 - Log: full audit trail of all key movements
@@ -1850,7 +1850,7 @@ The AI Assistant is accessible as a **slide-out panel** from the right side, alw
 │  ┌─────────────────────────────────────────────────────────────────┐   │
 │  │  Data Source: [Access Events ▾]    Date: [Last 30 days ▾]      │   │
 │  │                                                                 │   │
-│  │  Dimensions:  [+ Add]  📊 Door  📊 Person Type  📊 Hour       │   │
+│  │  Dimensions:  [+ Add]  📊 Door  📊 User Type  📊 Hour       │   │
 │  │  Measures:    [+ Add]  #️⃣ Count  #️⃣ Unique People              │   │
 │  │  Filters:     [+ Add]  Result = Granted                        │   │
 │  │                                                                 │   │
@@ -1934,7 +1934,7 @@ The AI Assistant is accessible as a **slide-out panel** from the right side, alw
 │                                                                         │
 │  ┌──────────────────────────────────────────────────────────────────┐  │
 │  │  UNLESS (Exceptions)                                    [+ Add] │  │
-│  │  Person is in group: [Security Guards ▾]                        │  │
+│  │  User is in group: [Security Guards ▾]                        │  │
 │  └──────────────────────────────────────────────────────────────────┘  │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -1943,7 +1943,7 @@ The AI Assistant is accessible as a **slide-out panel** from the right side, alw
 **Rule Builder Structure:**
 - **WHEN** block: trigger conditions with AND/OR logic
   - Trigger types: access event, alarm, AI detection, sensor reading, schedule, device status
-  - Conditions: filters on trigger (time, location, person type, etc.)
+  - Conditions: filters on trigger (time, location, user type, etc.)
 - **THEN** block: ordered list of actions
   - Action types: send alert, capture photo, open/lock door, create work order, update signage, play announcement, send email/SMS
 - **UNLESS** block: exception conditions that skip the rule

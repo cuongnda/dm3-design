@@ -148,7 +148,6 @@ export const Router = createBrowserRouter([
         element: <RoleBasedRoute />,
         children: [
           {
-            path: '/',
             element: <MainLayout />,
             children: [
               { index: true, element: <DashboardPage /> },

@@ -9,7 +9,7 @@
 
 ## 1. Overview & Purpose
 
-The DF-970 is a wall-mounted Android access control terminal with integrated face recognition camera and smart card reader. It serves as the primary user-facing device in the DM3 ecosystem — identifying people via face, card, or PIN and making access decisions **locally in < 50ms** using a synced person database and access rules.
+The DF-970 is a wall-mounted Android access control terminal with integrated face recognition camera and smart card reader. It serves as the primary user-facing device in the DM3 ecosystem — identifying people via face, card, or PIN and making access decisions **locally in < 50ms** using a synced user database and access rules.
 
 **Key principle: Offline-first.** The terminal operates autonomously with its local database. Server connectivity adds sync and event upload — it is never required for access decisions.
 
@@ -135,7 +135,7 @@ The DF-970 is a wall-mounted Android access control terminal with integrated fac
 | **Command Handler** | Kotlin | Process server commands (door control, reboot, display) |
 | **Door Controller** | HAL (JNI/GPIO) | Relay pulse, door sensor monitoring |
 | **MQTT Service** | HiveMQ MQTT Client (Android) | Persistent foreground service, auto-reconnect |
-| **Room DB** | Room (SQLite) | Local person DB, access rules, event queue |
+| **Room DB** | Room (SQLite) | Local user DB, access rules, event queue |
 | **Face SDK** | Megvii MegFace v3 | Face detection, liveness, template extraction/matching |
 | **SIP Client** | ooh323c / Ooh323 library | Intercom calling to door stations |
 | **Hardware HAL** | JNI → C/C++ native | Relay, GPIO, Wiegand, RS485 control |
@@ -145,7 +145,7 @@ The DF-970 is a wall-mounted Android access control terminal with integrated fac
 | Service | Type | Purpose |
 |---------|------|---------|
 | `MqttForegroundService` | Foreground | Persistent MQTT connection, survives app lifecycle |
-| `SyncWorker` | WorkManager (periodic) | Background person DB sync every 5 min |
+| `SyncWorker` | WorkManager (periodic) | Background user DB sync every 5 min |
 | `EventUploadWorker` | WorkManager (constrained) | Upload queued events when network available |
 | `HeartbeatWorker` | WorkManager (periodic) | Heartbeat every 30s |
 | `FaceRecognitionService` | Bound | Camera preview + continuous face detection |
@@ -158,7 +158,7 @@ The DF-970 is a wall-mounted Android access control terminal with integrated fac
 ### 4.1 Entity: `PersonEntity`
 
 ```kotlin
-@Entity(tableName = "persons")
+@Entity(tableName = "users")
 data class PersonEntity(
     @PrimaryKey val personId: String,
     val name: String,
@@ -234,13 +234,13 @@ data class AccessRuleEntity(
 )
 ```
 
-### 4.5 Entity: `PersonGroupEntity`
+### 4.5 Entity: `UserGroupEntity`
 
 ```kotlin
-@Entity(tableName = "person_groups")
-data class PersonGroupEntity(
+@Entity(tableName = "user_groups")
+data class UserGroupEntity(
     @PrimaryKey val groupId: String,
-    val personIds: String              // JSON array: ["person-001", "person-002"]
+    val personIds: String              // JSON array: ["user-001", "user-002"]
 )
 ```
 
@@ -329,9 +329,9 @@ data class FailedAttemptEntity(
 
 ### Database Capacity
 
-| Data | Per Person | 10K Persons | Notes |
+| Data | Per User | 10K Users | Notes |
 |------|-----------|-------------|-------|
-| Person record | ~200 B | 2 MB | Name, status, validity |
+| User record | ~200 B | 2 MB | Name, status, validity |
 | Face template | ~2 KB | 20 MB | ArcFace v3 format |
 | Card credential | ~100 B | 1 MB | UID hex string |
 | Access rules | ~500 B each | 50 KB | Typically 10–100 rules |
@@ -417,7 +417,7 @@ Card Tap (NFC antenna)
        │
        ▼
 ┌──────────────┐
-│ Lookup       │  SELECT person_id FROM credentials
+│ Lookup       │  SELECT user_id FROM credentials
 │ Local DB     │  WHERE type='card' AND value='{uid_hex}'
 │ (< 5ms)      │  AND status='active'
 └──────┬───────┘
@@ -451,10 +451,10 @@ Factor 1 presented (e.g., Card)
        │
        ▼
 ┌──────────────┐
-│ Lookup       │  Identify person from Factor 1
-│ Person       │
+│ Lookup       │  Identify user from Factor 1
+│ User       │
 └──────┬───────┘
-       │ Person found
+       │ User found
        ▼
 ┌──────────────┐
 │ Check Rule   │  Does matching rule require multi_factor?
@@ -463,7 +463,7 @@ Factor 1 presented (e.g., Card)
        │ Yes — multi_factor required
        ▼
 ┌──────────────┐
-│ Store        │  Save pending factor: person_id + credential_type + timestamp
+│ Store        │  Save pending factor: user_id + credential_type + timestamp
 │ Pending      │  Start 30-second timeout
 │ Factor       │
 └──────┬───────┘
@@ -473,10 +473,10 @@ Factor 2 presented (within 30s)
        │
        ▼
 ┌──────────────┐
-│ Verify       │  Factor 2 must match the SAME person as Factor 1
-│ Same Person  │  If different person → DENIED
+│ Verify       │  Factor 2 must match the SAME user as Factor 1
+│ Same User  │  If different user → DENIED
 └──────┬───────┘
-       │ Same person confirmed
+       │ Same user confirmed
        ▼
 ┌──────────────┐
 │ Access       │  Full rule evaluation with both factors satisfied
@@ -515,41 +515,41 @@ suspend fun makeAccessDecision(
     val credential = credentialDao.findByTypeAndValue(credentialType, credentialValue)
         ?: return AccessDecision.denied("denied_unknown")
 
-    val person = personDao.findById(credential.personId)
+    val user = personDao.findById(credential.personId)
         ?: return AccessDecision.denied("denied_unknown")
 
     // Step 3: Check blacklist (HIGHEST PRIORITY)
-    if (blacklistDao.exists(person.personId)) {
-        return AccessDecision.denied("denied_blacklist", person)
+    if (blacklistDao.exists(user.personId)) {
+        return AccessDecision.denied("denied_blacklist", user)
     }
 
-    // Step 4: Check person active status
-    if (person.status != "active") {
-        return AccessDecision.denied("denied_inactive", person)
+    // Step 4: Check user active status
+    if (user.status != "active") {
+        return AccessDecision.denied("denied_inactive", user)
     }
 
     // Step 5: Check credential validity window
-    if (person.validFrom != null && nowMs < person.validFrom) {
-        return AccessDecision.denied("denied_expired", person)
+    if (user.validFrom != null && nowMs < user.validFrom) {
+        return AccessDecision.denied("denied_expired", user)
     }
-    if (person.validUntil != null && nowMs > person.validUntil) {
-        return AccessDecision.denied("denied_expired", person)
+    if (user.validUntil != null && nowMs > user.validUntil) {
+        return AccessDecision.denied("denied_expired", user)
     }
 
     // Step 6: Check failed attempt lockout
     val recentFailures = failedAttemptDao.countRecent(
-        person.personId, nowMs - 600_000 // last 10 min
+        user.personId, nowMs - 600_000 // last 10 min
     )
     if (recentFailures >= config.maxFailedAttempts) {
-        return AccessDecision.denied("denied_lockout", person)
+        return AccessDecision.denied("denied_lockout", user)
     }
 
     // Step 7: Get matching rules (sorted by priority DESC)
-    val personGroupIds = personGroupDao.getGroupsForPerson(person.personId)
+    val personGroupIds = personGroupDao.getGroupsForPerson(user.personId)
     val rules = accessRuleDao.findMatchingRules(doorId, personGroupIds)
 
     if (rules.isEmpty()) {
-        return AccessDecision.denied("denied_zone", person)
+        return AccessDecision.denied("denied_zone", user)
     }
 
     // Step 8: Evaluate rules
@@ -571,38 +571,38 @@ suspend fun makeAccessDecision(
 
         // Check anti-passback
         if (rule.antiPassback) {
-            val lastState = antiPassbackDao.findByPerson(person.personId)
+            val lastState = antiPassbackDao.findByPerson(user.personId)
             if (lastState?.lastDirection == currentDirection) {
-                return AccessDecision.denied("denied_anti_passback", person)
+                return AccessDecision.denied("denied_anti_passback", user)
             }
         }
 
         // Check multi-factor
         if (rule.multiFactor) {
-            val pendingFactor = pendingFactorStore.get(person.personId)
+            val pendingFactor = pendingFactorStore.get(user.personId)
             if (pendingFactor == null) {
                 // First factor — store and wait for second
-                pendingFactorStore.store(person.personId, credentialType, nowMs)
-                return AccessDecision.pendingMultiFactor(person)
+                pendingFactorStore.store(user.personId, credentialType, nowMs)
+                return AccessDecision.pendingMultiFactor(user)
             }
             if (pendingFactor.credentialType == credentialType) {
                 // Same factor type presented twice — need different factor
-                return AccessDecision.pendingMultiFactor(person, "different_factor_required")
+                return AccessDecision.pendingMultiFactor(user, "different_factor_required")
             }
             if (nowMs - pendingFactor.timestampMs > 30_000) {
                 // Timeout — clear and deny
-                pendingFactorStore.clear(person.personId)
-                return AccessDecision.denied("denied_mfa_timeout", person)
+                pendingFactorStore.clear(user.personId)
+                return AccessDecision.denied("denied_mfa_timeout", user)
             }
             // Second factor valid — clear pending and proceed
-            pendingFactorStore.clear(person.personId)
+            pendingFactorStore.clear(user.personId)
         }
 
         // ✅ GRANTED
         val decisionTimeMs = (System.nanoTime() - startNs) / 1_000_000.0
         return AccessDecision.granted(
             reason = "authorized",
-            person = person,
+            user = user,
             ruleId = rule.ruleId,
             decisionTimeMs = decisionTimeMs,
             confidence = confidence
@@ -610,7 +610,7 @@ suspend fun makeAccessDecision(
     }
 
     // No matching rule
-    return AccessDecision.denied("denied_time", person)
+    return AccessDecision.denied("denied_time", user)
 }
 ```
 
@@ -705,7 +705,7 @@ Reference: `mqtt-protocol.md`
 5. Publish status.heartbeat (person_db_version=0 on first boot)
 6. Server detects version=0 → triggers full sync
 7. Receive cfg.full → store in config table → ack
-8. Receive cfg.person_sync (action=full_sync, batched) → upsert persons + credentials → ack per batch
+8. Receive cfg.person_sync (action=full_sync, batched) → upsert users + credentials → ack per batch
 9. Receive cfg.access_rules (action=full_sync) → store rules → ack
 10. Receive cfg.blacklist (action=full_sync) → store blacklist → ack
 11. Update sync_state: person_db_version, rules_version, blacklist_version
@@ -716,7 +716,7 @@ Reference: `mqtt-protocol.md`
 
 - Heartbeat includes `local_db_version`, `rules_version`, `blacklist_version`
 - Server compares versions and sends only deltas
-- `cfg.person_sync` with `action=upsert` or `action=delete` for changed persons
+- `cfg.person_sync` with `action=upsert` or `action=delete` for changed users
 - `cfg.access_rules` with `action=delta` for changed rules
 - `cfg.blacklist` with `action=add`/`action=remove` for blacklist changes
 
@@ -778,10 +778,10 @@ When MQTT is disconnected:
 |--------|---------|----------|
 | **Standby** | Clock (HH:MM:SS), date, company logo, offline indicator (orange dot if disconnected) | Until interaction |
 | **Recognition** | Camera preview with face detection overlay, "Đang nhận diện..." spinner | < 200ms (auto) |
-| **Granted** | Green background, ✅ checkmark, person name, person photo (from local DB), "Xin chào, [Name]" | 3 seconds |
+| **Granted** | Green background, ✅ checkmark, user name, user photo (from local DB), "Xin chào, [Name]" | 3 seconds |
 | **Denied** | Red background, ❌ mark, denial reason (localized Vietnamese/English), "Từ chối: [reason]" | 3 seconds |
 | **Multi-Factor Prompt** | Blue background, instruction: "Vui lòng quẹt thẻ" / "Nhập mã PIN", 30s countdown | 30 seconds |
-| **Admin Menu** | Settings list: network status, sync versions, person count, device ID, diagnostics, restart | Until exit |
+| **Admin Menu** | Settings list: network status, sync versions, user count, device ID, diagnostics, restart | Until exit |
 | **Display Message** | Server-pushed message (cmd.display), configurable color and duration | Configurable |
 
 ### 11.3 Offline Indicator
@@ -911,7 +911,7 @@ Local REST API accessible on LAN only (port 8080, bound to device IP).
 |--------|------|-------------|
 | `GET` | `/api/health` | Device health: uptime, memory, storage, CPU |
 | `GET` | `/api/sync` | Sync status: versions, last sync time, queue depth |
-| `GET` | `/api/persons/count` | Local person DB count |
+| `GET` | `/api/users/count` | Local user DB count |
 | `GET` | `/api/events/recent` | Last 50 access events |
 | `GET` | `/api/network` | Network status: IP, MQTT connected, latency |
 | `GET` | `/api/hardware` | Peripheral status: camera, reader, relay, sensor |
@@ -971,7 +971,7 @@ First-boot provisioning:
 1. App auto-launches on boot (Device Owner mode via Android Enterprise)
 2. Scan provisioning QR code or receive MDM configuration
 3. MQTT connects → initial sync begins
-4. Device ready in 2–5 minutes (depending on person DB size)
+4. Device ready in 2–5 minutes (depending on user DB size)
 
 ### 19.3 Android Enterprise / Kiosk Mode
 
@@ -999,9 +999,9 @@ First-boot provisioning:
 
 ### Key Test Scenarios
 
-1. **Cold boot to ready:** App starts → syncs 10K persons → ready in < 5 min
+1. **Cold boot to ready:** App starts → syncs 10K users → ready in < 5 min
 2. **Offline access:** Disconnect network → 100 access events → reconnect → all events uploaded
-3. **Blacklist priority:** Blacklist push arrives → person denied on next attempt (< 1s)
+3. **Blacklist priority:** Blacklist push arrives → user denied on next attempt (< 1s)
 4. **Multi-factor timeout:** Card tap → wait 31s → denied (MFA timeout)
 5. **Face recognition accuracy:** 99.5%+ true accept rate at 0.001% false accept rate
 6. **Anti-passback enforcement:** Entry → second entry attempt → denied
@@ -1024,6 +1024,6 @@ First-boot provisioning:
 - Face templates are ArcFace v3 format (~2KB each, 512-dimensional float vector). The Megvii SDK handles extraction and matching.
 - The DF-970 has a dedicated NPU (Neural Processing Unit) for accelerated face detection inference. Use NNAPI delegate when available.
 - Anti-passback state resets daily at midnight (configurable) to handle edge cases.
-- The terminal should display the person's stored photo (from local DB) on the Granted screen, not the live camera capture, for consistency.
-- Maximum recommended persons per device: 10,000 (limited by face template matching performance).
-- For deployments > 10K persons, consider partitioning by zone — each terminal only syncs persons with access to its zone.
+- The terminal should display the user's stored photo (from local DB) on the Granted screen, not the live camera capture, for consistency.
+- Maximum recommended users per device: 10,000 (limited by face template matching performance).
+- For deployments > 10K users, consider partitioning by zone — each terminal only syncs users with access to its zone.

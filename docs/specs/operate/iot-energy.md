@@ -59,7 +59,7 @@ IoT & Energy Management provides a unified dashboard for all IoT sensors (temper
 | severity | text | yes | warning | info / warning / critical |
 | enabled | bool | yes | true | Active flag |
 | notification_channels | text[] | yes | — | push / email / sms / in_app |
-| notification_targets | uuid[] | no | — | Specific persons to notify |
+| notification_targets | uuid[] | no | — | Specific users to notify |
 | cooldown_min | int | yes | 30 | Min time between repeat alerts |
 | auto_action | jsonb | no | — | Automation trigger on alert |
 | last_triggered_at | timestamptz | no | — | Last alert time |

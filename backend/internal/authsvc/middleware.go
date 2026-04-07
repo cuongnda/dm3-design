@@ -79,12 +79,12 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 	}
 }
 
-// CompanyIDKey is the context key for the resolved company_id.
-const companyIDContextKey contextKey = "company_id"
+// CompanyIDKey is the context key for the resolved tenant_id.
+const companyIDContextKey contextKey = "tenant_id"
 
-// RequireCompany extracts company_id from JWT claims and injects it into context.
-// System admins (role=system_admin) are allowed through without a company_id.
-// Optionally accepts a query param ?company_id= for system admins to scope requests.
+// RequireCompany extracts tenant_id from JWT claims and injects it into context.
+// System admins (role=system_admin) are allowed through without a tenant_id.
+// Optionally accepts a query param ?tenant_id= for system admins to scope requests.
 func RequireCompany() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +96,7 @@ func RequireCompany() func(http.Handler) http.Handler {
 
 			// System admins can optionally scope to a company via query param
 			if claims.Role == "system_admin" {
-				cid := r.URL.Query().Get("company_id")
+				cid := r.URL.Query().Get("tenant_id")
 				if cid == "" {
 					cid = claims.CID
 				}
@@ -105,7 +105,7 @@ func RequireCompany() func(http.Handler) http.Handler {
 				return
 			}
 
-			// Regular users must have a company_id
+			// Regular users must have a tenant_id
 			if claims.CID == "" {
 				writeJSON(w, http.StatusForbidden, map[string]string{"error": "no company associated with this account"})
 				return
@@ -117,7 +117,7 @@ func RequireCompany() func(http.Handler) http.Handler {
 	}
 }
 
-// CompanyIDFromContext extracts the company_id from request context.
+// CompanyIDFromContext extracts the tenant_id from request context.
 func CompanyIDFromContext(ctx context.Context) string {
 	v, _ := ctx.Value(companyIDContextKey).(string)
 	return v
@@ -127,6 +127,11 @@ func CompanyIDFromContext(ctx context.Context) string {
 func ClaimsFromContext(ctx context.Context) *AccessClaims {
 	c, _ := ctx.Value(claimsContextKey).(*AccessClaims)
 	return c
+}
+
+// WithClaims injects AccessClaims into context (used in tests and middleware chaining).
+func WithClaims(ctx context.Context, claims *AccessClaims) context.Context {
+	return context.WithValue(ctx, claimsContextKey, claims)
 }
 
 // RequireWriteRole returns middleware that allows any authenticated user for GET/HEAD/OPTIONS,

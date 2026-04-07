@@ -12,14 +12,14 @@ type contextKey string
 
 const (
 	TenantIDKey   contextKey = "tenant_id"
-	CompanyIDKey  contextKey = "company_id"
+	CompanyIDKey  contextKey = "tenant_id"
 	TenantInfoKey contextKey = "tenant_info"
 )
 
 // TenantInfo holds complete tenant context information
 type TenantInfo struct {
 	ID          string `json:"id"`
-	CompanyID   string `json:"company_id"`
+	TenantID   string `json:"tenant_id"`
 	CompanyName string `json:"company_name"`
 	CompanyCode string `json:"company_code"`
 	Plan        string `json:"plan"`
@@ -33,7 +33,7 @@ func WithTenantID(ctx context.Context, tenantID string) context.Context {
 	return context.WithValue(ctx, TenantIDKey, tenantID)
 }
 
-// WithCompanyID adds company_id to context
+// WithCompanyID adds tenant_id to context
 func WithCompanyID(ctx context.Context, companyID string) context.Context {
 	return context.WithValue(ctx, CompanyIDKey, companyID)
 }
@@ -52,7 +52,7 @@ func TenantIDFromContext(ctx context.Context) (string, error) {
 	return tenantID, nil
 }
 
-// CompanyIDFromContext extracts company_id from context.
+// CompanyIDFromContext extracts tenant_id from context.
 // Tries tenant's own key first, then falls back to authsvc key (set by RequireCompany middleware).
 func CompanyIDFromContext(ctx context.Context) (string, error) {
 	if companyID, ok := ctx.Value(CompanyIDKey).(string); ok && companyID != "" {
@@ -61,7 +61,7 @@ func CompanyIDFromContext(ctx context.Context) (string, error) {
 	if companyID := authsvc.CompanyIDFromContext(ctx); companyID != "" {
 		return companyID, nil
 	}
-	return "", fmt.Errorf("company_id not found in context")
+	return "", fmt.Errorf("tenant_id not found in context")
 }
 
 // TenantInfoFromContext extracts complete tenant info from context
@@ -82,7 +82,7 @@ func MustTenantID(ctx context.Context) string {
 	return tenantID
 }
 
-// MustCompanyID gets company_id or panics (for internal use where company is guaranteed)
+// MustCompanyID gets tenant_id or panics (for internal use where company is guaranteed)
 func MustCompanyID(ctx context.Context) string {
 	companyID, err := CompanyIDFromContext(ctx)
 	if err != nil {

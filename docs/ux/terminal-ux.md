@@ -115,7 +115,7 @@ Dark theme only. Reduced gray palette for clarity under varied lighting.
           │               │          └────┬─────┘
           ▼               ▼               ▼
      ┌──────────┐    ┌──────────┐    ┌──────────┐
-     │ Purpose/ │    │ Confirm  │    │ Person   │
+     │ Purpose/ │    │ Confirm  │    │ User   │
      │ Host     │    │ Name+Time│    │ Card     │
      └────┬─────┘    └────┬─────┘    └────┬─────┘
           │               │               │
@@ -347,7 +347,7 @@ On purpose selection → **Host Lookup Sub-screen:**
 │  └─────────────────────────────────────────────┘    │
 │                                                     │
 │  Chọn người bạn muốn gặp                           │ ← 14px hint
-│  Select the person you're visiting                   │
+│  Select the user you're visiting                   │
 │                                                     │
 └─────────────────────────────────────────────────────┘
 ```
@@ -550,7 +550,7 @@ After printing completes → auto-advance to welcome (2s delay).
 ```
 
 **Behavior (Offline-First Local Matching):**
-- Face recognition is **passive** — camera continuously scans against the **local person DB** (synced from server). When face matches locally → auto-advance. No server round-trip needed.
+- Face recognition is **passive** — camera continuously scans against the **local user DB** (synced from server). When face matches locally → auto-advance. No server round-trip needed.
 - Face detection oval turns green (#22C55E border) when face is detected, blue (#3B82F6) when matched against local DB.
 - Card/fingerprint options are tap-to-activate (reader matches against local credential store).
 - **All matching happens on-device in < 50ms.** The device never sends credentials to the server for decision-making. Server only receives event logs after the fact.
@@ -638,7 +638,7 @@ After printing completes → auto-advance to welcome (2s delay).
 └─────────────────────────────────────────────────────┘
 ```
 
-### 7.2 Screen 2 — Person Card
+### 7.2 Screen 2 — User Card
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -1029,7 +1029,7 @@ Full-screen overlay. Use Android system keyboard in kiosk mode with these custom
 └───────────────────────────────────────────────┘
 ```
 
-- **All access decisions work offline** — device matches credentials against local person DB. This is the normal mode, not a fallback.
+- **All access decisions work offline** — device matches credentials against local user DB. This is the normal mode, not a fallback.
 - Clock-in works offline (stores locally, syncs when reconnected)
 - Visitor check-in with pre-registered QR works offline (visitor data synced to device in advance)
 - Walk-up visitor registration may require network for host lookup (shows retry option)

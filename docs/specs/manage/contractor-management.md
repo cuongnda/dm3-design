@@ -18,7 +18,7 @@ Contractor Management handles temporary workers from external companies who perf
 | tax_id | string(20) | no | — | Mã số thuế |
 | business_license | string(50) | no | — | Giấy phép kinh doanh |
 | address | text | no | — | Company address |
-| contact_name | string(200) | no | — | Primary contact person |
+| contact_name | string(200) | no | — | Primary contact user |
 | contact_phone | string(20) | no | — | Contact phone |
 | contact_email | string(255) | no | — | Contact email |
 | contract_number | string(50) | no | — | Contract reference |
@@ -39,7 +39,7 @@ Contractor Management handles temporary workers from external companies who perf
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | — | Tenant isolation |
 | company_id | uuid | yes | — | FK to ContractorCompany |
-| person_id | uuid | yes | — | FK to Person (identity-svc) — type=contractor |
+| user_id | uuid | yes | — | FK to User (identity-svc) — type=contractor |
 | worker_role | string(100) | no | — | Role (e.g., "Đội trưởng", "Công nhân", "Kỹ thuật viên") |
 | badge_number | string(20) | no | — | Assigned contractor badge |
 | badge_issued_at | timestamp | no | — | Badge issue date |
@@ -164,8 +164,8 @@ DocStatusEnum: pending | verified | expired | rejected
     "access_schedule": "07:00-17:00 T2-T6"
   }
   ```
-- **Side effects:** Creates Person (type=contractor) in identity-svc, creates ContractorWorker, issues badge, syncs credentials to allowed devices
-- **Response 201:** Created worker with person_id
+- **Side effects:** Creates User (type=contractor) in identity-svc, creates ContractorWorker, issues badge, syncs credentials to allowed devices
+- **Response 201:** Created worker with user_id
 
 ### GET /api/v1/contractors/companies/{id}/workers
 - **Auth:** role >= viewer
@@ -216,7 +216,7 @@ DocStatusEnum: pending | verified | expired | rejected
 
 | Topic | Direction | QoS | Payload Schema | Description |
 |-------|-----------|-----|----------------|-------------|
-| `dm/{tenant}/device/{device_id}/cfg/persons` | server→device | 1 | Standard person credential sync | Contractor credentials use same sync mechanism as employees |
+| `dm/{tenant}/device/{device_id}/cfg/users` | server→device | 1 | Standard user credential sync | Contractor credentials use same sync mechanism as employees |
 | `dm/{tenant}/device/{device_id}/evt/access` | device→server | 1 | Standard access event | Contractor access events auto-create checkin records |
 
 ## Business Rules
@@ -262,10 +262,10 @@ DocStatusEnum: pending | verified | expired | rejected
 
 ## Offline Behavior
 
-- **Device-side:** Contractor credentials are synced to devices identically to employee credentials. Devices store contractor person records with embedded access schedule and expiry. Access decisions are fully local — a contractor's card/face works even when the server is offline, as long as the credential was previously synced.
+- **Device-side:** Contractor credentials are synced to devices identically to employee credentials. Devices store contractor user records with embedded access schedule and expiry. Access decisions are fully local — a contractor's card/face works even when the server is offline, as long as the credential was previously synced.
 - **Sync strategy:** Same as identity management — MQTT push with monotonic sync versions. Contractor credential changes (new worker, badge renewal, area change) trigger incremental sync. Contract expiry triggers bulk credential removal.
 - **Conflict resolution:** Server-wins. Schedule and expiry are embedded in device-side data, so even stale data has correct time restrictions.
-- **Local storage:** Contractors share the device person database with employees and visitors. Typical contractor load is 25-100 workers per site.
+- **Local storage:** Contractors share the device user database with employees and visitors. Typical contractor load is 25-100 workers per site.
 - **Checkin during offline:** If the server is offline, access events are buffered on devices. When connectivity restores, events are uploaded and ContractorCheckin records are retroactively created from the buffered events.
 - **Compliance enforcement during offline:** Compliance document expiry is enforced server-side. If a document expires while a device is offline, the credential remains active on the device until the server sends a suspension sync. However, badge expiry dates embedded in credentials are enforced locally by devices.
 
@@ -298,7 +298,7 @@ DocStatusEnum: pending | verified | expired | rejected
 ## Integration Points
 
 - **Depends on:**
-  - `identity-svc` — person creation (type=contractor), credential management, credential sync
+  - `identity-svc` — user creation (type=contractor), credential management, credential sync
   - `device-gw` — MQTT credential sync to access devices
   - `auth-svc` — JWT validation
   - `notif-svc` — expiry alerts, compliance warnings
@@ -312,7 +312,7 @@ DocStatusEnum: pending | verified | expired | rejected
 
 ## Notes
 
-- Contractor management is implemented as a layer on top of identity-svc. Each contractor worker has a corresponding Person record with `person_type=contractor`. The ContractorWorker table adds contractor-specific fields (company, badge, compliance).
+- Contractor management is implemented as a layer on top of identity-svc. Each contractor worker has a corresponding User record with `person_type=contractor`. The ContractorWorker table adds contractor-specific fields (company, badge, compliance).
 - Vietnamese compliance requirements include: "Chứng chỉ an toàn lao động" (workplace safety certificate), "Bảo hiểm tai nạn lao động" (workplace accident insurance), "Giấy phép lao động" (work permit for foreign workers).
 - For construction sites, additional compliance docs may include: electrical license, crane operator certification, confined space training.
 - The compliance score is displayed prominently in the UI with color coding: green (90-100%), yellow (70-89%), red (<70%).

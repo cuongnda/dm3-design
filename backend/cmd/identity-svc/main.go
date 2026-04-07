@@ -102,29 +102,29 @@ func main() {
 			ur.Post("/users/{id}/avatar", handlers.UploadUserAvatar)
 		})
 
-		// Persons: operator+viewer can read, manager+ can write
+		// Users: operator+viewer can read, manager+ can write
 		r.Group(func(pr chi.Router) {
 			pr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
-			pr.Get("/persons", handlers.ListPersons)
-			pr.Post("/persons", handlers.CreatePerson)
-			pr.Get("/persons/sync", handlers.SyncPersons)
-			pr.Get("/persons/{id}", handlers.GetPerson)
-			pr.Put("/persons/{id}", handlers.UpdatePerson)
-			pr.Delete("/persons/{id}", handlers.DeletePerson)
-			pr.Post("/persons/{id}/photo", handlers.UploadPhoto)
+			pr.Get("/users", handlers.ListUsers)
+			pr.Post("/users", handlers.CreateUser)
+			pr.Get("/users/sync", handlers.SyncUsers)
+			pr.Get("/users/{id}", handlers.GetUser)
+			pr.Put("/users/{id}", handlers.UpdateUser)
+			pr.Delete("/users/{id}", handlers.DeleteUser)
+			pr.Post("/users/{id}/photo", handlers.UploadPhoto)
 		})
 
 		// Credentials: operator+viewer can read, manager+ can write
 		r.Group(func(cr chi.Router) {
 			cr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
-			cr.Get("/persons/{id}/credentials", handlers.ListCredentials)
-			cr.Post("/persons/{id}/credentials", handlers.CreateCredential)
-			cr.Get("/persons/{id}/credentials/{credID}", handlers.GetCredential)
-			cr.Put("/persons/{id}/credentials/{credID}", handlers.UpdateCredential)
-			cr.Delete("/persons/{id}/credentials/{credID}", handlers.DeleteCredential)
+			cr.Get("/users/{id}/credentials", handlers.ListCredentials)
+			cr.Post("/users/{id}/credentials", handlers.CreateCredential)
+			cr.Get("/users/{id}/credentials/{credID}", handlers.GetCredential)
+			cr.Put("/users/{id}/credentials/{credID}", handlers.UpdateCredential)
+			cr.Delete("/users/{id}/credentials/{credID}", handlers.DeleteCredential)
 		})
 
-		// Person Groups: operator+viewer can read, manager+ can write
+		// User Groups: manager+ can write
 		r.Group(func(gr chi.Router) {
 			gr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
 			gr.Get("/groups", handlers.ListGroups)
@@ -134,7 +134,7 @@ func main() {
 			gr.Delete("/groups/{id}", handlers.DeleteGroup)
 			gr.Get("/groups/{id}/members", handlers.ListGroupMembers)
 			gr.Post("/groups/{id}/members", handlers.AddGroupMember)
-			gr.Delete("/groups/{id}/members/{personID}", handlers.RemoveGroupMember)
+			gr.Delete("/groups/{id}/members/{userID}", handlers.RemoveGroupMember)
 		})
 
 		// Stats: all roles can read

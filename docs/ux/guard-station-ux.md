@@ -660,7 +660,7 @@ Centralized alert queue. Accessed via `F3`.
 │      │     Server Room | Heartbeat missed   │  1. Acknowledge    │
 │      │     ⏱ 34 min ago | ACKNOWLEDGED      │  2. Check camera   │
 │      │                                      │  3. Dispatch guard │
-│      │  ────── Older ──────                 │  4. If person seen │
+│      │  ────── Older ──────                 │  4. If user seen │
 │      │  (load more...)                      │     → Lockdown zone│
 │      │                                      │  5. Call supervisor │
 │      │                                      │                    │

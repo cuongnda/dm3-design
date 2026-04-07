@@ -102,7 +102,9 @@ export function UserModal({ isOpen, onClose, onSave, user }: UserModalProps) {
       const saved = await onSave(payload as Partial<UserType>);
 
       // Upload avatar if a file was selected (edit mode: use existing user.id; create: use returned id)
-      const savedId = (saved as any)?.id ?? user?.id;
+      const savedId = (typeof saved === 'object' && saved !== null && 'id' in saved)
+        ? (saved as { id: string | number }).id
+        : user?.id;
       if (avatarFile && savedId) {
         const form = new FormData();
         form.append('avatar', avatarFile);

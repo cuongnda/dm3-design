@@ -67,12 +67,12 @@ The Authentication & Authorization system is the security foundation of DM3 — 
 
 ## Data Models
 
-### User (auth identity, separate from Person in identity-svc)
+### User (auth identity, separate from User in identity-svc)
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key (maps to Keycloak subject) |
 | tenant_id | uuid | yes | - | Tenant isolation |
-| person_id | uuid | no | null | Linked person in identity-svc |
+| user_id | uuid | no | null | Linked user in identity-svc |
 | username | string(100) | yes | - | Login username (unique per tenant) |
 | email | string(200) | yes | - | Email address |
 | email_verified | boolean | yes | false | Email verification status |
@@ -465,7 +465,7 @@ MFAMethodEnum: totp | sms | webauthn
   - `notif-svc` — Password reset emails, MFA SMS codes, security alerts
 - **Consumed by:**
   - ALL services — JWT validation via cached JWKS
-  - `identity-svc` — User↔Person linking, JIT provisioning on SSO login
+  - `identity-svc` — User↔User linking, JIT provisioning on SSO login
   - `tenant-svc` — Tenant-scoped authentication configuration
   - `audit-svc` — All auth events for security compliance
   - API Gateway (Traefik) — JWT validation middleware, rate limiting

@@ -27,7 +27,7 @@ import (
 type AccessClaims struct {
 	Sub      string   `json:"sub"`
 	TID      string   `json:"tid,omitempty"` // tenant_id
-	CID      string   `json:"cid,omitempty"` // company_id
+	CID      string   `json:"cid,omitempty"` // tenant_id
 	Email    string   `json:"email"`
 	Name     string   `json:"name"`
 	Roles    []string `json:"roles"`
@@ -93,7 +93,7 @@ type loginUserInfo struct {
 	Name  string `json:"name"`
 	Email string `json:"email"`
 	Role  string `json:"role,omitempty"`
-	CID   string `json:"company_id,omitempty"`
+	CID   string `json:"tenant_id,omitempty"`
 }
 
 type loginStepResponse struct {
@@ -107,7 +107,7 @@ type loginStepResponse struct {
 
 type loginStep2Request struct {
 	TemporaryToken string `json:"temporary_token"`
-	CompanyID      string `json:"company_id"`
+	TenantID      string `json:"tenant_id"`
 }
 
 // accountForLogin holds data scanned from dm3_auth.accounts during login.
@@ -135,10 +135,10 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch all accounts matching this email (one per company).
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, company_id::text, email, COALESCE(full_name, email), password_hash, ARRAY[role], status, role
+		`SELECT id, tenant_id::text, email, COALESCE(full_name, email), password_hash, ARRAY[role], status, role
 		 FROM dm3_auth.accounts
 		 WHERE email = $1 AND status != 'deleted'
-		 ORDER BY company_id NULLS FIRST`,
+		 ORDER BY tenant_id NULLS FIRST`,
 		req.Email,
 	)
 	if err != nil {
@@ -179,7 +179,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 		`UPDATE dm3_auth.accounts SET last_login = now(), login_count = login_count + 1
 		 WHERE email = $1 AND status != 'deleted'`, req.Email)
 
-	// System admin account (company_id IS NULL) → complete immediately.
+	// System admin account (tenant_id IS NULL) → complete immediately.
 	first := accounts[0]
 	if first.role == "system_admin" {
 		cid := ""
@@ -275,7 +275,7 @@ func (h *Handlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
 		return
 	}
-	if req.TemporaryToken == "" || req.CompanyID == "" {
+	if req.TemporaryToken == "" || req.TenantID == "" {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.temp_token_company_required")
 		return
 	}
@@ -300,10 +300,10 @@ func (h *Handlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 	// Find the account for this email + selected company.
 	var account accountForLogin
 	err = h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, company_id::text, email, COALESCE(full_name, email), password_hash, ARRAY[role], status, role
+		`SELECT id, tenant_id::text, email, COALESCE(full_name, email), password_hash, ARRAY[role], status, role
 		 FROM dm3_auth.accounts
-		 WHERE email = $1 AND company_id = $2::uuid AND status = 'active'`,
-		tempClaims.Email, req.CompanyID,
+		 WHERE email = $1 AND tenant_id = $2::uuid AND status = 'active'`,
+		tempClaims.Email, req.TenantID,
 	).Scan(&account.id, &account.companyID, &account.email, &account.fullName,
 		&account.passwordHash, &account.roles, &account.status, &account.role)
 	if err != nil {
@@ -314,19 +314,19 @@ func (h *Handlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 	// Verify company is still active.
 	var companyStatus string
 	err = h.db.Pool.QueryRow(r.Context(),
-		`SELECT status FROM dm3_auth.companies WHERE id = $1::uuid`, req.CompanyID,
+		`SELECT status FROM dm3_auth.companies WHERE id = $1::uuid`, req.TenantID,
 	).Scan(&companyStatus)
 	if err != nil || companyStatus != "active" {
 		i18n.ErrorResponse(w, r, http.StatusForbidden, "auth.no_company_access")
 		return
 	}
 
-	accessToken, err := h.generateAccessToken(account.id, req.CompanyID, account.email, account.fullName, account.roles, req.CompanyID, account.role)
+	accessToken, err := h.generateAccessToken(account.id, req.TenantID, account.email, account.fullName, account.roles, req.TenantID, account.role)
 	if err != nil {
 		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 		return
 	}
-	refreshToken, err := h.createRefreshToken(r, account.id, req.CompanyID)
+	refreshToken, err := h.createRefreshToken(r, account.id, req.TenantID)
 	if err != nil {
 		slog.Error("failed to create refresh token in step2", "error", err, "user_id", account.id)
 	}
@@ -335,7 +335,7 @@ func (h *Handlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 		Step:         "complete",
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
-		User:         &loginUserInfo{ID: account.id, Name: account.fullName, Email: account.email, Role: account.role, CID: req.CompanyID},
+		User:         &loginUserInfo{ID: account.id, Name: account.fullName, Email: account.email, Role: account.role, CID: req.TenantID},
 	})
 }
 
@@ -356,7 +356,7 @@ func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	var expiresAt time.Time
 	var revoked bool
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, user_id, company_id, expires_at, revoked FROM dm3_auth.refresh_tokens WHERE token_hash = $1`,
+		`SELECT id, user_id, tenant_id, expires_at, revoked FROM dm3_auth.refresh_tokens WHERE token_hash = $1`,
 		hash,
 	).Scan(&tokenID, &userID, &companyID, &expiresAt, &revoked)
 	if err != nil {
@@ -387,7 +387,7 @@ func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	var refreshCompanyID *string
 	var refreshUserRole string
 	err = h.db.Pool.QueryRow(r.Context(),
-		`SELECT email, COALESCE(full_name, email), ARRAY[role], company_id::text, role
+		`SELECT email, COALESCE(full_name, email), ARRAY[role], tenant_id::text, role
 		 FROM dm3_auth.accounts WHERE id = $1::uuid AND status != 'deleted'`, userID,
 	).Scan(&email, &fullName, &roles, &refreshCompanyID, &refreshUserRole)
 	if err != nil {
@@ -432,12 +432,12 @@ func (h *Handlers) Me(w http.ResponseWriter, r *http.Request) {
 
 	var user userResponse
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, company_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
+		`SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
 		        last_login, created_at, locale, timezone, NULL::int
 		 FROM dm3_auth.accounts WHERE id = $1::uuid`,
 		claims.Sub,
 	).Scan(
-		&user.ID, &user.CompanyID, &user.Email, &user.Name, &user.Roles, &user.Role,
+		&user.ID, &user.TenantID, &user.Email, &user.Name, &user.Roles, &user.Role,
 		&user.Status, &user.LastLogin, &user.CreatedAt,
 		&user.PreferredLanguage, &user.Timezone, &user.SessionTimeoutMinutes,
 	)
@@ -595,7 +595,7 @@ func (h *Handlers) DeviceToken(w http.ResponseWriter, r *http.Request) {
 
 type userResponse struct {
 	ID                    string     `json:"id"`
-	CompanyID             *string    `json:"company_id,omitempty"`
+	TenantID             *string    `json:"tenant_id,omitempty"`
 	Email                 string     `json:"email"`
 	Name                  *string    `json:"name"`
 	Roles                 []string   `json:"roles"`
@@ -616,7 +616,7 @@ func (h *Handlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_auth.accounts WHERE status != 'deleted'`).Scan(&total)
 
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, company_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status, last_login, created_at
+		`SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status, last_login, created_at
 		 FROM dm3_auth.accounts WHERE status != 'deleted' ORDER BY created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -627,7 +627,7 @@ func (h *Handlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	users := []userResponse{}
 	for rows.Next() {
 		var u userResponse
-		if err := rows.Scan(&u.ID, &u.CompanyID, &u.Email, &u.Name, &u.Roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.TenantID, &u.Email, &u.Name, &u.Roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -641,7 +641,7 @@ type createUserRequest struct {
 	Password  string   `json:"password"`
 	Name      string   `json:"name"`
 	Roles     []string `json:"roles"`
-	CompanyID *string  `json:"company_id,omitempty"`
+	TenantID *string  `json:"tenant_id,omitempty"`
 }
 
 func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
@@ -667,11 +667,11 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	var u userResponse
 	err = h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_auth.accounts (email, password_hash, first_name, role, company_id)
+		`INSERT INTO dm3_auth.accounts (email, password_hash, first_name, role, tenant_id)
 		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id, company_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status, last_login, created_at`,
-		req.Email, string(hash), req.Name, role, req.CompanyID,
-	).Scan(&u.ID, &u.CompanyID, &u.Email, &u.Name, &u.Roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt)
+		 RETURNING id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status, last_login, created_at`,
+		req.Email, string(hash), req.Name, role, req.TenantID,
+	).Scan(&u.ID, &u.TenantID, &u.Email, &u.Name, &u.Roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt)
 	if err != nil {
 		slog.Error("create user", "error", err)
 		i18n.ErrorResponse(w, r, http.StatusConflict, "user.already_exists")
@@ -684,9 +684,9 @@ func (h *Handlers) GetUser(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var u userResponse
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, company_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status, last_login, created_at
+		`SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status, last_login, created_at
 		 FROM dm3_auth.accounts WHERE id = $1::uuid`, id,
-	).Scan(&u.ID, &u.CompanyID, &u.Email, &u.Name, &u.Roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt)
+	).Scan(&u.ID, &u.TenantID, &u.Email, &u.Name, &u.Roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "user not found")
 		return
@@ -722,9 +722,9 @@ func (h *Handlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			status      = COALESCE($4, status),
 			updated_at  = now()
 		 WHERE id = $1::uuid
-		 RETURNING id, company_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status, last_login, created_at`,
+		 RETURNING id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status, last_login, created_at`,
 		id, req.Name, rolePtr, req.Status,
-	).Scan(&u.ID, &u.CompanyID, &u.Email, &u.Name, &u.Roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt)
+	).Scan(&u.ID, &u.TenantID, &u.Email, &u.Name, &u.Roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "user not found")
 		return
@@ -854,7 +854,7 @@ func (h *Handlers) createRefreshToken(r *http.Request, userID, companyID string)
 		cid = nil
 	}
 	_, err := h.db.Pool.Exec(r.Context(),
-		`INSERT INTO dm3_auth.refresh_tokens (user_id, company_id, token_hash, expires_at)
+		`INSERT INTO dm3_auth.refresh_tokens (user_id, tenant_id, token_hash, expires_at)
 		 VALUES ($1::uuid, $2, $3, $4)`,
 		userID, cid, hash, time.Now().Add(7*24*time.Hour))
 	if err != nil {

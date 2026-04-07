@@ -36,7 +36,7 @@ func Middleware(database *db.DB, mode IsolationMode) func(http.Handler) http.Han
 			// Handle system admin permissions based on isolation mode
 			if claims.Role == "system_admin" && mode == IsolationModeSystemAdmin {
 				// System admins can optionally scope to a company
-				companyID := r.URL.Query().Get("company_id")
+				companyID := r.URL.Query().Get("tenant_id")
 				if companyID == "" {
 					companyID = claims.CID
 				}
@@ -46,18 +46,18 @@ func Middleware(database *db.DB, mode IsolationMode) func(http.Handler) http.Han
 					// Load tenant info for system admin scoped requests
 					tenantInfo, err := loadTenantInfo(database, companyID)
 					if err != nil {
-						writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid company_id: %v", err))
+						writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid tenant_id: %v", err))
 						return
 					}
 					ctx = WithCompanyID(ctx, companyID)
-					ctx = WithTenantID(ctx, companyID) // company_id = tenant_id in this system
+					ctx = WithTenantID(ctx, companyID) // tenant_id = tenant_id in this system
 					ctx = WithTenantInfo(ctx, tenantInfo)
 				}
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
 
-			// Regular users must have company_id (tenant_id)
+			// Regular users must have tenant_id (tenant_id)
 			if claims.CID == "" {
 				if mode == IsolationModeOptional {
 					next.ServeHTTP(w, r) // Allow without tenant context
@@ -82,7 +82,7 @@ func Middleware(database *db.DB, mode IsolationMode) func(http.Handler) http.Han
 
 			// Inject tenant context
 			ctx := WithCompanyID(r.Context(), claims.CID)
-			ctx = WithTenantID(ctx, claims.CID) // company_id = tenant_id in this architecture
+			ctx = WithTenantID(ctx, claims.CID) // tenant_id = tenant_id in this architecture
 			ctx = WithTenantInfo(ctx, tenantInfo)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -107,6 +107,9 @@ func SystemAdminTenant(database *db.DB) func(http.Handler) http.Handler {
 
 // loadTenantInfo fetches complete tenant/company information from database
 func loadTenantInfo(database *db.DB, companyID string) (*TenantInfo, error) {
+	if database == nil || database.Pool == nil {
+		return &TenantInfo{ID: companyID, TenantID: companyID, Status: "active"}, nil
+	}
 	query := `
 		SELECT id, name, code, plan, status, max_devices, max_users
 		FROM dm3_auth.companies
@@ -132,7 +135,7 @@ func loadTenantInfo(database *db.DB, companyID string) (*TenantInfo, error) {
 		return nil, err
 	}
 	
-	info.CompanyID = companyID
+	info.TenantID = companyID
 	return &info, nil
 }
 

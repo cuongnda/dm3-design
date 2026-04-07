@@ -32,18 +32,18 @@ func setupTestDB(t *testing.T) *db.DB {
 func setupRouter(h *Handlers) http.Handler {
 	r := httputil.NewRouter()
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Get("/persons", h.ListPersons)
-		r.Post("/persons", h.CreatePerson)
-		r.Get("/persons/sync", h.SyncPersons)
-		r.Get("/persons/{id}", h.GetPerson)
-		r.Put("/persons/{id}", h.UpdatePerson)
-		r.Delete("/persons/{id}", h.DeletePerson)
+		r.Get("/users", h.ListUsers)
+		r.Post("/users", h.CreateUser)
+		r.Get("/users/sync", h.SyncUsers)
+		r.Get("/users/{id}", h.GetUser)
+		r.Put("/users/{id}", h.UpdateUser)
+		r.Delete("/users/{id}", h.DeleteUser)
 
-		r.Get("/persons/{id}/credentials", h.ListCredentials)
-		r.Post("/persons/{id}/credentials", h.CreateCredential)
-		r.Get("/persons/{id}/credentials/{credID}", h.GetCredential)
-		r.Put("/persons/{id}/credentials/{credID}", h.UpdateCredential)
-		r.Delete("/persons/{id}/credentials/{credID}", h.DeleteCredential)
+		r.Get("/users/{id}/credentials", h.ListCredentials)
+		r.Post("/users/{id}/credentials", h.CreateCredential)
+		r.Get("/users/{id}/credentials/{credID}", h.GetCredential)
+		r.Put("/users/{id}/credentials/{credID}", h.UpdateCredential)
+		r.Delete("/users/{id}/credentials/{credID}", h.DeleteCredential)
 
 		r.Get("/groups", h.ListGroups)
 		r.Post("/groups", h.CreateGroup)
@@ -52,7 +52,7 @@ func setupRouter(h *Handlers) http.Handler {
 		r.Delete("/groups/{id}", h.DeleteGroup)
 		r.Get("/groups/{id}/members", h.ListGroupMembers)
 		r.Post("/groups/{id}/members", h.AddGroupMember)
-		r.Delete("/groups/{id}/members/{personID}", h.RemoveGroupMember)
+		r.Delete("/groups/{id}/members/{userID}", h.RemoveGroupMember)
 
 		r.Get("/stats", h.GetStats)
 	})
@@ -68,50 +68,50 @@ func TestPersonsCRUD(t *testing.T) {
 
 	// Create
 	body := `{"first_name":"John","last_name":"Doe","email":"john@test.com","department":"Engineering"}`
-	req := httptest.NewRequest("POST", "/api/v1/persons", bytes.NewBufferString(body))
+	req := httptest.NewRequest("POST", "/api/v1/users", bytes.NewBufferString(body))
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusCreated {
-		t.Fatalf("create person: expected 201, got %d: %s", w.Code, w.Body.String())
+		t.Fatalf("create user: expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var person map[string]any
-	json.Unmarshal(w.Body.Bytes(), &person)
-	personID := person["id"].(string)
+	var user map[string]any
+	json.Unmarshal(w.Body.Bytes(), &user)
+	userID := user["id"].(string)
 
 	// Get
-	req = httptest.NewRequest("GET", "/api/v1/persons/"+personID, nil)
+	req = httptest.NewRequest("GET", "/api/v1/users/"+userID, nil)
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
-		t.Fatalf("get person: expected 200, got %d", w.Code)
+		t.Fatalf("get user: expected 200, got %d", w.Code)
 	}
 
 	// List with search
-	req = httptest.NewRequest("GET", "/api/v1/persons?search=John", nil)
+	req = httptest.NewRequest("GET", "/api/v1/users?search=John", nil)
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
-		t.Fatalf("list persons: expected 200, got %d", w.Code)
+		t.Fatalf("list users: expected 200, got %d", w.Code)
 	}
 
 	var listResp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &listResp)
 	if listResp["total"].(float64) < 1 {
-		t.Fatal("expected at least 1 person in search results")
+		t.Fatal("expected at least 1 user in search results")
 	}
 
 	// Update
 	body = `{"department":"Sales"}`
-	req = httptest.NewRequest("PUT", "/api/v1/persons/"+personID, bytes.NewBufferString(body))
+	req = httptest.NewRequest("PUT", "/api/v1/users/"+userID, bytes.NewBufferString(body))
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
-		t.Fatalf("update person: expected 200, got %d: %s", w.Code, w.Body.String())
+		t.Fatalf("update user: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
 	var updated map[string]any
@@ -121,20 +121,20 @@ func TestPersonsCRUD(t *testing.T) {
 	}
 
 	// Delete
-	req = httptest.NewRequest("DELETE", "/api/v1/persons/"+personID, nil)
+	req = httptest.NewRequest("DELETE", "/api/v1/users/"+userID, nil)
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
-		t.Fatalf("delete person: expected 204, got %d", w.Code)
+		t.Fatalf("delete user: expected 204, got %d", w.Code)
 	}
 
 	// Verify deleted
-	req = httptest.NewRequest("GET", "/api/v1/persons/"+personID, nil)
+	req = httptest.NewRequest("GET", "/api/v1/users/"+userID, nil)
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusNotFound {
-		t.Fatalf("get deleted person: expected 404, got %d", w.Code)
+		t.Fatalf("get deleted user: expected 404, got %d", w.Code)
 	}
 }
 
@@ -145,23 +145,23 @@ func TestCredentialsCRUD(t *testing.T) {
 	h := NewHandlers(database, nil)
 	router := setupRouter(h)
 
-	// Create person first
+	// Create user first
 	body := `{"first_name":"Jane","last_name":"Smith","email":"jane@test.com"}`
-	req := httptest.NewRequest("POST", "/api/v1/persons", bytes.NewBufferString(body))
+	req := httptest.NewRequest("POST", "/api/v1/users", bytes.NewBufferString(body))
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-	var person map[string]any
-	json.Unmarshal(w.Body.Bytes(), &person)
-	personID := person["id"].(string)
+	var user map[string]any
+	json.Unmarshal(w.Body.Bytes(), &user)
+	userID := user["id"].(string)
 	defer func() {
-		req := httptest.NewRequest("DELETE", "/api/v1/persons/"+personID, nil)
+		req := httptest.NewRequest("DELETE", "/api/v1/users/"+userID, nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 	}()
 
 	// Create credential
 	body = `{"type":"card","value":"CARD-12345"}`
-	req = httptest.NewRequest("POST", fmt.Sprintf("/api/v1/persons/%s/credentials", personID), bytes.NewBufferString(body))
+	req = httptest.NewRequest("POST", fmt.Sprintf("/api/v1/users/%s/credentials", userID), bytes.NewBufferString(body))
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -174,7 +174,7 @@ func TestCredentialsCRUD(t *testing.T) {
 	credID := cred["id"].(string)
 
 	// List credentials
-	req = httptest.NewRequest("GET", fmt.Sprintf("/api/v1/persons/%s/credentials", personID), nil)
+	req = httptest.NewRequest("GET", fmt.Sprintf("/api/v1/users/%s/credentials", userID), nil)
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -183,7 +183,7 @@ func TestCredentialsCRUD(t *testing.T) {
 	}
 
 	// Get credential
-	req = httptest.NewRequest("GET", fmt.Sprintf("/api/v1/persons/%s/credentials/%s", personID, credID), nil)
+	req = httptest.NewRequest("GET", fmt.Sprintf("/api/v1/users/%s/credentials/%s", userID, credID), nil)
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -193,7 +193,7 @@ func TestCredentialsCRUD(t *testing.T) {
 
 	// Invalid type
 	body = `{"type":"invalid","value":"xxx"}`
-	req = httptest.NewRequest("POST", fmt.Sprintf("/api/v1/persons/%s/credentials", personID), bytes.NewBufferString(body))
+	req = httptest.NewRequest("POST", fmt.Sprintf("/api/v1/users/%s/credentials", userID), bytes.NewBufferString(body))
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
@@ -201,7 +201,7 @@ func TestCredentialsCRUD(t *testing.T) {
 	}
 
 	// Delete credential
-	req = httptest.NewRequest("DELETE", fmt.Sprintf("/api/v1/persons/%s/credentials/%s", personID, credID), nil)
+	req = httptest.NewRequest("DELETE", fmt.Sprintf("/api/v1/users/%s/credentials/%s", userID, credID), nil)
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusNoContent {
@@ -230,17 +230,17 @@ func TestGroupsCRUD(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &group)
 	groupID := group["id"].(string)
 
-	// Create a person to add as member
+	// Create a user to add as member
 	body = `{"first_name":"Member","last_name":"One"}`
-	req = httptest.NewRequest("POST", "/api/v1/persons", bytes.NewBufferString(body))
+	req = httptest.NewRequest("POST", "/api/v1/users", bytes.NewBufferString(body))
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-	var person map[string]any
-	json.Unmarshal(w.Body.Bytes(), &person)
-	personID := person["id"].(string)
+	var user map[string]any
+	json.Unmarshal(w.Body.Bytes(), &user)
+	userID := user["id"].(string)
 
 	// Add member
-	body = fmt.Sprintf(`{"person_id":"%s"}`, personID)
+	body = fmt.Sprintf(`{"person_id":"%s"}`, userID)
 	req = httptest.NewRequest("POST", fmt.Sprintf("/api/v1/groups/%s/members", groupID), bytes.NewBufferString(body))
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -267,7 +267,7 @@ func TestGroupsCRUD(t *testing.T) {
 	}
 
 	// Remove member
-	req = httptest.NewRequest("DELETE", fmt.Sprintf("/api/v1/groups/%s/members/%s", groupID, personID), nil)
+	req = httptest.NewRequest("DELETE", fmt.Sprintf("/api/v1/groups/%s/members/%s", groupID, userID), nil)
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusNoContent {
@@ -275,9 +275,9 @@ func TestGroupsCRUD(t *testing.T) {
 	}
 
 	// Cleanup
-	httptest.NewRequest("DELETE", "/api/v1/persons/"+personID, nil)
+	httptest.NewRequest("DELETE", "/api/v1/users/"+userID, nil)
 	w2 := httptest.NewRecorder()
-	router.ServeHTTP(w2, httptest.NewRequest("DELETE", "/api/v1/persons/"+personID, nil))
+	router.ServeHTTP(w2, httptest.NewRequest("DELETE", "/api/v1/users/"+userID, nil))
 
 	req = httptest.NewRequest("DELETE", "/api/v1/groups/"+groupID, nil)
 	w = httptest.NewRecorder()
@@ -295,7 +295,7 @@ func TestSyncEndpoint(t *testing.T) {
 	router := setupRouter(h)
 
 	// Sync with epoch gets all
-	req := httptest.NewRequest("GET", "/api/v1/persons/sync?since=2000-01-01T00:00:00Z", nil)
+	req := httptest.NewRequest("GET", "/api/v1/users/sync?since=2000-01-01T00:00:00Z", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -310,7 +310,7 @@ func TestSyncEndpoint(t *testing.T) {
 	}
 
 	// Invalid since format
-	req = httptest.NewRequest("GET", "/api/v1/persons/sync?since=invalid", nil)
+	req = httptest.NewRequest("GET", "/api/v1/users/sync?since=invalid", nil)
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
@@ -335,8 +335,8 @@ func TestStatsEndpoint(t *testing.T) {
 
 	var stats map[string]any
 	json.Unmarshal(w.Body.Bytes(), &stats)
-	if stats["total_persons"] == nil {
-		t.Fatal("stats missing total_persons")
+	if stats["total_users"] == nil {
+		t.Fatal("stats missing total_users")
 	}
 }
 
@@ -349,7 +349,7 @@ func TestValidation(t *testing.T) {
 
 	// Missing required fields
 	body := `{"first_name":"Only"}`
-	req := httptest.NewRequest("POST", "/api/v1/persons", bytes.NewBufferString(body))
+	req := httptest.NewRequest("POST", "/api/v1/users", bytes.NewBufferString(body))
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
@@ -357,7 +357,7 @@ func TestValidation(t *testing.T) {
 	}
 
 	// Invalid JSON
-	req = httptest.NewRequest("POST", "/api/v1/persons", bytes.NewBufferString("{invalid"))
+	req = httptest.NewRequest("POST", "/api/v1/users", bytes.NewBufferString("{invalid"))
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
@@ -365,7 +365,7 @@ func TestValidation(t *testing.T) {
 	}
 
 	// Not found
-	req = httptest.NewRequest("GET", "/api/v1/persons/00000000-0000-0000-0000-000000000099", nil)
+	req = httptest.NewRequest("GET", "/api/v1/users/00000000-0000-0000-0000-000000000099", nil)
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusNotFound {

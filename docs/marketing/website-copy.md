@@ -87,7 +87,7 @@ Works with your existing hardware — Hikvision, Dahua, Hanwha, and any ONVIF-co
 Our offline-first architecture means every device makes access decisions locally in under 50 milliseconds. No cloud dependency. No network latency. Your building keeps running even when the internet doesn't. Competitors need constant cloud connectivity — we don't.
 
 **Any Building. Any Scale.**  
-50-person office or 10,000-worker factory. On-premise, cloud, or hybrid. Start with what you need. Add modules as you grow.
+50-user office or 10,000-worker factory. On-premise, cloud, or hybrid. Start with what you need. Add modules as you grow.
 
 **Cybersecurity Built In**  
 Zero-trust architecture, end-to-end encryption, immutable audit logs, and a compliance roadmap for SOC2 and ISO 27001.
@@ -235,7 +235,7 @@ Control who goes where — across every door, gate, turnstile, lift, and barrier
 
 **Intelligent access rules.** Time-based schedules, zone-based restrictions, anti-passback, interlocking, and custom policies. Define exactly who can access what, when, and how.
 
-**Zero-latency local decisions.** Every device makes access decisions locally against a synced person database — in under 50ms. No server round-trip. No internet dependency. Events stream to your dashboard for monitoring, but the device never waits for permission.
+**Zero-latency local decisions.** Every device makes access decisions locally against a synced user database — in under 50ms. No server round-trip. No internet dependency. Events stream to your dashboard for monitoring, but the device never waits for permission.
 
 **Real-time monitoring.** Live door status, access event logs streamed to your dashboard, and instant alerts for denied access or forced entry.
 
@@ -329,11 +329,11 @@ One button. Every system responds together. Because in an emergency, coordinated
 
 **URL:** `/platform/manage/`  
 **Meta Title:** MANAGE — Visitor, Identity & Attendance Management Platform  
-**Meta Description:** Manage every person in your building — employees, visitors, contractors, deliveries — with unified identity and automated access provisioning.
+**Meta Description:** Manage every user in your building — employees, visitors, contractors, deliveries — with unified identity and automated access provisioning.
 
 ### H1: MANAGE — Handle All People
 
-Employees. Visitors. Contractors. Delivery drivers. Every person who enters your building needs to be identified, authorized, tracked, and (eventually) deprovisioned.
+Employees. Visitors. Contractors. Delivery drivers. Every user who enters your building needs to be identified, authorized, tracked, and (eventually) deprovisioned.
 
 Duall Master MANAGE gives you one identity system for everyone — with automated workflows that eliminate manual access management.
 
@@ -341,9 +341,9 @@ Duall Master MANAGE gives you one identity system for everyone — with automate
 
 **Section: Identity Management**
 
-One profile per person. Across every module. Across every building.
+One profile per user. Across every module. Across every building.
 
-- **Unified identity** — A single record for each person, shared across access control, attendance, visitors, and every other module
+- **Unified identity** — A single record for each user, shared across access control, attendance, visitors, and every other module
 - **Credential management** — Assign and revoke cards, biometrics, and mobile credentials from one screen
 - **Role-based access** — Template-based provisioning: define a role once, assign it to hundreds of people
 - **HR integration** — Auto-sync from your HR system. New hire? Access provisioned. Terminated? Access revoked. Instantly.
@@ -884,7 +884,7 @@ Duall Master handles the scale and complexity of industrial environments — wit
 
 **Contractor compliance.** Register contractor companies and workers. Track safety training, certifications, and insurance. Block access when certifications expire. Daily check-in/out logging.
 
-**Unified identity.** One profile per person — whether they're a permanent employee, contract worker, or visitor. Access, attendance, and safety records all linked.
+**Unified identity.** One profile per user — whether they're a permanent employee, contract worker, or visitor. Access, attendance, and safety records all linked.
 
 ---
 
@@ -1000,7 +1000,7 @@ Role-based access with granular zone control. Define clearance levels that map t
 
 **Section: Deployment**
 
-Duall Master supports air-gapped deployment for the most sensitive environments. No internet required. All updates applied locally. Complete network isolation. **Offline-first architecture means access devices work identically whether connected or disconnected** — rules and person databases are synced to devices, which make all decisions locally.
+Duall Master supports air-gapped deployment for the most sensitive environments. No internet required. All updates applied locally. Complete network isolation. **Offline-first architecture means access devices work identically whether connected or disconnected** — rules and user databases are synced to devices, which make all decisions locally.
 
 [Request Government Briefing]
 

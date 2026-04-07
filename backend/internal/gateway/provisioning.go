@@ -39,7 +39,7 @@ type provisionRequest struct {
 	DeviceID  string `json:"device_id"`
 	Name      string `json:"name"`
 	Type      string `json:"type"`
-	CompanyID string `json:"company_id"`
+	TenantID string `json:"tenant_id"`
 	SiteID    string `json:"site_id"`
 	Location  string `json:"location"`
 }
@@ -64,12 +64,12 @@ func (h *ProvisioningHandlers) ProvisionDevice(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	companyID := req.CompanyID
+	companyID := req.TenantID
 	if companyID == "" {
 		companyID = authsvc.CompanyIDFromContext(r.Context())
 	}
 	if companyID == "" {
-		httputil.Error(w, http.StatusBadRequest, "company_id is required")
+		httputil.Error(w, http.StatusBadRequest, "tenant_id is required")
 		return
 	}
 
@@ -82,7 +82,7 @@ func (h *ProvisioningHandlers) ProvisionDevice(w http.ResponseWriter, r *http.Re
 	// Create device with status=provisioning
 	var deviceDBID string
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_devices.devices (device_id, name, type, site_id, location, company_id, status, status_detail)
+		`INSERT INTO dm3_devices.devices (device_id, name, type, site_id, location, tenant_id, status, status_detail)
 		 VALUES ($1, $2, $3, $4, $5, $6::uuid, 'provisioning', 'awaiting_activation')
 		 RETURNING id`,
 		req.DeviceID, req.Name, req.Type, req.SiteID, req.Location, companyID,
@@ -121,7 +121,7 @@ func (h *ProvisioningHandlers) ProvisionDevice(w http.ResponseWriter, r *http.Re
 			"name":       req.Name,
 			"type":       req.Type,
 			"status":     "provisioning",
-			"company_id": companyID,
+			"tenant_id": companyID,
 		},
 		"provisioning": map[string]any{
 			"qr_token":    qrToken,
@@ -139,7 +139,7 @@ func (h *ProvisioningHandlers) RegenerateQR(w http.ResponseWriter, r *http.Reque
 	// Get device info
 	var companyID, deviceType, status string
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT company_id, type, status FROM dm3_devices.devices WHERE id = $1::uuid`, deviceDBID,
+		`SELECT tenant_id, type, status FROM dm3_devices.devices WHERE id = $1::uuid`, deviceDBID,
 	).Scan(&companyID, &deviceType, &status)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "device not found")
@@ -251,7 +251,7 @@ func (h *ProvisioningHandlers) ActivateDevice(w http.ResponseWriter, r *http.Req
 	var deviceID, companyName string
 	_ = h.db.Pool.QueryRow(r.Context(),
 		`SELECT d.device_id, COALESCE(c.name, '') FROM dm3_devices.devices d
-		 LEFT JOIN dm3_auth.companies c ON c.id = d.company_id
+		 LEFT JOIN dm3_auth.companies c ON c.id = d.tenant_id
 		 WHERE d.id = $1::uuid`, qrClaims.DID,
 	).Scan(&deviceID, &companyName)
 
@@ -279,7 +279,7 @@ func (h *ProvisioningHandlers) ActivateDevice(w http.ResponseWriter, r *http.Req
 		"config": map[string]any{
 			"heartbeat_interval_sec": 30,
 			"sync_url":               "/api/v1",
-			"company_id":              qrClaims.CID,
+			"tenant_id":              qrClaims.CID,
 		},
 	})
 }
@@ -290,7 +290,7 @@ func (h *ProvisioningHandlers) ActivateDevice(w http.ResponseWriter, r *http.Req
 func (h *ProvisioningHandlers) ListPending(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT id, rid, device_type, COALESCE(firmware_version,''), hardware_fingerprint,
-		 hmac_verified, signature_verified, status, assigned_company_id, created_at
+		 hmac_verified, signature_verified, status, tenant_id, created_at
 		 FROM dm3_devices.pending_registrations WHERE status = 'pending' ORDER BY created_at DESC LIMIT 100`,
 	)
 	if err != nil {
@@ -319,7 +319,7 @@ func (h *ProvisioningHandlers) ListPending(w http.ResponseWriter, r *http.Reques
 			"hmac_verified":      hmacVerified,
 			"signature_verified": sigVerified,
 			"status":             status,
-			"assigned_company_id": assignedCompanyID,
+			"assigned_tenant_id": assignedCompanyID,
 			"created_at":         createdAt,
 		}
 		results = append(results, item)
@@ -331,7 +331,7 @@ func (h *ProvisioningHandlers) ListPending(w http.ResponseWriter, r *http.Reques
 }
 
 type approveRequest struct {
-	CompanyID string `json:"company_id"`
+	TenantID string `json:"tenant_id"`
 	SiteID    string `json:"site_id"`
 	Name      string `json:"name"`
 	Location  string `json:"location"`
@@ -346,8 +346,8 @@ func (h *ProvisioningHandlers) ApprovePending(w http.ResponseWriter, r *http.Req
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.CompanyID == "" {
-		httputil.Error(w, http.StatusBadRequest, "company_id is required")
+	if req.TenantID == "" {
+		httputil.Error(w, http.StatusBadRequest, "tenant_id is required")
 		return
 	}
 
@@ -376,9 +376,9 @@ func (h *ProvisioningHandlers) ApprovePending(w http.ResponseWriter, r *http.Req
 
 	// Update pending registration
 	_, _ = h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_devices.pending_registrations SET status = 'approved', assigned_company_id = $1::uuid,
+		`UPDATE dm3_devices.pending_registrations SET status = 'approved', tenant_id = $1::uuid,
 		 assigned_by = $2, reviewed_at = now() WHERE id = $3::uuid`,
-		req.CompanyID, assignedBy, regID,
+		req.TenantID, assignedBy, regID,
 	)
 
 	// Create device record
@@ -388,11 +388,11 @@ func (h *ProvisioningHandlers) ApprovePending(w http.ResponseWriter, r *http.Req
 	}
 	var deviceDBID string
 	err = h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_devices.devices (device_id, name, type, site_id, location, company_id, status, status_detail, firmware_version, hardware_fingerprint, provisioned_at, provisioned_by)
+		`INSERT INTO dm3_devices.devices (device_id, name, type, site_id, location, tenant_id, status, status_detail, firmware_version, hardware_fingerprint, provisioned_at, provisioned_by)
 		 VALUES ($1, $2, $3, $4, $5, $6::uuid, 'online', 'bootstrap_approved', $7, $8, now(), $9)
-		 ON CONFLICT (device_id) DO UPDATE SET status = 'online', name = $2, type = $3, site_id = $4, location = $5, company_id = $6::uuid, firmware_version = $7, hardware_fingerprint = $8, provisioned_at = now(), provisioned_by = $9, status_detail = 'bootstrap_approved', updated_at = now()
+		 ON CONFLICT (device_id) DO UPDATE SET status = 'online', name = $2, type = $3, site_id = $4, location = $5, tenant_id = $6::uuid, firmware_version = $7, hardware_fingerprint = $8, provisioned_at = now(), provisioned_by = $9, status_detail = 'bootstrap_approved', updated_at = now()
 		 RETURNING id`,
-		rid, name, deviceType, req.SiteID, req.Location, req.CompanyID, firmwareVersion, fp, assignedBy,
+		rid, name, deviceType, req.SiteID, req.Location, req.TenantID, firmwareVersion, fp, assignedBy,
 	).Scan(&deviceDBID)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to create device: "+err.Error())
@@ -400,7 +400,7 @@ func (h *ProvisioningHandlers) ApprovePending(w http.ResponseWriter, r *http.Req
 	}
 
 	// Generate device JWT
-	deviceJWT, err := generateDeviceJWT(deviceDBID, req.CompanyID, deviceType, h.cfg.JWTSecret)
+	deviceJWT, err := generateDeviceJWT(deviceDBID, req.TenantID, deviceType, h.cfg.JWTSecret)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to generate credentials")
 		return
@@ -418,12 +418,12 @@ func (h *ProvisioningHandlers) ApprovePending(w http.ResponseWriter, r *http.Req
 			"refresh_url":     "/api/v1/devices/refresh-token",
 		},
 		"company": map[string]any{
-			"id": req.CompanyID,
+			"id": req.TenantID,
 		},
 		"config": map[string]any{
 			"heartbeat_interval_sec": 30,
 			"sync_url":               "/api/v1",
-			"company_id":              req.CompanyID,
+			"tenant_id":              req.TenantID,
 		},
 	})
 	topic := fmt.Sprintf("dm/bootstrap/%s/response", rid)
@@ -555,7 +555,7 @@ func (h *ProvisioningHandlers) RefreshToken(w http.ResponseWriter, r *http.Reque
 	_, _ = h.db.Pool.Exec(r.Context(),
 		"UPDATE dm3_devices.devices SET last_seen = now(), status = 'online' WHERE device_id = $1", dc.DID)
 
-	slog.Info("device token refreshed", "device_id", dc.DID, "company_id", dc.CID)
+	slog.Info("device token refreshed", "device_id", dc.DID, "tenant_id", dc.CID)
 
 	httputil.JSON(w, http.StatusOK, map[string]any{
 		"token":      newToken,

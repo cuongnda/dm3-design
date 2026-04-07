@@ -40,23 +40,26 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({
   } = useTenantStore()
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const userRole = useAuthStore((s) => s.user?.role)
+  const isSystemAdmin = userRole === 'system_admin'
 
   // Fetch tenant data when authenticated — skip on unauthenticated pages like /login
+  // and skip for system_admin who has no tenant
   useEffect(() => {
-    if (!isAuthenticated) return
+    if (!isAuthenticated || isSystemAdmin) return
     refreshTenantData()
-  }, [isAuthenticated, refreshTenantData])
+  }, [isAuthenticated, isSystemAdmin, refreshTenantData])
 
   // Auto-refresh setup
   useEffect(() => {
-    if (!autoRefresh || !isAuthenticated) return
+    if (!autoRefresh || !isAuthenticated || isSystemAdmin) return
 
     const interval = setInterval(() => {
       refreshTenantData()
     }, refreshInterval)
 
     return () => clearInterval(interval)
-  }, [autoRefresh, refreshInterval, refreshTenantData])
+  }, [autoRefresh, refreshInterval, isSystemAdmin, refreshTenantData])
 
   const contextValue: TenantContextType = {
     tenant,

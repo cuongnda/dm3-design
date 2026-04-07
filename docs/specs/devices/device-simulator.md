@@ -104,7 +104,7 @@ simulator/
 | **AccessEngine** | Offline-first access decision algorithm — all decisions against local DB |
 | **SyncHandler** | Processes cfg.full, person_sync, access_rules, blacklist messages |
 | **SimulatorAPI** | aiohttp REST API + web dashboard serving |
-| **EventGenerator** | Generates mock persons (Vietnamese names) and access rules |
+| **EventGenerator** | Generates mock users (Vietnamese names) and access rules |
 | **Metrics** | Prometheus counters/gauges/summaries via prometheus_client |
 
 ---
@@ -142,7 +142,7 @@ dm3-simulator run \
   --device-prefix "sim" \
   --mode normal \
   --event-rate 1.0 \
-  --persons 50 \
+  --users 50 \
   --db-mode memory \
   --api-port 9090 \
   --log-level info \
@@ -162,7 +162,7 @@ dm3-simulator run \
 | `--device-prefix` | str | `sim` | Device ID prefix (not used in IDs — see Device ID Format) |
 | `--mode` | choice | `normal` | `normal` \| `stress` \| `chaos` |
 | `--event-rate` | float | 1.0 | Events per second per device |
-| `--persons` | int | 50 | Mock persons per device |
+| `--users` | int | 50 | Mock users per device |
 | `--db-mode` | choice | `memory` | `memory` \| `file` |
 | `--api-port` | int | 9090 | REST API + dashboard port |
 | `--log-level` | choice | `info` | `debug` \| `info` \| `warning` \| `error` |
@@ -175,16 +175,16 @@ dm3-simulator run \
 ### 5.2 `seed` — Pre-populate Device Databases
 
 ```bash
-dm3-simulator seed --devices 10 --persons 50 --output-dir /tmp/dm3-sim
+dm3-simulator seed --devices 10 --users 50 --output-dir /tmp/dm3-sim
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `--devices` | int | 10 | Number of device databases to seed |
-| `--persons` | int | 50 | Persons per device |
+| `--users` | int | 50 | Users per device |
 | `--output-dir` | str | `/tmp/dm3-sim` | Output directory for SQLite files |
 
-Creates `{device_id}.db` files with seeded persons, credentials, access rules, and person groups.
+Creates `{device_id}.db` files with seeded users, credentials, access rules, and user groups.
 
 ### 5.3 Device ID Format
 
@@ -290,7 +290,7 @@ Response: `AccessDecision` object
 ```json
 {
   "granted": true, "reason": "authorized",
-  "person_id": "uuid", "person_name": "Nguyễn Văn An",
+  "user_id": "uuid", "user_name": "Nguyễn Văn An",
   "rule_id": "rule-001", "decision_time_ms": 0.15,
   "confidence": null, "pending_multi_factor": false
 }
@@ -307,7 +307,7 @@ Omit `enabled` to toggle. Response: `{"status": "ok", "device_id": "000001", "au
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/devices/{device_id}/persons` | Persons in device's local DB (paginated: `?limit=50&offset=0`) |
+| `GET` | `/api/devices/{device_id}/users` | Users in device's local DB (paginated: `?limit=50&offset=0`) |
 | `GET` | `/api/devices/{device_id}/credentials` | Credentials in device's local DB (limit 100) |
 | `GET` | `/api/devices/{device_id}/rules` | Access rules in device's local DB |
 | `GET` | `/api/devices/{device_id}/events-queue` | Pending events in offline queue (limit 50) |
@@ -386,7 +386,7 @@ Header with device ID and control buttons: Trigger, Auto On/Off, Network Disconn
 
 **5 tabs:**
 1. **⚙️ Config** — Device configuration and sync state
-2. **👥 Persons** — Person records in local DB (paginated table)
+2. **👥 Users** — User records in local DB (paginated table)
 3. **🔑 Credentials** — Credential records (truncated values)
 4. **📋 Rules** — Access rules with priority, doors, groups, schedules
 5. **📤 Event Queue** — Pending offline events
@@ -401,7 +401,7 @@ Header with device ID and control buttons: Trigger, Auto On/Off, Network Disconn
 
 ### 7.6 Live Event Feed
 
-Real-time scrolling feed of access events with color-coded borders (green = granted, red = denied). Shows timestamp, device ID, person name, decision, and reason.
+Real-time scrolling feed of access events with color-coded borders (green = granted, red = denied). Shows timestamp, device ID, user name, decision, and reason.
 
 ---
 
@@ -481,12 +481,12 @@ The engine (`access_engine.py`) evaluates credentials against the local SQLite D
 
 ```
 1. Check lockdown → if active, deny with "lockdown_active"
-2. Lookup credential (type + value) → join credentials + persons tables
+2. Lookup credential (type + value) → join credentials + users tables
    → if not found, deny with "denied_unknown"
 3. Check blacklist (with effective_from/until window)
    → if blacklisted, deny with "denied_blacklist"
-4. Check person status → if not "active", deny with "denied_inactive"
-5. Check person validity window (valid_from/valid_until)
+4. Check user status → if not "active", deny with "denied_inactive"
+5. Check user validity window (valid_from/valid_until)
    → if outside window, deny with "denied_expired"
 6. Check failed attempt lockout (locked_until > now)
    → if locked out, deny with "denied_lockout"
@@ -496,7 +496,7 @@ The engine (`access_engine.py`) evaluates credentials against the local SQLite D
    a. Skip if disabled
    b. Skip if outside rule validity window
    c. Skip if door_id not in rule's door_ids
-   d. Skip if person not in any of rule's person_group_ids
+   d. Skip if user not in any of rule's user_group_ids
    e. Skip if schedule_json defined and current time outside schedule
    f. If anti_passback enabled and last_direction == current direction
       → deny with "denied_anti_passback"
@@ -522,7 +522,7 @@ def evaluate_schedule(schedule_json, now_ms):
 ### 9.3 Post-Decision Actions
 
 - **Granted:** Reset failed attempts, update anti-passback state
-- **Denied (with person_id):** Increment failed attempts (lockout after 5 failures for 5 minutes)
+- **Denied (with user_id):** Increment failed attempts (lockout after 5 failures for 5 minutes)
 - **Always:** Build `access.log` event, publish via MQTT or queue if offline
 
 ### 9.4 Decision Reasons
@@ -532,9 +532,9 @@ def evaluate_schedule(schedule_json, now_ms):
 | `authorized` | Access granted — rule matched |
 | `lockdown_active` | Device in lockdown mode |
 | `denied_unknown` | Credential not found in local DB |
-| `denied_blacklist` | Person is on the blacklist |
-| `denied_inactive` | Person status is not "active" |
-| `denied_expired` | Outside person's validity window |
+| `denied_blacklist` | User is on the blacklist |
+| `denied_inactive` | User status is not "active" |
+| `denied_expired` | Outside user's validity window |
 | `denied_lockout` | Too many failed attempts (5 failures → 5 min lockout) |
 | `denied_zone` | No access rule covers this door |
 | `denied_time` | No rule matched current time schedule |
@@ -546,11 +546,11 @@ def evaluate_schedule(schedule_json, now_ms):
 
 Each virtual device maintains its own SQLite database.
 
-### 10.1 `persons`
+### 10.1 `users`
 
 ```sql
-CREATE TABLE persons (
-    person_id   TEXT PRIMARY KEY,
+CREATE TABLE users (
+    user_id   TEXT PRIMARY KEY,
     name        TEXT NOT NULL,
     status      TEXT DEFAULT 'active',    -- active | suspended | terminated
     valid_from  INTEGER,                  -- Unix ms
@@ -565,7 +565,7 @@ CREATE TABLE persons (
 ```sql
 CREATE TABLE credentials (
     id          TEXT PRIMARY KEY,
-    person_id   TEXT NOT NULL REFERENCES persons(person_id),
+    user_id   TEXT NOT NULL REFERENCES users(user_id),
     type        TEXT NOT NULL,             -- face | card | pin | qr | fingerprint
     value       TEXT NOT NULL,
     status      TEXT DEFAULT 'active',
@@ -574,7 +574,7 @@ CREATE TABLE credentials (
     UNIQUE(type, value)
 );
 CREATE INDEX idx_credentials_type_value ON credentials(type, value);
-CREATE INDEX idx_credentials_person ON credentials(person_id);
+CREATE INDEX idx_credentials_person ON credentials(user_id);
 ```
 
 ### 10.3 `access_rules`
@@ -584,7 +584,7 @@ CREATE TABLE access_rules (
     rule_id          TEXT PRIMARY KEY,
     name             TEXT NOT NULL,
     door_ids         TEXT NOT NULL,          -- JSON array
-    person_group_ids TEXT NOT NULL,          -- JSON array
+    user_group_ids TEXT NOT NULL,          -- JSON array
     schedule_json    TEXT,                   -- JSON: {timezone, periods: [{days, start, end}]}
     anti_passback    INTEGER DEFAULT 0,
     multi_factor     INTEGER DEFAULT 0,
@@ -595,21 +595,21 @@ CREATE TABLE access_rules (
 );
 ```
 
-### 10.4 `person_groups`
+### 10.4 `user_groups`
 
 ```sql
-CREATE TABLE person_groups (
+CREATE TABLE user_groups (
     group_id    TEXT PRIMARY KEY,
-    person_ids  TEXT NOT NULL              -- JSON array of person_id strings
+    user_ids  TEXT NOT NULL              -- JSON array of user_id strings
 );
-CREATE INDEX idx_person_groups_lookup ON person_groups(group_id);
+CREATE INDEX idx_user_groups_lookup ON user_groups(group_id);
 ```
 
 ### 10.5 `blacklist`
 
 ```sql
 CREATE TABLE blacklist (
-    person_id       TEXT PRIMARY KEY,
+    user_id       TEXT PRIMARY KEY,
     name            TEXT,
     reason          TEXT,
     effective_from  INTEGER,
@@ -658,7 +658,7 @@ CREATE TABLE config (
 
 ```sql
 CREATE TABLE anti_passback_state (
-    person_id      TEXT PRIMARY KEY,
+    user_id      TEXT PRIMARY KEY,
     last_direction TEXT NOT NULL,           -- entry | exit
     last_door_id   TEXT NOT NULL,
     timestamp_ms   INTEGER NOT NULL
@@ -669,7 +669,7 @@ CREATE TABLE anti_passback_state (
 
 ```sql
 CREATE TABLE failed_attempts (
-    person_id    TEXT PRIMARY KEY,
+    user_id    TEXT PRIMARY KEY,
     count        INTEGER DEFAULT 0,
     locked_until INTEGER DEFAULT 0          -- Unix ms, 0 = not locked
 );
@@ -739,7 +739,7 @@ All messages use the standard envelope:
 | Message Type | Handler | Action |
 |-------------|---------|--------|
 | `cfg.full` | `SyncHandler.handle_config()` | Store all config sections, update config_version |
-| `cfg.person_sync` | `SyncHandler.handle_person_sync()` | Upsert/delete persons + credentials, increment person_db_version |
+| `cfg.person_sync` | `SyncHandler.handle_person_sync()` | Upsert/delete users + credentials, increment person_db_version |
 | `cfg.access_rules` | `SyncHandler.handle_access_rules()` | Upsert rules, update rules_version |
 | `cfg.blacklist` | `SyncHandler.handle_blacklist()` | Add/remove blacklist entries, update blacklist_version |
 | `cmd.lockdown` | `VirtualDevice._on_message()` | Activate/deactivate lockdown mode |
@@ -758,10 +758,10 @@ Config messages (`cfg.full`, `cfg.person_sync`, `cfg.access_rules`) are acknowle
 Names are generated from pools of Vietnamese last names (16), middle names (14), and first names (33):
 - Format: `{Last} {Middle} {First}` (e.g., "Nguyễn Văn An", "Trần Thị Hạnh")
 
-### 13.2 Persons (default: 50 per device)
+### 13.2 Users (default: 50 per device)
 
-Each person gets:
-- UUID person_id
+Each user gets:
+- UUID user_id
 - Vietnamese name
 - Active status
 - 2–3 credentials:
@@ -771,7 +771,7 @@ Each person gets:
 
 ### 13.3 Access Rules (default: 5 per device)
 
-- Persons split into 5 groups
+- Users split into 5 groups
 - Each rule maps one group to door(s) with a schedule
 - Schedules use `Asia/Ho_Chi_Minh` timezone
 - Pre-defined schedules: weekday office hours, 24/7, morning shift, weekend, evening
@@ -828,7 +828,7 @@ class SimulationConfig(BaseModel):
     mode: str = "normal"              # normal | stress | chaos
     event_rate: float = 1.0
     event_mix: dict[str, int]         # default: grant:70, deny:20, alarm:5, tamper:3, door_held:2
-    persons: int = 50
+    users: int = 50
     db_mode: str = "memory"
     api_port: int = 9090
     metrics_port: int = 9091
@@ -839,10 +839,10 @@ class SimulationConfig(BaseModel):
 
 ### 15.2 Other Models
 
-- **AccessDecision** — `granted`, `reason`, `person_id`, `person_name`, `rule_id`, `decision_time_ms`, `confidence`, `pending_multi_factor`
-- **PersonRecord** — `person_id`, `name`, `status`, `valid_from`, `valid_until`
-- **CredentialRecord** — `id`, `person_id`, `type`, `value`, `status`, `valid_from`, `valid_until`
-- **AccessRule** — `rule_id`, `name`, `door_ids`, `person_group_ids`, `schedule_json`, `anti_passback`, `multi_factor`, `priority`, `enabled`, `valid_from`, `valid_until`
+- **AccessDecision** — `granted`, `reason`, `user_id`, `user_name`, `rule_id`, `decision_time_ms`, `confidence`, `pending_multi_factor`
+- **PersonRecord** — `user_id`, `name`, `status`, `valid_from`, `valid_until`
+- **CredentialRecord** — `id`, `user_id`, `type`, `value`, `status`, `valid_from`, `valid_until`
+- **AccessRule** — `rule_id`, `name`, `door_ids`, `user_group_ids`, `schedule_json`, `anti_passback`, `multi_factor`, `priority`, `enabled`, `valid_from`, `valid_until`
 - **MqttMessage** — Standard MQTT message envelope (`v`, `id`, `ts`, `src`, `type`, `data`, `ref`, `status`)
 
 ---
@@ -942,7 +942,7 @@ Listed in CLI choices but chaos-specific fault injection (random disconnects, la
 | File | Tests | Coverage |
 |------|-------|----------|
 | `test_access_engine.py` | 11 | Decision engine: granted, denied (unknown, blacklist, inactive, expired, lockout, zone, time, anti-passback), lockdown, schedule evaluation |
-| `test_database.py` | 11 | SQLite operations: persons CRUD, credentials, access rules, blacklist, event queue, sync state, failed attempts, person groups |
+| `test_database.py` | 11 | SQLite operations: users CRUD, credentials, access rules, blacklist, event queue, sync state, failed attempts, user groups |
 | `test_device.py` | 3 | VirtualDevice: model creation, state machine, door states |
 
 Run tests:

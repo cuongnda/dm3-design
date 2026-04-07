@@ -189,7 +189,7 @@ Coordinated emergency response.
 
 ## 6. Domain: 👤 MANAGE — Handle All People
 
-Managing every person who enters the building — employees, visitors, contractors, delivery personnel.
+Managing every user who enters the building — employees, visitors, contractors, delivery personnel.
 
 ### 6.1 Identity Management
 
@@ -197,7 +197,7 @@ Central registry for all people in the system.
 
 | Feature | Description |
 |---------|-------------|
-| **Unified Identity** | One profile per person across all modules |
+| **Unified Identity** | One profile per user across all modules |
 | **Credential Management** | Assign/revoke cards, biometrics, mobile credentials |
 | **Role-based Access** | Template-based access provisioning per role |
 | **HR Integration** | Auto-sync from HR systems — hire/transfer/terminate |

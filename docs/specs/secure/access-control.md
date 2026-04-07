@@ -5,7 +5,7 @@
 
 ## Overview
 
-The Access Control System is the foundation of the SECURE domain — controlling who goes where, when, and how. It manages doors, gates, turnstiles, lifts, and barriers across one or multiple sites. **All access decisions are made locally on devices** using synced person databases and access rules. The server manages rules, orchestrates sync, and aggregates event logs for dashboards and analytics. Zero connectivity dependency for core access decisions.
+The Access Control System is the foundation of the SECURE domain — controlling who goes where, when, and how. It manages doors, gates, turnstiles, lifts, and barriers across one or multiple sites. **All access decisions are made locally on devices** using synced user databases and access rules. The server manages rules, orchestrates sync, and aggregates event logs for dashboards and analytics. Zero connectivity dependency for core access decisions.
 
 ## Data Models
 
@@ -40,7 +40,7 @@ The Access Control System is the foundation of the SECURE domain — controlling
 | last_event_at | timestamp | no | null | Last access event time |
 | last_heartbeat_at | timestamp | no | null | Last device heartbeat |
 | config_version | int | yes | 0 | Current config version synced |
-| person_db_version | int | yes | 0 | Current person DB version on device |
+| person_db_version | int | yes | 0 | Current user DB version on device |
 | rules_version | int | yes | 0 | Current rules version on device |
 | metadata | jsonb | no | {} | Extra data |
 | created_at | timestamp | yes | now() | Creation time |
@@ -55,7 +55,7 @@ The Access Control System is the foundation of the SECURE domain — controlling
 | name | string(100) | yes | - | Rule name, e.g. "Nhân viên — Giờ hành chính" |
 | description | string(500) | no | null | Rule description |
 | door_ids | uuid[] | yes | - | Doors this rule applies to |
-| person_group_ids | uuid[] | yes | - | Person groups granted access |
+| user_group_ids | uuid[] | yes | - | User groups granted access |
 | schedule_id | uuid | no | null | Time schedule reference |
 | schedule_inline | jsonb | no | null | Inline schedule if no schedule_id |
 | anti_passback | boolean | yes | false | Override per-door anti-passback |
@@ -91,8 +91,8 @@ The Access Control System is the foundation of the SECURE domain — controlling
 | tenant_id | uuid | yes | - | Tenant isolation |
 | time | timestamptz | yes | - | Event timestamp (device clock) |
 | door_id | uuid | yes | - | Which door |
-| person_id | uuid | no | null | Matched person (null if unknown) |
-| person_name | string(100) | no | null | Denormalized name |
+| user_id | uuid | no | null | Matched user (null if unknown) |
+| user_name | string(100) | no | null | Denormalized name |
 | credential_type | CredentialTypeEnum | yes | - | Method used |
 | direction | DirectionEnum | no | null | entry / exit |
 | decision | DecisionEnum | yes | - | granted / denied / forced |
@@ -103,12 +103,12 @@ The Access Control System is the foundation of the SECURE domain — controlling
 | photo_ref | string(200) | no | null | MinIO reference for snapshot |
 | temperature | float | no | null | Thermal reading if enabled |
 | mask_detected | boolean | no | null | Mask detection result |
-| local_db_version | int | no | null | Device's person DB version |
-| local_person_count | int | no | null | Device's person count |
+| local_db_version | int | no | null | Device's user DB version |
+| local_person_count | int | no | null | Device's user count |
 | device_id | uuid | no | null | Source device |
 | metadata | jsonb | no | {} | Extra data |
 
-### PersonGroup
+### UserGroup
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
@@ -116,7 +116,7 @@ The Access Control System is the foundation of the SECURE domain — controlling
 | site_id | uuid | yes | - | Site scope |
 | name | string(100) | yes | - | e.g. "Nhân viên văn phòng", "Ban giám đốc" |
 | description | string(500) | no | null | Description |
-| person_ids | uuid[] | no | [] | Members (or use dynamic rules) |
+| user_ids | uuid[] | no | [] | Members (or use dynamic rules) |
 | dynamic_filter | jsonb | no | null | Auto-membership rules (department, role) |
 | person_count | int | yes | 0 | Cached member count |
 | created_at | timestamp | yes | now() | Creation time |
@@ -269,7 +269,7 @@ InterlockModeEnum: mutual_exclusive | sequential
   | to | timestamp | now | End time |
   | decision | string | - | Filter: granted,denied,forced |
   | credential_type | string | - | Filter by credential type |
-  | person_id | uuid | - | Filter by person |
+  | user_id | uuid | - | Filter by user |
   | page | int | 1 | Pagination |
   | limit | int | 50 | Max 500 |
 - **Response 200:**
@@ -279,8 +279,8 @@ InterlockModeEnum: mutual_exclusive | sequential
       {
         "id": "uuid",
         "time": "2026-02-19T09:15:00Z",
-        "person_id": "uuid",
-        "person_name": "Nguyễn Văn An",
+        "user_id": "uuid",
+        "user_name": "Nguyễn Văn An",
         "credential_type": "face",
         "direction": "entry",
         "decision": "granted",
@@ -296,8 +296,8 @@ InterlockModeEnum: mutual_exclusive | sequential
 
 ### GET /api/v1/access/rules
 - **Auth:** role >= viewer
-- **Query params:** site_id (required), door_id, person_group_id, enabled, page, limit
-- **Response 200:** Paginated list of AccessRule with nested schedule and person counts
+- **Query params:** site_id (required), door_id, user_group_id, enabled, page, limit
+- **Response 200:** Paginated list of AccessRule with nested schedule and user counts
 
 ### POST /api/v1/access/rules
 - **Auth:** role >= admin
@@ -307,7 +307,7 @@ InterlockModeEnum: mutual_exclusive | sequential
     "name": "Nhân viên — Giờ hành chính",
     "site_id": "uuid",
     "door_ids": ["uuid1", "uuid2"],
-    "person_group_ids": ["uuid1"],
+    "user_group_ids": ["uuid1"],
     "schedule_inline": {
       "timezone": "Asia/Ho_Chi_Minh",
       "periods": [
@@ -344,25 +344,25 @@ InterlockModeEnum: mutual_exclusive | sequential
 - **Body:** Schedule object
 - **Response 201:** Created schedule
 
-### GET /api/v1/access/person-groups
+### GET /api/v1/access/user-groups
 - **Auth:** role >= viewer
 - **Query params:** site_id (required), search, page, limit
 - **Response 200:** Paginated groups with member counts
 
-### POST /api/v1/access/person-groups
+### POST /api/v1/access/user-groups
 - **Auth:** role >= admin
-- **Body:** PersonGroup object
+- **Body:** UserGroup object
 - **Response 201:** Created group
 
-### PUT /api/v1/access/person-groups/{id}/members
+### PUT /api/v1/access/user-groups/{id}/members
 - **Auth:** role >= admin
-- **Body:** `{ "add": ["person-uuid1"], "remove": ["person-uuid2"] }`
+- **Body:** `{ "add": ["user-uuid1"], "remove": ["user-uuid2"] }`
 - **Side effects:** Triggers person_sync to devices that have rules referencing this group
 - **Response 200:** Updated group
 
 ### POST /api/v1/access/doors/{id}/sync
 - **Auth:** role >= admin
-- **Description:** Force full person DB + rules sync to a specific device
+- **Description:** Force full user DB + rules sync to a specific device
 - **Side effects:** MQTT `cfg.person_sync` (action=full_sync) + `cfg.access_rules` (action=full_sync)
 - **Response 202:** Sync initiated
 - **Errors:** 401, 403, 404, 503 (device offline)
@@ -403,7 +403,7 @@ InterlockModeEnum: mutual_exclusive | sequential
 | `dm/{tid}/device/{did}/evt` (type: door.state) | device→server | 1 | See mqtt-protocol.md §4.2 | Door physical state change |
 | `dm/{tid}/device/{did}/cmd` (type: cmd.door) | server→device | 2 | `{action, door_id, duration_ms, reason, operator_id}` | Remote door control |
 | `dm/{tid}/device/{did}/cmd/resp` (type: cmd.door.resp) | device→server | 2 | `{door_id, current_state, executed_at}` | Door command response |
-| `dm/{tid}/device/{did}/cfg` (type: cfg.person_sync) | server→device | 2 | See mqtt-protocol.md §7.3 | Person DB sync to device |
+| `dm/{tid}/device/{did}/cfg` (type: cfg.person_sync) | server→device | 2 | See mqtt-protocol.md §7.3 | User DB sync to device |
 | `dm/{tid}/device/{did}/cfg` (type: cfg.access_rules) | server→device | 2 | See mqtt-protocol.md §7.5 | Access rules sync to device |
 | `dm/{tid}/device/{did}/cfg` (type: cfg.blacklist) | server→device | 2 | See mqtt-protocol.md §7.4 | Blacklist push (priority) |
 | `dm/{tid}/device/{did}/cfg/ack` | device→server | 2 | Ack with local versions and counts | Sync confirmation |
@@ -412,10 +412,10 @@ InterlockModeEnum: mutual_exclusive | sequential
 
 ## Business Rules
 
-1. **BR-AC-001 — Local Decision Engine:** All access decisions MUST be made on-device within 50ms using synced person DB and access rules. Server NEVER participates in real-time access decisions.
-2. **BR-AC-002 — Deny by Default:** If a credential does not match any person in the local DB, or the person has no applicable rule for the current door + time, access is DENIED.
-3. **BR-AC-003 — Blacklist Priority:** Blacklist entries override ALL access rules. A blacklisted person is denied regardless of any rule granting access. Blacklist sync has QoS 2 and must be processed before the next access decision.
-4. **BR-AC-004 — Anti-Passback:** If enabled on a rule or door, a person who entered (direction=entry) cannot enter again until they exit. Violation → deny with reason `denied_anti_passback`. Anti-passback state is maintained locally on the device.
+1. **BR-AC-001 — Local Decision Engine:** All access decisions MUST be made on-device within 50ms using synced user DB and access rules. Server NEVER participates in real-time access decisions.
+2. **BR-AC-002 — Deny by Default:** If a credential does not match any user in the local DB, or the user has no applicable rule for the current door + time, access is DENIED.
+3. **BR-AC-003 — Blacklist Priority:** Blacklist entries override ALL access rules. A blacklisted user is denied regardless of any rule granting access. Blacklist sync has QoS 2 and must be processed before the next access decision.
+4. **BR-AC-004 — Anti-Passback:** If enabled on a rule or door, a user who entered (direction=entry) cannot enter again until they exit. Violation → deny with reason `denied_anti_passback`. Anti-passback state is maintained locally on the device.
 5. **BR-AC-005 — Interlock / Mantrap:** In an interlock group, only one door may be unlocked at a time. A door in the group cannot unlock until all other doors in the group are in `locked` state. Enforced locally by the controller.
 6. **BR-AC-006 — Failed Attempt Lockout:** After `max_failed_attempts` consecutive denials for the same credential within 10 minutes, the credential is locked out for `lockout_duration_ms`. Enforced locally.
 7. **BR-AC-007 — Emergency Override:** When emergency mode is activated via `dm/{tid}/emergency/broadcast`, doors with `emergency_unlock=true` must unlock immediately regardless of rules. Doors with `emergency_unlock=false` (e.g., server rooms) lock down.
@@ -423,9 +423,9 @@ InterlockModeEnum: mutual_exclusive | sequential
 9. **BR-AC-009 — Schedule Enforcement:** Access rules with schedules are only active during the defined periods. Schedule evaluation uses the device's local clock (synced via NTP). Timezone is always explicit.
 10. **BR-AC-010 — Door Held Open Alert:** If a door remains in `open` state longer than `unlock_duration_ms + 30 seconds`, the device emits an `alarm.triggered` event with type `door_held`. Monitored locally.
 11. **BR-AC-011 — Forced Door Alert:** If a door is opened without a valid unlock command or access grant, the device emits `alarm.triggered` with type `door_forced`. Immediate critical alert.
-12. **BR-AC-012 — Incremental Sync:** Person DB sync uses cursor-based incremental sync (`sync_token`). Only changed records are sent. Full sync only on first provision or admin request.
-13. **BR-AC-013 — Multi-Factor Access:** When `multi_factor=true` on a rule, person must present 2+ credentials (e.g., card + face) within a 30-second window. Both must match the same person.
-14. **BR-AC-014 — Credential Validity Window:** Each person credential has `valid_from` and `valid_until`. Device rejects expired credentials locally without server involvement.
+12. **BR-AC-012 — Incremental Sync:** User DB sync uses cursor-based incremental sync (`sync_token`). Only changed records are sent. Full sync only on first provision or admin request.
+13. **BR-AC-013 — Multi-Factor Access:** When `multi_factor=true` on a rule, user must present 2+ credentials (e.g., card + face) within a 30-second window. Both must match the same user.
+14. **BR-AC-014 — Credential Validity Window:** Each user credential has `valid_from` and `valid_until`. Device rejects expired credentials locally without server involvement.
 15. **BR-AC-015 — Event Queue Ordering:** When device reconnects, queued events are uploaded in chronological order (oldest first), throttled at 100 events/second.
 
 ## Permissions Matrix
@@ -441,18 +441,18 @@ InterlockModeEnum: mutual_exclusive | sequential
 | Delete doors | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Create/edit rules | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Delete rules | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Manage person groups | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Manage user groups | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Force device sync | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Create interlock groups | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Emergency lockdown | ❌ | ✅ | ✅ | ✅ | ✅ |
 
 ## Offline Behavior
 
-- **Device-side:** This IS the primary mode. Devices always have a complete local person DB (SQLite), access rules, and blacklist. All credential matching, rule evaluation, schedule checks, anti-passback tracking, and interlock logic run locally in < 50ms. No server dependency whatsoever.
+- **Device-side:** This IS the primary mode. Devices always have a complete local user DB (SQLite), access rules, and blacklist. All credential matching, rule evaluation, schedule checks, anti-passback tracking, and interlock logic run locally in < 50ms. No server dependency whatsoever.
 - **Event queuing:** Access events are logged to local SQLite `event_queue` table (max 5,000 events). When connectivity restores, events upload in chronological order at 100/sec.
 - **Sync strategy:** On reconnect, device publishes heartbeat with `local_db_version`, `rules_version`, `blacklist_version`. Server compares versions and sends incremental deltas for any stale data.
-- **Conflict resolution:** Server wins. Server is the single source of truth for person data and rules. Device never modifies person records — only consumes them.
-- **Local storage:** SQLite DB on device containing: persons table (face templates ~2KB each, card UIDs, fingerprint templates ~500B each), access_rules, blacklist, event_queue, config. Max capacity: 10,000 persons by default (configurable per device model).
+- **Conflict resolution:** Server wins. Server is the single source of truth for user data and rules. Device never modifies user records — only consumes them.
+- **Local storage:** SQLite DB on device containing: users table (face templates ~2KB each, card UIDs, fingerprint templates ~500B each), access_rules, blacklist, event_queue, config. Max capacity: 10,000 users by default (configurable per device model).
 - **Clock sync:** Devices use NTP for time synchronization. If NTP is unavailable, device uses internal RTC. Events include device timestamp and are reconciled server-side.
 - **Blacklist during offline:** Blacklist entries synced before going offline remain enforced. New blacklist entries cannot reach the device until connectivity restores — this is an accepted risk documented in the security assessment.
 - **Degraded mode indicators:** Device displays "Offline Mode" icon on screen but continues normal access operations. Operators see `queue_depth > 0` in status to know events are pending upload.
@@ -475,13 +475,13 @@ InterlockModeEnum: mutual_exclusive | sequential
 | access.door.unlocked | POST unlock command | door_id, actor, reason, duration | 1 year |
 | access.door.locked | POST lock command | door_id, actor | 1 year |
 | access.door.held_open | POST hold-open | door_id, actor, duration | 1 year |
-| access.event.granted | Device access.log | person, door, credential, time | 2 years |
-| access.event.denied | Device access.log | person/unknown, door, reason, time | 2 years |
+| access.event.granted | Device access.log | user, door, credential, time | 2 years |
+| access.event.denied | Device access.log | user/unknown, door, reason, time | 2 years |
 | access.event.forced | Device door.state forced | door, time, photo | permanent |
 | access.rule.created | POST rule | full rule | 1 year |
 | access.rule.updated | PUT rule | diff | 1 year |
 | access.rule.deleted | DELETE rule | id + actor | permanent |
-| access.group.members_changed | PUT group members | added/removed person IDs | 1 year |
+| access.group.members_changed | PUT group members | added/removed user IDs | 1 year |
 | access.sync.initiated | POST sync | door_id, sync_type, actor | 90 days |
 | access.sync.completed | cfg/ack received | door_id, versions, counts | 90 days |
 | access.alarm.door_forced | Device alarm event | door_id, time, photo | permanent |
@@ -492,7 +492,7 @@ InterlockModeEnum: mutual_exclusive | sequential
 ## Integration Points
 
 - **Depends on:**
-  - `identity-svc` — Person data, credentials, person groups (gRPC)
+  - `identity-svc` — User data, credentials, user groups (gRPC)
   - `auth-svc` — JWT validation, role-based permissions
   - `device-gw` — MQTT message routing, device registry
   - `notif-svc` — Push notifications for alarms (forced door, held open)

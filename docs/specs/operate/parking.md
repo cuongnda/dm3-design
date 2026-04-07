@@ -40,7 +40,7 @@ Parking Management handles vehicle entry/exit, space occupancy tracking, license
 | status | SpaceStatus | yes | available | Current status |
 | sensor_id | uuid | no | — | Occupancy sensor reference |
 | ev_charger_id | uuid | no | — | EV charger reference |
-| reserved_for | uuid | no | — | Reserved for person/tenant (monthly) |
+| reserved_for | uuid | no | — | Reserved for user/tenant (monthly) |
 | coordinates | jsonb | no | — | Position on floor map {x, y, angle} |
 | metadata | jsonb | no | {} | Custom fields |
 | created_at | timestamp | yes | now() | Creation time |
@@ -51,7 +51,7 @@ Parking Management handles vehicle entry/exit, space occupancy tracking, license
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | — | Tenant reference |
-| owner_id | uuid | no | — | Person reference (null for visitors) |
+| owner_id | uuid | no | — | User reference (null for visitors) |
 | plate_number | text | yes | — | License plate (e.g., "30A-12345") |
 | plate_image_ref | text | no | — | Last captured plate image |
 | type | VehicleType | yes | — | Vehicle type |
@@ -98,7 +98,7 @@ Parking Management handles vehicle entry/exit, space occupancy tracking, license
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | — | Tenant reference |
 | site_id | uuid | yes | — | Site reference |
-| person_id | uuid | yes | — | Pass owner |
+| user_id | uuid | yes | — | Pass owner |
 | vehicle_id | uuid | yes | — | Registered vehicle |
 | zone_id | uuid | yes | — | Permitted zone |
 | space_id | uuid | no | — | Assigned space (if reserved) |
@@ -152,7 +152,7 @@ Parking Management handles vehicle entry/exit, space occupancy tracking, license
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | — | Tenant reference |
 | site_id | uuid | yes | — | Site reference |
-| person_id | uuid | yes | — | Reserver |
+| user_id | uuid | yes | — | Reserver |
 | vehicle_id | uuid | no | — | Vehicle (if known) |
 | zone_id | uuid | yes | — | Preferred zone |
 | space_id | uuid | no | — | Specific space (if assigned) |
@@ -296,7 +296,7 @@ ChargerStatus: available | charging | faulted | offline
 
 ### GET /api/v1/parking/passes
 - **Auth:** role >= operator
-- **Query params:** site_id, person_id, status, zone_id
+- **Query params:** site_id, user_id, status, zone_id
 - **Response 200:** Monthly pass list
 
 ### POST /api/v1/parking/passes
@@ -305,7 +305,7 @@ ChargerStatus: available | charging | faulted | offline
   ```json
   {
     "site_id": "uuid",
-    "person_id": "uuid",
+    "user_id": "uuid",
     "vehicle_id": "uuid",
     "zone_id": "uuid",
     "space_id": "uuid",
@@ -320,7 +320,7 @@ ChargerStatus: available | charging | faulted | offline
 
 ### GET /api/v1/parking/reservations
 - **Auth:** role >= operator
-- **Query params:** site_id, person_id, date, status
+- **Query params:** site_id, user_id, date, status
 - **Response 200:** Reservation list
 
 ### POST /api/v1/parking/reservations
@@ -400,7 +400,7 @@ ChargerStatus: available | charging | faulted | offline
 10. **EV charging billing:** IF ev_charging session THEN bill parking fee + energy consumed × rate_per_kwh. If charger occupied > 30min after full charge THEN apply idle fee.
 11. **Reservation expiry:** IF reservation exists AND vehicle doesn't arrive within 30 minutes of start_time THEN auto-cancel and release space.
 12. **Vietnamese plate format validation:** Plates must match Vietnamese format patterns (e.g., 30A-12345, 92B1-123.45 for motorbikes). Non-Vietnamese plates flagged as foreign.
-13. **Multi-vehicle per person:** A person may register up to 3 vehicles but only 1 monthly pass per zone unless admin overrides.
+13. **Multi-vehicle per user:** A user may register up to 3 vehicles but only 1 monthly pass per zone unless admin overrides.
 14. **Payment required for exit:** IF session has pending fee > 0 AND no monthly pass THEN barrier stays closed until payment confirmed (cash, card, or e-wallet).
 
 ## Permissions Matrix

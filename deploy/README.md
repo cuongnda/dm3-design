@@ -192,7 +192,7 @@ nginx (port 80/443)
   │     ├── /api/v1/system/devices  → device-gateway:8002
   │     ├── /api/v1/devices         → device-gateway:8002
   │     ├── /ws/                    → device-gateway:8002 (WS)
-  │     ├── /api/v1/persons         → identity-svc:8004
+  │     ├── /api/v1/users         → identity-svc:8004
   │     ├── /api/v1/groups          → identity-svc:8004
   │     ├── /api/v1/doors           → access-svc:8003
   │     ├── /api/v1/rules           → access-svc:8003

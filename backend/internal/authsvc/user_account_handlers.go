@@ -19,7 +19,7 @@ import (
 
 type userAccountResponse struct {
 	ID        string            `json:"id"`
-	CompanyID *string           `json:"company_id,omitempty"`
+	TenantID *string           `json:"tenant_id,omitempty"`
 	Email     string            `json:"email"`
 	Name      string            `json:"name"`
 	Roles     []string          `json:"roles"`
@@ -32,7 +32,7 @@ type userAccountResponse struct {
 }
 
 type userCompanyInfo struct {
-	CompanyID   string `json:"company_id"`
+	TenantID   string `json:"tenant_id"`
 	CompanyName string `json:"company_name"`
 	CompanyCode string `json:"company_code"`
 	Role        string `json:"role"`
@@ -43,7 +43,7 @@ type createUserAccountRequest struct {
 	Email     string  `json:"email"`
 	Name      string  `json:"name"`
 	Role      string  `json:"role"`                // primary_manager, manager, operator, viewer
-	CompanyID *string `json:"company_id,omitempty"` // null for system_admin
+	TenantID *string `json:"tenant_id,omitempty"` // null for system_admin
 	SendEmail bool    `json:"send_email"`           // whether to send welcome email
 }
 
@@ -51,7 +51,7 @@ type updateUserAccountRequest struct {
 	Name      *string `json:"name,omitempty"`
 	Role      *string `json:"role,omitempty"`
 	Status    *string `json:"status,omitempty"`
-	CompanyID *string `json:"company_id,omitempty"`
+	TenantID *string `json:"tenant_id,omitempty"`
 }
 
 type createUserAccountResponse struct {
@@ -87,8 +87,8 @@ func (h *Handlers) ListUserAccounts(w http.ResponseWriter, r *http.Request) {
 		idx++
 	}
 
-	if companyID := r.URL.Query().Get("company_id"); companyID != "" {
-		where += fmt.Sprintf(" AND company_id = $%d::uuid", idx)
+	if companyID := r.URL.Query().Get("tenant_id"); companyID != "" {
+		where += fmt.Sprintf(" AND tenant_id = $%d::uuid", idx)
 		args = append(args, companyID)
 		idx++
 	}
@@ -103,7 +103,7 @@ func (h *Handlers) ListUserAccounts(w http.ResponseWriter, r *http.Request) {
 
 	// Get accounts.
 	query := fmt.Sprintf(`
-		SELECT id, company_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
+		SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
 		       last_login, created_at, updated_at
 		FROM dm3_auth.accounts
 		%s
@@ -122,15 +122,15 @@ func (h *Handlers) ListUserAccounts(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var u userAccountResponse
 		var name string
-		if err := rows.Scan(&u.ID, &u.CompanyID, &u.Email, &name, &u.Roles, &u.Role,
+		if err := rows.Scan(&u.ID, &u.TenantID, &u.Email, &name, &u.Roles, &u.Role,
 			&u.Status, &u.LastLogin, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		u.Name = name
 		u.Companies = []userCompanyInfo{}
-		if u.CompanyID != nil {
-			ci, err := h.loadCompanyInfo(r, *u.CompanyID, u.Role)
+		if u.TenantID != nil {
+			ci, err := h.loadCompanyInfo(r, *u.TenantID, u.Role)
 			if err == nil {
 				u.Companies = []userCompanyInfo{ci}
 			}
@@ -146,7 +146,7 @@ func (h *Handlers) loadCompanyInfo(r *http.Request, companyID, role string) (use
 	var ci userCompanyInfo
 	err := h.db.Pool.QueryRow(r.Context(),
 		`SELECT id, name, code FROM dm3_auth.companies WHERE id = $1::uuid`, companyID,
-	).Scan(&ci.CompanyID, &ci.CompanyName, &ci.CompanyCode)
+	).Scan(&ci.TenantID, &ci.CompanyName, &ci.CompanyCode)
 	if err != nil {
 		return ci, err
 	}
@@ -163,11 +163,11 @@ func (h *Handlers) GetUserAccount(w http.ResponseWriter, r *http.Request) {
 	var u userAccountResponse
 	var name string
 	err := h.db.Pool.QueryRow(r.Context(), `
-		SELECT id, company_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
+		SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
 		       last_login, created_at, updated_at
 		FROM dm3_auth.accounts
 		WHERE id = $1::uuid AND status != 'deleted'`, id,
-	).Scan(&u.ID, &u.CompanyID, &u.Email, &name, &u.Roles, &u.Role,
+	).Scan(&u.ID, &u.TenantID, &u.Email, &name, &u.Roles, &u.Role,
 		&u.Status, &u.LastLogin, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "user not found")
@@ -175,8 +175,8 @@ func (h *Handlers) GetUserAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	u.Name = name
 	u.Companies = []userCompanyInfo{}
-	if u.CompanyID != nil {
-		ci, err := h.loadCompanyInfo(r, *u.CompanyID, u.Role)
+	if u.TenantID != nil {
+		ci, err := h.loadCompanyInfo(r, *u.TenantID, u.Role)
 		if err == nil {
 			u.Companies = []userCompanyInfo{ci}
 		}
@@ -219,9 +219,9 @@ func (h *Handlers) CreateUserAccount(w http.ResponseWriter, r *http.Request) {
 
 	var userID string
 	err = h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_auth.accounts (email, password_hash, first_name, role, company_id, status)
+		`INSERT INTO dm3_auth.accounts (email, password_hash, first_name, role, tenant_id, status)
 		 VALUES ($1, $2, $3, $4, $5, 'active') RETURNING id`,
-		req.Email, string(pwHash), req.Name, role, req.CompanyID,
+		req.Email, string(pwHash), req.Name, role, req.TenantID,
 	).Scan(&userID)
 	if err != nil {
 		slog.Error("create user account: insert error", "error", err)
@@ -233,16 +233,16 @@ func (h *Handlers) CreateUserAccount(w http.ResponseWriter, r *http.Request) {
 	var u userAccountResponse
 	var name string
 	_ = h.db.Pool.QueryRow(r.Context(), `
-		SELECT id, company_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
+		SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
 		       last_login, created_at, updated_at
 		FROM dm3_auth.accounts
 		WHERE id = $1::uuid`, userID,
-	).Scan(&u.ID, &u.CompanyID, &u.Email, &name, &u.Roles, &u.Role,
+	).Scan(&u.ID, &u.TenantID, &u.Email, &name, &u.Roles, &u.Role,
 		&u.Status, &u.LastLogin, &u.CreatedAt, &u.UpdatedAt)
 	u.Name = name
 	u.Companies = []userCompanyInfo{}
-	if u.CompanyID != nil {
-		ci, err := h.loadCompanyInfo(r, *u.CompanyID, u.Role)
+	if u.TenantID != nil {
+		ci, err := h.loadCompanyInfo(r, *u.TenantID, u.Role)
 		if err == nil {
 			u.Companies = []userCompanyInfo{ci}
 		}
@@ -271,10 +271,10 @@ func (h *Handlers) UpdateUserAccount(w http.ResponseWriter, r *http.Request) {
 			first_name  = COALESCE($2, first_name),
 			role        = COALESCE($3, role),
 			status      = COALESCE($4, status),
-			company_id  = COALESCE($5::uuid, company_id),
+			tenant_id  = COALESCE($5::uuid, tenant_id),
 			updated_at  = now()
 		WHERE id = $1::uuid AND status != 'deleted'`,
-		id, req.Name, req.Role, req.Status, req.CompanyID,
+		id, req.Name, req.Role, req.Status, req.TenantID,
 	)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -285,16 +285,16 @@ func (h *Handlers) UpdateUserAccount(w http.ResponseWriter, r *http.Request) {
 	var u userAccountResponse
 	var name string
 	_ = h.db.Pool.QueryRow(r.Context(), `
-		SELECT id, company_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
+		SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
 		       last_login, created_at, updated_at
 		FROM dm3_auth.accounts
 		WHERE id = $1::uuid`, id,
-	).Scan(&u.ID, &u.CompanyID, &u.Email, &name, &u.Roles, &u.Role,
+	).Scan(&u.ID, &u.TenantID, &u.Email, &name, &u.Roles, &u.Role,
 		&u.Status, &u.LastLogin, &u.CreatedAt, &u.UpdatedAt)
 	u.Name = name
 	u.Companies = []userCompanyInfo{}
-	if u.CompanyID != nil {
-		ci, err := h.loadCompanyInfo(r, *u.CompanyID, u.Role)
+	if u.TenantID != nil {
+		ci, err := h.loadCompanyInfo(r, *u.TenantID, u.Role)
 		if err == nil {
 			u.Companies = []userCompanyInfo{ci}
 		}
@@ -343,7 +343,7 @@ func (h *Handlers) RemoveUserFromCompany(w http.ResponseWriter, r *http.Request)
 
 	tag, err := h.db.Pool.Exec(r.Context(),
 		`UPDATE dm3_auth.accounts SET status = 'deleted', updated_at = now()
-		 WHERE id = $1::uuid AND company_id = $2::uuid AND role != 'system_admin' AND status != 'deleted'`,
+		 WHERE id = $1::uuid AND tenant_id = $2::uuid AND role != 'system_admin' AND status != 'deleted'`,
 		userID, companyID)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to remove user from company")
@@ -357,7 +357,7 @@ func (h *Handlers) RemoveUserFromCompany(w http.ResponseWriter, r *http.Request)
 	httputil.JSON(w, http.StatusOK, map[string]any{
 		"message":    "user removed from company successfully",
 		"user_id":    userID,
-		"company_id": companyID,
+		"tenant_id": companyID,
 	})
 }
 
@@ -387,7 +387,7 @@ func (h *Handlers) UpdateUserCompanyRole(w http.ResponseWriter, r *http.Request)
 
 	result, err := h.db.Pool.Exec(r.Context(),
 		`UPDATE dm3_auth.accounts SET role = $3, updated_at = now()
-		 WHERE id = $1::uuid AND company_id = $2::uuid AND status != 'deleted'`,
+		 WHERE id = $1::uuid AND tenant_id = $2::uuid AND status != 'deleted'`,
 		userID, companyID, req.Role)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to update role")
@@ -401,7 +401,7 @@ func (h *Handlers) UpdateUserCompanyRole(w http.ResponseWriter, r *http.Request)
 	httputil.JSON(w, http.StatusOK, map[string]any{
 		"message":    "role updated successfully",
 		"user_id":    userID,
-		"company_id": companyID,
+		"tenant_id": companyID,
 		"new_role":   req.Role,
 	})
 }
@@ -424,9 +424,9 @@ func (h *Handlers) GetAvailableCompanies(w http.ResponseWriter, r *http.Request)
 		FROM dm3_auth.companies c
 		WHERE c.status = 'active'
 		  AND c.id NOT IN (
-		    SELECT a.company_id
+		    SELECT a.tenant_id
 		    FROM dm3_auth.accounts a
-		    WHERE a.email = $1 AND a.company_id IS NOT NULL AND a.status != 'deleted'
+		    WHERE a.email = $1 AND a.tenant_id IS NOT NULL AND a.status != 'deleted'
 		  )
 		ORDER BY c.name`, email)
 	if err != nil {
@@ -473,10 +473,10 @@ func (h *Handlers) GetUserCompanyMatrix(w http.ResponseWriter, r *http.Request) 
 
 	// Find all accounts sharing this email.
 	rows, err := h.db.Pool.Query(r.Context(), `
-		SELECT a.company_id::text, c.name, c.code, a.role, a.status, a.created_at, a.updated_at
+		SELECT a.tenant_id::text, c.name, c.code, a.role, a.status, a.created_at, a.updated_at
 		FROM dm3_auth.accounts a
-		JOIN dm3_auth.companies c ON c.id = a.company_id
-		WHERE a.email = $1 AND a.company_id IS NOT NULL AND a.status != 'deleted'
+		JOIN dm3_auth.companies c ON c.id = a.tenant_id
+		WHERE a.email = $1 AND a.tenant_id IS NOT NULL AND a.status != 'deleted'
 		ORDER BY c.name`, userEmail)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to fetch company assignments")
@@ -485,7 +485,7 @@ func (h *Handlers) GetUserCompanyMatrix(w http.ResponseWriter, r *http.Request) 
 	defer rows.Close()
 
 	type companyAssignment struct {
-		CompanyID   string    `json:"company_id"`
+		TenantID   string    `json:"tenant_id"`
 		CompanyName string    `json:"company_name"`
 		CompanyCode string    `json:"company_code"`
 		Role        string    `json:"role"`
@@ -497,7 +497,7 @@ func (h *Handlers) GetUserCompanyMatrix(w http.ResponseWriter, r *http.Request) 
 	var assignments []companyAssignment
 	for rows.Next() {
 		var a companyAssignment
-		if err := rows.Scan(&a.CompanyID, &a.CompanyName, &a.CompanyCode,
+		if err := rows.Scan(&a.TenantID, &a.CompanyName, &a.CompanyCode,
 			&a.Role, &a.Status, &a.AssignedAt, &a.UpdatedAt); err != nil {
 			continue
 		}

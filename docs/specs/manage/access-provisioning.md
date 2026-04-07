@@ -45,8 +45,8 @@ Access Provisioning is the policy engine that determines who gets access to what
 | site_id | uuid | yes | - | Site scope |
 | request_number | string(20) | yes | auto | Human-readable ID, e.g. "REQ-2026-0042" |
 | type | RequestTypeEnum | yes | - | Request category |
-| requester_id | uuid | yes | - | Person requesting |
-| beneficiary_id | uuid | yes | - | Person who gets access (may differ from requester) |
+| requester_id | uuid | yes | - | User requesting |
+| beneficiary_id | uuid | yes | - | User who gets access (may differ from requester) |
 | template_id | uuid | no | null | From template (if template-based request) |
 | door_ids | uuid[] | no | [] | Specific doors (if custom request) |
 | zone_ids | uuid[] | no | [] | Specific zones (if custom request) |
@@ -100,13 +100,13 @@ Access Provisioning is the policy engine that determines who gets access to what
 | site_id | uuid | yes | - | Site scope |
 | name | string(100) | yes | - | Job description |
 | template_id | uuid | yes | - | Template to apply |
-| person_ids | uuid[] | yes | - | Target persons |
-| total_count | int | yes | - | Total persons |
+| user_ids | uuid[] | yes | - | Target users |
+| total_count | int | yes | - | Total users |
 | processed_count | int | yes | 0 | Processed so far |
 | success_count | int | yes | 0 | Successfully provisioned |
 | failed_count | int | yes | 0 | Failed |
 | status | JobStatusEnum | yes | pending | Job status |
-| errors | jsonb | no | [] | Array of {person_id, error} |
+| errors | jsonb | no | [] | Array of {user_id, error} |
 | created_by | uuid | yes | - | Initiator |
 | started_at | timestamp | no | null | Processing start |
 | completed_at | timestamp | no | null | Processing end |
@@ -161,7 +161,7 @@ CredentialTypeEnum: card | face | fingerprint | pin | qr | mobile_ble
     "requires_approval": false
   }
   ```
-- **Side effects:** Audit log. If auto_provision=true, retroactively provisions all matching unprovisioned persons.
+- **Side effects:** Audit log. If auto_provision=true, retroactively provisions all matching unprovisioned users.
 - **Response 201:** Created template
 - **Errors:** 401, 403, 422
 
@@ -262,7 +262,7 @@ CredentialTypeEnum: card | face | fingerprint | pin | qr | mobile_ble
   {
     "site_id": "uuid",
     "template_id": "uuid",
-    "person_ids": ["uuid1", "uuid2", "...", "uuid50"],
+    "user_ids": ["uuid1", "uuid2", "...", "uuid50"],
     "valid_from": "2026-03-01T00:00:00Z",
     "valid_until": null
   }
@@ -276,7 +276,7 @@ CredentialTypeEnum: card | face | fingerprint | pin | qr | mobile_ble
     "total_count": 50
   }
   ```
-- **Errors:** 401, 403, 422, 413 (max 500 persons per bulk job)
+- **Errors:** 401, 403, 422, 413 (max 500 users per bulk job)
 
 ### GET /api/v1/provisioning/bulk/{id}
 - **Auth:** role >= admin
@@ -285,13 +285,13 @@ CredentialTypeEnum: card | face | fingerprint | pin | qr | mobile_ble
 
 ### POST /api/v1/provisioning/auto-provision
 - **Auth:** role >= site_admin (or triggered by HR sync)
-- **Body:** `{ "person_id": "uuid", "event": "hired" }`
-- **Description:** Trigger auto-provisioning for a person based on their department/role matching templates
+- **Body:** `{ "user_id": "uuid", "event": "hired" }`
+- **Description:** Trigger auto-provisioning for a user based on their department/role matching templates
 - **Side effects:** Finds matching templates, creates access rules, triggers device sync, audit log
 - **Response 200:**
   ```json
   {
-    "person_id": "uuid",
+    "user_id": "uuid",
     "templates_matched": 3,
     "rules_created": 3,
     "doors_provisioned": 12
@@ -300,13 +300,13 @@ CredentialTypeEnum: card | face | fingerprint | pin | qr | mobile_ble
 
 ### POST /api/v1/provisioning/auto-deprovision
 - **Auth:** role >= site_admin (or triggered by HR sync)
-- **Body:** `{ "person_id": "uuid", "event": "terminated" }`
-- **Description:** Revoke ALL access for a person immediately
-- **Side effects:** Deletes all access rules for person, removes from all person groups, blacklists credentials, triggers immediate device sync (priority), audit log
+- **Body:** `{ "user_id": "uuid", "event": "terminated" }`
+- **Description:** Revoke ALL access for a user immediately
+- **Side effects:** Deletes all access rules for user, removes from all user groups, blacklists credentials, triggers immediate device sync (priority), audit log
 - **Response 200:**
   ```json
   {
-    "person_id": "uuid",
+    "user_id": "uuid",
     "rules_revoked": 5,
     "credentials_disabled": 3,
     "devices_synced": 15,
@@ -314,13 +314,13 @@ CredentialTypeEnum: card | face | fingerprint | pin | qr | mobile_ble
   }
   ```
 
-### GET /api/v1/provisioning/persons/{person_id}/access-summary
+### GET /api/v1/provisioning/users/{user_id}/access-summary
 - **Auth:** role >= viewer (own), role >= operator (others)
 - **Response 200:**
   ```json
   {
-    "person_id": "uuid",
-    "person_name": "Nguyễn Thị Lan",
+    "user_id": "uuid",
+    "user_name": "Nguyễn Thị Lan",
     "templates": [{ "id": "uuid", "name": "...", "provisioned_at": "..." }],
     "doors": [{ "id": "uuid", "name": "...", "schedule": "...", "valid_until": "..." }],
     "pending_requests": 1,
@@ -342,25 +342,25 @@ CredentialTypeEnum: card | face | fingerprint | pin | qr | mobile_ble
 
 | Topic | Direction | QoS | Payload Schema | Description |
 |-------|-----------|-----|----------------|-------------|
-| `dm/{tid}/device/{did}/cfg` (type: cfg.person_sync) | server→device | 2 | Person add/update/remove delta | Provisioning triggers person sync |
+| `dm/{tid}/device/{did}/cfg` (type: cfg.person_sync) | server→device | 2 | User add/update/remove delta | Provisioning triggers user sync |
 | `dm/{tid}/device/{did}/cfg` (type: cfg.access_rules) | server→device | 2 | Rules add/update/remove delta | New access rules pushed to devices |
 | `dm/{tid}/device/{did}/cfg` (type: cfg.blacklist) | server→device | 2 | Blacklist entries | Deprovision pushes blacklist with QoS 2 |
 
 ## Business Rules
 
-1. **BR-AP-001 — Auto-Provision on Hire:** When a new person is created (via HR sync or manual entry) with a matching department + job_role, all templates with `auto_provision=true` that match are automatically applied. No approval needed.
-2. **BR-AP-002 — Instant Deprovision on Termination:** When a person's status changes to `terminated`, ALL access is revoked within 60 seconds. Credentials are blacklisted with QoS 2 priority push. This is the highest-priority sync operation.
+1. **BR-AP-001 — Auto-Provision on Hire:** When a new user is created (via HR sync or manual entry) with a matching department + job_role, all templates with `auto_provision=true` that match are automatically applied. No approval needed.
+2. **BR-AP-002 — Instant Deprovision on Termination:** When a user's status changes to `terminated`, ALL access is revoked within 60 seconds. Credentials are blacklisted with QoS 2 priority push. This is the highest-priority sync operation.
 3. **BR-AP-003 — Approval Chain Sequence:** Approval steps execute in order. Step N+1 is not notified until step N approves. Any rejection at any step rejects the entire request.
 4. **BR-AP-004 — Escalation Timeout:** If an approver doesn't respond within `escalation_timeout_hours`, the request is either auto-approved (if `auto_approve_on_timeout=true`) or escalated to the next higher authority.
 5. **BR-AP-005 — Self-Service Scope:** Users with `viewer` role can only request access for themselves. Users with `operator` can request for their direct reports. Admins can request for anyone.
 6. **BR-AP-006 — Temporary Access Auto-Expiry:** Requests with `valid_until` set automatically expire — access rules are removed and device sync is triggered at the expiry time. A cron job checks every minute for expiring access.
 7. **BR-AP-007 — Permanent Access Requires Higher Approval:** Requests with `valid_until=null` (permanent access) require site_admin approval regardless of the template's approval chain.
 8. **BR-AP-008 — Capacity Limits:** Templates with `max_concurrent_users` reject new provisions when capacity is reached. Existing provisions must be revoked or expired before new ones are accepted.
-9. **BR-AP-009 — No Duplicate Active Access:** A person cannot have two active provisions from the same template. Attempting to create a duplicate returns 409. Extensions must use the `extension` request type.
-10. **BR-AP-010 — Bulk Job Throttling:** Bulk provisioning processes at 10 persons/second to avoid overwhelming device sync. Jobs with >100 persons run during off-peak hours (configurable).
+9. **BR-AP-009 — No Duplicate Active Access:** A user cannot have two active provisions from the same template. Attempting to create a duplicate returns 409. Extensions must use the `extension` request type.
+10. **BR-AP-010 — Bulk Job Throttling:** Bulk provisioning processes at 10 users/second to avoid overwhelming device sync. Jobs with >100 users run during off-peak hours (configurable).
 11. **BR-AP-011 — Delegation:** Approvers can delegate their approval to another user with equal or higher role. Delegation is logged in the audit trail.
 12. **BR-AP-012 — Request Expiry:** Pending requests that are not actioned within 30 days are auto-cancelled with reason "request_expired". Requester is notified.
-13. **BR-AP-013 — Template Change Impact:** When a template's doors/schedule change, existing provisions are updated and device sync is triggered for all affected persons. Users are notified of the change.
+13. **BR-AP-013 — Template Change Impact:** When a template's doors/schedule change, existing provisions are updated and device sync is triggered for all affected users. Users are notified of the change.
 14. **BR-AP-014 — Emergency Revocation Override:** auto-deprovision bypasses all normal sync throttling — blacklist push is immediate and uses QoS 2 on all devices.
 
 ## Permissions Matrix
@@ -380,15 +380,15 @@ CredentialTypeEnum: card | face | fingerprint | pin | qr | mobile_ble
 | Auto-deprovision trigger | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Revoke access | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Manage approval chains | ❌ | ❌ | ❌ | ✅ | ✅ |
-| View person access summary | ✅ (own) | ✅ | ✅ | ✅ | ✅ |
+| View user access summary | ✅ (own) | ✅ | ✅ | ✅ | ✅ |
 
 ## Offline Behavior
 
-- **Device-side:** Devices are unaware of provisioning workflows. They only receive the resulting access rules and person data via normal sync channels. Provisioning is entirely a server-side workflow.
+- **Device-side:** Devices are unaware of provisioning workflows. They only receive the resulting access rules and user data via normal sync channels. Provisioning is entirely a server-side workflow.
 - **Sync strategy:** After provisioning creates/updates/revokes access rules, the normal incremental sync mechanism pushes changes to devices. Standard cursor-based delta sync.
 - **Conflict resolution:** Server wins. Provisioning is server-only logic — no device-side conflicts possible.
-- **Local storage:** N/A — provisioning runs entirely on server. Devices store only the resulting access rules and person data.
-- **Deprovision during offline:** If a device is offline when deprovision occurs, the blacklist entry is queued. On reconnect, blacklist sync (QoS 2) is the first sync operation — executed before any person or rule sync.
+- **Local storage:** N/A — provisioning runs entirely on server. Devices store only the resulting access rules and user data.
+- **Deprovision during offline:** If a device is offline when deprovision occurs, the blacklist entry is queued. On reconnect, blacklist sync (QoS 2) is the first sync operation — executed before any user or rule sync.
 
 ## UI Pages
 
@@ -400,8 +400,8 @@ CredentialTypeEnum: card | face | fingerprint | pin | qr | mobile_ble
 | /manage/provisioning/requests | Request List | Status tabs, approval timeline, bulk actions |
 | /manage/provisioning/requests/:id | Request Detail | Approval chain progress, approver actions, provision status |
 | /manage/provisioning/requests/new | New Request | Template selector or custom door picker, date range, reason |
-| /manage/provisioning/bulk | Bulk Provisioning | Person multi-select, template picker, progress tracker |
-| /manage/provisioning/persons/:id | Person Access | Access summary, active templates, expiring access, request history |
+| /manage/provisioning/bulk | Bulk Provisioning | User multi-select, template picker, progress tracker |
+| /manage/provisioning/users/:id | User Access | Access summary, active templates, expiring access, request history |
 
 ## Events & Audit Log
 
@@ -417,8 +417,8 @@ CredentialTypeEnum: card | face | fingerprint | pin | qr | mobile_ble
 | provisioning.request.provisioned | Auto after final approval | request_id, rules_created, doors | 2 years |
 | provisioning.request.expired | Cron job | request_id, valid_until | 2 years |
 | provisioning.request.revoked | POST revoke | request_id, actor, reason | permanent |
-| provisioning.auto_provision | HR sync trigger | person_id, templates_matched, rules_created | 2 years |
-| provisioning.auto_deprovision | Termination trigger | person_id, rules_revoked, credentials_disabled | permanent |
+| provisioning.auto_provision | HR sync trigger | user_id, templates_matched, rules_created | 2 years |
+| provisioning.auto_deprovision | Termination trigger | user_id, rules_revoked, credentials_disabled | permanent |
 | provisioning.bulk.started | POST bulk | job_id, template_id, person_count | 1 year |
 | provisioning.bulk.completed | Job finish | job_id, success/failed counts | 1 year |
 | provisioning.approval.delegated | Delegation | request_id, from_approver, to_approver | 2 years |
@@ -427,8 +427,8 @@ CredentialTypeEnum: card | face | fingerprint | pin | qr | mobile_ble
 ## Integration Points
 
 - **Depends on:**
-  - `identity-svc` — Person data, department, job role, status changes (gRPC)
-  - `access-svc` — Access rule CRUD, person group management, device sync orchestration
+  - `identity-svc` — User data, department, job role, status changes (gRPC)
+  - `access-svc` — Access rule CRUD, user group management, device sync orchestration
   - `auth-svc` — JWT validation, role verification
   - `notif-svc` — Approval notifications, expiry reminders, provision confirmations
 - **Consumed by:**
@@ -436,7 +436,7 @@ CredentialTypeEnum: card | face | fingerprint | pin | qr | mobile_ble
   - `audit-svc` — All provisioning events for compliance
   - `automate-svc` — HR events can trigger automation rules
 - **External:**
-  - HR systems (SAP, Oracle HCM, BambooHR) — person lifecycle events via webhook/API
+  - HR systems (SAP, Oracle HCM, BambooHR) — user lifecycle events via webhook/API
   - Active Directory / LDAP — group membership sync
   - Identity providers (Azure AD, Okta) — attribute-based provisioning
 

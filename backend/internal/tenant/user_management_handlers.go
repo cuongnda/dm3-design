@@ -91,7 +91,7 @@ func (h *UserManagementHandlers) GetUsers(w http.ResponseWriter, r *http.Request
 		LEFT JOIN dm3_auth.accounts a ON u.account_id = a.id
 		LEFT JOIN dm3_identity.departments d ON u.department_id = d.id
 		LEFT JOIN dm3_access.access_groups ag ON u.access_group_id = ag.id
-		WHERE u.company_id = $1::uuid
+		WHERE u.tenant_id = $1::uuid
 		AND (u.is_deleted = false OR u.is_deleted IS NULL)
 	`
 	
@@ -146,7 +146,7 @@ func (h *UserManagementHandlers) GetUsers(w http.ResponseWriter, r *http.Request
 	}
 
 	// Count total for pagination (wrap the filter part)
-	countQuery := `SELECT COUNT(*) FROM dm3_identity.users u WHERE u.company_id = $1::uuid AND (u.is_deleted = false OR u.is_deleted IS NULL)`
+	countQuery := `SELECT COUNT(*) FROM dm3_identity.users u WHERE u.tenant_id = $1::uuid AND (u.is_deleted = false OR u.is_deleted IS NULL)`
 	countArgs := []interface{}{companyID}
 	countArgIndex := 2
 	if search != "" {
@@ -302,7 +302,7 @@ func (h *UserManagementHandlers) GetUser(w http.ResponseWriter, r *http.Request)
 			   email, position, user_status, avatar, phone, address,
 			   department_name, access_group_name, account_type,
 			   birth_day, effective_date, expired_date, is_master_card,
-			   company_id, tenant_id
+			   tenant_id
 		FROM dm3_identity.user_details
 		WHERE user_id = $1::uuid
 	`, userID)
@@ -314,23 +314,23 @@ func (h *UserManagementHandlers) GetUser(w http.ResponseWriter, r *http.Request)
 	var accountType *int
 	var birthDay, effectiveDate, expiredDate *string
 	var isMasterCard bool
-	var companyID, tenantID string
+	var tenantID string
 
 	err := row.Scan(
 		&userIDResult, &userCode, &empNumber, &firstName, &lastName, &fullName,
 		&email, &position, &status, &avatar, &phone, &address,
 		&departmentName, &accessGroupName, &accountType,
 		&birthDay, &effectiveDate, &expiredDate, &isMasterCard,
-		&companyID, &tenantID,
+		&tenantID,
 	)
-	
+
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "user not found")
 		return
 	}
 
 	// Verify user belongs to current tenant
-	if err := ValidateResourceAccess(r.Context(), companyID); err != nil {
+	if err := ValidateResourceAccess(r.Context(), tenantID); err != nil {
 		httputil.Error(w, http.StatusForbidden, "access denied")
 		return
 	}
@@ -355,7 +355,6 @@ func (h *UserManagementHandlers) GetUser(w http.ResponseWriter, r *http.Request)
 		"effective_date":   effectiveDate,
 		"expired_date":     expiredDate,
 		"is_master_card":   isMasterCard,
-		"company_id":       companyID,
 		"tenant_id":        tenantID,
 	}
 
@@ -385,14 +384,14 @@ func (h *UserManagementHandlers) CreateUser(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Set company ID from context
-	req.CompanyID = companyID
+	req.TenantID = companyID
 
 	// Auto-generate sequential user code (per company, padded 6 digits like dmpw pattern)
 	var maxCode int
 	_ = h.db.Pool.QueryRow(r.Context(), `
 		SELECT COALESCE(MAX(CAST(NULLIF(regexp_replace(user_code, '[^0-9]', '', 'g'), '') AS INTEGER)), 0)
 		FROM dm3_identity.users
-		WHERE company_id = $1::uuid AND status != 'deleted'
+		WHERE tenant_id = $1::uuid AND status != 'deleted'
 	`, companyID).Scan(&maxCode)
 	userCode := fmt.Sprintf("%06d", maxCode+1)
 	req.UserCode = &userCode
@@ -401,7 +400,7 @@ func (h *UserManagementHandlers) CreateUser(w http.ResponseWriter, r *http.Reque
 	var userID string
 	err = h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.users (
-			company_id, tenant_id, first_name, last_name, email,
+			tenant_id, tenant_id, first_name, last_name, email,
 			user_code, emp_number, position, phone, address,
 			sex, birth_day, department_id, status, created_at, updated_at
 		) VALUES (
@@ -568,7 +567,7 @@ func (h *UserManagementHandlers) GetDepartments(w http.ResponseWriter, r *http.R
 	query := `
 		SELECT id, name, number, department_manager_id
 		FROM dm3_identity.departments
-		WHERE company_id = $1::uuid AND is_deleted = false
+		WHERE tenant_id = $1::uuid AND is_deleted = false
 		ORDER BY name
 	`
 
@@ -613,7 +612,7 @@ func (h *UserManagementHandlers) GetAccessGroups(w http.ResponseWriter, r *http.
 	query := `
 		SELECT id, name, is_default, type
 		FROM dm3_access.access_groups
-		WHERE company_id = $1::uuid AND is_deleted = false
+		WHERE tenant_id = $1::uuid AND is_deleted = false
 		ORDER BY name
 	`
 
@@ -650,7 +649,7 @@ func (h *UserManagementHandlers) GetAccessGroups(w http.ResponseWriter, r *http.
 
 // Request/Response types
 type CreateUserRequest struct {
-	CompanyID    string  `json:"-"`
+	TenantID    string  `json:"-"`
 	FirstName    string  `json:"first_name"`
 	LastName     string  `json:"last_name"`
 	Email        string  `json:"email"`
@@ -726,10 +725,10 @@ func (h *UserManagementHandlers) BulkDeleteUsers(w http.ResponseWriter, r *http.
 	validationQuery := `
 		SELECT u.id, u.full_name, ca.account_id 
 		FROM dm3_identity.users u
-		LEFT JOIN dm3_identity.company_accounts ca ON u.account_id = ca.account_id AND ca.company_id = u.company_id
+		LEFT JOIN dm3_identity.company_accounts ca ON u.account_id = ca.account_id AND ca.tenant_id = u.tenant_id
 		WHERE u.id = ANY($1::uuid[]) 
 		  AND u.tenant_id = $2::uuid 
-		  AND u.company_id = $3::uuid
+		  AND u.tenant_id = $3::uuid
 		  AND u.is_deleted = false
 	`
 	
@@ -758,7 +757,7 @@ func (h *UserManagementHandlers) BulkDeleteUsers(w http.ResponseWriter, r *http.
 		if accountID != nil {
 			var accountType int
 			err := h.db.Pool.QueryRow(r.Context(), 
-				`SELECT account_type FROM dm3_identity.company_accounts WHERE account_id = $1::uuid AND company_id = $2::uuid`,
+				`SELECT account_type FROM dm3_identity.company_accounts WHERE account_id = $1::uuid AND tenant_id = $2::uuid`,
 				*accountID, companyID).Scan(&accountType)
 			
 			if err == nil && (accountType >= 4) { // primary_manager or system_admin
@@ -1121,7 +1120,7 @@ func (h *UserManagementHandlers) GetFilterOptions(w http.ResponseWriter, r *http
 	deptRows, err := h.db.Pool.Query(r.Context(), `
 		SELECT id, name, number 
 		FROM dm3_identity.departments 
-		WHERE company_id = $1::uuid 
+		WHERE tenant_id = $1::uuid 
 		ORDER BY name ASC
 	`, companyID)
 	if err == nil {
@@ -1143,7 +1142,7 @@ func (h *UserManagementHandlers) GetFilterOptions(w http.ResponseWriter, r *http
 	agRows, err := h.db.Pool.Query(r.Context(), `
 		SELECT id, name, is_default, type 
 		FROM dm3_access.access_groups 
-		WHERE company_id = $1::uuid 
+		WHERE tenant_id = $1::uuid 
 		ORDER BY name ASC
 	`, companyID)
 	if err == nil {
@@ -1168,7 +1167,7 @@ func (h *UserManagementHandlers) GetFilterOptions(w http.ResponseWriter, r *http
 	posRows, err := h.db.Pool.Query(r.Context(), `
 		SELECT DISTINCT position 
 		FROM dm3_identity.users 
-		WHERE company_id = $1::uuid AND position != '' AND position IS NOT NULL
+		WHERE tenant_id = $1::uuid AND position != '' AND position IS NOT NULL
 		ORDER BY position ASC
 	`, companyID)
 	if err == nil {

@@ -23,13 +23,13 @@ Key Management tracks the inventory, checkout, return, and audit trail of physic
 | cabinet_id | uuid | no | — | Electronic cabinet reference |
 | cabinet_slot | int | no | — | Slot number in cabinet |
 | status | KeyStatus | yes | available | Current status |
-| current_holder_id | uuid | no | — | Person currently holding key |
+| current_holder_id | uuid | no | — | User currently holding key |
 | checkout_at | timestamptz | no | — | Current checkout time |
 | expected_return | timestamptz | no | — | Expected return time |
 | max_checkout_hours | int | yes | 24 | Max allowed checkout duration |
 | requires_approval | bool | yes | false | Approval needed for checkout |
 | approver_ids | uuid[] | no | — | Authorized approvers |
-| authorized_persons | uuid[] | no | — | Persons allowed to checkout |
+| authorized_persons | uuid[] | no | — | Users allowed to checkout |
 | authorized_roles | text[] | no | — | Roles allowed to checkout |
 | copy_number | int | no | 1 | Copy number (of total copies) |
 | total_copies | int | no | 1 | Total copies of this key |
@@ -65,7 +65,7 @@ Key Management tracks the inventory, checkout, return, and audit trail of physic
 | tenant_id | uuid | yes | — | Tenant reference |
 | key_id | uuid | yes | — | Key reference |
 | type | TransactionType | yes | — | Transaction type |
-| person_id | uuid | yes | — | Person involved |
+| user_id | uuid | yes | — | User involved |
 | authorized_by | uuid | no | — | Approver (if approval required) |
 | checkout_at | timestamptz | no | — | Checkout timestamp |
 | expected_return | timestamptz | no | — | Expected return |
@@ -86,7 +86,7 @@ Key Management tracks the inventory, checkout, return, and audit trail of physic
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | — | Tenant reference |
 | key_id | uuid | yes | — | Requested key |
-| requester_id | uuid | yes | — | Requesting person |
+| requester_id | uuid | yes | — | Requesting user |
 | approver_id | uuid | no | — | Assigned approver |
 | status | RequestStatus | yes | pending | Request status |
 | purpose | text | yes | — | Reason for request |
@@ -185,16 +185,16 @@ RequestStatus: pending | approved | rejected | expired | cancelled
 - **Response 204:** No content
 
 ### POST /api/v1/keys/{id}/checkout
-- **Auth:** authorized person or role >= operator
+- **Auth:** authorized user or role >= operator
 - **Body:**
   ```json
   {
-    "person_id": "uuid",
+    "user_id": "uuid",
     "purpose": "Bảo trì server định kỳ",
     "expected_return": "2026-02-19T17:00:00+07:00"
   }
   ```
-- **Validation:** Key available, person authorized, approval if required
+- **Validation:** Key available, user authorized, approval if required
 - **Side effects:** Update key status, open cabinet slot, create transaction, audit log, schedule overdue check
 - **Response 200:** Transaction record
 
@@ -262,7 +262,7 @@ RequestStatus: pending | approved | rejected | expired | cancelled
 
 ### GET /api/v1/keys/transactions
 - **Auth:** role >= operator
-- **Query params:** site_id, key_id, person_id, type, from, to, overdue
+- **Query params:** site_id, key_id, user_id, type, from, to, overdue
 - **Response 200:** Transaction list
 
 ### GET /api/v1/keys/dashboard
@@ -290,23 +290,23 @@ RequestStatus: pending | approved | rejected | expired | cancelled
 
 | Topic | Direction | QoS | Payload Schema | Description |
 |-------|-----------|-----|----------------|-------------|
-| dm3/{site}/key/cabinet/{id}/slot/{slot}/cmd | server→device | 1 | `{"action":"unlock","person_id":"...","transaction_id":"..."}` | Unlock specific cabinet slot |
+| dm3/{site}/key/cabinet/{id}/slot/{slot}/cmd | server→device | 1 | `{"action":"unlock","user_id":"...","transaction_id":"..."}` | Unlock specific cabinet slot |
 | dm3/{site}/key/cabinet/{id}/slot/{slot}/status | device→server | 1 | `{"key_present":true,"door_open":false,"timestamp":"..."}` | Slot sensor status |
 | dm3/{site}/key/cabinet/{id}/status | device→server | 1 | `{"online":true,"door_status":"closed","battery_percent":95}` | Cabinet health |
-| dm3/{site}/key/cabinet/{id}/access | device→server | 1 | `{"person_id":"...","method":"card","slot":15,"action":"open","timestamp":"..."}` | Cabinet access event |
+| dm3/{site}/key/cabinet/{id}/access | device→server | 1 | `{"user_id":"...","method":"card","slot":15,"action":"open","timestamp":"..."}` | Cabinet access event |
 
 ## Business Rules
 1. **Authorization check:** IF key.requires_approval = false THEN checkout allowed for authorized_persons or authorized_roles. IF requires_approval = true THEN approved request required before checkout.
-2. **Single holder:** IF key status = checked_out THEN no other person can checkout the same key. Transfer requires return first (or explicit transfer action by admin).
+2. **Single holder:** IF key status = checked_out THEN no other user can checkout the same key. Transfer requires return first (or explicit transfer action by admin).
 3. **Overdue detection:** IF now() > transaction.expected_return AND key not returned THEN mark key as overdue, send notification to holder + admin at intervals (1h, 4h, 24h).
 4. **Cabinet slot sync:** IF key returned to cabinet THEN sensor detects key_present=true, server auto-completes transaction. IF key removed without server authorization THEN alert security.
 5. **Lost key protocol:** IF key reported lost AND key.category = master THEN auto-create high-priority maintenance work order for lock change assessment.
 6. **Emergency key access:** IF emergency mode active THEN emergency keys (category=emergency) released without approval. All transactions logged with emergency flag.
 7. **Maximum checkout duration:** IF checkout duration would exceed max_checkout_hours THEN warn at checkout, enforce hard limit with auto-escalation to admin.
 8. **End of business auto-check:** At end of business day (configurable), scan all keys. IF any expected-return-today keys not returned THEN send batch reminder notification.
-9. **Key transfer audit:** IF admin transfers key from person A to person B THEN close transaction A, create new transaction B, full audit trail maintained.
+9. **Key transfer audit:** IF admin transfers key from user A to user B THEN close transaction A, create new transaction B, full audit trail maintained.
 10. **Restricted key logging:** IF key.category = restricted OR master THEN all checkouts require purpose field, photo evidence optional but recommended.
-11. **Duplicate checkout prevention:** IF person already holds another key from same set (same parent_key_id) THEN warn/block depending on policy.
+11. **Duplicate checkout prevention:** IF user already holds another key from same set (same parent_key_id) THEN warn/block depending on policy.
 12. **Cabinet offline fallback:** IF cabinet offline THEN manual checkout via operator with physical override. Log as "manual_override" in transaction.
 
 ## Permissions Matrix
@@ -331,7 +331,7 @@ RequestStatus: pending | approved | rejected | expired | cancelled
 
 ## Offline Behavior
 - **Key cabinet:** Continue operating with cached authorization list. Accept card/PIN access, unlock slots per cached rules. Buffer all transactions locally (up to 5,000 events).
-- **Mobile app (operator):** Cache key inventory and authorized persons list. Allow manual checkout/return logging offline. Queue for sync.
+- **Mobile app (operator):** Cache key inventory and authorized users list. Allow manual checkout/return logging offline. Queue for sync.
 - **Sync strategy:** On reconnection, cabinet uploads all buffered transactions. Server reconciles key states. Mobile-queued transactions merged chronologically.
 - **Conflict resolution:** Physical state wins — if cabinet sensor says key is present but server thinks checked_out, flag for manual reconciliation. Server creates "discrepancy" alert.
 - **Local storage:** Cabinet: authorization list ~1MB, transaction buffer ~2MB. Mobile: key inventory ~500KB. TTL: authorization list refreshed every 4 hours.
@@ -342,7 +342,7 @@ RequestStatus: pending | approved | rejected | expired | cancelled
 | /operate/keys | Dashboard | Key overview, overdue alerts, cabinet status |
 | /operate/keys/inventory | Key inventory | DataTable, filters, status indicators |
 | /operate/keys/inventory/:id | Key detail | Status, current holder, transaction history |
-| /operate/keys/checkout | Checkout form | Key picker, person search, purpose, duration |
+| /operate/keys/checkout | Checkout form | Key picker, user search, purpose, duration |
 | /operate/keys/requests | Approval queue | Pending requests, approve/reject actions |
 | /operate/keys/transactions | Transaction log | Full audit trail, filters, export |
 | /operate/keys/cabinets | Cabinet management | Cabinet list, slot map, health status |
@@ -355,8 +355,8 @@ RequestStatus: pending | approved | rejected | expired | cancelled
 | key.created | POST create | full key | permanent |
 | key.updated | PUT update | diff only | permanent |
 | key.deleted | DELETE | key_id + actor | permanent |
-| key.checked_out | POST checkout | transaction + key + person + purpose | permanent |
-| key.returned | POST return | transaction + key + person + duration | permanent |
+| key.checked_out | POST checkout | transaction + key + user + purpose | permanent |
+| key.returned | POST return | transaction + key + user + duration | permanent |
 | key.transferred | Transfer action | from_person + to_person + key | permanent |
 | key.overdue | Auto-detection | key_id + holder + overdue_hours | permanent |
 | key.lost | Report lost | key_id + holder + notes | permanent |
@@ -364,12 +364,12 @@ RequestStatus: pending | approved | rejected | expired | cancelled
 | key.request.created | POST request | full request | 1 year |
 | key.request.approved | Approval action | request_id + approver | permanent |
 | key.request.rejected | Rejection action | request_id + approver + reason | permanent |
-| key.cabinet.accessed | Cabinet door opened | cabinet_id + person + method | 1 year |
-| key.cabinet.slot_opened | Slot unlocked | cabinet_id + slot + person + key | permanent |
-| key.cabinet.unauthorized | Unauthorized attempt | cabinet_id + person + method | permanent |
+| key.cabinet.accessed | Cabinet door opened | cabinet_id + user + method | 1 year |
+| key.cabinet.slot_opened | Slot unlocked | cabinet_id + slot + user + key | permanent |
+| key.cabinet.unauthorized | Unauthorized attempt | cabinet_id + user + method | permanent |
 
 ## Integration Points
-- **Depends on:** identity-svc (person lookup, authorization), notif-svc (overdue alerts, approval notifications), device-gw (cabinet device management), tenant-svc (site hierarchy), auth-svc (JWT)
+- **Depends on:** identity-svc (user lookup, authorization), notif-svc (overdue alerts, approval notifications), device-gw (cabinet device management), tenant-svc (site hierarchy), auth-svc (JWT)
 - **Consumed by:** analytics/report-svc (key usage reports, compliance), automate-svc (key triggers — e.g., fire mode release all emergency keys), maintenance-svc (lost key → lock change WO), audit-svc (compliance trail)
 - **External:** Electronic key cabinet hardware (e.g., Traka, KeyWatcher, Morse Watchmans), NFC/RFID readers for cabinet access
 

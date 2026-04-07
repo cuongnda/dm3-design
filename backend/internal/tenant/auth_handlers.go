@@ -36,7 +36,7 @@ func NewAuthHandlers(database *db.DB, jwtSecret string) *AuthHandlers {
 type LoginRequest struct {
 	Email     string `json:"email" validate:"required,email"`
 	Password  string `json:"password" validate:"required"`
-	CompanyID string `json:"company_id" validate:"required,uuid"`
+	TenantID string `json:"tenant_id" validate:"required,uuid"`
 	RememberMe bool  `json:"remember_me"`
 }
 
@@ -58,13 +58,13 @@ func (ah *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate input
-	if req.Email == "" || req.Password == "" || req.CompanyID == "" {
-		httputil.Error(w, http.StatusBadRequest, "email, password, and company_id are required")
+	if req.Email == "" || req.Password == "" || req.TenantID == "" {
+		httputil.Error(w, http.StatusBadRequest, "email, password, and tenant_id are required")
 		return
 	}
 
 	// Get account with permissions
-	account, err := ah.authSvc.GetAccountByEmailAndCompany(r.Context(), req.Email, req.CompanyID)
+	account, err := ah.authSvc.GetAccountByEmailAndCompany(r.Context(), req.Email, req.TenantID)
 	if err != nil {
 		httputil.Error(w, http.StatusUnauthorized, "invalid credentials")
 		return
@@ -83,7 +83,7 @@ func (ah *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get tenant information
-	tenantInfo, err := loadTenantInfo(ah.db, req.CompanyID)
+	tenantInfo, err := loadTenantInfo(ah.db, req.TenantID)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to load tenant information")
 		return
@@ -107,7 +107,7 @@ func (ah *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create session
-	session, token, err := ah.authSvc.CreateSession(r.Context(), account.ID, req.CompanyID, sessionData)
+	session, token, err := ah.authSvc.CreateSession(r.Context(), account.ID, req.TenantID, sessionData)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to create session")
 		return
@@ -211,7 +211,7 @@ func (ah *AuthHandlers) UpdateAccountProfile(w http.ResponseWriter, r *http.Requ
 		    locale = COALESCE($5, locale),
 		    timezone = COALESCE($6, timezone),
 		    updated_at = NOW()
-		WHERE id = $1::uuid AND company_id = $7::uuid
+		WHERE id = $1::uuid AND tenant_id = $7::uuid
 	`
 
 	_, err := ah.db.Pool.Exec(r.Context(), query,
@@ -352,7 +352,7 @@ func (ah *AuthHandlers) generateJWTToken(account *AccountInfo, tenant *TenantInf
 	claims := authsvc.AccessClaims{
 		Sub:   account.ID,
 		TID:   tenant.ID,
-		CID:   tenant.CompanyID,
+		CID:   tenant.TenantID,
 		Email: account.Email,
 		Name:  *account.FullName,
 		Role:  account.Role,

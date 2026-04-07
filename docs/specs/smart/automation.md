@@ -57,7 +57,7 @@ The Automation Engine is an IFTTT-style rule engine that enables building operat
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | type | ConditionTypeEnum | yes | Condition category |
-| field | string | yes | e.g. "event.person_id", "time.hour", "sensor.temperature" |
+| field | string | yes | e.g. "event.user_id", "time.hour", "sensor.temperature" |
 | operator | string | yes | eq, neq, gt, gte, lt, lte, in, not_in, between, contains |
 | value | any | yes | Comparison value |
 
@@ -185,7 +185,7 @@ ConflictTypeEnum: contradicting_actions | overlapping_triggers | circular_depend
       "operator": "AND",
       "conditions": [
         { "type": "time_range", "field": "time.hour", "operator": "not_in", "value": [7, 19] },
-        { "type": "person_attribute", "field": "event.person.department", "operator": "neq", "value": "Security" }
+        { "type": "person_attribute", "field": "event.user.department", "operator": "neq", "value": "Security" }
       ]
     },
     "actions": [
@@ -234,7 +234,7 @@ ConflictTypeEnum: contradicting_actions | overlapping_triggers | circular_depend
 
 ### POST /api/v1/automation/rules/{id}/test
 - **Auth:** role >= admin
-- **Body:** `{ "mock_event": { "type": "access.event.granted", "door_id": "uuid", "person_id": "uuid", "time": "2026-02-19T23:00:00Z" } }`
+- **Body:** `{ "mock_event": { "type": "access.event.granted", "door_id": "uuid", "user_id": "uuid", "time": "2026-02-19T23:00:00Z" } }`
 - **Description:** Dry-run a rule against a mock event — evaluates conditions but does NOT execute actions
 - **Response 200:**
   ```json
@@ -243,7 +243,7 @@ ConflictTypeEnum: contradicting_actions | overlapping_triggers | circular_depend
     "conditions_met": true,
     "conditions_detail": [
       { "condition": "time.hour not_in [7,19]", "result": true, "actual_value": 23 },
-      { "condition": "person.department neq Security", "result": true, "actual_value": "Engineering" }
+      { "condition": "user.department neq Security", "result": true, "actual_value": "Engineering" }
     ],
     "actions_would_execute": [
       { "order": 1, "type": "notification", "description": "Push to security_guard role" },
@@ -311,7 +311,7 @@ Note: The automation engine consumes NATS events internally (not MQTT). It publi
 3. **BR-AU-003 — Rate Limiting:** `max_executions_per_hour` prevents runaway rules. When limit is reached, subsequent triggers are logged as `skipped_cooldown` until the hour window rolls.
 4. **BR-AU-004 — Auto-Disable on Errors:** If a rule fails `auto_disable_on_errors` consecutive times, it is automatically disabled. Admin is notified. Error count resets on successful execution.
 5. **BR-AU-005 — Condition Evaluation:** Conditions are evaluated lazily — in AND groups, evaluation stops at first false. In OR groups, evaluation stops at first true. Nested groups are supported up to 5 levels deep.
-6. **BR-AU-006 — Action Variable References:** Actions can reference trigger event fields using `$trigger.field_name` syntax (e.g., `$trigger.door_id`, `$trigger.person_id`). Unresolvable references cause action failure.
+6. **BR-AU-006 — Action Variable References:** Actions can reference trigger event fields using `$trigger.field_name` syntax (e.g., `$trigger.door_id`, `$trigger.user_id`). Unresolvable references cause action failure.
 7. **BR-AU-007 — Conflict Detection:** On rule create/update, the engine checks for: contradicting actions (same target, opposite actions), overlapping triggers with incompatible actions, and circular dependencies. Conflicts are logged but don't block creation — only warnings.
 8. **BR-AU-008 — Emergency Override:** Automation rules are suspended during active emergencies. Emergency actions take absolute precedence. Rules resume on all-clear.
 9. **BR-AU-009 — Execution Timeout:** Each action has a 30-second execution timeout. Timed-out actions are logged as failures. The `on_failure` setting determines whether subsequent actions continue.
@@ -383,7 +383,7 @@ Note: The automation engine consumes NATS events internally (not MQTT). It publi
   - `intercom-svc` — Announcement commands
   - `notif-svc` — Notification dispatch
   - `device-gw` — MQTT command routing
-  - `identity-svc` — Person attribute lookups for conditions
+  - `identity-svc` — User attribute lookups for conditions
   - `auth-svc` — JWT validation
 - **Consumed by:**
   - `report-svc` — Automation analytics: rule effectiveness, execution trends

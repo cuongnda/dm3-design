@@ -957,7 +957,7 @@ export interface PendingDevice {
 }
 
 export interface ApproveRequest {
-  company_id: string;
+  tenant_id: string;
   name: string;
   location?: string;
 }

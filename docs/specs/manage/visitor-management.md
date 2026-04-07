@@ -15,7 +15,7 @@ Visitor Management handles the full lifecycle of building visitors — from pre-
 | tenant_id | uuid | yes | — | Tenant isolation |
 | site_id | uuid | yes | — | Site where visit occurs |
 | visitor_id | uuid | yes | — | FK to Visitor |
-| host_person_id | uuid | yes | — | FK to Person (host/employee) |
+| host_user_id | uuid | yes | — | FK to User (host/employee) |
 | purpose | VisitPurposeEnum | yes | — | Reason for visit |
 | purpose_note | string(500) | no | — | Additional detail |
 | status | VisitStatusEnum | yes | pre_registered | Current status |
@@ -26,7 +26,7 @@ Visitor Management handles the full lifecycle of building visitors — from pre-
 | checkin_method | CheckinMethodEnum | no | — | How visitor checked in |
 | checkin_device_id | uuid | no | — | Terminal/device used for check-in |
 | checkin_photo_ref | string(500) | no | — | Photo captured at check-in |
-| checkout_by | uuid | no | — | Person who processed checkout |
+| checkout_by | uuid | no | — | User who processed checkout |
 | qr_token | string(64) | yes | auto | Unique QR token for this visit |
 | qr_expires_at | timestamp | yes | auto | QR validity window |
 | badge_number | string(20) | no | — | Physical badge number if issued |
@@ -84,7 +84,7 @@ Visitor Management handles the full lifecycle of building visitors — from pre-
 | match_field | string(50) | yes | — | Field to match: name, national_id, email, phone, face |
 | match_value | string(500) | yes | — | Value to match against |
 | face_template_ref | string(500) | no | — | Face template for face-based matching |
-| reason | text | yes | — | Why this person is on the watchlist |
+| reason | text | yes | — | Why this user is on the watchlist |
 | added_by | uuid | yes | — | Actor who added |
 | expires_at | timestamp | no | — | Auto-removal date |
 | created_at | timestamp | yes | now() | Creation time |
@@ -110,7 +110,7 @@ WatchlistEnum: none | vip | blacklisted
   | site_id | uuid | required | Filter by site |
   | status | string | — | Filter by visit status |
   | date | date | today | Filter by expected arrival date |
-  | host_id | uuid | — | Filter by host person |
+  | host_id | uuid | — | Filter by host user |
   | search | string | — | Search visitor name, company, phone |
 - **Response 200:**
   ```json
@@ -145,7 +145,7 @@ WatchlistEnum: none | vip | blacklisted
       "phone": "0987654321",
       "company": "FPT Software"
     },
-    "host_person_id": "uuid",
+    "host_user_id": "uuid",
     "purpose": "meeting",
     "expected_arrival": "2026-02-20T09:00:00+07:00",
     "expected_departure": "2026-02-20T12:00:00+07:00",
@@ -166,7 +166,7 @@ WatchlistEnum: none | vip | blacklisted
 - **Side effects:** If `access_areas` changed, update temp credential sync
 
 ### POST /api/v1/visitors/{visit_id}/approve
-- **Auth:** Host person or role >= operator
+- **Auth:** Host user or role >= operator
 - **Body:** `{ "approved": true, "note": "Đã xác nhận" }` or `{ "approved": false, "reason": "Không có lịch hẹn" }`
 - **Side effects:** Updates status to `approved` or `rejected`, notifies visitor
 
@@ -228,8 +228,8 @@ WatchlistEnum: none | vip | blacklisted
 
 | Topic | Direction | QoS | Payload Schema | Description |
 |-------|-----------|-----|----------------|-------------|
-| `dm/{tenant}/device/{device_id}/cfg/persons` | server→device | 1 | `{ "action": "add", "person_id": "uuid", "credentials": [...], "valid_until": "...", "sync_version": N }` | Push temporary visitor credential to device |
-| `dm/{tenant}/device/{device_id}/cfg/persons` | server→device | 2 | `{ "action": "delete", "person_id": "uuid", "sync_version": N }` | Remove visitor credential on checkout/expiry |
+| `dm/{tenant}/device/{device_id}/cfg/users` | server→device | 1 | `{ "action": "add", "user_id": "uuid", "credentials": [...], "valid_until": "...", "sync_version": N }` | Push temporary visitor credential to device |
+| `dm/{tenant}/device/{device_id}/cfg/users` | server→device | 2 | `{ "action": "delete", "user_id": "uuid", "sync_version": N }` | Remove visitor credential on checkout/expiry |
 | `dm/{tenant}/visitor/checkin` | server→clients | 1 | `{ "visit_id": "uuid", "visitor_name": "...", "host_name": "..." }` | Real-time checkin notification to dashboard |
 
 ## Business Rules
@@ -248,7 +248,7 @@ WatchlistEnum: none | vip | blacklisted
 
 7. **BR-VIS-007: Returning visitor recognition.** When creating a visit for a phone/email that matches an existing visitor record, the system links to the existing visitor (avoiding duplicates). Visit history is preserved.
 
-8. **BR-VIS-008: Pre-registration requires host.** Every visit must have a host (employee). The host must be an active person in the identity system.
+8. **BR-VIS-008: Pre-registration requires host.** Every visit must have a host (employee). The host must be an active user in the identity system.
 
 9. **BR-VIS-009: Photo capture at check-in.** If site policy requires photo capture, check-in via terminal automatically captures a photo. This photo can be used for face-based access if the visitor's access areas include face-reader doors.
 
@@ -279,8 +279,8 @@ WatchlistEnum: none | vip | blacklisted
 
 ## Offline Behavior
 
-- **Device-side:** Visitor temporary credentials are synced to devices the same way as employee credentials (via MQTT `cfg/persons`). Devices store visitor credentials locally with `valid_until` embedded. Even if the server goes offline, devices grant/deny visitor access based on local data and enforce expiry time.
-- **Sync strategy:** On check-in, the server creates a temporary person record + credential and pushes to all relevant access devices. On check-out, a delete is pushed. If a device is offline during check-in, the credential is queued and pushed when the device reconnects.
+- **Device-side:** Visitor temporary credentials are synced to devices the same way as employee credentials (via MQTT `cfg/users`). Devices store visitor credentials locally with `valid_until` embedded. Even if the server goes offline, devices grant/deny visitor access based on local data and enforce expiry time.
+- **Sync strategy:** On check-in, the server creates a temporary user record + credential and pushes to all relevant access devices. On check-out, a delete is pushed. If a device is offline during check-in, the credential is queued and pushed when the device reconnects.
 - **Conflict resolution:** Server-wins. If a visitor's credential was supposed to be revoked (checkout/expiry) but the device was offline, the `valid_until` on the device ensures access is denied after expiry. When the device reconnects, the explicit delete is also processed.
 - **Local storage:** Visitor credentials consume the same device storage as employee credentials. Sites typically have <50 active visitors at a time, so impact is minimal.
 - **Terminal offline:** Self-service check-in terminals that lose server connectivity fall back to "manual mode" — security guard handles check-in. The terminal queues the check-in request and processes it when connectivity returns.
@@ -317,7 +317,7 @@ WatchlistEnum: none | vip | blacklisted
 ## Integration Points
 
 - **Depends on:**
-  - `identity-svc` — host person lookup, temporary person creation, credential management
+  - `identity-svc` — host user lookup, temporary user creation, credential management
   - `device-gw` — MQTT sync of temporary credentials to access devices
   - `vision-svc` — face matching for watchlist check at check-in (gRPC)
   - `notif-svc` — host notification (push, SMS, Telegram), visitor invitation (email, SMS)

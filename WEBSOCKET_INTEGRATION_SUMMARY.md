@@ -76,7 +76,7 @@ Based on the backend `websocket.go` and `mqtt_handler.go`:
   tenant_id: string,
   data: {
     door_id: string,
-    person_name?: string,
+    user_name?: string,
     decision: "granted" | "denied",
     reason?: string,
     credential_type?: string

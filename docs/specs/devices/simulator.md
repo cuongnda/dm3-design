@@ -14,7 +14,7 @@ The DM3 Device Simulator creates virtual access control devices for end-to-end t
 - **Virtual Devices** — Simulate 1-1000 devices with independent MQTT connections
 - **Access Events** — Generate realistic access grant/deny events with configurable rates
 - **Offline Mode** — Disconnect individual devices, queue events locally, auto-drain on reconnect
-- **Local Decision Engine** — SQLite-based person/credential/rule evaluation matching real firmware
+- **Local Decision Engine** — SQLite-based user/credential/rule evaluation matching real firmware
 - **Device Provisioning** — Both Bootstrap and QR provisioning flows
 - **Metrics** — Prometheus-compatible metrics at `/metrics`
 
@@ -99,7 +99,7 @@ python -m dm3_simulator run --broker mqtt://localhost:1884 --devices 0
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/devices/{id}/config` | Device config & sync state |
-| GET | `/api/devices/{id}/persons` | Local person DB |
+| GET | `/api/devices/{id}/users` | Local user DB |
 | GET | `/api/devices/{id}/credentials` | Local credentials |
 | GET | `/api/devices/{id}/rules` | Access rules |
 | GET | `/api/devices/{id}/events-queue` | Offline event queue |
@@ -113,7 +113,7 @@ python -m dm3_simulator run --broker mqtt://localhost:1884 --devices 0
 - **Provisioning Actions** — Bootstrap, QR Activate, Approve, Reject buttons contextual to device state
 - **Metrics Panel** — Throughput, access decisions, latency, offline/sync stats
 - **Event Feed** — Real-time access event stream
-- **Device Detail Modal** — Config, persons, credentials, rules, event queue tabs
+- **Device Detail Modal** — Config, users, credentials, rules, event queue tabs
 - **Batch Operations** — Select multiple devices for bulk trigger/start/stop/disconnect
 
 ## Provisioning States

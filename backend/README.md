@@ -8,7 +8,7 @@ Go monorepo for the Duall Master 3.0 platform.
 |---------|------|-------------|
 | device-gateway | 8002 | MQTT ↔ NATS bridge, device lifecycle |
 | access-svc | 8003 | Access control rules + event processing |
-| identity-svc | 8004 | Persons, credentials, groups |
+| identity-svc | 8004 | Users, credentials, groups |
 | auth-svc | 8005 | JWT auth, two-step company login |
 
 ## VSCode Debug (Recommended for Development)
@@ -97,7 +97,7 @@ This brings up:
 - **Valkey** (port 6380) — cache / session store
 - **MinIO** (port 9002, console 9003) — object storage
 - **dm3-simulator** (port 9090) — 5 virtual devices on MQTT
-- **seed-demo** — seeds 50 persons + credentials + access rules on first run
+- **seed-demo** — seeds 50 users + credentials + access rules on first run
 
 Wait ~15s for EMQX to be healthy before simulator devices connect.
 
@@ -175,9 +175,9 @@ Login: `admin@duali.com` / `admin123` (Duali Demo company)
 
 The `seed-demo` container runs `008_seed_demo_data.sql` on startup:
 
-- **50 persons** — Vietnamese names, departments, employee IDs (DM-001…DM-050)
+- **50 users** — Vietnamese names, departments, employee IDs (DM-001…DM-050)
 - **Credentials** — card + face for all, PIN for first 30 (~60%)
-- **4 person groups** — All Staff, Engineering Team, VIP/Management, Security Team
+- **4 user groups** — All Staff, Engineering Team, VIP/Management, Security Team
 - **4 access rules** — Main Door, Executive Floor (24/7), Engineering Lab, Security 24/7
 - **Tenant ID** — `00000000-0000-0000-0000-000000000001` (Duali Demo)
 

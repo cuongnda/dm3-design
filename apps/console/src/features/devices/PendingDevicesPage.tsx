@@ -27,7 +27,7 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
   const [companies, setCompanies] = useState<CompanyDTO[]>([]);
 
   // Per-row form state
-  const [rowState, setRowState] = useState<Record<string, { company_id: string; name: string; location: string }>>({});
+  const [rowState, setRowState] = useState<Record<string, { tenant_id: string; name: string; location: string }>>({});
 
   const { data: devices = [], isLoading: loading, refetch: loadData } = usePendingDevices();
   const approveDevice = useApprovePendingDevice();
@@ -40,16 +40,18 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
   }, [isSystemAdmin]);
 
   useEffect(() => {
-    // Init row state when devices change
-    const init: typeof rowState = {};
-    devices.forEach((d) => {
-      if (!rowState[d.id]) {
-        init[d.id] = { company_id: '', name: '', location: '' };
-      } else {
-        init[d.id] = rowState[d.id];
-      }
+    // Only add entries for new devices, never overwrite existing form state
+    setRowState((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      devices.forEach((d) => {
+        if (!prev[d.id]) {
+          next[d.id] = { tenant_id: '', name: '', location: '' };
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
     });
-    setRowState(init);
   }, [devices]);
 
   const updateRow = (id: string, field: string, value: string) => {
@@ -58,13 +60,13 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
 
   const handleApprove = (d: PendingDevice) => {
     const row = rowState[d.id];
-    if (isSystemAdmin && !row?.company_id) return;
+    if (isSystemAdmin && !row?.tenant_id) return;
     if (!row?.name) return;
 
     approveDevice.mutate({
       id: d.id,
       data: {
-        company_id: row.company_id,
+        tenant_id: row.tenant_id,
         name: row.name,
         location: row.location || undefined,
       },
@@ -146,8 +148,8 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
                   {isSystemAdmin && (
                     <TableCell className="px-4">
                       <Select
-                        value={rowState[d.id]?.company_id || ''}
-                        onChange={(e) => updateRow(d.id, 'company_id', e.target.value)}
+                        value={rowState[d.id]?.tenant_id || ''}
+                        onChange={(e) => updateRow(d.id, 'tenant_id', e.target.value)}
                         className={`${inputCls} w-36`}
                       >
                         <SelectOption value="">Select...</SelectOption>
@@ -173,7 +175,7 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
                         data-testid={`pending-button-approve-${d.id}`}
                         size="xs"
                         onClick={() => handleApprove(d)}
-                        disabled={approveDevice.isPending || rejectDevice.isPending || !rowState[d.id]?.name || (isSystemAdmin && !rowState[d.id]?.company_id)}
+                        disabled={approveDevice.isPending || rejectDevice.isPending || !rowState[d.id]?.name || (isSystemAdmin && !rowState[d.id]?.tenant_id)}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white"
                       >
                         {approveDevice.isPending ? 'Approving...' : t('pendingDevices.actions.approve')}

@@ -9,7 +9,7 @@
 ## Core Change
 
 **OLD:** Device scans → sends credential to server → server decides → sends grant/deny back  
-**NEW:** Device scans → matches locally against synced person DB → decides locally → sends event log to server
+**NEW:** Device scans → matches locally against synced user DB → decides locally → sends event log to server
 
 ---
 
@@ -33,7 +33,7 @@
 - **Updated** `cfg.full` config — mode changed from "online|offline|hybrid" to "offline_first"
 
 ### 2. `duall-master-system-architecture.md` — Significant changes
-- **Updated** access-svc component diagram — role changed from "Access Decision Engine" to "Rule & Sync Management Engine" with Rule CRUD, Person DB Sync Orchestrator, Blacklist Manager, Sync Publisher, Event Log Ingester, Analytics
+- **Updated** access-svc component diagram — role changed from "Access Decision Engine" to "Rule & Sync Management Engine" with Rule CRUD, User DB Sync Orchestrator, Blacklist Manager, Sync Publisher, Event Log Ingester, Analytics
 - **Updated** service communication patterns — "Access decision (<50ms): gRPC" → "Rule queries (<50ms): gRPC"
 - **Updated** NATS subject hierarchy — `access.decision` → `access.sync`, `access.event` → `access.log`
 - **Updated** service boundary map — access-svc description: "Door/gate control, credentials" → "Rule mgmt + sync orch + analytics"
@@ -42,7 +42,7 @@
 - **Updated** access_events SQL comment — clarified events are received from devices, decisions made locally
 
 ### 3. `duall-master-terminal-ux.md` — Targeted updates
-- **Updated** recognition behavior section — all matching happens on-device against local person DB in <50ms
+- **Updated** recognition behavior section — all matching happens on-device against local user DB in <50ms
 - **Updated** host notification — triggered by device access.log event, not server decision
 - **Updated** network offline section — access decisions work offline as normal mode, not fallback
 
@@ -52,7 +52,7 @@
 
 ### 5. `duall-master-webapp-ux.md` — Targeted updates
 - **Updated** dashboard "Live Access Events" → "Access Event Logs (from synced device logs)"
-- **Updated** door detail status card — added sync status (last sync time, person DB version, rules version)
+- **Updated** door detail status card — added sync status (last sync time, user DB version, rules version)
 - **Updated** access rules creation — noted rules are synced to devices on activation with progress tracking
 
 ### 6. `duall-master-mobile-ux.md` — Targeted updates
@@ -62,7 +62,7 @@
 
 ### 7. `duall-master-tech-stack-recommendation.md` — Targeted updates
 - **Updated** executive summary — added "Offline-first, edge-computing architecture" and core principle section
-- **Added** SQLite as device-side database — for local person DB, access rules, blacklists, event queue
+- **Added** SQLite as device-side database — for local user DB, access rules, blacklists, event queue
 - **Added** sync protocol considerations — delta updates, full sync, priority sync, cursor tokens
 
 ### 8. `duall-master-website-copy.md` — Marketing updates
@@ -82,7 +82,7 @@
 ---
 
 ## What STAYS Server-Side (unchanged)
-- Rule/person DB management (CRUD via web/mobile)
+- Rule/user DB management (CRUD via web/mobile)
 - Sync orchestration (push rules to devices via MQTT)
 - Event log aggregation + analytics + dashboards
 - Remote commands (emergency lockdown, remote unlock)

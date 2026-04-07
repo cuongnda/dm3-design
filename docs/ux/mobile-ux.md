@@ -257,7 +257,7 @@ Padding: 12px. Radius: --radius-lg.
 - Tap "Unlock" → confirmation bottom sheet: "Unlock Main Entrance Gate? This will remain unlocked for 10 seconds." with countdown timer option. [Cancel] [Unlock Now].
 - After unlock: command sent to server → server sends unlock command to device via MQTT. Button changes to "Locking in 8s..." with countdown ring animation.
 - **Note:** Remote unlock is one of the few server→device commands. Normal access decisions (face/card/QR) are always made locally on the device.
-- Tap door card → detail screen: event history (from synced event logs), access schedule, sync status (last sync, person DB version), linked cameras, manual override toggle.
+- Tap door card → detail screen: event history (from synced event logs), access schedule, sync status (last sync, user DB version), linked cameras, manual override toggle.
 - Search: filters by door name or location.
 - Long press door → quick action menu (lock, unlock, view camera, view log).
 

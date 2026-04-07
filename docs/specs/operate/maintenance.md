@@ -50,7 +50,7 @@ Maintenance management handles the full lifecycle of work orders (corrective and
 | category | text | no | — | Maintenance category (HVAC, electrical, plumbing, etc.) |
 | asset_id | uuid | no | — | Related asset |
 | location | jsonb | yes | — | {building, floor, zone, room} |
-| reporter_id | uuid | yes | — | Person who reported |
+| reporter_id | uuid | yes | — | User who reported |
 | assigned_to | uuid | no | — | Assigned technician |
 | assigned_team | uuid | no | — | Assigned team |
 | sla_id | uuid | no | — | Applicable SLA |

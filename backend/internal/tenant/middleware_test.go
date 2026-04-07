@@ -110,7 +110,7 @@ func TestTenantMiddleware(t *testing.T) {
 				return []byte("test-secret"), nil
 			})
 			if token.Valid {
-				ctx := context.WithValue(req.Context(), "auth_claims", claims)
+				ctx := authsvc.WithClaims(req.Context(), claims)
 				req = req.WithContext(ctx)
 			}
 
@@ -148,7 +148,7 @@ func TestTenantContext(t *testing.T) {
 	t.Run("WithTenantInfo and TenantInfoFromContext", func(t *testing.T) {
 		info := &TenantInfo{
 			ID:          "tenant-789",
-			CompanyID:   "company-789",
+			TenantID:    "company-789",
 			CompanyName: "Test Company",
 			CompanyCode: "TEST",
 			Plan:        "enterprise",

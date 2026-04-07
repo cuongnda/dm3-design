@@ -439,7 +439,7 @@ When a device cannot reach the server (no network, server down):
 
 ```
 1. Device operates in FULL OFFLINE MODE
-   → Access decisions made locally from synced person DB + rules
+   → Access decisions made locally from synced user DB + rules
    → This is by design (offline-first architecture)
 
 2. Events queued locally

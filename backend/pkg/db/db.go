@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -17,17 +19,70 @@ type DB struct {
 	dsn  string
 }
 
+// Connect establishes a connection pool. If the target database does not exist,
+// it connects to the "postgres" maintenance database and creates it first.
 func Connect(ctx context.Context, dsn string) (*DB, error) {
 	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
+	if err == nil {
+		if pingErr := pool.Ping(ctx); pingErr == nil {
+			slog.Info("connected to database")
+			return &DB{Pool: pool, dsn: dsn}, nil
+		}
+		pool.Close()
+	}
+
+	// Attempt to create the database if it doesn't exist.
+	dbName, adminDSN := extractDBName(dsn)
+	if dbName == "" || adminDSN == "" {
 		return nil, fmt.Errorf("db connect: %w", err)
+	}
+
+	slog.Info("database not found, attempting to create it", "database", dbName)
+	if createErr := createDatabase(ctx, adminDSN, dbName); createErr != nil {
+		return nil, fmt.Errorf("db auto-create: %w", createErr)
+	}
+
+	pool, err = pgxpool.New(ctx, dsn)
+	if err != nil {
+		return nil, fmt.Errorf("db connect after create: %w", err)
 	}
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
-		return nil, fmt.Errorf("db ping: %w", err)
+		return nil, fmt.Errorf("db ping after create: %w", err)
 	}
-	slog.Info("connected to database")
+	slog.Info("database created and connected", "database", dbName)
 	return &DB{Pool: pool, dsn: dsn}, nil
+}
+
+// extractDBName returns the database name and a DSN pointing to the "postgres" admin DB.
+func extractDBName(dsn string) (string, string) {
+	cfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return "", ""
+	}
+	dbName := cfg.Database
+	if dbName == "" {
+		return "", ""
+	}
+	// Build admin DSN: replace database name with "postgres"
+	adminDSN := strings.ReplaceAll(dsn, "/"+dbName, "/postgres")
+	if adminDSN == dsn {
+		// Try replacing dbname= param style
+		adminDSN = strings.ReplaceAll(dsn, "dbname="+dbName, "dbname=postgres")
+	}
+	return dbName, adminDSN
+}
+
+// createDatabase connects to the admin DB and creates the target database.
+func createDatabase(ctx context.Context, adminDSN, dbName string) error {
+	conn, err := pgx.Connect(ctx, adminDSN)
+	if err != nil {
+		return fmt.Errorf("connect to admin db: %w", err)
+	}
+	defer conn.Close(ctx)
+
+	_, err = conn.Exec(ctx, fmt.Sprintf("CREATE DATABASE %s", pgx.Identifier{dbName}.Sanitize()))
+	return err
 }
 
 func (d *DB) Close() {

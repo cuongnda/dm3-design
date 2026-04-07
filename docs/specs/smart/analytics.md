@@ -85,7 +85,7 @@ Analytics provides cross-domain dashboards, trend analysis, anomaly detection, a
 | parameters | jsonb | yes | {} | Report parameters |
 | format | text | yes | pdf | Output format |
 | schedule_cron | text | yes | — | Cron expression |
-| recipients | jsonb | yes | — | [{person_id, email, channel}] |
+| recipients | jsonb | yes | — | [{user_id, email, channel}] |
 | timezone | text | yes | Asia/Ho_Chi_Minh | Timezone |
 | enabled | bool | yes | true | Active flag |
 | last_run_at | timestamptz | no | — | Last generation |
@@ -285,7 +285,7 @@ AnomalyType: access_pattern | energy_spike | occupancy_deviation | device_health
     "parameters": {"site_id": "uuid", "meter_types": ["electricity", "water"]},
     "format": "pdf",
     "schedule_cron": "0 8 1 * *",
-    "recipients": [{"person_id": "uuid", "channel": "email"}],
+    "recipients": [{"user_id": "uuid", "channel": "email"}],
     "timezone": "Asia/Ho_Chi_Minh"
   }
   ```
@@ -337,7 +337,7 @@ AnomalyType: access_pattern | energy_spike | occupancy_deviation | device_health
     "to": "2026-02-01",
     "site_id": "uuid",
     "format": "csv",
-    "columns": ["time", "door_name", "person_name", "direction", "decision"]
+    "columns": ["time", "door_name", "user_name", "direction", "decision"]
   }
   ```
 - **Response 202:** Accepted with export job ID

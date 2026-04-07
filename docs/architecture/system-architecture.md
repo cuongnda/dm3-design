@@ -178,7 +178,7 @@ Zooming into `access-svc`. **Note:** access-svc is NOT a real-time decision engi
 │  │          Rule & Sync Management Engine           │        │
 │  │                                                  │        │
 │  │  ┌────────────┐ ┌────────────┐ ┌────────────┐  │        │
-│  │  │ Rule CRUD  │ │ Person DB  │ │ Blacklist  │  │        │
+│  │  │ Rule CRUD  │ │ User DB  │ │ Blacklist  │  │        │
 │  │  │ (manage    │ │ Sync Orch. │ │ Manager    │  │        │
 │  │  │  access    │ │ (push to   │ │ (priority  │  │        │
 │  │  │  rules)    │ │  devices)  │ │  push)     │  │        │
@@ -357,9 +357,9 @@ SECURE Domain:
   /api/v1/intercom/stations             GET, POST
 
 MANAGE Domain:
-  /api/v1/identity/persons              GET, POST, PUT, DELETE
-  /api/v1/identity/persons/{id}/credentials   GET, POST, DELETE
-  /api/v1/identity/persons/{id}/access        GET, PUT
+  /api/v1/identity/users              GET, POST, PUT, DELETE
+  /api/v1/identity/users/{id}/credentials   GET, POST, DELETE
+  /api/v1/identity/users/{id}/access        GET, PUT
   /api/v1/visitors                      GET, POST
   /api/v1/visitors/{id}/checkin         POST
   /api/v1/visitors/{id}/checkout        POST
@@ -503,7 +503,7 @@ Webhook payload:
   "timestamp": "2026-02-19T01:00:00Z",
   "data": {
     "door_id": "door_001",
-    "person_id": "person_123",
+    "user_id": "person_123",
     "credential_type": "face",
     "direction": "entry"
   },
@@ -562,7 +562,7 @@ CREATE TABLE access_events (
     tenant_id   UUID NOT NULL,
     time        TIMESTAMPTZ NOT NULL,
     door_id     UUID NOT NULL,
-    person_id   UUID,
+    user_id   UUID,
     credential  JSONB,          -- {"type":"face","reader_id":"..."}
     direction   TEXT,            -- 'entry' | 'exit'
     decision    TEXT NOT NULL,   -- 'granted' | 'denied' | 'forced'
@@ -597,7 +597,7 @@ SELECT
     COUNT(*) AS total_events,
     COUNT(*) FILTER (WHERE decision = 'granted') AS granted,
     COUNT(*) FILTER (WHERE decision = 'denied') AS denied,
-    COUNT(DISTINCT person_id) AS unique_persons
+    COUNT(DISTINCT user_id) AS unique_persons
 FROM access_events
 GROUP BY tenant_id, door_id, bucket;
 
@@ -646,7 +646,7 @@ GROUP BY tenant_id, sensor_id, bucket;
 
 ```sql
 -- Identity service schema
-CREATE TABLE persons (
+CREATE TABLE users (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id    UUID NOT NULL,
     first_name   TEXT NOT NULL,
@@ -662,14 +662,14 @@ CREATE TABLE persons (
     updated_at   TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX idx_persons_tenant ON persons(tenant_id);
-CREATE INDEX idx_persons_email ON persons(tenant_id, email);
+CREATE INDEX idx_persons_tenant ON users(tenant_id);
+CREATE INDEX idx_persons_email ON users(tenant_id, email);
 
 -- Credentials (cards, biometrics, mobile)
 CREATE TABLE credentials (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id    UUID NOT NULL,
-    person_id    UUID NOT NULL REFERENCES persons(id),
+    user_id    UUID NOT NULL REFERENCES users(id),
     type         TEXT NOT NULL,     -- 'card','face','fingerprint','mobile','pin'
     value        TEXT NOT NULL,     -- encrypted card number, template ref, etc.
     status       TEXT DEFAULT 'active',
@@ -685,7 +685,7 @@ CREATE TABLE access_rules (
     name         TEXT NOT NULL,
     door_ids     UUID[] NOT NULL,
     schedule_id  UUID,              -- time schedule reference
-    person_groups UUID[],           -- which groups have this access
+    user_groups UUID[],           -- which groups have this access
     anti_passback BOOLEAN DEFAULT false,
     priority     INT DEFAULT 0,
     enabled      BOOLEAN DEFAULT true,
@@ -810,7 +810,7 @@ dm/{tenant_id}/
 
 ```
 dm.{tenant}.access.log.{door_id}         # Access event logs (from devices, decisions already made locally)
-dm.{tenant}.access.sync.{device_id}      # Access rule/person sync events
+dm.{tenant}.access.sync.{device_id}      # Access rule/user sync events
 dm.{tenant}.device.status.{device_id}    # Device status changes
 dm.{tenant}.alert.{severity}             # Alerts (critical/warning/info)
 dm.{tenant}.automation.trigger            # Automation rule triggers
@@ -1048,11 +1048,11 @@ User: "Who entered Building A after 10pm last night?"
                     │  │  Frame                 │  │
                     │  │    │                   │  │
                     │  │    ├─► YOLOv8n (obj)   │  │
-                    │  │    │   person, vehicle  │  │
+                    │  │    │   user, vehicle  │  │
                     │  │    │   bag, weapon      │  │
                     │  │    │                   │  │
                     │  │    ├─► InsightFace     │  │
-                    │  │    │   (if person ROI) │  │
+                    │  │    │   (if user ROI) │  │
                     │  │    │   face match      │  │
                     │  │    │                   │  │
                     │  │    └─► PaddleOCR       │  │
@@ -1062,7 +1062,7 @@ User: "Who entered Building A after 10pm last night?"
                     │                              │
                     │  Post-process:                │
                     │  • Object tracking (DeepSORT) │
-                    │  • Event dedup (same person)  │
+                    │  • Event dedup (same user)  │
                     │  • Confidence threshold        │
                     │  • Publish to NATS             │
                     └──────────────────────────────┘
@@ -1142,7 +1142,7 @@ Hardware requirements (per camera):
   └──────────┘         │ protocol  │        └──────────┘
                        └──────────┘
 
-  SYNC FLOW (server → device, pushes rules/person DB):
+  SYNC FLOW (server → device, pushes rules/user DB):
   access-svc → device-gateway → MQTT cfg topics → Device (stores in local SQLite)
 
   EVENT FLOW (device → server, logs only — NOT decision requests):
@@ -1467,7 +1467,7 @@ Permission structure:
   access.door.configure      access.rule.manage
   video.camera.view          video.camera.ptz
   video.camera.playback      video.clip.export
-  identity.person.view       identity.person.manage
+  identity.user.view       identity.user.manage
   identity.credential.issue  identity.credential.revoke
   visitor.manage             visitor.approve
   alarm.zone.view            alarm.zone.arm
@@ -1647,7 +1647,7 @@ Critical path (access control decision):
 │                                                                      │
 │  Layer 3: Application (Valkey)                                       │
 │  • Access rules per door: TTL 60s, invalidate on rule change         │
-│  • Person credentials: TTL 60s, invalidate on credential change      │
+│  • User credentials: TTL 60s, invalidate on credential change      │
 │  • Dashboard widget data: TTL 30s                                    │
 │  • Session tokens: TTL = token expiry                                │
 │  • Tenant config: TTL 300s                                           │

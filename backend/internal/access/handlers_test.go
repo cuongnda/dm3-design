@@ -132,7 +132,7 @@ func TestRouteSetup(t *testing.T) {
 
 // TestNATSEventParsing tests event unmarshalling.
 func TestNATSEventParsing(t *testing.T) {
-	raw := `{"version":1,"id":"evt-1","ts":1708344900000,"src":"device-001","type":"access.log","data":{"door_id":"d1","person_name":"Test","decision":"granted","credential_type":"face"}}`
+	raw := `{"version":1,"id":"evt-1","ts":1708344900000,"src":"device-001","type":"access.log","data":{"door_id":"d1","user_name":"Test","decision":"granted","credential_type":"face"}}`
 	var evt deviceEvent
 	if err := json.Unmarshal([]byte(raw), &evt); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
@@ -148,8 +148,8 @@ func TestNATSEventParsing(t *testing.T) {
 	if ald.Decision != "granted" {
 		t.Errorf("expected decision granted, got %s", ald.Decision)
 	}
-	if ald.PersonName != "Test" {
-		t.Errorf("expected person_name Test, got %s", ald.PersonName)
+	if ald.UserName != "Test" {
+		t.Errorf("expected person_name Test, got %s", ald.UserName)
 	}
 }
 

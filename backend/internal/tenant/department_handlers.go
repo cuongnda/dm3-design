@@ -15,7 +15,7 @@ import (
 // Department models
 type Department struct {
 	ID                  string  `json:"id" db:"id"`
-	CompanyID           string  `json:"company_id" db:"company_id"`
+	TenantID           string  `json:"tenant_id" db:"tenant_id"`
 	ParentID            *string `json:"parent_id" db:"parent_id"`
 	Name                string  `json:"name" db:"name"`
 	Number              string  `json:"number" db:"number"`
@@ -117,7 +117,7 @@ func (h *UserManagementHandlers) ListDepartments(w http.ResponseWriter, r *http.
 	var args []interface{}
 	argIndex := 1
 
-	whereConditions = append(whereConditions, fmt.Sprintf("d.company_id = $%d::uuid", argIndex))
+	whereConditions = append(whereConditions, fmt.Sprintf("d.tenant_id = $%d::uuid", argIndex))
 	args = append(args, companyID)
 	argIndex++
 
@@ -165,7 +165,7 @@ func (h *UserManagementHandlers) ListDepartments(w http.ResponseWriter, r *http.
 	// Data query
 	dataQuery := fmt.Sprintf(`
 		SELECT 
-			d.id, d.company_id, d.parent_id, d.name, d.number,
+			d.id, d.tenant_id, d.parent_id, d.name, d.number,
 			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name,
 			d.access_group_id,
 			COALESCE(user_counts.count, 0) as user_count,
@@ -195,7 +195,7 @@ func (h *UserManagementHandlers) ListDepartments(w http.ResponseWriter, r *http.
 	for rows.Next() {
 		var dept Department
 		err := rows.Scan(
-			&dept.ID, &dept.CompanyID, &dept.ParentID, &dept.Name, &dept.Number,
+			&dept.ID, &dept.TenantID, &dept.ParentID, &dept.Name, &dept.Number,
 			&dept.DepartmentManagerID, &dept.ManagerName, &dept.AccessGroupID,
 			&dept.UserCount, &dept.CreatedOn, &dept.UpdatedOn,
 			&dept.IsDeleted,
@@ -248,7 +248,7 @@ func (h *UserManagementHandlers) CreateDepartment(w http.ResponseWriter, r *http
 	// Check for duplicate number
 	var exists bool
 	err := h.db.Pool.QueryRow(ctx, 
-		"SELECT EXISTS(SELECT 1 FROM dm3_identity.departments WHERE company_id = $1 AND number = $2 AND is_deleted = false)", 
+		"SELECT EXISTS(SELECT 1 FROM dm3_identity.departments WHERE tenant_id = $1 AND number = $2 AND is_deleted = false)", 
 		companyID, data.Number).Scan(&exists)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "Failed to check department number")
@@ -263,7 +263,7 @@ func (h *UserManagementHandlers) CreateDepartment(w http.ResponseWriter, r *http
 	var departmentID string
 	err = h.db.Pool.QueryRow(ctx, `
 		INSERT INTO dm3_identity.departments (
-			company_id, parent_id, name, number, department_manager_id, access_group_id, created_on, updated_on
+			tenant_id, parent_id, name, number, department_manager_id, access_group_id, created_on, updated_on
 		) VALUES ($1, $2, $3, $4, $5, $6, now(), now())
 		RETURNING id`,
 		companyID, data.ParentID, data.Name, data.Number, data.DepartmentManagerID, data.AccessGroupID,
@@ -277,13 +277,13 @@ func (h *UserManagementHandlers) CreateDepartment(w http.ResponseWriter, r *http
 	var dept Department
 	err = h.db.Pool.QueryRow(ctx, `
 		SELECT 
-			d.id, d.company_id, d.parent_id, d.name, d.number,
+			d.id, d.tenant_id, d.parent_id, d.name, d.number,
 			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name, d.access_group_id,
 			0 as user_count, d.created_on::text, d.updated_on::text, d.is_deleted
 		FROM dm3_identity.departments d
 		LEFT JOIN dm3_identity.users mgr ON d.department_manager_id = mgr.id
 		WHERE d.id = $1`, departmentID).Scan(
-		&dept.ID, &dept.CompanyID, &dept.ParentID, &dept.Name, &dept.Number,
+		&dept.ID, &dept.TenantID, &dept.ParentID, &dept.Name, &dept.Number,
 		&dept.DepartmentManagerID, &dept.ManagerName, &dept.AccessGroupID,
 		&dept.UserCount, &dept.CreatedOn, &dept.UpdatedOn,
 		&dept.IsDeleted,
@@ -309,7 +309,7 @@ func (h *UserManagementHandlers) GetDepartment(w http.ResponseWriter, r *http.Re
 	var dept Department
 	err := h.db.Pool.QueryRow(ctx, `
 		SELECT 
-			d.id, d.company_id, d.parent_id, d.name, d.number,
+			d.id, d.tenant_id, d.parent_id, d.name, d.number,
 			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name, d.access_group_id,
 			COALESCE(user_counts.count, 0) as user_count,
 			d.created_on::text, d.updated_on::text, d.is_deleted
@@ -321,9 +321,9 @@ func (h *UserManagementHandlers) GetDepartment(w http.ResponseWriter, r *http.Re
 			WHERE department_id = $2 AND is_deleted = false
 			GROUP BY department_id
 		) user_counts ON d.id = user_counts.department_id
-		WHERE d.id = $1 AND d.company_id = $3 AND d.is_deleted = false`,
+		WHERE d.id = $1 AND d.tenant_id = $3 AND d.is_deleted = false`,
 		departmentID, departmentID, companyID).Scan(
-		&dept.ID, &dept.CompanyID, &dept.ParentID, &dept.Name, &dept.Number,
+		&dept.ID, &dept.TenantID, &dept.ParentID, &dept.Name, &dept.Number,
 		&dept.DepartmentManagerID, &dept.ManagerName, &dept.AccessGroupID,
 		&dept.UserCount, &dept.CreatedOn, &dept.UpdatedOn,
 		&dept.IsDeleted,
@@ -365,7 +365,7 @@ func (h *UserManagementHandlers) UpdateDepartment(w http.ResponseWriter, r *http
 	// Check for duplicate number (excluding current department)
 	var exists bool
 	err := h.db.Pool.QueryRow(ctx, 
-		"SELECT EXISTS(SELECT 1 FROM dm3_identity.departments WHERE company_id = $1 AND number = $2 AND id != $3 AND is_deleted = false)", 
+		"SELECT EXISTS(SELECT 1 FROM dm3_identity.departments WHERE tenant_id = $1 AND number = $2 AND id != $3 AND is_deleted = false)", 
 		companyID, data.Number, departmentID).Scan(&exists)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "Failed to check department number")
@@ -381,7 +381,7 @@ func (h *UserManagementHandlers) UpdateDepartment(w http.ResponseWriter, r *http
 		UPDATE dm3_identity.departments SET
 			name = $1, number = $2, parent_id = $3, 
 			department_manager_id = $4, access_group_id = $5, updated_on = now()
-		WHERE id = $6 AND company_id = $7 AND is_deleted = false`,
+		WHERE id = $6 AND tenant_id = $7 AND is_deleted = false`,
 		data.Name, data.Number, data.ParentID, data.DepartmentManagerID, data.AccessGroupID,
 		departmentID, companyID)
 	if err != nil {
@@ -393,7 +393,7 @@ func (h *UserManagementHandlers) UpdateDepartment(w http.ResponseWriter, r *http
 	var dept Department
 	err = h.db.Pool.QueryRow(ctx, `
 		SELECT 
-			d.id, d.company_id, d.parent_id, d.name, d.number,
+			d.id, d.tenant_id, d.parent_id, d.name, d.number,
 			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name, d.access_group_id,
 			COALESCE(user_counts.count, 0) as user_count,
 			d.created_on::text, d.updated_on::text, d.is_deleted
@@ -405,9 +405,9 @@ func (h *UserManagementHandlers) UpdateDepartment(w http.ResponseWriter, r *http
 			WHERE department_id = $1 AND is_deleted = false
 			GROUP BY department_id
 		) user_counts ON d.id = user_counts.department_id
-		WHERE d.id = $1 AND d.company_id = $2 AND d.is_deleted = false`,
+		WHERE d.id = $1 AND d.tenant_id = $2 AND d.is_deleted = false`,
 		departmentID, companyID).Scan(
-		&dept.ID, &dept.CompanyID, &dept.ParentID, &dept.Name, &dept.Number,
+		&dept.ID, &dept.TenantID, &dept.ParentID, &dept.Name, &dept.Number,
 		&dept.DepartmentManagerID, &dept.ManagerName, &dept.AccessGroupID,
 		&dept.UserCount, &dept.CreatedOn, &dept.UpdatedOn,
 		&dept.IsDeleted,
@@ -447,7 +447,7 @@ func (h *UserManagementHandlers) DeleteDepartment(w http.ResponseWriter, r *http
 	// Soft delete department
 	result, err := h.db.Pool.Exec(ctx, `
 		UPDATE dm3_identity.departments SET is_deleted = true, updated_on = now()
-		WHERE id = $1 AND company_id = $2 AND is_deleted = false`,
+		WHERE id = $1 AND tenant_id = $2 AND is_deleted = false`,
 		departmentID, companyID)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "Failed to delete department")
@@ -489,7 +489,7 @@ func (h *UserManagementHandlers) BulkDeleteDepartments(w http.ResponseWriter, r 
 	err = h.db.Pool.QueryRow(ctx,
 		`SELECT COUNT(DISTINCT d.id) FROM dm3_identity.departments d
 		 JOIN dm3_identity.users u ON u.department_id = d.id AND u.is_deleted = false
-		 WHERE d.id = ANY($1::uuid[]) AND d.company_id = $2 AND d.is_deleted = false`,
+		 WHERE d.id = ANY($1::uuid[]) AND d.tenant_id = $2 AND d.is_deleted = false`,
 		req.IDs, companyID).Scan(&blockedCount)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to validate departments")
@@ -502,7 +502,7 @@ func (h *UserManagementHandlers) BulkDeleteDepartments(w http.ResponseWriter, r 
 
 	result, err := h.db.Pool.Exec(ctx,
 		`UPDATE dm3_identity.departments SET is_deleted = true, updated_on = now()
-		 WHERE id = ANY($1::uuid[]) AND company_id = $2 AND is_deleted = false`,
+		 WHERE id = ANY($1::uuid[]) AND tenant_id = $2 AND is_deleted = false`,
 		req.IDs, companyID)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to delete departments")
@@ -529,7 +529,7 @@ func (h *UserManagementHandlers) GetDepartmentUsers(w http.ResponseWriter, r *ht
 		SELECT u.id, COALESCE(u.user_code,''), u.first_name, u.last_name,
 		       COALESCE(u.email,''), u.position, u.status
 		FROM dm3_identity.users u
-		WHERE u.company_id = $1::uuid AND u.department_id = $2::uuid
+		WHERE u.tenant_id = $1::uuid AND u.department_id = $2::uuid
 		  AND (u.is_deleted = false OR u.is_deleted IS NULL)
 		ORDER BY u.first_name, u.last_name
 	`, companyID, departmentID)
@@ -580,7 +580,7 @@ func (h *UserManagementHandlers) AssignUsersToDepartment(w http.ResponseWriter, 
 	for _, userID := range body.UserIDs {
 		_, err := h.db.Pool.Exec(ctx, `
 			UPDATE dm3_identity.users SET department_id = $1::uuid, updated_at = now()
-			WHERE id = $2::uuid AND company_id = $3::uuid AND (is_deleted = false OR is_deleted IS NULL)
+			WHERE id = $2::uuid AND tenant_id = $3::uuid AND (is_deleted = false OR is_deleted IS NULL)
 		`, departmentID, userID, companyID)
 		if err != nil {
 			httputil.Error(w, http.StatusInternalServerError, "failed to assign user")
@@ -603,7 +603,7 @@ func (h *UserManagementHandlers) RemoveUserFromDepartment(w http.ResponseWriter,
 
 	result, err := h.db.Pool.Exec(ctx, `
 		UPDATE dm3_identity.users SET department_id = NULL, updated_at = now()
-		WHERE id = $1::uuid AND department_id = $2::uuid AND company_id = $3::uuid
+		WHERE id = $1::uuid AND department_id = $2::uuid AND tenant_id = $3::uuid
 		  AND (is_deleted = false OR is_deleted IS NULL)
 	`, userID, departmentID, companyID)
 	if err != nil {
@@ -638,7 +638,7 @@ func (h *UserManagementHandlers) GetManagers(w http.ResponseWriter, r *http.Requ
 	rows, err := h.db.Pool.Query(r.Context(), `
 		SELECT id, COALESCE(user_code,''), first_name, last_name
 		FROM dm3_identity.users
-		WHERE company_id = $1::uuid
+		WHERE tenant_id = $1::uuid
 		  AND (is_deleted = false OR is_deleted IS NULL)
 		ORDER BY first_name, last_name
 	`, companyID)
@@ -681,7 +681,7 @@ func (h *UserManagementHandlers) GetAvailableUsersForDepartment(w http.ResponseW
 		       COALESCE(d.name,'') AS department_name, u.status
 		FROM dm3_identity.users u
 		LEFT JOIN dm3_identity.departments d ON u.department_id = d.id
-		WHERE u.company_id = $1::uuid
+		WHERE u.tenant_id = $1::uuid
 		  AND (u.department_id IS NULL OR u.department_id != $2::uuid)
 		  AND (u.is_deleted = false OR u.is_deleted IS NULL)
 		ORDER BY u.first_name, u.last_name

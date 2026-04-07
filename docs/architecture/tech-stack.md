@@ -6,11 +6,11 @@
 
 ## Executive Summary
 
-All-open-source stack. No vendor lock-in. **Offline-first, edge-computing architecture.** On-premise first, cloud-additive. Two languages only: **Go** (platform) + **Python** (AI). Estimated 12–15 person team. Phase 1 launch in 8–10 months.
+All-open-source stack. No vendor lock-in. **Offline-first, edge-computing architecture.** On-premise first, cloud-additive. Two languages only: **Go** (platform) + **Python** (AI). Estimated 12–15 user team. Phase 1 launch in 8–10 months.
 
 ### Core Architecture Principle: Offline-First
 
-Devices make all access decisions locally. The server manages rules, syncs person databases to devices, and aggregates event logs for analytics. Zero dependency on connectivity for access control operations.
+Devices make all access decisions locally. The server manages rules, syncs user databases to devices, and aggregates event logs for analytics. Zero dependency on connectivity for access control operations.
 
 ---
 
@@ -54,7 +54,7 @@ Single codebase for 4 apps (Admin iOS/Android, Resident iOS/Android). Strong BLE
 
 ### Device-Side Database: **SQLite**
 
-Every access terminal runs SQLite locally for the offline-first architecture. Stores synced person DB (face templates, card UIDs, fingerprint templates), access rules, blacklists, and pending event queue. SQLite is perfect: zero-config, reliable, and handles 10,000+ person records with sub-millisecond lookups.
+Every access terminal runs SQLite locally for the offline-first architecture. Stores synced user DB (face templates, card UIDs, fingerprint templates), access rules, blacklists, and pending event queue. SQLite is perfect: zero-config, reliable, and handles 10,000+ user records with sub-millisecond lookups.
 
 - **Risks:** Limited concurrent write throughput → adequate for single-device use; event queue is append-only
 - **License/Cost:** Public domain, free

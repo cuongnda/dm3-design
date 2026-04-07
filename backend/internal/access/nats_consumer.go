@@ -40,8 +40,8 @@ type deviceEvent struct {
 
 type accessLogData struct {
 	DoorID         string         `json:"door_id"`
-	PersonID       string         `json:"person_id"`
-	PersonName     string         `json:"person_name"`
+	UserID       string         `json:"user_id"`
+	UserName     string         `json:"user_name"`
 	CredentialType string         `json:"credential_type"`
 	Direction      string         `json:"direction"`
 	Decision       string         `json:"decision"`
@@ -86,9 +86,9 @@ func (c *NATSConsumer) handleEvent(subject string, data []byte) error {
 	deviceID := evt.Src
 
 	_, err := c.db.Pool.Exec(context.Background(),
-		`INSERT INTO dm3_access.access_events (time, door_id, device_id, person_id, person_name, credential_type, direction, decision, reason, confidence, photo_ref, temperature, metadata)
+		`INSERT INTO dm3_access.access_events (time, door_id, device_id, user_id, user_name, credential_type, direction, decision, reason, confidence, photo_ref, temperature, metadata)
 		 VALUES ($1, $2, $3, $4, NULLIF($5,''), NULLIF($6,''), NULLIF($7,''), $8, NULLIF($9,''), $10, NULLIF($11,''), $12, $13)`,
-		evtTime, toUUIDPtr(ald.DoorID), toUUIDPtr(deviceID), toUUIDPtr(ald.PersonID), ald.PersonName, ald.CredentialType,
+		evtTime, toUUIDPtr(ald.DoorID), toUUIDPtr(deviceID), toUUIDPtr(ald.UserID), ald.UserName, ald.CredentialType,
 		ald.Direction, ald.Decision, ald.Reason, ald.Confidence, ald.PhotoRef, ald.Temperature, metadataJSON)
 	if err != nil {
 		slog.Error("nats: failed to insert access event", "error", err)
@@ -101,6 +101,6 @@ func (c *NATSConsumer) handleEvent(subject string, data []byte) error {
 			`UPDATE dm3_access.doors SET last_event_at = $1 WHERE id = $2::uuid`, evtTime, *doorUUID)
 	}
 
-	slog.Debug("access event ingested", "door", ald.DoorID, "decision", ald.Decision, "person", ald.PersonName)
+	slog.Debug("access event ingested", "door", ald.DoorID, "decision", ald.Decision, "user", ald.UserName)
 	return nil
 }
