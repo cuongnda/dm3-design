@@ -13,9 +13,10 @@ func AddDepartmentRoutes(r chi.Router, h *UserManagementHandlers) {
 		// Managers dropdown (static before /{id})
 		r.Get("/managers", h.GetManagers)
 
-		// Import/Export (static before /{id})
+		// Import/Export and bulk operations (static before /{id})
 		r.Post("/import", h.ImportDepartments)
 		r.Get("/export", h.ExportDepartments)
+		r.Post("/bulk-delete", h.BulkDeleteDepartments)
 
 		r.Get("/{id}", h.GetDepartment)
 		r.Put("/{id}", h.UpdateDepartment)

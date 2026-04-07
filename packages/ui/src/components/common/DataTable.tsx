@@ -27,7 +27,7 @@ export interface DataTableSelectionProps {
   selectAllScope?: "page" | "all"
   /**
    * When true, clicking the row (outside interactive cells) toggles selection.
-   * Defaults to false so tables with `onRowClick` keep one behavior; enable for multi-select lists.
+   * Defaults to true.
    */
   selectOnRowClick?: boolean
 }
@@ -45,6 +45,7 @@ interface DataTableProps<T> {
   data: T[]
   rowKey: (row: T) => string
   onRowClick?: (row: T) => void
+  onRowDoubleClick?: (row: T) => void
   rowClassName?: (row: T) => string
   pageSize?: number
   /**
@@ -75,6 +76,7 @@ export function DataTable<T>({
   data,
   rowKey,
   onRowClick,
+  onRowDoubleClick,
   rowClassName,
   pageSize = 15,
   paginate = true,
@@ -177,7 +179,7 @@ export function DataTable<T>({
   const colCount = columns.length + (selection ? 1 : 0)
 
   const handleRowClick = (row: T) => {
-    if (selection?.selectOnRowClick) toggleRowId(rowKey(row))
+    if (selection && (selection.selectOnRowClick ?? true)) toggleRowId(rowKey(row))
     onRowClick?.(row)
   }
 
@@ -280,6 +282,7 @@ export function DataTable<T>({
                     data-testid={rowTestId?.(row)}
                     data-state={isSel ? "selected" : undefined}
                     onClick={() => handleRowClick(row)}
+                    onDoubleClick={() => onRowDoubleClick?.(row)}
                     className={cn(
                       "transition-colors",
                       (onRowClick || selection?.selectOnRowClick) && "cursor-pointer",

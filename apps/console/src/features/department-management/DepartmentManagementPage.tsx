@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Building2, Plus, Search, MoreHorizontal,
-  Edit, Trash2, Users, Upload,
+  Edit, Trash2, Users,
 } from 'lucide-react';
 import {
   Button, Input,
@@ -10,10 +10,10 @@ import {
   Badge, AppModal,
   DataTableCard, DataTable, type Column,
 } from '@dm3/ui';
+import { apiFetch } from '@/lib/api';
 import { useDepartmentManagement } from './hooks/useDepartmentManagement';
 import { DepartmentModal } from './components/DepartmentModal';
 import { UserAssignModal } from './components/UserAssignModal';
-import { ImportExportModal } from './components/ImportExportModal';
 import type { Department, DepartmentFormData } from './types';
 
 export function DepartmentManagementPage() {
@@ -35,8 +35,6 @@ export function DepartmentManagementPage() {
     changePageSize,
     handleSortChange,
     fetchManagers,
-    exportDepartments,
-    importDepartments,
   } = useDepartmentManagement();
 
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
@@ -46,7 +44,6 @@ export function DepartmentManagementPage() {
   const [departmentToDelete, setDepartmentToDelete] = useState<Department | null>(null);
   const [showUserAssignModal, setShowUserAssignModal] = useState(false);
   const [selectedDepartmentForUsers, setSelectedDepartmentForUsers] = useState<Department | null>(null);
-  const [showImportExportModal, setShowImportExportModal] = useState(false);
 
   useEffect(() => {
     fetchDepartments();
@@ -75,16 +72,12 @@ export function DepartmentManagementPage() {
 
   const handleBulkDelete = async () => {
     if (selectedDepartments.length === 0) return;
-    // TODO: call bulk delete API
-    console.log('Bulk delete:', selectedDepartments);
-  };
-
-  const getStatusVariant = (status: string): 'default' | 'secondary' | 'destructive' | 'outline' => {
-    switch (status) {
-      case 'active': return 'default';
-      case 'inactive': return 'secondary';
-      default: return 'outline';
-    }
+    await apiFetch('/api/v1/departments/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids: selectedDepartments }),
+    });
+    setSelectedDepartments([]);
+    fetchDepartments();
   };
 
   const deptColumns = useMemo((): Column<Department>[] => [
@@ -125,12 +118,6 @@ export function DepartmentManagementPage() {
       width: '72px',
       sortable: true,
       render: (d) => <Badge variant="secondary">{d.user_count || 0}</Badge>,
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      width: '88px',
-      render: (d) => <Badge variant={getStatusVariant(d.status)}>{d.status}</Badge>,
     },
     {
       key: 'created_on',
@@ -179,10 +166,6 @@ export function DepartmentManagementPage() {
           <p className="text-[13px] text-muted-foreground">{t('description', 'Manage organizational departments and hierarchy')}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setShowImportExportModal(true)}>
-            <Upload size={14} className="mr-1.5" />
-            Import/Export
-          </Button>
           <Button size="sm" onClick={() => setShowCreateModal(true)}>
             <Plus size={14} className="mr-1.5" />
             {t('createDepartment', 'Create Department')}
@@ -248,10 +231,12 @@ export function DepartmentManagementPage() {
             rowKey={(d) => d.id}
             sortState={{ col: sortBy, dir: sortDir }}
             onSortChange={handleSortChange}
+            onRowDoubleClick={(d) => setEditingDepartment(d)}
             selection={{
               selectedIds: selectedDepartments,
               onSelectedIdsChange: setSelectedDepartments,
               selectAllScope: 'page',
+              selectOnRowClick: true,
             }}
           />
         )}
@@ -276,13 +261,6 @@ export function DepartmentManagementPage() {
         isOpen={showUserAssignModal}
         onClose={() => setShowUserAssignModal(false)}
         department={selectedDepartmentForUsers}
-      />
-
-      <ImportExportModal
-        isOpen={showImportExportModal}
-        onClose={() => setShowImportExportModal(false)}
-        onExport={async () => exportDepartments()}
-        onImport={async (file) => { const ok = await importDepartments(file); if (ok) setShowImportExportModal(false); }}
       />
 
       <AppModal

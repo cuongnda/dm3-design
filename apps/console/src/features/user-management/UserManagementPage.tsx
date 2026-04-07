@@ -294,6 +294,7 @@ export function UserManagementPage() {
                         rowKey={(u) => u.id}
                         sortState={{ col: sortBy, dir: sortDir }}
                         onSortChange={handleSortChange}
+                        onRowDoubleClick={(u) => setEditingUser(u)}
                         selection={{
                             selectedIds: Array.from(selected),
                             onSelectedIdsChange: (ids) => setSelected(new Set(ids)),

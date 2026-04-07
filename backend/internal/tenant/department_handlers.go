@@ -463,6 +463,58 @@ func (h *UserManagementHandlers) DeleteDepartment(w http.ResponseWriter, r *http
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "Department deleted successfully"})
 }
 
+// BulkDeleteDepartments handles POST /api/v1/departments/bulk-delete
+func (h *UserManagementHandlers) BulkDeleteDepartments(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	companyID, err := CompanyIDFromContext(ctx)
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, "company context required")
+		return
+	}
+
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+		httputil.Error(w, http.StatusBadRequest, "ids required")
+		return
+	}
+	if len(req.IDs) > 100 {
+		httputil.Error(w, http.StatusBadRequest, "maximum 100 departments can be deleted at once")
+		return
+	}
+
+	// Check none of the departments have users assigned
+	var blockedCount int
+	err = h.db.Pool.QueryRow(ctx,
+		`SELECT COUNT(DISTINCT d.id) FROM dm3_identity.departments d
+		 JOIN dm3_identity.users u ON u.department_id = d.id AND u.is_deleted = false
+		 WHERE d.id = ANY($1::uuid[]) AND d.company_id = $2 AND d.is_deleted = false`,
+		req.IDs, companyID).Scan(&blockedCount)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to validate departments")
+		return
+	}
+	if blockedCount > 0 {
+		httputil.Error(w, http.StatusBadRequest, fmt.Sprintf("%d department(s) still have users assigned and cannot be deleted", blockedCount))
+		return
+	}
+
+	result, err := h.db.Pool.Exec(ctx,
+		`UPDATE dm3_identity.departments SET is_deleted = true, updated_on = now()
+		 WHERE id = ANY($1::uuid[]) AND company_id = $2 AND is_deleted = false`,
+		req.IDs, companyID)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to delete departments")
+		return
+	}
+
+	httputil.JSON(w, http.StatusOK, map[string]interface{}{
+		"message":       "Departments deleted successfully",
+		"affected_rows": result.RowsAffected(),
+	})
+}
+
 // GetDepartmentUsers returns users belonging to a department
 func (h *UserManagementHandlers) GetDepartmentUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
