@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/duali/dm3-backend/pkg/db"
@@ -82,13 +83,24 @@ func (c *NATSConsumer) handleEvent(subject string, data []byte) error {
 	evtTime := time.UnixMilli(evt.TS)
 	metadataJSON, _ := json.Marshal(ald.Metadata)
 
+	// Extract tenant_id from NATS subject: dm3.devices.{tenant_id}.{device_id}.evt
+	parts := strings.SplitN(subject, ".", 5)
+	if len(parts) < 4 || !uuidRegex.MatchString(parts[2]) {
+		slog.Warn("nats: cannot extract tenant_id from subject", "subject", subject)
+		return nil
+	}
+	tenantID := parts[2]
+
 	// Extract device_id from source or subject
 	deviceID := evt.Src
+	if deviceID == "" {
+		deviceID = parts[3]
+	}
 
 	_, err := c.db.Pool.Exec(context.Background(),
-		`INSERT INTO dm3_access.access_events (time, door_id, device_id, user_id, user_name, credential_type, direction, decision, reason, confidence, photo_ref, temperature, metadata)
-		 VALUES ($1, $2, $3, $4, NULLIF($5,''), NULLIF($6,''), NULLIF($7,''), $8, NULLIF($9,''), $10, NULLIF($11,''), $12, $13)`,
-		evtTime, toUUIDPtr(ald.DoorID), toUUIDPtr(deviceID), toUUIDPtr(ald.UserID), ald.UserName, ald.CredentialType,
+		`INSERT INTO dm3_access.access_events (time, tenant_id, door_id, device_id, user_id, user_name, credential_type, direction, decision, reason, confidence, photo_ref, temperature, metadata)
+		 VALUES ($1, $2::uuid, $3, $4, $5, NULLIF($6,''), NULLIF($7,''), NULLIF($8,''), $9, NULLIF($10,''), $11, NULLIF($12,''), $13, $14)`,
+		evtTime, tenantID, toUUIDPtr(ald.DoorID), toUUIDPtr(deviceID), toUUIDPtr(ald.UserID), ald.UserName, ald.CredentialType,
 		ald.Direction, ald.Decision, ald.Reason, ald.Confidence, ald.PhotoRef, ald.Temperature, metadataJSON)
 	if err != nil {
 		slog.Error("nats: failed to insert access event", "error", err)
