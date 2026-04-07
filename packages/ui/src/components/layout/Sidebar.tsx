@@ -37,7 +37,7 @@ function SidebarNavItem({ to, icon, label, badge, collapsed, end }: NavItemProps
                     >
                         {icon}
                         {badge ? (
-                            <span className="absolute -top-1 -right-1 bg-destructive text-white text-[9px] font-bold px-1 rounded-full min-w-[14px] text-center leading-[14px]">
+                            <span className="absolute -top-1 -right-1 inline-flex min-w-[14px] items-center justify-center rounded-full border border-destructive/30 bg-destructive/10 px-1 text-center text-[9px] font-bold leading-[14px] text-destructive">
                                 {badge}
                             </span>
                         ) : null}
@@ -69,7 +69,9 @@ function SidebarNavItem({ to, icon, label, badge, collapsed, end }: NavItemProps
             {icon}
             <span className="truncate">{label}</span>
             {badge ? (
-                <span className="ml-auto bg-destructive text-white text-[10px] font-bold px-1.5 rounded-full leading-[18px]">{badge}</span>
+                <span className="ml-auto inline-flex items-center justify-center rounded-full border border-destructive/30 bg-destructive/10 px-1.5 text-[10px] font-bold leading-[18px] text-destructive">
+                    {badge}
+                </span>
             ) : null}
         </NavLink>
     );

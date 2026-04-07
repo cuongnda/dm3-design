@@ -241,11 +241,6 @@ export function UserManagementPage() {
                     </Button>
                 )}
 
-                {selected.size === 0 && (
-                    <div className="text-[13px] text-muted-foreground whitespace-nowrap">
-                        <span className="font-medium text-foreground">{total}</span> users
-                    </div>
-                )}
             </div>
 
             <DataTableCard
