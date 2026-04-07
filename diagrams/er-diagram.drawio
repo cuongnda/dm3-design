@@ -1,217 +1,150 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<mxfile host="app.diagrams.net" modified="2026-02-19" type="device">
-  <diagram name="DM3 ER Diagram" id="er-diagram">
+<mxfile host="app.diagrams.net" modified="2026-04-06" type="device">
+  <diagram name="DM3 Current ER Diagram" id="er-diagram">
     <mxGraphModel dx="2200" dy="1600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="3000" pageHeight="2000" math="0" shadow="0">
       <root>
         <mxCell id="0"/>
         <mxCell id="1" parent="0"/>
 
-        <!-- Title -->
-        <mxCell id="title" value="Duall Master 3.0 — Entity Relationship Diagram" style="text;html=1;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#0B1120;" vertex="1" parent="1">
-          <mxGeometry x="600" y="20" width="800" height="40" as="geometry"/>
+        <mxCell id="title" value="Duall Master 3.0 — Current ER Diagram" style="text;html=1;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#0B1120;" vertex="1" parent="1">
+          <mxGeometry x="600" y="20" width="900" height="40" as="geometry"/>
         </mxCell>
-        <mxCell id="subtitle" value="5 Domains · Multi-tenant · TimescaleDB + PostgreSQL" style="text;html=1;fontSize=13;align=center;fillColor=none;strokeColor=none;fontColor=#6B7280;" vertex="1" parent="1">
-          <mxGeometry x="600" y="55" width="800" height="25" as="geometry"/>
+        <mxCell id="subtitle" value="Current-schema view based on migrations 000001–000013 · Conceptualized for readability" style="text;html=1;fontSize=13;align=center;fillColor=none;strokeColor=none;fontColor=#6B7280;" vertex="1" parent="1">
+          <mxGeometry x="520" y="55" width="1050" height="25" as="geometry"/>
         </mxCell>
 
-        <!-- ============================================================ -->
-        <!-- PLATFORM (dm3_auth) — Grey -->
-        <!-- ============================================================ -->
+        <!-- PLATFORM / AUTH -->
         <mxCell id="platform-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F4F6;strokeColor=#D1D5DB;dashed=1;arcSize=4;" vertex="1" parent="1">
-          <mxGeometry x="40" y="100" width="400" height="420" as="geometry"/>
+          <mxGeometry x="40" y="100" width="470" height="520" as="geometry"/>
         </mxCell>
-        <mxCell id="platform-label" value="PLATFORM" style="text;html=1;fontSize=12;fontStyle=1;align=left;fillColor=none;strokeColor=none;fontColor=#6B7280;" vertex="1" parent="1">
-          <mxGeometry x="55" y="108" width="100" height="20" as="geometry"/>
-        </mxCell>
-
-        <!-- Tenants -->
-        <mxCell id="tenants" value="&lt;b style='color:#6B7280'&gt;tenants&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;name : VARCHAR(255)&lt;br/&gt;code : VARCHAR(50) UNIQUE&lt;br/&gt;plan : VARCHAR(50)&lt;br/&gt;status : ENUM&lt;br/&gt;settings : JSONB&lt;br/&gt;created_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="60" y="140" width="180" height="170" as="geometry"/>
+        <mxCell id="platform-label" value="PLATFORM / AUTH" style="text;html=1;fontSize=12;fontStyle=1;align=left;fillColor=none;strokeColor=none;fontColor=#6B7280;" vertex="1" parent="1">
+          <mxGeometry x="55" y="108" width="150" height="20" as="geometry"/>
         </mxCell>
 
-        <!-- Users -->
-        <mxCell id="users" value="&lt;b style='color:#6B7280'&gt;users&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 tenant_id : UUID (FK)&lt;br/&gt;email : VARCHAR(255) UNIQUE&lt;br/&gt;password_hash : VARCHAR&lt;br/&gt;name : VARCHAR(255)&lt;br/&gt;roles : TEXT[]&lt;br/&gt;status : ENUM&lt;br/&gt;last_login : TIMESTAMPTZ&lt;br/&gt;created_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="60" y="330" width="180" height="180" as="geometry"/>
+        <mxCell id="companies" value="&lt;b style='color:#6B7280'&gt;companies&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;name : VARCHAR(255)&lt;br/&gt;code : VARCHAR(50) UNIQUE&lt;br/&gt;plan : VARCHAR(50)&lt;br/&gt;status : VARCHAR(20)&lt;br/&gt;settings : JSONB&lt;br/&gt;max_devices : INT&lt;br/&gt;max_users : INT&lt;br/&gt;created_at : TIMESTAMPTZ&lt;br/&gt;updated_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="140" width="190" height="220" as="geometry"/>
         </mxCell>
 
-        <!-- Sites -->
-        <mxCell id="sites" value="&lt;b style='color:#6B7280'&gt;sites&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 tenant_id : UUID (FK)&lt;br/&gt;name : VARCHAR(255)&lt;br/&gt;address : TEXT&lt;br/&gt;timezone : VARCHAR(50)&lt;br/&gt;geo_lat : DECIMAL&lt;br/&gt;geo_lng : DECIMAL&lt;br/&gt;status : ENUM&lt;br/&gt;created_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="260" y="140" width="170" height="190" as="geometry"/>
+        <mxCell id="auth_users" value="&lt;b style='color:#6B7280'&gt;auth.users&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;email : VARCHAR(255) UNIQUE&lt;br/&gt;password_hash : VARCHAR&lt;br/&gt;name : VARCHAR(255)&lt;br/&gt;roles : TEXT[]&lt;br/&gt;role : VARCHAR(50)&lt;br/&gt;🔗 company_id : UUID (nullable)&lt;br/&gt;status : VARCHAR(20)&lt;br/&gt;last_login : TIMESTAMPTZ&lt;br/&gt;created_at / updated_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="380" width="190" height="220" as="geometry"/>
         </mxCell>
 
-        <!-- Tenant→Users -->
-        <mxCell id="rel-tenant-users" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6B7280;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="tenants" target="users">
-          <mxGeometry relative="1" as="geometry"/>
+        <mxCell id="user_companies" value="&lt;b style='color:#6B7280'&gt;user_companies&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 (user_id, company_id)&lt;br/&gt;🔗 user_id : UUID (FK)&lt;br/&gt;🔗 company_id : UUID (FK)&lt;br/&gt;role : VARCHAR(50)&lt;br/&gt;status : VARCHAR(20)&lt;br/&gt;created_at : TIMESTAMPTZ&lt;br/&gt;&lt;br/&gt;&lt;i&gt;Multi-company membership&lt;/i&gt;&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="270" y="150" width="210" height="170" as="geometry"/>
         </mxCell>
 
-        <!-- Tenant→Sites -->
-        <mxCell id="rel-tenant-sites" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6B7280;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="tenants" target="sites">
-          <mxGeometry relative="1" as="geometry"/>
+        <mxCell id="refresh_tokens" value="&lt;b style='color:#6B7280'&gt;refresh_tokens&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 user_id : UUID (FK)&lt;br/&gt;🔗 company_id : UUID (nullable)&lt;br/&gt;token_hash : VARCHAR(64) UNIQUE&lt;br/&gt;expires_at : TIMESTAMPTZ&lt;br/&gt;revoked : BOOLEAN&lt;br/&gt;created_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="270" y="350" width="210" height="180" as="geometry"/>
         </mxCell>
 
-        <!-- ============================================================ -->
-        <!-- DEVICES (dm3_devices) — Blue -->
-        <!-- ============================================================ -->
+        <!-- DEVICES -->
         <mxCell id="devices-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#93C5FD;dashed=1;arcSize=4;" vertex="1" parent="1">
-          <mxGeometry x="480" y="100" width="420" height="420" as="geometry"/>
+          <mxGeometry x="540" y="100" width="420" height="520" as="geometry"/>
         </mxCell>
         <mxCell id="devices-label" value="SECURE — Devices" style="text;html=1;fontSize=12;fontStyle=1;align=left;fillColor=none;strokeColor=none;fontColor=#3B82F6;" vertex="1" parent="1">
-          <mxGeometry x="495" y="108" width="150" height="20" as="geometry"/>
+          <mxGeometry x="555" y="108" width="150" height="20" as="geometry"/>
         </mxCell>
 
-        <!-- Devices -->
-        <mxCell id="devices" value="&lt;b style='color:#3B82F6'&gt;devices&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 tenant_id : UUID (FK)&lt;br/&gt;device_id : VARCHAR(20) UNIQUE&lt;br/&gt;name : VARCHAR(255)&lt;br/&gt;type : ENUM (terminal/controller/sensor/camera)&lt;br/&gt;status : ENUM (online/offline/error)&lt;br/&gt;firmware_version : VARCHAR&lt;br/&gt;🔗 site_id : UUID (FK)&lt;br/&gt;location : VARCHAR(255)&lt;br/&gt;last_seen : TIMESTAMPTZ&lt;br/&gt;config : JSONB&lt;br/&gt;created_at : TIMESTAMPTZ&lt;br/&gt;updated_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="500" y="140" width="220" height="260" as="geometry"/>
+        <mxCell id="devices" value="&lt;b style='color:#3B82F6'&gt;devices&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 company_id : UUID&lt;br/&gt;device_id : VARCHAR(20) UNIQUE&lt;br/&gt;name : VARCHAR(255)&lt;br/&gt;type : VARCHAR(50)&lt;br/&gt;status : VARCHAR(20)&lt;br/&gt;firmware_version : VARCHAR(50)&lt;br/&gt;site_id : VARCHAR/UUID*&lt;br/&gt;location : VARCHAR(255)&lt;br/&gt;last_seen : TIMESTAMPTZ&lt;br/&gt;config : JSONB&lt;br/&gt;created_at / updated_at&lt;br/&gt;&lt;i&gt;* legacy field shape still exists in schema evolution&lt;/i&gt;&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="560" y="140" width="210" height="260" as="geometry"/>
         </mxCell>
 
-        <!-- Zones -->
-        <mxCell id="zones" value="&lt;b style='color:#3B82F6'&gt;zones&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 tenant_id : UUID (FK)&lt;br/&gt;🔗 site_id : UUID (FK)&lt;br/&gt;name : VARCHAR(255)&lt;br/&gt;type : ENUM&lt;br/&gt;floor : VARCHAR(50)&lt;br/&gt;building : VARCHAR(100)&lt;br/&gt;max_occupancy : INT&lt;br/&gt;created_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="740" y="140" width="150" height="200" as="geometry"/>
+        <mxCell id="firmwares" value="&lt;b style='color:#3B82F6'&gt;firmwares&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;version : VARCHAR(50)&lt;br/&gt;device_type : VARCHAR(50)&lt;br/&gt;description : TEXT&lt;br/&gt;file_path : VARCHAR(500)&lt;br/&gt;file_size : BIGINT&lt;br/&gt;checksum : VARCHAR(64)&lt;br/&gt;is_active : BOOLEAN&lt;br/&gt;uploaded_by : UUID&lt;br/&gt;created_at / updated_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="790" y="140" width="150" height="220" as="geometry"/>
         </mxCell>
 
-        <!-- ============================================================ -->
-        <!-- ACCESS (dm3_access) — Blue -->
-        <!-- ============================================================ -->
+        <!-- ACCESS -->
         <mxCell id="access-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#93C5FD;dashed=1;arcSize=4;" vertex="1" parent="1">
-          <mxGeometry x="940" y="100" width="510" height="700" as="geometry"/>
+          <mxGeometry x="980" y="100" width="610" height="760" as="geometry"/>
         </mxCell>
         <mxCell id="access-label" value="SECURE — Access Control" style="text;html=1;fontSize=12;fontStyle=1;align=left;fillColor=none;strokeColor=none;fontColor=#3B82F6;" vertex="1" parent="1">
-          <mxGeometry x="955" y="108" width="180" height="20" as="geometry"/>
+          <mxGeometry x="995" y="108" width="180" height="20" as="geometry"/>
         </mxCell>
 
-        <!-- Doors -->
-        <mxCell id="doors" value="&lt;b style='color:#3B82F6'&gt;doors&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 tenant_id : UUID (FK)&lt;br/&gt;🔗 site_id : UUID (FK)&lt;br/&gt;🔗 zone_id : UUID (FK)&lt;br/&gt;name : VARCHAR(255)&lt;br/&gt;type : ENUM&lt;br/&gt;🔗 device_id : UUID (FK)&lt;br/&gt;status : ENUM (online/offline)&lt;br/&gt;state : ENUM (locked/unlocked)&lt;br/&gt;mode : ENUM (normal/lockdown/free)&lt;br/&gt;unlock_duration_ms : INT&lt;br/&gt;anti_passback : BOOLEAN&lt;br/&gt;emergency_unlock : BOOLEAN&lt;br/&gt;🔗 camera_id : UUID (FK)&lt;br/&gt;config_version : INT&lt;br/&gt;person_db_version : INT&lt;br/&gt;rules_version : INT&lt;br/&gt;created_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="960" y="140" width="220" height="350" as="geometry"/>
+        <mxCell id="doors" value="&lt;b style='color:#3B82F6'&gt;doors&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 company_id : UUID&lt;br/&gt;name : VARCHAR(255)&lt;br/&gt;🔗 device_id : UUID&lt;br/&gt;site_id / zone_id : UUID&lt;br/&gt;type : VARCHAR(20)&lt;br/&gt;state : VARCHAR(20)&lt;br/&gt;mode : VARCHAR(20)&lt;br/&gt;status : VARCHAR(20)&lt;br/&gt;controller_id : UUID&lt;br/&gt;camera_id : UUID&lt;br/&gt;unlock_duration_ms : INT&lt;br/&gt;anti_passback : BOOLEAN&lt;br/&gt;emergency_unlock : BOOLEAN&lt;br/&gt;config/person_db/rules_version : INT&lt;br/&gt;last_event_at / last_heartbeat_at&lt;br/&gt;metadata : JSONB&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="140" width="230" height="340" as="geometry"/>
         </mxCell>
 
-        <!-- Access Rules -->
-        <mxCell id="rules" value="&lt;b style='color:#3B82F6'&gt;access_rules&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 tenant_id : UUID (FK)&lt;br/&gt;name : VARCHAR(255)&lt;br/&gt;door_ids : UUID[]&lt;br/&gt;person_group_ids : UUID[]&lt;br/&gt;🔗 schedule_id : UUID (FK)&lt;br/&gt;priority : INT&lt;br/&gt;enabled : BOOLEAN&lt;br/&gt;multi_factor : BOOLEAN&lt;br/&gt;valid_from : TIMESTAMPTZ&lt;br/&gt;valid_until : TIMESTAMPTZ&lt;br/&gt;created_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="1200" y="140" width="230" height="260" as="geometry"/>
+        <mxCell id="rules" value="&lt;b style='color:#3B82F6'&gt;access_rules&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 company_id : UUID&lt;br/&gt;name : VARCHAR(255)&lt;br/&gt;door_ids : UUID[]&lt;br/&gt;person_group_ids : UUID[]&lt;br/&gt;🔗 schedule_id : UUID&lt;br/&gt;site_id : UUID&lt;br/&gt;priority : INT&lt;br/&gt;enabled : BOOLEAN&lt;br/&gt;multi_factor : BOOLEAN&lt;br/&gt;anti_passback : BOOLEAN&lt;br/&gt;valid_from / valid_until&lt;br/&gt;created_by : UUID&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="1250" y="140" width="210" height="250" as="geometry"/>
         </mxCell>
 
-        <!-- Schedules -->
-        <mxCell id="schedules" value="&lt;b style='color:#3B82F6'&gt;schedules&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 tenant_id : UUID (FK)&lt;br/&gt;name : VARCHAR(100)&lt;br/&gt;timezone : VARCHAR(50)&lt;br/&gt;blocks : JSONB&lt;br/&gt;holidays : JSONB&lt;br/&gt;created_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="1200" y="420" width="230" height="170" as="geometry"/>
+        <mxCell id="schedules" value="&lt;b style='color:#3B82F6'&gt;schedules&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 company_id : UUID&lt;br/&gt;name : VARCHAR(100)&lt;br/&gt;timezone : VARCHAR(50)&lt;br/&gt;periods : JSONB&lt;br/&gt;holidays_excluded : BOOLEAN&lt;br/&gt;holiday_calendar_id : UUID&lt;br/&gt;created_at / updated_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="1250" y="410" width="210" height="170" as="geometry"/>
         </mxCell>
 
-        <!-- Access Events (hypertable) -->
-        <mxCell id="events" value="&lt;b style='color:#3B82F6'&gt;access_events ⏱️&lt;/b&gt;&lt;br/&gt;&lt;i style='font-size:10px;color:#94A3B8'&gt;TimescaleDB hypertable&lt;/i&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID&lt;br/&gt;🔗 tenant_id : UUID (PK)&lt;br/&gt;time : TIMESTAMPTZ (PK)&lt;br/&gt;🔗 door_id : UUID (FK)&lt;br/&gt;🔗 device_id : UUID (FK)&lt;br/&gt;🔗 person_id : UUID (FK)&lt;br/&gt;person_name : VARCHAR&lt;br/&gt;credential_type : ENUM&lt;br/&gt;direction : ENUM (in/out)&lt;br/&gt;decision : ENUM (granted/denied)&lt;br/&gt;reason : VARCHAR&lt;br/&gt;metadata : JSONB&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#F59E0B;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="960" y="510" width="220" height="270" as="geometry"/>
+        <mxCell id="events" value="&lt;b style='color:#3B82F6'&gt;access_events ⏱️&lt;/b&gt;&lt;br/&gt;&lt;i style='font-size:10px;color:#94A3B8'&gt;TimescaleDB hypertable&lt;/i&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 (company_id, time, id)&lt;br/&gt;time : TIMESTAMPTZ&lt;br/&gt;🔗 door_id : UUID&lt;br/&gt;🔗 device_id : UUID&lt;br/&gt;🔗 person_id : UUID&lt;br/&gt;person_name : VARCHAR&lt;br/&gt;credential_type : VARCHAR(50)&lt;br/&gt;direction : VARCHAR(10)&lt;br/&gt;decision : VARCHAR(20)&lt;br/&gt;reason : VARCHAR(255)&lt;br/&gt;confidence / temperature : FLOAT&lt;br/&gt;photo_ref : VARCHAR(200)&lt;br/&gt;decided_locally : BOOLEAN&lt;br/&gt;metadata : JSONB&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#F59E0B;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="500" width="230" height="320" as="geometry"/>
         </mxCell>
 
-        <!-- ============================================================ -->
-        <!-- IDENTITY (dm3_identity) — Purple -->
-        <!-- ============================================================ -->
+        <mxCell id="access_time_templates" value="&lt;b style='color:#3B82F6'&gt;access_time_templates&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 company_id : UUID&lt;br/&gt;name : VARCHAR(100)&lt;br/&gt;description : TEXT&lt;br/&gt;timezone : VARCHAR(50)&lt;br/&gt;is_active : BOOLEAN&lt;br/&gt;created_by : UUID&lt;br/&gt;created_at / updated_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="1480" y="150" width="100" height="180" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="access_time_slots" value="&lt;b style='color:#3B82F6'&gt;access_time_slots&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 template_id : UUID&lt;br/&gt;day_of_week : INT&lt;br/&gt;start_time / end_time : TIME&lt;br/&gt;slot_name : VARCHAR(50)&lt;br/&gt;is_active : BOOLEAN&lt;br/&gt;created_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="1480" y="350" width="100" height="180" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="user_access_times" value="&lt;b style='color:#3B82F6'&gt;user_access_times&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 company_id : UUID&lt;br/&gt;user_id : UUID&lt;br/&gt;🔗 template_id : UUID&lt;br/&gt;effective_from : DATE&lt;br/&gt;effective_to : DATE?&lt;br/&gt;assigned_by : UUID&lt;br/&gt;created_at / updated_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="1480" y="550" width="100" height="170" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="access_time_validations" value="&lt;b style='color:#3B82F6'&gt;access_time_validations&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 company_id : UUID&lt;br/&gt;user_id : UUID&lt;br/&gt;🔗 template_id : UUID?&lt;br/&gt;door_id : UUID?&lt;br/&gt;validation_time : TIMESTAMPTZ&lt;br/&gt;requested_time : TIMESTAMPTZ&lt;br/&gt;is_allowed : BOOLEAN&lt;br/&gt;reason : VARCHAR(255)&lt;br/&gt;matched_slot_id : UUID?&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="1480" y="740" width="100" height="170" as="geometry"/>
+        </mxCell>
+
+        <!-- IDENTITY -->
         <mxCell id="identity-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F3FF;strokeColor=#C4B5FD;dashed=1;arcSize=4;" vertex="1" parent="1">
-          <mxGeometry x="480" y="550" width="440" height="470" as="geometry"/>
+          <mxGeometry x="540" y="650" width="420" height="430" as="geometry"/>
         </mxCell>
         <mxCell id="identity-label" value="MANAGE — Identity" style="text;html=1;fontSize=12;fontStyle=1;align=left;fillColor=none;strokeColor=none;fontColor=#8B5CF6;" vertex="1" parent="1">
-          <mxGeometry x="495" y="558" width="150" height="20" as="geometry"/>
+          <mxGeometry x="555" y="658" width="150" height="20" as="geometry"/>
         </mxCell>
 
-        <!-- Persons -->
-        <mxCell id="persons" value="&lt;b style='color:#8B5CF6'&gt;persons&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 tenant_id : UUID (FK)&lt;br/&gt;first_name : VARCHAR(255)&lt;br/&gt;last_name : VARCHAR(255)&lt;br/&gt;email : VARCHAR(255)&lt;br/&gt;phone : VARCHAR(50)&lt;br/&gt;department : VARCHAR(100)&lt;br/&gt;role : VARCHAR(100)&lt;br/&gt;employee_id : VARCHAR(50)&lt;br/&gt;status : ENUM&lt;br/&gt;photo_url : VARCHAR(500)&lt;br/&gt;created_at : TIMESTAMPTZ&lt;br/&gt;updated_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="500" y="590" width="200" height="270" as="geometry"/>
+        <mxCell id="persons" value="&lt;b style='color:#8B5CF6'&gt;persons&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 company_id : UUID&lt;br/&gt;first_name / last_name&lt;br/&gt;email / phone&lt;br/&gt;department : VARCHAR(100)&lt;br/&gt;role : VARCHAR(100)&lt;br/&gt;employee_id : VARCHAR(50)&lt;br/&gt;status : VARCHAR(20)&lt;br/&gt;photo_url : VARCHAR(500)&lt;br/&gt;created_at / updated_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="560" y="700" width="180" height="250" as="geometry"/>
         </mxCell>
 
-        <!-- Credentials -->
-        <mxCell id="credentials" value="&lt;b style='color:#8B5CF6'&gt;credentials&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 tenant_id : UUID (FK)&lt;br/&gt;🔗 person_id : UUID (FK)&lt;br/&gt;type : ENUM (face/card/pin/qr/fingerprint)&lt;br/&gt;value : TEXT&lt;br/&gt;status : ENUM&lt;br/&gt;valid_from : TIMESTAMPTZ&lt;br/&gt;valid_until : TIMESTAMPTZ&lt;br/&gt;created_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="720" y="590" width="190" height="200" as="geometry"/>
+        <mxCell id="credentials" value="&lt;b style='color:#8B5CF6'&gt;credentials&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 company_id : UUID&lt;br/&gt;🔗 person_id : UUID&lt;br/&gt;type : VARCHAR(50)&lt;br/&gt;value : TEXT&lt;br/&gt;status : VARCHAR(20)&lt;br/&gt;valid_from / valid_until&lt;br/&gt;created_at / updated_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="760" y="700" width="180" height="190" as="geometry"/>
         </mxCell>
 
-        <!-- Person Groups -->
-        <mxCell id="person_groups" value="&lt;b style='color:#8B5CF6'&gt;person_groups&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 tenant_id : UUID (FK)&lt;br/&gt;name : VARCHAR(255)&lt;br/&gt;description : TEXT&lt;br/&gt;type : ENUM (employee/visitor/contractor)&lt;br/&gt;person_ids : UUID[]&lt;br/&gt;created_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="720" y="810" width="190" height="180" as="geometry"/>
+        <mxCell id="person_groups" value="&lt;b style='color:#8B5CF6'&gt;person_groups&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 company_id : UUID&lt;br/&gt;name : VARCHAR(255)&lt;br/&gt;description : TEXT&lt;br/&gt;created_at / updated_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="760" y="910" width="180" height="150" as="geometry"/>
         </mxCell>
 
-        <!-- Person→Credentials -->
-        <mxCell id="rel-person-cred" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#8B5CF6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="persons" target="credentials">
-          <mxGeometry relative="1" as="geometry"/>
+        <mxCell id="person_group_members" value="&lt;b style='color:#8B5CF6'&gt;person_group_members&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 (group_id, person_id)&lt;br/&gt;🔗 group_id : UUID&lt;br/&gt;🔗 person_id : UUID&lt;br/&gt;added_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="560" y="970" width="180" height="100" as="geometry"/>
         </mxCell>
 
-        <!-- ============================================================ -->
-        <!-- OPERATE — Amber -->
-        <!-- ============================================================ -->
-        <mxCell id="operate-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#FCD34D;dashed=1;arcSize=4;" vertex="1" parent="1">
-          <mxGeometry x="40" y="550" width="420" height="470" as="geometry"/>
-        </mxCell>
-        <mxCell id="operate-label" value="OPERATE" style="text;html=1;fontSize=12;fontStyle=1;align=left;fillColor=none;strokeColor=none;fontColor=#F59E0B;" vertex="1" parent="1">
-          <mxGeometry x="55" y="558" width="100" height="20" as="geometry"/>
-        </mxCell>
+        <!-- Relationships -->
+        <mxCell id="rel-company-users" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6B7280;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="companies" target="auth_users"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="rel-company-usercompanies" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6B7280;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="companies" target="user_companies"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="rel-user-usercompanies" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6B7280;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="auth_users" target="user_companies"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="rel-user-refresh" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6B7280;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="auth_users" target="refresh_tokens"><mxGeometry relative="1" as="geometry"/></mxCell>
 
-        <!-- Visitors -->
-        <mxCell id="visitors" value="&lt;b style='color:#F59E0B'&gt;visitors&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 tenant_id : UUID (FK)&lt;br/&gt;🔗 person_id : UUID (FK)&lt;br/&gt;host_person_id : UUID&lt;br/&gt;purpose : VARCHAR&lt;br/&gt;expected_arrival : TIMESTAMPTZ&lt;br/&gt;checked_in_at : TIMESTAMPTZ&lt;br/&gt;checked_out_at : TIMESTAMPTZ&lt;br/&gt;status : ENUM&lt;br/&gt;badge_number : VARCHAR&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F59E0B;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="60" y="590" width="190" height="220" as="geometry"/>
-        </mxCell>
+        <mxCell id="rel-device-door" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#3B82F6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="devices" target="doors"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="rel-device-event" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#3B82F6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="devices" target="events"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="rel-door-events" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#3B82F6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="doors" target="events"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="rel-rules-sched" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#3B82F6;endArrow=ERone;startArrow=ERmany;startSize=12;endSize=12;" edge="1" parent="1" source="rules" target="schedules"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="rel-template-slots" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#3B82F6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="access_time_templates" target="access_time_slots"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="rel-template-useraccess" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#3B82F6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="access_time_templates" target="user_access_times"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="rel-template-validations" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#3B82F6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="access_time_templates" target="access_time_validations"><mxGeometry relative="1" as="geometry"/></mxCell>
 
-        <!-- Guard Tours -->
-        <mxCell id="guard_tours" value="&lt;b style='color:#F59E0B'&gt;guard_tours&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 tenant_id : UUID (FK)&lt;br/&gt;name : VARCHAR(255)&lt;br/&gt;🔗 schedule_id : UUID (FK)&lt;br/&gt;checkpoints : JSONB&lt;br/&gt;assigned_guard : UUID&lt;br/&gt;status : ENUM&lt;br/&gt;created_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F59E0B;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="270" y="590" width="180" height="190" as="geometry"/>
-        </mxCell>
-
-        <!-- Parking -->
-        <mxCell id="parking" value="&lt;b style='color:#F59E0B'&gt;parking_sessions&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 tenant_id : UUID (FK)&lt;br/&gt;🔗 person_id : UUID (FK)&lt;br/&gt;plate_number : VARCHAR&lt;br/&gt;entry_time : TIMESTAMPTZ&lt;br/&gt;exit_time : TIMESTAMPTZ&lt;br/&gt;zone : VARCHAR&lt;br/&gt;status : ENUM&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F59E0B;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="60" y="830" width="180" height="180" as="geometry"/>
-        </mxCell>
-
-        <!-- Audit Log -->
-        <mxCell id="audit" value="&lt;b style='color:#F59E0B'&gt;audit_log ⏱️&lt;/b&gt;&lt;br/&gt;&lt;i style='font-size:10px;color:#94A3B8'&gt;TimescaleDB hypertable&lt;/i&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID&lt;br/&gt;🔗 tenant_id : UUID (PK)&lt;br/&gt;time : TIMESTAMPTZ (PK)&lt;br/&gt;🔗 user_id : UUID (FK)&lt;br/&gt;action : VARCHAR&lt;br/&gt;resource_type : VARCHAR&lt;br/&gt;resource_id : UUID&lt;br/&gt;changes : JSONB&lt;br/&gt;ip_address : INET&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#F59E0B;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="270" y="800" width="180" height="210" as="geometry"/>
-        </mxCell>
-
-        <!-- ============================================================ -->
-        <!-- SMART — Cyan -->
-        <!-- ============================================================ -->
-        <mxCell id="smart-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFEFF;strokeColor=#67E8F9;dashed=1;arcSize=4;" vertex="1" parent="1">
-          <mxGeometry x="1490" y="100" width="280" height="350" as="geometry"/>
-        </mxCell>
-        <mxCell id="smart-label" value="SMART" style="text;html=1;fontSize=12;fontStyle=1;align=left;fillColor=none;strokeColor=none;fontColor=#06B6D4;" vertex="1" parent="1">
-          <mxGeometry x="1505" y="108" width="100" height="20" as="geometry"/>
-        </mxCell>
-
-        <!-- Automation Rules -->
-        <mxCell id="automations" value="&lt;b style='color:#06B6D4'&gt;automation_rules&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID (PK)&lt;br/&gt;🔗 tenant_id : UUID (FK)&lt;br/&gt;name : VARCHAR(255)&lt;br/&gt;trigger_type : ENUM&lt;br/&gt;trigger_config : JSONB&lt;br/&gt;conditions : JSONB&lt;br/&gt;actions : JSONB&lt;br/&gt;enabled : BOOLEAN&lt;br/&gt;last_triggered : TIMESTAMPTZ&lt;br/&gt;created_at : TIMESTAMPTZ&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#06B6D4;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="1510" y="140" width="240" height="220" as="geometry"/>
-        </mxCell>
-
-        <!-- AI Detections -->
-        <mxCell id="ai_detections" value="&lt;b style='color:#06B6D4'&gt;ai_detections ⏱️&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID&lt;br/&gt;🔗 tenant_id : UUID&lt;br/&gt;time : TIMESTAMPTZ&lt;br/&gt;🔗 camera_id : UUID (FK)&lt;br/&gt;type : ENUM (face/plate/object/anomaly)&lt;br/&gt;confidence : FLOAT&lt;br/&gt;bbox : JSONB&lt;br/&gt;result : JSONB&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFEFF;strokeColor=#06B6D4;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="1490" y="480" width="240" height="190" as="geometry"/>
-        </mxCell>
-
-        <!-- ============================================================ -->
-        <!-- Relationships (cross-domain) -->
-        <!-- ============================================================ -->
-
-        <!-- Device→Door -->
-        <mxCell id="rel-device-door" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#3B82F6;endArrow=ERone;startArrow=ERmany;startSize=12;endSize=12;" edge="1" parent="1" source="doors" target="devices">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-
-        <!-- Door→Events -->
-        <mxCell id="rel-door-events" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#3B82F6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="doors" target="events">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-
-        <!-- Person→Events -->
-        <mxCell id="rel-person-events" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#8B5CF6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="persons" target="events">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-
-        <!-- Rules→Schedules -->
-        <mxCell id="rel-rules-sched" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#3B82F6;endArrow=ERone;startArrow=ERmany;startSize=12;endSize=12;" edge="1" parent="1" source="rules" target="schedules">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
+        <mxCell id="rel-person-cred" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#8B5CF6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="persons" target="credentials"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="rel-person-events" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#8B5CF6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="persons" target="events"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="rel-groups-members" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#8B5CF6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="person_groups" target="person_group_members"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="rel-person-members" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#8B5CF6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="persons" target="person_group_members"><mxGeometry relative="1" as="geometry"/></mxCell>
 
         <!-- Legend -->
         <mxCell id="legend-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#E5E7EB;arcSize=8;" vertex="1" parent="1">
-          <mxGeometry x="1490" y="700" width="280" height="180" as="geometry"/>
+          <mxGeometry x="1620" y="100" width="300" height="250" as="geometry"/>
         </mxCell>
-        <mxCell id="legend-title" value="Legend" style="text;html=1;fontSize=13;fontStyle=1;align=left;fillColor=none;strokeColor=none;fontColor=#374151;" vertex="1" parent="1">
-          <mxGeometry x="1510" y="710" width="100" height="20" as="geometry"/>
+        <mxCell id="legend-title" value="Legend / Scope" style="text;html=1;fontSize=13;fontStyle=1;align=left;fillColor=none;strokeColor=none;fontColor=#374151;" vertex="1" parent="1">
+          <mxGeometry x="1640" y="115" width="120" height="20" as="geometry"/>
         </mxCell>
-        <mxCell id="legend-1" value="&lt;span style='font-size:11px'&gt;🔑 Primary Key&lt;br/&gt;🔗 Foreign Key&lt;br/&gt;⏱️ TimescaleDB Hypertable&lt;br/&gt;&lt;br/&gt;&lt;span style='color:#3B82F6'&gt;■&lt;/span&gt; SECURE (blue)&lt;br/&gt;&lt;span style='color:#8B5CF6'&gt;■&lt;/span&gt; MANAGE (purple)&lt;br/&gt;&lt;span style='color:#F59E0B'&gt;■&lt;/span&gt; OPERATE (amber)&lt;br/&gt;&lt;span style='color:#06B6D4'&gt;■&lt;/span&gt; SMART (cyan)&lt;br/&gt;&lt;span style='color:#6B7280'&gt;■&lt;/span&gt; PLATFORM (grey)&lt;/span&gt;" style="text;html=1;align=left;fillColor=none;strokeColor=none;" vertex="1" parent="1">
-          <mxGeometry x="1510" y="735" width="240" height="140" as="geometry"/>
+        <mxCell id="legend-1" value="&lt;span style='font-size:11px'&gt;🔑 Primary Key&lt;br/&gt;🔗 Foreign Key / logical relation&lt;br/&gt;⏱️ TimescaleDB hypertable&lt;br/&gt;&lt;br/&gt;This diagram reflects the &lt;b&gt;current schema direction&lt;/b&gt; from migrations 000001–000013.&lt;br/&gt;It is &lt;b&gt;conceptual-current&lt;/b&gt;, not an exhaustive physical schema dump.&lt;br/&gt;&lt;br/&gt;Not every future/planned domain entity is shown.&lt;br/&gt;Auth/service transition details are simplified for readability.&lt;br/&gt;&lt;br/&gt;&lt;span style='color:#3B82F6'&gt;■&lt;/span&gt; SECURE&lt;br/&gt;&lt;span style='color:#8B5CF6'&gt;■&lt;/span&gt; MANAGE&lt;br/&gt;&lt;span style='color:#6B7280'&gt;■&lt;/span&gt; PLATFORM / AUTH&lt;/span&gt;" style="text;html=1;align=left;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="1640" y="145" width="260" height="190" as="geometry"/>
         </mxCell>
 
       </root>
