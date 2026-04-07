@@ -65,7 +65,7 @@ export function DepartmentModal({
 
   const loadManagers = async () => {
     try {
-      const response = await apiFetch<{ managers: DepartmentManager[] }>('/api/v1/accounts/managers');
+      const response = await apiFetch<{ managers: DepartmentManager[] }>('/api/v1/departments/managers');
       setManagers(response.managers);
     } catch (err) {
       console.error('Error loading managers:', err);
@@ -143,7 +143,7 @@ export function DepartmentModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Building2 size={20} />

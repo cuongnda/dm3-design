@@ -71,6 +71,15 @@ func main() {
 	r.Post("/api/v1/auth/login-step2", h.LoginStep2)
 	r.Post("/api/v1/auth/refresh", h.Refresh)
 
+	// User & Department management routes (require auth + company context)
+	umHandlers := tenant.NewUserManagementHandlers(database)
+	r.Group(func(pr chi.Router) {
+		pr.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
+		pr.Use(authsvc.RequireCompany())
+		tenant.AddUserManagementRoutes(pr, umHandlers)
+		tenant.AddDepartmentRoutes(pr, umHandlers)
+	})
+
 	// Protected routes
 	r.Group(func(pr chi.Router) {
 		pr.Use(authsvc.AuthMiddleware(cfg.JWTSecret))

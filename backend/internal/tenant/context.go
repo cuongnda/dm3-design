@@ -3,6 +3,8 @@ package tenant
 import (
 	"context"
 	"fmt"
+
+	"github.com/duali/dm3-backend/internal/authsvc"
 )
 
 // contextKey for tenant context values
@@ -50,13 +52,16 @@ func TenantIDFromContext(ctx context.Context) (string, error) {
 	return tenantID, nil
 }
 
-// CompanyIDFromContext extracts company_id from context
+// CompanyIDFromContext extracts company_id from context.
+// Tries tenant's own key first, then falls back to authsvc key (set by RequireCompany middleware).
 func CompanyIDFromContext(ctx context.Context) (string, error) {
-	companyID, ok := ctx.Value(CompanyIDKey).(string)
-	if !ok || companyID == "" {
-		return "", fmt.Errorf("company_id not found in context")
+	if companyID, ok := ctx.Value(CompanyIDKey).(string); ok && companyID != "" {
+		return companyID, nil
 	}
-	return companyID, nil
+	if companyID := authsvc.CompanyIDFromContext(ctx); companyID != "" {
+		return companyID, nil
+	}
+	return "", fmt.Errorf("company_id not found in context")
 }
 
 // TenantInfoFromContext extracts complete tenant info from context

@@ -127,7 +127,7 @@ export function UserModal({ isOpen, onClose, onSave, user }: UserModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-xl max-h-[90vh] flex flex-col p-0 gap-0">
+      <DialogContent className="max-w-xl max-h-[90vh] flex flex-col p-0 gap-0" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader className="border-b border-border shrink-0 pl-5 pr-14 pt-5 pb-3">
           <DialogTitle className="flex items-center gap-2 text-[15px]">
             <User size={16} />

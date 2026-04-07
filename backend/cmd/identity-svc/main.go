@@ -15,6 +15,7 @@ import (
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/config"
 	"github.com/duali/dm3-backend/internal/identity"
+	"github.com/duali/dm3-backend/internal/tenant"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/i18n"
@@ -63,6 +64,7 @@ func main() {
 
 	// HTTP handlers
 	handlers := identity.NewHandlers(database, natsClient)
+	umHandlers := tenant.NewUserManagementHandlers(database)
 
 	// HTTP routes
 	r := httputil.NewRouter()
@@ -98,7 +100,6 @@ func main() {
 			ur.Delete("/users/{id}", handlers.DeleteUser)
 			ur.Post("/users/bulk-delete", handlers.BulkDeleteUsers)
 			ur.Post("/users/{id}/avatar", handlers.UploadUserAvatar)
-			ur.Get("/departments", handlers.ListUserDepartments)
 		})
 
 		// Persons: operator+viewer can read, manager+ can write
@@ -138,6 +139,13 @@ func main() {
 
 		// Stats: all roles can read
 		r.Get("/stats", handlers.GetStats)
+	})
+
+	// Department management routes (proxied here from frontend)
+	r.Group(func(pr chi.Router) {
+		pr.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
+		pr.Use(authsvc.RequireCompany())
+		tenant.AddDepartmentRoutes(pr, umHandlers)
 	})
 
 	// Start server
