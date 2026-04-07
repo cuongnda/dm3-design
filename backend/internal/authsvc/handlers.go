@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	mathrand "math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -155,8 +154,6 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 		}
 		accounts = append(accounts, a)
 	}
-	rows.Close()
-
 	if len(accounts) == 0 {
 		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.invalid_credentials")
 		return
@@ -244,7 +241,12 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 			return
 		}
-		refreshToken, _ := h.createRefreshToken(r, chosenAccount.id, c.ID)
+		refreshToken, err := h.createRefreshToken(r, chosenAccount.id, c.ID)
+		if err != nil {
+			slog.Error("LoginStep2: failed to create refresh token", "error", err)
+			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
+			return
+		}
 		httputil.JSON(w, http.StatusOK, loginStepResponse{
 			Step:         "complete",
 			AccessToken:  accessToken,
@@ -378,8 +380,13 @@ func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Revoke old token.
-	_, _ = h.db.Pool.Exec(r.Context(), `UPDATE dm3_auth.refresh_tokens SET revoked = true WHERE id = $1::uuid`, tokenID)
+	// Revoke old token. If this fails we must not issue a new token —
+	// the old token would remain valid and the rotation guarantee is broken.
+	if _, err := h.db.Pool.Exec(r.Context(), `UPDATE dm3_auth.refresh_tokens SET revoked = true WHERE id = $1::uuid`, tokenID); err != nil {
+		slog.Error("Refresh: failed to revoke old token", "error", err, "token_id", tokenID)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
 
 	// Get account info from dm3_auth.accounts.
 	var email, fullName string
@@ -400,8 +407,18 @@ func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
 		refreshCID = *refreshCompanyID
 	}
 
-	accessToken, _ := h.generateAccessToken(userID, companyID, email, fullName, roles, refreshCID, refreshUserRole)
-	refreshToken, _ := h.createRefreshToken(r, userID, companyID)
+	accessToken, err := h.generateAccessToken(userID, companyID, email, fullName, roles, refreshCID, refreshUserRole)
+	if err != nil {
+		slog.Error("Refresh: failed to generate access token", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+	refreshToken, err := h.createRefreshToken(r, userID, companyID)
+	if err != nil {
+		slog.Error("Refresh: failed to create refresh token", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
 
 	httputil.JSON(w, http.StatusOK, tokenResponse{
 		AccessToken:  accessToken,
@@ -418,8 +435,12 @@ func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Revoke all refresh tokens for this user.
-	_, _ = h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_auth.refresh_tokens SET revoked = true WHERE user_id = $1::uuid`, claims.Sub)
+	if _, err := h.db.Pool.Exec(r.Context(),
+		`UPDATE dm3_auth.refresh_tokens SET revoked = true WHERE user_id = $1::uuid`, claims.Sub); err != nil {
+		slog.Error("Logout: failed to revoke tokens", "error", err, "user_id", claims.Sub)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -619,7 +640,8 @@ func (h *Handlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 		`SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status, last_login, created_at
 		 FROM dm3_auth.accounts WHERE status != 'deleted' ORDER BY created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		slog.Error("list users: query", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 	defer rows.Close()
@@ -628,7 +650,8 @@ func (h *Handlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var u userResponse
 		if err := rows.Scan(&u.ID, &u.TenantID, &u.Email, &u.Name, &u.Roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			slog.Error("list users: scan", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		users = append(users, u)
@@ -738,7 +761,8 @@ func (h *Handlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	tag, err := h.db.Pool.Exec(r.Context(),
 		`UPDATE dm3_auth.accounts SET status = 'deleted', updated_at = now() WHERE id = $1::uuid AND status != 'deleted'`, id)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		slog.Error("delete user", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -892,11 +916,22 @@ func (h *Handlers) ResetUserPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate random password.
+	// Generate a cryptographically random password using rejection sampling to
+	// avoid modulo bias (256 % 62 = 8 values are rejected per byte).
 	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	password := make([]byte, 12)
+	buf := make([]byte, 1)
 	for i := range password {
-		password[i] = chars[mathrand.Intn(len(chars))]
+		for {
+			if _, err := rand.Read(buf); err != nil {
+				httputil.Error(w, http.StatusInternalServerError, "failed to generate password")
+				return
+			}
+			if int(buf[0]) < 256-(256%len(chars)) {
+				password[i] = chars[int(buf[0])%len(chars)]
+				break
+			}
+		}
 	}
 	newPassword := string(password)
 

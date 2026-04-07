@@ -24,6 +24,7 @@ func toUUIDPtr(s string) *string {
 type NATSConsumer struct {
 	db   *db.DB
 	nats *natsutil.Client
+	ctx  context.Context // set in Start; used to derive per-call timeouts
 }
 
 func NewNATSConsumer(database *db.DB, natsClient *natsutil.Client) *NATSConsumer {
@@ -41,8 +42,8 @@ type deviceEvent struct {
 
 type accessLogData struct {
 	DoorID         string         `json:"door_id"`
-	UserID       string         `json:"user_id"`
-	UserName     string         `json:"user_name"`
+	UserID         string         `json:"user_id"`
+	UserName       string         `json:"user_name"`
 	CredentialType string         `json:"credential_type"`
 	Direction      string         `json:"direction"`
 	Decision       string         `json:"decision"`
@@ -55,6 +56,7 @@ type accessLogData struct {
 
 // Start subscribes to NATS device events and ingests access events into the DB.
 func (c *NATSConsumer) Start(ctx context.Context) error {
+	c.ctx = ctx
 	if err := c.nats.Subscribe(ctx, "DEVICES", "access-svc-events", "dm3.devices.*.*.evt", c.handleEvent); err != nil {
 		return err
 	}
@@ -97,7 +99,11 @@ func (c *NATSConsumer) handleEvent(subject string, data []byte) error {
 		deviceID = parts[3]
 	}
 
-	_, err := c.db.Pool.Exec(context.Background(),
+	// Use a bounded context for DB operations so they cannot hang indefinitely.
+	dbCtx, cancel := context.WithTimeout(c.ctx, 5*time.Second)
+	defer cancel()
+
+	_, err := c.db.Pool.Exec(dbCtx,
 		`INSERT INTO dm3_access.access_events (time, tenant_id, door_id, device_id, user_id, user_name, credential_type, direction, decision, reason, confidence, photo_ref, temperature, metadata)
 		 VALUES ($1, $2::uuid, $3, $4, $5, NULLIF($6,''), NULLIF($7,''), NULLIF($8,''), $9, NULLIF($10,''), $11, NULLIF($12,''), $13, $14)`,
 		evtTime, tenantID, toUUIDPtr(ald.DoorID), toUUIDPtr(deviceID), toUUIDPtr(ald.UserID), ald.UserName, ald.CredentialType,
@@ -109,8 +115,12 @@ func (c *NATSConsumer) handleEvent(subject string, data []byte) error {
 
 	// Update door's last_event_at
 	if doorUUID := toUUIDPtr(ald.DoorID); doorUUID != nil {
-		_, _ = c.db.Pool.Exec(context.Background(),
-			`UPDATE dm3_access.doors SET last_event_at = $1 WHERE id = $2::uuid`, evtTime, *doorUUID)
+		updateCtx, updateCancel := context.WithTimeout(c.ctx, 5*time.Second)
+		if _, err := c.db.Pool.Exec(updateCtx,
+			`UPDATE dm3_access.doors SET last_event_at = $1 WHERE id = $2::uuid`, evtTime, *doorUUID); err != nil {
+			slog.Warn("nats: failed to update door last_event_at", "error", err, "door", *doorUUID)
+		}
+		updateCancel()
 	}
 
 	slog.Debug("access event ingested", "door", ald.DoorID, "decision", ald.Decision, "user", ald.UserName)

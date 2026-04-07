@@ -6,6 +6,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -21,8 +24,14 @@ import (
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		slog.Error("insecure configuration", "error", err)
+		os.Exit(1)
+	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	database, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		slog.Error("database connection failed", "error", err)
@@ -112,9 +121,26 @@ func main() {
 	})
 
 	addr := fmt.Sprintf(":%d", cfg.HTTPPort)
-	slog.Info("starting auth-svc", "addr", addr)
-	if err := http.ListenAndServe(addr, r); err != nil {
-		slog.Error("server error", "error", err)
-		os.Exit(1)
-	}
+	srv := &http.Server{Addr: addr, Handler: r}
+
+	go func() {
+		slog.Info("starting auth-svc", "addr", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("server error", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+
+	slog.Info("shutting down auth-svc")
+	cancel()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	_ = srv.Shutdown(shutdownCtx)
+	slog.Info("auth-svc shutdown complete")
 }

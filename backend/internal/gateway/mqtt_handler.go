@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/singleflight"
+
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/natsutil"
 )
@@ -68,14 +70,22 @@ func ParseTopic(topic string) (ParsedTopic, error) {
 
 // MQTTHandler processes incoming MQTT messages and bridges to NATS + DB.
 type MQTTHandler struct {
-	db   *db.DB
-	nats *natsutil.Client
-	hub  *EventHub
-	sync *SyncService
+	db        *db.DB
+	nats      *natsutil.Client
+	hub       *EventHub
+	sync      *SyncService
+	appCtx    context.Context      // application-lifetime context for background goroutines
+	syncGroup singleflight.Group   // deduplicates concurrent auto-syncs per device
 }
 
 func NewMQTTHandler(database *db.DB, natsClient *natsutil.Client, hub *EventHub) *MQTTHandler {
-	return &MQTTHandler{db: database, nats: natsClient, hub: hub}
+	return &MQTTHandler{db: database, nats: natsClient, hub: hub, appCtx: context.Background()}
+}
+
+// SetAppContext stores the application-lifetime context used by background goroutines.
+// Call this from main() after creating the handler.
+func (h *MQTTHandler) SetAppContext(ctx context.Context) {
+	h.appCtx = ctx
 }
 
 // SetSyncService sets the sync service for auto-sync on heartbeat.
@@ -99,7 +109,7 @@ func (h *MQTTHandler) Handle(topic string, payload []byte) {
 
 	slog.Debug("mqtt message", "topic", topic, "type", env.Type, "device", pt.DeviceID)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(h.appCtx, 5*time.Second)
 	defer cancel()
 
 	switch pt.Category {
@@ -149,8 +159,8 @@ type accessLogData struct {
 	DoorID         string  `json:"door_id"`
 	Direction      string  `json:"direction"`
 	Decision       string  `json:"decision"`
-	UserID       string  `json:"user_id"`
-	UserName     string  `json:"user_name"`
+	UserID         string  `json:"user_id"`
+	UserName       string  `json:"user_name"`
 	Confidence     float64 `json:"confidence"`
 	Reason         string  `json:"reason"`
 	CredentialType string  `json:"credential_type"`
@@ -171,15 +181,15 @@ func (h *MQTTHandler) handleAlarm(ctx context.Context, pt ParsedTopic, env MQTTE
 }
 
 type heartbeatData struct {
-	Online           bool   `json:"online"`
-	Firmware         string `json:"firmware"`
-	IP               string `json:"ip"`
-	CPUPct           int    `json:"cpu_pct"`
-	MemPct           int    `json:"mem_pct"`
-	DiskPct          int    `json:"disk_pct"`
-	UptimeS          int64  `json:"uptime_s"`
-	QueueDepth       int    `json:"queue_depth"`
-	LocalDBVersion   int    `json:"local_db_version"`
+	Online         bool   `json:"online"`
+	Firmware       string `json:"firmware"`
+	IP             string `json:"ip"`
+	CPUPct         int    `json:"cpu_pct"`
+	MemPct         int    `json:"mem_pct"`
+	DiskPct        int    `json:"disk_pct"`
+	UptimeS        int64  `json:"uptime_s"`
+	QueueDepth     int    `json:"queue_depth"`
+	LocalDBVersion int    `json:"local_db_version"`
 	LocalUserCount int    `json:"local_user_count"`
 }
 
@@ -210,23 +220,30 @@ func (h *MQTTHandler) handleStatus(ctx context.Context, pt ParsedTopic, env MQTT
 		}
 		slog.Debug("heartbeat processed", "device", pt.DeviceID, "status", status)
 
-		// Auto-sync: if device reports local_db_version == 0, push config
+		// Auto-sync: if device reports local_db_version == 0, push config.
+		// singleflight ensures at most one in-flight sync per device at a time,
+		// preventing goroutine explosion when a fleet of reset devices comes online.
 		if data.LocalDBVersion == 0 && data.Online && h.sync != nil {
+			deviceID := pt.DeviceID
 			go func() {
-				// Look up tenant_id for this device
-				var companyID string
-				err := h.db.Pool.QueryRow(context.Background(),
-					`SELECT tenant_id FROM dm3_devices.devices WHERE device_id = $1`, pt.DeviceID,
-				).Scan(&companyID)
-				if err != nil {
-					slog.Warn("sync: could not find company for device", "device", pt.DeviceID, "error", err)
-					return
-				}
-				syncCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancel()
-				if err := h.sync.PushSyncToDevice(syncCtx, companyID, pt.DeviceID); err != nil {
-					slog.Error("sync: auto-push failed", "device", pt.DeviceID, "error", err)
-				}
+				_, _, _ = h.syncGroup.Do(deviceID, func() (any, error) {
+					var companyID string
+					lookupCtx, lookupCancel := context.WithTimeout(h.appCtx, 5*time.Second)
+					defer lookupCancel()
+					if err := h.db.Pool.QueryRow(lookupCtx,
+						`SELECT tenant_id FROM dm3_devices.devices WHERE device_id = $1`, deviceID,
+					).Scan(&companyID); err != nil {
+						slog.Warn("sync: could not find company for device", "device", deviceID, "error", err)
+						return nil, err
+					}
+					syncCtx, syncCancel := context.WithTimeout(h.appCtx, 10*time.Second)
+					defer syncCancel()
+					if err := h.sync.PushSyncToDevice(syncCtx, companyID, deviceID); err != nil {
+						slog.Error("sync: auto-push failed", "device", deviceID, "error", err)
+						return nil, err
+					}
+					return nil, nil
+				})
 			}()
 		}
 
