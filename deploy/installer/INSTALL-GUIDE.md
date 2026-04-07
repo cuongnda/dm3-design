@@ -200,7 +200,7 @@ nginx (port 80/443)
   ├── /api/v1/users             → auth-svc
   ├── /api/v1/roles             → auth-svc
   ├── /api/v1/devices           → device-gateway
-  ├── /api/v1/persons           → identity-svc
+  ├── /api/v1/users           → identity-svc
   ├── /api/v1/groups            → identity-svc
   ├── /api/v1/doors             → access-svc
   ├── /api/v1/rules             → access-svc

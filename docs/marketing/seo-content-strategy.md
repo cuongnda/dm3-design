@@ -292,7 +292,7 @@ Level 4: Blog posts, case studies, guides
 |---------|---------|
 | **Target Keywords** | visitor management system, identity management, time and attendance software, people management platform |
 | **Meta Title** | MANAGE — Visitor, Identity & Attendance Management Platform |
-| **Meta Description** | Manage every person in your building — employees, visitors, contractors, deliveries — with unified identity and automated access provisioning. |
+| **Meta Description** | Manage every user in your building — employees, visitors, contractors, deliveries — with unified identity and automated access provisioning. |
 | **H1** | MANAGE — Handle All People |
 | **Content Brief** | Domain overview. 6 module cards: Identity, Visitors, Contractors, Time & Attendance, Delivery, Access Provisioning. Workflow diagrams (visitor journey, employee onboarding). HR integration highlight. |
 | **CTA** | "See How It Works", "Request Demo" |

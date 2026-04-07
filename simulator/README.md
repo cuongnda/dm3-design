@@ -23,7 +23,7 @@ dm3-simulator run --devices 10 --broker mqtt://localhost:1883 --tenant-id tenant
 dm3-simulator run --devices 100 --mode stress --broker mqtt://broker:1883 --tenant-id t-001
 
 # Pre-seed databases with mock data
-dm3-simulator seed --devices 10 --persons 50 --output-dir /tmp/dm3-sim
+dm3-simulator seed --devices 10 --users 50 --output-dir /tmp/dm3-sim
 
 # Full options
 dm3-simulator run \
@@ -34,7 +34,7 @@ dm3-simulator run \
   --device-prefix sim \
   --mode normal \
   --event-rate 1.0 \
-  --persons 50 \
+  --users 50 \
   --db-mode memory \
   --api-port 9090 \
   --heartbeat-interval 30 \
@@ -129,6 +129,6 @@ python -m pytest tests/ -v
 ## Mock Data
 
 The `seed` command generates:
-- 50 persons per device with Vietnamese names
+- 50 users per device with Vietnamese names
 - Card UIDs, face template hashes, optional PINs
 - 5 access rules with different schedules and door assignments

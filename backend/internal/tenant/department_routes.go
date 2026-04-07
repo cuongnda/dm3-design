@@ -9,6 +9,15 @@ func AddDepartmentRoutes(r chi.Router, h *UserManagementHandlers) {
 	r.Route("/api/v1/departments", func(r chi.Router) {
 		r.Get("/", h.ListDepartments)
 		r.Post("/", h.CreateDepartment)
+
+		// Managers dropdown (static before /{id})
+		r.Get("/managers", h.GetManagers)
+
+		// Import/Export and bulk operations (static before /{id})
+		r.Post("/import", h.ImportDepartments)
+		r.Get("/export", h.ExportDepartments)
+		r.Post("/bulk-delete", h.BulkDeleteDepartments)
+
 		r.Get("/{id}", h.GetDepartment)
 		r.Put("/{id}", h.UpdateDepartment)
 		r.Delete("/{id}", h.DeleteDepartment)
@@ -17,15 +26,6 @@ func AddDepartmentRoutes(r chi.Router, h *UserManagementHandlers) {
 		r.Get("/{id}/users", h.GetDepartmentUsers)
 		r.Post("/{id}/users", h.AssignUsersToDepartment)
 		r.Delete("/{id}/users/{userId}", h.RemoveUserFromDepartment)
-
-		// Import/Export
-		r.Post("/import", h.ImportDepartments)
-		r.Get("/export", h.ExportDepartments)
+		r.Get("/{id}/available-users", h.GetAvailableUsersForDepartment)
 	})
-
-	// Managers endpoint for dropdown data
-	r.Get("/api/v1/accounts/managers", h.GetManagers)
-
-	// Available users for department assignment
-	r.Get("/api/v1/users/available-for-department", h.GetAvailableUsersForDepartment)
 }

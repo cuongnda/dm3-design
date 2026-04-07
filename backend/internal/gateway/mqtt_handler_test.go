@@ -14,19 +14,19 @@ func TestParseTopic(t *testing.T) {
 	}{
 		{
 			topic: "dm/company-1/device/term-001/evt",
-			want:  ParsedTopic{CompanyID: "company-1", DeviceID: "term-001", Category: "evt"},
+			want:  ParsedTopic{TenantID: "company-1", DeviceID: "term-001", Category: "evt"},
 		},
 		{
 			topic: "dm/company-1/device/term-001/sta",
-			want:  ParsedTopic{CompanyID: "company-1", DeviceID: "term-001", Category: "sta"},
+			want:  ParsedTopic{TenantID: "company-1", DeviceID: "term-001", Category: "sta"},
 		},
 		{
 			topic: "dm/company-1/device/term-001/cmd/resp",
-			want:  ParsedTopic{CompanyID: "company-1", DeviceID: "term-001", Category: "cmd/resp"},
+			want:  ParsedTopic{TenantID: "company-1", DeviceID: "term-001", Category: "cmd/resp"},
 		},
 		{
 			topic: "dm/company-1/device/term-001/cfg/ack",
-			want:  ParsedTopic{CompanyID: "company-1", DeviceID: "term-001", Category: "cfg/ack"},
+			want:  ParsedTopic{TenantID: "company-1", DeviceID: "term-001", Category: "cfg/ack"},
 		},
 		{
 			topic:   "invalid/topic",
@@ -58,7 +58,7 @@ func TestMQTTEnvelopeParsing(t *testing.T) {
 		"ts": 1740000000000,
 		"src": "device:term-001",
 		"type": "access.log",
-		"data": {"method":"face","door_id":"door-001","direction":"entry","decision":"granted","person_id":"p-1","person_name":"Test","confidence":0.97,"reason":"authorized","credential_type":"face"}
+		"data": {"method":"face","door_id":"door-001","direction":"entry","decision":"granted","user_id":"p-1","user_name":"Test","confidence":0.97,"reason":"authorized","credential_type":"face"}
 	}`
 
 	var env MQTTEnvelope
@@ -91,8 +91,8 @@ func TestMQTTEnvelopeParsing(t *testing.T) {
 	if data.Method != "face" {
 		t.Errorf("method = %q, want face", data.Method)
 	}
-	if data.PersonName != "Test" {
-		t.Errorf("person_name = %q, want Test", data.PersonName)
+	if data.UserName != "Test" {
+		t.Errorf("person_name = %q, want Test", data.UserName)
 	}
 }
 

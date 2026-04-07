@@ -27,8 +27,8 @@ func NewSyncService(database *db.DB, mqttClient *mqtt.Client) *SyncService {
 	return &SyncService{db: database, mqtt: mqttClient}
 }
 
-// syncPerson represents a person in the sync payload.
-type syncPerson struct {
+// syncUser represents a user in the sync payload.
+type syncUser struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	Status    string `json:"status"`
@@ -39,7 +39,7 @@ type syncPerson struct {
 // syncCredential represents a credential in the sync payload.
 type syncCredential struct {
 	ID        string `json:"id"`
-	PersonID  string `json:"person_id"`
+	UserID  string `json:"user_id"`
 	Type      string `json:"type"`
 	Value     string `json:"value"`
 	Status    string `json:"status"`
@@ -49,29 +49,28 @@ type syncCredential struct {
 
 // syncAccessRule represents an access rule in the sync payload.
 type syncAccessRule struct {
-	RuleID         string   `json:"rule_id"`
-	Name           string   `json:"name"`
-	DoorIDs        []string `json:"door_ids"`
-	PersonGroupIDs []string `json:"person_group_ids"`
-	Schedule       any      `json:"schedule,omitempty"`
-	Priority       int      `json:"priority"`
-	Enabled        bool     `json:"enabled"`
+	RuleID   string   `json:"rule_id"`
+	Name     string   `json:"name"`
+	DoorIDs  []string `json:"door_ids"`
+	Schedule any      `json:"schedule,omitempty"`
+	Priority int      `json:"priority"`
+	Enabled  bool     `json:"enabled"`
 }
 
-// syncPersonGroup represents a person group in the sync payload.
-type syncPersonGroup struct {
-	ID        string   `json:"id"`
-	GroupID   string   `json:"group_id"`
-	PersonIDs []string `json:"person_ids"`
+// syncUserGroup represents a user group in the sync payload.
+type syncUserGroup struct {
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	UserIDs []string `json:"user_ids"`
 }
 
 // cfgFullPayload is the full sync message sent to devices.
 type cfgFullPayload struct {
 	ConfigVersion int              `json:"config_version"`
-	Persons       []syncPerson     `json:"persons"`
+	Users         []syncUser       `json:"users"`
+	UserGroups    []syncUserGroup  `json:"user_groups"`
 	Credentials   []syncCredential `json:"credentials"`
-	AccessRules   []syncAccessRule  `json:"access_rules"`
-	PersonGroups  []syncPersonGroup `json:"person_groups"`
+	AccessRules   []syncAccessRule `json:"access_rules"`
 	Blacklist     []any            `json:"blacklist"`
 }
 
@@ -79,37 +78,37 @@ type cfgFullPayload struct {
 func (s *SyncService) PushSyncToDevice(ctx context.Context, companyID, deviceID string) error {
 	slog.Info("sync: assembling config", "company", companyID, "device", deviceID)
 
-	// Fetch persons for company
-	persons := []syncPerson{}
+	// Fetch users for company
+	users := []syncUser{}
 	rows, err := s.db.Pool.Query(ctx,
-		`SELECT id, CONCAT(first_name, ' ', last_name), status FROM dm3_identity.persons WHERE company_id = $1::uuid AND status = 'active'`,
+		`SELECT id, CONCAT(first_name, ' ', last_name), status FROM dm3_identity.users WHERE tenant_id = $1::uuid AND status = 'active'`,
 		companyID)
 	if err != nil {
-		return fmt.Errorf("sync: query persons: %w", err)
+		return fmt.Errorf("sync: query users: %w", err)
 	}
 	for rows.Next() {
-		var p syncPerson
+		var p syncUser
 		if err := rows.Scan(&p.ID, &p.Name, &p.Status); err != nil {
 			continue
 		}
-		persons = append(persons, p)
+		users = append(users, p)
 	}
 	rows.Close()
 
 	// Fetch credentials for company
 	credentials := []syncCredential{}
 	rows, err = s.db.Pool.Query(ctx,
-		`SELECT c.id, c.person_id, c.type, c.value, c.status
+		`SELECT c.id, c.user_id, c.type, c.value, c.status
 		 FROM dm3_identity.credentials c
-		 JOIN dm3_identity.persons p ON p.id = c.person_id
-		 WHERE p.company_id = $1::uuid AND c.status = 'active'`,
+		 JOIN dm3_identity.users p ON p.id = c.user_id
+		 WHERE p.tenant_id = $1::uuid AND c.status = 'active'`,
 		companyID)
 	if err != nil {
 		return fmt.Errorf("sync: query credentials: %w", err)
 	}
 	for rows.Next() {
 		var c syncCredential
-		if err := rows.Scan(&c.ID, &c.PersonID, &c.Type, &c.Value, &c.Status); err != nil {
+		if err := rows.Scan(&c.ID, &c.UserID, &c.Type, &c.Value, &c.Status); err != nil {
 			continue
 		}
 		credentials = append(credentials, c)
@@ -119,27 +118,22 @@ func (s *SyncService) PushSyncToDevice(ctx context.Context, companyID, deviceID 
 	// Fetch access rules for company
 	accessRules := []syncAccessRule{}
 	rows, err = s.db.Pool.Query(ctx,
-		`SELECT id, name, COALESCE(door_ids, '{}'), COALESCE(person_group_ids, '{}'), schedule, priority, enabled
-		 FROM dm3_access.access_rules WHERE company_id = $1::uuid AND enabled = true`,
+		`SELECT id, name, COALESCE(door_ids, '{}'), schedule, priority, enabled
+		 FROM dm3_access.access_rules WHERE tenant_id = $1::uuid AND enabled = true`,
 		companyID)
 	if err != nil {
 		return fmt.Errorf("sync: query access rules: %w", err)
 	}
 	for rows.Next() {
 		var r syncAccessRule
-		var doorIDs, groupIDs []string
+		var doorIDs []string
 		var schedule json.RawMessage
-		if err := rows.Scan(&r.RuleID, &r.Name, &doorIDs, &groupIDs, &schedule, &r.Priority, &r.Enabled); err != nil {
+		if err := rows.Scan(&r.RuleID, &r.Name, &doorIDs, &schedule, &r.Priority, &r.Enabled); err != nil {
 			continue
 		}
-		// Convert UUID door_ids to string format matching simulator door IDs
 		r.DoorIDs = make([]string, len(doorIDs))
 		for i, d := range doorIDs {
 			r.DoorIDs[i] = d
-		}
-		r.PersonGroupIDs = make([]string, len(groupIDs))
-		for i, g := range groupIDs {
-			r.PersonGroupIDs[i] = g
 		}
 		if len(schedule) > 0 {
 			var s any
@@ -150,35 +144,30 @@ func (s *SyncService) PushSyncToDevice(ctx context.Context, companyID, deviceID 
 	}
 	rows.Close()
 
-	// Fetch person groups
-	personGroups := []syncPersonGroup{}
-	rows, err = s.db.Pool.Query(ctx,
-		`SELECT g.id, g.id, ARRAY_AGG(gm.person_id::text)
-		 FROM dm3_identity.person_groups g
-		 JOIN dm3_identity.person_group_members gm ON gm.group_id = g.id
-		 WHERE g.company_id = $1::uuid
-		 GROUP BY g.id`,
-		companyID)
-	if err != nil {
-		slog.Warn("sync: query person groups failed (may not exist)", "error", err)
-	} else {
-		for rows.Next() {
-			var pg syncPersonGroup
-			if err := rows.Scan(&pg.ID, &pg.GroupID, &pg.PersonIDs); err != nil {
-				continue
+	// Fetch user groups for company
+	userGroups := []syncUserGroup{}
+	groupRows, err := s.db.Pool.Query(ctx,
+		`SELECT g.id, g.name, COALESCE(array_agg(gm.user_id::text) FILTER (WHERE gm.user_id IS NOT NULL), ARRAY[]::text[])
+		 FROM dm3_identity.user_groups g
+		 LEFT JOIN dm3_identity.user_group_members gm ON gm.group_id = g.id
+		 WHERE g.tenant_id = $1::uuid GROUP BY g.id, g.name`, companyID)
+	if err == nil {
+		defer groupRows.Close()
+		for groupRows.Next() {
+			var ug syncUserGroup
+			if groupRows.Scan(&ug.ID, &ug.Name, &ug.UserIDs) == nil {
+				userGroups = append(userGroups, ug)
 			}
-			personGroups = append(personGroups, pg)
 		}
-		rows.Close()
 	}
 
 	// Build cfg.full envelope
 	data := cfgFullPayload{
 		ConfigVersion: 1,
-		Persons:       persons,
+		Users:         users,
+		UserGroups:    userGroups,
 		Credentials:   credentials,
 		AccessRules:   accessRules,
-		PersonGroups:  personGroups,
 		Blacklist:     []any{},
 	}
 
@@ -209,7 +198,7 @@ func (s *SyncService) PushSyncToDevice(ctx context.Context, companyID, deviceID 
 	slog.Info("sync: pushed cfg.full",
 		"device", deviceID,
 		"company", companyID,
-		"persons", len(persons),
+		"users", len(users),
 		"credentials", len(credentials),
 		"rules", len(accessRules),
 		"topic", topic,
@@ -224,7 +213,7 @@ func (s *SyncService) HandleSyncRequest(w http.ResponseWriter, r *http.Request) 
 	// Look up device
 	var companyID, deviceID string
 	err := s.db.Pool.QueryRow(r.Context(),
-		`SELECT company_id, device_id FROM dm3_devices.devices WHERE id = $1::uuid`, id,
+		`SELECT tenant_id, device_id FROM dm3_devices.devices WHERE id = $1::uuid`, id,
 	).Scan(&companyID, &deviceID)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "device not found")
@@ -240,7 +229,7 @@ func (s *SyncService) HandleSyncRequest(w http.ResponseWriter, r *http.Request) 
 	httputil.JSON(w, http.StatusOK, map[string]string{
 		"status":    "sync_pushed",
 		"device_id": deviceID,
-		"company_id": companyID,
+		"tenant_id": companyID,
 	})
 }
 

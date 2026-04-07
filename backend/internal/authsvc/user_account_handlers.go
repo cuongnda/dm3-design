@@ -18,20 +18,21 @@ import (
 // ─── User Account Models ─────────────────────────────────────────────────────
 
 type userAccountResponse struct {
-	ID          string             `json:"id"`
-	Email       string             `json:"email"`
-	Name        string             `json:"name"`
-	Roles       []string           `json:"roles"`
-	Role        string             `json:"role"` // primary_manager, manager, operator, viewer, system_admin
-	Status      string             `json:"status"`
-	LastLogin   *time.Time         `json:"last_login,omitempty"`
-	CreatedAt   time.Time          `json:"created_at"`
-	UpdatedAt   time.Time          `json:"updated_at"`
-	Companies   []userCompanyInfo  `json:"companies"`
+	ID        string            `json:"id"`
+	TenantID *string           `json:"tenant_id,omitempty"`
+	Email     string            `json:"email"`
+	Name      string            `json:"name"`
+	Roles     []string          `json:"roles"`
+	Role      string            `json:"role"` // primary_manager, manager, operator, viewer, system_admin
+	Status    string            `json:"status"`
+	LastLogin *time.Time        `json:"last_login,omitempty"`
+	CreatedAt time.Time         `json:"created_at"`
+	UpdatedAt time.Time         `json:"updated_at"`
+	Companies []userCompanyInfo `json:"companies"`
 }
 
 type userCompanyInfo struct {
-	CompanyID   string `json:"company_id"`
+	TenantID   string `json:"tenant_id"`
 	CompanyName string `json:"company_name"`
 	CompanyCode string `json:"company_code"`
 	Role        string `json:"role"`
@@ -39,18 +40,18 @@ type userCompanyInfo struct {
 }
 
 type createUserAccountRequest struct {
-	Email      string   `json:"email"`
-	Name       string   `json:"name"`
-	Role       string   `json:"role"` // primary_manager, manager, operator, viewer
-	CompanyID  *string  `json:"company_id,omitempty"` // null for system_admin
-	SendEmail  bool     `json:"send_email"` // whether to send welcome email
+	Email     string  `json:"email"`
+	Name      string  `json:"name"`
+	Role      string  `json:"role"`                // primary_manager, manager, operator, viewer
+	TenantID *string `json:"tenant_id,omitempty"` // null for system_admin
+	SendEmail bool    `json:"send_email"`           // whether to send welcome email
 }
 
 type updateUserAccountRequest struct {
 	Name      *string `json:"name,omitempty"`
 	Role      *string `json:"role,omitempty"`
 	Status    *string `json:"status,omitempty"`
-	CompanyID *string `json:"company_id,omitempty"`
+	TenantID *string `json:"tenant_id,omitempty"`
 }
 
 type createUserAccountResponse struct {
@@ -64,48 +65,49 @@ func (h *Handlers) ListUserAccounts(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
-	where := "WHERE 1=1"
+	where := "WHERE status != 'deleted'"
 	args := []any{}
 	idx := 1
 
 	if search := r.URL.Query().Get("search"); search != "" {
-		where += fmt.Sprintf(" AND (u.email ILIKE $%d OR u.name ILIKE $%d)", idx, idx)
+		where += fmt.Sprintf(" AND (email ILIKE $%d OR full_name ILIKE $%d OR first_name ILIKE $%d)", idx, idx, idx)
 		args = append(args, "%"+search+"%")
 		idx++
 	}
 
 	if status := r.URL.Query().Get("status"); status != "" {
-		where += fmt.Sprintf(" AND u.status = $%d", idx)
+		where += fmt.Sprintf(" AND status = $%d", idx)
 		args = append(args, status)
 		idx++
 	}
 
 	if role := r.URL.Query().Get("role"); role != "" {
-		where += fmt.Sprintf(" AND u.role = $%d", idx)
+		where += fmt.Sprintf(" AND role = $%d", idx)
 		args = append(args, role)
 		idx++
 	}
 
-	if companyID := r.URL.Query().Get("company_id"); companyID != "" {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM dm3_auth.user_companies uc WHERE uc.user_id = u.id AND uc.company_id = $%d::uuid)", idx)
+	if companyID := r.URL.Query().Get("tenant_id"); companyID != "" {
+		where += fmt.Sprintf(" AND tenant_id = $%d::uuid", idx)
 		args = append(args, companyID)
 		idx++
 	}
 
-	// Get total count
+	// Get total count.
 	var total int64
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM dm3_auth.users u %s", where)
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM dm3_auth.accounts %s", where)
 	if err := h.db.Pool.QueryRow(r.Context(), countQuery, args...).Scan(&total); err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// Get users
+	// Get accounts.
 	query := fmt.Sprintf(`
-		SELECT u.id, u.email, u.name, array_to_json(u.roles), u.role, u.status, u.last_login, u.created_at, u.updated_at
-		FROM dm3_auth.users u
+		SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
+		       last_login, created_at, updated_at
+		FROM dm3_auth.accounts
 		%s
-		ORDER BY u.created_at DESC
+		ORDER BY created_at DESC
 		LIMIT $%d OFFSET $%d`, where, idx, idx+1)
 
 	args = append(args, limit, offset)
@@ -119,41 +121,38 @@ func (h *Handlers) ListUserAccounts(w http.ResponseWriter, r *http.Request) {
 	var users []userAccountResponse
 	for rows.Next() {
 		var u userAccountResponse
-		var roles []byte
-		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		var name string
+		if err := rows.Scan(&u.ID, &u.TenantID, &u.Email, &name, &u.Roles, &u.Role,
+			&u.Status, &u.LastLogin, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		if err := json.Unmarshal(roles, &u.Roles); err != nil {
-			u.Roles = []string{}
+		u.Name = name
+		u.Companies = []userCompanyInfo{}
+		if u.TenantID != nil {
+			ci, err := h.loadCompanyInfo(r, *u.TenantID, u.Role)
+			if err == nil {
+				u.Companies = []userCompanyInfo{ci}
+			}
 		}
 		users = append(users, u)
 	}
 
-	// Load company info for each user
-	for i := range users {
-		users[i].Companies = []userCompanyInfo{} // Initialize empty slice
-		companyRows, err := h.db.Pool.Query(r.Context(), `
-			SELECT uc.company_id, c.name, c.code, uc.role, uc.status
-			FROM dm3_auth.user_companies uc
-			JOIN dm3_auth.companies c ON c.id = uc.company_id
-			WHERE uc.user_id = $1::uuid
-			ORDER BY c.name`, users[i].ID)
-		if err != nil {
-			continue
-		}
-
-		for companyRows.Next() {
-			var company userCompanyInfo
-			if err := companyRows.Scan(&company.CompanyID, &company.CompanyName, &company.CompanyCode, &company.Role, &company.Status); err != nil {
-				continue
-			}
-			users[i].Companies = append(users[i].Companies, company)
-		}
-		companyRows.Close()
-	}
-
 	httputil.Paginated(w, users, total, page, limit)
+}
+
+// loadCompanyInfo fetches company details to build a userCompanyInfo.
+func (h *Handlers) loadCompanyInfo(r *http.Request, companyID, role string) (userCompanyInfo, error) {
+	var ci userCompanyInfo
+	err := h.db.Pool.QueryRow(r.Context(),
+		`SELECT id, name, code FROM dm3_auth.companies WHERE id = $1::uuid`, companyID,
+	).Scan(&ci.TenantID, &ci.CompanyName, &ci.CompanyCode)
+	if err != nil {
+		return ci, err
+	}
+	ci.Role = role
+	ci.Status = "active"
+	return ci, nil
 }
 
 // ─── Get User Account ────────────────────────────────────────────────────────
@@ -162,36 +161,24 @@ func (h *Handlers) GetUserAccount(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var u userAccountResponse
-	var roles []byte
+	var name string
 	err := h.db.Pool.QueryRow(r.Context(), `
-		SELECT id, email, name, array_to_json(roles), role, status, last_login, created_at, updated_at
-		FROM dm3_auth.users
-		WHERE id = $1::uuid`, id,
-	).Scan(&u.ID, &u.Email, &u.Name, &roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt, &u.UpdatedAt)
+		SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
+		       last_login, created_at, updated_at
+		FROM dm3_auth.accounts
+		WHERE id = $1::uuid AND status != 'deleted'`, id,
+	).Scan(&u.ID, &u.TenantID, &u.Email, &name, &u.Roles, &u.Role,
+		&u.Status, &u.LastLogin, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "user not found")
 		return
 	}
-
-	if err := json.Unmarshal(roles, &u.Roles); err != nil {
-		u.Roles = []string{}
-	}
-
-	// Load companies
-	u.Companies = []userCompanyInfo{} // Initialize empty slice
-	companyRows, err := h.db.Pool.Query(r.Context(), `
-		SELECT uc.company_id, c.name, c.code, uc.role, uc.status
-		FROM dm3_auth.user_companies uc
-		JOIN dm3_auth.companies c ON c.id = uc.company_id
-		WHERE uc.user_id = $1::uuid
-		ORDER BY c.name`, u.ID)
-	if err == nil {
-		defer companyRows.Close()
-		for companyRows.Next() {
-			var company userCompanyInfo
-			if err := companyRows.Scan(&company.CompanyID, &company.CompanyName, &company.CompanyCode, &company.Role, &company.Status); err == nil {
-				u.Companies = append(u.Companies, company)
-			}
+	u.Name = name
+	u.Companies = []userCompanyInfo{}
+	if u.TenantID != nil {
+		ci, err := h.loadCompanyInfo(r, *u.TenantID, u.Role)
+		if err == nil {
+			u.Companies = []userCompanyInfo{ci}
 		}
 	}
 
@@ -211,7 +198,7 @@ func (h *Handlers) CreateUserAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate random password
+	// Generate random password.
 	pwBytes := make([]byte, 8)
 	if _, err := rand.Read(pwBytes); err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to generate password")
@@ -230,57 +217,35 @@ func (h *Handlers) CreateUserAccount(w http.ResponseWriter, r *http.Request) {
 		role = "viewer"
 	}
 
-	// Begin transaction
-	tx, err := h.db.Pool.Begin(r.Context())
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "transaction failed")
-		return
-	}
-	defer tx.Rollback(r.Context())
-
-	// Create user
 	var userID string
-	err = tx.QueryRow(r.Context(),
-		`INSERT INTO dm3_auth.users (email, password_hash, name, roles, role, status)
+	err = h.db.Pool.QueryRow(r.Context(),
+		`INSERT INTO dm3_auth.accounts (email, password_hash, first_name, role, tenant_id, status)
 		 VALUES ($1, $2, $3, $4, $5, 'active') RETURNING id`,
-		req.Email, string(pwHash), req.Name, []string{role}, role,
+		req.Email, string(pwHash), req.Name, role, req.TenantID,
 	).Scan(&userID)
 	if err != nil {
-		slog.Error("create user account: user insert error", "error", err)
-		httputil.Error(w, http.StatusConflict, "user with this email already exists")
+		slog.Error("create user account: insert error", "error", err)
+		httputil.Error(w, http.StatusConflict, "user with this email already exists in this company")
 		return
 	}
 
-	// Add to company if specified
-	if req.CompanyID != nil && *req.CompanyID != "" {
-		_, err = tx.Exec(r.Context(),
-			`INSERT INTO dm3_auth.user_companies (user_id, company_id, role, status)
-			 VALUES ($1::uuid, $2::uuid, $3, 'active')`,
-			userID, *req.CompanyID, role,
-		)
-		if err != nil {
-			slog.Error("create user account: company assignment error", "error", err)
-			httputil.Error(w, http.StatusBadRequest, "failed to assign user to company")
-			return
-		}
-	}
-
-	if err := tx.Commit(r.Context()); err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "commit failed")
-		return
-	}
-
-	// Fetch the created user
+	// Fetch the created account.
 	var u userAccountResponse
-	var roles []byte
+	var name string
 	_ = h.db.Pool.QueryRow(r.Context(), `
-		SELECT id, email, name, array_to_json(roles), role, status, last_login, created_at, updated_at
-		FROM dm3_auth.users
+		SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
+		       last_login, created_at, updated_at
+		FROM dm3_auth.accounts
 		WHERE id = $1::uuid`, userID,
-	).Scan(&u.ID, &u.Email, &u.Name, &roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt, &u.UpdatedAt)
-
-	if err := json.Unmarshal(roles, &u.Roles); err != nil {
-		u.Roles = []string{}
+	).Scan(&u.ID, &u.TenantID, &u.Email, &name, &u.Roles, &u.Role,
+		&u.Status, &u.LastLogin, &u.CreatedAt, &u.UpdatedAt)
+	u.Name = name
+	u.Companies = []userCompanyInfo{}
+	if u.TenantID != nil {
+		ci, err := h.loadCompanyInfo(r, *u.TenantID, u.Role)
+		if err == nil {
+			u.Companies = []userCompanyInfo{ci}
+		}
 	}
 
 	httputil.JSON(w, http.StatusCreated, createUserAccountResponse{
@@ -300,70 +265,39 @@ func (h *Handlers) UpdateUserAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx, err := h.db.Pool.Begin(r.Context())
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "transaction failed")
-		return
-	}
-	defer tx.Rollback(r.Context())
-
-	// Update user
-	_, err = tx.Exec(r.Context(), `
-		UPDATE dm3_auth.users SET
-			name = COALESCE($2, name),
-			role = COALESCE($3, role),
-			status = COALESCE($4, status),
-			updated_at = now()
-		WHERE id = $1::uuid`,
-		id, req.Name, req.Role, req.Status,
+	// Update core fields on the account.
+	_, err := h.db.Pool.Exec(r.Context(), `
+		UPDATE dm3_auth.accounts SET
+			first_name  = COALESCE($2, first_name),
+			role        = COALESCE($3, role),
+			status      = COALESCE($4, status),
+			tenant_id  = COALESCE($5::uuid, tenant_id),
+			updated_at  = now()
+		WHERE id = $1::uuid AND status != 'deleted'`,
+		id, req.Name, req.Role, req.Status, req.TenantID,
 	)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// Update company assignment if specified
-	if req.CompanyID != nil {
-		// Remove existing company assignments
-		_, _ = tx.Exec(r.Context(),
-			`DELETE FROM dm3_auth.user_companies WHERE user_id = $1::uuid`,
-			id,
-		)
-
-		// Add new company assignment if not empty
-		if *req.CompanyID != "" {
-			role := "viewer"
-			if req.Role != nil {
-				role = *req.Role
-			}
-			_, err = tx.Exec(r.Context(),
-				`INSERT INTO dm3_auth.user_companies (user_id, company_id, role, status)
-				 VALUES ($1::uuid, $2::uuid, $3, 'active')`,
-				id, *req.CompanyID, role,
-			)
-			if err != nil {
-				httputil.Error(w, http.StatusBadRequest, "failed to assign user to company")
-				return
-			}
-		}
-	}
-
-	if err := tx.Commit(r.Context()); err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "commit failed")
-		return
-	}
-
-	// Return updated user
+	// Return updated account.
 	var u userAccountResponse
-	var roles []byte
+	var name string
 	_ = h.db.Pool.QueryRow(r.Context(), `
-		SELECT id, email, name, array_to_json(roles), role, status, last_login, created_at, updated_at
-		FROM dm3_auth.users
+		SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
+		       last_login, created_at, updated_at
+		FROM dm3_auth.accounts
 		WHERE id = $1::uuid`, id,
-	).Scan(&u.ID, &u.Email, &u.Name, &roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt, &u.UpdatedAt)
-
-	if err := json.Unmarshal(roles, &u.Roles); err != nil {
-		u.Roles = []string{}
+	).Scan(&u.ID, &u.TenantID, &u.Email, &name, &u.Roles, &u.Role,
+		&u.Status, &u.LastLogin, &u.CreatedAt, &u.UpdatedAt)
+	u.Name = name
+	u.Companies = []userCompanyInfo{}
+	if u.TenantID != nil {
+		ci, err := h.loadCompanyInfo(r, *u.TenantID, u.Role)
+		if err == nil {
+			u.Companies = []userCompanyInfo{ci}
+		}
 	}
 
 	httputil.JSON(w, http.StatusOK, u)
@@ -374,9 +308,10 @@ func (h *Handlers) UpdateUserAccount(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) DeleteUserAccount(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	// Soft delete by setting status to inactive
+	// Soft delete: set status to 'deleted'. Protect system_admin accounts.
 	tag, err := h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_auth.users SET status = 'inactive', updated_at = now() WHERE id = $1::uuid AND role != 'system_admin'`,
+		`UPDATE dm3_auth.accounts SET status = 'deleted', updated_at = now()
+		 WHERE id = $1::uuid AND role != 'system_admin' AND status != 'deleted'`,
 		id,
 	)
 	if err != nil {
@@ -388,165 +323,57 @@ func (h *Handlers) DeleteUserAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.JSON(w, http.StatusOK, map[string]string{"status": "inactive"})
+	httputil.JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
-// ─── Multi-Company Management ───────────────────────────────────────────────
+// ─── Company Helpers (stubs replacing user_companies junction table) ─────────
 
-type addUserToCompanyRequest struct {
-	CompanyID string `json:"company_id"`
-	Role      string `json:"role"` // role for this specific company
-}
-
-type updateUserCompanyRoleRequest struct {
-	Role string `json:"role"`
-}
-
-type userCompanyAssignmentResponse struct {
-	UserID      string `json:"user_id"`
-	CompanyID   string `json:"company_id"`
-	CompanyName string `json:"company_name"`
-	Role        string `json:"role"`
-	Status      string `json:"status"`
-	AssignedAt  string `json:"assigned_at"`
-}
-
-// AddUserToCompany assigns a user to an additional company
+// AddUserToCompany is not applicable in the new accounts model (one row per
+// email+company). Creating a new account for the same email in another company
+// is done via CreateUserAccount. This endpoint returns a helpful error.
 func (h *Handlers) AddUserToCompany(w http.ResponseWriter, r *http.Request) {
-	userID := chi.URLParam(r, "id")
-	
-	var req addUserToCompanyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	
-	if req.CompanyID == "" || req.Role == "" {
-		httputil.Error(w, http.StatusBadRequest, "company_id and role are required")
-		return
-	}
-	
-	// Validate role
-	validRoles := map[string]bool{
-		"primary_manager": true,
-		"manager":         true,
-		"operator":        true,
-		"viewer":          true,
-	}
-	if !validRoles[req.Role] {
-		httputil.Error(w, http.StatusBadRequest, "invalid role")
-		return
-	}
-	
-	// Check if user exists
-	var userExists bool
-	err := h.db.Pool.QueryRow(r.Context(),
-		"SELECT EXISTS(SELECT 1 FROM dm3_auth.users WHERE id = $1::uuid)", userID).Scan(&userExists)
-	if err != nil || !userExists {
-		httputil.Error(w, http.StatusNotFound, "user not found")
-		return
-	}
-	
-	// Check if company exists
-	var companyName string
-	err = h.db.Pool.QueryRow(r.Context(),
-		"SELECT name FROM dm3_auth.companies WHERE id = $1::uuid", req.CompanyID).Scan(&companyName)
-	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "company not found")
-		return
-	}
-	
-	// Check if user is already assigned to this company
-	var alreadyAssigned bool
-	err = h.db.Pool.QueryRow(r.Context(),
-		"SELECT EXISTS(SELECT 1 FROM dm3_auth.user_companies WHERE user_id = $1::uuid AND company_id = $2::uuid)",
-		userID, req.CompanyID).Scan(&alreadyAssigned)
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to check existing assignment")
-		return
-	}
-	if alreadyAssigned {
-		httputil.Error(w, http.StatusConflict, "user is already assigned to this company")
-		return
-	}
-	
-	// Add user to company
-	_, err = h.db.Pool.Exec(r.Context(),
-		`INSERT INTO dm3_auth.user_companies (user_id, company_id, role, status, created_at)
-		 VALUES ($1::uuid, $2::uuid, $3, 'active', now())`,
-		userID, req.CompanyID, req.Role)
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to assign user to company")
-		return
-	}
-	
-	// Return assignment details
-	response := userCompanyAssignmentResponse{
-		UserID:      userID,
-		CompanyID:   req.CompanyID,
-		CompanyName: companyName,
-		Role:        req.Role,
-		Status:      "active",
-		AssignedAt:  time.Now().Format(time.RFC3339),
-	}
-	
-	httputil.JSON(w, http.StatusCreated, response)
+	httputil.Error(w, http.StatusGone,
+		"multi-company assignment via user_companies is removed; create a new account per company instead")
 }
 
-// RemoveUserFromCompany removes a user from a specific company
+// RemoveUserFromCompany soft-deletes the account that links a user to a company.
 func (h *Handlers) RemoveUserFromCompany(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	companyID := chi.URLParam(r, "companyId")
-	
-	// Check if this is the user's only company
-	var companyCount int
-	err := h.db.Pool.QueryRow(r.Context(),
-		"SELECT COUNT(*) FROM dm3_auth.user_companies WHERE user_id = $1::uuid AND status = 'active'",
-		userID).Scan(&companyCount)
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to check company count")
-		return
-	}
-	
-	if companyCount <= 1 {
-		httputil.Error(w, http.StatusBadRequest, "cannot remove user from their only company")
-		return
-	}
-	
-	// Remove assignment
-	result, err := h.db.Pool.Exec(r.Context(),
-		`DELETE FROM dm3_auth.user_companies 
-		 WHERE user_id = $1::uuid AND company_id = $2::uuid`,
+
+	tag, err := h.db.Pool.Exec(r.Context(),
+		`UPDATE dm3_auth.accounts SET status = 'deleted', updated_at = now()
+		 WHERE id = $1::uuid AND tenant_id = $2::uuid AND role != 'system_admin' AND status != 'deleted'`,
 		userID, companyID)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to remove user from company")
 		return
 	}
-	
-	if result.RowsAffected() == 0 {
-		httputil.Error(w, http.StatusNotFound, "user not assigned to this company")
+	if tag.RowsAffected() == 0 {
+		httputil.Error(w, http.StatusNotFound, "user not found in this company")
 		return
 	}
-	
-	httputil.JSON(w, http.StatusOK, map[string]interface{}{
-		"message": "user removed from company successfully",
-		"user_id": userID,
-		"company_id": companyID,
+
+	httputil.JSON(w, http.StatusOK, map[string]any{
+		"message":    "user removed from company successfully",
+		"user_id":    userID,
+		"tenant_id": companyID,
 	})
 }
 
-// UpdateUserCompanyRole updates a user's role in a specific company
+// UpdateUserCompanyRole updates the role of an account scoped to a specific company.
 func (h *Handlers) UpdateUserCompanyRole(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	companyID := chi.URLParam(r, "companyId")
-	
-	var req updateUserCompanyRoleRequest
+
+	var req struct {
+		Role string `json:"role"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	
-	// Validate role
+
 	validRoles := map[string]bool{
 		"primary_manager": true,
 		"manager":         true,
@@ -557,59 +384,64 @@ func (h *Handlers) UpdateUserCompanyRole(w http.ResponseWriter, r *http.Request)
 		httputil.Error(w, http.StatusBadRequest, "invalid role")
 		return
 	}
-	
-	// Update role
+
 	result, err := h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_auth.user_companies 
-		 SET role = $3, updated_at = now()
-		 WHERE user_id = $1::uuid AND company_id = $2::uuid`,
+		`UPDATE dm3_auth.accounts SET role = $3, updated_at = now()
+		 WHERE id = $1::uuid AND tenant_id = $2::uuid AND status != 'deleted'`,
 		userID, companyID, req.Role)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to update role")
 		return
 	}
-	
 	if result.RowsAffected() == 0 {
-		httputil.Error(w, http.StatusNotFound, "user not assigned to this company")
+		httputil.Error(w, http.StatusNotFound, "user not found in this company")
 		return
 	}
-	
-	httputil.JSON(w, http.StatusOK, map[string]interface{}{
-		"message": "role updated successfully",
-		"user_id": userID,
-		"company_id": companyID,
-		"new_role": req.Role,
+
+	httputil.JSON(w, http.StatusOK, map[string]any{
+		"message":    "role updated successfully",
+		"user_id":    userID,
+		"tenant_id": companyID,
+		"new_role":   req.Role,
 	})
 }
 
-// GetAvailableCompanies returns companies that a user can be added to
+// GetAvailableCompanies returns companies that the given account is NOT already assigned to.
 func (h *Handlers) GetAvailableCompanies(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
-	
-	// Get companies the user is NOT already assigned to
+
+	// Find the email of this account so we can exclude all companies it already has.
+	var email string
+	if err := h.db.Pool.QueryRow(r.Context(),
+		`SELECT email FROM dm3_auth.accounts WHERE id = $1::uuid AND status != 'deleted'`, userID,
+	).Scan(&email); err != nil {
+		httputil.Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+
 	rows, err := h.db.Pool.Query(r.Context(), `
 		SELECT c.id, c.name, c.code, c.status
 		FROM dm3_auth.companies c
 		WHERE c.status = 'active'
 		  AND c.id NOT IN (
-		    SELECT uc.company_id 
-		    FROM dm3_auth.user_companies uc 
-		    WHERE uc.user_id = $1::uuid
+		    SELECT a.tenant_id
+		    FROM dm3_auth.accounts a
+		    WHERE a.email = $1 AND a.tenant_id IS NOT NULL AND a.status != 'deleted'
 		  )
-		ORDER BY c.name`, userID)
+		ORDER BY c.name`, email)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to fetch available companies")
 		return
 	}
 	defer rows.Close()
-	
+
 	type availableCompany struct {
 		ID     string `json:"id"`
 		Name   string `json:"name"`
 		Code   string `json:"code"`
 		Status string `json:"status"`
 	}
-	
+
 	var companies []availableCompany
 	for rows.Next() {
 		var company availableCompany
@@ -618,40 +450,42 @@ func (h *Handlers) GetAvailableCompanies(w http.ResponseWriter, r *http.Request)
 		}
 		companies = append(companies, company)
 	}
-	
-	httputil.JSON(w, http.StatusOK, map[string]interface{}{
+
+	httputil.JSON(w, http.StatusOK, map[string]any{
 		"companies": companies,
 	})
 }
 
-// GetUserCompanyMatrix returns a detailed view of user's roles across companies
+// GetUserCompanyMatrix returns a detailed view of a user's roles across companies.
+// In the new model each email+company pair is a separate account row.
 func (h *Handlers) GetUserCompanyMatrix(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
-	
-	// Get user basic info
+
+	// Get base account info.
 	var userName, userEmail string
 	err := h.db.Pool.QueryRow(r.Context(),
-		"SELECT name, email FROM dm3_auth.users WHERE id = $1::uuid", userID).Scan(&userName, &userEmail)
+		`SELECT COALESCE(full_name, email), email FROM dm3_auth.accounts WHERE id = $1::uuid AND status != 'deleted'`,
+		userID).Scan(&userName, &userEmail)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "user not found")
 		return
 	}
-	
-	// Get company assignments
+
+	// Find all accounts sharing this email.
 	rows, err := h.db.Pool.Query(r.Context(), `
-		SELECT uc.company_id, c.name, c.code, uc.role, uc.status, uc.created_at, uc.updated_at
-		FROM dm3_auth.user_companies uc
-		JOIN dm3_auth.companies c ON c.id = uc.company_id
-		WHERE uc.user_id = $1::uuid
-		ORDER BY c.name`, userID)
+		SELECT a.tenant_id::text, c.name, c.code, a.role, a.status, a.created_at, a.updated_at
+		FROM dm3_auth.accounts a
+		JOIN dm3_auth.companies c ON c.id = a.tenant_id
+		WHERE a.email = $1 AND a.tenant_id IS NOT NULL AND a.status != 'deleted'
+		ORDER BY c.name`, userEmail)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to fetch company assignments")
 		return
 	}
 	defer rows.Close()
-	
+
 	type companyAssignment struct {
-		CompanyID   string    `json:"company_id"`
+		TenantID   string    `json:"tenant_id"`
 		CompanyName string    `json:"company_name"`
 		CompanyCode string    `json:"company_code"`
 		Role        string    `json:"role"`
@@ -659,23 +493,21 @@ func (h *Handlers) GetUserCompanyMatrix(w http.ResponseWriter, r *http.Request) 
 		AssignedAt  time.Time `json:"assigned_at"`
 		UpdatedAt   time.Time `json:"updated_at"`
 	}
-	
+
 	var assignments []companyAssignment
 	for rows.Next() {
-		var assignment companyAssignment
-		if err := rows.Scan(&assignment.CompanyID, &assignment.CompanyName, &assignment.CompanyCode,
-			&assignment.Role, &assignment.Status, &assignment.AssignedAt, &assignment.UpdatedAt); err != nil {
+		var a companyAssignment
+		if err := rows.Scan(&a.TenantID, &a.CompanyName, &a.CompanyCode,
+			&a.Role, &a.Status, &a.AssignedAt, &a.UpdatedAt); err != nil {
 			continue
 		}
-		assignments = append(assignments, assignment)
+		assignments = append(assignments, a)
 	}
-	
-	httputil.JSON(w, http.StatusOK, map[string]interface{}{
+
+	httputil.JSON(w, http.StatusOK, map[string]any{
 		"user_id":     userID,
 		"user_name":   userName,
 		"user_email":  userEmail,
 		"assignments": assignments,
 	})
 }
-
-// ResetUserPassword is now implemented in handlers.go with the new schema

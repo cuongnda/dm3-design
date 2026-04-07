@@ -240,11 +240,15 @@ function Select({
       </button>
 
       {open && !disabled && createPortal(
-        <div
-          ref={panelRef}
-          style={panelStyle}
-          className="rounded-md border border-border bg-card text-foreground shadow-xl"
-        >
+        <>
+          {/* Invisible full-screen blocker: sits above dialog (z>51) but below panel, prevents dialog content from capturing events */}
+          {/* pointerEvents: auto overrides pointer-events: none set by Radix Dialog on document.body */}
+          <div style={{ position: 'fixed', inset: 0, zIndex: 2147483646, pointerEvents: 'auto' }} />
+          <div
+            ref={panelRef}
+            style={{ ...panelStyle, pointerEvents: 'auto' }}
+            className="rounded-md border border-border bg-card text-foreground shadow-xl"
+          >
           <div className="shrink-0 border-b border-border bg-card p-2">
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
@@ -253,7 +257,6 @@ function Select({
                 onChange={e => setSearch(e.target.value)}
                 placeholder={searchPlaceholder}
                 className="h-8 pl-9 pr-8 bg-background"
-                autoFocus
               />
               {search && (
                 <button
@@ -278,7 +281,7 @@ function Select({
                   disabled={opt.disabled}
                   onClick={() => handleSelect(opt.value)}
                   className={cn(
-                    "flex items-center gap-2 w-full px-3 py-2 text-sm text-left",
+                    "flex items-center gap-2 w-full px-3 py-2 text-sm text-left cursor-pointer select-none",
                     "hover:bg-muted focus:bg-muted focus:outline-none",
                     "disabled:opacity-50 disabled:cursor-not-allowed",
                     selectedValue === opt.value && "bg-primary/10 text-primary"
@@ -302,7 +305,7 @@ function Select({
                   disabled={opt.disabled}
                   onClick={() => handleSelect(opt.value)}
                   className={cn(
-                    "w-full px-3 py-2 text-left text-sm flex items-center justify-between gap-2",
+                    "w-full px-3 py-2 text-left text-sm flex items-center justify-between gap-2 cursor-pointer select-none",
                     "hover:bg-muted focus:bg-muted focus:outline-none",
                     "disabled:opacity-50 disabled:cursor-not-allowed",
                     selectedValue === opt.value && "bg-primary/10 text-primary"
@@ -314,7 +317,8 @@ function Select({
               ))
             )}
           </div>
-        </div>,
+          </div>
+        </>,
         document.body
       )}
     </div>

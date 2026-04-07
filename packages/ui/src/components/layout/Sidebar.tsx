@@ -6,6 +6,7 @@ import { useThemeStore } from '@/stores/themeStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { ROUTES } from '@/lib/constants';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 
@@ -27,7 +28,7 @@ function SidebarNavItem({ to, icon, label, badge, collapsed, end }: NavItemProps
                     <NavLink
                         to={to}
                         end={end}
-                        className="relative mx-auto flex h-9 w-9 items-center justify-center rounded-md transition-colors"
+                        className="relative mx-auto flex h-9 w-9 cursor-pointer items-center justify-center rounded-md transition-colors duration-200 ease-out"
                         style={({ isActive }) =>
                             isActive
                                 ? { backgroundColor: 'var(--sidebar-nav-active)', color: 'var(--sidebar-nav-active-text)' }
@@ -55,7 +56,7 @@ function SidebarNavItem({ to, icon, label, badge, collapsed, end }: NavItemProps
             end={end}
             className={({ isActive }) =>
                 cn(
-                    'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition-colors',
+                    'flex w-full cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition-colors duration-200 ease-out',
                     !isActive && 'hover:bg-sidebar-accent/50',
                 )
             }
@@ -96,7 +97,7 @@ export function Sidebar() {
     return (
         <nav
             className={cn(
-                'flex h-full min-h-screen shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar shadow-[1px_0_0_0_var(--color-sidebar-border)] transition-all duration-300',
+                'flex h-full min-h-screen shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar shadow-[1px_0_0_0_var(--color-sidebar-border)] transition-[width] duration-300 ease-in-out will-change-[width]',
                 c ? 'w-[56px]' : 'w-[220px]',
             )}
         >
@@ -123,41 +124,55 @@ export function Sidebar() {
                 <SidebarNavItem to={ROUTES.devices} icon={<Cpu size={iconSize} />} label={t('nav.devices')} collapsed={c} />
             </div>
 
-            {/* Bottom */}
+            {/* Bottom — align with system admin sidebar: settings, profile + theme, sign out */}
             <div className="shrink-0 border-t border-sidebar-border">
-                <div className="space-y-0.5 px-3 py-1">
+                <div className="px-3 py-1.5">
                     <SidebarNavItem to={ROUTES.settings} icon={<Settings size={iconSize} />} label={t('nav.settings')} collapsed={c} />
                 </div>
 
-                {/* User row */}
-                <div className={cn('border-t border-sidebar-border py-2.5', c ? 'px-2' : 'px-3')}>
+                <div className="border-t border-sidebar-border">
                     {c ? (
-                        <div className="flex flex-col items-center gap-1.5">
-                            <div className="w-7 h-7 bg-sidebar-primary rounded-full flex items-center justify-center text-[11px] font-bold text-sidebar-primary-foreground">
-                                {user?.initials}
-                            </div>
+                        <div className="flex flex-col items-center gap-2 p-2">
+                            <Tooltip delayDuration={0}>
+                                <TooltipTrigger asChild>
+                                    <div className="flex h-9 w-9 cursor-default items-center justify-center rounded-full bg-sidebar-primary/20 text-[11px] font-semibold text-sidebar-primary">
+                                        {user?.initials}
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="right" className="max-w-[220px] border-border bg-card text-card-foreground text-[12px]">
+                                    <div className="font-medium text-foreground">{user?.name}</div>
+                                    <div className="text-muted-foreground">{user?.email}</div>
+                                </TooltipContent>
+                            </Tooltip>
+                            <ThemeToggle />
                             <button
+                                type="button"
                                 onClick={handleLogout}
-                                className="cursor-pointer text-sidebar-foreground/40 hover:text-destructive transition-colors"
+                                className="cursor-pointer text-sidebar-foreground/50 transition-colors duration-200 ease-out hover:text-destructive"
                                 title={t('actions.signOut')}
                             >
-                                <LogOut size={13} />
+                                <LogOut size={14} />
                             </button>
                         </div>
                     ) : (
-                        <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 bg-sidebar-primary rounded-full flex items-center justify-center text-[11px] font-bold text-sidebar-primary-foreground shrink-0">
-                                {user?.initials}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-[12px] font-semibold text-sidebar-foreground truncate">{user?.name}</p>
+                        <div className="space-y-2 p-3">
+                            <div className="flex items-center gap-2 px-1">
+                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sidebar-primary/20 text-[11px] font-semibold text-sidebar-primary">
+                                    {user?.initials}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="truncate text-[12px] font-medium text-sidebar-foreground">{user?.name}</div>
+                                    <div className="truncate text-[10px] text-muted-foreground">{user?.email}</div>
+                                </div>
+                                <ThemeToggle />
                             </div>
                             <button
+                                type="button"
                                 onClick={handleLogout}
-                                className="cursor-pointer text-sidebar-foreground/40 hover:text-destructive transition-colors shrink-0"
-                                title={t('actions.signOut')}
+                                className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-[12px] text-muted-foreground transition-colors duration-200 ease-out hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                             >
-                                <LogOut size={13} />
+                                <LogOut size={14} className="shrink-0" />
+                                {t('actions.signOut')}
                             </button>
                         </div>
                     )}
@@ -166,8 +181,9 @@ export function Sidebar() {
                 {/* Collapse toggle */}
                 <div className="border-t border-sidebar-border">
                     <button
+                        type="button"
                         onClick={toggleSidebar}
-                        className="flex cursor-pointer items-center justify-center w-full h-8 text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+                        className="flex h-8 w-full cursor-pointer items-center justify-center text-sidebar-foreground/40 transition-colors duration-200 ease-out hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                     >
                         {c ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
                     </button>

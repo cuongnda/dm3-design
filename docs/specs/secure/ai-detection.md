@@ -26,8 +26,8 @@ AI Detection provides intelligent video analytics by processing camera feeds thr
 | bounding_box | jsonb | no | null | `{x, y, width, height}` normalized 0-1 |
 | snapshot_path | string(500) | no | null | MinIO path to annotated snapshot |
 | clip_id | uuid | no | null | Linked video clip |
-| person_id | uuid | no | null | Matched person (face recognition) |
-| person_name | string(100) | no | null | Matched person name |
+| user_id | uuid | no | null | Matched user (face recognition) |
+| user_name | string(100) | no | null | Matched user name |
 | plate_number | string(20) | no | null | Detected license plate |
 | object_class | string(50) | no | null | Detected object class (YOLO) |
 | object_count | int | no | null | Count for crowd/people counting |
@@ -72,7 +72,7 @@ AI Detection provides intelligent video analytics by processing camera feeds thr
 ### AIModel
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| id | string(50) | yes | - | Model identifier, e.g. "yolov8n-person" |
+| id | string(50) | yes | - | Model identifier, e.g. "yolov8n-user" |
 | name | string(100) | yes | - | Display name |
 | version | string(20) | yes | - | Model version |
 | type | AIModelTypeEnum | yes | - | Model type |
@@ -143,7 +143,7 @@ AIModelStatusEnum: active | inactive | loading | error
 
 ### GET /api/v1/ai/events/{id}
 - **Auth:** role >= viewer
-- **Response 200:** Full event with snapshot URL, clip URL, linked alarm, linked person
+- **Response 200:** Full event with snapshot URL, clip URL, linked alarm, linked user
 
 ### POST /api/v1/ai/events/{id}/review
 - **Auth:** role >= operator
@@ -259,10 +259,10 @@ AIModelStatusEnum: active | inactive | loading | error
 5. **BR-AI-005 — Auto-Clip Extraction:** When `auto_extract_clip=true`, a 30-second video clip (15s before, 15s after detection) is automatically extracted and linked to the event.
 6. **BR-AI-006 — ROI Zones:** Detection rules can define regions of interest within the camera frame. Only objects/events within ROI trigger alerts. Objects outside ROI are ignored. Useful for excluding roads, trees, etc.
 7. **BR-AI-007 — Schedule-Based Detection:** Rules with `schedule_id` only run during scheduled periods. e.g., loitering detection only active after business hours. Reduces false positives during busy periods.
-8. **BR-AI-008 — Loitering Duration:** Loitering detection requires a person to remain in the ROI for `loitering_threshold_ms` (default 5 min). Tracking persists across frames. Person leaving and returning resets the timer.
-9. **BR-AI-009 — Crowd Counting Threshold:** Crowd events trigger when person count in ROI exceeds `crowd_threshold_count`. The `object_count` field stores the actual count.
-10. **BR-AI-010 — Face Recognition Access Integration:** When a known face is detected by AI (not at a door reader), if the face matches a blacklisted person, an immediate critical alert is generated. If VIP, a notification is sent.
-11. **BR-AI-011 — Tailgating Detection:** Tailgating is detected when the AI observes two or more persons passing through a door/turnstile on a single credential. Links to access event from the same door within a 10-second window.
+8. **BR-AI-008 — Loitering Duration:** Loitering detection requires a user to remain in the ROI for `loitering_threshold_ms` (default 5 min). Tracking persists across frames. User leaving and returning resets the timer.
+9. **BR-AI-009 — Crowd Counting Threshold:** Crowd events trigger when user count in ROI exceeds `crowd_threshold_count`. The `object_count` field stores the actual count.
+10. **BR-AI-010 — Face Recognition Access Integration:** When a known face is detected by AI (not at a door reader), if the face matches a blacklisted user, an immediate critical alert is generated. If VIP, a notification is sent.
+11. **BR-AI-011 — Tailgating Detection:** Tailgating is detected when the AI observes two or more users passing through a door/turnstile on a single credential. Links to access event from the same door within a 10-second window.
 12. **BR-AI-012 — Model Resource Management:** Only active models consume GPU/CPU memory. Maximum concurrent models depends on hardware (GPU VRAM). System prevents loading models that would exceed available resources.
 13. **BR-AI-013 — Processing Priority:** Critical zones (perimeter, server room) get processing priority over general areas. When GPU is saturated, lower-priority camera feeds are processed at reduced frame rate.
 14. **BR-AI-014 — Event Annotation:** All AI events include an annotated snapshot showing bounding boxes, confidence scores, and detection type overlaid on the image. Stored in MinIO.
@@ -316,7 +316,7 @@ AIModelStatusEnum: active | inactive | loading | error
 
 - **Depends on:**
   - `video-svc` / go2rtc — RTSP sub-stream feed for analysis
-  - `identity-svc` — Face recognition database (face templates for known persons)
+  - `identity-svc` — Face recognition database (face templates for known users)
   - MinIO — Snapshot and clip storage
   - GPU hardware — NVIDIA GPU recommended for real-time inference
 - **Consumed by:**

@@ -82,8 +82,8 @@ func (h *Handlers) ListCompanies(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT c.id, c.name, c.code, c.plan, c.status, c.logo_url, c.address, c.phone, c.email,
 		 c.max_devices, c.max_users, c.created_at, c.updated_at,
-		 (SELECT COUNT(*) FROM dm3_auth.users u WHERE u.company_id = c.id),
-		 (SELECT COUNT(*) FROM dm3_devices.devices d WHERE d.company_id = c.id)
+		 (SELECT COUNT(*) FROM dm3_auth.accounts u WHERE u.tenant_id = c.id),
+		 (SELECT COUNT(*) FROM dm3_devices.devices d WHERE d.tenant_id = c.id)
 		 FROM dm3_auth.companies c ORDER BY c.created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -162,9 +162,9 @@ func (h *Handlers) CreateCompany(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Create primary manager user
 	_, err = tx.Exec(r.Context(),
-		`INSERT INTO dm3_auth.users (email, password_hash, name, roles, company_id, role, company_id, status)
-		 VALUES ($1, $2, $3, $4, $5::uuid, $6, $5::uuid, 'active')`,
-		req.Email, string(pwHash), req.Name+" Admin", []string{"admin"}, company.ID, "primary_manager",
+		`INSERT INTO dm3_auth.accounts (email, password_hash, full_name, tenant_id, role, status)
+		 VALUES ($1, $2, $3, $4::uuid, $5, 'active')`,
+		req.Email, string(pwHash), req.Name+" Admin", company.ID, "primary_manager",
 	)
 	if err != nil {
 		slog.Error("create primary manager error", "error", err)
@@ -195,10 +195,10 @@ func (h *Handlers) GetCompany(w http.ResponseWriter, r *http.Request) {
 	err := h.db.Pool.QueryRow(r.Context(),
 		`SELECT c.id, c.name, c.code, c.plan, c.status, c.logo_url, c.address, c.phone, c.email,
 		 c.max_devices, c.max_users, c.created_at, c.updated_at,
-		 (SELECT COUNT(*) FROM dm3_auth.users u WHERE u.company_id = c.id),
-		 (SELECT COUNT(*) FROM dm3_devices.devices d WHERE d.company_id = c.id),
-		 (SELECT COUNT(*) FROM dm3_access.doors dr WHERE dr.company_id = c.id),
-		 (SELECT COUNT(*) FROM dm3_access.access_events e WHERE e.company_id = c.id)
+		 (SELECT COUNT(*) FROM dm3_auth.accounts u WHERE u.tenant_id = c.id),
+		 (SELECT COUNT(*) FROM dm3_devices.devices d WHERE d.tenant_id = c.id),
+		 (SELECT COUNT(*) FROM dm3_access.doors dr WHERE dr.tenant_id = c.id),
+		 (SELECT COUNT(*) FROM dm3_access.access_events e WHERE e.tenant_id = c.id)
 		 FROM dm3_auth.companies c WHERE c.id = $1::uuid`, id,
 	).Scan(&c.ID, &c.Name, &c.Code, &c.Plan, &c.Status, &c.LogoURL, &c.Address, &c.Phone, &c.Email,
 		&c.MaxDevices, &c.MaxUsers, &c.CreatedAt, &c.UpdatedAt,

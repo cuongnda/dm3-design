@@ -16,7 +16,7 @@ import (
 // AccountInfo represents a user account in the consolidated auth schema
 type AccountInfo struct {
 	ID            string    `json:"id"`
-	CompanyID     *string   `json:"company_id"`
+	TenantID     *string   `json:"tenant_id"`
 	Email         string    `json:"email"`
 	PasswordHash  string    `json:"-"` // Never expose in JSON
 	FirstName     *string   `json:"first_name"`
@@ -39,7 +39,7 @@ type AccountInfo struct {
 type SessionInfo struct {
 	ID              string     `json:"id"`
 	AccountID       string     `json:"account_id"`
-	CompanyID       string     `json:"company_id"`
+	TenantID       string     `json:"tenant_id"`
 	TokenHash       string     `json:"-"` // Never expose in JSON
 	RefreshTokenHash *string   `json:"-"` // Never expose in JSON
 	UserAgent       *string    `json:"user_agent"`
@@ -68,10 +68,10 @@ func (as *AuthService) GetAccountByEmailAndCompany(ctx context.Context, email st
 			ap.account_id, ap.email, a.password_hash, a.first_name, a.last_name, 
 			ap.full_name, ap.role, ap.all_permissions, ap.status, 
 			a.email_verified, a.phone, a.avatar_url, a.locale, a.timezone,
-			a.last_login, a.created_at, a.updated_at, ap.company_id
+			a.last_login, a.created_at, a.updated_at, ap.tenant_id
 		FROM dm3_auth.account_permissions ap
 		JOIN dm3_auth.accounts a ON ap.account_id = a.id
-		WHERE ap.email = $1 AND ap.company_id = $2::uuid
+		WHERE ap.email = $1 AND ap.tenant_id = $2::uuid
 		AND ap.status = 'active' AND ap.company_status = 'active'
 	`
 
@@ -85,7 +85,7 @@ func (as *AuthService) GetAccountByEmailAndCompany(ctx context.Context, email st
 		&account.Role, &permissions, &account.Status,
 		&account.EmailVerified, &account.Phone, &account.AvatarURL,
 		&account.Locale, &account.Timezone, &lastLogin,
-		&account.CreatedAt, &account.UpdatedAt, &account.CompanyID,
+		&account.CreatedAt, &account.UpdatedAt, &account.TenantID,
 	)
 
 	if err != nil {
@@ -142,7 +142,7 @@ func (as *AuthService) CreateSession(ctx context.Context, accountID, companyID s
 
 	session := &SessionInfo{
 		AccountID:         accountID,
-		CompanyID:         companyID,
+		TenantID:         companyID,
 		TokenHash:         tokenHash,
 		RefreshTokenHash:  refreshTokenHash,
 		UserAgent:        getStringPtr(sessionData["user_agent"]),
@@ -156,7 +156,7 @@ func (as *AuthService) CreateSession(ctx context.Context, accountID, companyID s
 	// Insert session into database
 	err = as.db.Pool.QueryRow(ctx, `
 		INSERT INTO dm3_auth.sessions 
-		(account_id, company_id, token_hash, refresh_token_hash, user_agent, ip_address, device_fingerprint, expires_at)
+		(account_id, tenant_id, token_hash, refresh_token_hash, user_agent, ip_address, device_fingerprint, expires_at)
 		VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8)
 		RETURNING id, created_at
 	`, accountID, companyID, tokenHash, refreshTokenHash, 
@@ -188,7 +188,7 @@ func (as *AuthService) ValidateSession(ctx context.Context, token string) (*Sess
 
 	query := `
 		SELECT 
-			s.id, s.account_id, s.company_id, s.token_hash, s.user_agent, 
+			s.id, s.account_id, s.tenant_id, s.token_hash, s.user_agent, 
 			s.ip_address, s.device_fingerprint, s.is_active, s.expires_at, 
 			s.last_activity, s.created_at,
 			a.email, a.full_name, a.role, a.status
@@ -201,7 +201,7 @@ func (as *AuthService) ValidateSession(ctx context.Context, token string) (*Sess
 	var account AccountInfo
 
 	err := as.db.Pool.QueryRow(ctx, query, tokenHash).Scan(
-		&session.ID, &session.AccountID, &session.CompanyID, &session.TokenHash,
+		&session.ID, &session.AccountID, &session.TenantID, &session.TokenHash,
 		&session.UserAgent, &session.IPAddress, &session.DeviceFingerprint,
 		&session.IsActive, &session.ExpiresAt, &session.LastActivity, &session.CreatedAt,
 		&account.Email, &account.FullName, &account.Role, &account.Status,
@@ -227,8 +227,8 @@ func (as *AuthService) ValidateSession(ctx context.Context, token string) (*Sess
 	}
 
 	account.ID = session.AccountID
-	if session.CompanyID != "" {
-		account.CompanyID = &session.CompanyID
+	if session.TenantID != "" {
+		account.TenantID = &session.TenantID
 	}
 
 	return &session, &account, nil

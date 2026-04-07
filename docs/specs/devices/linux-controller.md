@@ -8,7 +8,7 @@
 
 ## 1. Overview & Purpose
 
-The Linux Controller is a headless device that bridges physical access hardware (readers, locks, sensors) to the DM3 platform. It has no screen — it controls relays, reads credentials from external readers, monitors door sensors, and makes **all access decisions locally in < 50ms** using a synced person database.
+The Linux Controller is a headless device that bridges physical access hardware (readers, locks, sensors) to the DM3 platform. It has no screen — it controls relays, reads credentials from external readers, monitors door sensors, and makes **all access decisions locally in < 50ms** using a synced user database.
 
 **Use cases:**
 - Retrofit existing buildings: connect legacy Wiegand readers to DM3
@@ -166,7 +166,7 @@ The Linux Controller is a headless device that bridges physical access hardware 
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │                  Local SQLite Database                     │   │
-│  │  persons | credentials | access_rules | blacklist |       │   │
+│  │  users | credentials | access_rules | blacklist |       │   │
 │  │  event_queue | sync_state | config | anti_passback        │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │                                                                  │
@@ -339,15 +339,15 @@ readers:
 
 Identical core schema to the Device Simulator (see `device-simulator.md §6`). Same tables:
 
-- `persons` — synced person records
+- `users` — synced user records
 - `credentials` — card UIDs, PIN hashes, face templates, QR data
 - `access_rules` — synced access rules with schedules
-- `person_groups` — group membership
+- `user_groups` — group membership
 - `blacklist` — priority blacklist
 - `event_queue` — pending events for upload
 - `sync_state` — sync versions and cursors
 - `config` — device configuration
-- `anti_passback_state` — per-person last direction tracking
+- `anti_passback_state` — per-user last direction tracking
 - `failed_attempts` — lockout tracking
 
 ### Additional Table: `door_state`
@@ -388,7 +388,7 @@ Reader Plugin emits Credential
 │ Decision     │  1. Check lockdown
 │ Engine       │  2. Lookup credential in local DB
 │ (< 50ms)     │  3. Check blacklist
-│              │  4. Check person status + validity
+│              │  4. Check user status + validity
 │              │  5. Check failed attempt lockout
 │              │  6. Find + evaluate access rules (priority order)
 │              │  7. Check schedule, anti-passback, interlock
@@ -475,14 +475,14 @@ When doors are in an interlock group, only one can be unlocked at a time:
 ```
 Door A (locked) ─── Mantrap ─── Door B (locked)
 
-1. Person presents credential at Door A
+1. User presents credential at Door A
 2. Controller checks: is Door B locked? → YES
 3. Decision: GRANTED → Unlock Door A
-4. Person enters mantrap, Door A closes and locks
-5. Person presents credential at Door B
+4. User enters mantrap, Door A closes and locks
+5. User presents credential at Door B
 6. Controller checks: is Door A locked? → YES
 7. Decision: GRANTED → Unlock Door B
-8. Person exits mantrap
+8. User exits mantrap
 
 If Door A is still open when Door B credential is presented:
 → DENIED (reason: denied_interlock)
@@ -630,7 +630,7 @@ Default: 100,000 events. Configurable via `cfg.full.network.offline_queue_max`.
 | **Offline < 24 hours** | Same; blacklist may be slightly stale |
 | **Offline > 24 hours** | Same; JWT may expire — device uses cached auth; events continue queuing |
 | **Offline > 7 days** | Same; potential NTP drift — events timestamped with local clock |
-| **First boot, never synced** | Deny all (empty person DB) — must complete initial sync |
+| **First boot, never synced** | Deny all (empty user DB) — must complete initial sync |
 
 ---
 
@@ -926,7 +926,7 @@ curl -fsSL https://install.duallmaster.com/controller.sh | sudo bash -s -- \
 - The Linux controller is the most hardware-flexible device in the DM3 ecosystem. Its plugin architecture allows supporting virtually any reader hardware.
 - For Wiegand: the protocol is inherently insecure (plain-text over two wires). For high-security deployments, recommend OSDP (RS485-based, encrypted) or DESFire EV3 with secure messaging.
 - GPIO libraries differ by platform: `pigpio` for Raspberry Pi, `libgpiod` for generic Linux. The HAL abstracts this.
-- Maximum recommended persons: 10,000 (same as other devices). Limited by SQLite lookup performance, not storage.
+- Maximum recommended users: 10,000 (same as other devices). Limited by SQLite lookup performance, not storage.
 - The REX (request-to-exit) button unlocks the door without logging an access event by default. This is configurable — some deployments want REX events logged.
 - Door sensor polarity is configurable: normally-open or normally-closed magnetic contacts.
 - For multi-controller deployments managing the same physical mantrap, interlock coordination happens via server-side MQTT commands (not direct controller-to-controller communication).

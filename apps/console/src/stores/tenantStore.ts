@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
+import { apiFetch } from '@/lib/api'
 
 // Tenant information interface
 export interface TenantInfo {
@@ -86,26 +87,18 @@ export const useTenantStore = create<TenantState>()(
       // API actions
       fetchTenant: async () => {
         const { setLoadingTenant, setTenant, setTenantError } = get()
-        
+
         try {
           setLoadingTenant(true)
           setTenantError(null)
-          
-          const response = await fetch('/api/v1/tenant/current', {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('dm3-token')}`,
-            },
-          })
-          
-          if (!response.ok) {
-            throw new Error(`Failed to fetch tenant: ${response.status}`)
-          }
-          
-          const data = await response.json()
+          const data = await apiFetch<{ tenant: TenantInfo }>('/api/v1/tenant/current')
           setTenant(data.tenant)
         } catch (error) {
-          console.error('Failed to fetch tenant:', error)
-          setTenantError(error instanceof Error ? error.message : 'Failed to fetch tenant')
+          // apiFetch redirects to /login on 401 — only log non-auth errors
+          if (error instanceof Error && error.message !== 'Unauthorized') {
+            console.error('Failed to fetch tenant:', error)
+            setTenantError(error.message)
+          }
         } finally {
           setLoadingTenant(false)
         }
@@ -113,26 +106,17 @@ export const useTenantStore = create<TenantState>()(
 
       fetchUsage: async () => {
         const { setLoadingUsage, setUsage, setUsageError } = get()
-        
+
         try {
           setLoadingUsage(true)
           setUsageError(null)
-          
-          const response = await fetch('/api/v1/tenant/stats', {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('dm3-token')}`,
-            },
-          })
-          
-          if (!response.ok) {
-            throw new Error(`Failed to fetch usage: ${response.status}`)
-          }
-          
-          const data = await response.json()
+          const data = await apiFetch<{ usage: TenantUsage }>('/api/v1/tenant/stats')
           setUsage(data.usage)
         } catch (error) {
-          console.error('Failed to fetch usage:', error)
-          setUsageError(error instanceof Error ? error.message : 'Failed to fetch usage')
+          if (error instanceof Error && error.message !== 'Unauthorized') {
+            console.error('Failed to fetch usage:', error)
+            setUsageError(error.message)
+          }
         } finally {
           setLoadingUsage(false)
         }

@@ -12,7 +12,7 @@
 
 ## Architecture Principles (CRITICAL)
 - **Offline-first**: Devices make access decisions LOCALLY. Never send credentials to server for decisions.
-- **Server role**: Sync rules/person DB to devices + aggregate event logs for analytics
+- **Server role**: Sync rules/user DB to devices + aggregate event logs for analytics
 - **Three Domains**: SECURE (blue #3B82F6) / MANAGE (purple #8B5CF6) / OPERATE (amber #F59E0B)
 - **Cross-cutting**: SMART (cyan #06B6D4) / PLATFORM (gray #6B7280)
 

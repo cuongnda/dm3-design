@@ -18,20 +18,20 @@ type Claims struct {
 
 	// Compat aliases
 	UserID   string `json:"-"`
-	CompanyID string `json:"-"`
+	TenantID string `json:"-"`
 }
 
 // Populate compat fields after parsing.
 func (c *Claims) Fixup() {
 	c.UserID = c.Sub
-	c.CompanyID = c.CID
+	c.TenantID = c.CID
 }
 
 func GenerateToken(userID, email, companyID string, roles []string, secret string) (string, error) {
 	claims := Claims{
 		UserID:   userID,
 		Email:    email,
-		CompanyID: companyID,
+		TenantID: companyID,
 		Roles:    roles,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),

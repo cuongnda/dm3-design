@@ -16,7 +16,7 @@ Delivery Management tracks packages and deliveries arriving at a building — fr
 | site_id | uuid | yes | — | Site |
 | package_id | string(50) | yes | auto | Human-readable ID (e.g., "PKG-20260219-001") |
 | tracking_number | string(100) | no | — | Carrier tracking number |
-| recipient_person_id | uuid | no | — | FK to Person (if known) |
+| recipient_user_id | uuid | no | — | FK to User (if known) |
 | recipient_name | string(200) | yes | — | Recipient display name |
 | recipient_phone | string(20) | no | — | Recipient phone |
 | recipient_unit | string(50) | no | — | Unit/room/office number |
@@ -37,9 +37,9 @@ Delivery Management tracks packages and deliveries arriving at a building — fr
 | notification_sent_at | timestamp | no | — | When notification was sent |
 | notification_count | int | no | 0 | Number of notifications sent |
 | collected_at | timestamp | no | — | When package was collected |
-| collected_by | uuid | no | — | Person who collected (may differ from recipient) |
+| collected_by | uuid | no | — | User who collected (may differ from recipient) |
 | collection_signature_ref | string(500) | no | — | Signature image ref |
-| collection_photo_ref | string(500) | no | — | Photo of person collecting |
+| collection_photo_ref | string(500) | no | — | Photo of user collecting |
 | returned_at | timestamp | no | — | If returned to sender |
 | return_reason | text | no | — | Reason for return |
 | notes | text | no | — | Admin notes |
@@ -158,7 +158,7 @@ LockerStatusEnum: available | occupied | maintenance | disabled
     "notes": "2 kiện hàng"
   }
   ```
-- **Side effects:** Auto-matches recipient to Person by phone/name, sends notification (push + SMS), audit log
+- **Side effects:** Auto-matches recipient to User by phone/name, sends notification (push + SMS), audit log
 - **Response 201:** Created delivery
 
 ### GET /api/v1/deliveries/{id}
@@ -178,7 +178,7 @@ LockerStatusEnum: available | occupied | maintenance | disabled
 - **Body:**
   ```json
   {
-    "collected_by_person_id": "uuid",
+    "collected_by_user_id": "uuid",
     "signature_ref": "minio://signatures/...",
     "photo_ref": "minio://collection-photos/...",
     "notes": "Người nhận ủy quyền cho đồng nghiệp"
@@ -234,9 +234,9 @@ LockerStatusEnum: available | occupied | maintenance | disabled
 
 3. **BR-DEL-003: Perishable priority.** Perishable deliveries (food, flowers) trigger immediate notification with "URGENT" flag. If uncollected for >4 hours, an alert escalates to admin.
 
-4. **BR-DEL-004: Recipient auto-matching.** On delivery creation, the system attempts to match `recipient_name` + `recipient_phone` to a Person in identity-svc. If matched, the person's push notification token is used. If not matched, SMS is used.
+4. **BR-DEL-004: Recipient auto-matching.** On delivery creation, the system attempts to match `recipient_name` + `recipient_phone` to a User in identity-svc. If matched, the user's push notification token is used. If not matched, SMS is used.
 
-5. **BR-DEL-005: Collection verification.** Collection requires either: (a) the recipient collecting in person (verified by face/card at terminal or manual confirmation), or (b) a delegate with a photo + signature capture.
+5. **BR-DEL-005: Collection verification.** Collection requires either: (a) the recipient collecting in user (verified by face/card at terminal or manual confirmation), or (b) a delegate with a photo + signature capture.
 
 6. **BR-DEL-006: Locker code expiry.** Smart locker one-time codes expire after 48 hours. After expiry, the admin must reassign or manually open the locker.
 
@@ -303,7 +303,7 @@ LockerStatusEnum: available | occupied | maintenance | disabled
 ## Integration Points
 
 - **Depends on:**
-  - `identity-svc` — recipient person lookup (phone/name matching)
+  - `identity-svc` — recipient user lookup (phone/name matching)
   - `notif-svc` — push notifications, SMS, Telegram messages
   - `device-gw` — smart locker MQTT commands
   - `auth-svc` — JWT validation

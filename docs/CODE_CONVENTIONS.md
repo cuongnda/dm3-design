@@ -11,7 +11,7 @@ backend/
 ├── cmd/                    # Service entry points
 │   ├── auth-svc/main.go   # Port 8005, JWT auth, user management
 │   ├── access-svc/main.go # Port 8003, doors, events, rules
-│   ├── identity-svc/main.go # Port 8004, persons, credentials, groups
+│   ├── identity-svc/main.go # Port 8004, users, credentials, groups
 │   └── device-gateway/main.go # Port 8002, device management, MQTT
 ├── internal/              # Private application code
 │   ├── authsvc/          # Auth service handlers
@@ -65,14 +65,14 @@ func (h *Handlers) CreatePerson(w http.ResponseWriter, r *http.Request) {
         return
     }
     
-    person, err := h.db.CreatePerson(r.Context(), req)
+    user, err := h.db.CreatePerson(r.Context(), req)
     if err != nil {
-        slog.Error("create person failed", "error", err)
+        slog.Error("create user failed", "error", err)
         httputil.Error(w, http.StatusInternalServerError, "creation failed")
         return
     }
     
-    httputil.JSON(w, http.StatusCreated, person)
+    httputil.JSON(w, http.StatusCreated, user)
 }
 ```
 
@@ -81,10 +81,10 @@ Standard JSON error responses with structured logging:
 ```go
 // Always use httputil.Error for consistent error format
 httputil.Error(w, http.StatusBadRequest, "validation failed")
-httputil.Error(w, http.StatusNotFound, "person not found")
+httputil.Error(w, http.StatusNotFound, "user not found")
 
 // Log errors with structured fields
-slog.Error("database error", "error", err, "person_id", id)
+slog.Error("database error", "error", err, "user_id", id)
 ```
 
 ### Database Queries
@@ -94,13 +94,13 @@ type DB struct {
     Pool *pgxpool.Pool
 }
 
-func (d *DB) CreatePerson(ctx context.Context, req CreatePersonRequest) (*Person, error) {
+func (d *DB) CreatePerson(ctx context.Context, req CreatePersonRequest) (*User, error) {
     const query = `
-        INSERT INTO dm3_identity.persons (first_name, last_name, email, tenant_id)
+        INSERT INTO dm3_identity.users (first_name, last_name, email, tenant_id)
         VALUES ($1, $2, $3, $4)
         RETURNING id, created_at, updated_at`
     
-    var p Person
+    var p User
     err := d.Pool.QueryRow(ctx, query, req.FirstName, req.LastName, req.Email, tenantID).
         Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
     return &p, err
@@ -129,7 +129,7 @@ func Load() *Config {
 Structured logging with `log/slog`:
 ```go
 slog.Info("starting service", "addr", addr, "version", version)
-slog.Error("database error", "error", err, "table", "persons")
+slog.Error("database error", "error", err, "table", "users")
 slog.Warn("migration issue", "file", filename, "error", err)
 ```
 
@@ -287,7 +287,7 @@ import { formatDate } from '@/lib/utils';
 
 ```go
 // Go model
-type Person struct {
+type User struct {
     ID        string    `json:"id"`
     TenantID  string    `json:"tenant_id"`
     FirstName string    `json:"first_name"`

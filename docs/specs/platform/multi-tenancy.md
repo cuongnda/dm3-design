@@ -8,7 +8,7 @@
 
 The Multi-Tenancy system enables DM3 to serve multiple **Companies** (organizations/customers) from a single deployment — each with complete data isolation, independent configuration, and hierarchical site management.
 
-**Key concept:** A **Company** is the top-level isolation boundary. Every piece of data (devices, doors, persons, events) belongs to exactly one Company. Users belong to a Company and can only see/manage data within their Company.
+**Key concept:** A **Company** is the top-level isolation boundary. Every piece of data (devices, doors, users, events) belongs to exactly one Company. Users belong to a Company and can only see/manage data within their Company.
 
 ### Two-Level Administration
 
@@ -101,7 +101,7 @@ SiteStatusEnum: active | inactive | maintenance
 | Manage company users | ❌ | ✅ | ❌ | ❌ | ❌ |
 | Manage devices | ❌ | ✅ | ✅ | ❌ | ❌ |
 | Manage doors/rules | ❌ | ✅ | ✅ | ❌ | ❌ |
-| Manage persons | ❌ | ✅ | ✅ | ✅ | ❌ |
+| Manage users | ❌ | ✅ | ✅ | ✅ | ❌ |
 | View dashboards | ❌ | ✅ | ✅ | ✅ | ✅ |
 | View events | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Send commands | ❌ | ✅ | ✅ | ✅ | ❌ |

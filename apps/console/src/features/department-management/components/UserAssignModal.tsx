@@ -73,7 +73,7 @@ export function UserAssignModal({ isOpen, onClose, department }: UserAssignModal
     if (!department) return;
     setLoading(true);
     try {
-      const response = await fetch(`/api/v1/users/available-for-department?department_id=${department.id}`, {
+      const response = await fetch(`/api/v1/departments/${department.id}/available-users`, {
         headers: getAuthHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch available users');

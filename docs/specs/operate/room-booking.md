@@ -43,7 +43,7 @@ Room & Resource Booking enables tenants and employees to reserve meeting rooms, 
 | tenant_id | uuid | yes | — | Tenant reference |
 | site_id | uuid | yes | — | Site reference |
 | resource_id | uuid | yes | — | Resource being booked |
-| organizer_id | uuid | yes | — | Person who made the booking |
+| organizer_id | uuid | yes | — | User who made the booking |
 | title | text | yes | — | Meeting/booking title |
 | description | text | no | — | Details or agenda |
 | start_time | timestamptz | yes | — | Booking start |
@@ -51,7 +51,7 @@ Room & Resource Booking enables tenants and employees to reserve meeting rooms, 
 | status | BookingStatus | yes | confirmed | Current status |
 | recurrence_rule | text | no | — | iCal RRULE for recurring bookings |
 | recurrence_group_id | uuid | no | — | Groups recurring instances |
-| attendees | uuid[] | no | — | Invited person IDs |
+| attendees | uuid[] | no | — | Invited user IDs |
 | external_attendees | jsonb | no | [] | External email invitees |
 | checked_in | bool | yes | false | Whether organizer checked in |
 | checked_in_at | timestamptz | no | — | Check-in timestamp |
@@ -306,7 +306,7 @@ BookingStatus: tentative | confirmed | checked_in | completed | cancelled | no_s
 | dm3/{site}/booking/resource/{id}/status | server→device | 1 | `{"status":"occupied","booking":{"title":"...","end_time":"...","organizer":"..."}}` | Push current status to room display |
 | dm3/{site}/booking/resource/{id}/next | server→device | 1 | `{"next_booking":{"title":"...","start_time":"..."},"available_until":"..."}` | Next booking info for display |
 | dm3/{site}/iot/sensor/{id}/occupancy | device→server | 1 | `{"occupied":true,"count":3,"timestamp":"..."}` | Occupancy sensor reading for no-show detection |
-| dm3/{site}/booking/checkin/{resource_id} | device→server | 1 | `{"method":"nfc","person_id":"...","timestamp":"..."}` | Check-in from room panel |
+| dm3/{site}/booking/checkin/{resource_id} | device→server | 1 | `{"method":"nfc","user_id":"...","timestamp":"..."}` | Check-in from room panel |
 
 ## Business Rules
 1. **No double-booking:** IF a resource has a confirmed booking for a time slot THEN no other confirmed booking can overlap that slot (409 Conflict).
@@ -371,11 +371,11 @@ BookingStatus: tentative | confirmed | checked_in | completed | cancelled | no_s
 | booking.reservation.checked_in | POST check-in | booking_id + method + actor | 1 year |
 | booking.reservation.no_show | Auto-release timer | booking_id + resource_id | 1 year |
 | booking.reservation.released | Auto or manual | booking_id + reason | 1 year |
-| booking.access.provisioned | Booking confirmed | booking_id + access_rule_id + persons | 1 year |
+| booking.access.provisioned | Booking confirmed | booking_id + access_rule_id + users | 1 year |
 | booking.access.revoked | Booking ended/cancelled | booking_id + access_rule_id | 1 year |
 
 ## Integration Points
-- **Depends on:** identity-svc (person lookup, attendees), access-svc (temporary access rules), iot-svc (occupancy sensors), notif-svc (booking notifications), tenant-svc (site hierarchy), auth-svc (JWT validation)
+- **Depends on:** identity-svc (user lookup, attendees), access-svc (temporary access rules), iot-svc (occupancy sensors), notif-svc (booking notifications), tenant-svc (site hierarchy), auth-svc (JWT validation)
 - **Consumed by:** analytics/report-svc (room utilization metrics), automate-svc (booking triggers), ai-asst-svc (natural language booking queries), display devices (MQTT)
 - **External:** Microsoft Outlook (Graph API calendar sync), Google Calendar (Calendar API sync), room display panels (MQTT)
 

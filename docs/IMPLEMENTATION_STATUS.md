@@ -7,7 +7,7 @@ This document tracks the current implementation status of DM3 features across th
 ### Backend Services (Go)
 - **auth-svc** (port 8005) — JWT authentication, bcrypt hashing, refresh tokens, RBAC, multi-company login
 - **access-svc** (port 8003) — Access event processing, door management, access rules engine
-- **identity-svc** (port 8004) — Person/credential management, identity operations
+- **identity-svc** (port 8004) — User/credential management, identity operations
 - **device-gateway** (port 8002) — MQTT bridge, device provisioning, sync coordination, WebSocket events
 
 ### Frontend Features (React/TypeScript)
@@ -15,14 +15,14 @@ Based on actual pages in `apps/console/src/features/`:
 
 #### SECURE Domain
 - **Access Control** (`AccessControlPage`) — Door management, real-time status, lock/unlock controls
-- **AI Detection** (`AIDetectionPage`) — Person/object detection dashboard
+- **AI Detection** (`AIDetectionPage`) — User/object detection dashboard
 - **CCTV** (`CCTVPage`, `CameraDetailPage`) — Camera monitoring and playback
 - **Emergency** (`EmergencyPage`) — Emergency procedures and alerts
 - **Intercom** (`IntercomPage`) — Video intercom interface
 - **Intrusion** (`IntrusionPage`) — Intrusion detection monitoring
 
 #### MANAGE Domain
-- **Identity Management** (`IdentitiesPage`, `PersonDetailPage`, `GroupsPage`) — Person/group management
+- **Identity Management** (`IdentitiesPage`, `PersonDetailPage`, `GroupsPage`) — User/group management
 - **Visitor Management** (`VisitorsPage`) — Visitor check-in/out, pre-registration
 - **Contractor Management** (`ContractorsPage`) — Contractor tracking and compliance
 - **Attendance** (`AttendancePage`) — Time & attendance tracking

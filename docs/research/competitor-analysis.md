@@ -38,10 +38,10 @@
 
 | Problem | Example |
 |---------|---------|
-| **"Visitor" isn't a domain — it's a person type** | Visitors use access control (Security Layer), book rooms (Facility Layer), get tracked (Intelligence Layer). They cross all layers. |
+| **"Visitor" isn't a domain — it's a user type** | Visitors use access control (Security Layer), book rooms (Facility Layer), get tracked (Intelligence Layer). They cross all layers. |
 | **"Facility" conflates people & places** | Time Attendance tracks *people*, not facilities. Room booking is about *spaces*. Maintenance is about *assets*. Three different subjects. |
 | **Layer boundaries are arbitrary** | Guard tour could be Security or Facility. Emergency could be Security or Intelligence. AI detection is in Security, but AI assistant is in Intelligence. |
-| **No clear organizing principle** | Layer 1 = by function, Layer 2 = by person type, Layer 3 = by location type, Layer 4 = by technology. Mixed metaphors. |
+| **No clear organizing principle** | Layer 1 = by function, Layer 2 = by user type, Layer 3 = by location type, Layer 4 = by technology. Mixed metaphors. |
 
 ---
 
@@ -171,7 +171,7 @@ The industry trend is moving toward **hybrid: function-based pillars with identi
 | Pillar | What It Manages | Modules |
 |--------|----------------|---------|
 | **Security** | Threat prevention & detection | Access Control, CCTV, Intrusion, Intercom, AI Detection, Emergency/Lockdown |
-| **People** | All person types & their lifecycle | Identity Mgmt, Visitor Mgmt, Contractor Mgmt, Time & Attendance |
+| **People** | All user types & their lifecycle | Identity Mgmt, Visitor Mgmt, Contractor Mgmt, Time & Attendance |
 | **Building** | Physical spaces & assets | Room Booking, Parking, Energy/IoT Sensors, Zones/Floors |
 | **Operations** | Day-to-day workflows | Guard Tour, Maintenance, Delivery Mgmt, Key Mgmt |
 | **Intelligence** *(cross-cutting)* | Data & AI across all pillars | Dashboards, Analytics, AI Assistant, Automation, Reports |
@@ -214,7 +214,7 @@ The industry trend is moving toward **hybrid: function-based pillars with identi
 | Domain | Purpose | Logic |
 |--------|---------|-------|
 | **SECURE** | Protect the building | Everything that detects, prevents, or responds to threats |
-| **MANAGE** | Manage people & access | All person types: employees, visitors, contractors, deliveries |
+| **MANAGE** | Manage people & access | All user types: employees, visitors, contractors, deliveries |
 | **OPERATE** | Run the building | Day-to-day facility operations and space management |
 
 **Plus two horizontal layers:**
@@ -226,7 +226,7 @@ The industry trend is moving toward **hybrid: function-based pillars with identi
 - ✅ Clean separation: things (Secure) vs people (Manage) vs spaces (Operate)
 - ✅ Matches industry: Genetec-style unified security + HID-style identity + facility ops
 - ✅ Each domain maps to a buyer persona (Security Director / HR-Admin / Facility Manager)
-- ✅ "Delivery" under Manage makes sense — it's about managing a person (delivery person) entering
+- ✅ "Delivery" under Manage makes sense — it's about managing a user (delivery user) entering
 
 **Cons:**
 - Some modules could arguably go in two domains (guard tour = Secure or Operate?)
@@ -325,7 +325,7 @@ Each domain maps to a decision-maker:
 | Predictive Intelligence | Multi-site Management |
 
 ### Why not Option A?
-Option A is essentially the same logic but with 4 pillars instead of 3. The "Operations" pillar is weak — guard tour, maintenance, key management, and delivery don't have a strong unifying theme. Option B absorbs delivery into MANAGE (it's about managing a person entering) and the rest into OPERATE (running the building), which is cleaner.
+Option A is essentially the same logic but with 4 pillars instead of 3. The "Operations" pillar is weak — guard tour, maintenance, key management, and delivery don't have a strong unifying theme. Option B absorbs delivery into MANAGE (it's about managing a user entering) and the rest into OPERATE (running the building), which is cleaner.
 
 ### Why not Option C?
 Too abstract. Security buyers want to see "Security" as a first-class concept. Splitting access control between People and Systems is confusing. Less marketable.
@@ -353,7 +353,7 @@ If "MANAGE" feels too generic, consider:
 | **PEOPLE** | Clear, human-centric | Informal for enterprise |
 | **IDENTITY** | Industry-standard (PIAM) | Narrow — doesn't obviously include attendance |
 | **WORKFORCE** | Strong, professional | Excludes visitors (they're not workforce) |
-| **COMMUNITY** | Inclusive of all person types | Unusual in security industry |
+| **COMMUNITY** | Inclusive of all user types | Unusual in security industry |
 
 **Recommendation:** Use **MANAGE** with subtitle "People & Identity Management" — or **PEOPLE** if the brand voice is modern/friendly.
 

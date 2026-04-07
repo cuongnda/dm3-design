@@ -107,7 +107,7 @@ The Emergency & Lockdown Management system coordinates building-wide or zone-spe
 | site_id | uuid | yes | - | Site scope |
 | name | string(100) | yes | - | e.g. "Đội PCCC Tòa A" |
 | type | EmergencyTypeEnum | yes | - | Team specialization |
-| member_ids | uuid[] | yes | - | Person IDs of team members |
+| member_ids | uuid[] | yes | - | User IDs of team members |
 | leader_id | uuid | yes | - | Team leader |
 | assembly_point | string(200) | no | null | Gathering location |
 | equipment_list | jsonb | no | [] | Required equipment checklist |

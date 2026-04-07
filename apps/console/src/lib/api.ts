@@ -53,18 +53,26 @@ async function tryRefreshToken(): Promise<boolean> {
 }
 
 export async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<T> {
-  const token = getToken();
+  const tokenAtRequest = getToken();
   const lang = i18n.language?.split('-')[0] ?? 'en';
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'Accept-Language': lang,
     ...(opts.headers as Record<string, string>),
   };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (tokenAtRequest) headers['Authorization'] = `Bearer ${tokenAtRequest}`;
 
   const res = await fetch(url, { ...opts, headers });
 
   if (res.status === 401) {
+    // If the token was replaced during this request (e.g. user logged in on another tab
+    // or a login completed while this background fetch was in-flight), don't clear the
+    // new token — just bail out silently.
+    const tokenNow = getToken();
+    if (tokenNow && tokenNow !== tokenAtRequest) {
+      throw new Error('Unauthorized');
+    }
+
     // Try refresh once (deduplicated across concurrent requests)
     if (!_refreshing) _refreshing = tryRefreshToken().finally(() => { _refreshing = null; });
     const refreshed = await _refreshing;
@@ -949,7 +957,7 @@ export interface PendingDevice {
 }
 
 export interface ApproveRequest {
-  company_id: string;
+  tenant_id: string;
   name: string;
   location?: string;
 }

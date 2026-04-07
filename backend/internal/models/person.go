@@ -2,9 +2,9 @@ package models
 
 import "time"
 
-type Person struct {
+type User struct {
 	ID         string    `json:"id"`
-	CompanyID  string    `json:"company_id"`
+	TenantID   string    `json:"tenant_id"`
 	FirstName  string    `json:"first_name"`
 	LastName   string    `json:"last_name"`
 	Email      string    `json:"email,omitempty"`
@@ -20,10 +20,10 @@ type Person struct {
 
 type Credential struct {
 	ID         string     `json:"id"`
-	CompanyID  string     `json:"company_id"`
-	PersonID   string     `json:"person_id"`
-	Type       string     `json:"type"`       // face, card, pin, qr, fingerprint
-	Value      string     `json:"value"`       // NOTE: would be encrypted in production
+	TenantID   string     `json:"tenant_id"`
+	UserID     string     `json:"user_id"`
+	Type       string     `json:"type"`
+	Value      string     `json:"value"`
 	Status     string     `json:"status"`
 	ValidFrom  *time.Time `json:"valid_from,omitempty"`
 	ValidUntil *time.Time `json:"valid_until,omitempty"`
@@ -31,9 +31,9 @@ type Credential struct {
 	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
-type PersonGroup struct {
+type UserGroup struct {
 	ID          string    `json:"id"`
-	CompanyID   string    `json:"company_id"`
+	TenantID    string    `json:"tenant_id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description,omitempty"`
 	MemberCount int       `json:"member_count,omitempty"`
@@ -41,15 +41,15 @@ type PersonGroup struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-type PersonGroupMember struct {
-	GroupID  string    `json:"group_id"`
-	PersonID string    `json:"person_id"`
-	AddedAt  time.Time `json:"added_at"`
+type UserGroupMember struct {
+	GroupID string    `json:"group_id"`
+	UserID  string    `json:"user_id"`
+	AddedAt time.Time `json:"added_at"`
 }
 
 // SyncResponse is returned by the sync endpoint for offline-first device sync.
 type SyncResponse struct {
-	Persons     []Person     `json:"persons"`
+	Users       []User       `json:"users"`
 	Credentials []Credential `json:"credentials"`
 	Since       string       `json:"since"`
 	Timestamp   string       `json:"timestamp"`
@@ -57,9 +57,9 @@ type SyncResponse struct {
 
 // IdentityStats holds aggregate identity statistics.
 type IdentityStats struct {
-	TotalPersons     int64            `json:"total_persons"`
-	PersonsByStatus  map[string]int64 `json:"persons_by_status"`
-	PersonsByDept    map[string]int64 `json:"persons_by_department"`
+	TotalUsers       int64            `json:"total_users"`
+	UsersByStatus    map[string]int64 `json:"users_by_status"`
+	UsersByDept      map[string]int64 `json:"users_by_department"`
 	CredentialCounts map[string]int64 `json:"credential_counts"`
 	TotalGroups      int64            `json:"total_groups"`
 }

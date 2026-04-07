@@ -30,7 +30,7 @@ func (h *Handlers) UploadUserAvatar(w http.ResponseWriter, r *http.Request) {
 	_ = h.db.Pool.QueryRow(r.Context(), `
 		SELECT EXISTS(
 			SELECT 1 FROM dm3_identity.users
-			WHERE id = $1::uuid AND company_id = $2::uuid
+			WHERE id = $1::uuid AND tenant_id = $2::uuid
 			  AND (is_deleted = false OR is_deleted IS NULL)
 		)
 	`, userID, companyID).Scan(&exists)
@@ -79,7 +79,7 @@ func (h *Handlers) UploadUserAvatar(w http.ResponseWriter, r *http.Request) {
 	avatarURL := fmt.Sprintf("/photos/%s", filename)
 	_, err = h.db.Pool.Exec(r.Context(), `
 		UPDATE dm3_identity.users SET avatar = $2, updated_at = NOW()
-		WHERE id = $1::uuid AND company_id = $3::uuid
+		WHERE id = $1::uuid AND tenant_id = $3::uuid
 	`, userID, avatarURL, companyID)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to update avatar")
@@ -128,7 +128,7 @@ func (h *Handlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 		sortOrder = "ASC"
 	}
 
-	baseWhere := `WHERE u.company_id = $1::uuid AND (u.is_deleted = false OR u.is_deleted IS NULL)`
+	baseWhere := `WHERE u.tenant_id = $1::uuid AND (u.is_deleted = false OR u.is_deleted IS NULL)`
 	args := []interface{}{companyID}
 	idx := 2
 
@@ -296,7 +296,7 @@ func (h *Handlers) GetUser(w http.ResponseWriter, r *http.Request) {
 			u.expired_date::text
 		FROM dm3_identity.users u
 		LEFT JOIN dm3_identity.departments d ON u.department_id = d.id
-		WHERE u.id = $1::uuid AND u.company_id = $2::uuid
+		WHERE u.id = $1::uuid AND u.tenant_id = $2::uuid
 		  AND (u.is_deleted = false OR u.is_deleted IS NULL)
 	`, userID, companyID).Scan(
 		&id, &userCode, &empNum, &firstName, &lastName, &fullName,
@@ -364,7 +364,7 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	_ = h.db.Pool.QueryRow(r.Context(), `
 		SELECT COALESCE(MAX(CAST(NULLIF(regexp_replace(user_code, '[^0-9]', '', 'g'), '') AS INTEGER)), 0)
 		FROM dm3_identity.users
-		WHERE company_id = $1::uuid AND (is_deleted = false OR is_deleted IS NULL)
+		WHERE tenant_id = $1::uuid AND (is_deleted = false OR is_deleted IS NULL)
 	`, companyID).Scan(&maxCode)
 	userCode := fmt.Sprintf("%06d", maxCode+1)
 
@@ -373,7 +373,7 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var accountID string
 	err := h.db.Pool.QueryRow(r.Context(), `
 		SELECT id FROM dm3_auth.accounts
-		WHERE username = $1 AND company_id = $2::uuid AND is_deleted = false
+		WHERE email = $1 AND tenant_id = $2::uuid AND status != 'deleted'
 	`, req.Email, companyID).Scan(&accountID)
 
 	if err == pgx.ErrNoRows {
@@ -387,8 +387,8 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if scanErr := h.db.Pool.QueryRow(r.Context(), `
-			INSERT INTO dm3_auth.accounts (company_id, username, password_hash, type, created_on, updated_on)
-			VALUES ($1::uuid, $2, $3, 1, NOW(), NOW())
+			INSERT INTO dm3_auth.accounts (tenant_id, email, password_hash, role, status, created_at, updated_at)
+			VALUES ($1::uuid, $2, $3, 'viewer', 'active', NOW(), NOW())
 			RETURNING id
 		`, companyID, req.Email, string(hashed)).Scan(&accountID); scanErr != nil {
 			httputil.Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to create account: %v", scanErr))
@@ -412,7 +412,7 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var userID string
 	if err := h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.users (
-			company_id, tenant_id, first_name, last_name, email,
+			tenant_id, tenant_id, first_name, last_name, email,
 			user_code, emp_number, position, phone, address,
 			sex, birth_day, department_id, account_id,
 			status, created_at, updated_at
@@ -560,7 +560,7 @@ func (h *Handlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	q := fmt.Sprintf(`
 		UPDATE dm3_identity.users SET %s
-		WHERE id = $1::uuid AND company_id = $2::uuid
+		WHERE id = $1::uuid AND tenant_id = $2::uuid
 		  AND (is_deleted = false OR is_deleted IS NULL)
 	`, strings.Join(setParts, ", "))
 
@@ -588,7 +588,7 @@ func (h *Handlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	result, err := h.db.Pool.Exec(r.Context(), `
 		UPDATE dm3_identity.users
 		SET is_deleted = true, status = 'deleted', updated_at = NOW()
-		WHERE id = $1::uuid AND company_id = $2::uuid
+		WHERE id = $1::uuid AND tenant_id = $2::uuid
 		  AND (is_deleted = false OR is_deleted IS NULL)
 	`, userID, companyID)
 	if err != nil {
@@ -628,7 +628,7 @@ func (h *Handlers) BulkDeleteUsers(w http.ResponseWriter, r *http.Request) {
 	_, err := h.db.Pool.Exec(r.Context(), fmt.Sprintf(`
 		UPDATE dm3_identity.users
 		SET is_deleted = true, status = 'deleted', updated_at = NOW()
-		WHERE company_id = $1::uuid
+		WHERE tenant_id = $1::uuid
 		  AND id IN (%s)
 		  AND (is_deleted = false OR is_deleted IS NULL)
 	`, strings.Join(placeholders, ",")), args...)
@@ -651,7 +651,7 @@ func (h *Handlers) ListUserDepartments(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Pool.Query(r.Context(), `
 		SELECT id, name, COALESCE(number, '') FROM dm3_identity.departments
-		WHERE company_id = $1::uuid AND (is_deleted = false OR is_deleted IS NULL)
+		WHERE tenant_id = $1::uuid AND (is_deleted = false OR is_deleted IS NULL)
 		ORDER BY name
 	`, companyID)
 	if err != nil {

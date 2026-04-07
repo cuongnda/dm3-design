@@ -32,7 +32,7 @@
 |-----------|--------|-----------|
 | **ORM** | Room (Jetpack) | Type-safe, compile-time verified queries, Kotlin coroutines support. Industry standard for Android local DB. |
 | **Underlying** | SQLite | Built into Android. Room wraps it with nice API. |
-| **Schema** | Same as simulator | persons, credentials, access_rules, person_groups, event_queue, sync_state |
+| **Schema** | Same as simulator | users, credentials, access_rules, user_groups, event_queue, sync_state |
 
 ### MQTT
 | Component | Choice | Rationale |
@@ -138,7 +138,7 @@ dm3-terminal/
 - CameraX preview on recognition screen
 - ML Kit face detection
 - MobileFaceNet TFLite embedding
-- 1:N matching against local person DB
+- 1:N matching against local user DB
 - Face → access decision flow
 
 ### Phase 4: Card + Hardware

@@ -58,7 +58,7 @@
 - **Acceptance Criteria:**
   - [ ] Door status card shows state, mode, last event, device info, firmware
   - [ ] Quick action buttons with confirmation dialogs for dangerous actions
-  - [ ] Events tab: paginated table with time, person, credential, result, photo thumbnail
+  - [ ] Events tab: paginated table with time, user, credential, result, photo thumbnail
   - [ ] Access Rules tab: list of rules with enabled toggle
   - [ ] Schedule tab: weekly visual schedule grid
   - [ ] Camera tab: placeholder for linked camera view
@@ -148,12 +148,12 @@
 ## Phase 3: MANAGE Domain
 
 ### P3-001: Identity Management
-- **Title:** [dm3] Build Identity Management with person directory
-- **Description:** `/manage/identities` — person directory with search, filters, detail view with credentials, access history.
+- **Title:** [dm3] Build Identity Management with user directory
+- **Description:** `/manage/identities` — user directory with search, filters, detail view with credentials, access history.
 - **Acceptance Criteria:**
-  - [ ] Person table: name, department, role, status, credentials count
-  - [ ] Person detail: profile info, credentials list, access groups, recent events
-  - [ ] Add/edit person form
+  - [ ] User table: name, department, role, status, credentials count
+  - [ ] User detail: profile info, credentials list, access groups, recent events
+  - [ ] Add/edit user form
   - [ ] Credential assignment (card, face, mobile)
   - [ ] Bulk import placeholder
   - [ ] Vietnamese name data in mock
@@ -271,7 +271,7 @@
 - **Description:** `/operate/keys` — key inventory, checkout/return tracking, overdue alerts.
 - **Acceptance Criteria:**
   - [ ] Key inventory table: key name, cabinet, status (available/checked-out)
-  - [ ] Checkout form: key, person, expected return
+  - [ ] Checkout form: key, user, expected return
   - [ ] Return confirmation
   - [ ] Overdue alerts
   - [ ] Audit trail per key

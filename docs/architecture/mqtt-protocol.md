@@ -110,7 +110,7 @@ All messages follow a standard envelope format:
 **QoS:** 1
 **Direction:** Device → Server (event reporting only — decision already made locally)
 
-> **IMPORTANT:** This is a log of what already happened on the device. The device made the access decision locally against its synced person DB. The server does NOT make access decisions.
+> **IMPORTANT:** This is a log of what already happened on the device. The device made the access decision locally against its synced user DB. The server does NOT make access decisions.
 
 ```json
 {
@@ -126,8 +126,8 @@ All messages follow a standard envelope format:
     "decision": "granted|denied",
     "decided_locally": true,
     "decision_time_ms": 35,
-    "person_id": "person-uuid",
-    "person_name": "Nguyễn Văn A",
+    "user_id": "user-uuid",
+    "user_name": "Nguyễn Văn A",
     "confidence": 0.97,
     "reason": "authorized|denied_expired|denied_zone|denied_time|denied_unknown|denied_blacklist",
     "credential_type": "face_template|card_uid|qr_code|fp_template|pin",
@@ -135,13 +135,13 @@ All messages follow a standard envelope format:
     "temperature": 36.5,       // Optional: thermal reading (°C)
     "mask_detected": true,     // Optional: mask detection
     "photo": "base64_jpeg",    // Optional: snapshot (max 100KB, compressed)
-    "local_db_version": 42,    // Current person DB version on device
-    "local_person_count": 4998 // Number of persons in local DB
+    "local_db_version": 42,    // Current user DB version on device
+    "local_person_count": 4998 // Number of users in local DB
   }
 }
 ```
 
-**Note:** The old `access.scan` (device asks server) and `access.decision` (server responds) messages have been **removed**. Devices make all access decisions locally using their synced person DB and access rules. This event is purely for server-side logging, analytics, and dashboards.
+**Note:** The old `access.scan` (device asks server) and `access.decision` (server responds) messages have been **removed**. Devices make all access decisions locally using their synced user DB and access rules. This event is purely for server-side logging, analytics, and dashboards.
 
 ### 4.2 Door State Event
 
@@ -184,7 +184,7 @@ All messages follow a standard envelope format:
     "action": "checkin|checkout|pre_registered_arrival",
     "name": "Trần Thị B",
     "id_number": "0123456789",  // Masked in transit
-    "host_id": "person-uuid",
+    "host_id": "user-uuid",
     "photo": "base64_jpeg",
     "badge_printed": true,
     "access_zones": ["zone-lobby", "zone-meeting"],
@@ -222,7 +222,7 @@ All messages follow a standard envelope format:
     "lane_id": "lane-001",
     "local_match": {
       "matched": true,
-      "person_id": "person-uuid",
+      "user_id": "user-uuid",
       "slot_assigned": "B2-015"
     }
   }
@@ -466,18 +466,18 @@ Sent after device first connects or on major config change.
 }
 ```
 
-### 7.3 Person Database Sync
+### 7.3 User Database Sync
 
-For offline/hybrid mode — push person credentials to device local storage.
+For offline/hybrid mode — push user credentials to device local storage.
 
 ```json
 {
   "type": "cfg.person_sync",
   "data": {
     "action": "upsert|delete|full_sync",
-    "persons": [
+    "users": [
       {
-        "person_id": "person-uuid",
+        "user_id": "user-uuid",
         "name": "Nguyễn Văn A",
         "credentials": [
           {"type": "card", "uid": "AABBCCDD"},
@@ -525,7 +525,7 @@ Real-time blacklist updates pushed to devices with highest priority. Device must
     "action": "add|remove|full_sync",
     "entries": [
       {
-        "person_id": "person-uuid",
+        "user_id": "user-uuid",
         "name": "Nguyễn Văn X",
         "credentials": [
           {"type": "card", "uid": "AABBCCDD"},
@@ -559,7 +559,7 @@ Push zone/schedule/group-based access rules to devices for local decision-making
         "rule_id": "rule-uuid",
         "name": "Office Hours",
         "door_ids": ["door-001", "door-002"],
-        "person_group_ids": ["group-all-staff"],
+        "user_group_ids": ["group-all-staff"],
         "schedule": {
           "timezone": "Asia/Ho_Chi_Minh",
           "periods": [
@@ -610,13 +610,13 @@ Push zone/schedule/group-based access rules to devices for local decision-making
 
 ## 8. Offline-First Architecture & Sync
 
-> **Offline is the DEFAULT operating mode.** Devices always make access decisions locally using their synced person DB and access rules. Connectivity adds sync capabilities but is never required for access decisions.
+> **Offline is the DEFAULT operating mode.** Devices always make access decisions locally using their synced user DB and access rules. Connectivity adds sync capabilities but is never required for access decisions.
 
 ### 8.1 Local Decision Engine (Always Active)
 
 Every device operates a local decision engine:
 
-1. **Local person DB** (SQLite) — synced from server via `cfg.person_sync`
+1. **Local user DB** (SQLite) — synced from server via `cfg.person_sync`
 2. **Local access rules** — synced from server via `cfg.access_rules` and `cfg.full`
 3. **Local blacklist** — synced via `cfg.blacklist` (priority push)
 4. **Local decision** — all credential matching and rule evaluation happens on-device in **< 50ms**
@@ -628,7 +628,7 @@ Every device operates a local decision engine:
 
 | Sync Type | Trigger | QoS | Content |
 |-----------|---------|-----|---------|
-| **Full sync** | Device provisioning, major rule change, admin request | 2 | Complete person DB + rules + blacklist |
+| **Full sync** | Device provisioning, major rule change, admin request | 2 | Complete user DB + rules + blacklist |
 | **Incremental sync** | Periodic (every 5 min when connected) | 2 | Delta updates via `sync_token` cursor |
 | **Priority sync** | Blacklist update, emergency rule change | 2 | Immediate push, device must process before next access decision |
 | **Event upload** | Continuous when connected, batch on reconnect | 1 | Access logs, door events, alarms → server for dashboards/audit |
@@ -636,7 +636,7 @@ Every device operates a local decision engine:
 #### Sync Flows
 
 **Server → Device (rules & data):**
-- `cfg.person_sync` — person credentials (face templates, card UIDs, etc.)
+- `cfg.person_sync` — user credentials (face templates, card UIDs, etc.)
 - `cfg.access_rules` — zone/schedule/group rules
 - `cfg.blacklist` — real-time blacklist pushes
 - `cfg.full` — full device configuration
@@ -667,7 +667,7 @@ Device acknowledges every sync with local DB version and counts:
 
 #### Conflict Resolution
 
-**Server wins.** The server is the source of truth for rules and person data. If a device has stale data, the next sync overwrites it. Devices never modify person records — they only consume them.
+**Server wins.** The server is the source of truth for rules and user data. If a device has stale data, the next sync overwrites it. Devices never modify user records — they only consume them.
 
 ### 8.3 Reconnection Flow
 
@@ -677,7 +677,7 @@ When connectivity restores after an outage:
 1. CONNECT → CONNACK
 2. Device publishes: status.heartbeat (with queue_depth > 0, local_db_version, rules_version)
 3. Device publishes: queued access.log events (ordered by timestamp, throttled 100/sec)
-4. Server publishes: cfg.person_sync (incremental, if person DB changed since device's sync_token)
+4. Server publishes: cfg.person_sync (incremental, if user DB changed since device's sync_token)
 5. Server publishes: cfg.access_rules (if rules_version changed)
 6. Server publishes: cfg.blacklist (if blacklist_version changed)
 7. Sync confirmed via ack messages
@@ -688,7 +688,7 @@ When connectivity restores after an outage:
 
 ```
 Local SQLite Database on Device:
-├── persons          — synced person records with credentials
+├── users          — synced user records with credentials
 ├── access_rules     — synced access rules and schedules
 ├── blacklist        — synced blacklist entries
 ├── event_queue      — pending events to upload (max 5000)
@@ -709,7 +709,7 @@ Terminal (Local)             EMQX                   access-svc              DB
    │                          │                         │                    │
    │── scan credential ──►    │                         │                    │
    │── match against ──►      │                         │                    │
-   │   local person DB        │                         │                    │
+   │   local user DB        │                         │                    │
    │── check local rules ──►  │                         │                    │
    │── DECISION (<50ms) ──►   │                         │                    │
    │── unlock/deny door ──►   │                         │                    │
@@ -733,8 +733,8 @@ Terminal (Local)             EMQX (unavailable)     Local SQLite DB
    │                          ✗                         │
    │── scan credential ──►    │                         │
    │── match against ─────────────────────────────────►│
-   │   local person DB        │                         │
-   │◄────── person found ────────────────────────────-│
+   │   local user DB        │                         │
+   │◄────── user found ────────────────────────────-│
    │                          │                         │
    │── check local rules ──►  │                         │
    │── DECISION (<50ms) ──►   │                         │
@@ -809,7 +809,7 @@ Guard Station              Server                 EMQX                  All Devi
 | `E005` | Command timeout (device didn't respond) |
 | `E006` | Device busy (processing another command) |
 | `E007` | Config version conflict |
-| `E008` | Person sync failed (storage full) |
+| `E008` | User sync failed (storage full) |
 | `E009` | Firmware download failed |
 | `E010` | Peripheral error (camera/reader/lock) |
 

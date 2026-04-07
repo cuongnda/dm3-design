@@ -409,7 +409,7 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
     setManagersLoading(true);
     
     try {
-      const response = await fetch('/api/v1/accounts/managers', {
+      const response = await fetch('/api/v1/departments/managers', {
         headers: getAuthHeaders(),
       });
 

@@ -56,7 +56,7 @@ func (h *Handlers) SystemStats(w http.ResponseWriter, r *http.Request) {
 		`SELECT COUNT(*),
 		 COUNT(*) FILTER (WHERE status = 'active'),
 		 COUNT(*) FILTER (WHERE status != 'active')
-		 FROM dm3_auth.users`,
+		 FROM dm3_auth.accounts`,
 	).Scan(&stats.Users.Total, &stats.Users.Active, &stats.Users.Inactive)
 
 	// Device counts (from device-gateway schema if available)
@@ -73,7 +73,7 @@ func (h *Handlers) SystemStats(w http.ResponseWriter, r *http.Request) {
 	).Scan(&stats.RecentStats.NewCompanies7d)
 
 	_ = h.db.Pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM dm3_auth.users WHERE created_at > now() - interval '7 days'`,
+		`SELECT COUNT(*) FROM dm3_auth.accounts WHERE created_at > now() - interval '7 days'`,
 	).Scan(&stats.RecentStats.NewUsers7d)
 
 	_ = h.db.Pool.QueryRow(ctx,
