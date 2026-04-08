@@ -589,7 +589,7 @@ func (h *UserManagementHandlers) DeleteUser(w http.ResponseWriter, r *http.Reque
 	// Soft delete user
 	result, err := h.db.Pool.Exec(r.Context(), `
 		UPDATE dm3_identity.users 
-		SET is_deleted = true, status = 'deleted', updated_on = NOW()
+		SET is_deleted = true, status = 'deleted', updated_at = NOW()
 		WHERE id = $1::uuid AND tenant_id = $2::uuid AND is_deleted = false
 	`, userID, tenantID)
 
@@ -843,7 +843,7 @@ func (h *UserManagementHandlers) BulkDeleteUsers(w http.ResponseWriter, r *http.
 	// Perform bulk deletion
 	result, err := h.db.Pool.Exec(r.Context(), `
 		UPDATE dm3_identity.users 
-		SET is_deleted = true, status = 'deleted', updated_on = NOW(),
+		SET is_deleted = true, status = 'deleted', updated_at = NOW(),
 		    deletion_reason = COALESCE($3, 'Bulk deletion'),
 		    deleted_by = $4
 		WHERE id = ANY($1::uuid[]) AND tenant_id = $2::uuid AND is_deleted = false
@@ -890,7 +890,7 @@ func (h *UserManagementHandlers) BulkUpdateDepartment(w http.ResponseWriter, r *
 	
 	result, err := h.db.Pool.Exec(r.Context(), `
 		UPDATE dm3_identity.users 
-		SET department_id = $1::uuid, updated_on = NOW()
+		SET department_id = $1::uuid, updated_at = NOW()
 		WHERE id = ANY($2::uuid[]) AND tenant_id = $3::uuid AND is_deleted = false
 	`, req.DepartmentID, req.UserIDs, tenantID)
 	
@@ -975,7 +975,7 @@ func (h *UserManagementHandlers) BulkApproveUsers(w http.ResponseWriter, r *http
 	
 	result, err := h.db.Pool.Exec(r.Context(), `
 		UPDATE dm3_identity.users 
-		SET status = 'active', updated_on = NOW()
+		SET status = 'active', updated_at = NOW()
 		WHERE id = ANY($1::uuid[]) AND tenant_id = $2::uuid AND status = 'pending' AND is_deleted = false
 	`, req.UserIDs, tenantID)
 	
@@ -1016,7 +1016,7 @@ func (h *UserManagementHandlers) BulkSuspendUsers(w http.ResponseWriter, r *http
 	
 	result, err := h.db.Pool.Exec(r.Context(), `
 		UPDATE dm3_identity.users 
-		SET status = 'suspended', updated_on = NOW()
+		SET status = 'suspended', updated_at = NOW()
 		WHERE id = ANY($1::uuid[]) AND tenant_id = $2::uuid AND status != 'suspended' AND is_deleted = false
 	`, req.UserIDs, tenantID)
 	
@@ -1118,7 +1118,7 @@ func (h *UserManagementHandlers) ChangeUserPassword(w http.ResponseWriter, r *ht
 	// Update password in accounts table (find account by user ID)
 	result, err := h.db.Pool.Exec(r.Context(), `
 		UPDATE dm3_auth.accounts 
-		SET password_hash = $1, updated_on = NOW()
+		SET password_hash = $1, updated_at = NOW()
 		WHERE id = (
 			SELECT account_id 
 			FROM dm3_identity.users 

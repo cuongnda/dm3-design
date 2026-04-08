@@ -70,7 +70,7 @@
           <mxGeometry x="55" y="838" width="150" height="20" as="geometry"/>
         </mxCell>
 
-        <mxCell id="departments" value="&lt;b style='color:#8B5CF6'&gt;departments&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → companies&lt;br/&gt;🔗 parent_id → departments (self)&lt;br/&gt;department_manager_id : UUID&lt;br/&gt;name : VARCHAR(255) NOT NULL&lt;br/&gt;number : VARCHAR(100)&lt;br/&gt;is_deleted : BOOL&lt;br/&gt;created_on / updated_on&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+        <mxCell id="departments" value="&lt;b style='color:#8B5CF6'&gt;departments&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → companies&lt;br/&gt;🔗 parent_id → departments (self)&lt;br/&gt;department_manager_id : UUID&lt;br/&gt;name : VARCHAR(255) NOT NULL&lt;br/&gt;number : VARCHAR(100)&lt;br/&gt;is_deleted : BOOL&lt;br/&gt;created_at / updated_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
           <mxGeometry x="60" y="870" width="220" height="200" as="geometry"/>
         </mxCell>
 
@@ -99,7 +99,7 @@
         </mxCell>
 
         <!-- Row 1: WHO / WHEN / WHERE -->
-        <mxCell id="access_groups" value="&lt;b style='color:#3B82F6'&gt;access_groups&lt;/b&gt;&lt;br/&gt;&lt;i style='font-size:10px;color:#94A3B8'&gt;WHO can access&lt;/i&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → companies&lt;br/&gt;🔗 parent_id → access_groups (self)&lt;br/&gt;name : VARCHAR(255) NOT NULL&lt;br/&gt;is_default : BOOL def false&lt;br/&gt;type : SMALLINT def 1&lt;br/&gt;is_deleted : BOOL def false&lt;br/&gt;created_on / updated_on&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+        <mxCell id="access_groups" value="&lt;b style='color:#3B82F6'&gt;access_groups&lt;/b&gt;&lt;br/&gt;&lt;i style='font-size:10px;color:#94A3B8'&gt;WHO can access&lt;/i&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → companies&lt;br/&gt;🔗 parent_id → access_groups (self)&lt;br/&gt;name : VARCHAR(255) NOT NULL&lt;br/&gt;is_default : BOOL def false&lt;br/&gt;type : SMALLINT def 1&lt;br/&gt;is_deleted : BOOL def false&lt;br/&gt;created_at / updated_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
           <mxGeometry x="600" y="150" width="220" height="220" as="geometry"/>
         </mxCell>
 
