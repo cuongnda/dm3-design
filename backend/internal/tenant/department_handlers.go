@@ -167,7 +167,6 @@ func (h *UserManagementHandlers) ListDepartments(w http.ResponseWriter, r *http.
 		SELECT 
 			d.id, d.tenant_id, d.parent_id, d.name, d.number,
 			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name,
-			d.access_group_id,
 			COALESCE(user_counts.count, 0) as user_count,
 			d.created_at::text, d.updated_at::text, d.is_deleted
 		FROM dm3_identity.departments d
@@ -196,7 +195,7 @@ func (h *UserManagementHandlers) ListDepartments(w http.ResponseWriter, r *http.
 		var dept Department
 		err := rows.Scan(
 			&dept.ID, &dept.TenantID, &dept.ParentID, &dept.Name, &dept.Number,
-			&dept.DepartmentManagerID, &dept.ManagerName, &dept.AccessGroupID,
+			&dept.DepartmentManagerID, &dept.ManagerName,
 			&dept.UserCount, &dept.CreatedAt, &dept.UpdatedAt,
 			&dept.IsDeleted,
 		)
@@ -263,10 +262,10 @@ func (h *UserManagementHandlers) CreateDepartment(w http.ResponseWriter, r *http
 	var departmentID string
 	err = h.db.Pool.QueryRow(ctx, `
 		INSERT INTO dm3_identity.departments (
-			tenant_id, parent_id, name, number, department_manager_id, access_group_id, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, now(), now())
+			tenant_id, parent_id, name, number, department_manager_id, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, now(), now())
 		RETURNING id`,
-		companyID, data.ParentID, data.Name, data.Number, data.DepartmentManagerID, data.AccessGroupID,
+		companyID, data.ParentID, data.Name, data.Number, data.DepartmentManagerID,
 	).Scan(&departmentID)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "Failed to create department")
@@ -278,13 +277,13 @@ func (h *UserManagementHandlers) CreateDepartment(w http.ResponseWriter, r *http
 	err = h.db.Pool.QueryRow(ctx, `
 		SELECT 
 			d.id, d.tenant_id, d.parent_id, d.name, d.number,
-			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name, d.access_group_id,
+			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name,
 			0 as user_count, d.created_at::text, d.updated_at::text, d.is_deleted
 		FROM dm3_identity.departments d
 		LEFT JOIN dm3_identity.users mgr ON d.department_manager_id = mgr.id
 		WHERE d.id = $1`, departmentID).Scan(
 		&dept.ID, &dept.TenantID, &dept.ParentID, &dept.Name, &dept.Number,
-		&dept.DepartmentManagerID, &dept.ManagerName, &dept.AccessGroupID,
+		&dept.DepartmentManagerID, &dept.ManagerName,
 		&dept.UserCount, &dept.CreatedAt, &dept.UpdatedAt,
 		&dept.IsDeleted,
 	)
@@ -310,7 +309,7 @@ func (h *UserManagementHandlers) GetDepartment(w http.ResponseWriter, r *http.Re
 	err := h.db.Pool.QueryRow(ctx, `
 		SELECT 
 			d.id, d.tenant_id, d.parent_id, d.name, d.number,
-			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name, d.access_group_id,
+			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name,
 			COALESCE(user_counts.count, 0) as user_count,
 			d.created_at::text, d.updated_at::text, d.is_deleted
 		FROM dm3_identity.departments d
@@ -324,7 +323,7 @@ func (h *UserManagementHandlers) GetDepartment(w http.ResponseWriter, r *http.Re
 		WHERE d.id = $1 AND d.tenant_id = $3 AND d.is_deleted = false`,
 		departmentID, departmentID, companyID).Scan(
 		&dept.ID, &dept.TenantID, &dept.ParentID, &dept.Name, &dept.Number,
-		&dept.DepartmentManagerID, &dept.ManagerName, &dept.AccessGroupID,
+		&dept.DepartmentManagerID, &dept.ManagerName,
 		&dept.UserCount, &dept.CreatedAt, &dept.UpdatedAt,
 		&dept.IsDeleted,
 	)
@@ -379,10 +378,10 @@ func (h *UserManagementHandlers) UpdateDepartment(w http.ResponseWriter, r *http
 	// Update department
 	_, err = h.db.Pool.Exec(ctx, `
 		UPDATE dm3_identity.departments SET
-			name = $1, number = $2, parent_id = $3, 
-			department_manager_id = $4, access_group_id = $5, updated_at = now()
-		WHERE id = $6 AND tenant_id = $7 AND is_deleted = false`,
-		data.Name, data.Number, data.ParentID, data.DepartmentManagerID, data.AccessGroupID,
+			name = $1, number = $2, parent_id = $3,
+			department_manager_id = $4, updated_at = now()
+		WHERE id = $5 AND tenant_id = $6 AND is_deleted = false`,
+		data.Name, data.Number, data.ParentID, data.DepartmentManagerID,
 		departmentID, companyID)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "Failed to update department")
@@ -394,7 +393,7 @@ func (h *UserManagementHandlers) UpdateDepartment(w http.ResponseWriter, r *http
 	err = h.db.Pool.QueryRow(ctx, `
 		SELECT 
 			d.id, d.tenant_id, d.parent_id, d.name, d.number,
-			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name, d.access_group_id,
+			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name,
 			COALESCE(user_counts.count, 0) as user_count,
 			d.created_at::text, d.updated_at::text, d.is_deleted
 		FROM dm3_identity.departments d
@@ -408,7 +407,7 @@ func (h *UserManagementHandlers) UpdateDepartment(w http.ResponseWriter, r *http
 		WHERE d.id = $1 AND d.tenant_id = $2 AND d.is_deleted = false`,
 		departmentID, companyID).Scan(
 		&dept.ID, &dept.TenantID, &dept.ParentID, &dept.Name, &dept.Number,
-		&dept.DepartmentManagerID, &dept.ManagerName, &dept.AccessGroupID,
+		&dept.DepartmentManagerID, &dept.ManagerName,
 		&dept.UserCount, &dept.CreatedAt, &dept.UpdatedAt,
 		&dept.IsDeleted,
 	)

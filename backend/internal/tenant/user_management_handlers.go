@@ -173,7 +173,7 @@ func (h *UserManagementHandlers) GetUsers(w http.ResponseWriter, r *http.Request
 		countArgIndex++
 	}
 	if accessGroupID != "" {
-		countQuery += fmt.Sprintf(` AND u.access_group_id = $%d::uuid`, countArgIndex)
+		countQuery += fmt.Sprintf(` AND u.id IN (SELECT agu.user_id FROM dm3_access.access_group_users agu WHERE agu.access_group_id = $%d::uuid AND (agu.effective_to IS NULL OR agu.effective_to > now()))`, countArgIndex)
 		countArgs = append(countArgs, accessGroupID)
 		countArgIndex++
 	}

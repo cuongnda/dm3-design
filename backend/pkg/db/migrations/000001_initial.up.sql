@@ -25,9 +25,9 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================
--- dm3_auth.companies
+-- dm3_auth.tenants
 -- ============================================================
-CREATE TABLE IF NOT EXISTS dm3_auth.companies (
+CREATE TABLE IF NOT EXISTS dm3_auth.tenants (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name        VARCHAR(255) NOT NULL,
     code        VARCHAR(50)  NOT NULL UNIQUE,
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS dm3_auth.companies (
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_auth.accounts (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id           UUID REFERENCES dm3_auth.companies(id),
+    tenant_id           UUID REFERENCES dm3_auth.tenants(id),
     email               VARCHAR(255) NOT NULL,
     password_hash       VARCHAR(255) NOT NULL,
     first_name          VARCHAR(255),
@@ -98,7 +98,7 @@ CREATE TRIGGER update_accounts_updated_at
 CREATE TABLE IF NOT EXISTS dm3_auth.refresh_tokens (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id    UUID NOT NULL REFERENCES dm3_auth.accounts(id) ON DELETE CASCADE,
-    tenant_id  UUID REFERENCES dm3_auth.companies(id),
+    tenant_id  UUID REFERENCES dm3_auth.tenants(id),
     token_hash VARCHAR(64) NOT NULL UNIQUE,
     expires_at TIMESTAMPTZ NOT NULL,
     revoked    BOOLEAN DEFAULT false,
@@ -114,7 +114,7 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON dm3_auth.refresh_tokens(to
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_access.access_groups (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id      UUID NOT NULL REFERENCES dm3_auth.companies(id),
+    tenant_id      UUID NOT NULL REFERENCES dm3_auth.tenants(id),
     parent_id      UUID REFERENCES dm3_access.access_groups(id),
     name           VARCHAR(255) NOT NULL,
     is_default     BOOLEAN DEFAULT false,
@@ -134,13 +134,13 @@ CREATE INDEX IF NOT EXISTS idx_ag_access_time       ON dm3_access.access_groups(
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_identity.departments (
     id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id             UUID NOT NULL REFERENCES dm3_auth.companies(id),
+    tenant_id             UUID NOT NULL REFERENCES dm3_auth.tenants(id),
     parent_id             UUID REFERENCES dm3_identity.departments(id),
     department_manager_id UUID,
     name                  VARCHAR(255) NOT NULL,
     number                VARCHAR(100) DEFAULT '',
-    created_on            TIMESTAMPTZ DEFAULT now(),
-    updated_on            TIMESTAMPTZ DEFAULT now(),
+    created_at            TIMESTAMPTZ DEFAULT now(),
+    updated_at            TIMESTAMPTZ DEFAULT now(),
     is_deleted            BOOLEAN DEFAULT false
 );
 
@@ -151,7 +151,7 @@ CREATE INDEX IF NOT EXISTS idx_departments_tenant ON dm3_identity.departments(te
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_identity.users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id       UUID NOT NULL REFERENCES dm3_auth.companies(id),
+    tenant_id       UUID NOT NULL REFERENCES dm3_auth.tenants(id),
     account_id      UUID REFERENCES dm3_auth.accounts(id) ON DELETE SET NULL,
     department_id   UUID REFERENCES dm3_identity.departments(id),
     first_name      VARCHAR(255) NOT NULL DEFAULT '',
@@ -190,7 +190,7 @@ ALTER TABLE dm3_identity.departments
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_identity.credentials (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id   UUID NOT NULL REFERENCES dm3_auth.companies(id),
+    tenant_id   UUID NOT NULL REFERENCES dm3_auth.tenants(id),
     user_id     UUID NOT NULL REFERENCES dm3_identity.users(id) ON DELETE CASCADE,
     type        VARCHAR(50) NOT NULL,
     value       TEXT NOT NULL,
@@ -211,7 +211,7 @@ CREATE INDEX IF NOT EXISTS idx_credentials_status ON dm3_identity.credentials(st
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_identity.user_groups (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id   UUID NOT NULL REFERENCES dm3_auth.companies(id),
+    tenant_id   UUID NOT NULL REFERENCES dm3_auth.tenants(id),
     name        VARCHAR(255) NOT NULL,
     description TEXT,
     created_at  TIMESTAMPTZ DEFAULT now(),
@@ -227,7 +227,7 @@ CREATE INDEX IF NOT EXISTS idx_user_groups_name   ON dm3_identity.user_groups(na
 CREATE TABLE IF NOT EXISTS dm3_identity.user_group_members (
     group_id  UUID NOT NULL REFERENCES dm3_identity.user_groups(id) ON DELETE CASCADE,
     user_id   UUID NOT NULL REFERENCES dm3_identity.users(id) ON DELETE CASCADE,
-    tenant_id UUID NOT NULL REFERENCES dm3_auth.companies(id),
+    tenant_id UUID NOT NULL REFERENCES dm3_auth.tenants(id),
     added_at  TIMESTAMPTZ DEFAULT now(),
     PRIMARY KEY (group_id, user_id)
 );
@@ -239,7 +239,7 @@ CREATE INDEX IF NOT EXISTS idx_user_group_members_tenant ON dm3_identity.user_gr
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_access.access_group_users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id       UUID NOT NULL REFERENCES dm3_auth.companies(id),
+    tenant_id       UUID NOT NULL REFERENCES dm3_auth.tenants(id),
     access_group_id UUID NOT NULL REFERENCES dm3_access.access_groups(id) ON DELETE CASCADE,
     user_id         UUID NOT NULL REFERENCES dm3_identity.users(id) ON DELETE CASCADE,
     effective_from  TIMESTAMPTZ DEFAULT now(),
@@ -330,7 +330,7 @@ CREATE TRIGGER trg_account_deleted
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_devices.devices (
     id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id            UUID NOT NULL REFERENCES dm3_auth.companies(id),
+    tenant_id            UUID NOT NULL REFERENCES dm3_auth.tenants(id),
     device_id            VARCHAR(20) NOT NULL UNIQUE,
     name                 VARCHAR(255),
     type                 VARCHAR(50) NOT NULL,
@@ -384,7 +384,7 @@ CREATE INDEX IF NOT EXISTS idx_firmwares_created_at  ON dm3_devices.firmwares(cr
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_devices.provisioning_tokens (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id  UUID NOT NULL REFERENCES dm3_auth.companies(id) ON DELETE CASCADE,
+    tenant_id  UUID NOT NULL REFERENCES dm3_auth.tenants(id) ON DELETE CASCADE,
     device_id  UUID NOT NULL REFERENCES dm3_devices.devices(id),
     token_hash VARCHAR(64) NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
@@ -400,7 +400,7 @@ CREATE INDEX IF NOT EXISTS idx_provisioning_tokens_tenant ON dm3_devices.provisi
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_devices.pending_registrations (
     id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id            UUID REFERENCES dm3_auth.companies(id),
+    tenant_id            UUID REFERENCES dm3_auth.tenants(id),
     rid                  VARCHAR(20) NOT NULL,
     device_type          VARCHAR(50) NOT NULL,
     firmware_version     VARCHAR(50),
@@ -421,7 +421,7 @@ CREATE INDEX IF NOT EXISTS idx_pending_tenant ON dm3_devices.pending_registratio
 -- dm3_devices.used_nonces (replay protection, composite PK)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_devices.used_nonces (
-    tenant_id  UUID NOT NULL REFERENCES dm3_auth.companies(id) ON DELETE CASCADE,
+    tenant_id  UUID NOT NULL REFERENCES dm3_auth.tenants(id) ON DELETE CASCADE,
     nonce      VARCHAR(100) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now(),
     PRIMARY KEY (tenant_id, nonce)
@@ -432,7 +432,7 @@ CREATE TABLE IF NOT EXISTS dm3_devices.used_nonces (
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_access.zones (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id   UUID NOT NULL REFERENCES dm3_auth.companies(id),
+    tenant_id   UUID NOT NULL REFERENCES dm3_auth.tenants(id),
     parent_id   UUID REFERENCES dm3_access.zones(id) ON DELETE SET NULL,
     name        VARCHAR(255) NOT NULL,
     description VARCHAR(500),
@@ -448,7 +448,7 @@ CREATE INDEX IF NOT EXISTS idx_zones_parent ON dm3_access.zones(parent_id);
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_access.access_times (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id   UUID NOT NULL REFERENCES dm3_auth.companies(id),
+    tenant_id   UUID NOT NULL REFERENCES dm3_auth.tenants(id),
     name        VARCHAR(100) NOT NULL,
     description TEXT,
     timezone    VARCHAR(50) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
@@ -471,7 +471,7 @@ ALTER TABLE dm3_access.access_groups
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_access.access_time_slots (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id      UUID NOT NULL REFERENCES dm3_auth.companies(id) ON DELETE CASCADE,
+    tenant_id      UUID NOT NULL REFERENCES dm3_auth.tenants(id) ON DELETE CASCADE,
     access_time_id UUID NOT NULL REFERENCES dm3_access.access_times(id) ON DELETE CASCADE,
     day_of_week    INTEGER NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6),
     start_time     TIME NOT NULL,
@@ -493,7 +493,7 @@ CREATE INDEX IF NOT EXISTS idx_access_time_slots_day    ON dm3_access.access_tim
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_access.access_points (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id      UUID NOT NULL REFERENCES dm3_auth.companies(id),
+    tenant_id      UUID NOT NULL REFERENCES dm3_auth.tenants(id),
     zone_id        UUID REFERENCES dm3_access.zones(id) ON DELETE SET NULL,
     access_time_id UUID REFERENCES dm3_access.access_times(id) ON DELETE SET NULL,
     name           VARCHAR(255) NOT NULL,
@@ -512,7 +512,7 @@ CREATE INDEX IF NOT EXISTS idx_access_points_zone   ON dm3_access.access_points(
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_access.access_devices (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id         UUID NOT NULL REFERENCES dm3_auth.companies(id),
+    tenant_id         UUID NOT NULL REFERENCES dm3_auth.tenants(id),
     device_id         UUID REFERENCES dm3_devices.devices(id),
     name              VARCHAR(255) NOT NULL,
     type              VARCHAR(20) NOT NULL DEFAULT 'door',
@@ -548,7 +548,7 @@ CREATE INDEX IF NOT EXISTS idx_access_devices_state  ON dm3_access.access_device
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_access.access_point_devices (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id        UUID NOT NULL REFERENCES dm3_auth.companies(id),
+    tenant_id        UUID NOT NULL REFERENCES dm3_auth.tenants(id),
     access_point_id  UUID NOT NULL REFERENCES dm3_access.access_points(id) ON DELETE CASCADE,
     access_device_id TEXT NOT NULL,
     role             VARCHAR(20) NOT NULL DEFAULT 'reader_in',
@@ -567,7 +567,7 @@ CREATE INDEX IF NOT EXISTS idx_ap_devices_tenant ON dm3_access.access_point_devi
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_access.access_group_access_points (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id        UUID NOT NULL REFERENCES dm3_auth.companies(id),
+    tenant_id        UUID NOT NULL REFERENCES dm3_auth.tenants(id),
     access_group_id  UUID NOT NULL REFERENCES dm3_access.access_groups(id) ON DELETE CASCADE,
     access_point_id  UUID NOT NULL REFERENCES dm3_access.access_points(id) ON DELETE CASCADE,
     access_time_id   UUID REFERENCES dm3_access.access_times(id) ON DELETE SET NULL,
@@ -659,7 +659,7 @@ END $$;
 -- ============================================================
 
 -- Default company
-INSERT INTO dm3_auth.companies (id, name, code, plan, status)
+INSERT INTO dm3_auth.tenants (id, name, code, plan, status)
 VALUES ('00000000-0000-0000-0000-000000000001', 'Duali Demo', 'duali-demo', 'enterprise', 'active')
 ON CONFLICT DO NOTHING;
 
