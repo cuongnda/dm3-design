@@ -1,7 +1,7 @@
 # Feature: Parking Management
 
 > Domain: OPERATE | Color: #4CAF50 | Priority: P1
-> Status: Draft | Owner: parking-svc team
+> Status: NOT IMPLEMENTED | Owner: parking-svc team
 
 ## Overview
 Parking Management handles vehicle entry/exit, space occupancy tracking, license plate recognition (LPR), reservations, monthly passes, EV charging, and fee calculation for multi-level parking facilities. Designed for Vietnamese parking contexts including motorbikes, cars, and bicycles with LPR as the primary access method. Integrates with barrier controllers, LPR cameras, and payment gateways.

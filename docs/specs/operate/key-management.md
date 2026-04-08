@@ -1,7 +1,7 @@
 # Feature: Key Management
 
 > Domain: OPERATE | Color: #4CAF50 | Priority: P2
-> Status: Draft | Owner: key-svc team
+> Status: NOT IMPLEMENTED | Owner: key-svc team
 
 ## Overview
 Key Management tracks the inventory, checkout, return, and audit trail of physical keys and key-like assets (access cards, fobs, master keys). Supports electronic key cabinet integration, overdue alerts, approval workflows for restricted keys, and full audit trail for compliance. Designed for buildings that still maintain physical locks alongside electronic access control.

@@ -1,7 +1,7 @@
 # Feature: Guard Tour & Patrol
 
 > Domain: OPERATE | Color: #4CAF50 | Priority: P1
-> Status: Draft | Owner: patrol-svc team
+> Status: NOT IMPLEMENTED | Owner: patrol-svc team
 
 ## Overview
 Guard Tour manages security patrol routes, checkpoint verification (NFC/QR), real-time tracking, incident reporting, and shift handover. Guards execute assigned patrol routes via mobile app, scanning NFC tags or QR codes at each checkpoint. The system monitors compliance in real-time, alerts supervisors of missed checkpoints, and provides comprehensive patrol analytics.

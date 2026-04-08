@@ -1,7 +1,7 @@
 # Feature: Room & Resource Booking
 
 > Domain: OPERATE | Color: #4CAF50 | Priority: P1
-> Status: Draft | Owner: facility-svc team
+> Status: NOT IMPLEMENTED | Owner: facility-svc team
 
 ## Overview
 Room & Resource Booking enables tenants and employees to reserve meeting rooms, hot desks, equipment, and shared amenities through a calendar-based interface. Integrates with access control to auto-grant door access for the booking period, and with IoT sensors to detect no-shows and auto-release resources. Supports recurring bookings, multi-timezone calendar sync (Outlook/Google), and Vietnamese holiday awareness.

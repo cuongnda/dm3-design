@@ -1,7 +1,7 @@
 # Feature: IoT Sensors & Energy Management
 
 > Domain: OPERATE | Color: #4CAF50 | Priority: P1
-> Status: Draft | Owner: iot-svc team
+> Status: NOT IMPLEMENTED | Owner: iot-svc team
 
 ## Overview
 IoT & Energy Management provides a unified dashboard for all IoT sensors (temperature, humidity, air quality, water leak, occupancy) and energy monitoring (electricity, water, gas). Supports alert thresholds, consumption reports, environmental compliance, and ESG reporting. Sensor data stored as time-series in TimescaleDB with continuous aggregates for efficient querying.
