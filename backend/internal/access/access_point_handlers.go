@@ -59,7 +59,7 @@ func (h *AccessHandlers) ListAccessPoints(w http.ResponseWriter, r *http.Request
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
 		slog.Error("list access points query error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
@@ -70,7 +70,7 @@ func (h *AccessHandlers) ListAccessPoints(w http.ResponseWriter, r *http.Request
 		if err := rows.Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
 			&ap.Name, &ap.Description, &ap.AccessDeviceCount,
 			&ap.CreatedAt, &ap.UpdatedAt); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		aps = append(aps, ap)
@@ -133,7 +133,7 @@ func (h *AccessHandlers) CreateAccessPoint(w http.ResponseWriter, r *http.Reques
 		&ap.CreatedAt, &ap.UpdatedAt)
 	if err != nil {
 		slog.Error("create access point error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusCreated, ap)
@@ -159,11 +159,11 @@ func (h *AccessHandlers) UpdateAccessPoint(w http.ResponseWriter, r *http.Reques
 	var ap models.AccessPoint
 	err := h.db.Pool.QueryRow(r.Context(),
 		`UPDATE dm3_access.access_points
-		 SET name          = COALESCE($2, name),
-		     description   = COALESCE($3, description),
-		     zone_id       = COALESCE($4::uuid, zone_id),
+		 SET name           = COALESCE($2, name),
+		     description    = COALESCE($3, description),
+		     zone_id        = COALESCE($4::uuid, zone_id),
 		     access_time_id = COALESCE($5::uuid, access_time_id),
-		     updated_at    = now()
+		     updated_at     = now()
 		 WHERE id = $1::uuid AND tenant_id = $6::uuid
 		 RETURNING id, tenant_id, zone_id, access_time_id, name, description, 0, created_at, updated_at`,
 		id, req.Name, req.Description, req.ZoneID, req.AccessTimeID, cid,
@@ -185,7 +185,7 @@ func (h *AccessHandlers) DeleteAccessPoint(w http.ResponseWriter, r *http.Reques
 		`DELETE FROM dm3_access.access_points WHERE id = $1::uuid AND tenant_id = $2::uuid`,
 		id, cid)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -213,7 +213,7 @@ func (h *AccessHandlers) BulkDeleteAccessPoints(w http.ResponseWriter, r *http.R
 	query := fmt.Sprintf(`DELETE FROM dm3_access.access_points WHERE tenant_id = $1::uuid AND id IN (%s)`, strings.Join(placeholders, ","))
 	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusOK, map[string]any{"deleted": tag.RowsAffected()})
@@ -282,7 +282,7 @@ func (h *AccessHandlers) AddAccessPointDevice(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if req.Role == "" {
-		req.Role = "controller"
+		req.Role = "reader_in"
 	}
 
 	var id string
@@ -299,6 +299,27 @@ func (h *AccessHandlers) AddAccessPointDevice(w http.ResponseWriter, r *http.Req
 		return
 	}
 	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id})
+}
+
+// DELETE /access-points/:id/devices/:deviceId
+func (h *AccessHandlers) RemoveAccessPointDevice(w http.ResponseWriter, r *http.Request) {
+	apID := chi.URLParam(r, "id")
+	deviceID := chi.URLParam(r, "deviceId")
+
+	tag, err := h.db.Pool.Exec(r.Context(),
+		`DELETE FROM dm3_access.access_point_devices
+		 WHERE access_point_id = $1::uuid AND access_device_id = $2`,
+		apID, deviceID,
+	)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		httputil.Error(w, http.StatusNotFound, "access device not in this access point")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ─── Access Point → Access Groups ────────────────────────────────────────────
@@ -320,11 +341,11 @@ func (h *AccessHandlers) ListAccessPointGroups(w http.ResponseWriter, r *http.Re
 
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT ag.id, ag.tenant_id, ag.name,
-		        COUNT(DISTINCT u.id) AS user_count
+		        COUNT(DISTINCT agu.user_id) AS user_count
 		 FROM dm3_access.access_group_access_points agap
 		 JOIN dm3_access.access_groups ag ON ag.id = agap.access_group_id
-		 LEFT JOIN dm3_identity.users u ON u.access_group_id = ag.id
-		   AND (u.is_deleted = false OR u.is_deleted IS NULL)
+		 LEFT JOIN dm3_access.access_group_users agu ON agu.access_group_id = ag.id
+		   AND (agu.effective_to IS NULL OR agu.effective_to > now())
 		 WHERE agap.access_point_id = $1::uuid
 		 GROUP BY ag.id, ag.tenant_id, ag.name
 		 ORDER BY ag.name ASC`,
@@ -332,7 +353,7 @@ func (h *AccessHandlers) ListAccessPointGroups(w http.ResponseWriter, r *http.Re
 	)
 	if err != nil {
 		slog.Error("list access point groups error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
@@ -341,7 +362,7 @@ func (h *AccessHandlers) ListAccessPointGroups(w http.ResponseWriter, r *http.Re
 	for rows.Next() {
 		var ag models.AccessGroup
 		if err := rows.Scan(&ag.ID, &ag.TenantID, &ag.Name, &ag.UserCount); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		result = append(result, ag)
@@ -355,7 +376,8 @@ func (h *AccessHandlers) AddAccessPointGroup(w http.ResponseWriter, r *http.Requ
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
 	var req struct {
-		AccessGroupID string `json:"access_group_id"`
+		AccessGroupID string  `json:"access_group_id"`
+		AccessTimeID  *string `json:"access_time_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -368,15 +390,16 @@ func (h *AccessHandlers) AddAccessPointGroup(w http.ResponseWriter, r *http.Requ
 
 	var id string
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_access.access_group_access_points (tenant_id, access_group_id, access_point_id)
-		 VALUES ($1::uuid, $2::uuid, $3::uuid)
-		 ON CONFLICT (access_group_id, access_point_id) DO NOTHING
+		`INSERT INTO dm3_access.access_group_access_points (tenant_id, access_group_id, access_point_id, access_time_id)
+		 VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid)
+		 ON CONFLICT (access_group_id, access_point_id, access_time_id) DO UPDATE
+		   SET access_time_id = EXCLUDED.access_time_id
 		 RETURNING id`,
-		cid, req.AccessGroupID, apID,
+		cid, req.AccessGroupID, apID, req.AccessTimeID,
 	).Scan(&id)
 	if err != nil {
 		slog.Error("add access point group error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id})
@@ -386,39 +409,23 @@ func (h *AccessHandlers) AddAccessPointGroup(w http.ResponseWriter, r *http.Requ
 func (h *AccessHandlers) RemoveAccessPointGroup(w http.ResponseWriter, r *http.Request) {
 	apID := chi.URLParam(r, "id")
 	groupID := chi.URLParam(r, "groupId")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
 
 	tag, err := h.db.Pool.Exec(r.Context(),
 		`DELETE FROM dm3_access.access_group_access_points
-		 WHERE access_point_id = $1::uuid AND access_group_id = $2::uuid`,
-		apID, groupID,
+		 WHERE access_point_id = $1::uuid AND access_group_id = $2::uuid AND tenant_id = $3::uuid`,
+		apID, groupID, cid,
 	)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if tag.RowsAffected() == 0 {
 		httputil.Error(w, http.StatusNotFound, "access group not in this access point")
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// DELETE /access-points/:id/devices/:deviceId
-func (h *AccessHandlers) RemoveAccessPointDevice(w http.ResponseWriter, r *http.Request) {
-	apID := chi.URLParam(r, "id")
-	deviceID := chi.URLParam(r, "deviceId")
-
-	tag, err := h.db.Pool.Exec(r.Context(),
-		`DELETE FROM dm3_access.access_point_devices
-		 WHERE access_point_id = $1::uuid AND access_device_id = $2::uuid`,
-		apID, deviceID,
-	)
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if tag.RowsAffected() == 0 {
-		httputil.Error(w, http.StatusNotFound, "access device not in this access point")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

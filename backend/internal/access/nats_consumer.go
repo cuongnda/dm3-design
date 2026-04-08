@@ -41,7 +41,7 @@ type deviceEvent struct {
 }
 
 type accessLogData struct {
-	DoorID         string         `json:"door_id"`
+	DoorID         string         `json:"door_id"` // legacy field, may still arrive from older firmware
 	UserID         string         `json:"user_id"`
 	UserName       string         `json:"user_name"`
 	CredentialType string         `json:"credential_type"`
@@ -99,14 +99,28 @@ func (c *NATSConsumer) handleEvent(subject string, data []byte) error {
 		deviceID = parts[3]
 	}
 
+	// Resolve access_point_id from device_id via devices table
+	var accessPointID *string
+	if deviceID != "" {
+		lookupCtx, lookupCancel := context.WithTimeout(c.ctx, 2*time.Second)
+		_ = c.db.Pool.QueryRow(lookupCtx,
+			`SELECT ap.id::text FROM dm3_access.access_points ap
+			 JOIN dm3_devices.devices dev ON dev.id = ap.device_id
+			 WHERE dev.device_id = $1 AND ap.tenant_id = $2::uuid
+			 LIMIT 1`,
+			deviceID, tenantID,
+		).Scan(&accessPointID)
+		lookupCancel()
+	}
+
 	// Use a bounded context for DB operations so they cannot hang indefinitely.
 	dbCtx, cancel := context.WithTimeout(c.ctx, 5*time.Second)
 	defer cancel()
 
 	_, err := c.db.Pool.Exec(dbCtx,
-		`INSERT INTO dm3_access.access_events (time, tenant_id, door_id, device_id, user_id, user_name, credential_type, direction, decision, reason, confidence, photo_ref, temperature, metadata)
-		 VALUES ($1, $2::uuid, $3, $4, $5, NULLIF($6,''), NULLIF($7,''), NULLIF($8,''), $9, NULLIF($10,''), $11, NULLIF($12,''), $13, $14)`,
-		evtTime, tenantID, toUUIDPtr(ald.DoorID), toUUIDPtr(deviceID), toUUIDPtr(ald.UserID), ald.UserName, ald.CredentialType,
+		`INSERT INTO dm3_access.access_events (time, tenant_id, access_point_id, user_id, user_name, credential_type, direction, decision, reason, confidence, photo_ref, temperature, metadata)
+		 VALUES ($1, $2::uuid, $3::uuid, $4::uuid, NULLIF($5,''), NULLIF($6,''), NULLIF($7,''), $8, NULLIF($9,''), $10, NULLIF($11,''), $12, $13)`,
+		evtTime, tenantID, accessPointID, toUUIDPtr(ald.UserID), ald.UserName, ald.CredentialType,
 		ald.Direction, ald.Decision, ald.Reason, ald.Confidence, ald.PhotoRef, ald.Temperature, metadataJSON)
 	if err != nil {
 		slog.Error("nats: failed to insert access event", "error", err)

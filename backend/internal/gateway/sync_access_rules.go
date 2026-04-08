@@ -51,7 +51,7 @@ type accessRulesPayload struct {
 	SyncToken    string     `json:"sync_token"`
 }
 
-// PushAccessRules derives access rules from the access_groups → access_points → doors
+// PushAccessRules derives access rules from the access_groups → access_points
 // chain and sends cfg.access_rules to the specified device.
 func (s *AccessRulesSyncer) PushAccessRules(ctx context.Context, tenantID, deviceID string) error {
 	// Find the device's UUID from device_id string
@@ -64,21 +64,24 @@ func (s *AccessRulesSyncer) PushAccessRules(ctx context.Context, tenantID, devic
 		return fmt.Errorf("access_rules: device not found: %w", err)
 	}
 
-	// Query access groups that have access points linked to doors on this device.
-	// Join chain: access_groups → access_group_access_points → access_points
-	//           → access_point_doors → doors (where doors.device_id = deviceUUID)
+	// Find the access point linked to this device
+	var accessPointID string
+	err = s.db.Pool.QueryRow(ctx,
+		`SELECT id::text FROM dm3_access.access_points WHERE device_id = $1::uuid AND tenant_id = $2::uuid`,
+		deviceUUID, tenantID,
+	).Scan(&accessPointID)
+	if err != nil {
+		return fmt.Errorf("access_rules: no access point for device: %w", err)
+	}
+
+	// Query access groups that include this access point
 	ruleRows, err := s.db.Pool.Query(ctx, `
-		SELECT DISTINCT
-			ag.id, ag.name, ag.type
+		SELECT DISTINCT ag.id, ag.name, ag.type
 		FROM dm3_access.access_groups ag
 		JOIN dm3_access.access_group_access_points agap ON agap.access_group_id = ag.id
-		JOIN dm3_access.access_points ap ON ap.id = agap.access_point_id
-		JOIN dm3_access.access_point_doors apd ON apd.access_point_id = ap.id
-		JOIN dm3_access.doors d ON d.id = apd.door_id
-		WHERE d.device_id = $1::uuid
+		WHERE agap.access_point_id = $1::uuid
 		  AND ag.tenant_id = $2::uuid
-		  AND (ag.is_deleted = false OR ag.is_deleted IS NULL)
-	`, deviceUUID, tenantID)
+	`, accessPointID, tenantID)
 	if err != nil {
 		return fmt.Errorf("access_rules: query groups: %w", err)
 	}
@@ -110,61 +113,35 @@ func (s *AccessRulesSyncer) PushAccessRules(ctx context.Context, tenantID, devic
 		})
 	}
 
-	// For each access group, find:
-	// - door_ids (doors on this device accessible through this group)
-	// - user_group_ids (user IDs assigned to this group — using users.access_group_id)
-	// - schedule (from access_point.access_time_id → access_time_slots)
+	// Anti-passback from the access point itself
+	var apAntiPassback bool
+	_ = s.db.Pool.QueryRow(ctx,
+		`SELECT anti_passback FROM dm3_access.access_points WHERE id = $1::uuid`,
+		accessPointID,
+	).Scan(&apAntiPassback)
+
+	// For each access group, find users and schedule
 	rules := make([]syncRule, 0, len(groups))
 
 	for _, g := range groups {
 		rule := syncRule{
-			RuleID:  g.ID,
-			Name:    g.Name,
-			Priority: g.Type,
-			Enabled: true,
+			RuleID:       g.ID,
+			Name:         g.Name,
+			DoorIDs:      []string{accessPointID}, // access_point = door in new model
+			Priority:     g.Type,
+			Enabled:      true,
+			AntiPassback: apAntiPassback,
 		}
 
-		// Door IDs for this group on this device
-		doorRows, err := s.db.Pool.Query(ctx, `
-			SELECT DISTINCT d.id::text
-			FROM dm3_access.access_group_access_points agap
-			JOIN dm3_access.access_points ap ON ap.id = agap.access_point_id
-			JOIN dm3_access.access_point_doors apd ON apd.access_point_id = ap.id
-			JOIN dm3_access.doors d ON d.id = apd.door_id
-			WHERE agap.access_group_id = $1::uuid AND d.device_id = $2::uuid
-		`, g.ID, deviceUUID)
-		if err != nil {
-			slog.Warn("access_rules: query doors", "group", g.ID, "error", err)
-			continue
-		}
-		rule.DoorIDs = []string{}
-		for doorRows.Next() {
-			var doorID string
-			if doorRows.Scan(&doorID) == nil {
-				rule.DoorIDs = append(rule.DoorIDs, doorID)
-			}
-		}
-		doorRows.Close()
-
-		// Anti-passback: check if any door in this group has anti_passback = true
-		var hasAntiPassback bool
-		_ = s.db.Pool.QueryRow(ctx, `
-			SELECT EXISTS (
-				SELECT 1 FROM dm3_access.access_group_access_points agap
-				JOIN dm3_access.access_point_doors apd ON apd.access_point_id = agap.access_point_id
-				JOIN dm3_access.doors d ON d.id = apd.door_id
-				WHERE agap.access_group_id = $1::uuid AND d.device_id = $2::uuid AND d.anti_passback = true
-			)
-		`, g.ID, deviceUUID).Scan(&hasAntiPassback)
-		rule.AntiPassback = hasAntiPassback
-
-		// User IDs assigned to this access group (via users.access_group_id)
+		// User IDs assigned to this access group (via access_group_users junction)
 		userRows, err := s.db.Pool.Query(ctx, `
 			SELECT u.id::text
-			FROM dm3_identity.users u
-			WHERE u.access_group_id = $1::uuid
+			FROM dm3_access.access_group_users agu
+			JOIN dm3_identity.users u ON u.id = agu.user_id
+			WHERE agu.access_group_id = $1::uuid
 			  AND u.status = 'active'
 			  AND (u.is_deleted = false OR u.is_deleted IS NULL)
+			  AND (agu.effective_to IS NULL OR agu.effective_to > now())
 		`, g.ID)
 		if err != nil {
 			slog.Warn("access_rules: query users", "group", g.ID, "error", err)
@@ -179,19 +156,19 @@ func (s *AccessRulesSyncer) PushAccessRules(ctx context.Context, tenantID, devic
 		}
 		userRows.Close()
 
-		// Schedule: from access_points linked to this group
+		// Schedule: prefer group-specific override, fall back to access point default
 		schedRows, err := s.db.Pool.Query(ctx, `
 			SELECT DISTINCT at.timezone, ats.day_of_week,
 			       to_char(ats.start_time, 'HH24:MI'), to_char(ats.end_time, 'HH24:MI')
 			FROM dm3_access.access_group_access_points agap
 			JOIN dm3_access.access_points ap ON ap.id = agap.access_point_id
-			JOIN dm3_access.access_times at ON at.id = ap.access_time_id
+			JOIN dm3_access.access_times at ON at.id = COALESCE(agap.access_time_id, ap.access_time_id)
 			JOIN dm3_access.access_time_slots ats ON ats.access_time_id = at.id AND ats.is_active = true
-			WHERE agap.access_group_id = $1::uuid AND at.is_active = true
-		`, g.ID)
+			WHERE agap.access_group_id = $1::uuid AND agap.access_point_id = $2::uuid AND at.is_active = true
+		`, g.ID, accessPointID)
 		if err == nil {
 			var timezone string
-			daySlots := map[string]syncRulePeriod{} // keyed by start+end
+			daySlots := map[string]syncRulePeriod{}
 			for schedRows.Next() {
 				var tz, start, end string
 				var day int
@@ -225,7 +202,7 @@ func (s *AccessRulesSyncer) PushAccessRules(ctx context.Context, tenantID, devic
 
 	payload := accessRulesPayload{
 		Action:       "full_sync",
-		RulesVersion: int(time.Now().Unix()), // use timestamp as version
+		RulesVersion: int(time.Now().Unix()),
 		Rules:        rules,
 	}
 

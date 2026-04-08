@@ -254,7 +254,7 @@ func (h *AccessHandlers) BulkDeleteAccessDevices(w http.ResponseWriter, r *http.
 	httputil.JSON(w, http.StatusOK, map[string]any{"deleted": tag.RowsAffected()})
 }
 
-// ─── Access Rules ────────────────────────────────────────────────────────────
+// ─── Access Rules (legacy stubs) ─────────────────────────────────────────────
 
 func (h *AccessHandlers) ListRules(w http.ResponseWriter, r *http.Request) {
 	httputil.Error(w, http.StatusNotImplemented, "access rules have been replaced by access groups")
@@ -276,7 +276,7 @@ func (h *AccessHandlers) DeleteRule(w http.ResponseWriter, r *http.Request) {
 	httputil.Error(w, http.StatusNotImplemented, "access rules have been replaced by access groups")
 }
 
-// ─── Schedules ───────────────────────────────────────────────────────────────
+// ─── Schedules (legacy stubs) ────────────────────────────────────────────────
 
 func (h *AccessHandlers) ListSchedules(w http.ResponseWriter, r *http.Request) {
 	httputil.Error(w, http.StatusNotImplemented, "schedules have been removed")
@@ -304,18 +304,18 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
-	where := "WHERE 1=1"
-	args := []any{}
-	idx := 1
-
-	if cid := authsvc.CompanyIDFromContext(r.Context()); cid != "" {
-		where += fmt.Sprintf(" AND tenant_id = $%d::uuid", idx)
-		args = append(args, cid)
-		idx++
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
 	}
 
-	if v := r.URL.Query().Get("door_id"); v != "" {
-		where += fmt.Sprintf(" AND door_id = $%d::uuid", idx)
+	where := "WHERE tenant_id = $1::uuid"
+	args := []any{cid}
+	idx := 2
+
+	if v := r.URL.Query().Get("access_point_id"); v != "" {
+		where += fmt.Sprintf(" AND access_point_id = $%d::uuid", idx)
 		args = append(args, v)
 		idx++
 	}
@@ -354,7 +354,7 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	copy(countArgs, args)
 	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_access.access_events "+where, countArgs...).Scan(&total)
 
-	query := fmt.Sprintf(`SELECT id, tenant_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''),
+	query := fmt.Sprintf(`SELECT id, tenant_id, time, COALESCE(access_point_id::text,''),
 		COALESCE(user_id::text,''), COALESCE(user_name,''), COALESCE(credential_type,''),
 		COALESCE(direction,''), decision, COALESCE(reason,''), confidence, COALESCE(photo_ref,''), metadata
 		FROM dm3_access.access_events %s ORDER BY time DESC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
@@ -363,7 +363,7 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
 		slog.Error("list events query error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
@@ -371,10 +371,10 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	events := []eventResponse{}
 	for rows.Next() {
 		var e eventResponse
-		if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.DoorID, &e.DeviceID,
+		if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.AccessPointID,
 			&e.UserID, &e.UserName, &e.CredentialType, &e.Direction, &e.Decision,
 			&e.Reason, &e.Confidence, &e.PhotoRef, &e.Metadata); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		events = append(events, e)
@@ -386,8 +386,7 @@ type eventResponse struct {
 	ID             string         `json:"id"`
 	TenantID       string         `json:"tenant_id"`
 	Time           time.Time      `json:"time"`
-	DoorID         string         `json:"door_id,omitempty"`
-	DeviceID       string         `json:"device_id,omitempty"`
+	AccessPointID  string         `json:"access_point_id,omitempty"`
 	UserID         string         `json:"user_id,omitempty"`
 	UserName       string         `json:"user_name,omitempty"`
 	CredentialType string         `json:"credential_type,omitempty"`
@@ -404,49 +403,30 @@ type eventResponse struct {
 func (h *AccessHandlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	var stats models.DashboardStats
 	cid := authsvc.CompanyIDFromContext(r.Context())
-
-	if cid != "" {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesTotal)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='online' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesOnline)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='offline' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesOffline)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='alarm' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesAlarm)
-	} else {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices`).Scan(&stats.AccessDevicesTotal)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='online'`).Scan(&stats.AccessDevicesOnline)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='offline'`).Scan(&stats.AccessDevicesOffline)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='alarm'`).Scan(&stats.AccessDevicesAlarm)
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
 	}
+
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesTotal)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='online' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesOnline)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='offline' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesOffline)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='alarm' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesAlarm)
 
 	today := time.Now().Truncate(24 * time.Hour)
-	if cid != "" {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND tenant_id = $2::uuid`, today, cid).Scan(&stats.EventsToday)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='granted' AND tenant_id = $2::uuid`, today, cid).Scan(&stats.GrantedToday)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='denied' AND tenant_id = $2::uuid`, today, cid).Scan(&stats.DeniedToday)
-	} else {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1`, today).Scan(&stats.EventsToday)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='granted'`, today).Scan(&stats.GrantedToday)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='denied'`, today).Scan(&stats.DeniedToday)
-	}
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND tenant_id = $2::uuid`, today, cid).Scan(&stats.EventsToday)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='granted' AND tenant_id = $2::uuid`, today, cid).Scan(&stats.GrantedToday)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='denied' AND tenant_id = $2::uuid`, today, cid).Scan(&stats.DeniedToday)
 
-	// Recent events
-	var recentQuery string
-	var recentArgs []any
-	if cid != "" {
-		recentQuery = `SELECT id, tenant_id, time, door_id, user_id, user_name, credential_type,
+	recentQuery := `SELECT id, tenant_id, time, access_point_id, user_id, user_name, credential_type,
 		 direction, decision, reason, metadata
 		 FROM dm3_access.access_events WHERE tenant_id = $1::uuid ORDER BY time DESC LIMIT 10`
-		recentArgs = []any{cid}
-	} else {
-		recentQuery = `SELECT id, tenant_id, time, door_id, user_id, user_name, credential_type,
-		 direction, decision, reason, metadata
-		 FROM dm3_access.access_events ORDER BY time DESC LIMIT 10`
-	}
-	rows, err := h.db.Pool.Query(r.Context(), recentQuery, recentArgs...)
+	rows, err := h.db.Pool.Query(r.Context(), recentQuery, cid)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
 			var e models.AccessEvent
-			if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.DoorID, &e.UserID,
+			if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.AccessPointID, &e.UserID,
 				&e.UserName, &e.CredentialType, &e.Direction, &e.Decision, &e.Reason, &e.Metadata); err == nil {
 				stats.RecentEvents = append(stats.RecentEvents, e)
 			}
@@ -464,7 +444,6 @@ func (h *AccessHandlers) GetStats(w http.ResponseWriter, r *http.Request) {
 func (h *AccessHandlers) GetSyncPackage(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	// Verify access device exists
 	var accessDeviceID string
 	var rulesVersion int
 	err := h.db.Pool.QueryRow(r.Context(),
@@ -474,7 +453,6 @@ func (h *AccessHandlers) GetSyncPackage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// access_rules table is dropped; return empty rules list
 	pkg := models.SyncPackage{
 		AccessDeviceID: accessDeviceID,
 		Rules:          []models.AccessRule{},
@@ -528,11 +506,4 @@ func nilIfEmpty(s string) *string {
 		return nil
 	}
 	return &s
-}
-
-func boolVal(p *bool, def bool) bool {
-	if p != nil {
-		return *p
-	}
-	return def
 }

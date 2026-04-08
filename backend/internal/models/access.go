@@ -109,13 +109,13 @@ type AccessDevice struct {
 
 // AccessPointDevice is one row in the access_point_devices junction.
 type AccessPointDevice struct {
-	ID              string        `json:"id"`
-	TenantID        string        `json:"tenant_id"`
-	AccessPointID   string        `json:"access_point_id"`
-	AccessDeviceID  string        `json:"access_device_id"`
-	Role            string        `json:"role"` // reader_in | reader_out | controller | camera
-	Device          *AccessDevice `json:"device,omitempty"`
-	CreatedAt       time.Time     `json:"created_at"`
+	ID             string        `json:"id"`
+	TenantID       string        `json:"tenant_id"`
+	AccessPointID  string        `json:"access_point_id"`
+	AccessDeviceID string        `json:"access_device_id"`
+	Role           string        `json:"role"` // reader_in | reader_out | controller | camera
+	Device         *AccessDevice `json:"device,omitempty"`
+	CreatedAt      time.Time     `json:"created_at"`
 }
 
 // AccessGroupAccessPoint is one row in the access_group_access_points junction.
@@ -128,6 +128,17 @@ type AccessGroupAccessPoint struct {
 	AccessPoint   *AccessPoint `json:"access_point,omitempty"`
 	AccessTime    *AccessTime  `json:"access_time,omitempty"`
 	CreatedAt     time.Time    `json:"created_at"`
+}
+
+// AccessGroupUser is one row in the access_group_users junction (M:N user ↔ access group).
+type AccessGroupUser struct {
+	ID            string     `json:"id"`
+	TenantID      string     `json:"tenant_id"`
+	AccessGroupID string     `json:"access_group_id"`
+	UserID        string     `json:"user_id"`
+	EffectiveFrom time.Time  `json:"effective_from"`
+	EffectiveTo   *time.Time `json:"effective_to,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
 }
 
 // ─── Access Rule (legacy, kept for sync package) ──────────────────────────────
@@ -222,10 +233,10 @@ type AccessTimeValidation struct {
 // ─── Request/Response DTOs ────────────────────────────────────────────────────
 
 type CreateAccessTimeTemplateRequest struct {
-	Name        string           `json:"name" validate:"required,min=1,max=100"`
-	Description *string          `json:"description,omitempty"`
-	Timezone    string           `json:"timezone" validate:"required"`
-	TimeSlots   []TimeSlotInput  `json:"time_slots" validate:"required,min=1"`
+	Name        string          `json:"name" validate:"required,min=1,max=100"`
+	Description *string         `json:"description,omitempty"`
+	Timezone    string          `json:"timezone" validate:"required"`
+	TimeSlots   []TimeSlotInput `json:"time_slots" validate:"required,min=1"`
 }
 
 type UpdateAccessTimeTemplateRequest struct {
