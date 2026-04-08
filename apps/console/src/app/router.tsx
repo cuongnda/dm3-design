@@ -94,6 +94,56 @@ const DepartmentManagementPage = lazy(() =>
   import('@/features/department-management/DepartmentManagementPage').then((m) => ({ default: m.DepartmentManagementPage }))
 );
 
+const VisitorsPage = lazy(() =>
+  import('@/features/manage/visitors/VisitorsPage').then((m) => ({ default: m.VisitorsPage }))
+);
+const ContractorsPage = lazy(() =>
+  import('@/features/manage/contractors/ContractorsPage').then((m) => ({ default: m.ContractorsPage }))
+);
+const AttendancePage = lazy(() =>
+  import('@/features/manage/attendance/AttendancePage').then((m) => ({ default: m.AttendancePage }))
+);
+const DeliveriesPage = lazy(() =>
+  import('@/features/manage/deliveries/DeliveriesPage').then((m) => ({ default: m.DeliveriesPage }))
+);
+const GroupsPage = lazy(() =>
+  import('@/features/manage/identities/GroupsPage').then((m) => ({ default: m.GroupsPage }))
+);
+const ProvisioningPage = lazy(() =>
+  import('@/features/manage/provisioning/ProvisioningPage').then((m) => ({ default: m.ProvisioningPage }))
+);
+
+// OPERATE
+const RoomBookingPage = lazy(() =>
+  import('@/features/operate/room-booking/RoomBookingPage').then((m) => ({ default: m.RoomBookingPage }))
+);
+const ParkingPage = lazy(() =>
+  import('@/features/operate/parking/ParkingPage').then((m) => ({ default: m.ParkingPage }))
+);
+const MaintenancePage = lazy(() =>
+  import('@/features/operate/maintenance/MaintenancePage').then((m) => ({ default: m.MaintenancePage }))
+);
+const GuardTourPage = lazy(() =>
+  import('@/features/operate/guard-tour/GuardTourPage').then((m) => ({ default: m.GuardTourPage }))
+);
+const KeyManagementPage = lazy(() =>
+  import('@/features/operate/keys/KeyManagementPage').then((m) => ({ default: m.KeyManagementPage }))
+);
+const IoTEnergyPage = lazy(() =>
+  import('@/features/operate/iot-energy/IoTEnergyPage').then((m) => ({ default: m.IoTEnergyPage }))
+);
+
+// SMART
+const AIAssistantPage = lazy(() =>
+  import('@/features/smart/ai-assistant/AIAssistantPage').then((m) => ({ default: m.AIAssistantPage }))
+);
+const AnalyticsPage = lazy(() =>
+  import('@/features/smart/analytics/AnalyticsPage').then((m) => ({ default: m.AnalyticsPage }))
+);
+const AutomationPage = lazy(() =>
+  import('@/features/smart/automation/AutomationPage').then((m) => ({ default: m.AutomationPage }))
+);
+
 // DEVICES
 const DevicesPage = lazy(() =>
   import('@/features/devices/DevicesPage').then((m) => ({ default: m.DevicesPage }))
@@ -207,6 +257,12 @@ export const Router = createBrowserRouter([
               { path: 'manage/departments', element: <LazyWrap><DepartmentManagementPage /></LazyWrap> },
               { path: 'manage/identities', element: <LazyWrap><IdentitiesPage /></LazyWrap> },
               { path: 'manage/identities/:id', element: <LazyWrap><PersonDetailPage /></LazyWrap> },
+              { path: 'manage/identities/groups', element: <LazyWrap><GroupsPage /></LazyWrap> },
+              { path: 'manage/visitors', element: <LazyWrap><VisitorsPage /></LazyWrap> },
+              { path: 'manage/contractors', element: <LazyWrap><ContractorsPage /></LazyWrap> },
+              { path: 'manage/attendance', element: <LazyWrap><AttendancePage /></LazyWrap> },
+              { path: 'manage/deliveries', element: <LazyWrap><DeliveriesPage /></LazyWrap> },
+              { path: 'manage/provisioning', element: <LazyWrap><ProvisioningPage /></LazyWrap> },
 
               // ACCESS CONTROL (legacy)
               { path: 'access-control', element: <LazyWrap><AccessControlPage /></LazyWrap> },
@@ -218,6 +274,19 @@ export const Router = createBrowserRouter([
               { path: 'devices/pending', element: <LazyWrap><PendingDevicesPage /></LazyWrap> },
               { path: 'devices/provision', element: <LazyWrap><ProvisionDevicePage /></LazyWrap> },
               { path: 'devices/:id', element: <LazyWrap><DeviceDetailPage /></LazyWrap> },
+
+              // OPERATE
+              { path: 'operate/room-booking', element: <LazyWrap><RoomBookingPage /></LazyWrap> },
+              { path: 'operate/parking', element: <LazyWrap><ParkingPage /></LazyWrap> },
+              { path: 'operate/maintenance', element: <LazyWrap><MaintenancePage /></LazyWrap> },
+              { path: 'operate/guard-tour', element: <LazyWrap><GuardTourPage /></LazyWrap> },
+              { path: 'operate/keys', element: <LazyWrap><KeyManagementPage /></LazyWrap> },
+              { path: 'operate/iot-energy', element: <LazyWrap><IoTEnergyPage /></LazyWrap> },
+
+              // SMART
+              { path: 'smart/ai-assistant', element: <LazyWrap><AIAssistantPage /></LazyWrap> },
+              { path: 'smart/analytics', element: <LazyWrap><AnalyticsPage /></LazyWrap> },
+              { path: 'smart/automation', element: <LazyWrap><AutomationPage /></LazyWrap> },
 
               // SETTINGS
               { path: 'settings', element: <LazyWrap><SettingsPage /></LazyWrap> },
