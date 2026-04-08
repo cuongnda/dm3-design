@@ -1,25 +1,25 @@
 # Graph Report - backend + docs  (2026-04-08)
 
 ## Corpus Check
-- 116 files · ~226,991 words
+- 932 files · ~0 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 957 nodes · 1178 edges · 110 communities detected
-- Extraction: 86% EXTRACTED · 14% INFERRED · 0% AMBIGUOUS · INFERRED: 170 edges (avg confidence: 0.59)
+- 932 nodes · 1139 edges · 108 communities detected
+- Extraction: 85% EXTRACTED · 15% INFERRED · 0% AMBIGUOUS · INFERRED: 167 edges (avg confidence: 0.59)
 - Token cost: 0 input · 0 output
 
 ## God Nodes (most connected - your core abstractions)
-1. `Handlers` - 70 edges
-2. `UserManagementHandlers` - 22 edges
-3. `Attendance Feature Spec` - 15 edges
-4. `UserManagementHandlers` - 13 edges
-5. `Identity Management Feature Spec` - 13 edges
-6. `System Architecture Document` - 13 edges
-7. `Handlers` - 11 edges
-8. `MQTTHandler` - 11 edges
-9. `Android Terminal DF-970 Spec` - 11 edges
-10. `Handlers` - 10 edges
+1. `UserManagementHandlers` - 22 edges
+2. `AccessHandlers` - 20 edges
+3. `AuthHandlers` - 20 edges
+4. `IdentityHandlers` - 19 edges
+5. `Attendance Feature Spec` - 15 edges
+6. `UserManagementHandlers` - 13 edges
+7. `Identity Management Feature Spec` - 13 edges
+8. `System Architecture Document` - 13 edges
+9. `MQTTHandler` - 11 edges
+10. `Android Terminal DF-970 Spec` - 11 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Middleware()` --calls--> `writeError()`  [INFERRED]
@@ -62,293 +62,293 @@
 
 ## Communities
 
-### Community 0 - "Multi-Service Handler Layer"
-Cohesion: 0.02
-Nodes (36): AccessClaims, accountForLogin, addMemberRequest, boolVal(), changePasswordRequest, companyInfo, createCredentialRequest, createDeviceRequest (+28 more)
-
-### Community 1 - "Device Ecosystem & UX"
+### Community 0 - "Android Terminal App"
 Cohesion: 0.03
 Nodes (90): Access Decision Engine (DF-970), Face Recognition Manager (DF-970), Megvii MegFace SDK (DF-970), MQTT Foreground Service (DF-970 HiveMQ), DF-970 Offline-First Principle Rationale, Room DB SQLite (DF-970), Android Terminal DF-970 Spec, Sync Manager (DF-970) (+82 more)
 
-### Community 2 - "Smart Features & Infrastructure Map"
-Cohesion: 0.1
-Nodes (51): On-Premise LLM, AI Function Registry, AI Rate Limits, Alarm Zone, Analytics Dashboard/Widget, Anomaly Detection, Alarm Arm Modes, Contractor Auto-Suspend (+43 more)
+### Community 1 - "Access Service API"
+Cohesion: 0.03
+Nodes (37): AccessClaims, AccessHandlers, accountForLogin, addMemberRequest, boolVal(), changePasswordRequest, companyInfo, createCredentialRequest (+29 more)
 
-### Community 3 - "Auth Service (authsvc)"
-Cohesion: 0.06
-Nodes (28): auth.Claims, AuthHandlers, getClientIP(), LoginRequest, LoginResponse, NewAuthHandlers(), RegisterAuthRoutes(), Connect() (+20 more)
+### Community 2 - "Auth Context Layer"
+Cohesion: 0.04
+Nodes (35): Auth(), contextKey, writeErr(), CompanyIDFromContext(), contextKey, MustCompanyID(), MustTenantID(), MustTenantInfo() (+27 more)
 
-### Community 4 - "Auth Package & Context Utils"
-Cohesion: 0.05
-Nodes (17): Auth(), contextKey, writeErr(), CompanyIDFromContext(), contextKey, MustCompanyID(), MustTenantID(), MustTenantInfo() (+9 more)
+### Community 3 - "AI & Smart Features"
+Cohesion: 0.11
+Nodes (47): On-Premise LLM, AI Function Registry, AI Rate Limits, Analytics Dashboard/Widget, Anomaly Detection, Bootstrap Provisioning Flow, Contractor Auto-Suspend, 4-Level Escalation Chain (+39 more)
 
-### Community 5 - "NATS & Messaging Client"
+### Community 4 - "MQTT Client"
 Cohesion: 0.06
 Nodes (20): Client, Connect(), matchTopic(), MessageHandler, Options, BugReport, Config, min() (+12 more)
 
-### Community 6 - "Access Time Management"
-Cohesion: 0.05
-Nodes (17): getSlotDisplayName(), Handlers, Department, DepartmentFormData, DepartmentImportData, DepartmentManager, DepartmentUser, FirmwareDTO (+9 more)
+### Community 5 - "Configuration"
+Cohesion: 0.09
+Nodes (15): Config, env(), envInt(), envSlice(), Load(), activateRequest, approveRequest, BootstrapMQTTHandler (+7 more)
 
-### Community 7 - "User Management Handlers"
+### Community 6 - "User Management"
 Cohesion: 0.07
 Nodes (6): BulkOperationRequest, BulkOperationResponse, CreateUserRequest, getUserIDFromContext(), UpdateUserRequest, UserManagementHandlers
 
-### Community 8 - "Access & Auth Semantic Layer"
-Cohesion: 0.09
-Nodes (29): Access Handlers, NATS Consumer (access-svc), AccessClaims JWT Struct, Company Handlers, Auth Service Handlers, Auth Middleware, User Account Handlers, Credential Types (face/card/pin/qr/fingerprint) (+21 more)
+### Community 7 - "Department Management"
+Cohesion: 0.08
+Nodes (15): Department, DepartmentFormData, DepartmentImportData, DepartmentManager, DepartmentUser, FirmwareDTO, FirmwareHandlers, isValidDeviceType() (+7 more)
 
-### Community 9 - "Access Control Concepts (Offline-First)"
-Cohesion: 0.1
-Nodes (27): Local Access Decision, Anti-Passback, Barrier Controller Offline Cache, Blacklist Priority, Bootstrap Provisioning Flow, 7-day JWT Grace Period, Device JWT, Device SQLite Store (+19 more)
-
-### Community 10 - "Access Domain Models"
-Cohesion: 0.09
-Nodes (21): AccessRule, AccessTimeSlot, AccessTimeStats, AccessTimeTemplate, AccessTimeValidation, AssignAccessTimeRequest, CreateAccessTimeTemplateRequest, DashboardStats (+13 more)
-
-### Community 11 - "Device Provisioning"
-Cohesion: 0.11
-Nodes (10): activateRequest, approveRequest, BootstrapMQTTHandler, bootstrapRegisterMsg, deviceJWTClaims, generateDeviceJWT(), ProvisioningHandlers, provisionRequest (+2 more)
-
-### Community 12 - "Handler Tests"
-Cohesion: 0.13
-Nodes (8): setupRouter(), setupTestDB(), TestCredentialsCRUD(), TestGroupsCRUD(), TestPersonsCRUD(), TestStatsEndpoint(), TestSyncEndpoint(), TestValidation()
-
-### Community 13 - "Auth Middleware Layer"
+### Community 8 - "Auth Middleware"
 Cohesion: 0.13
 Nodes (16): AuthMiddleware(), ClaimsFromContext(), contextKey, formatPanicError(), IsolationMode, loadTenantInfo(), Middleware(), OptionalTenant() (+8 more)
 
-### Community 14 - "MQTT Message Handler"
+### Community 9 - "Auth Handler Tests"
+Cohesion: 0.13
+Nodes (8): setupRouter(), setupTestDB(), TestCredentialsCRUD(), TestGroupsCRUD(), TestPersonsCRUD(), TestStatsEndpoint(), TestSyncEndpoint(), TestValidation()
+
+### Community 10 - "Offline Access Control"
+Cohesion: 0.11
+Nodes (24): Local Access Decision, Anti-Passback, Barrier Controller Offline Cache, Blacklist Priority, 7-day JWT Grace Period, Device JWT, Device SQLite Store, Incremental Sync with sync_token (+16 more)
+
+### Community 11 - "AuthSvc Handlers"
+Cohesion: 0.14
+Nodes (2): AuthHandlers, hashToken()
+
+### Community 12 - "MQTT Handler"
 Cohesion: 0.15
 Nodes (6): accessLogData, heartbeatData, MQTTEnvelope, MQTTHandler, ParsedTopic, ParseTopic()
 
-### Community 15 - "Tenant Validation & Security"
+### Community 13 - "Access Rules & Models"
+Cohesion: 0.12
+Nodes (16): AccessRule, AccessTimeSlot, AccessTimeStats, AccessTimeTemplate, AccessTimeValidation, AssignAccessTimeRequest, CreateAccessTimeTemplateRequest, DashboardStats (+8 more)
+
+### Community 14 - "Validation Layer"
 Cohesion: 0.12
 Nodes (3): ResourceValidator, SecurityAuditor, TenantLimitChecker
 
-### Community 16 - "Auth Helpers & Session"
+### Community 15 - "Auth Helpers"
 Cohesion: 0.18
 Nodes (6): AccountInfo, AuthService, generateSecureToken(), getStringPtr(), hashToken(), SessionInfo
 
-### Community 17 - "Tenant-Aware Database"
+### Community 16 - "Database Layer"
 Cohesion: 0.2
 Nodes (2): QueryBuilder, TenantAwareDB
 
-### Community 18 - "IoT & Facility Operations"
+### Community 17 - "Smart Building IoT"
 Cohesion: 0.14
 Nodes (15): Calendar Sync, Energy Meter Types, ESG Reporting, IoT Gateway Offline Buffering, IoT Sensor Types, Parts Inventory, Preventive Maintenance Schedule, Room Check-in via QR (+7 more)
 
-### Community 19 - "Department Management"
+### Community 18 - "User-Department Relations"
 Cohesion: 0.14
 Nodes (1): UserManagementHandlers
 
-### Community 20 - "Community 20"
+### Community 19 - "Auth Handlers (authsvc)"
+Cohesion: 0.18
+Nodes (6): AuthHandlers, getClientIP(), LoginRequest, LoginResponse, NewAuthHandlers(), RegisterAuthRoutes()
+
+### Community 20 - "Design System & Analysis"
 Cohesion: 0.14
 Nodes (14): AI as Cross-Cutting Capability, Three Domains Architecture Recommendation, DM3 Color System & Domain Colors, DM3 Design System v1.0, i18n Feature Specification, i18n Backend Stack (Go pkg/i18n), Multi-Tenancy Feature Specification, Tenant Isolation Architecture (+6 more)
 
-### Community 21 - "Community 21"
-Cohesion: 0.17
-Nodes (13): Camera Credentials Encrypted, Camera Stream JWT Auth, Emergency Broadcast Override, Event-Linked Video Clips, go2rtc Proxy, NVR Storage Alerts, ONVIF Camera Management, Ring Group Routing (+5 more)
-
-### Community 22 - "Community 22"
+### Community 21 - "Face Recognition & Security"
 Cohesion: 0.17
 Nodes (13): AI Detection Types, Escort Enforcement, Face Recognition Opt-In, False Positive Feedback Loop, GPU Resource Management, vision-svc, Visitor Auto-Checkout, Visitor QR Token (+5 more)
 
-### Community 23 - "Community 23"
-Cohesion: 0.23
-Nodes (1): Handlers
+### Community 22 - "Camera & Video Security"
+Cohesion: 0.17
+Nodes (13): Camera Credentials Encrypted, Camera Stream JWT Auth, Emergency Broadcast Override, Event-Linked Video Clips, go2rtc Proxy, NVR Storage Alerts, ONVIF Camera Management, Ring Group Routing (+5 more)
 
-### Community 24 - "Community 24"
+### Community 23 - "Access Time Handlers"
+Cohesion: 0.17
+Nodes (2): AccessHandlers, getSlotDisplayName()
+
+### Community 24 - "Emergency Override"
 Cohesion: 0.2
 Nodes (12): Fire Emergency Override, Emergency MQTT QoS 2, Emergency Permanent Retention, Emergency Types, Hardware Failsafe Wiring, Security Lockdown, Emergency Spec, BR-EM-003 (+4 more)
 
-### Community 25 - "Community 25"
-Cohesion: 0.22
-Nodes (1): Handlers
+### Community 25 - "User Account Handlers"
+Cohesion: 0.23
+Nodes (1): AuthHandlers
 
-### Community 26 - "Community 26"
+### Community 26 - "Stats Handler Tests"
+Cohesion: 0.22
+Nodes (2): parseTestToken(), TestSystemAdminTokenHasNoCompanyID()
+
+### Community 27 - "Identity User Handlers"
+Cohesion: 0.22
+Nodes (1): IdentityHandlers
+
+### Community 28 - "JWT & Auth Versions"
 Cohesion: 0.29
 Nodes (8): Auth v1 (Go auth-svc), Auth v2 (Keycloak-backed), JWKS Local Validation, Refresh Token Rotation, Auth Spec, Keycloak, Valkey (Redis-compatible), BR-AUTH-001 to BR-AUTH-014
 
-### Community 27 - "Community 27"
+### Community 29 - "Person & Identity Models"
 Cohesion: 0.29
 Nodes (6): Credential, IdentityStats, SyncResponse, User, UserGroup, UserGroupMember
 
-### Community 28 - "Community 28"
-Cohesion: 0.33
-Nodes (5): createUserAccountRequest, createUserAccountResponse, updateUserAccountRequest, userAccountResponse, userCompanyInfo
+### Community 30 - "Alarm & Intrusion"
+Cohesion: 0.38
+Nodes (7): Alarm Zone, Alarm Arm Modes, Duress Code Silent Alarm, Zone Trouble State, Intrusion Detection Spec, BR-ID-012, BR-ID-013
 
-### Community 29 - "Community 29"
-Cohesion: 0.33
-Nodes (5): companyStat, deviceStat, recentStat, systemStats, userStat
+### Community 31 - "Tenant Handlers"
+Cohesion: 0.29
+Nodes (1): TenantHandlers
 
-### Community 30 - "Community 30"
-Cohesion: 0.33
-Nodes (5): adminInfo, companyResponse, createCompanyRequest, createCompanyResponse, updateCompanyRequest
-
-### Community 31 - "Community 31"
-Cohesion: 0.33
-Nodes (1): Handlers
-
-### Community 32 - "Community 32"
+### Community 32 - "Device Provisioning Tests"
 Cohesion: 0.33
 Nodes (0): 
 
-### Community 33 - "Community 33"
+### Community 33 - "HTTP Response Helpers"
 Cohesion: 0.47
 Nodes (5): Error(), ErrorResponse, JSON(), Paginated(), PaginatedResponse
 
-### Community 34 - "Community 34"
-Cohesion: 0.4
-Nodes (6): Delivery Auto-Notification, Uncollected Package Alerts, Package ID Format, Smart Locker MQTT Integration, Vietnamese Carrier Integration, Delivery Management Spec
-
-### Community 35 - "Community 35"
+### Community 34 - "Automation Rules"
 Cohesion: 0.47
 Nodes (6): Automation Action Types, Automation Rule Engine, Automation Suspend on Emergency, Automation Trigger Types, Automation Spec, BR-AU-008
 
-### Community 36 - "Community 36"
+### Community 35 - "Smart Locker & Delivery"
+Cohesion: 0.4
+Nodes (6): Delivery Auto-Notification, Uncollected Package Alerts, Package ID Format, Smart Locker MQTT Integration, Vietnamese Carrier Integration, Delivery Management Spec
+
+### Community 36 - "Company Handlers"
+Cohesion: 0.33
+Nodes (5): adminInfo, companyResponse, createCompanyRequest, createCompanyResponse, updateCompanyRequest
+
+### Community 37 - "Company Admin Handlers"
+Cohesion: 0.33
+Nodes (1): AuthHandlers
+
+### Community 38 - "Stats Handlers"
+Cohesion: 0.33
+Nodes (5): companyStat, deviceStat, recentStat, systemStats, userStat
+
+### Community 39 - "User Account Models"
+Cohesion: 0.33
+Nodes (5): createUserAccountRequest, createUserAccountResponse, updateUserAccountRequest, userAccountResponse, userCompanyInfo
+
+### Community 40 - "Logging"
 Cohesion: 0.4
 Nodes (1): responseWriter
 
-### Community 37 - "Community 37"
+### Community 41 - "MQTT Handler Tests"
 Cohesion: 0.4
 Nodes (0): 
 
-### Community 38 - "Community 38"
+### Community 42 - "JWT Utilities"
 Cohesion: 0.5
 Nodes (2): Claims, ValidateToken()
 
-### Community 39 - "Community 39"
+### Community 43 - "NATS Multi-Tenant"
+Cohesion: 0.4
+Nodes (5): NATS Consumer (access-svc), Auth Middleware, Multi-Tenancy (company=tenant), NATS Subject Carries tenant_id, AccessEvent Model
+
+### Community 44 - "Monorepo Architecture"
 Cohesion: 0.4
 Nodes (5): Fork Strategy Rationale (AI era), Frontend Fork Strategy: Shared Core + Fork per Vertical, Monorepo Restructure Changelog, Monorepo Rationale (Vertical Specialization), DM3 Target Market Segments
 
-### Community 40 - "Community 40"
+### Community 45 - "Guard Patrol"
 Cohesion: 0.6
 Nodes (5): GPS Tracking, NFC/QR Checkpoint Scanning, Patrol Compliance Score, Tag Fraud Detection, Guard Tour Spec
 
-### Community 41 - "Community 41"
+### Community 46 - "Contractor Management"
 Cohesion: 0.5
 Nodes (5): Contractor 7-Year Audit Retention, Contractor Compliance Score, Contractor Safety Training, Contractor Management Spec, BR-CON-003
 
-### Community 42 - "Community 42"
+### Community 47 - "Code Conventions"
 Cohesion: 0.5
 Nodes (4): Database Query Pattern (pgx no ORM), Go Backend Code Conventions, HTTP Handler Pattern, Backend Language Comparison (Go vs others)
 
-### Community 43 - "Community 43"
-Cohesion: 0.5
-Nodes (4): WebSocket Integration Changelog, WebSocket Client + Realtime Store Components, WebSocket Real-time Pattern, device-gateway Implementation Status
-
-### Community 44 - "Community 44"
+### Community 48 - "Offline-First Architecture"
 Cohesion: 0.5
 Nodes (4): DF-970 Android Terminal Tech Stack, Face Recognition Stack (ML Kit + MobileFaceNet), Core Change: Local Decision vs Server Decision, Offline-First Architecture Decision
 
-### Community 45 - "Community 45"
-Cohesion: 1.0
+### Community 49 - "WebSocket Realtime"
+Cohesion: 0.5
+Nodes (4): WebSocket Integration Changelog, WebSocket Client + Realtime Store Components, WebSocket Real-time Pattern, device-gateway Implementation Status
+
+### Community 50 - "Route Registration"
+Cohesion: 0.67
 Nodes (0): 
-
-### Community 46 - "Community 46"
-Cohesion: 1.0
-Nodes (0): 
-
-### Community 47 - "Community 47"
-Cohesion: 2.0
-Nodes (0): 
-
-### Community 48 - "Community 48"
-Cohesion: 1.0
-Nodes (1): AccessEvent
-
-### Community 49 - "Community 49"
-Cohesion: 1.0
-Nodes (1): Device
-
-### Community 50 - "Community 50"
-Cohesion: 1.0
-Nodes (1): Handlers
 
 ### Community 51 - "Community 51"
 Cohesion: 1.0
-Nodes (2): ActivateDevice Handler, generateDeviceJWT
+Nodes (0): 
 
 ### Community 52 - "Community 52"
 Cohesion: 1.0
-Nodes (2): BugReporter Middleware, BugReporter Reporter
+Nodes (0): 
 
 ### Community 53 - "Community 53"
-Cohesion: 1.0
-Nodes (2): E2E Event Pipeline, DM3 Simulator
+Cohesion: 2.0
+Nodes (0): 
 
 ### Community 54 - "Community 54"
 Cohesion: 1.0
-Nodes (2): Implementation Status Critical Findings, Frontend Mock-Data Shell Problem
+Nodes (1): AccessEvent
 
 ### Community 55 - "Community 55"
 Cohesion: 1.0
-Nodes (2): TypeScript/React Frontend Conventions, Frontend Framework Comparison
+Nodes (1): Device
 
 ### Community 56 - "Community 56"
 Cohesion: 1.0
-Nodes (0): 
+Nodes (2): ActivateDevice Handler, generateDeviceJWT
 
 ### Community 57 - "Community 57"
 Cohesion: 1.0
-Nodes (1): access-svc main
+Nodes (2): BugReporter Middleware, BugReporter Reporter
 
 ### Community 58 - "Community 58"
 Cohesion: 1.0
-Nodes (1): auth-svc main
+Nodes (2): E2E Event Pipeline, DM3 Simulator
 
 ### Community 59 - "Community 59"
 Cohesion: 1.0
-Nodes (1): device-gateway main
+Nodes (2): Implementation Status Critical Findings, Frontend Mock-Data Shell Problem
 
 ### Community 60 - "Community 60"
 Cohesion: 1.0
-Nodes (1): identity-svc main
+Nodes (2): TypeScript/React Frontend Conventions, Frontend Framework Comparison
 
 ### Community 61 - "Community 61"
 Cohesion: 1.0
-Nodes (1): tenant Department Handlers
+Nodes (0): 
 
 ### Community 62 - "Community 62"
 Cohesion: 1.0
-Nodes (1): tenant Middleware Test
+Nodes (1): AuthHandlers
 
 ### Community 63 - "Community 63"
 Cohesion: 1.0
-Nodes (1): tenant Department Routes
+Nodes (1): tenant Department Handlers
 
 ### Community 64 - "Community 64"
 Cohesion: 1.0
-Nodes (1): tenant Auth Handlers
+Nodes (1): tenant Middleware Test
 
 ### Community 65 - "Community 65"
 Cohesion: 1.0
-Nodes (1): tenant Handlers (Tenant/Company Management)
+Nodes (1): tenant Department Routes
 
 ### Community 66 - "Community 66"
 Cohesion: 1.0
-Nodes (1): tenant Database (QueryBuilder + TenantAwareDB)
+Nodes (1): tenant Auth Handlers
 
 ### Community 67 - "Community 67"
 Cohesion: 1.0
-Nodes (1): tenant Database Test
+Nodes (1): tenant Database (QueryBuilder + TenantAwareDB)
 
 ### Community 68 - "Community 68"
 Cohesion: 1.0
-Nodes (1): tenant User Management Routes
+Nodes (1): tenant Database Test
 
 ### Community 69 - "Community 69"
 Cohesion: 1.0
-Nodes (1): tenant Context (TenantInfo, context keys)
+Nodes (1): tenant User Management Routes
 
 ### Community 70 - "Community 70"
 Cohesion: 1.0
-Nodes (1): tenant Validation (ResourceValidator, SecurityAuditor, LimitChecker)
+Nodes (1): tenant Context (TenantInfo, context keys)
 
 ### Community 71 - "Community 71"
 Cohesion: 1.0
-Nodes (1): tenant Routes (RegisterRoutes)
+Nodes (1): tenant Validation (ResourceValidator, SecurityAuditor, LimitChecker)
 
 ### Community 72 - "Community 72"
 Cohesion: 1.0
@@ -420,144 +420,124 @@ Nodes (1): TenantLimitChecker (quota enforcement)
 
 ### Community 89 - "Community 89"
 Cohesion: 1.0
-Nodes (1): NATS Stream DEVICES (dm3.devices.>)
+Nodes (1): Logging Middleware
 
 ### Community 90 - "Community 90"
 Cohesion: 1.0
-Nodes (1): NATS Stream IDENTITY (dm3.identity.>)
+Nodes (1): User Model
 
 ### Community 91 - "Community 91"
 Cohesion: 1.0
-Nodes (1): access.NATSConsumer (access event consumer)
+Nodes (1): Credential Model
 
 ### Community 92 - "Community 92"
 Cohesion: 1.0
-Nodes (1): gateway.MQTTHandler
+Nodes (1): UserGroup Model
 
 ### Community 93 - "Community 93"
 Cohesion: 1.0
-Nodes (1): gateway.SyncService
+Nodes (1): SyncResponse Model
 
 ### Community 94 - "Community 94"
 Cohesion: 1.0
-Nodes (1): gateway.EventHub (WebSocket)
+Nodes (1): Door Model
 
 ### Community 95 - "Community 95"
 Cohesion: 1.0
-Nodes (1): bugreporter (auto 5xx reporting)
+Nodes (1): AccessRule Model
 
 ### Community 96 - "Community 96"
 Cohesion: 1.0
-Nodes (1): Graceful Shutdown Pattern (all services)
+Nodes (1): Schedule Model
 
 ### Community 97 - "Community 97"
 Cohesion: 1.0
-Nodes (1): Logging Middleware
+Nodes (1): SyncPackage Model
 
 ### Community 98 - "Community 98"
 Cohesion: 1.0
-Nodes (1): Identity Handlers Tests
+Nodes (1): Device Model
 
 ### Community 99 - "Community 99"
 Cohesion: 1.0
-Nodes (1): Access Handlers Tests
+Nodes (1): httputil Router Factory
 
 ### Community 100 - "Community 100"
 Cohesion: 1.0
-Nodes (1): Access Time Handlers
+Nodes (1): pkg/auth JWT
 
 ### Community 101 - "Community 101"
 Cohesion: 1.0
-Nodes (1): Device Model
+Nodes (1): auth.Claims
 
 ### Community 102 - "Community 102"
 Cohesion: 1.0
-Nodes (1): Auth Stats Handlers
+Nodes (1): DM3 Backend Services Overview
 
 ### Community 103 - "Community 103"
 Cohesion: 1.0
-Nodes (1): httputil Router Factory
+Nodes (1): auth-svc Implementation Status
 
 ### Community 104 - "Community 104"
 Cohesion: 1.0
-Nodes (1): pkg/auth JWT
+Nodes (1): access-svc Implementation Status
 
 ### Community 105 - "Community 105"
 Cohesion: 1.0
-Nodes (1): DM3 Backend Services Overview
+Nodes (1): identity-svc Implementation Status
 
 ### Community 106 - "Community 106"
 Cohesion: 1.0
-Nodes (1): auth-svc Implementation Status
+Nodes (1): Anti-Patterns (DM3)
 
 ### Community 107 - "Community 107"
 Cohesion: 1.0
-Nodes (1): access-svc Implementation Status
-
-### Community 108 - "Community 108"
-Cohesion: 1.0
-Nodes (1): identity-svc Implementation Status
-
-### Community 109 - "Community 109"
-Cohesion: 1.0
-Nodes (1): Anti-Patterns (DM3)
+Nodes (0): 
 
 ## Knowledge Gaps
-- **238 isolated node(s):** `Department`, `DepartmentFormData`, `DepartmentUser`, `DepartmentManager`, `DepartmentImportData` (+233 more)
+- **221 isolated node(s):** `Department`, `DepartmentFormData`, `DepartmentUser`, `DepartmentManager`, `DepartmentImportData` (+216 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **Thin community `Community 45`** (2 nodes): `department_routes.go`, `AddDepartmentRoutes()`
+- **Thin community `Community 51`** (2 nodes): `department_routes.go`, `AddDepartmentRoutes()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 46`** (2 nodes): `user_management_routes.go`, `AddUserManagementRoutes()`
+- **Thin community `Community 52`** (2 nodes): `user_management_routes.go`, `AddUserManagementRoutes()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 47`** (2 nodes): `cors.go`, `CORS()`
+- **Thin community `Community 53`** (2 nodes): `cors.go`, `CORS()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 48`** (2 nodes): `event.go`, `AccessEvent`
+- **Thin community `Community 54`** (2 nodes): `event.go`, `AccessEvent`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 49`** (2 nodes): `device.go`, `Device`
+- **Thin community `Community 55`** (2 nodes): `device.go`, `Device`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 50`** (2 nodes): `Handlers`, `.SystemStats()`
+- **Thin community `Community 56`** (2 nodes): `ActivateDevice Handler`, `generateDeviceJWT`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 51`** (2 nodes): `ActivateDevice Handler`, `generateDeviceJWT`
+- **Thin community `Community 57`** (2 nodes): `BugReporter Middleware`, `BugReporter Reporter`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 52`** (2 nodes): `BugReporter Middleware`, `BugReporter Reporter`
+- **Thin community `Community 58`** (2 nodes): `E2E Event Pipeline`, `DM3 Simulator`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 53`** (2 nodes): `E2E Event Pipeline`, `DM3 Simulator`
+- **Thin community `Community 59`** (2 nodes): `Implementation Status Critical Findings`, `Frontend Mock-Data Shell Problem`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 54`** (2 nodes): `Implementation Status Critical Findings`, `Frontend Mock-Data Shell Problem`
+- **Thin community `Community 60`** (2 nodes): `TypeScript/React Frontend Conventions`, `Frontend Framework Comparison`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 55`** (2 nodes): `TypeScript/React Frontend Conventions`, `Frontend Framework Comparison`
+- **Thin community `Community 61`** (2 nodes): `main.go`, `main()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 56`** (1 nodes): `user_handlers.go`
+- **Thin community `Community 62`** (2 nodes): `AuthHandlers`, `.SystemStats()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 57`** (1 nodes): `access-svc main`
+- **Thin community `Community 63`** (1 nodes): `tenant Department Handlers`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 58`** (1 nodes): `auth-svc main`
+- **Thin community `Community 64`** (1 nodes): `tenant Middleware Test`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 59`** (1 nodes): `device-gateway main`
+- **Thin community `Community 65`** (1 nodes): `tenant Department Routes`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 60`** (1 nodes): `identity-svc main`
+- **Thin community `Community 66`** (1 nodes): `tenant Auth Handlers`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 61`** (1 nodes): `tenant Department Handlers`
+- **Thin community `Community 67`** (1 nodes): `tenant Database (QueryBuilder + TenantAwareDB)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 62`** (1 nodes): `tenant Middleware Test`
+- **Thin community `Community 68`** (1 nodes): `tenant Database Test`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 63`** (1 nodes): `tenant Department Routes`
+- **Thin community `Community 69`** (1 nodes): `tenant User Management Routes`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 64`** (1 nodes): `tenant Auth Handlers`
+- **Thin community `Community 70`** (1 nodes): `tenant Context (TenantInfo, context keys)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 65`** (1 nodes): `tenant Handlers (Tenant/Company Management)`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 66`** (1 nodes): `tenant Database (QueryBuilder + TenantAwareDB)`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 67`** (1 nodes): `tenant Database Test`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 68`** (1 nodes): `tenant User Management Routes`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 69`** (1 nodes): `tenant Context (TenantInfo, context keys)`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 70`** (1 nodes): `tenant Validation (ResourceValidator, SecurityAuditor, LimitChecker)`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 71`** (1 nodes): `tenant Routes (RegisterRoutes)`
+- **Thin community `Community 71`** (1 nodes): `tenant Validation (ResourceValidator, SecurityAuditor, LimitChecker)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 72`** (1 nodes): `tenant Middleware (IsolationMode)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -593,63 +573,59 @@ Nodes (1): Anti-Patterns (DM3)
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 88`** (1 nodes): `TenantLimitChecker (quota enforcement)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 89`** (1 nodes): `NATS Stream DEVICES (dm3.devices.>)`
+- **Thin community `Community 89`** (1 nodes): `Logging Middleware`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 90`** (1 nodes): `NATS Stream IDENTITY (dm3.identity.>)`
+- **Thin community `Community 90`** (1 nodes): `User Model`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 91`** (1 nodes): `access.NATSConsumer (access event consumer)`
+- **Thin community `Community 91`** (1 nodes): `Credential Model`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 92`** (1 nodes): `gateway.MQTTHandler`
+- **Thin community `Community 92`** (1 nodes): `UserGroup Model`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 93`** (1 nodes): `gateway.SyncService`
+- **Thin community `Community 93`** (1 nodes): `SyncResponse Model`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 94`** (1 nodes): `gateway.EventHub (WebSocket)`
+- **Thin community `Community 94`** (1 nodes): `Door Model`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 95`** (1 nodes): `bugreporter (auto 5xx reporting)`
+- **Thin community `Community 95`** (1 nodes): `AccessRule Model`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 96`** (1 nodes): `Graceful Shutdown Pattern (all services)`
+- **Thin community `Community 96`** (1 nodes): `Schedule Model`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 97`** (1 nodes): `Logging Middleware`
+- **Thin community `Community 97`** (1 nodes): `SyncPackage Model`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 98`** (1 nodes): `Identity Handlers Tests`
+- **Thin community `Community 98`** (1 nodes): `Device Model`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 99`** (1 nodes): `Access Handlers Tests`
+- **Thin community `Community 99`** (1 nodes): `httputil Router Factory`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 100`** (1 nodes): `Access Time Handlers`
+- **Thin community `Community 100`** (1 nodes): `pkg/auth JWT`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 101`** (1 nodes): `Device Model`
+- **Thin community `Community 101`** (1 nodes): `auth.Claims`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 102`** (1 nodes): `Auth Stats Handlers`
+- **Thin community `Community 102`** (1 nodes): `DM3 Backend Services Overview`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 103`** (1 nodes): `httputil Router Factory`
+- **Thin community `Community 103`** (1 nodes): `auth-svc Implementation Status`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 104`** (1 nodes): `pkg/auth JWT`
+- **Thin community `Community 104`** (1 nodes): `access-svc Implementation Status`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 105`** (1 nodes): `DM3 Backend Services Overview`
+- **Thin community `Community 105`** (1 nodes): `identity-svc Implementation Status`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 106`** (1 nodes): `auth-svc Implementation Status`
+- **Thin community `Community 106`** (1 nodes): `Anti-Patterns (DM3)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 107`** (1 nodes): `access-svc Implementation Status`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 108`** (1 nodes): `identity-svc Implementation Status`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 109`** (1 nodes): `Anti-Patterns (DM3)`
+- **Thin community `Community 107`** (1 nodes): `user_handlers.go`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Are the 3 inferred relationships involving `Attendance Feature Spec` (e.g. with `Terminal Attendance Clock-in Flow` and `Web Console Main Layout Shell UX`) actually correct?**
-  _`Attendance Feature Spec` has 3 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `Department`, `DepartmentFormData`, `DepartmentUser` to the rest of the system?**
-  _238 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Multi-Service Handler Layer` be split into smaller, more focused modules?**
-  _Cohesion score 0.02 - nodes in this community are weakly interconnected._
-- **Should `Device Ecosystem & UX` be split into smaller, more focused modules?**
+  _221 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `Android Terminal App` be split into smaller, more focused modules?**
   _Cohesion score 0.03 - nodes in this community are weakly interconnected._
-- **Should `Smart Features & Infrastructure Map` be split into smaller, more focused modules?**
-  _Cohesion score 0.1 - nodes in this community are weakly interconnected._
-- **Should `Auth Service (authsvc)` be split into smaller, more focused modules?**
+- **Should `Access Service API` be split into smaller, more focused modules?**
+  _Cohesion score 0.03 - nodes in this community are weakly interconnected._
+- **Should `Auth Context Layer` be split into smaller, more focused modules?**
+  _Cohesion score 0.04 - nodes in this community are weakly interconnected._
+- **Should `AI & Smart Features` be split into smaller, more focused modules?**
+  _Cohesion score 0.11 - nodes in this community are weakly interconnected._
+- **Should `MQTT Client` be split into smaller, more focused modules?**
   _Cohesion score 0.06 - nodes in this community are weakly interconnected._
-- **Should `Auth Package & Context Utils` be split into smaller, more focused modules?**
-  _Cohesion score 0.05 - nodes in this community are weakly interconnected._
+- **Should `Configuration` be split into smaller, more focused modules?**
+  _Cohesion score 0.09 - nodes in this community are weakly interconnected._
