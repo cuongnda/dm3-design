@@ -1,0 +1,287 @@
+package gateway
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"slices"
+	"time"
+
+	"github.com/duali/dm3-backend/pkg/db"
+	"github.com/duali/dm3-backend/pkg/mqtt"
+)
+
+const personSyncBatchSize = 1000
+
+// PersonSyncer assembles and pushes cfg.person_sync messages to devices.
+type PersonSyncer struct {
+	db   *db.DB
+	mqtt *mqtt.Client
+}
+
+func NewPersonSyncer(database *db.DB, mqttClient *mqtt.Client) *PersonSyncer {
+	return &PersonSyncer{db: database, mqtt: mqttClient}
+}
+
+// syncPersonUser is a user in the person_sync payload (matches MQTT spec §7.3).
+type syncPersonUser struct {
+	UserID      string               `json:"user_id"`
+	Name        string               `json:"name"`
+	Credentials []syncPersonCred     `json:"credentials"`
+	AccessZones []string             `json:"access_zones"`
+	ScheduleID  *string              `json:"schedule_id,omitempty"`
+	ValidFrom   *int64               `json:"valid_from,omitempty"`
+	ValidUntil  *int64               `json:"valid_until,omitempty"`
+	Active      bool                 `json:"active"`
+}
+
+type syncPersonCred struct {
+	Type    string `json:"type"`              // card, face, fingerprint, qr, pin
+	UID     string `json:"uid,omitempty"`     // for card type
+	Template string `json:"template,omitempty"` // for face/fingerprint (base64)
+	Code    string `json:"code,omitempty"`    // for qr/pin
+	Version string `json:"version,omitempty"` // e.g. "arcface_v3"
+	Finger  string `json:"finger,omitempty"`  // e.g. "right_index" for fingerprint
+}
+
+// buildSyncCred maps a credential type+value from DB to the spec-compliant struct.
+func buildSyncCred(credType, credValue string) syncPersonCred {
+	c := syncPersonCred{Type: credType}
+	switch credType {
+	case "card":
+		c.UID = credValue
+	case "face":
+		c.Template = credValue
+		c.Version = "arcface_v3"
+	case "fingerprint":
+		c.Template = credValue
+	case "qr":
+		c.Code = credValue
+	case "pin":
+		c.Code = credValue
+	default:
+		c.UID = credValue // fallback
+	}
+	return c
+}
+
+type personSyncPayload struct {
+	Action     string           `json:"action"`
+	Users      []syncPersonUser `json:"users"`
+	SyncToken  string           `json:"sync_token"`
+	TotalCount int              `json:"total_count"`
+	Batch      int              `json:"batch"`
+	BatchTotal int              `json:"batch_total"`
+}
+
+// PushPersonSync fetches all active users + credentials for a tenant and sends
+// batched cfg.person_sync messages to the specified device.
+func (s *PersonSyncer) PushPersonSync(ctx context.Context, tenantID, deviceID string) error {
+	// 1. Fetch all active users for the tenant
+	userRows, err := s.db.Pool.Query(ctx, `
+		SELECT u.id, CONCAT(u.first_name, ' ', u.last_name),
+		       u.effective_date, u.expired_date, u.access_group_id
+		FROM dm3_identity.users u
+		WHERE u.tenant_id = $1::uuid
+		  AND u.status = 'active'
+		  AND (u.is_deleted = false OR u.is_deleted IS NULL)
+		ORDER BY u.id
+	`, tenantID)
+	if err != nil {
+		return fmt.Errorf("person_sync: query users: %w", err)
+	}
+	defer userRows.Close()
+
+	type userRow struct {
+		ID            string
+		Name          string
+		ValidFrom     *time.Time
+		ValidUntil    *time.Time
+		AccessGroupID *string
+	}
+	var users []userRow
+	for userRows.Next() {
+		var u userRow
+		if err := userRows.Scan(&u.ID, &u.Name, &u.ValidFrom, &u.ValidUntil, &u.AccessGroupID); err != nil {
+			slog.Warn("person_sync: scan user", "error", err)
+			continue
+		}
+		users = append(users, u)
+	}
+	if err := userRows.Err(); err != nil {
+		return fmt.Errorf("person_sync: iterate users: %w", err)
+	}
+
+	if len(users) == 0 {
+		slog.Info("person_sync: no active users", "tenant", tenantID)
+		return s.publishPersonSync(ctx, tenantID, deviceID, personSyncPayload{
+			Action:     "full_sync",
+			Users:      []syncPersonUser{},
+			TotalCount: 0,
+			Batch:      1,
+			BatchTotal: 1,
+		})
+	}
+
+	// 2. Fetch all active credentials for the tenant (indexed by user_id)
+	credRows, err := s.db.Pool.Query(ctx, `
+		SELECT c.user_id, c.type, c.value
+		FROM dm3_identity.credentials c
+		JOIN dm3_identity.users u ON u.id = c.user_id
+		WHERE u.tenant_id = $1::uuid
+		  AND c.status = 'active'
+		  AND (c.valid_until IS NULL OR c.valid_until > now())
+		ORDER BY c.user_id
+	`, tenantID)
+	if err != nil {
+		return fmt.Errorf("person_sync: query credentials: %w", err)
+	}
+	defer credRows.Close()
+
+	credsByUser := map[string][]syncPersonCred{}
+	for credRows.Next() {
+		var userID, cType, cValue string
+		if err := credRows.Scan(&userID, &cType, &cValue); err != nil {
+			continue
+		}
+		cred := buildSyncCred(cType, cValue)
+		credsByUser[userID] = append(credsByUser[userID], cred)
+	}
+	if err := credRows.Err(); err != nil {
+		return fmt.Errorf("person_sync: iterate credentials: %w", err)
+	}
+
+	// 3. Fetch access zones per access_group (access_group → access_point → zone)
+	zoneRows, err := s.db.Pool.Query(ctx, `
+		SELECT agap.access_group_id, z.id::text
+		FROM dm3_access.access_group_access_points agap
+		JOIN dm3_access.access_points ap ON ap.id = agap.access_point_id
+		JOIN dm3_access.zones z ON z.id = ap.zone_id
+		WHERE agap.tenant_id = $1::uuid AND ap.zone_id IS NOT NULL
+	`, tenantID)
+	if err != nil {
+		return fmt.Errorf("person_sync: query access zones: %w", err)
+	}
+	defer zoneRows.Close()
+
+	zonesByGroup := map[string][]string{}
+	for zoneRows.Next() {
+		var groupID, zoneID string
+		if err := zoneRows.Scan(&groupID, &zoneID); err != nil {
+			continue
+		}
+		if !slices.Contains(zonesByGroup[groupID], zoneID) {
+			zonesByGroup[groupID] = append(zonesByGroup[groupID], zoneID)
+		}
+	}
+	if err := zoneRows.Err(); err != nil {
+		return fmt.Errorf("person_sync: iterate zones: %w", err)
+	}
+
+	// 4. Fetch schedule_id per access_group (access_group → access_point → access_time)
+	schedRows, err := s.db.Pool.Query(ctx, `
+		SELECT DISTINCT agap.access_group_id, ap.access_time_id::text
+		FROM dm3_access.access_group_access_points agap
+		JOIN dm3_access.access_points ap ON ap.id = agap.access_point_id
+		WHERE agap.tenant_id = $1::uuid AND ap.access_time_id IS NOT NULL
+	`, tenantID)
+	if err != nil {
+		return fmt.Errorf("person_sync: query schedules: %w", err)
+	}
+	defer schedRows.Close()
+
+	schedByGroup := map[string]string{}
+	for schedRows.Next() {
+		var groupID, schedID string
+		if err := schedRows.Scan(&groupID, &schedID); err != nil {
+			continue
+		}
+		schedByGroup[groupID] = schedID // last one wins if multiple
+	}
+
+	// 5. Build sync users
+	syncUsers := make([]syncPersonUser, 0, len(users))
+	for _, u := range users {
+		su := syncPersonUser{
+			UserID:      u.ID,
+			Name:        u.Name,
+			Credentials: credsByUser[u.ID],
+			Active:      true,
+		}
+		if su.Credentials == nil {
+			su.Credentials = []syncPersonCred{}
+		}
+		if u.ValidFrom != nil {
+			ms := u.ValidFrom.UnixMilli()
+			su.ValidFrom = &ms
+		}
+		if u.ValidUntil != nil {
+			ms := u.ValidUntil.UnixMilli()
+			su.ValidUntil = &ms
+		}
+		if u.AccessGroupID != nil {
+			su.AccessZones = zonesByGroup[*u.AccessGroupID]
+			if sched, ok := schedByGroup[*u.AccessGroupID]; ok {
+				su.ScheduleID = &sched
+			}
+		}
+		if su.AccessZones == nil {
+			su.AccessZones = []string{}
+		}
+		syncUsers = append(syncUsers, su)
+	}
+
+	// 6. Send in batches
+	totalCount := len(syncUsers)
+	batchTotal := (totalCount + personSyncBatchSize - 1) / personSyncBatchSize
+
+	for i := range batchTotal {
+		start := i * personSyncBatchSize
+		end := min(start+personSyncBatchSize, totalCount)
+
+		payload := personSyncPayload{
+			Action:     "full_sync",
+			Users:      syncUsers[start:end],
+			TotalCount: totalCount,
+			Batch:      i + 1,
+			BatchTotal: batchTotal,
+		}
+
+		if err := s.publishPersonSync(ctx, tenantID, deviceID, payload); err != nil {
+			return fmt.Errorf("person_sync: batch %d/%d: %w", i+1, batchTotal, err)
+		}
+	}
+
+	slog.Info("person_sync: pushed",
+		"device", deviceID,
+		"tenant", tenantID,
+		"users", totalCount,
+		"batches", batchTotal,
+	)
+	return nil
+}
+
+func (s *PersonSyncer) publishPersonSync(ctx context.Context, tenantID, deviceID string, payload personSyncPayload) error {
+	dataBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal data: %w", err)
+	}
+
+	envelope := MQTTEnvelope{
+		Version: 1,
+		ID:      generateUUID(),
+		TS:      time.Now().UnixMilli(),
+		Src:     "server:device-gateway",
+		Type:    "cfg.person_sync",
+		Data:    dataBytes,
+	}
+
+	envBytes, err := json.Marshal(envelope)
+	if err != nil {
+		return fmt.Errorf("marshal envelope: %w", err)
+	}
+
+	topic := fmt.Sprintf("dm/%s/device/%s/cfg", tenantID, deviceID)
+	return s.mqtt.Publish(ctx, topic, 2, envBytes)
+}

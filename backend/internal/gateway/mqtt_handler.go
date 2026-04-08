@@ -262,6 +262,47 @@ func (h *MQTTHandler) handleCommandResponse(ctx context.Context, pt ParsedTopic,
 	slog.Info("command response", "device", pt.DeviceID, "type", env.Type, "ref", env.Ref, "status", env.Status)
 }
 
-func (h *MQTTHandler) handleConfigAck(ctx context.Context, pt ParsedTopic, env MQTTEnvelope) {
-	slog.Info("config ack", "device", pt.DeviceID, "type", env.Type, "ref", env.Ref, "status", env.Status)
+func (h *MQTTHandler) handleConfigAck(_ context.Context, pt ParsedTopic, env MQTTEnvelope) {
+	switch env.Type {
+	case "cfg.person_sync.ack":
+		var data struct {
+			SyncedCount int    `json:"synced_count"`
+			FailedCount int    `json:"failed_count"`
+			LocalTotal  int    `json:"local_total"`
+			SyncToken   string `json:"sync_token"`
+		}
+		if err := json.Unmarshal(env.Data, &data); err == nil {
+			slog.Info("person_sync ack",
+				"device", pt.DeviceID,
+				"synced", data.SyncedCount,
+				"failed", data.FailedCount,
+				"local_total", data.LocalTotal,
+				"status", env.Status,
+			)
+		}
+
+	case "cfg.access_rules.ack":
+		var data struct {
+			RulesVersion int `json:"rules_version"`
+			RulesCount   int `json:"rules_count"`
+		}
+		if err := json.Unmarshal(env.Data, &data); err == nil {
+			slog.Info("access_rules ack",
+				"device", pt.DeviceID,
+				"rules_version", data.RulesVersion,
+				"rules_count", data.RulesCount,
+				"status", env.Status,
+			)
+		}
+
+	case "cfg.blacklist.ack":
+		slog.Info("blacklist ack",
+			"device", pt.DeviceID,
+			"ref", env.Ref,
+			"status", env.Status,
+		)
+
+	default:
+		slog.Info("config ack", "device", pt.DeviceID, "type", env.Type, "ref", env.Ref, "status", env.Status)
+	}
 }

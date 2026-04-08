@@ -2,13 +2,11 @@ package gateway
 
 import (
 	"context"
-	"encoding/json"
+	"crypto/rand"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
-
-	"crypto/rand"
 
 	"github.com/go-chi/chi/v5"
 
@@ -17,211 +15,81 @@ import (
 	"github.com/duali/dm3-backend/pkg/mqtt"
 )
 
-// SyncService assembles and pushes device configuration via MQTT.
+// SyncService orchestrates device configuration sync via MQTT.
+// It delegates to specialized syncers for each message type.
 type SyncService struct {
-	db   *db.DB
-	mqtt *mqtt.Client
+	db        *db.DB
+	mqtt      *mqtt.Client
+	Persons   *PersonSyncer
+	Rules     *AccessRulesSyncer
+	Blacklist *BlacklistSyncer
 }
 
 func NewSyncService(database *db.DB, mqttClient *mqtt.Client) *SyncService {
-	return &SyncService{db: database, mqtt: mqttClient}
+	return &SyncService{
+		db:        database,
+		mqtt:      mqttClient,
+		Persons:   NewPersonSyncer(database, mqttClient),
+		Rules:     NewAccessRulesSyncer(database, mqttClient),
+		Blacklist: NewBlacklistSyncer(database, mqttClient),
+	}
 }
 
-// syncUser represents a user in the sync payload.
-type syncUser struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Status     string `json:"status"`
-	ValidFrom  *int64 `json:"valid_from,omitempty"`
-	ValidUntil *int64 `json:"valid_until,omitempty"`
-}
-
-// syncCredential represents a credential in the sync payload.
-type syncCredential struct {
-	ID         string `json:"id"`
-	UserID     string `json:"user_id"`
-	Type       string `json:"type"`
-	Value      string `json:"value"`
-	Status     string `json:"status"`
-	ValidFrom  *int64 `json:"valid_from,omitempty"`
-	ValidUntil *int64 `json:"valid_until,omitempty"`
-}
-
-// syncAccessRule represents an access rule in the sync payload.
-type syncAccessRule struct {
-	RuleID   string   `json:"rule_id"`
-	Name     string   `json:"name"`
-	DoorIDs  []string `json:"door_ids"`
-	Schedule any      `json:"schedule,omitempty"`
-	Priority int      `json:"priority"`
-	Enabled  bool     `json:"enabled"`
-}
-
-// syncUserGroup represents a user group in the sync payload.
-type syncUserGroup struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	UserIDs []string `json:"user_ids"`
-}
-
-// cfgFullPayload is the full sync message sent to devices.
-type cfgFullPayload struct {
-	ConfigVersion int              `json:"config_version"`
-	Users         []syncUser       `json:"users"`
-	UserGroups    []syncUserGroup  `json:"user_groups"`
-	Credentials   []syncCredential `json:"credentials"`
-	AccessRules   []syncAccessRule `json:"access_rules"`
-	Blacklist     []any            `json:"blacklist"`
-}
-
-// PushSyncToDevice assembles all config data for a device's company and pushes via MQTT.
+// PushSyncToDevice pushes all sync types (person_sync, access_rules, blacklist) to a device.
 func (s *SyncService) PushSyncToDevice(ctx context.Context, companyID, deviceID string) error {
-	slog.Info("sync: assembling config", "company", companyID, "device", deviceID)
+	return s.pushSyncTypes(ctx, companyID, deviceID, "all")
+}
 
-	// Fetch users for company
-	users := []syncUser{}
-	userRows, err := s.db.Pool.Query(ctx,
-		`SELECT id, CONCAT(first_name, ' ', last_name), status FROM dm3_identity.users WHERE tenant_id = $1::uuid AND status = 'active'`,
-		companyID)
-	if err != nil {
-		return fmt.Errorf("sync: query users: %w", err)
-	}
-	defer userRows.Close()
-	for userRows.Next() {
-		var p syncUser
-		if err := userRows.Scan(&p.ID, &p.Name, &p.Status); err != nil {
-			continue
-		}
-		users = append(users, p)
-	}
-	if err := userRows.Err(); err != nil {
-		return fmt.Errorf("sync: iterate users: %w", err)
-	}
+// pushSyncTypes pushes the specified sync type(s) to a device.
+// syncType: "person_sync", "access_rules", "blacklist", or "all".
+func (s *SyncService) pushSyncTypes(ctx context.Context, companyID, deviceID, syncType string) error {
+	slog.Info("sync: pushing", "type", syncType, "company", companyID, "device", deviceID)
 
-	// Fetch credentials for company
-	credentials := []syncCredential{}
-	credRows, err := s.db.Pool.Query(ctx,
-		`SELECT c.id, c.user_id, c.type, c.value, c.status
-		 FROM dm3_identity.credentials c
-		 JOIN dm3_identity.users p ON p.id = c.user_id
-		 WHERE p.tenant_id = $1::uuid AND c.status = 'active'`,
-		companyID)
-	if err != nil {
-		return fmt.Errorf("sync: query credentials: %w", err)
-	}
-	defer credRows.Close()
-	for credRows.Next() {
-		var c syncCredential
-		if err := credRows.Scan(&c.ID, &c.UserID, &c.Type, &c.Value, &c.Status); err != nil {
-			continue
-		}
-		credentials = append(credentials, c)
-	}
-	if err := credRows.Err(); err != nil {
-		return fmt.Errorf("sync: iterate credentials: %w", err)
-	}
+	var errs []error
 
-	// Fetch access rules for company
-	accessRules := []syncAccessRule{}
-	ruleRows, err := s.db.Pool.Query(ctx,
-		`SELECT id, name, COALESCE(door_ids, '{}'), schedule, priority, enabled
-		 FROM dm3_access.access_rules WHERE tenant_id = $1::uuid AND enabled = true`,
-		companyID)
-	if err != nil {
-		return fmt.Errorf("sync: query access rules: %w", err)
-	}
-	defer ruleRows.Close()
-	for ruleRows.Next() {
-		var r syncAccessRule
-		var doorIDs []string
-		var schedule json.RawMessage
-		if err := ruleRows.Scan(&r.RuleID, &r.Name, &doorIDs, &schedule, &r.Priority, &r.Enabled); err != nil {
-			continue
-		}
-		r.DoorIDs = make([]string, len(doorIDs))
-		copy(r.DoorIDs, doorIDs)
-		if len(schedule) > 0 {
-			var scheduleData any
-			if err := json.Unmarshal(schedule, &scheduleData); err != nil {
-				slog.Warn("sync: failed to unmarshal schedule", "rule", r.RuleID, "error", err)
-			} else {
-				r.Schedule = scheduleData
-			}
-		}
-		accessRules = append(accessRules, r)
-	}
-	if err := ruleRows.Err(); err != nil {
-		return fmt.Errorf("sync: iterate access rules: %w", err)
-	}
-
-	// Fetch user groups for company
-	userGroups := []syncUserGroup{}
-	groupRows, err := s.db.Pool.Query(ctx,
-		`SELECT g.id, g.name, COALESCE(array_agg(gm.user_id::text) FILTER (WHERE gm.user_id IS NOT NULL), ARRAY[]::text[])
-		 FROM dm3_identity.user_groups g
-		 LEFT JOIN dm3_identity.user_group_members gm ON gm.group_id = g.id
-		 WHERE g.tenant_id = $1::uuid GROUP BY g.id, g.name`, companyID)
-	if err == nil {
-		defer groupRows.Close()
-		for groupRows.Next() {
-			var ug syncUserGroup
-			if groupRows.Scan(&ug.ID, &ug.Name, &ug.UserIDs) == nil {
-				userGroups = append(userGroups, ug)
-			}
-		}
-		if err := groupRows.Err(); err != nil {
-			slog.Warn("sync: error iterating user groups", "error", err)
+	if syncType == "all" || syncType == "person_sync" {
+		if err := s.Persons.PushPersonSync(ctx, companyID, deviceID); err != nil {
+			slog.Error("sync: person_sync failed", "device", deviceID, "error", err)
+			errs = append(errs, err)
 		}
 	}
 
-	// Build cfg.full envelope
-	data := cfgFullPayload{
-		ConfigVersion: 1,
-		Users:         users,
-		UserGroups:    userGroups,
-		Credentials:   credentials,
-		AccessRules:   accessRules,
-		Blacklist:     []any{},
+	if syncType == "all" || syncType == "access_rules" {
+		if err := s.Rules.PushAccessRules(ctx, companyID, deviceID); err != nil {
+			slog.Error("sync: access_rules failed", "device", deviceID, "error", err)
+			errs = append(errs, err)
+		}
 	}
 
-	dataBytes, err := json.Marshal(data)
-	if err != nil {
-		return fmt.Errorf("sync: marshal data: %w", err)
+	if syncType == "all" || syncType == "blacklist" {
+		if err := s.Blacklist.PushBlacklist(ctx, companyID, deviceID); err != nil {
+			slog.Error("sync: blacklist failed", "device", deviceID, "error", err)
+			errs = append(errs, err)
+		}
 	}
 
-	envelope := MQTTEnvelope{
-		Version: 1,
-		ID:      generateUUID(),
-		TS:      time.Now().UnixMilli(),
-		Src:     "server:device-gateway",
-		Type:    "cfg.full",
-		Data:    dataBytes,
+	if len(errs) > 0 {
+		return fmt.Errorf("sync: %d error(s), first: %w", len(errs), errs[0])
 	}
-
-	payload, err := json.Marshal(envelope)
-	if err != nil {
-		return fmt.Errorf("sync: marshal envelope: %w", err)
-	}
-
-	topic := fmt.Sprintf("dm/%s/device/%s/cfg", companyID, deviceID)
-	if err := s.mqtt.Publish(ctx, topic, 1, payload); err != nil {
-		return fmt.Errorf("sync: publish to %s: %w", topic, err)
-	}
-
-	slog.Info("sync: pushed cfg.full",
-		"device", deviceID,
-		"company", companyID,
-		"users", len(users),
-		"credentials", len(credentials),
-		"rules", len(accessRules),
-		"topic", topic,
-	)
 	return nil
 }
 
 // HandleSyncRequest handles POST /api/v1/devices/{id}/sync — manual sync trigger.
+// Query param ?type=person_sync|access_rules|blacklist|all (default: all)
 func (s *SyncService) HandleSyncRequest(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+
+	syncType := r.URL.Query().Get("type")
+	if syncType == "" {
+		syncType = "all"
+	}
+	switch syncType {
+	case "person_sync", "access_rules", "blacklist", "all":
+		// valid
+	default:
+		httputil.Error(w, http.StatusBadRequest, "invalid sync type: must be person_sync, access_rules, blacklist, or all")
+		return
+	}
 
 	// Look up device
 	var companyID, deviceID string
@@ -233,14 +101,15 @@ func (s *SyncService) HandleSyncRequest(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := s.PushSyncToDevice(r.Context(), companyID, deviceID); err != nil {
-		slog.Error("sync: push failed", "error", err, "device", deviceID)
-		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+	if err := s.pushSyncTypes(r.Context(), companyID, deviceID, syncType); err != nil {
+		slog.Error("sync: push failed", "error", err, "device", deviceID, "type", syncType)
+		httputil.Error(w, http.StatusInternalServerError, "sync failed")
 		return
 	}
 
 	httputil.JSON(w, http.StatusOK, map[string]string{
 		"status":    "sync_pushed",
+		"type":      syncType,
 		"device_id": deviceID,
 		"tenant_id": companyID,
 	})
