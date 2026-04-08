@@ -45,5 +45,7 @@
   "modal.status": "Status",
   "modal.cancel": "Cancel",
   "modal.save": "Save",
-  "modal.saving": "Saving..."
+  "modal.saving": "Saving...",
+  "delete.confirmPre": "Are you sure you want to delete",
+  "delete.confirmPost": "? This action cannot be undone."
 }
