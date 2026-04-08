@@ -72,7 +72,7 @@ type adminInfo struct {
 
 // ─── List Companies ──────────────────────────────────────────────────────────
 
-func (h *Handlers) ListCompanies(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) ListCompanies(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
@@ -106,7 +106,7 @@ func (h *Handlers) ListCompanies(w http.ResponseWriter, r *http.Request) {
 
 // ─── Create Company ──────────────────────────────────────────────────────────
 
-func (h *Handlers) CreateCompany(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) CreateCompany(w http.ResponseWriter, r *http.Request) {
 	var req createCompanyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -189,7 +189,7 @@ func (h *Handlers) CreateCompany(w http.ResponseWriter, r *http.Request) {
 
 // ─── Get Company ─────────────────────────────────────────────────────────────
 
-func (h *Handlers) GetCompany(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) GetCompany(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var c companyResponse
 	err := h.db.Pool.QueryRow(r.Context(),
@@ -212,7 +212,7 @@ func (h *Handlers) GetCompany(w http.ResponseWriter, r *http.Request) {
 
 // ─── Update Company ──────────────────────────────────────────────────────────
 
-func (h *Handlers) UpdateCompany(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req updateCompanyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -247,7 +247,7 @@ func (h *Handlers) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 
 // ─── Delete Company (soft) ───────────────────────────────────────────────────
 
-func (h *Handlers) DeleteCompany(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) DeleteCompany(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	tag, err := h.db.Pool.Exec(r.Context(),
 		`UPDATE dm3_auth.companies SET status = 'suspended', updated_at = now() WHERE id = $1::uuid AND status != 'suspended'`, id)

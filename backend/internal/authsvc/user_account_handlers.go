@@ -61,7 +61,7 @@ type createUserAccountResponse struct {
 
 // ─── List User Accounts ──────────────────────────────────────────────────────
 
-func (h *Handlers) ListUserAccounts(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) ListUserAccounts(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
@@ -142,7 +142,7 @@ func (h *Handlers) ListUserAccounts(w http.ResponseWriter, r *http.Request) {
 }
 
 // loadCompanyInfo fetches company details to build a userCompanyInfo.
-func (h *Handlers) loadCompanyInfo(r *http.Request, companyID, role string) (userCompanyInfo, error) {
+func (h *AuthHandlers) loadCompanyInfo(r *http.Request, companyID, role string) (userCompanyInfo, error) {
 	var ci userCompanyInfo
 	err := h.db.Pool.QueryRow(r.Context(),
 		`SELECT id, name, code FROM dm3_auth.companies WHERE id = $1::uuid`, companyID,
@@ -157,7 +157,7 @@ func (h *Handlers) loadCompanyInfo(r *http.Request, companyID, role string) (use
 
 // ─── Get User Account ────────────────────────────────────────────────────────
 
-func (h *Handlers) GetUserAccount(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) GetUserAccount(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var u userAccountResponse
@@ -187,7 +187,7 @@ func (h *Handlers) GetUserAccount(w http.ResponseWriter, r *http.Request) {
 
 // ─── Create User Account ─────────────────────────────────────────────────────
 
-func (h *Handlers) CreateUserAccount(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) CreateUserAccount(w http.ResponseWriter, r *http.Request) {
 	var req createUserAccountRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -256,7 +256,7 @@ func (h *Handlers) CreateUserAccount(w http.ResponseWriter, r *http.Request) {
 
 // ─── Update User Account ─────────────────────────────────────────────────────
 
-func (h *Handlers) UpdateUserAccount(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) UpdateUserAccount(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var req updateUserAccountRequest
@@ -305,7 +305,7 @@ func (h *Handlers) UpdateUserAccount(w http.ResponseWriter, r *http.Request) {
 
 // ─── Delete User Account ─────────────────────────────────────────────────────
 
-func (h *Handlers) DeleteUserAccount(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) DeleteUserAccount(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	// Soft delete: set status to 'deleted'. Protect system_admin accounts.
@@ -331,13 +331,13 @@ func (h *Handlers) DeleteUserAccount(w http.ResponseWriter, r *http.Request) {
 // AddUserToCompany is not applicable in the new accounts model (one row per
 // email+company). Creating a new account for the same email in another company
 // is done via CreateUserAccount. This endpoint returns a helpful error.
-func (h *Handlers) AddUserToCompany(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) AddUserToCompany(w http.ResponseWriter, r *http.Request) {
 	httputil.Error(w, http.StatusGone,
 		"multi-company assignment via user_companies is removed; create a new account per company instead")
 }
 
 // RemoveUserFromCompany soft-deletes the account that links a user to a company.
-func (h *Handlers) RemoveUserFromCompany(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) RemoveUserFromCompany(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	companyID := chi.URLParam(r, "companyId")
 
@@ -362,7 +362,7 @@ func (h *Handlers) RemoveUserFromCompany(w http.ResponseWriter, r *http.Request)
 }
 
 // UpdateUserCompanyRole updates the role of an account scoped to a specific company.
-func (h *Handlers) UpdateUserCompanyRole(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) UpdateUserCompanyRole(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	companyID := chi.URLParam(r, "companyId")
 
@@ -407,7 +407,7 @@ func (h *Handlers) UpdateUserCompanyRole(w http.ResponseWriter, r *http.Request)
 }
 
 // GetAvailableCompanies returns companies that the given account is NOT already assigned to.
-func (h *Handlers) GetAvailableCompanies(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) GetAvailableCompanies(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 
 	// Find the email of this account so we can exclude all companies it already has.
@@ -458,7 +458,7 @@ func (h *Handlers) GetAvailableCompanies(w http.ResponseWriter, r *http.Request)
 
 // GetUserCompanyMatrix returns a detailed view of a user's roles across companies.
 // In the new model each email+company pair is a separate account row.
-func (h *Handlers) GetUserCompanyMatrix(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) GetUserCompanyMatrix(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 
 	// Get base account info.

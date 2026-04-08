@@ -73,7 +73,7 @@ func main() {
 	}
 
 	// HTTP handlers
-	handlers := access.NewHandlers(database)
+	handlers := access.NewAccessHandlers(database)
 
 	// HTTP routes
 	r := httputil.NewRouter()

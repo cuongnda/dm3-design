@@ -19,7 +19,7 @@ import (
 
 // ─── Access Time Templates ──────────────────────────────────────────────────
 
-func (h *Handlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
@@ -89,7 +89,7 @@ func (h *Handlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-func (h *Handlers) GetAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) GetAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
 	templateID := chi.URLParam(r, "id")
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 
@@ -152,7 +152,7 @@ func (h *Handlers) GetAccessTimeTemplate(w http.ResponseWriter, r *http.Request)
 	httputil.JSON(w, http.StatusOK, template)
 }
 
-func (h *Handlers) CreateAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) CreateAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateAccessTimeTemplateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_json")
@@ -227,7 +227,7 @@ func (h *Handlers) CreateAccessTimeTemplate(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-func (h *Handlers) UpdateAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) UpdateAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
 	templateID := chi.URLParam(r, "id")
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 
@@ -344,7 +344,7 @@ func (h *Handlers) UpdateAccessTimeTemplate(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-func (h *Handlers) DeleteAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) DeleteAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
 	templateID := chi.URLParam(r, "id")
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 
@@ -370,7 +370,7 @@ func (h *Handlers) DeleteAccessTimeTemplate(w http.ResponseWriter, r *http.Reque
 
 // ─── User Assignment ────────────────────────────────────────────────────────
 
-func (h *Handlers) AssignAccessTime(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) AssignAccessTime(w http.ResponseWriter, r *http.Request) {
 	var req models.AssignAccessTimeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_json")
@@ -432,7 +432,7 @@ func (h *Handlers) AssignAccessTime(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handlers) GetUserAccessTime(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) GetUserAccessTime(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "userId")
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 
@@ -487,7 +487,7 @@ func (h *Handlers) GetUserAccessTime(w http.ResponseWriter, r *http.Request) {
 
 // ─── Access Validation ──────────────────────────────────────────────────────
 
-func (h *Handlers) ValidateAccess(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ValidateAccess(w http.ResponseWriter, r *http.Request) {
 	var req models.ValidateAccessRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_json")
@@ -630,7 +630,7 @@ func (h *Handlers) ValidateAccess(w http.ResponseWriter, r *http.Request) {
 
 // ─── Stats & Analytics ──────────────────────────────────────────────────────
 
-func (h *Handlers) GetAccessTimeStats(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) GetAccessTimeStats(w http.ResponseWriter, r *http.Request) {
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 	
 	var stats models.AccessTimeStats
@@ -678,7 +678,7 @@ func (h *Handlers) GetAccessTimeStats(w http.ResponseWriter, r *http.Request) {
 
 // ─── Helper Functions ───────────────────────────────────────────────────────
 
-func (h *Handlers) logValidation(ctx context.Context, companyID, userID, templateID string, doorID *string, requestedTime time.Time, isAllowed bool, reason, matchedSlotID string) {
+func (h *AccessHandlers) logValidation(ctx context.Context, companyID, userID, templateID string, doorID *string, requestedTime time.Time, isAllowed bool, reason, matchedSlotID string) {
 	var templatePtr, doorPtr, slotPtr interface{}
 	if templateID != "" {
 		templatePtr = templateID

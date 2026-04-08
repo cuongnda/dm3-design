@@ -113,7 +113,7 @@ func main() {
 	}
 
 	// HTTP handlers
-	handlers := gateway.NewHandlers(database, mqttClient)
+	handlers := gateway.NewGatewayHandlers(database, mqttClient)
 	provHandlers := gateway.NewProvisioningHandlers(database, mqttClient, cfg)
 	firmwareHandlers := gateway.NewFirmwareHandlers(database)
 

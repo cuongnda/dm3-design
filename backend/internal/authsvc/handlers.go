@@ -54,13 +54,13 @@ type DeviceClaims struct {
 
 // ─── Handlers ────────────────────────────────────────────────────────────────
 
-type Handlers struct {
+type AuthHandlers struct {
 	db        *db.DB
 	jwtSecret string
 }
 
-func NewHandlers(database *db.DB, jwtSecret string) *Handlers {
-	return &Handlers{db: database, jwtSecret: jwtSecret}
+func NewAuthHandlers(database *db.DB, jwtSecret string) *AuthHandlers {
+	return &AuthHandlers{db: database, jwtSecret: jwtSecret}
 }
 
 // ─── Auth Routes ─────────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ type accountForLogin struct {
 	role         string
 }
 
-func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
@@ -271,7 +271,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 	var req loginStep2Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
@@ -345,7 +345,7 @@ type refreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req refreshRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
@@ -428,7 +428,7 @@ func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromContext(r.Context())
 	if claims == nil {
 		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.unauthorized")
@@ -444,7 +444,7 @@ func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handlers) Me(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromContext(r.Context())
 	if claims == nil {
 		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.unauthorized")
@@ -475,7 +475,7 @@ type updateMeRequest struct {
 	SessionTimeoutMinutes *int    `json:"session_timeout_minutes,omitempty"`
 }
 
-func (h *Handlers) UpdateMe(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromContext(r.Context())
 	if claims == nil {
 		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.unauthorized")
@@ -551,7 +551,7 @@ type deviceTokenResponse struct {
 	ExpiresIn int    `json:"expires_in"`
 }
 
-func (h *Handlers) DeviceToken(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) DeviceToken(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromContext(r.Context())
 	if claims == nil {
 		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.unauthorized")
@@ -629,7 +629,7 @@ type userResponse struct {
 	SessionTimeoutMinutes *int       `json:"session_timeout_minutes,omitempty"`
 }
 
-func (h *Handlers) ListUsers(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
@@ -667,7 +667,7 @@ type createUserRequest struct {
 	TenantID *string  `json:"tenant_id,omitempty"`
 }
 
-func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var req createUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
@@ -703,7 +703,7 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusCreated, u)
 }
 
-func (h *Handlers) GetUser(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) GetUser(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var u userResponse
 	err := h.db.Pool.QueryRow(r.Context(),
@@ -723,7 +723,7 @@ type updateUserRequest struct {
 	Status *string  `json:"status"`
 }
 
-func (h *Handlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req updateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -755,7 +755,7 @@ func (h *Handlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, u)
 }
 
-func (h *Handlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	// Soft delete: set status to 'deleted'.
 	tag, err := h.db.Pool.Exec(r.Context(),
@@ -776,7 +776,7 @@ type changePasswordRequest struct {
 	Password string `json:"password"`
 }
 
-func (h *Handlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req changePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -817,7 +817,7 @@ type roleInfo struct {
 	Permissions []string `json:"permissions"`
 }
 
-func (h *Handlers) ListRoles(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) ListRoles(w http.ResponseWriter, r *http.Request) {
 	roles := []roleInfo{
 		{Name: "admin", Description: "Full system access", Permissions: []string{"users:read", "users:write", "users:delete", "devices:read", "devices:write", "access:read", "access:write", "identity:read", "identity:write"}},
 		{Name: "operator", Description: "Operational access", Permissions: []string{"devices:read", "devices:write", "access:read", "access:write", "identity:read"}},
@@ -828,7 +828,7 @@ func (h *Handlers) ListRoles(w http.ResponseWriter, r *http.Request) {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-func (h *Handlers) generateTempToken(userID, email string) (string, error) {
+func (h *AuthHandlers) generateTempToken(userID, email string) (string, error) {
 	now := time.Now()
 	claims := TempClaims{
 		Sub:     userID,
@@ -845,7 +845,7 @@ func (h *Handlers) generateTempToken(userID, email string) (string, error) {
 	return token.SignedString([]byte(h.jwtSecret))
 }
 
-func (h *Handlers) generateAccessToken(userID, companyID, email, name string, roles []string, selectedCompanyID, role string) (string, error) {
+func (h *AuthHandlers) generateAccessToken(userID, companyID, email, name string, roles []string, selectedCompanyID, role string) (string, error) {
 	now := time.Now()
 	claims := AccessClaims{
 		Sub:   userID,
@@ -865,7 +865,7 @@ func (h *Handlers) generateAccessToken(userID, companyID, email, name string, ro
 	return token.SignedString([]byte(h.jwtSecret))
 }
 
-func (h *Handlers) createRefreshToken(r *http.Request, userID, companyID string) (string, error) {
+func (h *AuthHandlers) createRefreshToken(r *http.Request, userID, companyID string) (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err
@@ -909,7 +909,7 @@ func parsePagination(r *http.Request) (int, int) {
 }
 
 // ResetUserPassword generates a new random password for a user.
-func (h *Handlers) ResetUserPassword(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) ResetUserPassword(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	if userID == "" {
 		httputil.Error(w, http.StatusBadRequest, "user ID required")
@@ -960,7 +960,7 @@ func (h *Handlers) ResetUserPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 // ChangeUserPassword sets a custom password for a user.
-func (h *Handlers) ChangeUserPassword(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) ChangeUserPassword(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	if userID == "" {
 		httputil.Error(w, http.StatusBadRequest, "user ID required")

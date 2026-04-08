@@ -29,7 +29,7 @@ func setupTestDB(t *testing.T) *db.DB {
 	return database
 }
 
-func setupRouter(h *Handlers) http.Handler {
+func setupRouter(h *IdentityHandlers) http.Handler {
 	r := httputil.NewRouter()
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/users", h.ListUsers)
@@ -63,7 +63,7 @@ func TestPersonsCRUD(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewHandlers(database, nil)
+	h := NewIdentityHandlers(database, nil)
 	router := setupRouter(h)
 
 	// Create
@@ -142,7 +142,7 @@ func TestCredentialsCRUD(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewHandlers(database, nil)
+	h := NewIdentityHandlers(database, nil)
 	router := setupRouter(h)
 
 	// Create user first
@@ -213,7 +213,7 @@ func TestGroupsCRUD(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewHandlers(database, nil)
+	h := NewIdentityHandlers(database, nil)
 	router := setupRouter(h)
 
 	// Create group
@@ -291,7 +291,7 @@ func TestSyncEndpoint(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewHandlers(database, nil)
+	h := NewIdentityHandlers(database, nil)
 	router := setupRouter(h)
 
 	// Sync with epoch gets all
@@ -322,7 +322,7 @@ func TestStatsEndpoint(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewHandlers(database, nil)
+	h := NewIdentityHandlers(database, nil)
 	router := setupRouter(h)
 
 	req := httptest.NewRequest("GET", "/api/v1/stats", nil)
@@ -344,7 +344,7 @@ func TestValidation(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewHandlers(database, nil)
+	h := NewIdentityHandlers(database, nil)
 	router := setupRouter(h)
 
 	// Missing required fields

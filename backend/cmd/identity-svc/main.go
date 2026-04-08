@@ -67,7 +67,7 @@ func main() {
 	}
 
 	// HTTP handlers
-	handlers := identity.NewHandlers(database, natsClient)
+	handlers := identity.NewIdentityHandlers(database, natsClient)
 	umHandlers := tenant.NewUserManagementHandlers(database)
 
 	// HTTP routes

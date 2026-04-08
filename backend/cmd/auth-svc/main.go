@@ -49,7 +49,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	h := authsvc.NewHandlers(database, cfg.JWTSecret)
+	h := authsvc.NewAuthHandlers(database, cfg.JWTSecret)
 	r := httputil.NewRouter()
 
 	// Bug reporter middleware (auto-reports 5xx to DV Tasks)

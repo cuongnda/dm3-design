@@ -17,17 +17,17 @@ import (
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
-type Handlers struct {
+type AccessHandlers struct {
 	db *db.DB
 }
 
-func NewHandlers(database *db.DB) *Handlers {
-	return &Handlers{db: database}
+func NewAccessHandlers(database *db.DB) *AccessHandlers {
+	return &AccessHandlers{db: database}
 }
 
 // ─── Doors ───────────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListDoors(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ListDoors(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
@@ -124,7 +124,7 @@ type createDoorRequest struct {
 	CameraID         *string `json:"camera_id"`
 }
 
-func (h *Handlers) CreateDoor(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) CreateDoor(w http.ResponseWriter, r *http.Request) {
 	var req createDoorRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -172,7 +172,7 @@ func (h *Handlers) CreateDoor(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusCreated, d)
 }
 
-func (h *Handlers) GetDoor(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) GetDoor(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	d, err := h.scanDoor(r, id)
 	if err != nil {
@@ -200,7 +200,7 @@ type updateDoorRequest struct {
 	CameraID         *string `json:"camera_id"`
 }
 
-func (h *Handlers) UpdateDoor(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) UpdateDoor(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	var req updateDoorRequest
@@ -236,7 +236,7 @@ func (h *Handlers) UpdateDoor(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, d)
 }
 
-func (h *Handlers) DeleteDoor(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) DeleteDoor(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	query := `DELETE FROM dm3_access.doors WHERE id = $1::uuid`
@@ -259,7 +259,7 @@ func (h *Handlers) DeleteDoor(w http.ResponseWriter, r *http.Request) {
 
 // ─── Access Rules ────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListRules(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ListRules(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
@@ -342,7 +342,7 @@ type createRuleRequest struct {
 	ValidUntil        *time.Time      `json:"valid_until"`
 }
 
-func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 	var req createRuleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -392,7 +392,7 @@ func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusCreated, ar)
 }
 
-func (h *Handlers) GetRule(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) GetRule(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var ar models.AccessRule
 	err := h.db.Pool.QueryRow(r.Context(),
@@ -410,7 +410,7 @@ func (h *Handlers) GetRule(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, ar)
 }
 
-func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req createRuleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -443,7 +443,7 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, ar)
 }
 
-func (h *Handlers) DeleteRule(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) DeleteRule(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	query := `DELETE FROM dm3_access.access_rules WHERE id = $1::uuid`
@@ -466,7 +466,7 @@ func (h *Handlers) DeleteRule(w http.ResponseWriter, r *http.Request) {
 
 // ─── Schedules ───────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListSchedules(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ListSchedules(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 	cid := authsvc.CompanyIDFromContext(r.Context())
@@ -518,7 +518,7 @@ type createScheduleRequest struct {
 	HolidayCalendarID *string         `json:"holiday_calendar_id"`
 }
 
-func (h *Handlers) CreateSchedule(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 	var req createScheduleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -547,7 +547,7 @@ func (h *Handlers) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusCreated, s)
 }
 
-func (h *Handlers) GetSchedule(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) GetSchedule(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var s models.Schedule
 	err := h.db.Pool.QueryRow(r.Context(),
@@ -561,7 +561,7 @@ func (h *Handlers) GetSchedule(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, s)
 }
 
-func (h *Handlers) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req createScheduleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -586,7 +586,7 @@ func (h *Handlers) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, s)
 }
 
-func (h *Handlers) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	query := `DELETE FROM dm3_access.schedules WHERE id = $1::uuid`
@@ -609,7 +609,7 @@ func (h *Handlers) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
 
 // ─── Events ──────────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListEvents(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
@@ -710,7 +710,7 @@ type eventResponse struct {
 
 // ─── Dashboard Stats ─────────────────────────────────────────────────────────
 
-func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	var stats models.DashboardStats
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -772,7 +772,7 @@ func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
 
 // ─── Sync Package ────────────────────────────────────────────────────────────
 
-func (h *Handlers) GetSyncPackage(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) GetSyncPackage(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	// Verify door exists
@@ -820,7 +820,7 @@ func (h *Handlers) GetSyncPackage(w http.ResponseWriter, r *http.Request) {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-func (h *Handlers) scanDoor(r *http.Request, id string) (models.Door, error) {
+func (h *AccessHandlers) scanDoor(r *http.Request, id string) (models.Door, error) {
 	var d models.Door
 	err := h.db.Pool.QueryRow(r.Context(),
 		`SELECT id, tenant_id, site_id, zone_id, name, description, type, COALESCE(location,''), floor, building,

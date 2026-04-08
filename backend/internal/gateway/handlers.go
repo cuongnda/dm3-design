@@ -19,17 +19,17 @@ import (
 	"github.com/duali/dm3-backend/pkg/mqtt"
 )
 
-type Handlers struct {
+type GatewayHandlers struct {
 	db   *db.DB
 	mqtt *mqtt.Client
 }
 
-func NewHandlers(database *db.DB, mqttClient *mqtt.Client) *Handlers {
-	return &Handlers{db: database, mqtt: mqttClient}
+func NewGatewayHandlers(database *db.DB, mqttClient *mqtt.Client) *GatewayHandlers {
+	return &GatewayHandlers{db: database, mqtt: mqttClient}
 }
 
 // ListDevices handles GET /api/v1/devices (company-scoped)
-func (h *Handlers) ListDevices(w http.ResponseWriter, r *http.Request) {
+func (h *GatewayHandlers) ListDevices(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	if cid == "" {
 		httputil.Error(w, http.StatusForbidden, "company context required")
@@ -88,7 +88,7 @@ func (h *Handlers) ListDevices(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListDevicesGlobal handles GET /api/v1/system/devices (system admin only, all companies)
-func (h *Handlers) ListDevicesGlobal(w http.ResponseWriter, r *http.Request) {
+func (h *GatewayHandlers) ListDevicesGlobal(w http.ResponseWriter, r *http.Request) {
 	query := `SELECT d.id, d.tenant_id, d.device_id, COALESCE(d.name,''), d.type, d.status, COALESCE(d.firmware_version,''), COALESCE(d.site_id,''), COALESCE(d.location,''), d.last_seen, d.created_at, d.updated_at, COALESCE(c.name,'') as company_name
 	FROM dm3_devices.devices d LEFT JOIN dm3_auth.companies c ON c.id = d.tenant_id WHERE 1=1`
 	args := []any{}
@@ -151,7 +151,7 @@ type createDeviceRequest struct {
 }
 
 // CreateDevice handles POST /api/v1/devices
-func (h *Handlers) CreateDevice(w http.ResponseWriter, r *http.Request) {
+func (h *GatewayHandlers) CreateDevice(w http.ResponseWriter, r *http.Request) {
 	var req createDeviceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -188,7 +188,7 @@ func (h *Handlers) CreateDevice(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetDevice handles GET /api/v1/devices/{id}
-func (h *Handlers) GetDevice(w http.ResponseWriter, r *http.Request) {
+func (h *GatewayHandlers) GetDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	query := `SELECT id, tenant_id, device_id, COALESCE(name,''), type, status, COALESCE(firmware_version,''), COALESCE(site_id,''), COALESCE(location,''), last_seen, created_at, updated_at
@@ -216,7 +216,7 @@ type updateDeviceRequest struct {
 }
 
 // UpdateDevice handles PUT /api/v1/devices/{id}
-func (h *Handlers) UpdateDevice(w http.ResponseWriter, r *http.Request) {
+func (h *GatewayHandlers) UpdateDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -251,7 +251,7 @@ func (h *Handlers) UpdateDevice(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteDevice handles DELETE /api/v1/devices/{id}
-func (h *Handlers) DeleteDevice(w http.ResponseWriter, r *http.Request) {
+func (h *GatewayHandlers) DeleteDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -281,7 +281,7 @@ type sendCommandRequest struct {
 }
 
 // SendCommand handles POST /api/v1/devices/{id}/command
-func (h *Handlers) SendCommand(w http.ResponseWriter, r *http.Request) {
+func (h *GatewayHandlers) SendCommand(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var req sendCommandRequest
@@ -337,7 +337,7 @@ func (h *Handlers) SendCommand(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetDeviceEvents handles GET /api/v1/devices/{id}/events
-func (h *Handlers) GetDeviceEvents(w http.ResponseWriter, r *http.Request) {
+func (h *GatewayHandlers) GetDeviceEvents(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
@@ -380,7 +380,7 @@ func (h *Handlers) GetDeviceEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListEvents handles GET /api/v1/events
-func (h *Handlers) ListEvents(w http.ResponseWriter, r *http.Request) {
+func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 	cid := authsvc.CompanyIDFromContext(r.Context())

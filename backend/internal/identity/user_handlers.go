@@ -21,7 +21,7 @@ import (
 
 // ─── Avatar Upload ────────────────────────────────────────────────────────────
 
-func (h *Handlers) UploadUserAvatar(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) UploadUserAvatar(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 
@@ -91,7 +91,7 @@ func (h *Handlers) UploadUserAvatar(w http.ResponseWriter, r *http.Request) {
 
 // ─── User CRUD ────────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListUsers(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 	if companyID == "" {
 		httputil.Error(w, http.StatusBadRequest, "company context required")
@@ -267,7 +267,7 @@ func (h *Handlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handlers) GetUser(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) GetUser(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 
@@ -331,7 +331,7 @@ func (h *Handlers) GetUser(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 	if companyID == "" {
 		httputil.Error(w, http.StatusBadRequest, "company context required")
@@ -438,7 +438,7 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 	if companyID == "" {
@@ -577,7 +577,7 @@ func (h *Handlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "user updated successfully"})
 }
 
-func (h *Handlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 	if companyID == "" {
@@ -603,7 +603,7 @@ func (h *Handlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "user deleted successfully"})
 }
 
-func (h *Handlers) BulkDeleteUsers(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) BulkDeleteUsers(w http.ResponseWriter, r *http.Request) {
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 	if companyID == "" {
 		httputil.Error(w, http.StatusBadRequest, "company context required")
@@ -642,7 +642,7 @@ func (h *Handlers) BulkDeleteUsers(w http.ResponseWriter, r *http.Request) {
 
 // ─── Reference data ───────────────────────────────────────────────────────────
 
-func (h *Handlers) ListUserDepartments(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) ListUserDepartments(w http.ResponseWriter, r *http.Request) {
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 	if companyID == "" {
 		httputil.Error(w, http.StatusBadRequest, "company context required")
