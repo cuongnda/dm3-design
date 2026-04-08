@@ -44,7 +44,7 @@ func (h *AccessHandlers) ListAccessGroups(w http.ResponseWriter, r *http.Request
 		"SELECT COUNT(*) FROM dm3_access.access_groups ag "+where, countArgs...).Scan(&total)
 
 	query := fmt.Sprintf(`
-		SELECT ag.id, ag.tenant_id, ag.parent_id, ag.name, ag.is_default, ag.type,
+		SELECT ag.id, ag.tenant_id, ag.parent_id, ag.access_time_id, ag.name, ag.is_default, ag.type,
 		       COUNT(DISTINCT agap.access_point_id) AS access_point_count,
 		       COUNT(DISTINCT u.id) AS user_count,
 		       ag.created_on, ag.updated_on
@@ -68,7 +68,7 @@ func (h *AccessHandlers) ListAccessGroups(w http.ResponseWriter, r *http.Request
 	groups := []models.AccessGroup{}
 	for rows.Next() {
 		var g models.AccessGroup
-		if err := rows.Scan(&g.ID, &g.TenantID, &g.ParentID, &g.Name, &g.IsDefault, &g.Type,
+		if err := rows.Scan(&g.ID, &g.TenantID, &g.ParentID, &g.AccessTimeID, &g.Name, &g.IsDefault, &g.Type,
 			&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -83,33 +83,54 @@ func (h *AccessHandlers) GetAccessGroup(w http.ResponseWriter, r *http.Request) 
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
 	var g models.AccessGroup
+	var at models.AccessTime
+	var atID, atName, atTz *string
+
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT ag.id, ag.tenant_id, ag.parent_id, ag.name, ag.is_default, ag.type,
+		`SELECT ag.id, ag.tenant_id, ag.parent_id, ag.access_time_id, ag.name, ag.is_default, ag.type,
 		        COUNT(DISTINCT agap.access_point_id) AS access_point_count,
 		        COUNT(DISTINCT u.id) AS user_count,
-		        ag.created_on, ag.updated_on
+		        ag.created_on, ag.updated_on,
+		        agt.id, agt.name, agt.timezone
 		 FROM dm3_access.access_groups ag
 		 LEFT JOIN dm3_access.access_group_access_points agap ON agap.access_group_id = ag.id
 		 LEFT JOIN dm3_identity.users u ON u.access_group_id = ag.id AND (u.is_deleted = false OR u.is_deleted IS NULL)
+		 LEFT JOIN dm3_access.access_times agt ON agt.id = ag.access_time_id
 		 WHERE ag.id = $1::uuid
 		   AND ($2::uuid IS NULL OR ag.tenant_id = $2::uuid)
 		   AND ag.is_deleted = false
-		 GROUP BY ag.id`,
+		 GROUP BY ag.id, agt.id`,
 		id, nilIfEmpty(cid),
-	).Scan(&g.ID, &g.TenantID, &g.ParentID, &g.Name, &g.IsDefault, &g.Type,
-		&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt)
+	).Scan(&g.ID, &g.TenantID, &g.ParentID, &g.AccessTimeID, &g.Name, &g.IsDefault, &g.Type,
+		&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt,
+		&atID, &atName, &atTz)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "access group not found")
 		return
 	}
+
+	// Only add access time if it exists
+	if atID != nil {
+		at.ID = *atID
+		at.TenantID = g.TenantID
+		if atName != nil {
+			at.Name = *atName
+		}
+		if atTz != nil {
+			at.Timezone = *atTz
+		}
+		g.AccessTime = &at
+	}
+
 	httputil.JSON(w, http.StatusOK, g)
 }
 
 type createAccessGroupRequest struct {
-	Name      string  `json:"name"`
-	ParentID  *string `json:"parent_id"`
-	IsDefault bool    `json:"is_default"`
-	Type      int     `json:"type"`
+	Name        string  `json:"name"`
+	ParentID    *string `json:"parent_id"`
+	AccessTimeID *string `json:"access_time_id"`
+	IsDefault   bool    `json:"is_default"`
+	Type        int     `json:"type"`
 }
 
 func (h *AccessHandlers) CreateAccessGroup(w http.ResponseWriter, r *http.Request) {
@@ -129,11 +150,11 @@ func (h *AccessHandlers) CreateAccessGroup(w http.ResponseWriter, r *http.Reques
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	var g models.AccessGroup
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_access.access_groups (tenant_id, parent_id, name, is_default, type)
-		 VALUES ($1::uuid, $2::uuid, $3, $4, $5)
-		 RETURNING id, tenant_id, parent_id, name, is_default, type, 0, 0, created_on, updated_on`,
-		cid, req.ParentID, req.Name, req.IsDefault, req.Type,
-	).Scan(&g.ID, &g.TenantID, &g.ParentID, &g.Name, &g.IsDefault, &g.Type,
+		`INSERT INTO dm3_access.access_groups (tenant_id, parent_id, access_time_id, name, is_default, type)
+		 VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6)
+		 RETURNING id, tenant_id, parent_id, access_time_id, name, is_default, type, 0, 0, created_on, updated_on`,
+		cid, req.ParentID, req.AccessTimeID, req.Name, req.IsDefault, req.Type,
+	).Scan(&g.ID, &g.TenantID, &g.ParentID, &g.AccessTimeID, &g.Name, &g.IsDefault, &g.Type,
 		&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		slog.Error("create access group error", "error", err)
@@ -144,9 +165,10 @@ func (h *AccessHandlers) CreateAccessGroup(w http.ResponseWriter, r *http.Reques
 }
 
 type updateAccessGroupRequest struct {
-	Name      *string `json:"name"`
-	ParentID  *string `json:"parent_id"`
-	IsDefault *bool   `json:"is_default"`
+	Name         *string `json:"name"`
+	ParentID     *string `json:"parent_id"`
+	AccessTimeID *string `json:"access_time_id"`
+	IsDefault    *bool   `json:"is_default"`
 }
 
 func (h *AccessHandlers) UpdateAccessGroup(w http.ResponseWriter, r *http.Request) {
@@ -162,16 +184,17 @@ func (h *AccessHandlers) UpdateAccessGroup(w http.ResponseWriter, r *http.Reques
 	var g models.AccessGroup
 	err := h.db.Pool.QueryRow(r.Context(),
 		`UPDATE dm3_access.access_groups
-		 SET name       = COALESCE($2, name),
-		     parent_id  = COALESCE($3::uuid, parent_id),
-		     is_default = COALESCE($4, is_default),
-		     updated_on = now()
+		 SET name           = COALESCE($2, name),
+		     parent_id      = COALESCE($3::uuid, parent_id),
+		     access_time_id = CASE WHEN $4::text = 'null' THEN NULL ELSE COALESCE($4::uuid, access_time_id) END,
+		     is_default     = COALESCE($5, is_default),
+		     updated_on     = now()
 		 WHERE id = $1::uuid
-		   AND ($5::uuid IS NULL OR tenant_id = $5::uuid)
+		   AND ($6::uuid IS NULL OR tenant_id = $6::uuid)
 		   AND is_deleted = false
-		 RETURNING id, tenant_id, parent_id, name, is_default, type, 0, 0, created_on, updated_on`,
-		id, req.Name, req.ParentID, req.IsDefault, nilIfEmpty(cid),
-	).Scan(&g.ID, &g.TenantID, &g.ParentID, &g.Name, &g.IsDefault, &g.Type,
+		 RETURNING id, tenant_id, parent_id, access_time_id, name, is_default, type, 0, 0, created_on, updated_on`,
+		id, req.Name, req.ParentID, req.AccessTimeID, req.IsDefault, nilIfEmpty(cid),
+	).Scan(&g.ID, &g.TenantID, &g.ParentID, &g.AccessTimeID, &g.Name, &g.IsDefault, &g.Type,
 		&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "access group not found")
@@ -250,10 +273,12 @@ func (h *AccessHandlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *h
 
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT agap.id, agap.tenant_id, agap.access_group_id, agap.access_point_id,
-		        agap.created_at,
-		        ap.name, ap.description
+		        agap.access_time_id, agap.created_at,
+		        ap.name, ap.description,
+		        at.id, at.name, at.timezone
 		 FROM dm3_access.access_group_access_points agap
 		 JOIN dm3_access.access_points ap ON ap.id = agap.access_point_id
+		 LEFT JOIN dm3_access.access_times at ON at.id = agap.access_time_id
 		 WHERE agap.access_group_id = $1::uuid
 		 ORDER BY ap.name ASC`,
 		groupID,
@@ -269,17 +294,33 @@ func (h *AccessHandlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *h
 	for rows.Next() {
 		var item models.AccessGroupAccessPoint
 		var ap models.AccessPoint
+		var at models.AccessTime
+		var atID, atName, atTz *string
 
 		if err := rows.Scan(
 			&item.ID, &item.TenantID, &item.AccessGroupID, &item.AccessPointID,
-			&item.CreatedAt,
+			&item.AccessTimeID, &item.CreatedAt,
 			&ap.Name, &ap.Description,
+			&atID, &atName, &atTz,
 		); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		ap.ID = item.AccessPointID
 		item.AccessPoint = &ap
+
+		// Only add access time if it exists
+		if atID != nil {
+			at.ID = *atID
+			at.TenantID = item.TenantID
+			if atName != nil {
+				at.Name = *atName
+			}
+			if atTz != nil {
+				at.Timezone = *atTz
+			}
+			item.AccessTime = &at
+		}
 		result = append(result, item)
 	}
 	httputil.JSON(w, http.StatusOK, map[string]any{"data": result, "total": len(result)})
@@ -291,7 +332,8 @@ func (h *AccessHandlers) AddAccessGroupAccessPoint(w http.ResponseWriter, r *htt
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
 	var req struct {
-		AccessPointID string `json:"access_point_id"`
+		AccessPointID string  `json:"access_point_id"`
+		AccessTimeID  *string `json:"access_time_id,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -305,11 +347,11 @@ func (h *AccessHandlers) AddAccessGroupAccessPoint(w http.ResponseWriter, r *htt
 	var id string
 	err := h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO dm3_access.access_group_access_points
-		    (tenant_id, access_group_id, access_point_id)
-		 VALUES ($1::uuid, $2::uuid, $3::uuid)
-		 ON CONFLICT (access_group_id, access_point_id) DO NOTHING
+		    (tenant_id, access_group_id, access_point_id, access_time_id)
+		 VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid)
+		 ON CONFLICT (access_group_id, access_point_id, access_time_id) DO NOTHING
 		 RETURNING id`,
-		cid, groupID, req.AccessPointID,
+		cid, groupID, req.AccessPointID, req.AccessTimeID,
 	).Scan(&id)
 	if err != nil {
 		slog.Error("add access group access point error", "error", err)

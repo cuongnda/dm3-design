@@ -12,7 +12,7 @@ import {
   TablePaginationFooter, Checkbox,
 } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
-import type { AccessGroup, AccessGroupAccessPoint, AccessGroupFormData } from './types';
+import type { AccessGroup, AccessGroupAccessPoint, AccessGroupFormData, AccessTime } from './types';
 
 interface GroupUser {
   id: string;
@@ -33,29 +33,20 @@ interface AvailableAP {
   description?: string;
 }
 
-interface AvailableAccessTime {
-  id: string;
-  name: string;
-  description?: string;
-}
-
 interface AddAccessPointModalProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   linkedAPIds: string[];
-  onSubmit: (accessPointId: string, accessTimeId?: string) => Promise<boolean>;
+  onSubmit: (accessPointId: string) => Promise<boolean>;
 }
 
 function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddAccessPointModalProps) {
   const { t } = useTranslation('accessGroups');
   const [selectedId, setSelectedId] = useState('');
-  const [selectedAccessTimeId, setSelectedAccessTimeId] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [allAPs, setAllAPs] = useState<AvailableAP[]>([]);
-  const [allAccessTimes, setAllAccessTimes] = useState<AvailableAccessTime[]>([]);
   const [loadingAPs, setLoadingAPs] = useState(false);
-  const [loadingAccessTimes, setLoadingAccessTimes] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
@@ -63,19 +54,10 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
   useEffect(() => {
     if (!open) return;
     setLoadingAPs(true);
-    setLoadingAccessTimes(true);
-
-    Promise.all([
-      apiFetch<{ data?: AvailableAP[] }>('/api/v1/access/access-points?limit=200')
-        .then((res) => setAllAPs(res.data ?? []))
-        .catch(() => setAllAPs([])),
-      apiFetch<{ data?: AvailableAccessTime[] }>('/api/v1/access/access-times?limit=100')
-        .then((res) => setAllAccessTimes(res.data ?? []))
-        .catch(() => setAllAccessTimes([])),
-    ]).finally(() => {
-      setLoadingAPs(false);
-      setLoadingAccessTimes(false);
-    });
+    apiFetch<{ data?: AvailableAP[] }>('/api/v1/access/access-points?limit=200')
+      .then((res) => setAllAPs(res.data ?? []))
+      .catch(() => setAllAPs([]))
+      .finally(() => setLoadingAPs(false));
   }, [open]);
 
   const availableAPs = useMemo(
@@ -98,7 +80,6 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
   const handleOpenChange = (v: boolean) => {
     if (!v) {
       setSelectedId('');
-      setSelectedAccessTimeId('');
       setError('');
       setSearch('');
       setPage(1);
@@ -112,7 +93,7 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
       return;
     }
     setSubmitting(true);
-    const ok = await onSubmit(selectedId, selectedAccessTimeId || undefined);
+    const ok = await onSubmit(selectedId);
     setSubmitting(false);
     if (ok) onOpenChange(false);
   };
@@ -138,7 +119,7 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
         loading: submitting,
       }}
     >
-      <div className="space-y-4">
+      <div className="space-y-3">
         {/* Search */}
         <Input
           value={search}
@@ -147,33 +128,6 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
           className="h-8 text-[13px]"
           disabled={submitting}
         />
-
-        {/* Access Time Selection */}
-        <div>
-          <Label className="text-[12px] mb-1.5 block">
-            {t('accessTime', 'Access Time')} <span className="text-muted-foreground text-[11px]">{t('optional', '(optional)')}</span>
-          </Label>
-          {loadingAccessTimes ? (
-            <div className="h-8 flex items-center justify-center text-[13px] text-muted-foreground">
-              <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary/30 border-t-primary mr-2" />
-              Loading access times…
-            </div>
-          ) : (
-            <select
-              value={selectedAccessTimeId}
-              onChange={(e) => setSelectedAccessTimeId(e.target.value)}
-              disabled={submitting}
-              className="w-full h-8 px-3 py-1 text-[13px] border border-border rounded-md bg-input text-foreground disabled:opacity-50 appearance-none cursor-pointer"
-            >
-              <option value="">{t('noAccessTimeSelected', 'No specific access time')}</option>
-              {allAccessTimes.map((at) => (
-                <option key={at.id} value={at.id}>
-                  {at.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
 
         {/* Access Point table */}
         <div className="rounded-md border border-border overflow-hidden">
@@ -484,6 +438,7 @@ export function AccessGroupDetailPage() {
   const [loadingGroup, setLoadingGroup] = useState(true);
   const [accessPoints, setAccessPoints] = useState<AccessGroupAccessPoint[]>([]);
   const [loadingAPs, setLoadingAPs] = useState(false);
+  const [accessTimes, setAccessTimes] = useState<AccessTime[]>([]);
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState<AccessGroupFormData>({ name: '', is_default: false });
@@ -539,15 +494,29 @@ export function AccessGroupDetailPage() {
     }
   }, [id]);
 
+  const fetchAccessTimes = useCallback(async () => {
+    try {
+      const data = await apiFetch<{ data?: AccessTime[] }>('/api/v1/access/access-times?limit=100');
+      setAccessTimes(data.data ?? []);
+    } catch (err) {
+      console.error('Failed to fetch access times:', err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchGroup();
     fetchAccessPoints();
     fetchUsers();
-  }, [fetchGroup, fetchAccessPoints, fetchUsers]);
+    fetchAccessTimes();
+  }, [fetchGroup, fetchAccessPoints, fetchUsers, fetchAccessTimes]);
 
   const openEditModal = () => {
     if (!group) return;
-    setEditForm({ name: group.name, is_default: group.is_default });
+    setEditForm({
+      name: group.name,
+      is_default: group.is_default,
+      access_time_id: group.access_time_id,
+    });
     setEditError('');
     setShowEditModal(true);
   };
@@ -573,16 +542,12 @@ export function AccessGroupDetailPage() {
     }
   };
 
-  const handleAddAccessPoint = useCallback(async (accessPointId: string, accessTimeId?: string): Promise<boolean> => {
+  const handleAddAccessPoint = useCallback(async (accessPointId: string): Promise<boolean> => {
     if (!id) return false;
     try {
-      const body: Record<string, string> = { access_point_id: accessPointId };
-      if (accessTimeId) {
-        body.access_time_id = accessTimeId;
-      }
       await apiFetch(`/api/v1/access/access-groups/${id}/access-points`, {
         method: 'POST',
-        body: JSON.stringify(body),
+        body: JSON.stringify({ access_point_id: accessPointId }),
       });
       await fetchAccessPoints();
       await fetchGroup();
@@ -713,16 +678,6 @@ export function AccessGroupDetailPage() {
       render: (ap) => (
         <span className="text-[13px] text-muted-foreground">
           {ap.access_point?.description ?? '—'}
-        </span>
-      ),
-    },
-    {
-      key: 'access_time',
-      header: t('columns.accessTime', 'Access Time'),
-      width: '150px',
-      render: (ap) => (
-        <span className="text-[13px] text-muted-foreground">
-          {ap.access_time?.name ?? '—'}
         </span>
       ),
     },
@@ -940,6 +895,23 @@ export function AccessGroupDetailPage() {
             <label htmlFor="edit_is_default" className="text-[13px] text-foreground cursor-pointer select-none">
               {t('form.isDefault', 'Set as default group')}
             </label>
+          </div>
+          <div>
+            <Label htmlFor="edit-access-time">{t('form.accessTime', 'Access Time')}</Label>
+            <select
+              id="edit-access-time"
+              value={editForm.access_time_id ?? ''}
+              onChange={(e) => setEditForm(prev => ({ ...prev, access_time_id: e.target.value || undefined }))}
+              className="w-full h-9 px-3 py-1 text-[13px] border border-border rounded-md bg-input text-foreground disabled:opacity-50 appearance-none cursor-pointer"
+              disabled={submittingEdit}
+            >
+              <option value="">{t('form.noRestriction', 'No time restriction (24/7)')}</option>
+              {accessTimes.map((at) => (
+                <option key={at.id} value={at.id}>
+                  {at.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </AppModal>
