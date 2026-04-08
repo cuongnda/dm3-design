@@ -139,7 +139,6 @@ CREATE TABLE IF NOT EXISTS dm3_identity.departments (
     department_manager_id UUID,
     name                  VARCHAR(255) NOT NULL,
     number                VARCHAR(100) DEFAULT '',
-    access_group_id       UUID,
     created_on            TIMESTAMPTZ DEFAULT now(),
     updated_on            TIMESTAMPTZ DEFAULT now(),
     is_deleted            BOOLEAN DEFAULT false
@@ -155,7 +154,6 @@ CREATE TABLE IF NOT EXISTS dm3_identity.users (
     tenant_id       UUID NOT NULL REFERENCES dm3_auth.companies(id),
     account_id      UUID REFERENCES dm3_auth.accounts(id) ON DELETE SET NULL,
     department_id   UUID REFERENCES dm3_identity.departments(id),
-    access_group_id UUID REFERENCES dm3_access.access_groups(id),
     first_name      VARCHAR(255) NOT NULL DEFAULT '',
     last_name       VARCHAR(255) NOT NULL DEFAULT '',
     email           VARCHAR(255),
@@ -237,6 +235,26 @@ CREATE TABLE IF NOT EXISTS dm3_identity.user_group_members (
 CREATE INDEX IF NOT EXISTS idx_user_group_members_tenant ON dm3_identity.user_group_members(tenant_id);
 
 -- ============================================================
+-- dm3_access.access_group_users  (M:N user ↔ access_group)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS dm3_access.access_group_users (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       UUID NOT NULL REFERENCES dm3_auth.companies(id),
+    access_group_id UUID NOT NULL REFERENCES dm3_access.access_groups(id) ON DELETE CASCADE,
+    user_id         UUID NOT NULL REFERENCES dm3_identity.users(id) ON DELETE CASCADE,
+    effective_from  TIMESTAMPTZ DEFAULT now(),
+    effective_to    TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_access_group_user UNIQUE (access_group_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_agu_group     ON dm3_access.access_group_users(access_group_id);
+CREATE INDEX IF NOT EXISTS idx_agu_user      ON dm3_access.access_group_users(user_id);
+CREATE INDEX IF NOT EXISTS idx_agu_tenant    ON dm3_access.access_group_users(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_agu_effective ON dm3_access.access_group_users(effective_to)
+    WHERE effective_to IS NOT NULL;
+
+-- ============================================================
 -- dm3_identity.sync_meta
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_identity.sync_meta (
@@ -275,11 +293,18 @@ SELECT
         ELSE 1
     END AS account_type,
     d.name  AS department_name,
-    ag.name AS access_group_name
+    ag_agg.access_group_name
 FROM dm3_identity.users u
-LEFT JOIN dm3_auth.accounts a         ON u.account_id      = a.id
-LEFT JOIN dm3_identity.departments d  ON u.department_id   = d.id
-LEFT JOIN dm3_access.access_groups ag ON u.access_group_id = ag.id
+LEFT JOIN dm3_auth.accounts a        ON u.account_id   = a.id
+LEFT JOIN dm3_identity.departments d ON u.department_id = d.id
+LEFT JOIN LATERAL (
+    SELECT string_agg(ag.name, ', ' ORDER BY ag.name) AS access_group_name
+    FROM dm3_access.access_group_users agu
+    JOIN dm3_access.access_groups ag ON ag.id = agu.access_group_id
+        AND (ag.is_deleted = false OR ag.is_deleted IS NULL)
+    WHERE agu.user_id = u.id
+      AND (agu.effective_to IS NULL OR agu.effective_to > now())
+) ag_agg ON true
 WHERE u.is_deleted = false OR u.is_deleted IS NULL;
 
 -- Trigger: soft-delete identity user when account status set to 'deleted'

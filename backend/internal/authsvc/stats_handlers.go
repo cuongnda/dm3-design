@@ -48,7 +48,7 @@ func (h *AuthHandlers) SystemStats(w http.ResponseWriter, r *http.Request) {
 		`SELECT COUNT(*), 
 		 COUNT(*) FILTER (WHERE status = 'active'),
 		 COUNT(*) FILTER (WHERE status = 'suspended')
-		 FROM dm3_auth.companies`,
+		 FROM dm3_auth.tenants`,
 	).Scan(&stats.Companies.Total, &stats.Companies.Active, &stats.Companies.Suspended)
 
 	// User counts
@@ -69,7 +69,7 @@ func (h *AuthHandlers) SystemStats(w http.ResponseWriter, r *http.Request) {
 
 	// Recent activity (last 7 days)
 	_ = h.db.Pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM dm3_auth.companies WHERE created_at > now() - interval '7 days'`,
+		`SELECT COUNT(*) FROM dm3_auth.tenants WHERE created_at > now() - interval '7 days'`,
 	).Scan(&stats.RecentStats.NewCompanies7d)
 
 	_ = h.db.Pool.QueryRow(ctx,

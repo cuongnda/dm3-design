@@ -45,7 +45,7 @@ func (h *AccessHandlers) ListAccessGroups(w http.ResponseWriter, r *http.Request
 		SELECT ag.id, ag.tenant_id, ag.parent_id, ag.access_time_id, ag.name, ag.is_default, ag.type,
 		       COUNT(DISTINCT agap.access_point_id) AS access_point_count,
 		       COUNT(DISTINCT agu.user_id) AS user_count,
-		       ag.created_on, ag.updated_on
+		       ag.created_at, ag.updated_at
 		FROM dm3_access.access_groups ag
 		LEFT JOIN dm3_access.access_group_access_points agap ON agap.access_group_id = ag.id
 		LEFT JOIN dm3_access.access_group_users agu ON agu.access_group_id = ag.id
@@ -93,12 +93,13 @@ func (h *AccessHandlers) GetAccessGroup(w http.ResponseWriter, r *http.Request) 
 	err := h.db.Pool.QueryRow(r.Context(),
 		`SELECT ag.id, ag.tenant_id, ag.parent_id, ag.access_time_id, ag.name, ag.is_default, ag.type,
 		        COUNT(DISTINCT agap.access_point_id) AS access_point_count,
-		        COUNT(DISTINCT u.id) AS user_count,
-		        ag.created_on, ag.updated_on,
+		        COUNT(DISTINCT agu.user_id) AS user_count,
+		        ag.created_at, ag.updated_at,
 		        agt.id, agt.name, agt.timezone
 		 FROM dm3_access.access_groups ag
 		 LEFT JOIN dm3_access.access_group_access_points agap ON agap.access_group_id = ag.id
-		 LEFT JOIN dm3_identity.users u ON u.access_group_id = ag.id AND (u.is_deleted = false OR u.is_deleted IS NULL)
+		 LEFT JOIN dm3_access.access_group_users agu ON agu.access_group_id = ag.id
+		     AND (agu.effective_to IS NULL OR agu.effective_to > now())
 		 LEFT JOIN dm3_access.access_times agt ON agt.id = ag.access_time_id
 		 WHERE ag.id = $1::uuid
 		   AND ag.tenant_id = $2::uuid
@@ -155,7 +156,7 @@ func (h *AccessHandlers) CreateAccessGroup(w http.ResponseWriter, r *http.Reques
 	err := h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO dm3_access.access_groups (tenant_id, parent_id, access_time_id, name, is_default, type)
 		 VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6)
-		 RETURNING id, tenant_id, parent_id, access_time_id, name, is_default, type, 0, 0, created_on, updated_on`,
+		 RETURNING id, tenant_id, parent_id, access_time_id, name, is_default, type, 0, 0, created_at, updated_at`,
 		cid, req.ParentID, req.AccessTimeID, req.Name, req.IsDefault, req.Type,
 	).Scan(&g.ID, &g.TenantID, &g.ParentID, &g.AccessTimeID, &g.Name, &g.IsDefault, &g.Type,
 		&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt)
@@ -196,11 +197,11 @@ func (h *AccessHandlers) UpdateAccessGroup(w http.ResponseWriter, r *http.Reques
 		     parent_id      = COALESCE($3::uuid, parent_id),
 		     access_time_id = CASE WHEN $4::text = 'null' THEN NULL ELSE COALESCE($4::uuid, access_time_id) END,
 		     is_default     = COALESCE($5, is_default),
-		     updated_on     = now()
+		     updated_at     = now()
 		 WHERE id = $1::uuid
 		   AND ($6::uuid IS NULL OR tenant_id = $6::uuid)
 		   AND is_deleted = false
-		 RETURNING id, tenant_id, parent_id, access_time_id, name, is_default, type, 0, 0, created_on, updated_on`,
+		 RETURNING id, tenant_id, parent_id, access_time_id, name, is_default, type, 0, 0, created_at, updated_at`,
 		id, req.Name, req.ParentID, req.AccessTimeID, req.IsDefault, nilIfEmpty(cid),
 	).Scan(&g.ID, &g.TenantID, &g.ParentID, &g.AccessTimeID, &g.Name, &g.IsDefault, &g.Type,
 		&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt)
@@ -219,7 +220,7 @@ func (h *AccessHandlers) DeleteAccessGroup(w http.ResponseWriter, r *http.Reques
 		httputil.Error(w, http.StatusForbidden, "company context required")
 		return
 	}
-	query := `UPDATE dm3_access.access_groups SET is_deleted = true, updated_on = now()
+	query := `UPDATE dm3_access.access_groups SET is_deleted = true, updated_at = now()
 	          WHERE id = $1::uuid AND is_deleted = false AND tenant_id = $2::uuid`
 	args := []any{id, cid}
 
@@ -250,7 +251,7 @@ func (h *AccessHandlers) BulkDeleteAccessGroups(w http.ResponseWriter, r *http.R
 		placeholders[i] = fmt.Sprintf("$%d::uuid", i+2)
 		args = append(args, id)
 	}
-	query := fmt.Sprintf(`UPDATE dm3_access.access_groups SET is_deleted = true, updated_on = now() WHERE tenant_id = $1::uuid AND id IN (%s) AND is_deleted = false`, strings.Join(placeholders, ","))
+	query := fmt.Sprintf(`UPDATE dm3_access.access_groups SET is_deleted = true, updated_at = now() WHERE tenant_id = $1::uuid AND id IN (%s) AND is_deleted = false`, strings.Join(placeholders, ","))
 	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "internal error")

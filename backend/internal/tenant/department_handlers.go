@@ -23,8 +23,8 @@ type Department struct {
 	ManagerName         *string `json:"manager_name" db:"manager_name"`
 	AccessGroupID       *string `json:"access_group_id" db:"access_group_id"`
 	UserCount           int     `json:"user_count" db:"user_count"`
-	CreatedOn           string  `json:"created_on" db:"created_on"`
-	UpdatedOn           string  `json:"updated_on" db:"updated_on"`
+	CreatedAt           string  `json:"created_at" db:"created_at"`
+	UpdatedAt           string  `json:"updated_at" db:"updated_at"`
 	IsDeleted           bool    `json:"is_deleted" db:"is_deleted"`
 }
 
@@ -102,7 +102,7 @@ func (h *UserManagementHandlers) ListDepartments(w http.ResponseWriter, r *http.
 		"number":       "d.number",
 		"manager_name": "TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,''))",
 		"user_count":   "COALESCE(user_counts.count, 0)",
-		"created_on":   "d.created_on",
+		"created_at":   "d.created_at",
 	}
 	sortCol, ok := validSortCols[sortBy]
 	if !ok {
@@ -169,7 +169,7 @@ func (h *UserManagementHandlers) ListDepartments(w http.ResponseWriter, r *http.
 			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name,
 			d.access_group_id,
 			COALESCE(user_counts.count, 0) as user_count,
-			d.created_on::text, d.updated_on::text, d.is_deleted
+			d.created_at::text, d.updated_at::text, d.is_deleted
 		FROM dm3_identity.departments d
 		LEFT JOIN dm3_identity.users mgr ON d.department_manager_id = mgr.id
 		LEFT JOIN (
@@ -197,7 +197,7 @@ func (h *UserManagementHandlers) ListDepartments(w http.ResponseWriter, r *http.
 		err := rows.Scan(
 			&dept.ID, &dept.TenantID, &dept.ParentID, &dept.Name, &dept.Number,
 			&dept.DepartmentManagerID, &dept.ManagerName, &dept.AccessGroupID,
-			&dept.UserCount, &dept.CreatedOn, &dept.UpdatedOn,
+			&dept.UserCount, &dept.CreatedAt, &dept.UpdatedAt,
 			&dept.IsDeleted,
 		)
 		if err != nil {
@@ -263,7 +263,7 @@ func (h *UserManagementHandlers) CreateDepartment(w http.ResponseWriter, r *http
 	var departmentID string
 	err = h.db.Pool.QueryRow(ctx, `
 		INSERT INTO dm3_identity.departments (
-			tenant_id, parent_id, name, number, department_manager_id, access_group_id, created_on, updated_on
+			tenant_id, parent_id, name, number, department_manager_id, access_group_id, created_at, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, now(), now())
 		RETURNING id`,
 		companyID, data.ParentID, data.Name, data.Number, data.DepartmentManagerID, data.AccessGroupID,
@@ -279,13 +279,13 @@ func (h *UserManagementHandlers) CreateDepartment(w http.ResponseWriter, r *http
 		SELECT 
 			d.id, d.tenant_id, d.parent_id, d.name, d.number,
 			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name, d.access_group_id,
-			0 as user_count, d.created_on::text, d.updated_on::text, d.is_deleted
+			0 as user_count, d.created_at::text, d.updated_at::text, d.is_deleted
 		FROM dm3_identity.departments d
 		LEFT JOIN dm3_identity.users mgr ON d.department_manager_id = mgr.id
 		WHERE d.id = $1`, departmentID).Scan(
 		&dept.ID, &dept.TenantID, &dept.ParentID, &dept.Name, &dept.Number,
 		&dept.DepartmentManagerID, &dept.ManagerName, &dept.AccessGroupID,
-		&dept.UserCount, &dept.CreatedOn, &dept.UpdatedOn,
+		&dept.UserCount, &dept.CreatedAt, &dept.UpdatedAt,
 		&dept.IsDeleted,
 	)
 	if err != nil {
@@ -312,7 +312,7 @@ func (h *UserManagementHandlers) GetDepartment(w http.ResponseWriter, r *http.Re
 			d.id, d.tenant_id, d.parent_id, d.name, d.number,
 			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name, d.access_group_id,
 			COALESCE(user_counts.count, 0) as user_count,
-			d.created_on::text, d.updated_on::text, d.is_deleted
+			d.created_at::text, d.updated_at::text, d.is_deleted
 		FROM dm3_identity.departments d
 		LEFT JOIN dm3_identity.users mgr ON d.department_manager_id = mgr.id
 		LEFT JOIN (
@@ -325,7 +325,7 @@ func (h *UserManagementHandlers) GetDepartment(w http.ResponseWriter, r *http.Re
 		departmentID, departmentID, companyID).Scan(
 		&dept.ID, &dept.TenantID, &dept.ParentID, &dept.Name, &dept.Number,
 		&dept.DepartmentManagerID, &dept.ManagerName, &dept.AccessGroupID,
-		&dept.UserCount, &dept.CreatedOn, &dept.UpdatedOn,
+		&dept.UserCount, &dept.CreatedAt, &dept.UpdatedAt,
 		&dept.IsDeleted,
 	)
 	if err != nil {
@@ -380,7 +380,7 @@ func (h *UserManagementHandlers) UpdateDepartment(w http.ResponseWriter, r *http
 	_, err = h.db.Pool.Exec(ctx, `
 		UPDATE dm3_identity.departments SET
 			name = $1, number = $2, parent_id = $3, 
-			department_manager_id = $4, access_group_id = $5, updated_on = now()
+			department_manager_id = $4, access_group_id = $5, updated_at = now()
 		WHERE id = $6 AND tenant_id = $7 AND is_deleted = false`,
 		data.Name, data.Number, data.ParentID, data.DepartmentManagerID, data.AccessGroupID,
 		departmentID, companyID)
@@ -396,7 +396,7 @@ func (h *UserManagementHandlers) UpdateDepartment(w http.ResponseWriter, r *http
 			d.id, d.tenant_id, d.parent_id, d.name, d.number,
 			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name, d.access_group_id,
 			COALESCE(user_counts.count, 0) as user_count,
-			d.created_on::text, d.updated_on::text, d.is_deleted
+			d.created_at::text, d.updated_at::text, d.is_deleted
 		FROM dm3_identity.departments d
 		LEFT JOIN dm3_identity.users mgr ON d.department_manager_id = mgr.id
 		LEFT JOIN (
@@ -409,7 +409,7 @@ func (h *UserManagementHandlers) UpdateDepartment(w http.ResponseWriter, r *http
 		departmentID, companyID).Scan(
 		&dept.ID, &dept.TenantID, &dept.ParentID, &dept.Name, &dept.Number,
 		&dept.DepartmentManagerID, &dept.ManagerName, &dept.AccessGroupID,
-		&dept.UserCount, &dept.CreatedOn, &dept.UpdatedOn,
+		&dept.UserCount, &dept.CreatedAt, &dept.UpdatedAt,
 		&dept.IsDeleted,
 	)
 	if err != nil {
@@ -446,7 +446,7 @@ func (h *UserManagementHandlers) DeleteDepartment(w http.ResponseWriter, r *http
 
 	// Soft delete department
 	result, err := h.db.Pool.Exec(ctx, `
-		UPDATE dm3_identity.departments SET is_deleted = true, updated_on = now()
+		UPDATE dm3_identity.departments SET is_deleted = true, updated_at = now()
 		WHERE id = $1 AND tenant_id = $2 AND is_deleted = false`,
 		departmentID, companyID)
 	if err != nil {
@@ -501,7 +501,7 @@ func (h *UserManagementHandlers) BulkDeleteDepartments(w http.ResponseWriter, r 
 	}
 
 	result, err := h.db.Pool.Exec(ctx,
-		`UPDATE dm3_identity.departments SET is_deleted = true, updated_on = now()
+		`UPDATE dm3_identity.departments SET is_deleted = true, updated_at = now()
 		 WHERE id = ANY($1::uuid[]) AND tenant_id = $2 AND is_deleted = false`,
 		req.IDs, companyID)
 	if err != nil {

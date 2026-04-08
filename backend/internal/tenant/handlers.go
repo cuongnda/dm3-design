@@ -56,7 +56,7 @@ func (h *TenantHandlers) ListTenants(w http.ResponseWriter, r *http.Request) {
 	// Build query with optional filters
 	qb := NewQueryBuilderOptional(r.Context(), `
 		SELECT id, name, code, plan, status, max_devices, max_users, created_at, updated_at
-		FROM dm3_auth.companies
+		FROM dm3_auth.tenants
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2
 	`)
@@ -100,7 +100,7 @@ func (h *TenantHandlers) ListTenants(w http.ResponseWriter, r *http.Request) {
 
 	// Count total for pagination
 	var total int
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_auth.companies").Scan(&total)
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_auth.tenants").Scan(&total)
 	if err != nil {
 		total = 0
 	}
@@ -175,7 +175,7 @@ func (h *TenantHandlers) UpdateTenantStatus(w http.ResponseWriter, r *http.Reque
 
 	// Update tenant status
 	_, err := h.db.Pool.Exec(r.Context(),
-		"UPDATE dm3_auth.companies SET status = $1, updated_at = NOW() WHERE id = $2::uuid",
+		"UPDATE dm3_auth.tenants SET status = $1, updated_at = NOW() WHERE id = $2::uuid",
 		req.Status, tenantID,
 	)
 	if err != nil {
