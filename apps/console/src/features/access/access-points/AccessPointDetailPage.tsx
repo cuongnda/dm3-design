@@ -26,13 +26,6 @@ import type { AccessPoint, AccessPointDevice } from './types';
 // Types local to this page
 // ---------------------------------------------------------------------------
 
-interface AccessGroup {
-    id: string;
-    name: string;
-    description?: string;
-    member_count?: number;
-}
-
 // ---------------------------------------------------------------------------
 // Add Door Modal
 // ---------------------------------------------------------------------------
@@ -268,180 +261,6 @@ function AddDoorModal({ open, onOpenChange, linkedDoorIds, onSubmit }: AddDoorMo
 // Add Access Group Modal
 // ---------------------------------------------------------------------------
 
-interface AvailableGroup {
-    id: string;
-    name: string;
-    user_count?: number;
-}
-
-interface AddAccessGroupModalProps {
-    open: boolean;
-    onOpenChange: (v: boolean) => void;
-    linkedGroupIds: string[];
-    onSubmit: (groupId: string) => Promise<boolean>;
-}
-
-function AddAccessGroupModal({ open, onOpenChange, linkedGroupIds, onSubmit }: AddAccessGroupModalProps) {
-    const { t } = useTranslation('accessPoints');
-    const [selectedId, setSelectedId] = useState('');
-    const [submitting, setSubmitting] = useState(false);
-    const [error, setError] = useState('');
-    const [allGroups, setAllGroups] = useState<AvailableGroup[]>([]);
-    const [loadingGroups, setLoadingGroups] = useState(false);
-    const [search, setSearch] = useState('');
-    const [page, setPage] = useState(1);
-    const PAGE_SIZE = 10;
-
-    useEffect(() => {
-        if (!open) return;
-        setLoadingGroups(true);
-        apiFetch<{ data?: AvailableGroup[] }>('/api/v1/access/access-groups?limit=200')
-            .then((res) => setAllGroups(res.data ?? []))
-            .catch(() => setAllGroups([]))
-            .finally(() => setLoadingGroups(false));
-    }, [open]);
-
-    const availableGroups = useMemo(() => allGroups.filter((g) => !linkedGroupIds.includes(g.id)), [allGroups, linkedGroupIds]);
-
-    const filteredGroups = useMemo(() => {
-        const q = search.toLowerCase();
-        return q ? availableGroups.filter((g) => g.name.toLowerCase().includes(q)) : availableGroups;
-    }, [availableGroups, search]);
-
-    useEffect(() => {
-        setPage(1);
-    }, [search, availableGroups.length]);
-
-    const totalPages = Math.max(1, Math.ceil(filteredGroups.length / PAGE_SIZE));
-    const pagedGroups = filteredGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-    const handleOpenChange = (v: boolean) => {
-        if (!v) {
-            setSelectedId('');
-            setError('');
-            setSearch('');
-            setPage(1);
-        }
-        onOpenChange(v);
-    };
-
-    const handleSubmit = async () => {
-        if (!selectedId) {
-            setError(t('selectGroupRequired'));
-            return;
-        }
-        setSubmitting(true);
-        const ok = await onSubmit(selectedId);
-        setSubmitting(false);
-        if (ok) onOpenChange(false);
-    };
-
-    return (
-        <AppModal
-            open={open}
-            onOpenChange={handleOpenChange}
-            title={
-                <span className="flex items-center gap-2">
-                    <Users size={16} />
-                    {t('addGroup')}
-                </span>
-            }
-            size="md"
-            showCancelButton
-            cancelLabel={t('cancel')}
-            errorMessage={error || undefined}
-            primaryAction={{
-                label: submitting ? t('adding') : t('add'),
-                onClick: handleSubmit,
-                disabled: submitting || !selectedId,
-                loading: submitting,
-            }}
-        >
-            <div className="space-y-3">
-                {/* Search */}
-                <Input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder={t('searchGroups')}
-                    className="h-8 text-[13px]"
-                    disabled={submitting}
-                />
-
-                {/* Group table */}
-                <div className="rounded-md border border-border overflow-hidden">
-                    {loadingGroups ? (
-                        <div className="flex items-center justify-center gap-2 py-10 text-[13px] text-muted-foreground">
-                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                            Loading…
-                        </div>
-                    ) : availableGroups.length === 0 ? (
-                        <div className="py-10 text-center text-[13px] text-muted-foreground">
-                            {allGroups.length === 0 ? t('noGroupsInSystem') : t('allGroupsAssigned')}
-                        </div>
-                    ) : filteredGroups.length === 0 ? (
-                        <div className="py-10 text-center text-[13px] text-muted-foreground">{t('noGroupsMatch')}</div>
-                    ) : (
-                        <>
-                            <table className="w-full text-[13px]">
-                                <thead className="bg-muted/60 border-b border-border">
-                                    <tr>
-                                        <th className="w-8 px-3 py-2" />
-                                        <th className="px-3 py-2 text-left font-medium text-foreground">{t('groupName')}</th>
-                                        <th className="px-3 py-2 text-left font-medium text-foreground">{t('members')}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {pagedGroups.map((g) => {
-                                        const isSelected = selectedId === g.id;
-                                        return (
-                                            <tr
-                                                key={g.id}
-                                                onClick={() => !submitting && setSelectedId(isSelected ? '' : g.id)}
-                                                className={`border-b border-border last:border-0 cursor-pointer transition-colors ${
-                                                    isSelected ? 'bg-primary/10' : 'hover:bg-muted/40'
-                                                }`}
-                                            >
-                                                <td className="w-8 px-3 py-2">
-                                                    <div
-                                                        className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${
-                                                            isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/40'
-                                                        }`}
-                                                    >
-                                                        {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
-                                                    </div>
-                                                </td>
-                                                <td className="px-3 py-2 font-medium text-foreground">{g.name}</td>
-                                                <td className="px-3 py-2">
-                                                    {g.user_count != null ? (
-                                                        <Badge variant="secondary" className="text-[11px]">
-                                                            {g.user_count}
-                                                        </Badge>
-                                                    ) : (
-                                                        <span className="text-muted-foreground">—</span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                            <TablePaginationFooter
-                                page={page}
-                                pageSize={PAGE_SIZE}
-                                total={filteredGroups.length}
-                                totalPages={totalPages}
-                                onPageChange={setPage}
-                                loading={loadingGroups}
-                                className="border-t border-border"
-                            />
-                        </>
-                    )}
-                </div>
-            </div>
-        </AppModal>
-    );
-}
-
 // ---------------------------------------------------------------------------
 // Door status badge helper
 // ---------------------------------------------------------------------------
@@ -486,22 +305,15 @@ export function AccessPointDetailPage() {
     const [showAddDoorModal, setShowAddDoorModal] = useState(false);
     const [removingDoorId, setRemovingDoorId] = useState<string | null>(null);
 
-    // Access Groups tab
-    const [groups, setGroups] = useState<AccessGroup[]>([]);
-    const [groupsLoading, setGroupsLoading] = useState(false);
-    const [showAddGroupModal, setShowAddGroupModal] = useState(false);
-    const [removingGroupId, setRemovingGroupId] = useState<string | null>(null);
-
     // Active tab
-    const [activeTab, setActiveTab] = useState<'doors' | 'groups'>('doors');
+    const [activeTab, setActiveTab] = useState<'doors'>('doors');
 
     // Edit modal
     const [showEditModal, setShowEditModal] = useState(false);
-    const [editForm, setEditForm] = useState({ name: '', description: '', zone_id: '', access_time_id: '' });
+    const [editForm, setEditForm] = useState({ name: '', description: '', zone_id: '' });
     const [editNameError, setEditNameError] = useState('');
     const [submittingEdit, setSubmittingEdit] = useState(false);
     const [zones, setZones] = useState<{ id: string; name: string }[]>([]);
-    const [accessTimes, setAccessTimes] = useState<{ id: string; name: string }[]>([]);
 
     // ── Fetch AP details ────────────────────────────────────────────────────
 
@@ -576,64 +388,12 @@ export function AccessPointDetailPage() {
         [id, fetchDoors, fetchAP],
     );
 
-    // ── Fetch access groups ─────────────────────────────────────────────────
-
-    const fetchGroups = useCallback(async () => {
-        if (!id) return;
-        setGroupsLoading(true);
-        try {
-            const data = await apiFetch<{ access_groups?: AccessGroup[]; data?: AccessGroup[] }>(`/api/v1/access/access-points/${id}/access-groups`);
-            setGroups(data.access_groups ?? data.data ?? (data as unknown as AccessGroup[]));
-        } catch (err) {
-            console.error('Failed to fetch access groups:', err);
-        } finally {
-            setGroupsLoading(false);
-        }
-    }, [id]);
-
-    const handleAddGroup = useCallback(
-        async (groupId: string): Promise<boolean> => {
-            if (!id) return false;
-            try {
-                await apiFetch(`/api/v1/access/access-points/${id}/access-groups`, {
-                    method: 'POST',
-                    body: JSON.stringify({ access_group_id: groupId }),
-                });
-                await fetchGroups();
-                return true;
-            } catch (err) {
-                console.error('Failed to add access group:', err);
-                return false;
-            }
-        },
-        [id, fetchGroups],
-    );
-
-    const handleRemoveGroup = useCallback(
-        async (groupId: string) => {
-            if (!id) return;
-            setRemovingGroupId(groupId);
-            try {
-                await apiFetch(`/api/v1/access/access-points/${id}/access-groups/${groupId}`, {
-                    method: 'DELETE',
-                });
-                await fetchGroups();
-            } catch (err) {
-                console.error('Failed to remove access group:', err);
-            } finally {
-                setRemovingGroupId(null);
-            }
-        },
-        [id, fetchGroups],
-    );
-
     // ── Initial load ────────────────────────────────────────────────────────
 
     useEffect(() => {
         fetchAP();
         fetchDoors();
-        fetchGroups();
-    }, [fetchAP, fetchDoors, fetchGroups]);
+    }, [fetchAP, fetchDoors]);
 
     // ── Edit handlers ───────────────────────────────────────────────────────
 
@@ -643,17 +403,12 @@ export function AccessPointDetailPage() {
             name: ap.name,
             description: ap.description ?? '',
             zone_id: ap.zone_id ?? '',
-            access_time_id: ap.access_time_id ?? '',
         });
         setEditNameError('');
-        // load zones + access times lazily
-        Promise.all([
-            apiFetch<{ data?: { id: string; name: string }[] }>('/api/v1/access/zones?limit=200'),
-            apiFetch<{ data?: { id: string; name: string }[] }>('/api/v1/access/access-times?limit=200'),
-        ])
-            .then(([zRes, atRes]) => {
+        // load zones lazily
+        apiFetch<{ data?: { id: string; name: string }[] }>('/api/v1/access/zones?limit=200')
+            .then((zRes) => {
                 setZones(zRes.data ?? []);
-                setAccessTimes(atRes.data ?? []);
             })
             .catch(() => {});
         setShowEditModal(true);
@@ -671,7 +426,6 @@ export function AccessPointDetailPage() {
                 name: editForm.name.trim(),
                 description: editForm.description.trim() || undefined,
                 zone_id: editForm.zone_id || undefined,
-                access_time_id: editForm.access_time_id || undefined,
             };
             await apiFetch(`/api/v1/access/access-points/${id}`, {
                 method: 'PUT',
@@ -732,53 +486,6 @@ export function AccessPointDetailPage() {
         [t, handleRemoveDoor, removingDoorId],
     );
 
-    const groupColumns = useMemo(
-        (): Column<AccessGroup>[] => [
-            {
-                key: 'name',
-                header: t('groupName', 'Group Name'),
-                render: (g) => (
-                    <div className="flex items-center gap-2">
-                        <Users size={14} className="text-primary shrink-0" />
-                        <div>
-                            <div className="text-[13px] font-medium">{g.name}</div>
-                            {g.description && <div className="text-[11px] text-muted-foreground">{g.description}</div>}
-                        </div>
-                    </div>
-                ),
-            },
-            {
-                key: 'member_count',
-                header: t('members', 'Members'),
-                width: '80px',
-                render: (g) =>
-                    g.member_count != null ? (
-                        <Badge variant="secondary">{g.member_count}</Badge>
-                    ) : (
-                        <span className="text-[12px] text-muted-foreground">—</span>
-                    ),
-            },
-            {
-                key: 'actions',
-                header: '',
-                width: '80px',
-                render: (g) => (
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-[12px] text-destructive hover:text-destructive"
-                        onClick={() => handleRemoveGroup(g.id)}
-                        disabled={removingGroupId === g.id}
-                    >
-                        <Trash2 size={13} className="mr-1" />
-                        {removingGroupId === g.id ? t('removing', 'Removing…') : t('remove', 'Remove')}
-                    </Button>
-                ),
-            },
-        ],
-        [t, handleRemoveGroup, removingGroupId],
-    );
-
     // ── Render ──────────────────────────────────────────────────────────────
 
     if (apLoading) {
@@ -828,7 +535,7 @@ export function AccessPointDetailPage() {
             {/* Tabs */}
             <Tabs
                 value={activeTab}
-                onValueChange={(v) => setActiveTab(v as 'doors' | 'groups')}
+                onValueChange={(v) => setActiveTab(v as 'doors')}
                 className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm"
             >
                 {/* Card header: tabs + action button */}
@@ -838,22 +545,12 @@ export function AccessPointDetailPage() {
                             <DoorOpen size={13} className="mr-1.5" />
                             {t('doorsTab', 'Doors')} ({doors.length})
                         </TabsTrigger>
-                        <TabsTrigger value="groups" className="text-[12px] px-3 whitespace-nowrap">
-                            <Users size={13} className="mr-1.5" />
-                            {t('groupsTab', 'Access Groups')} ({groups.length})
-                        </TabsTrigger>
                     </TabsList>
 
                     {activeTab === 'doors' && (
                         <Button size="sm" onClick={() => setShowAddDoorModal(true)}>
                             <Plus size={14} className="mr-1.5" />
                             {t('addDoor', 'Add Door')}
-                        </Button>
-                    )}
-                    {activeTab === 'groups' && (
-                        <Button size="sm" onClick={() => setShowAddGroupModal(true)}>
-                            <Plus size={14} className="mr-1.5" />
-                            {t('addGroup', 'Add Group')}
                         </Button>
                     )}
                 </div>
@@ -876,25 +573,6 @@ export function AccessPointDetailPage() {
                         <DataTable embedded stickyHeader paginate={false} columns={doorColumns} data={doors} rowKey={(d) => d.id} />
                     )}
                 </TabsContent>
-
-                {/* Access Groups tab content */}
-                <TabsContent value="groups" className="min-h-0 flex-1 overflow-auto">
-                    {groupsLoading ? (
-                        <div className="flex justify-center py-12">
-                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                        </div>
-                    ) : groups.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-16 text-center">
-                            <Users size={36} className="mb-3 text-muted-foreground/40" />
-                            <p className="text-[13px] font-medium text-foreground">{t('noGroupsTitle', 'No access groups linked')}</p>
-                            <p className="mt-1 text-[12px] text-muted-foreground">
-                                {t('noGroupsHint', 'Click "Add Group" to grant an access group entry via this point.')}
-                            </p>
-                        </div>
-                    ) : (
-                        <DataTable embedded stickyHeader paginate={false} columns={groupColumns} data={groups} rowKey={(g) => g.id} />
-                    )}
-                </TabsContent>
             </Tabs>
 
             {/* Add Door Modal */}
@@ -903,14 +581,6 @@ export function AccessPointDetailPage() {
                 onOpenChange={setShowAddDoorModal}
                 linkedDoorIds={doors.map((d) => d.access_device_id)}
                 onSubmit={handleAddDoor}
-            />
-
-            {/* Add Access Group Modal */}
-            <AddAccessGroupModal
-                open={showAddGroupModal}
-                onOpenChange={setShowAddGroupModal}
-                linkedGroupIds={groups.map((g) => g.id)}
-                onSubmit={handleAddGroup}
             />
 
             {/* Edit Access Point Modal */}
@@ -972,22 +642,6 @@ export function AccessPointDetailPage() {
                             {zones.map((z) => (
                                 <SelectOption key={z.id} value={z.id}>
                                     {z.name}
-                                </SelectOption>
-                            ))}
-                        </Select>
-                    </div>
-                    <div>
-                        <Label>{t('accessTime', 'Access Time')}</Label>
-                        <Select
-                            value={editForm.access_time_id}
-                            onValueChange={(v) => setEditForm((p) => ({ ...p, access_time_id: v }))}
-                            placeholder={t('noRestriction', 'No restriction (24/7)')}
-                            disabled={submittingEdit}
-                        >
-                            <SelectOption value="">{t('noRestriction', 'No restriction (24/7)')}</SelectOption>
-                            {accessTimes.map((at) => (
-                                <SelectOption key={at.id} value={at.id}>
-                                    {at.name}
                                 </SelectOption>
                             ))}
                         </Select>
