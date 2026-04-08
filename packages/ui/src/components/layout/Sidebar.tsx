@@ -102,20 +102,21 @@ export function Sidebar() {
   const c = sidebarCollapsed;
 
   return (
-    <nav
+    <aside
       className={cn(
-        'flex flex-col h-full bg-[#111827] border-r border-[#1E293B] transition-all duration-300 flex-shrink-0 overflow-hidden',
+        'bg-[#111827] border-r border-[#1E293B] transition-all duration-300 flex-shrink-0 overflow-y-auto',
         c ? 'w-14' : 'w-60'
       )}
+      style={{ height: '100vh' }}
     >
       {/* Logo */}
-      <div className={cn('flex items-center border-b border-[#1E293B] h-12 flex-shrink-0', c ? 'justify-center px-2' : 'px-4 gap-2')}>
+      <div className={cn('flex items-center border-b border-[#1E293B] h-12 sticky top-0 z-10 bg-[#111827]', c ? 'justify-center px-2' : 'px-4 gap-2')}>
         <div className="w-5 h-5 bg-[#3B82F6] rotate-45 rounded-[4px] flex-shrink-0" />
         {!c && <span className="text-[14px] font-semibold text-[#F8FAFC]">DUALL MASTER</span>}
       </div>
 
       {/* Nav items */}
-      <div className="flex-1 overflow-y-auto py-2 space-y-0.5">
+      <div className="py-2 space-y-0.5">
         <SectionLabel label={t('nav.overview')} color="#64748B" collapsed={c} />
         <SidebarNavItem to={ROUTES.dashboard} icon={<LayoutDashboard size={iconSize} />} label={t('nav.dashboard')} collapsed={c} />
         <SidebarNavItem to={ROUTES.alerts} icon={<Bell size={iconSize} />} label={t('nav.alerts')} badge={unreadCount} collapsed={c} />
@@ -196,6 +197,6 @@ export function Sidebar() {
           </button>
         </div>
       </div>
-    </nav>
+    </aside>
   );
 }
