@@ -34,6 +34,6 @@ export interface SlotInput {
   day_of_week: number;
   start_time: string;
   end_time: string;
-  slot_name?: string;
+  slot_name: string;
   is_active: boolean;
 }
