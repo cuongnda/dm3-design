@@ -19,7 +19,7 @@ import (
 
 // ─── Access Times ────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
@@ -85,7 +85,7 @@ func (h *Handlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.Reques
 	httputil.Paginated(w, templates, total, page, limit)
 }
 
-func (h *Handlers) GetAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) GetAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
 	templateID := chi.URLParam(r, "id")
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 
@@ -148,7 +148,7 @@ func (h *Handlers) GetAccessTimeTemplate(w http.ResponseWriter, r *http.Request)
 	httputil.JSON(w, http.StatusOK, template)
 }
 
-func (h *Handlers) CreateAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) CreateAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateAccessTimeTemplateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_json")
@@ -223,7 +223,7 @@ func (h *Handlers) CreateAccessTimeTemplate(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-func (h *Handlers) UpdateAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) UpdateAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
 	templateID := chi.URLParam(r, "id")
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 
@@ -336,7 +336,7 @@ func (h *Handlers) UpdateAccessTimeTemplate(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-func (h *Handlers) DeleteAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) DeleteAccessTimeTemplate(w http.ResponseWriter, r *http.Request) {
 	templateID := chi.URLParam(r, "id")
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 
@@ -360,7 +360,7 @@ func (h *Handlers) DeleteAccessTimeTemplate(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-func (h *Handlers) BulkDeleteAccessTimes(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) BulkDeleteAccessTimes(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	var req struct {
 		IDs []string `json:"ids"`
@@ -386,23 +386,23 @@ func (h *Handlers) BulkDeleteAccessTimes(w http.ResponseWriter, r *http.Request)
 
 // ─── User Assignment (DROPPED) ───────────────────────────────────────────────
 
-func (h *Handlers) AssignAccessTime(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) AssignAccessTime(w http.ResponseWriter, r *http.Request) {
 	httputil.Error(w, http.StatusNotImplemented, "user_access_times has been removed")
 }
 
-func (h *Handlers) GetUserAccessTime(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) GetUserAccessTime(w http.ResponseWriter, r *http.Request) {
 	httputil.Error(w, http.StatusNotImplemented, "user_access_times has been removed")
 }
 
 // ─── Access Validation (DROPPED) ────────────────────────────────────────────
 
-func (h *Handlers) ValidateAccess(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ValidateAccess(w http.ResponseWriter, r *http.Request) {
 	httputil.Error(w, http.StatusNotImplemented, "access_time_validations has been removed")
 }
 
 // ─── Stats & Analytics ──────────────────────────────────────────────────────
 
-func (h *Handlers) GetAccessTimeStats(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) GetAccessTimeStats(w http.ResponseWriter, r *http.Request) {
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 
 	var stats models.AccessTimeStats

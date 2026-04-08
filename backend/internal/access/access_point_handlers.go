@@ -16,7 +16,7 @@ import (
 
 // ─── Access Points ────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListAccessPoints(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ListAccessPoints(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
@@ -78,7 +78,7 @@ func (h *Handlers) ListAccessPoints(w http.ResponseWriter, r *http.Request) {
 	httputil.Paginated(w, aps, total, page, limit)
 }
 
-func (h *Handlers) GetAccessPoint(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) GetAccessPoint(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -110,7 +110,7 @@ type createAccessPointRequest struct {
 	AccessTimeID *string `json:"access_time_id"`
 }
 
-func (h *Handlers) CreateAccessPoint(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) CreateAccessPoint(w http.ResponseWriter, r *http.Request) {
 	var req createAccessPointRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -146,7 +146,7 @@ type updateAccessPointRequest struct {
 	AccessTimeID *string `json:"access_time_id"`
 }
 
-func (h *Handlers) UpdateAccessPoint(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) UpdateAccessPoint(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -177,7 +177,7 @@ func (h *Handlers) UpdateAccessPoint(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, ap)
 }
 
-func (h *Handlers) DeleteAccessPoint(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) DeleteAccessPoint(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -195,7 +195,7 @@ func (h *Handlers) DeleteAccessPoint(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handlers) BulkDeleteAccessPoints(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) BulkDeleteAccessPoints(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	var req struct {
 		IDs []string `json:"ids"`
@@ -222,7 +222,7 @@ func (h *Handlers) BulkDeleteAccessPoints(w http.ResponseWriter, r *http.Request
 // ─── Access Point → Doors ─────────────────────────────────────────────────────
 
 // GET /access-points/:id/doors
-func (h *Handlers) ListAccessPointDoors(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ListAccessPointDoors(w http.ResponseWriter, r *http.Request) {
 	apID := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -271,7 +271,7 @@ func (h *Handlers) ListAccessPointDoors(w http.ResponseWriter, r *http.Request) 
 }
 
 // POST /access-points/:id/doors
-func (h *Handlers) AddAccessPointDoor(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) AddAccessPointDoor(w http.ResponseWriter, r *http.Request) {
 	apID := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -310,7 +310,7 @@ func (h *Handlers) AddAccessPointDoor(w http.ResponseWriter, r *http.Request) {
 // ─── Access Point → Access Groups ────────────────────────────────────────────
 
 // GET /access-points/:id/access-groups
-func (h *Handlers) ListAccessPointGroups(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ListAccessPointGroups(w http.ResponseWriter, r *http.Request) {
 	apID := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -356,7 +356,7 @@ func (h *Handlers) ListAccessPointGroups(w http.ResponseWriter, r *http.Request)
 }
 
 // POST /access-points/:id/access-groups
-func (h *Handlers) AddAccessPointGroup(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) AddAccessPointGroup(w http.ResponseWriter, r *http.Request) {
 	apID := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -389,7 +389,7 @@ func (h *Handlers) AddAccessPointGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE /access-points/:id/access-groups/:groupId
-func (h *Handlers) RemoveAccessPointGroup(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) RemoveAccessPointGroup(w http.ResponseWriter, r *http.Request) {
 	apID := chi.URLParam(r, "id")
 	groupID := chi.URLParam(r, "groupId")
 
@@ -410,7 +410,7 @@ func (h *Handlers) RemoveAccessPointGroup(w http.ResponseWriter, r *http.Request
 }
 
 // DELETE /access-points/:id/doors/:doorId
-func (h *Handlers) RemoveAccessPointDoor(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) RemoveAccessPointDoor(w http.ResponseWriter, r *http.Request) {
 	apID := chi.URLParam(r, "id")
 	doorID := chi.URLParam(r, "doorId")
 

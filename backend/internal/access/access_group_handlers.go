@@ -16,7 +16,7 @@ import (
 
 // ─── Access Groups ────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListAccessGroups(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ListAccessGroups(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
@@ -78,7 +78,7 @@ func (h *Handlers) ListAccessGroups(w http.ResponseWriter, r *http.Request) {
 	httputil.Paginated(w, groups, total, page, limit)
 }
 
-func (h *Handlers) GetAccessGroup(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) GetAccessGroup(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -112,7 +112,7 @@ type createAccessGroupRequest struct {
 	Type      int     `json:"type"`
 }
 
-func (h *Handlers) CreateAccessGroup(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) CreateAccessGroup(w http.ResponseWriter, r *http.Request) {
 	var req createAccessGroupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -149,7 +149,7 @@ type updateAccessGroupRequest struct {
 	IsDefault *bool   `json:"is_default"`
 }
 
-func (h *Handlers) UpdateAccessGroup(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) UpdateAccessGroup(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -180,7 +180,7 @@ func (h *Handlers) UpdateAccessGroup(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, g)
 }
 
-func (h *Handlers) DeleteAccessGroup(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) DeleteAccessGroup(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -204,7 +204,7 @@ func (h *Handlers) DeleteAccessGroup(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handlers) BulkDeleteAccessGroups(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) BulkDeleteAccessGroups(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	var req struct {
 		IDs []string `json:"ids"`
@@ -231,7 +231,7 @@ func (h *Handlers) BulkDeleteAccessGroups(w http.ResponseWriter, r *http.Request
 // ─── Access Group → Access Points ────────────────────────────────────────────
 
 // GET /access-groups/:id/access-points
-func (h *Handlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -286,7 +286,7 @@ func (h *Handlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *http.Re
 }
 
 // POST /access-groups/:id/access-points
-func (h *Handlers) AddAccessGroupAccessPoint(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) AddAccessGroupAccessPoint(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -320,7 +320,7 @@ func (h *Handlers) AddAccessGroupAccessPoint(w http.ResponseWriter, r *http.Requ
 }
 
 // GET /access-groups/:id/users
-func (h *Handlers) ListAccessGroupUsers(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ListAccessGroupUsers(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -373,7 +373,7 @@ func (h *Handlers) ListAccessGroupUsers(w http.ResponseWriter, r *http.Request) 
 }
 
 // POST /access-groups/:id/users  — assign users to this group
-func (h *Handlers) AssignUsersToGroup(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) AssignUsersToGroup(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -413,7 +413,7 @@ func (h *Handlers) AssignUsersToGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE /access-groups/:id/users/:userId — remove user from group
-func (h *Handlers) RemoveUserFromGroup(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) RemoveUserFromGroup(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "id")
 	userID := chi.URLParam(r, "userId")
 	cid := authsvc.CompanyIDFromContext(r.Context())
@@ -437,7 +437,7 @@ func (h *Handlers) RemoveUserFromGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE /access-groups/:id/access-points/:apId
-func (h *Handlers) RemoveAccessGroupAccessPoint(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) RemoveAccessGroupAccessPoint(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "id")
 	apID := chi.URLParam(r, "apId")
 

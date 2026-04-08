@@ -26,6 +26,10 @@ func main() {
 	slog.Info("starting access-svc")
 
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		slog.Error("insecure configuration", "error", err)
+		os.Exit(1)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -69,7 +73,7 @@ func main() {
 	}
 
 	// HTTP handlers
-	handlers := access.NewHandlers(database)
+	handlers := access.NewAccessHandlers(database)
 
 	// HTTP routes
 	r := httputil.NewRouter()

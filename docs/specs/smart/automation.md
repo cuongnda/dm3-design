@@ -1,7 +1,7 @@
 # Feature: Automation Engine
 
 > Domain: SMART | Color: #F59E0B | Priority: P1
-> Status: Draft | Owner: SMART Team
+> Status: NOT IMPLEMENTED | Owner: SMART Team
 
 ## Overview
 

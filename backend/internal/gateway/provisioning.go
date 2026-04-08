@@ -92,7 +92,8 @@ func (h *ProvisioningHandlers) ProvisionDevice(w http.ResponseWriter, r *http.Re
 			httputil.Error(w, http.StatusConflict, "device_id already exists")
 			return
 		}
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		slog.Error("ProvisionDevice: insert failed", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -214,25 +215,24 @@ func (h *ProvisioningHandlers) ActivateDevice(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Check token not already used (by hash)
+	// Atomically mark the token as used. Checking used_at IS NULL in the WHERE
+	// clause prevents a TOCTOU race where two concurrent requests both pass a
+	// separate SELECT check before either UPDATE commits.
 	tokenHash := sha256Hash(req.QRToken)
-	var usedAt *time.Time
-	err = h.db.Pool.QueryRow(r.Context(),
-		`SELECT used_at FROM dm3_devices.provisioning_tokens WHERE token_hash = $1`, tokenHash,
-	).Scan(&usedAt)
-	if err != nil {
-		httputil.Error(w, http.StatusUnauthorized, "token not found")
-		return
-	}
-	if usedAt != nil {
-		httputil.Error(w, http.StatusConflict, "token already used")
-		return
-	}
-
-	// Mark token as used
-	_, _ = h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_devices.provisioning_tokens SET used_at = now() WHERE token_hash = $1`, tokenHash,
+	tag, err := h.db.Pool.Exec(r.Context(),
+		`UPDATE dm3_devices.provisioning_tokens SET used_at = now() WHERE token_hash = $1 AND used_at IS NULL`,
+		tokenHash,
 	)
+	if err != nil {
+		slog.Error("ActivateDevice: failed to mark token used", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		// Either token not found or already used.
+		httputil.Error(w, http.StatusConflict, "token not found or already used")
+		return
+	}
 
 	// Store hardware fingerprint and update device status
 	fpJSON, _ := json.Marshal(req.HardwareFingerprint)
@@ -294,7 +294,8 @@ func (h *ProvisioningHandlers) ListPending(w http.ResponseWriter, r *http.Reques
 		 FROM dm3_devices.pending_registrations WHERE status = 'pending' ORDER BY created_at DESC LIMIT 100`,
 	)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		slog.Error("ListPending: query failed", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 	defer rows.Close()
@@ -307,7 +308,8 @@ func (h *ProvisioningHandlers) ListPending(w http.ResponseWriter, r *http.Reques
 		var assignedCompanyID *string
 		var createdAt time.Time
 		if err := rows.Scan(&id, &rid, &deviceType, &firmwareVersion, &fp, &hmacVerified, &sigVerified, &status, &assignedCompanyID, &createdAt); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			slog.Error("ListPending: scan failed", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		item := map[string]any{
@@ -395,7 +397,8 @@ func (h *ProvisioningHandlers) ApprovePending(w http.ResponseWriter, r *http.Req
 		rid, name, deviceType, req.SiteID, req.Location, req.TenantID, firmwareVersion, fp, assignedBy,
 	).Scan(&deviceDBID)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to create device: "+err.Error())
+		slog.Error("ApprovePending: insert device failed", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -407,15 +410,15 @@ func (h *ProvisioningHandlers) ApprovePending(w http.ResponseWriter, r *http.Req
 	}
 
 	// Publish credentials to bootstrap channel
-	responsePayload, _ := json.Marshal(map[string]any{
+	responsePayload, err := json.Marshal(map[string]any{
 		"type":   "device.approved",
 		"rid":    rid,
 		"status": "approved",
 		"credentials": map[string]any{
 			"mqtt_username":    fmt.Sprintf("device:%s", rid),
-			"mqtt_token":      deviceJWT,
+			"mqtt_token":       deviceJWT,
 			"token_expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
-			"refresh_url":     "/api/v1/devices/refresh-token",
+			"refresh_url":      "/api/v1/devices/refresh-token",
 		},
 		"company": map[string]any{
 			"id": req.TenantID,
@@ -426,6 +429,10 @@ func (h *ProvisioningHandlers) ApprovePending(w http.ResponseWriter, r *http.Req
 			"tenant_id":              req.TenantID,
 		},
 	})
+	if err != nil {
+		slog.Error("ApprovePending: marshal response failed", "error", err)
+		responsePayload = []byte(`{"type":"device.approved","status":"approved"}`)
+	}
 	topic := fmt.Sprintf("dm/bootstrap/%s/response", rid)
 	if err := h.mqtt.Publish(r.Context(), topic, 1, responsePayload); err != nil {
 		slog.Error("failed to publish approval to bootstrap channel", "error", err, "rid", rid)
@@ -467,12 +474,16 @@ func (h *ProvisioningHandlers) RejectPending(w http.ResponseWriter, r *http.Requ
 	)
 
 	// Publish rejection
-	responsePayload, _ := json.Marshal(map[string]any{
+	responsePayload, err := json.Marshal(map[string]any{
 		"type":    "device.rejected",
 		"rid":     rid,
 		"status":  "rejected",
 		"message": "Registration rejected by administrator",
 	})
+	if err != nil {
+		slog.Error("RejectPending: marshal response failed", "error", err)
+		responsePayload = []byte(`{"type":"device.rejected","status":"rejected"}`)
+	}
 	topic := fmt.Sprintf("dm/bootstrap/%s/response", rid)
 	if err := h.mqtt.Publish(r.Context(), topic, 1, responsePayload); err != nil {
 		slog.Error("failed to publish rejection", "error", err, "rid", rid)
@@ -621,13 +632,20 @@ func sha256Hash(s string) string {
 
 // BootstrapMQTTHandler handles bootstrap registration messages.
 type BootstrapMQTTHandler struct {
-	db   *db.DB
-	mqtt *mqtt.Client
-	cfg  *config.Config
+	db     *db.DB
+	mqtt   *mqtt.Client
+	cfg    *config.Config
+	appCtx context.Context
 }
 
 func NewBootstrapMQTTHandler(database *db.DB, mqttClient *mqtt.Client, cfg *config.Config) *BootstrapMQTTHandler {
-	return &BootstrapMQTTHandler{db: database, mqtt: mqttClient, cfg: cfg}
+	return &BootstrapMQTTHandler{db: database, mqtt: mqttClient, cfg: cfg, appCtx: context.Background()}
+}
+
+// SetAppContext sets the application-level context used to derive timeouts.
+// Call this after construction so that shutdown signals cancel in-flight handlers.
+func (h *BootstrapMQTTHandler) SetAppContext(ctx context.Context) {
+	h.appCtx = ctx
 }
 
 type bootstrapRegisterMsg struct {
@@ -656,7 +674,7 @@ func (h *BootstrapMQTTHandler) Handle(topic string, payload []byte) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(h.appCtx, 10*time.Second)
 	defer cancel()
 
 	// 1. Validate HMAC
@@ -688,20 +706,20 @@ func (h *BootstrapMQTTHandler) Handle(topic string, payload []byte) {
 		}
 	}
 
-	// 3. Check nonce not replayed
+	// 3. Check nonce not replayed — atomic INSERT eliminates SELECT+INSERT TOCTOU window.
 	if msg.Nonce != "" {
-		var exists bool
-		_ = h.db.Pool.QueryRow(ctx,
-			`SELECT EXISTS(SELECT 1 FROM dm3_devices.used_nonces WHERE nonce = $1)`, msg.Nonce,
-		).Scan(&exists)
-		if exists {
+		tag, err := h.db.Pool.Exec(ctx,
+			`INSERT INTO dm3_devices.used_nonces (nonce) VALUES ($1) ON CONFLICT (nonce) DO NOTHING`, msg.Nonce,
+		)
+		if err != nil {
+			slog.Error("bootstrap: failed to record nonce", "error", err, "rid", msg.RID)
+			return
+		}
+		if tag.RowsAffected() == 0 {
 			slog.Warn("bootstrap: nonce replay detected", "rid", msg.RID, "nonce", msg.Nonce)
 			h.publishResponse(ctx, msg.RID, "device.register_nack", "error", "Replay detected")
 			return
 		}
-		_, _ = h.db.Pool.Exec(ctx,
-			`INSERT INTO dm3_devices.used_nonces (nonce) VALUES ($1) ON CONFLICT DO NOTHING`, msg.Nonce,
-		)
 	}
 
 	// 4. Check RID not already registered
@@ -754,12 +772,16 @@ func (h *BootstrapMQTTHandler) validateHMAC(payload []byte, providedHMAC string)
 }
 
 func (h *BootstrapMQTTHandler) publishResponse(ctx context.Context, rid, msgType, status, message string) {
-	resp, _ := json.Marshal(map[string]any{
+	resp, err := json.Marshal(map[string]any{
 		"type":    msgType,
 		"rid":     rid,
 		"status":  status,
 		"message": message,
 	})
+	if err != nil {
+		slog.Error("bootstrap: marshal response failed", "error", err, "rid", rid)
+		return
+	}
 	topic := fmt.Sprintf("dm/bootstrap/%s/response", rid)
 	if err := h.mqtt.Publish(ctx, topic, 1, resp); err != nil {
 		slog.Error("bootstrap: failed to publish response", "error", err, "topic", topic)

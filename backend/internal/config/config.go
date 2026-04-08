@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -62,6 +64,28 @@ func Load() *Config {
 		BugReporterSprintID:  env("BUG_REPORTER_SPRINT_ID", ""),
 		BugReporterAssignee:  env("BUG_REPORTER_ASSIGNEE_ID", ""),
 	}
+}
+
+// Validate logs warnings for insecure development defaults and returns an error
+// when running in production (APP_ENV=production) with any of them still set.
+func (c *Config) Validate() error {
+	var insecure []string
+	if c.JWTSecret == "dm3-dev-secret-key" {
+		insecure = append(insecure, "JWT_SECRET is using the insecure development default")
+	}
+	if c.BootstrapSecret == "dm3-bootstrap-v1-dev-secret" {
+		insecure = append(insecure, "BOOTSTRAP_SECRET is using the insecure development default")
+	}
+	if strings.Contains(c.DatabaseURL, "dm3secret") {
+		insecure = append(insecure, "DATABASE_URL is using the insecure development default password")
+	}
+	for _, msg := range insecure {
+		slog.Warn("[SECURITY] " + msg + "; set a strong value via environment variable before deploying to production")
+	}
+	if os.Getenv("APP_ENV") == "production" && len(insecure) > 0 {
+		return fmt.Errorf("insecure default secrets detected in production: %s", strings.Join(insecure, "; "))
+	}
+	return nil
 }
 
 func env(key, fallback string) string {

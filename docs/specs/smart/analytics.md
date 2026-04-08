@@ -1,7 +1,7 @@
 # Feature: Analytics & Reporting
 
 > Domain: SMART | Color: #9C27B0 | Priority: P1
-> Status: Draft | Owner: report-svc team
+> Status: NOT IMPLEMENTED | Owner: report-svc team
 
 ## Overview
 Analytics provides cross-domain dashboards, trend analysis, anomaly detection, and scheduled reports across all DM3 domains. Aggregates data from access events, visitor logs, attendance records, energy consumption, parking sessions, and maintenance work orders into actionable insights. Uses TimescaleDB continuous aggregates and ClickHouse (Phase 3) for high-performance analytical queries.

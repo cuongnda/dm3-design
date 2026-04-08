@@ -39,7 +39,7 @@ type recentStat struct {
 	NewDevices7d   int64 `json:"new_devices_7d"`
 }
 
-func (h *Handlers) SystemStats(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) SystemStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var stats systemStats
 

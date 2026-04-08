@@ -29,21 +29,21 @@ func NewSyncService(database *db.DB, mqttClient *mqtt.Client) *SyncService {
 
 // syncUser represents a user in the sync payload.
 type syncUser struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Status    string `json:"status"`
-	ValidFrom *int64 `json:"valid_from,omitempty"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	ValidFrom  *int64 `json:"valid_from,omitempty"`
 	ValidUntil *int64 `json:"valid_until,omitempty"`
 }
 
 // syncCredential represents a credential in the sync payload.
 type syncCredential struct {
-	ID        string `json:"id"`
-	UserID  string `json:"user_id"`
-	Type      string `json:"type"`
-	Value     string `json:"value"`
-	Status    string `json:"status"`
-	ValidFrom *int64 `json:"valid_from,omitempty"`
+	ID         string `json:"id"`
+	UserID     string `json:"user_id"`
+	Type       string `json:"type"`
+	Value      string `json:"value"`
+	Status     string `json:"status"`
+	ValidFrom  *int64 `json:"valid_from,omitempty"`
 	ValidUntil *int64 `json:"valid_until,omitempty"`
 }
 
@@ -80,24 +80,27 @@ func (s *SyncService) PushSyncToDevice(ctx context.Context, companyID, deviceID 
 
 	// Fetch users for company
 	users := []syncUser{}
-	rows, err := s.db.Pool.Query(ctx,
+	userRows, err := s.db.Pool.Query(ctx,
 		`SELECT id, CONCAT(first_name, ' ', last_name), status FROM dm3_identity.users WHERE tenant_id = $1::uuid AND status = 'active'`,
 		companyID)
 	if err != nil {
 		return fmt.Errorf("sync: query users: %w", err)
 	}
-	for rows.Next() {
+	defer userRows.Close()
+	for userRows.Next() {
 		var p syncUser
-		if err := rows.Scan(&p.ID, &p.Name, &p.Status); err != nil {
+		if err := userRows.Scan(&p.ID, &p.Name, &p.Status); err != nil {
 			continue
 		}
 		users = append(users, p)
 	}
-	rows.Close()
+	if err := userRows.Err(); err != nil {
+		return fmt.Errorf("sync: iterate users: %w", err)
+	}
 
 	// Fetch credentials for company
 	credentials := []syncCredential{}
-	rows, err = s.db.Pool.Query(ctx,
+	credRows, err := s.db.Pool.Query(ctx,
 		`SELECT c.id, c.user_id, c.type, c.value, c.status
 		 FROM dm3_identity.credentials c
 		 JOIN dm3_identity.users p ON p.id = c.user_id
@@ -106,43 +109,50 @@ func (s *SyncService) PushSyncToDevice(ctx context.Context, companyID, deviceID 
 	if err != nil {
 		return fmt.Errorf("sync: query credentials: %w", err)
 	}
-	for rows.Next() {
+	defer credRows.Close()
+	for credRows.Next() {
 		var c syncCredential
-		if err := rows.Scan(&c.ID, &c.UserID, &c.Type, &c.Value, &c.Status); err != nil {
+		if err := credRows.Scan(&c.ID, &c.UserID, &c.Type, &c.Value, &c.Status); err != nil {
 			continue
 		}
 		credentials = append(credentials, c)
 	}
-	rows.Close()
+	if err := credRows.Err(); err != nil {
+		return fmt.Errorf("sync: iterate credentials: %w", err)
+	}
 
 	// Fetch access rules for company
 	accessRules := []syncAccessRule{}
-	rows, err = s.db.Pool.Query(ctx,
+	ruleRows, err := s.db.Pool.Query(ctx,
 		`SELECT id, name, COALESCE(door_ids, '{}'), schedule, priority, enabled
 		 FROM dm3_access.access_rules WHERE tenant_id = $1::uuid AND enabled = true`,
 		companyID)
 	if err != nil {
 		return fmt.Errorf("sync: query access rules: %w", err)
 	}
-	for rows.Next() {
+	defer ruleRows.Close()
+	for ruleRows.Next() {
 		var r syncAccessRule
 		var doorIDs []string
 		var schedule json.RawMessage
-		if err := rows.Scan(&r.RuleID, &r.Name, &doorIDs, &schedule, &r.Priority, &r.Enabled); err != nil {
+		if err := ruleRows.Scan(&r.RuleID, &r.Name, &doorIDs, &schedule, &r.Priority, &r.Enabled); err != nil {
 			continue
 		}
 		r.DoorIDs = make([]string, len(doorIDs))
-		for i, d := range doorIDs {
-			r.DoorIDs[i] = d
-		}
+		copy(r.DoorIDs, doorIDs)
 		if len(schedule) > 0 {
-			var s any
-			json.Unmarshal(schedule, &s)
-			r.Schedule = s
+			var scheduleData any
+			if err := json.Unmarshal(schedule, &scheduleData); err != nil {
+				slog.Warn("sync: failed to unmarshal schedule", "rule", r.RuleID, "error", err)
+			} else {
+				r.Schedule = scheduleData
+			}
 		}
 		accessRules = append(accessRules, r)
 	}
-	rows.Close()
+	if err := ruleRows.Err(); err != nil {
+		return fmt.Errorf("sync: iterate access rules: %w", err)
+	}
 
 	// Fetch user groups for company
 	userGroups := []syncUserGroup{}
@@ -158,6 +168,9 @@ func (s *SyncService) PushSyncToDevice(ctx context.Context, companyID, deviceID 
 			if groupRows.Scan(&ug.ID, &ug.Name, &ug.UserIDs) == nil {
 				userGroups = append(userGroups, ug)
 			}
+		}
+		if err := groupRows.Err(); err != nil {
+			slog.Warn("sync: error iterating user groups", "error", err)
 		}
 	}
 
@@ -222,7 +235,7 @@ func (s *SyncService) HandleSyncRequest(w http.ResponseWriter, r *http.Request) 
 
 	if err := s.PushSyncToDevice(r.Context(), companyID, deviceID); err != nil {
 		slog.Error("sync: push failed", "error", err, "device", deviceID)
-		httputil.Error(w, http.StatusInternalServerError, fmt.Sprintf("sync failed: %v", err))
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -235,7 +248,11 @@ func (s *SyncService) HandleSyncRequest(w http.ResponseWriter, r *http.Request) 
 
 func generateUUID() string {
 	b := make([]byte, 16)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand failure is extremely rare; fall back to a timestamp-based id
+		// rather than silently returning a zero-UUID.
+		return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
+	}
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])

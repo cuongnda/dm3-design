@@ -53,7 +53,7 @@ func TestBoolVal(t *testing.T) {
 
 // TestCreateDoorRequestValidation tests request validation without DB.
 func TestCreateDoorValidation(t *testing.T) {
-	h := &Handlers{db: nil} // nil DB — we expect validation to fail before DB call
+	h := &AccessHandlers{db: nil} // nil DB — we expect validation to fail before DB call
 
 	// Missing required fields
 	body := `{"location":"test"}`
@@ -76,7 +76,7 @@ func TestCreateDoorValidation(t *testing.T) {
 
 // TestCreateRuleValidation tests rule request validation without DB.
 func TestCreateRuleValidation(t *testing.T) {
-	h := &Handlers{db: nil}
+	h := &AccessHandlers{db: nil}
 
 	body := `{"name":"test"}`
 	r := httptest.NewRequest("POST", "/api/v1/rules", bytes.NewBufferString(body))
@@ -89,7 +89,7 @@ func TestCreateRuleValidation(t *testing.T) {
 
 // TestCreateScheduleValidation tests schedule request validation.
 func TestCreateScheduleValidation(t *testing.T) {
-	h := &Handlers{db: nil}
+	h := &AccessHandlers{db: nil}
 
 	body := `{"timezone":"UTC"}`
 	r := httptest.NewRequest("POST", "/api/v1/schedules", bytes.NewBufferString(body))
@@ -104,7 +104,7 @@ func TestCreateScheduleValidation(t *testing.T) {
 func TestRouteSetup(t *testing.T) {
 	// Verify routes can be registered without panic
 	r := chi.NewRouter()
-	h := &Handlers{db: nil}
+	h := &AccessHandlers{db: nil}
 
 	r.Get("/api/v1/doors", h.ListDoors)
 	r.Post("/api/v1/doors", h.CreateDoor)

@@ -12,18 +12,18 @@ import (
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
-// Handlers provides tenant/company management endpoints
-type Handlers struct {
+// TenantHandlers provides tenant/company management endpoints
+type TenantHandlers struct {
 	db *db.DB
 }
 
-// NewHandlers creates a new tenant handlers instance
-func NewHandlers(database *db.DB) *Handlers {
-	return &Handlers{db: database}
+// NewTenantHandlers creates a new tenant handlers instance
+func NewTenantHandlers(database *db.DB) *TenantHandlers {
+	return &TenantHandlers{db: database}
 }
 
 // GetCurrentTenant returns information about the current user's tenant
-func (h *Handlers) GetCurrentTenant(w http.ResponseWriter, r *http.Request) {
+func (h *TenantHandlers) GetCurrentTenant(w http.ResponseWriter, r *http.Request) {
 	info, err := TenantInfoFromContext(r.Context())
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "no tenant context available")
@@ -36,7 +36,7 @@ func (h *Handlers) GetCurrentTenant(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListTenants lists all tenants (system admin only)
-func (h *Handlers) ListTenants(w http.ResponseWriter, r *http.Request) {
+func (h *TenantHandlers) ListTenants(w http.ResponseWriter, r *http.Request) {
 	claims := authsvc.ClaimsFromContext(r.Context())
 	if claims == nil || claims.Role != "system_admin" {
 		writeError(w, http.StatusForbidden, "system admin access required")
@@ -116,7 +116,7 @@ func (h *Handlers) ListTenants(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetTenant gets a specific tenant by ID (system admin only)
-func (h *Handlers) GetTenant(w http.ResponseWriter, r *http.Request) {
+func (h *TenantHandlers) GetTenant(w http.ResponseWriter, r *http.Request) {
 	claims := authsvc.ClaimsFromContext(r.Context())
 	if claims == nil || claims.Role != "system_admin" {
 		writeError(w, http.StatusForbidden, "system admin access required")
@@ -141,7 +141,7 @@ func (h *Handlers) GetTenant(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateTenantStatus updates tenant status (system admin only)
-func (h *Handlers) UpdateTenantStatus(w http.ResponseWriter, r *http.Request) {
+func (h *TenantHandlers) UpdateTenantStatus(w http.ResponseWriter, r *http.Request) {
 	claims := authsvc.ClaimsFromContext(r.Context())
 	if claims == nil || claims.Role != "system_admin" {
 		writeError(w, http.StatusForbidden, "system admin access required")
@@ -197,7 +197,7 @@ func (h *Handlers) UpdateTenantStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetTenantStats returns usage statistics for the current tenant
-func (h *Handlers) GetTenantStats(w http.ResponseWriter, r *http.Request) {
+func (h *TenantHandlers) GetTenantStats(w http.ResponseWriter, r *http.Request) {
 	tenantID, err := TenantIDFromContext(r.Context())
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "no tenant context available")
@@ -261,7 +261,7 @@ func (h *Handlers) GetTenantStats(w http.ResponseWriter, r *http.Request) {
 }
 
 // ValidateTenantLimits checks if the tenant can create new resources
-func (h *Handlers) ValidateTenantLimits(w http.ResponseWriter, r *http.Request) {
+func (h *TenantHandlers) ValidateTenantLimits(w http.ResponseWriter, r *http.Request) {
 	resourceType := r.URL.Query().Get("resource")
 	if resourceType == "" {
 		writeError(w, http.StatusBadRequest, "resource parameter required")

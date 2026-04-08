@@ -10,7 +10,7 @@ import (
 
 // RegisterRoutes adds tenant management routes to the router
 func RegisterRoutes(r chi.Router, database *db.DB, jwtSecret string) {
-	handlers := NewHandlers(database)
+	handlers := NewTenantHandlers(database)
 
 	// Public tenant routes (require authentication + tenant context)
 	r.Route("/api/v1/tenant", func(r chi.Router) {

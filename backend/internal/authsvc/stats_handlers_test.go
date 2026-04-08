@@ -126,7 +126,7 @@ func TestCreateCompanyRequestValidation(t *testing.T) {
 			}
 
 			// Handler without DB will fail, but we can test validation
-			h := &Handlers{jwtSecret: testSecret}
+			h := &AuthHandlers{jwtSecret: testSecret}
 			req := httptest.NewRequest("POST", "/api/v1/system/companies", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
@@ -163,7 +163,7 @@ func TestUpdateCompanyRequestParsing(t *testing.T) {
 // ─── System Admin Auth Flow Tests ────────────────────────────────────────────
 
 func TestSystemAdminTokenHasNoCompanyID(t *testing.T) {
-	h := &Handlers{jwtSecret: testSecret}
+	h := &AuthHandlers{jwtSecret: testSecret}
 
 	// System admin should get token without tenant_id
 	tokenStr, err := h.generateAccessToken("admin-1", "system", "sysadmin@duali.com", "System Admin", []string{"admin"}, "", "system_admin")

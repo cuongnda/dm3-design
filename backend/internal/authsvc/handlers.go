@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	mathrand "math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -55,13 +54,13 @@ type DeviceClaims struct {
 
 // ─── Handlers ────────────────────────────────────────────────────────────────
 
-type Handlers struct {
+type AuthHandlers struct {
 	db        *db.DB
 	jwtSecret string
 }
 
-func NewHandlers(database *db.DB, jwtSecret string) *Handlers {
-	return &Handlers{db: database, jwtSecret: jwtSecret}
+func NewAuthHandlers(database *db.DB, jwtSecret string) *AuthHandlers {
+	return &AuthHandlers{db: database, jwtSecret: jwtSecret}
 }
 
 // ─── Auth Routes ─────────────────────────────────────────────────────────────
@@ -122,7 +121,7 @@ type accountForLogin struct {
 	role         string
 }
 
-func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
@@ -155,8 +154,6 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 		}
 		accounts = append(accounts, a)
 	}
-	rows.Close()
-
 	if len(accounts) == 0 {
 		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.invalid_credentials")
 		return
@@ -244,7 +241,12 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 			return
 		}
-		refreshToken, _ := h.createRefreshToken(r, chosenAccount.id, c.ID)
+		refreshToken, err := h.createRefreshToken(r, chosenAccount.id, c.ID)
+		if err != nil {
+			slog.Error("LoginStep2: failed to create refresh token", "error", err)
+			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
+			return
+		}
 		httputil.JSON(w, http.StatusOK, loginStepResponse{
 			Step:         "complete",
 			AccessToken:  accessToken,
@@ -269,7 +271,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 	var req loginStep2Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
@@ -343,7 +345,7 @@ type refreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req refreshRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
@@ -378,8 +380,13 @@ func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Revoke old token.
-	_, _ = h.db.Pool.Exec(r.Context(), `UPDATE dm3_auth.refresh_tokens SET revoked = true WHERE id = $1::uuid`, tokenID)
+	// Revoke old token. If this fails we must not issue a new token —
+	// the old token would remain valid and the rotation guarantee is broken.
+	if _, err := h.db.Pool.Exec(r.Context(), `UPDATE dm3_auth.refresh_tokens SET revoked = true WHERE id = $1::uuid`, tokenID); err != nil {
+		slog.Error("Refresh: failed to revoke old token", "error", err, "token_id", tokenID)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
 
 	// Get account info from dm3_auth.accounts.
 	var email, fullName string
@@ -400,8 +407,18 @@ func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
 		refreshCID = *refreshCompanyID
 	}
 
-	accessToken, _ := h.generateAccessToken(userID, companyID, email, fullName, roles, refreshCID, refreshUserRole)
-	refreshToken, _ := h.createRefreshToken(r, userID, companyID)
+	accessToken, err := h.generateAccessToken(userID, companyID, email, fullName, roles, refreshCID, refreshUserRole)
+	if err != nil {
+		slog.Error("Refresh: failed to generate access token", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+	refreshToken, err := h.createRefreshToken(r, userID, companyID)
+	if err != nil {
+		slog.Error("Refresh: failed to create refresh token", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
 
 	httputil.JSON(w, http.StatusOK, tokenResponse{
 		AccessToken:  accessToken,
@@ -411,19 +428,23 @@ func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromContext(r.Context())
 	if claims == nil {
 		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.unauthorized")
 		return
 	}
 	// Revoke all refresh tokens for this user.
-	_, _ = h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_auth.refresh_tokens SET revoked = true WHERE user_id = $1::uuid`, claims.Sub)
+	if _, err := h.db.Pool.Exec(r.Context(),
+		`UPDATE dm3_auth.refresh_tokens SET revoked = true WHERE user_id = $1::uuid`, claims.Sub); err != nil {
+		slog.Error("Logout: failed to revoke tokens", "error", err, "user_id", claims.Sub)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handlers) Me(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromContext(r.Context())
 	if claims == nil {
 		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.unauthorized")
@@ -454,7 +475,7 @@ type updateMeRequest struct {
 	SessionTimeoutMinutes *int    `json:"session_timeout_minutes,omitempty"`
 }
 
-func (h *Handlers) UpdateMe(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromContext(r.Context())
 	if claims == nil {
 		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.unauthorized")
@@ -530,7 +551,7 @@ type deviceTokenResponse struct {
 	ExpiresIn int    `json:"expires_in"`
 }
 
-func (h *Handlers) DeviceToken(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) DeviceToken(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromContext(r.Context())
 	if claims == nil {
 		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.unauthorized")
@@ -608,7 +629,7 @@ type userResponse struct {
 	SessionTimeoutMinutes *int       `json:"session_timeout_minutes,omitempty"`
 }
 
-func (h *Handlers) ListUsers(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
@@ -619,7 +640,8 @@ func (h *Handlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 		`SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status, last_login, created_at
 		 FROM dm3_auth.accounts WHERE status != 'deleted' ORDER BY created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		slog.Error("list users: query", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 	defer rows.Close()
@@ -628,7 +650,8 @@ func (h *Handlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var u userResponse
 		if err := rows.Scan(&u.ID, &u.TenantID, &u.Email, &u.Name, &u.Roles, &u.Role, &u.Status, &u.LastLogin, &u.CreatedAt); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			slog.Error("list users: scan", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		users = append(users, u)
@@ -644,7 +667,7 @@ type createUserRequest struct {
 	TenantID *string  `json:"tenant_id,omitempty"`
 }
 
-func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var req createUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
@@ -680,7 +703,7 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusCreated, u)
 }
 
-func (h *Handlers) GetUser(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) GetUser(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var u userResponse
 	err := h.db.Pool.QueryRow(r.Context(),
@@ -700,7 +723,7 @@ type updateUserRequest struct {
 	Status *string  `json:"status"`
 }
 
-func (h *Handlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req updateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -732,13 +755,14 @@ func (h *Handlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, u)
 }
 
-func (h *Handlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	// Soft delete: set status to 'deleted'.
 	tag, err := h.db.Pool.Exec(r.Context(),
 		`UPDATE dm3_auth.accounts SET status = 'deleted', updated_at = now() WHERE id = $1::uuid AND status != 'deleted'`, id)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		slog.Error("delete user", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -752,7 +776,7 @@ type changePasswordRequest struct {
 	Password string `json:"password"`
 }
 
-func (h *Handlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req changePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -793,7 +817,7 @@ type roleInfo struct {
 	Permissions []string `json:"permissions"`
 }
 
-func (h *Handlers) ListRoles(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) ListRoles(w http.ResponseWriter, r *http.Request) {
 	roles := []roleInfo{
 		{Name: "admin", Description: "Full system access", Permissions: []string{"users:read", "users:write", "users:delete", "devices:read", "devices:write", "access:read", "access:write", "identity:read", "identity:write"}},
 		{Name: "operator", Description: "Operational access", Permissions: []string{"devices:read", "devices:write", "access:read", "access:write", "identity:read"}},
@@ -804,7 +828,7 @@ func (h *Handlers) ListRoles(w http.ResponseWriter, r *http.Request) {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-func (h *Handlers) generateTempToken(userID, email string) (string, error) {
+func (h *AuthHandlers) generateTempToken(userID, email string) (string, error) {
 	now := time.Now()
 	claims := TempClaims{
 		Sub:     userID,
@@ -821,7 +845,7 @@ func (h *Handlers) generateTempToken(userID, email string) (string, error) {
 	return token.SignedString([]byte(h.jwtSecret))
 }
 
-func (h *Handlers) generateAccessToken(userID, companyID, email, name string, roles []string, selectedCompanyID, role string) (string, error) {
+func (h *AuthHandlers) generateAccessToken(userID, companyID, email, name string, roles []string, selectedCompanyID, role string) (string, error) {
 	now := time.Now()
 	claims := AccessClaims{
 		Sub:   userID,
@@ -841,7 +865,7 @@ func (h *Handlers) generateAccessToken(userID, companyID, email, name string, ro
 	return token.SignedString([]byte(h.jwtSecret))
 }
 
-func (h *Handlers) createRefreshToken(r *http.Request, userID, companyID string) (string, error) {
+func (h *AuthHandlers) createRefreshToken(r *http.Request, userID, companyID string) (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err
@@ -885,18 +909,29 @@ func parsePagination(r *http.Request) (int, int) {
 }
 
 // ResetUserPassword generates a new random password for a user.
-func (h *Handlers) ResetUserPassword(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) ResetUserPassword(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	if userID == "" {
 		httputil.Error(w, http.StatusBadRequest, "user ID required")
 		return
 	}
 
-	// Generate random password.
+	// Generate a cryptographically random password using rejection sampling to
+	// avoid modulo bias (256 % 62 = 8 values are rejected per byte).
 	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	password := make([]byte, 12)
+	buf := make([]byte, 1)
 	for i := range password {
-		password[i] = chars[mathrand.Intn(len(chars))]
+		for {
+			if _, err := rand.Read(buf); err != nil {
+				httputil.Error(w, http.StatusInternalServerError, "failed to generate password")
+				return
+			}
+			if int(buf[0]) < 256-(256%len(chars)) {
+				password[i] = chars[int(buf[0])%len(chars)]
+				break
+			}
+		}
 	}
 	newPassword := string(password)
 
@@ -925,7 +960,7 @@ func (h *Handlers) ResetUserPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 // ChangeUserPassword sets a custom password for a user.
-func (h *Handlers) ChangeUserPassword(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) ChangeUserPassword(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	if userID == "" {
 		httputil.Error(w, http.StatusBadRequest, "user ID required")

@@ -8,7 +8,8 @@
 ## Quick Start
 1. Read `docs/VISION.md` — understand the product
 2. Read `docs/README.md` — navigate the docs
-3. Check `docs/changelog/` — understand recent decisions
+3. Read `docs/IMPLEMENTATION_STATUS.md` — ⚠️ understand what is real vs mock data before any feature work
+4. Check `docs/changelog/` — understand recent decisions
 
 ## Architecture Principles (CRITICAL)
 - **Offline-first**: Devices make access decisions LOCALLY. Never send credentials to server for decisions.
@@ -20,26 +21,45 @@
 ```
 dm3/
 ├── AGENTS.md           # You are here
+├── CLAUDE.md           # Claude Code specific guidance (commands, architecture detail)
 ├── docs/               # 📖 Single source of truth for all documentation
-│   ├── VISION.md       # 🎯 North star — read first
-│   ├── README.md       # Doc structure & guidelines
-│   ├── architecture/   # System design, MQTT protocol, tech stack
-│   ├── design/         # Design system (dark theme, components)
-│   ├── ux/             # UX specs per platform (webapp, mobile, terminal, guard)
-│   ├── marketing/      # Website copy, SEO strategy
-│   ├── research/       # Reference material (not source of truth)
-│   └── changelog/      # Major decision history
-├── webapp/             # 🖥️ React web dashboard (Vite + React 18 + TS + Tailwind + shadcn/ui)
-├── mockups/            # 📸 HTML mockups & screenshots
+│   ├── VISION.md                  # 🎯 North star — read first
+│   ├── IMPLEMENTATION_STATUS.md   # ⚠️ What is real vs mock data
+│   ├── README.md                  # Doc structure & guidelines
+│   ├── architecture/              # System design, MQTT protocol, tech stack
+│   ├── specs/                     # 29 feature specs (authoritative for behaviour)
+│   ├── design/                    # Design system (dark theme, components)
+│   ├── ux/                        # UX specs per platform (webapp, mobile, terminal, guard)
+│   ├── marketing/                 # Website copy, SEO strategy
+│   ├── research/                  # Reference material (not source of truth)
+│   └── changelog/                 # Major decision history
+├── apps/               # 🖥️ Frontend — Turborepo workspaces
+│   ├── console/        # Master app — all modules (reference implementation)
+│   ├── school/         # Vertical: attendance + identity
+│   ├── factory/        # Vertical: attendance + maintenance
+│   └── apartment/      # Vertical: visitor + parking + intercom
+├── packages/           # Shared frontend packages
+│   ├── ui/             # @dm3/ui — shadcn/ui components + custom
+│   └── api-client/     # @dm3/api-client — OpenAPI client + WebSocket + Zustand store
+├── backend/            # 🔧 Go monorepo — 4 services (auth, identity, access, device-gateway)
 └── diagrams/           # 📊 Architecture diagrams (draw.io)
 ```
 
 ## Tech Stack
-- **Web App**: Vite + React 18 + TypeScript + Tailwind CSS 4 + shadcn/ui + Zustand + TanStack Query
-- **Backend** (planned): Go (core) + Python/FastAPI (AI services)
+- **Frontend**: Vite + React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui + React Router v7 + Zustand 5 + TanStack Query 5 + i18next
+- **Backend**: Go 1.22 — 4 services (auth-svc :8005, identity-svc :8004, access-svc :8003, device-gateway :8002)
+- **Database**: TimescaleDB :5433 (`dm3` db, schemas: dm3_auth, dm3_devices, dm3_access, dm3_identity)
+- **Messaging**: NATS JetStream :4222, EMQX MQTT :1884
 - **Mobile** (planned): Flutter
 - **IoT Protocol**: MQTT 5.0 via EMQX (offline-first, see docs/architecture/mqtt-protocol.md)
-- **Theme**: Dark-first (#0A0E1A bg), cyber security aesthetic
+- **Theme**: Dark-first (#0B1120 bg), cyber security aesthetic
+
+## Implementation Reality (read before coding)
+Most frontend features are **mock-data-only UI shells**. Only these pages connect to real backend APIs:
+- DashboardPage, DeviceDetailPage, IdentitiesPage, PersonDetailPage, GroupsPage, SystemSettingsPage
+
+All OPERATE, SMART, and most SECURE/MANAGE pages import from `mock-data` files.
+See `docs/IMPLEMENTATION_STATUS.md` for the full compliance table.
 
 ## Design Guidelines
 - Clean, minimal (Stripe/Linear/Notion style)
@@ -59,9 +79,3 @@ dm3/
 - Never push without explicit permission from the project owner
 - Commit locally, push when told
 - Use conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`
-
-## Kanban
-Tasks are tracked in the kanban board at http://localhost:8080
-- Project: `dm3-webapp`
-- Always create kanban tasks before starting work
-- Log time spent and token usage on completion

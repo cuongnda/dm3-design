@@ -16,7 +16,7 @@ import (
 
 // ─── Zones ───────────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListZones(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ListZones(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
@@ -86,7 +86,7 @@ type createZoneRequest struct {
 	ParentID    *string `json:"parent_id"`
 }
 
-func (h *Handlers) CreateZone(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) CreateZone(w http.ResponseWriter, r *http.Request) {
 	var req createZoneRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -114,7 +114,7 @@ func (h *Handlers) CreateZone(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusCreated, z)
 }
 
-func (h *Handlers) GetZone(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) GetZone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -142,7 +142,7 @@ type updateZoneRequest struct {
 	ParentID    *string `json:"parent_id"`
 }
 
-func (h *Handlers) UpdateZone(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) UpdateZone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -171,7 +171,7 @@ func (h *Handlers) UpdateZone(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, z)
 }
 
-func (h *Handlers) DeleteZone(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) DeleteZone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -193,7 +193,7 @@ func (h *Handlers) DeleteZone(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handlers) BulkDeleteZones(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) BulkDeleteZones(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
 	var req struct {
@@ -224,7 +224,7 @@ func (h *Handlers) BulkDeleteZones(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /zones/:id/doors — list access points in a zone
-func (h *Handlers) ListZoneDoors(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ListZoneDoors(w http.ResponseWriter, r *http.Request) {
 	zoneID := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	page, limit := parsePagination(r)
@@ -279,16 +279,16 @@ func (h *Handlers) ListZoneDoors(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /doors/:id/devices — stubbed: dm3_access.door_devices is dropped
-func (h *Handlers) ListDoorDevices(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ListDoorDevices(w http.ResponseWriter, r *http.Request) {
 	httputil.Error(w, http.StatusNotImplemented, "door devices have been replaced by access point doors")
 }
 
 // POST /doors/:id/devices — stubbed: dm3_access.door_devices is dropped
-func (h *Handlers) AddDoorDevice(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) AddDoorDevice(w http.ResponseWriter, r *http.Request) {
 	httputil.Error(w, http.StatusNotImplemented, "door devices have been replaced by access point doors")
 }
 
 // DELETE /doors/:id/devices/:deviceId — stubbed: dm3_access.door_devices is dropped
-func (h *Handlers) RemoveDoorDevice(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) RemoveDoorDevice(w http.ResponseWriter, r *http.Request) {
 	httputil.Error(w, http.StatusNotImplemented, "door devices have been replaced by access point doors")
 }

@@ -1,7 +1,7 @@
 # Feature: AI Assistant
 
 > Domain: SMART | Color: #9C27B0 | Priority: P1
-> Status: Draft | Owner: ai-asst-svc team
+> Status: NOT IMPLEMENTED | Owner: ai-asst-svc team
 
 ## Overview
 The AI Assistant provides a natural language interface for querying building data, executing commands, generating reports, and troubleshooting issues across all DM3 domains. Runs on-premise using local LLM (Ollama/vLLM) for data privacy. Supports Vietnamese and English, respects user permissions, maintains conversation history, and suggests contextual actions. Available via web console chat panel, guard station voice, and mobile app.

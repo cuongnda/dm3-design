@@ -27,6 +27,10 @@ func main() {
 	slog.Info("starting identity-svc")
 
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		slog.Error("insecure configuration", "error", err)
+		os.Exit(1)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -63,7 +67,7 @@ func main() {
 	}
 
 	// HTTP handlers
-	handlers := identity.NewHandlers(database, natsClient)
+	handlers := identity.NewIdentityHandlers(database, natsClient)
 	umHandlers := tenant.NewUserManagementHandlers(database)
 
 	// HTTP routes
@@ -90,18 +94,6 @@ func main() {
 		r.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
 		r.Use(authsvc.RequireCompany())
 
-		// Users (identity): manager+ can read/write
-		r.Group(func(ur chi.Router) {
-			ur.Use(authsvc.RequireRole("manager", "primary_manager", "system_admin"))
-			ur.Get("/users", handlers.ListUsers)
-			ur.Post("/users", handlers.CreateUser)
-			ur.Get("/users/{id}", handlers.GetUser)
-			ur.Put("/users/{id}", handlers.UpdateUser)
-			ur.Delete("/users/{id}", handlers.DeleteUser)
-			ur.Post("/users/bulk-delete", handlers.BulkDeleteUsers)
-			ur.Post("/users/{id}/avatar", handlers.UploadUserAvatar)
-		})
-
 		// Users: operator+viewer can read, manager+ can write
 		r.Group(func(pr chi.Router) {
 			pr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
@@ -111,7 +103,9 @@ func main() {
 			pr.Get("/users/{id}", handlers.GetUser)
 			pr.Put("/users/{id}", handlers.UpdateUser)
 			pr.Delete("/users/{id}", handlers.DeleteUser)
+			pr.Post("/users/bulk-delete", handlers.BulkDeleteUsers)
 			pr.Post("/users/{id}/photo", handlers.UploadPhoto)
+			pr.Post("/users/{id}/avatar", handlers.UploadUserAvatar)
 		})
 
 		// Credentials: operator+viewer can read, manager+ can write

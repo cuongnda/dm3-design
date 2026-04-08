@@ -28,17 +28,17 @@ var (
 	copyFile   = func(dst io.Writer, src io.Reader) (int64, error) { return io.Copy(dst, src) }
 )
 
-type Handlers struct {
+type IdentityHandlers struct {
 	db   *db.DB
 	nats *natsutil.Client
 }
 
-func NewHandlers(database *db.DB, nats *natsutil.Client) *Handlers {
-	return &Handlers{db: database, nats: nats}
+func NewIdentityHandlers(database *db.DB, nats *natsutil.Client) *IdentityHandlers {
+	return &IdentityHandlers{db: database, nats: nats}
 }
 
 // publishEvent publishes a NATS event for identity changes.
-func (h *Handlers) publishEvent(subject string, data any) {
+func (h *IdentityHandlers) publishEvent(subject string, data any) {
 	if h.nats == nil {
 		return
 	}
@@ -56,7 +56,7 @@ func (h *Handlers) publishEvent(subject string, data any) {
 
 // ─── Photo Upload ────────────────────────────────────────────────────────────
 
-func (h *Handlers) UploadPhoto(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) UploadPhoto(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	// Verify user exists
@@ -121,7 +121,7 @@ func (h *Handlers) UploadPhoto(w http.ResponseWriter, r *http.Request) {
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListCredentials(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) ListCredentials(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 
 	// Verify user exists
@@ -162,7 +162,7 @@ type createCredentialRequest struct {
 	ValidUntil *time.Time `json:"valid_until"`
 }
 
-func (h *Handlers) CreateCredential(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) CreateCredential(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 
 	var exists bool
@@ -206,7 +206,7 @@ func (h *Handlers) CreateCredential(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusCreated, c)
 }
 
-func (h *Handlers) GetCredential(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) GetCredential(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	credID := chi.URLParam(r, "credID")
 
@@ -224,7 +224,7 @@ func (h *Handlers) GetCredential(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, c)
 }
 
-func (h *Handlers) UpdateCredential(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) UpdateCredential(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	credID := chi.URLParam(r, "credID")
 
@@ -252,7 +252,7 @@ func (h *Handlers) UpdateCredential(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, c)
 }
 
-func (h *Handlers) DeleteCredential(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) DeleteCredential(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	credID := chi.URLParam(r, "credID")
 
@@ -271,7 +271,7 @@ func (h *Handlers) DeleteCredential(w http.ResponseWriter, r *http.Request) {
 
 // ─── Sync ────────────────────────────────────────────────────────────────────
 
-func (h *Handlers) SyncUsers(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) SyncUsers(w http.ResponseWriter, r *http.Request) {
 	sinceStr := r.URL.Query().Get("since")
 	var since time.Time
 	if sinceStr != "" {
@@ -341,7 +341,7 @@ func (h *Handlers) SyncUsers(w http.ResponseWriter, r *http.Request) {
 
 // ─── Stats ───────────────────────────────────────────────────────────────────
 
-func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	stats := models.IdentityStats{
 		UsersByStatus:  make(map[string]int64),
 		UsersByDept:    make(map[string]int64),
@@ -429,7 +429,7 @@ func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
 
 // ─── User Groups ──────────────────────────────────────────────────────────────
 
-func (h *Handlers) ListGroups(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) ListGroups(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
@@ -474,7 +474,7 @@ type createGroupRequest struct {
 	Description string `json:"description"`
 }
 
-func (h *Handlers) CreateGroup(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	var req createGroupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
 		httputil.Error(w, http.StatusBadRequest, "name required")
@@ -493,7 +493,7 @@ func (h *Handlers) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusCreated, g)
 }
 
-func (h *Handlers) GetGroup(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) GetGroup(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var g models.UserGroup
 	err := h.db.Pool.QueryRow(r.Context(),
@@ -509,7 +509,7 @@ func (h *Handlers) GetGroup(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, g)
 }
 
-func (h *Handlers) UpdateGroup(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req createGroupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -531,7 +531,7 @@ func (h *Handlers) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, g)
 }
 
-func (h *Handlers) DeleteGroup(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	tag, err := h.db.Pool.Exec(r.Context(), `DELETE FROM dm3_identity.user_groups WHERE id = $1::uuid`, id)
 	if err != nil || tag.RowsAffected() == 0 {
@@ -541,7 +541,7 @@ func (h *Handlers) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handlers) ListGroupMembers(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) ListGroupMembers(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "id")
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT p.id, p.tenant_id, p.first_name, p.last_name, COALESCE(p.email,''), COALESCE(p.phone,''),
@@ -571,7 +571,7 @@ type addMemberRequest struct {
 	UserID string `json:"user_id"`
 }
 
-func (h *Handlers) AddGroupMember(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) AddGroupMember(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "id")
 	var req addMemberRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == "" {
@@ -590,7 +590,7 @@ func (h *Handlers) AddGroupMember(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handlers) RemoveGroupMember(w http.ResponseWriter, r *http.Request) {
+func (h *IdentityHandlers) RemoveGroupMember(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "id")
 	userID := chi.URLParam(r, "userID")
 	h.db.Pool.Exec(r.Context(),
@@ -601,7 +601,7 @@ func (h *Handlers) RemoveGroupMember(w http.ResponseWriter, r *http.Request) {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-func (h *Handlers) scanPerson(r *http.Request, id string) (models.User, error) {
+func (h *IdentityHandlers) scanPerson(r *http.Request, id string) (models.User, error) {
 	var p models.User
 	err := h.db.Pool.QueryRow(r.Context(),
 		`SELECT id, tenant_id, first_name, last_name, COALESCE(email,''), COALESCE(phone,''),

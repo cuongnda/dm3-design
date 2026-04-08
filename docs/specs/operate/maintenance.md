@@ -1,7 +1,7 @@
 # Feature: Maintenance & Work Orders
 
 > Domain: OPERATE | Color: #4CAF50 | Priority: P1
-> Status: Draft | Owner: maint-svc team
+> Status: NOT IMPLEMENTED | Owner: maint-svc team
 
 ## Overview
 Maintenance management handles the full lifecycle of work orders (corrective and preventive), asset tracking, technician assignment, SLA tracking, and parts inventory. Enables facility managers to create, assign, and track maintenance tasks while technicians execute work via mobile. Integrates with IoT sensors for predictive maintenance triggers and with identity-svc for technician management.

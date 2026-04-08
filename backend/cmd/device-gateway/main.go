@@ -27,6 +27,10 @@ func main() {
 	slog.Info("starting device-gateway")
 
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		slog.Error("insecure configuration", "error", err)
+		os.Exit(1)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -76,6 +80,7 @@ func main() {
 
 	// MQTT message handler
 	mqttHandler := gateway.NewMQTTHandler(database, natsClient, hub)
+	mqttHandler.SetAppContext(ctx)
 	mqttHandler.SetSyncService(syncService)
 
 	// Subscribe to all device topics
@@ -96,6 +101,7 @@ func main() {
 
 	// Bootstrap MQTT handler
 	bootstrapHandler := gateway.NewBootstrapMQTTHandler(database, mqttClient, cfg)
+	bootstrapHandler.SetAppContext(ctx)
 	if err := mqttClient.Subscribe(ctx, "dm/bootstrap/register", 1, bootstrapHandler.Handle); err != nil {
 		slog.Warn("mqtt subscribe bootstrap failed", "error", err)
 	}
@@ -107,7 +113,7 @@ func main() {
 	}
 
 	// HTTP handlers
-	handlers := gateway.NewHandlers(database, mqttClient)
+	handlers := gateway.NewGatewayHandlers(database, mqttClient)
 	provHandlers := gateway.NewProvisioningHandlers(database, mqttClient, cfg)
 	firmwareHandlers := gateway.NewFirmwareHandlers(database)
 
@@ -180,12 +186,16 @@ func main() {
 		})
 	})
 
-	// No-auth endpoints
+	// No-auth endpoints (device activation does not require user auth)
 	r.Post("/api/v1/devices/activate", provHandlers.ActivateDevice)
 	r.Post("/api/v1/devices/refresh-token", provHandlers.RefreshToken)
 
-	// WebSocket endpoint
-	r.Get("/ws/events", hub.ServeHTTP)
+	// WebSocket endpoint — requires valid user JWT to prevent unauthenticated
+	// clients from receiving the real-time event stream.
+	r.Group(func(r chi.Router) {
+		r.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
+		r.Get("/ws/events", hub.ServeHTTP)
+	})
 
 	// Start server
 	addr := fmt.Sprintf(":%d", cfg.HTTPPort)
