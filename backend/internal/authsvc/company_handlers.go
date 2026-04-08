@@ -77,14 +77,14 @@ func (h *AuthHandlers) ListCompanies(w http.ResponseWriter, r *http.Request) {
 	offset := (page - 1) * limit
 
 	var total int64
-	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_auth.companies`).Scan(&total)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_auth.tenants`).Scan(&total)
 
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT c.id, c.name, c.code, c.plan, c.status, c.logo_url, c.address, c.phone, c.email,
 		 c.max_devices, c.max_users, c.created_at, c.updated_at,
 		 (SELECT COUNT(*) FROM dm3_auth.accounts u WHERE u.tenant_id = c.id),
 		 (SELECT COUNT(*) FROM dm3_devices.devices d WHERE d.tenant_id = c.id)
-		 FROM dm3_auth.companies c ORDER BY c.created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
+		 FROM dm3_auth.tenants c ORDER BY c.created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -147,7 +147,7 @@ func (h *AuthHandlers) CreateCompany(w http.ResponseWriter, r *http.Request) {
 	// 1. Create company
 	var company companyResponse
 	err = tx.QueryRow(r.Context(),
-		`INSERT INTO dm3_auth.companies (name, code, plan, email, address, phone, max_devices, max_users)
+		`INSERT INTO dm3_auth.tenants (name, code, plan, email, address, phone, max_devices, max_users)
 		 VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 50), COALESCE($8, 20))
 		 RETURNING id, name, code, plan, status, logo_url, address, phone, email, max_devices, max_users, created_at, updated_at`,
 		req.Name, req.Code, plan, req.Email, req.Address, req.Phone, req.MaxDevices, req.MaxUsers,
@@ -199,7 +199,7 @@ func (h *AuthHandlers) GetCompany(w http.ResponseWriter, r *http.Request) {
 		 (SELECT COUNT(*) FROM dm3_devices.devices d WHERE d.tenant_id = c.id),
 		 (SELECT COUNT(*) FROM dm3_access.doors dr WHERE dr.tenant_id = c.id),
 		 (SELECT COUNT(*) FROM dm3_access.access_events e WHERE e.tenant_id = c.id)
-		 FROM dm3_auth.companies c WHERE c.id = $1::uuid`, id,
+		 FROM dm3_auth.tenants c WHERE c.id = $1::uuid`, id,
 	).Scan(&c.ID, &c.Name, &c.Code, &c.Plan, &c.Status, &c.LogoURL, &c.Address, &c.Phone, &c.Email,
 		&c.MaxDevices, &c.MaxUsers, &c.CreatedAt, &c.UpdatedAt,
 		&c.UserCount, &c.DeviceCount, &c.DoorCount, &c.EventCount)
@@ -222,7 +222,7 @@ func (h *AuthHandlers) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 
 	var c companyResponse
 	err := h.db.Pool.QueryRow(r.Context(),
-		`UPDATE dm3_auth.companies SET
+		`UPDATE dm3_auth.tenants SET
 			name = COALESCE($2, name),
 			plan = COALESCE($3, plan),
 			status = COALESCE($4, status),
@@ -250,7 +250,7 @@ func (h *AuthHandlers) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandlers) DeleteCompany(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	tag, err := h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_auth.companies SET status = 'suspended', updated_at = now() WHERE id = $1::uuid AND status != 'suspended'`, id)
+		`UPDATE dm3_auth.tenants SET status = 'suspended', updated_at = now() WHERE id = $1::uuid AND status != 'suspended'`, id)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return

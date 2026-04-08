@@ -251,7 +251,7 @@ func (h *ProvisioningHandlers) ActivateDevice(w http.ResponseWriter, r *http.Req
 	var deviceID, companyName string
 	_ = h.db.Pool.QueryRow(r.Context(),
 		`SELECT d.device_id, COALESCE(c.name, '') FROM dm3_devices.devices d
-		 LEFT JOIN dm3_auth.companies c ON c.id = d.tenant_id
+		 LEFT JOIN dm3_auth.tenants c ON c.id = d.tenant_id
 		 WHERE d.id = $1::uuid`, qrClaims.DID,
 	).Scan(&deviceID, &companyName)
 

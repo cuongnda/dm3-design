@@ -209,7 +209,7 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 		}
 		var ci companyInfo
 		err := h.db.Pool.QueryRow(r.Context(),
-			`SELECT id, name, code, logo_url FROM dm3_auth.companies WHERE id = $1::uuid AND status = 'active'`,
+			`SELECT id, name, code, logo_url FROM dm3_auth.tenants WHERE id = $1::uuid AND status = 'active'`,
 			*a.companyID,
 		).Scan(&ci.ID, &ci.Name, &ci.Code, &ci.LogoURL)
 		if err != nil {
@@ -316,7 +316,7 @@ func (h *AuthHandlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 	// Verify company is still active.
 	var companyStatus string
 	err = h.db.Pool.QueryRow(r.Context(),
-		`SELECT status FROM dm3_auth.companies WHERE id = $1::uuid`, req.TenantID,
+		`SELECT status FROM dm3_auth.tenants WHERE id = $1::uuid`, req.TenantID,
 	).Scan(&companyStatus)
 	if err != nil || companyStatus != "active" {
 		i18n.ErrorResponse(w, r, http.StatusForbidden, "auth.no_company_access")

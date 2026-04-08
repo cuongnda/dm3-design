@@ -90,7 +90,7 @@ func (h *GatewayHandlers) ListDevices(w http.ResponseWriter, r *http.Request) {
 // ListDevicesGlobal handles GET /api/v1/system/devices (system admin only, all companies)
 func (h *GatewayHandlers) ListDevicesGlobal(w http.ResponseWriter, r *http.Request) {
 	query := `SELECT d.id, d.tenant_id, d.device_id, COALESCE(d.name,''), d.type, d.status, COALESCE(d.firmware_version,''), COALESCE(d.site_id,''), COALESCE(d.location,''), d.last_seen, d.created_at, d.updated_at, COALESCE(c.name,'') as company_name
-	FROM dm3_devices.devices d LEFT JOIN dm3_auth.companies c ON c.id = d.tenant_id WHERE 1=1`
+	FROM dm3_devices.devices d LEFT JOIN dm3_auth.tenants c ON c.id = d.tenant_id WHERE 1=1`
 	args := []any{}
 	argIdx := 1
 

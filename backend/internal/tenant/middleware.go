@@ -112,7 +112,7 @@ func loadTenantInfo(database *db.DB, companyID string) (*TenantInfo, error) {
 	}
 	query := `
 		SELECT id, name, code, plan, status, max_devices, max_users
-		FROM dm3_auth.companies
+		FROM dm3_auth.tenants
 		WHERE id = $1::uuid AND status != 'deleted'
 	`
 	

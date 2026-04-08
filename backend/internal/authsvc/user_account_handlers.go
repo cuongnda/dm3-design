@@ -145,7 +145,7 @@ func (h *AuthHandlers) ListUserAccounts(w http.ResponseWriter, r *http.Request) 
 func (h *AuthHandlers) loadCompanyInfo(r *http.Request, companyID, role string) (userCompanyInfo, error) {
 	var ci userCompanyInfo
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, name, code FROM dm3_auth.companies WHERE id = $1::uuid`, companyID,
+		`SELECT id, name, code FROM dm3_auth.tenants WHERE id = $1::uuid`, companyID,
 	).Scan(&ci.TenantID, &ci.CompanyName, &ci.CompanyCode)
 	if err != nil {
 		return ci, err
@@ -421,7 +421,7 @@ func (h *AuthHandlers) GetAvailableCompanies(w http.ResponseWriter, r *http.Requ
 
 	rows, err := h.db.Pool.Query(r.Context(), `
 		SELECT c.id, c.name, c.code, c.status
-		FROM dm3_auth.companies c
+		FROM dm3_auth.tenants c
 		WHERE c.status = 'active'
 		  AND c.id NOT IN (
 		    SELECT a.tenant_id
@@ -475,7 +475,7 @@ func (h *AuthHandlers) GetUserCompanyMatrix(w http.ResponseWriter, r *http.Reque
 	rows, err := h.db.Pool.Query(r.Context(), `
 		SELECT a.tenant_id::text, c.name, c.code, a.role, a.status, a.created_at, a.updated_at
 		FROM dm3_auth.accounts a
-		JOIN dm3_auth.companies c ON c.id = a.tenant_id
+		JOIN dm3_auth.tenants c ON c.id = a.tenant_id
 		WHERE a.email = $1 AND a.tenant_id IS NOT NULL AND a.status != 'deleted'
 		ORDER BY c.name`, userEmail)
 	if err != nil {
