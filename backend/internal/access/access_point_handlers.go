@@ -70,10 +70,16 @@ func (h *AccessHandlers) ListAccessPoints(w http.ResponseWriter, r *http.Request
 		if err := rows.Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
 			&ap.Name, &ap.Description, &ap.AccessDeviceCount,
 			&ap.CreatedAt, &ap.UpdatedAt); err != nil {
+			slog.Error("list access points scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		aps = append(aps, ap)
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("list access points rows iteration error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
 	}
 	httputil.Paginated(w, aps, total, page, limit)
 }
@@ -245,7 +251,7 @@ func (h *AccessHandlers) ListAccessPointDevices(w http.ResponseWriter, r *http.R
 	)
 	if err != nil {
 		slog.Error("list access point devices error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
@@ -256,10 +262,16 @@ func (h *AccessHandlers) ListAccessPointDevices(w http.ResponseWriter, r *http.R
 		if err := rows.Scan(
 			&item.ID, &item.TenantID, &item.AccessPointID, &item.AccessDeviceID, &item.Role, &item.CreatedAt,
 		); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			slog.Error("list access point devices scan error", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("list access point devices rows iteration error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
 	}
 	httputil.JSON(w, http.StatusOK, map[string]any{"data": result, "total": len(result)})
 }
@@ -295,7 +307,7 @@ func (h *AccessHandlers) AddAccessPointDevice(w http.ResponseWriter, r *http.Req
 	).Scan(&id)
 	if err != nil {
 		slog.Error("add access point device error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id})
@@ -305,14 +317,20 @@ func (h *AccessHandlers) AddAccessPointDevice(w http.ResponseWriter, r *http.Req
 func (h *AccessHandlers) RemoveAccessPointDevice(w http.ResponseWriter, r *http.Request) {
 	apID := chi.URLParam(r, "id")
 	deviceID := chi.URLParam(r, "deviceId")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
 
 	tag, err := h.db.Pool.Exec(r.Context(),
 		`DELETE FROM dm3_access.access_point_devices
-		 WHERE access_point_id = $1::uuid AND access_device_id = $2`,
-		apID, deviceID,
+		 WHERE access_point_id = $1::uuid AND access_device_id = $2 AND tenant_id = $3::uuid`,
+		apID, deviceID, cid,
 	)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		slog.Error("remove access point device error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -362,10 +380,16 @@ func (h *AccessHandlers) ListAccessPointGroups(w http.ResponseWriter, r *http.Re
 	for rows.Next() {
 		var ag models.AccessGroup
 		if err := rows.Scan(&ag.ID, &ag.TenantID, &ag.Name, &ag.UserCount); err != nil {
+			slog.Error("list access point groups scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		result = append(result, ag)
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("list access point groups rows iteration error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
 	}
 	httputil.JSON(w, http.StatusOK, map[string]any{"data": result, "total": len(result)})
 }

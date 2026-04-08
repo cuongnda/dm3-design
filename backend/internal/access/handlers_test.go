@@ -2,6 +2,7 @@ package access
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -184,7 +185,7 @@ func TestNATSEventParsing(t *testing.T) {
 func TestNATSNonAccessEvent(t *testing.T) {
 	c := &NATSConsumer{db: nil, nats: nil}
 	raw := `{"version":1,"id":"evt-2","ts":1708344900000,"src":"device-001","type":"status.heartbeat","data":{}}`
-	err := c.handleEvent("dm3.devices.t1.d1.evt", []byte(raw))
+	err := c.handleEvent(context.Background(), "dm3.devices.t1.d1.evt", []byte(raw))
 	if err != nil {
 		t.Errorf("non-access event should return nil, got %v", err)
 	}
@@ -196,13 +197,13 @@ func TestNATSTenantExtraction(t *testing.T) {
 
 	// Invalid subject — too few parts
 	raw := `{"version":1,"id":"e","ts":1,"src":"d","type":"access.log","data":{"decision":"granted"}}`
-	err := c.handleEvent("dm3.devices", []byte(raw))
+	err := c.handleEvent(context.Background(), "dm3.devices", []byte(raw))
 	if err != nil {
 		t.Errorf("short subject should be skipped, got %v", err)
 	}
 
 	// Invalid tenant_id — not a UUID
-	err = c.handleEvent("dm3.devices.not-a-uuid.dev1.evt", []byte(raw))
+	err = c.handleEvent(context.Background(), "dm3.devices.not-a-uuid.dev1.evt", []byte(raw))
 	if err != nil {
 		t.Errorf("non-UUID tenant should be skipped, got %v", err)
 	}
@@ -211,7 +212,7 @@ func TestNATSTenantExtraction(t *testing.T) {
 // TestNATSBadJSON tests that malformed JSON is acked (returns nil, not error).
 func TestNATSBadJSON(t *testing.T) {
 	c := &NATSConsumer{db: nil, nats: nil}
-	err := c.handleEvent("dm3.devices.t1.d1.evt", []byte("{bad json"))
+	err := c.handleEvent(context.Background(), "dm3.devices.t1.d1.evt", []byte("{bad json"))
 	if err != nil {
 		t.Errorf("bad JSON should return nil (ack), got %v", err)
 	}

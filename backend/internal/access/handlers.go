@@ -2,6 +2,7 @@ package access
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -78,7 +79,7 @@ func (h *AccessHandlers) ListAccessDevices(w http.ResponseWriter, r *http.Reques
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
 		slog.Error("list access devices query error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
@@ -91,10 +92,16 @@ func (h *AccessHandlers) ListAccessDevices(w http.ResponseWriter, r *http.Reques
 			&d.FirmwareVersion, &d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt,
 			&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Metadata,
 			&d.CreatedAt, &d.UpdatedAt); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			slog.Error("list access devices scan error", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		devices = append(devices, d)
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("list access devices rows iteration error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
 	}
 	httputil.Paginated(w, devices, total, page, limit)
 }
@@ -149,7 +156,7 @@ func (h *AccessHandlers) CreateAccessDevice(w http.ResponseWriter, r *http.Reque
 		&d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
 		slog.Error("create access device error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusCreated, d)
@@ -179,6 +186,10 @@ type updateAccessDeviceRequest struct {
 func (h *AccessHandlers) UpdateAccessDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
 	var req updateAccessDeviceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -191,12 +202,12 @@ func (h *AccessHandlers) UpdateAccessDevice(w http.ResponseWriter, r *http.Reque
 			name = COALESCE($2, name),
 			status = COALESCE($3, status), state = COALESCE($4, state), mode = COALESCE($5, mode),
 			device_id = COALESCE($6, device_id), updated_at = now()
-		 WHERE id = $1::uuid AND ($7::uuid IS NULL OR tenant_id = $7::uuid)
+		 WHERE id = $1::uuid AND tenant_id = $7::uuid
 		 RETURNING id, tenant_id, device_id, name, type,
 		 status, state, mode, unlock_duration_ms, anti_passback, emergency_unlock,
 		 firmware_version, ip_address, last_event_at, last_heartbeat_at,
 		 config_version, user_db_version, rules_version, metadata, created_at, updated_at`,
-		id, req.Name, req.Status, req.State, req.Mode, req.DeviceID, nilIfEmpty(cid),
+		id, req.Name, req.Status, req.State, req.Mode, req.DeviceID, cid,
 	).Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type,
 		&d.Status, &d.State, &d.Mode, &d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock,
 		&d.FirmwareVersion, &d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt,
@@ -212,15 +223,16 @@ func (h *AccessHandlers) UpdateAccessDevice(w http.ResponseWriter, r *http.Reque
 func (h *AccessHandlers) DeleteAccessDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
-	query := `DELETE FROM dm3_access.access_devices WHERE id = $1::uuid`
-	args := []any{id}
-	if cid != "" {
-		query += " AND tenant_id = $2::uuid"
-		args = append(args, cid)
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
 	}
-	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
+	tag, err := h.db.Pool.Exec(r.Context(),
+		`DELETE FROM dm3_access.access_devices WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+		id, cid)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		slog.Error("delete access device error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -248,7 +260,8 @@ func (h *AccessHandlers) BulkDeleteAccessDevices(w http.ResponseWriter, r *http.
 	query := fmt.Sprintf(`DELETE FROM dm3_access.access_devices WHERE tenant_id = $1::uuid AND id IN (%s)`, strings.Join(placeholders, ","))
 	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		slog.Error("bulk delete access devices error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusOK, map[string]any{"deleted": tag.RowsAffected()})
@@ -374,10 +387,16 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.AccessPointID,
 			&e.UserID, &e.UserName, &e.CredentialType, &e.Direction, &e.Decision,
 			&e.Reason, &e.Confidence, &e.PhotoRef, &e.Metadata); err != nil {
+			slog.Error("list events scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		events = append(events, e)
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("list events rows iteration error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
 	}
 	httputil.Paginated(w, events, total, page, limit)
 }
@@ -443,11 +462,16 @@ func (h *AccessHandlers) GetStats(w http.ResponseWriter, r *http.Request) {
 
 func (h *AccessHandlers) GetSyncPackage(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
 
 	var accessDeviceID string
 	var rulesVersion int
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, rules_version FROM dm3_access.access_devices WHERE id = $1::uuid`, id).Scan(&accessDeviceID, &rulesVersion)
+		`SELECT id, rules_version FROM dm3_access.access_devices WHERE id = $1::uuid AND tenant_id = $2::uuid`, id, cid).Scan(&accessDeviceID, &rulesVersion)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "access device not found")
 		return
@@ -464,20 +488,24 @@ func (h *AccessHandlers) GetSyncPackage(w http.ResponseWriter, r *http.Request) 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 func (h *AccessHandlers) scanAccessDevice(r *http.Request, id string) (models.AccessDevice, error) {
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		return models.AccessDevice{}, fmt.Errorf("company context required")
+	}
 	var d models.AccessDevice
 	err := h.db.Pool.QueryRow(r.Context(),
 		`SELECT id, tenant_id, device_id, name, type,
 		 status, state, mode, unlock_duration_ms, anti_passback, emergency_unlock,
 		 firmware_version, ip_address, last_event_at, last_heartbeat_at,
 		 config_version, user_db_version, rules_version, metadata, created_at, updated_at
-		 FROM dm3_access.access_devices WHERE id = $1::uuid`, id,
+		 FROM dm3_access.access_devices WHERE id = $1::uuid AND tenant_id = $2::uuid`, id, cid,
 	).Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type,
 		&d.Status, &d.State, &d.Mode, &d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock,
 		&d.FirmwareVersion, &d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt,
 		&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Metadata,
 		&d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return d, fmt.Errorf("not found")
 		}
 		return d, err

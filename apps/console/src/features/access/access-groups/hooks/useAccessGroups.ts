@@ -9,6 +9,13 @@ interface AccessGroupPagination {
     total_pages: number;
 }
 
+interface PaginatedResponse<T> {
+    data: T[];
+    total: number;
+    page: number;
+    limit: number;
+}
+
 interface UseAccessGroupsReturn {
     accessGroups: AccessGroup[];
     loading: boolean;
@@ -41,8 +48,8 @@ export function useAccessGroups(): UseAccessGroupsReturn {
                 page: pagination.page.toString(),
                 limit: pagination.limit.toString(),
             });
-            const data = await apiFetch<any>(`/api/v1/access/access-groups?${params}`);
-            setAccessGroups(data.data ?? data.access_groups ?? data.items ?? []);
+            const data = await apiFetch<PaginatedResponse<AccessGroup>>(`/api/v1/access/access-groups?${params}`);
+            setAccessGroups(data.data ?? []);
             const total = data.total ?? 0;
             setPagination((prev) => ({
                 ...prev,

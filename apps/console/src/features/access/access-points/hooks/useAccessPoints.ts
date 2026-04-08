@@ -54,7 +54,7 @@ export function useAccessPoints(): UseAccessPointsReturn {
     const fetchZones = useCallback(async () => {
         try {
             const data = await apiFetch<{ zones?: Zone[]; data?: Zone[] }>('/api/v1/access/zones?limit=100');
-            setZones(data.zones ?? data.data ?? (data as unknown as Zone[]));
+            setZones(data.zones ?? data.data ?? []);
         } catch (err) {
             console.error('Failed to fetch zones:', err);
         }
@@ -88,7 +88,7 @@ export function useAccessPoints(): UseAccessPointsReturn {
                 total_pages?: number;
             }>(`/api/v1/access/access-points?${params}`);
 
-            setAccessPoints(data.access_points ?? data.data ?? (data as unknown as AccessPoint[]));
+            setAccessPoints(data.access_points ?? data.data ?? []);
             setPagination((prev) => ({
                 ...prev,
                 total: data.pagination?.total ?? data.total ?? 0,

@@ -94,10 +94,9 @@ export function AccessGroupsPage() {
         setDeleteLoading(true);
         setDeleteError(null);
         try {
-            await apiFetch(`/api/v1/access/access-groups/${groupToDelete.id}`, { method: 'DELETE' });
+            await deleteAccessGroup(groupToDelete.id);
             setShowDeleteDialog(false);
             setGroupToDelete(null);
-            fetchAccessGroups();
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Failed to delete access group';
             try {
@@ -112,6 +111,7 @@ export function AccessGroupsPage() {
     };
 
     const handleBulkDelete = async () => {
+        setDeleteError(null);
         try {
             await apiFetch('/api/v1/access/access-groups/bulk-delete', { method: 'POST', body: JSON.stringify({ ids: selected }) });
             setSelected([]);
@@ -255,6 +255,11 @@ export function AccessGroupsPage() {
                     />
                 </div>
             </div>
+
+            {/* Bulk delete error banner */}
+            {deleteError && !showDeleteDialog && (
+                <div className="text-red-500 text-sm p-2 bg-red-50 rounded shrink-0">{deleteError}</div>
+            )}
 
             <DataTableCard
                 title={

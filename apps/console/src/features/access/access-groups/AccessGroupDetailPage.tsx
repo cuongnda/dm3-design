@@ -438,6 +438,7 @@ export function AccessGroupDetailPage() {
 
   const [group, setGroup] = useState<AccessGroup | null>(null);
   const [loadingGroup, setLoadingGroup] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [accessPoints, setAccessPoints] = useState<AccessGroupAccessPoint[]>([]);
   const [loadingAPs, setLoadingAPs] = useState(false);
   const [accessTimes, setAccessTimes] = useState<AccessTime[]>([]);
@@ -462,9 +463,10 @@ export function AccessGroupDetailPage() {
     setLoadingGroup(true);
     try {
       const data = await apiFetch<{ access_group?: AccessGroup }>(`/api/v1/access/access-groups/${id}`);
-      setGroup(data.access_group || {} as AccessGroup);
+      setGroup(data.access_group ?? null);
     } catch (err) {
       console.error('Failed to fetch access group:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load access group');
     } finally {
       setLoadingGroup(false);
     }
@@ -478,6 +480,7 @@ export function AccessGroupDetailPage() {
       setAccessPoints(data.access_points ?? []);
     } catch (err) {
       console.error('Failed to fetch access points:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load access points');
     } finally {
       setLoadingAPs(false);
     }
@@ -491,6 +494,7 @@ export function AccessGroupDetailPage() {
       setUsers(data.data ?? []);
     } catch (err) {
       console.error('Failed to fetch users:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load users');
     } finally {
       setLoadingUsers(false);
     }
@@ -506,10 +510,12 @@ export function AccessGroupDetailPage() {
   }, []);
 
   useEffect(() => {
-    fetchGroup();
-    fetchAccessPoints();
-    fetchUsers();
-    fetchAccessTimes();
+    let cancelled = false;
+    const run = async () => {
+      await Promise.all([fetchGroup(), fetchAccessPoints(), fetchUsers(), fetchAccessTimes()]);
+    };
+    if (!cancelled) run();
+    return () => { cancelled = true; };
   }, [fetchGroup, fetchAccessPoints, fetchUsers, fetchAccessTimes]);
 
   const openEditModal = () => {
@@ -551,11 +557,13 @@ export function AccessGroupDetailPage() {
         method: 'POST',
         body: JSON.stringify({ access_point_id: accessPointId }),
       });
+      setError(null);
       await fetchAccessPoints();
       await fetchGroup();
       return true;
     } catch (err) {
       console.error('Failed to add access point:', err);
+      setError(err instanceof Error ? err.message : 'Failed to add access point');
       return false;
     }
   }, [id, fetchAccessPoints, fetchGroup]);
@@ -567,10 +575,12 @@ export function AccessGroupDetailPage() {
       await apiFetch(`/api/v1/access/access-groups/${id}/access-points/${accessPointId}`, {
         method: 'DELETE',
       });
+      setError(null);
       await fetchAccessPoints();
       await fetchGroup();
     } catch (err) {
       console.error('Failed to remove access point:', err);
+      setError(err instanceof Error ? err.message : 'Failed to remove access point');
     } finally {
       setRemovingAPId(null);
     }
@@ -583,11 +593,13 @@ export function AccessGroupDetailPage() {
         method: 'POST',
         body: JSON.stringify({ user_ids: userIds }),
       });
+      setError(null);
       await fetchUsers();
       await fetchGroup();
       return true;
     } catch (err) {
       console.error('Failed to assign users:', err);
+      setError(err instanceof Error ? err.message : 'Failed to assign users');
       return false;
     }
   }, [id, fetchUsers, fetchGroup]);
@@ -597,10 +609,12 @@ export function AccessGroupDetailPage() {
     setRemovingUserId(userId);
     try {
       await apiFetch(`/api/v1/access/access-groups/${id}/users/${userId}`, { method: 'DELETE' });
+      setError(null);
       await fetchUsers();
       await fetchGroup();
     } catch (err) {
       console.error('Failed to remove user:', err);
+      setError(err instanceof Error ? err.message : 'Failed to remove user');
     } finally {
       setRemovingUserId(null);
     }
@@ -724,6 +738,11 @@ export function AccessGroupDetailPage() {
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden">
+      {/* Error banner */}
+      {error && (
+        <div className="text-red-500 text-sm p-2 mb-2 bg-red-50 rounded shrink-0">{error}</div>
+      )}
+
       {/* Header */}
       <div className="shrink-0">
         <Button

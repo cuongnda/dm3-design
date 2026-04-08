@@ -2,12 +2,14 @@ package access
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/models"
@@ -69,10 +71,16 @@ func (h *AccessHandlers) ListAccessGroups(w http.ResponseWriter, r *http.Request
 		var g models.AccessGroup
 		if err := rows.Scan(&g.ID, &g.TenantID, &g.ParentID, &g.AccessTimeID, &g.Name, &g.IsDefault, &g.Type,
 			&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt); err != nil {
+			slog.Error("list access groups scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		groups = append(groups, g)
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("list access groups rows iteration error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
 	}
 	httputil.Paginated(w, groups, total, page, limit)
 }
@@ -105,7 +113,7 @@ func (h *AccessHandlers) GetAccessGroup(w http.ResponseWriter, r *http.Request) 
 		   AND ag.tenant_id = $2::uuid
 		   AND ag.is_deleted = false
 		 GROUP BY ag.id, agt.id`,
-		id, nilIfEmpty(cid),
+		id, cid,
 	).Scan(&g.ID, &g.TenantID, &g.ParentID, &g.AccessTimeID, &g.Name, &g.IsDefault, &g.Type,
 		&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt,
 		&atID, &atName, &atTz)
@@ -199,10 +207,10 @@ func (h *AccessHandlers) UpdateAccessGroup(w http.ResponseWriter, r *http.Reques
 		     is_default     = COALESCE($5, is_default),
 		     updated_at     = now()
 		 WHERE id = $1::uuid
-		   AND ($6::uuid IS NULL OR tenant_id = $6::uuid)
+		   AND tenant_id = $6::uuid
 		   AND is_deleted = false
 		 RETURNING id, tenant_id, parent_id, access_time_id, name, is_default, type, 0, 0, created_at, updated_at`,
-		id, req.Name, req.ParentID, req.AccessTimeID, req.IsDefault, nilIfEmpty(cid),
+		id, req.Name, req.ParentID, req.AccessTimeID, req.IsDefault, cid,
 	).Scan(&g.ID, &g.TenantID, &g.ParentID, &g.AccessTimeID, &g.Name, &g.IsDefault, &g.Type,
 		&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
@@ -238,6 +246,10 @@ func (h *AccessHandlers) DeleteAccessGroup(w http.ResponseWriter, r *http.Reques
 
 func (h *AccessHandlers) BulkDeleteAccessGroups(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
 	var req struct {
 		IDs []string `json:"ids"`
 	}
@@ -291,9 +303,9 @@ func (h *AccessHandlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *h
 		 FROM dm3_access.access_group_access_points agap
 		 JOIN dm3_access.access_points ap ON ap.id = agap.access_point_id
 		 LEFT JOIN dm3_access.access_times at ON at.id = agap.access_time_id
-		 WHERE agap.access_group_id = $1::uuid
+		 WHERE agap.access_group_id = $1::uuid AND agap.tenant_id = $2::uuid
 		 ORDER BY ap.name ASC`,
-		groupID,
+		groupID, cid,
 	)
 	if err != nil {
 		slog.Error("list access group access points error", "error", err)
@@ -315,6 +327,7 @@ func (h *AccessHandlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *h
 			&ap.Name, &ap.Description,
 			&atID, &atName, &atTz,
 		); err != nil {
+			slog.Error("list access group access points scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
@@ -333,6 +346,11 @@ func (h *AccessHandlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *h
 			item.AccessTime = &at
 		}
 		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("list access group access points rows iteration error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
 	}
 	httputil.JSON(w, http.StatusOK, map[string]any{"data": result, "total": len(result)})
 }
@@ -359,13 +377,19 @@ func (h *AccessHandlers) AddAccessGroupAccessPoint(w http.ResponseWriter, r *htt
 	err := h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO dm3_access.access_group_access_points
 		    (tenant_id, access_group_id, access_point_id, access_time_id)
-		 VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid)
-		 ON CONFLICT (access_group_id, access_point_id, access_time_id) DO UPDATE
+		 SELECT $1::uuid, $2::uuid, ap.id, $4::uuid
+		 FROM dm3_access.access_points ap
+		 WHERE ap.id = $3::uuid AND ap.tenant_id = $1::uuid
+		 ON CONFLICT (access_group_id, access_point_id) DO UPDATE
 		   SET access_time_id = EXCLUDED.access_time_id
 		 RETURNING id`,
 		cid, groupID, req.AccessPointID, req.AccessTimeID,
 	).Scan(&id)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httputil.Error(w, http.StatusNotFound, "access point not found")
+			return
+		}
 		slog.Error("add access group access point error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
@@ -410,10 +434,11 @@ func (h *AccessHandlers) ListAccessGroupUsers(w http.ResponseWriter, r *http.Req
 		 FROM dm3_access.access_group_users agu
 		 JOIN dm3_identity.users u ON u.id = agu.user_id
 		 WHERE agu.access_group_id = $1::uuid
+		   AND agu.tenant_id = $2::uuid
 		   AND (u.is_deleted = false OR u.is_deleted IS NULL)
 		   AND (agu.effective_to IS NULL OR agu.effective_to > now())
 		 ORDER BY u.last_name ASC, u.first_name ASC`,
-		groupID,
+		groupID, cid,
 	)
 	if err != nil {
 		slog.Error("list access group users error", "error", err)
@@ -427,10 +452,16 @@ func (h *AccessHandlers) ListAccessGroupUsers(w http.ResponseWriter, r *http.Req
 		var u userRow
 		if err := rows.Scan(&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Position, &u.Status,
 			&u.EffectiveFrom, &u.EffectiveTo); err != nil {
+			slog.Error("list access group users scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		users = append(users, u)
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("list access group users rows iteration error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
 	}
 	httputil.JSON(w, http.StatusOK, map[string]any{"data": users, "total": len(users)})
 }

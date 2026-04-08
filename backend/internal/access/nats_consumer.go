@@ -24,7 +24,6 @@ func toUUIDPtr(s string) *string {
 type NATSConsumer struct {
 	db   *db.DB
 	nats *natsutil.Client
-	ctx  context.Context // set in Start; used to derive per-call timeouts
 }
 
 func NewNATSConsumer(database *db.DB, natsClient *natsutil.Client) *NATSConsumer {
@@ -56,15 +55,17 @@ type accessLogData struct {
 
 // Start subscribes to NATS device events and ingests access events into the DB.
 func (c *NATSConsumer) Start(ctx context.Context) error {
-	c.ctx = ctx
-	if err := c.nats.Subscribe(ctx, "DEVICES", "access-svc-events", "dm3.devices.*.*.evt", c.handleEvent); err != nil {
+	handler := func(subject string, data []byte) error {
+		return c.handleEvent(ctx, subject, data)
+	}
+	if err := c.nats.Subscribe(ctx, "DEVICES", "access-svc-events", "dm3.devices.*.*.evt", handler); err != nil {
 		return err
 	}
 	slog.Info("nats consumer started", "subject", "dm3.devices.*.*.evt")
 	return nil
 }
 
-func (c *NATSConsumer) handleEvent(subject string, data []byte) error {
+func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []byte) error {
 	var evt deviceEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		slog.Warn("nats: failed to unmarshal event", "error", err, "subject", subject)
@@ -102,7 +103,7 @@ func (c *NATSConsumer) handleEvent(subject string, data []byte) error {
 	// Resolve access_point_id from device_id via devices table
 	var accessPointID *string
 	if deviceID != "" {
-		lookupCtx, lookupCancel := context.WithTimeout(c.ctx, 2*time.Second)
+		lookupCtx, lookupCancel := context.WithTimeout(ctx, 2*time.Second)
 		_ = c.db.Pool.QueryRow(lookupCtx,
 			`SELECT ap.id::text FROM dm3_access.access_points ap
 			 JOIN dm3_devices.devices dev ON dev.id = ap.device_id
@@ -114,7 +115,7 @@ func (c *NATSConsumer) handleEvent(subject string, data []byte) error {
 	}
 
 	// Use a bounded context for DB operations so they cannot hang indefinitely.
-	dbCtx, cancel := context.WithTimeout(c.ctx, 5*time.Second)
+	dbCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	_, err := c.db.Pool.Exec(dbCtx,
@@ -129,7 +130,7 @@ func (c *NATSConsumer) handleEvent(subject string, data []byte) error {
 
 	// Update access device's last_event_at
 	if deviceUUID := toUUIDPtr(ald.DoorID); deviceUUID != nil {
-		updateCtx, updateCancel := context.WithTimeout(c.ctx, 5*time.Second)
+		updateCtx, updateCancel := context.WithTimeout(ctx, 5*time.Second)
 		if _, err := c.db.Pool.Exec(updateCtx,
 			`UPDATE dm3_access.access_devices SET last_event_at = $1 WHERE id = $2::uuid`, evtTime, *deviceUUID); err != nil {
 			slog.Warn("nats: failed to update access device last_event_at", "error", err, "device", *deviceUUID)

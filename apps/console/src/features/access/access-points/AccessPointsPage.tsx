@@ -19,7 +19,6 @@ import {
     SelectOption,
     Label,
 } from '@dm3/ui';
-import { apiFetch } from '@/lib/api';
 import { useAccessPoints } from './hooks/useAccessPoints';
 import type { AccessPoint, AccessPointFormData, Zone } from './types';
 
@@ -156,9 +155,9 @@ export function AccessPointsPage() {
         zones,
         loading,
         filters,
-        fetchAccessPoints,
         createAccessPoint,
         updateAccessPoint,
+        deleteAccessPoint,
         updateFilters,
     } = useAccessPoints();
 
@@ -182,9 +181,8 @@ export function AccessPointsPage() {
         setDeleteLoading(true);
         setDeleteError(null);
         try {
-            await apiFetch(`/api/v1/access/access-points/${deletingAP.id}`, { method: 'DELETE' });
+            await deleteAccessPoint(deletingAP.id);
             setDeletingAP(null);
-            fetchAccessPoints();
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Failed to delete access point';
             try {

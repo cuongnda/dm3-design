@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Shield, Plus, Trash2, Cpu, Users, Edit } from 'lucide-react';
+import { ArrowLeft, Shield, Plus, Trash2, Cpu, Edit } from 'lucide-react';
 import {
     Button,
     Input,
@@ -345,6 +345,7 @@ export function AccessPointDetailPage() {
     // AP details
     const [ap, setAP] = useState<AccessPoint | null>(null);
     const [apLoading, setAPLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     // Devices tab
     const [devices, setDevices] = useState<AccessPointDevice[]>([]);
@@ -373,6 +374,7 @@ export function AccessPointDetailPage() {
             setAP('access_point' in (data as object) ? (data as { access_point: AccessPoint }).access_point : (data as AccessPoint));
         } catch (err) {
             console.error('Failed to fetch access point:', err);
+            setError(err instanceof Error ? err.message : 'Failed to load access point');
         } finally {
             setAPLoading(false);
         }
@@ -399,6 +401,7 @@ export function AccessPointDetailPage() {
             }));
         } catch (err) {
             console.error('Failed to fetch devices:', err);
+            setError(err instanceof Error ? err.message : 'Failed to load devices');
         } finally {
             setDevicesLoading(false);
         }
@@ -416,11 +419,13 @@ export function AccessPointDetailPage() {
                         }),
                     ),
                 );
+                setError(null);
                 await fetchDevices();
                 await fetchAP();
                 return true;
             } catch (err) {
                 console.error('Failed to add device:', err);
+                setError(err instanceof Error ? err.message : 'Failed to add device');
                 return false;
             }
         },
@@ -435,10 +440,12 @@ export function AccessPointDetailPage() {
                 await apiFetch(`/api/v1/access/access-points/${id}/devices/${deviceId}`, {
                     method: 'DELETE',
                 });
+                setError(null);
                 await fetchDevices();
                 await fetchAP();
             } catch (err) {
                 console.error('Failed to remove device:', err);
+                setError(err instanceof Error ? err.message : 'Failed to remove device');
             } finally {
                 setRemovingDeviceId(null);
             }
@@ -449,8 +456,12 @@ export function AccessPointDetailPage() {
     // ── Initial load ────────────────────────────────────────────────────────
 
     useEffect(() => {
-        fetchAP();
-        fetchDevices();
+        let cancelled = false;
+        const run = async () => {
+            await Promise.all([fetchAP(), fetchDevices()]);
+        };
+        if (!cancelled) run();
+        return () => { cancelled = true; };
     }, [fetchAP, fetchDevices]);
 
     // ── Edit handlers ───────────────────────────────────────────────────────
@@ -493,6 +504,7 @@ export function AccessPointDetailPage() {
             setShowEditModal(false);
         } catch (err) {
             console.error('Failed to update access point:', err);
+            setError(err instanceof Error ? err.message : 'Failed to update access point');
         } finally {
             setSubmittingEdit(false);
         }
@@ -569,6 +581,11 @@ export function AccessPointDetailPage() {
 
     return (
         <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden">
+            {/* Error banner */}
+            {error && (
+                <div className="text-red-500 text-sm p-2 mb-2 bg-red-50 rounded shrink-0">{error}</div>
+            )}
+
             {/* Page header */}
             <div className="flex shrink-0 items-start justify-between">
                 <div className="flex items-start gap-3">
