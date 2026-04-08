@@ -132,8 +132,8 @@ export function AccessTimeFormPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden">
+      <div className="shrink-0 flex items-center justify-between">
         <div>
           <h1 className="text-[18px] font-semibold text-foreground">
             {isEditing ? t('form.title.edit', 'Edit Access Time') : t('form.title.new', 'New Access Time')}
@@ -144,7 +144,8 @@ export function AccessTimeFormPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="min-h-0 flex-1 overflow-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pr-4">
         {/* Left: Details */}
         <Card className="p-4 space-y-3">
           <h3 className="font-semibold">{t('form.name', 'Name')}</h3>
@@ -212,28 +213,31 @@ export function AccessTimeFormPage() {
                 <p className="text-sm">{t('form.noSlots', 'No time slots')}</p>
               </div>
             )}
-            <div className="space-y-2">
+            <div className="space-y-3">
               {slots.map((slot, idx) => (
-                <div key={idx} className="flex items-center gap-2 border rounded p-2">
-                  <Select value={slot.day_of_week.toString()} onChange={(e) => updateSlot(idx, 'day_of_week', parseInt(e.target.value))} className="w-20 h-7 text-[11px]">
+                <div key={idx} className="flex items-center gap-2 border border-border/50 rounded p-3 hover:bg-muted/30 transition-colors">
+                  <Select value={slot.day_of_week.toString()} onChange={(e) => updateSlot(idx, 'day_of_week', parseInt(e.target.value))} className="w-20 h-8 text-[12px] shrink-0">
                     {DAY_NAMES.map((d, i) => <SelectOption key={i} value={i.toString()}>{d}</SelectOption>)}
                   </Select>
-                  <Input type="time" value={slot.start_time} onChange={(e) => updateSlot(idx, 'start_time', e.target.value)} className="w-24 h-7 text-[11px]" />
-                  <span className="text-xs text-muted-foreground">→</span>
-                  <Input type="time" value={slot.end_time} onChange={(e) => updateSlot(idx, 'end_time', e.target.value)} className="w-24 h-7 text-[11px]" />
-                  <Input value={slot.slot_name} onChange={(e) => updateSlot(idx, 'slot_name', e.target.value)} placeholder="Label" className="flex-1 h-7 text-[11px]" />
-                  <input type="checkbox" checked={slot.is_active} onChange={(e) => updateSlot(idx, 'is_active', e.target.checked)} />
-                  <Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => removeSlot(idx)}>
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
+                  <Input type="time" value={slot.start_time} onChange={(e) => updateSlot(idx, 'start_time', e.target.value)} className="w-24 h-8 text-[12px] shrink-0" />
+                  <span className="text-sm text-muted-foreground shrink-0">—</span>
+                  <Input type="time" value={slot.end_time} onChange={(e) => updateSlot(idx, 'end_time', e.target.value)} className="w-24 h-8 text-[12px] shrink-0" />
+                  <Input value={slot.slot_name} onChange={(e) => updateSlot(idx, 'slot_name', e.target.value)} placeholder="Label" className="flex-1 h-8 text-[12px] min-w-0" />
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <input type="checkbox" checked={slot.is_active} onChange={(e) => updateSlot(idx, 'is_active', e.target.checked)} className="h-4 w-4 rounded border-border/70 cursor-pointer" />
+                    <Button variant="ghost" size="icon-sm" className="text-destructive h-8 w-8" onClick={() => removeSlot(idx)}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
           </Card>
         </div>
       </div>
+      </div>
 
-      <div className="flex justify-end gap-2">
+      <div className="shrink-0 flex justify-end gap-2">
         <Button variant="outline" onClick={() => navigate('/access/access-times')}>{t('form.cancel', 'Cancel')}</Button>
         <Button onClick={handleSave} disabled={saving || !name || slots.length === 0}>
           {saving ? t('form.saving', 'Saving...') : t('form.save', 'Save')}

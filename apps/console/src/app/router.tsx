@@ -64,9 +64,6 @@ const AccessPointsPage = lazy(() =>
 const AccessPointDetailPage = lazy(() =>
   import('@/features/access/access-points/AccessPointDetailPage').then((m) => ({ default: m.AccessPointDetailPage }))
 );
-const AccessDevicesPage = lazy(() =>
-  import('@/features/access/doors/DoorsPage').then((m) => ({ default: m.AccessDevicesPage }))
-);
 const AccessGroupsPage = lazy(() =>
   import('@/features/access/access-groups/AccessGroupsPage').then((m) => ({ default: m.AccessGroupsPage }))
 );
@@ -195,7 +192,6 @@ export const Router = createBrowserRouter([
               { path: 'access/zones', element: <LazyWrap><ZonesPage /></LazyWrap> },
               { path: 'access/access-points', element: <LazyWrap><AccessPointsPage /></LazyWrap> },
               { path: 'access/access-points/:id', element: <LazyWrap><AccessPointDetailPage /></LazyWrap> },
-              { path: 'access/doors', element: <LazyWrap><AccessDevicesPage /></LazyWrap> },
               { path: 'access/access-groups', element: <LazyWrap><AccessGroupsPage /></LazyWrap> },
               { path: 'access/access-groups/:id', element: <LazyWrap><AccessGroupDetailPage /></LazyWrap> },
               { path: 'access/access-times', element: <LazyWrap><AccessTimesPage /></LazyWrap> },

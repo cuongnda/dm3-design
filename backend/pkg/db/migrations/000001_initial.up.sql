@@ -109,24 +109,28 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON dm3_auth.refresh_tokens(us
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON dm3_auth.refresh_tokens(token_hash);
 
 -- ============================================================
--- dm3_access.access_groups (created before identity.users to allow FK)
+-- dm3_access.access_groups
+-- (created before identity.users to allow FK)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_access.access_groups (
-    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id  UUID NOT NULL REFERENCES dm3_auth.companies(id),
-    parent_id  UUID REFERENCES dm3_access.access_groups(id),
-    name       VARCHAR(255) NOT NULL,
-    is_default BOOLEAN DEFAULT false,
-    type       SMALLINT DEFAULT 1,
-    created_on TIMESTAMPTZ DEFAULT now(),
-    updated_on TIMESTAMPTZ DEFAULT now(),
-    is_deleted BOOLEAN DEFAULT false
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id      UUID NOT NULL REFERENCES dm3_auth.companies(id),
+    parent_id      UUID REFERENCES dm3_access.access_groups(id),
+    name           VARCHAR(255) NOT NULL,
+    is_default     BOOLEAN DEFAULT false,
+    type           SMALLINT DEFAULT 1,
+    access_time_id UUID, -- FK added after dm3_access.access_times is created
+    created_on     TIMESTAMPTZ DEFAULT now(),
+    updated_on     TIMESTAMPTZ DEFAULT now(),
+    is_deleted     BOOLEAN DEFAULT false
 );
 
 CREATE INDEX IF NOT EXISTS idx_access_groups_tenant ON dm3_access.access_groups(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_ag_access_time       ON dm3_access.access_groups(access_time_id);
 
 -- ============================================================
--- dm3_identity.departments (created before identity.users to allow FK)
+-- dm3_identity.departments
+-- (created before identity.users to allow FK)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_identity.departments (
     id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -432,6 +436,11 @@ CREATE TABLE IF NOT EXISTS dm3_access.access_times (
 
 CREATE INDEX IF NOT EXISTS idx_access_times_tenant ON dm3_access.access_times(tenant_id, is_active);
 
+-- Now that access_times exists, add FK for access_groups.access_time_id
+ALTER TABLE dm3_access.access_groups
+    ADD CONSTRAINT fk_access_groups_access_time
+    FOREIGN KEY (access_time_id) REFERENCES dm3_access.access_times(id) ON DELETE SET NULL;
+
 -- ============================================================
 -- dm3_access.access_time_slots
 -- ============================================================
@@ -454,7 +463,7 @@ CREATE INDEX IF NOT EXISTS idx_access_time_slots_day    ON dm3_access.access_tim
 
 -- ============================================================
 -- dm3_access.access_points
--- Logical access point: groups multiple physical doors under one zone.
+-- Logical access point: groups multiple physical devices under one zone.
 -- access_time_id = NULL means 24/7 unrestricted access.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_access.access_points (
@@ -472,10 +481,11 @@ CREATE INDEX IF NOT EXISTS idx_access_points_tenant ON dm3_access.access_points(
 CREATE INDEX IF NOT EXISTS idx_access_points_zone   ON dm3_access.access_points(zone_id);
 
 -- ============================================================
--- dm3_access.doors  (physical door device in access context)
+-- dm3_access.access_devices
+-- Physical access device in access context.
 -- Maps 1:1 to dm3_devices.devices via device_id.
 -- ============================================================
-CREATE TABLE IF NOT EXISTS dm3_access.doors (
+CREATE TABLE IF NOT EXISTS dm3_access.access_devices (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id         UUID NOT NULL REFERENCES dm3_auth.companies(id),
     device_id         UUID REFERENCES dm3_devices.devices(id),
@@ -499,46 +509,51 @@ CREATE TABLE IF NOT EXISTS dm3_access.doors (
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_doors_tenant ON dm3_access.doors(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_doors_device ON dm3_access.doors(device_id);
-CREATE INDEX IF NOT EXISTS idx_doors_status ON dm3_access.doors(status);
-CREATE INDEX IF NOT EXISTS idx_doors_state  ON dm3_access.doors(state);
+CREATE INDEX IF NOT EXISTS idx_access_devices_tenant ON dm3_access.access_devices(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_access_devices_device ON dm3_access.access_devices(device_id);
+CREATE INDEX IF NOT EXISTS idx_access_devices_status ON dm3_access.access_devices(status);
+CREATE INDEX IF NOT EXISTS idx_access_devices_state  ON dm3_access.access_devices(state);
 
 -- ============================================================
--- dm3_access.access_point_doors
--- Junction: 1 access point → N physical doors (with role)
+-- dm3_access.access_point_devices
+-- Junction: 1 access point → N physical devices (with role)
 -- role values: reader_in | reader_out | controller | camera
+-- NOTE: access_device_id is stored as plain text (no FK) because
+--       devices are owned by device-gateway service, not access service.
 -- ============================================================
-CREATE TABLE IF NOT EXISTS dm3_access.access_point_doors (
+CREATE TABLE IF NOT EXISTS dm3_access.access_point_devices (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id        UUID NOT NULL REFERENCES dm3_auth.companies(id),
     access_point_id  UUID NOT NULL REFERENCES dm3_access.access_points(id) ON DELETE CASCADE,
-    door_id          UUID NOT NULL REFERENCES dm3_access.doors(id) ON DELETE CASCADE,
+    access_device_id TEXT NOT NULL,
     role             VARCHAR(20) NOT NULL DEFAULT 'reader_in',
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT uq_ap_door UNIQUE (access_point_id, door_id)
+    CONSTRAINT uq_ap_access_device UNIQUE (access_point_id, access_device_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_ap_doors_ap     ON dm3_access.access_point_doors(access_point_id);
-CREATE INDEX IF NOT EXISTS idx_ap_doors_door   ON dm3_access.access_point_doors(door_id);
-CREATE INDEX IF NOT EXISTS idx_ap_doors_tenant ON dm3_access.access_point_doors(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_ap_devices_ap     ON dm3_access.access_point_devices(access_point_id);
+CREATE INDEX IF NOT EXISTS idx_ap_devices_device ON dm3_access.access_point_devices(access_device_id);
+CREATE INDEX IF NOT EXISTS idx_ap_devices_tenant ON dm3_access.access_point_devices(tenant_id);
 
 -- ============================================================
 -- dm3_access.access_group_access_points
 -- Junction: access group → access points (defines who can go where)
+-- access_time_id allows per-group-point time override
 -- ============================================================
 CREATE TABLE IF NOT EXISTS dm3_access.access_group_access_points (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id        UUID NOT NULL REFERENCES dm3_auth.companies(id),
     access_group_id  UUID NOT NULL REFERENCES dm3_access.access_groups(id) ON DELETE CASCADE,
     access_point_id  UUID NOT NULL REFERENCES dm3_access.access_points(id) ON DELETE CASCADE,
+    access_time_id   UUID REFERENCES dm3_access.access_times(id) ON DELETE SET NULL,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT uq_ag_ap UNIQUE (access_group_id, access_point_id)
+    CONSTRAINT uq_ag_ap_tz UNIQUE (access_group_id, access_point_id, access_time_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_agap_group  ON dm3_access.access_group_access_points(access_group_id);
-CREATE INDEX IF NOT EXISTS idx_agap_point  ON dm3_access.access_group_access_points(access_point_id);
-CREATE INDEX IF NOT EXISTS idx_agap_tenant ON dm3_access.access_group_access_points(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_agap_group       ON dm3_access.access_group_access_points(access_group_id);
+CREATE INDEX IF NOT EXISTS idx_agap_point       ON dm3_access.access_group_access_points(access_point_id);
+CREATE INDEX IF NOT EXISTS idx_agap_tenant      ON dm3_access.access_group_access_points(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_agap_access_time ON dm3_access.access_group_access_points(access_time_id);
 
 -- ============================================================
 -- dm3_access.access_events (TimescaleDB hypertable)
@@ -580,7 +595,7 @@ CREATE INDEX IF NOT EXISTS idx_access_events_ap   ON dm3_access.access_events(ac
 CREATE INDEX IF NOT EXISTS idx_access_events_user ON dm3_access.access_events(user_id, time DESC);
 
 -- ============================================================
--- Triggers: updated_at
+-- Triggers: updated_at for dm3_access tables
 -- ============================================================
 CREATE OR REPLACE FUNCTION dm3_access.update_timestamp()
 RETURNS TRIGGER AS $$
@@ -602,9 +617,9 @@ BEGIN
             BEFORE UPDATE ON dm3_access.access_times
             FOR EACH ROW EXECUTE FUNCTION dm3_access.update_timestamp();
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_doors_updated_at') THEN
-        CREATE TRIGGER trg_doors_updated_at
-            BEFORE UPDATE ON dm3_access.doors
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_access_devices_updated_at') THEN
+        CREATE TRIGGER trg_access_devices_updated_at
+            BEFORE UPDATE ON dm3_access.access_devices
             FOR EACH ROW EXECUTE FUNCTION dm3_access.update_timestamp();
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_zones_updated_at') THEN

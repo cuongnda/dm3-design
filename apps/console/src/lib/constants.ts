@@ -42,7 +42,6 @@ export const ROUTES = {
   // ACCESS
   zones: '/access/zones',
   accessPoints: '/access/access-points',
-  doors: '/access/doors',
   accessGroups: '/access/access-groups',
   accessTimes: '/access/access-times',
   // DEVICES

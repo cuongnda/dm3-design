@@ -15,7 +15,6 @@ import enSystem from './locales/en/system.json';
 import enDepartments from './locales/en/departments.json';
 import enUsers from './locales/en/users.json';
 import enZones from './locales/en/zones.json';
-import enDoors from './locales/en/doors.json';
 import enAccessPoints from './locales/en/accessPoints.json';
 import enAccessGroups from './locales/en/accessGroups.json';
 import enAccessTimes from './locales/en/accessTimes.json';
@@ -33,7 +32,6 @@ import viSystem from './locales/vi/system.json';
 import viDepartments from './locales/vi/departments.json';
 import viUsers from './locales/vi/users.json';
 import viZones from './locales/vi/zones.json';
-import viDoors from './locales/vi/doors.json';
 import viAccessPoints from './locales/vi/accessPoints.json';
 import viAccessGroups from './locales/vi/accessGroups.json';
 import viAccessTimes from './locales/vi/accessTimes.json';
@@ -57,7 +55,6 @@ i18n
         departments: enDepartments,
         users: enUsers,
         zones: enZones,
-        doors: enDoors,
         accessPoints: enAccessPoints,
         accessGroups: enAccessGroups,
         accessTimes: enAccessTimes,
@@ -76,14 +73,13 @@ i18n
         departments: viDepartments,
         users: viUsers,
         zones: viZones,
-        doors: viDoors,
         accessPoints: viAccessPoints,
         accessGroups: viAccessGroups,
         accessTimes: viAccessTimes,
       },
     },
     defaultNS: 'common',
-    ns: ['common', 'auth', 'dashboard', 'secure', 'manage', 'operate', 'smart', 'devices', 'settings', 'system', 'departments', 'users', 'zones', 'doors', 'accessPoints', 'accessGroups', 'accessTimes'],
+    ns: ['common', 'auth', 'dashboard', 'secure', 'manage', 'operate', 'smart', 'devices', 'settings', 'system', 'departments', 'users', 'zones', 'accessPoints', 'accessGroups', 'accessTimes'],
     fallbackLng: 'en',
     supportedLngs: ['en', 'vi'],
     // Accept region tags like `vi-VN`/`en-US` and map them to base languages `vi`/`en`.

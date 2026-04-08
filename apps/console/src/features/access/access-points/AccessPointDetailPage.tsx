@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Shield, Plus, Trash2, DoorOpen, Users, Edit } from 'lucide-react';
+import { ArrowLeft, Shield, Plus, Trash2, Cpu, Users, Edit } from 'lucide-react';
 import {
     Button,
     Input,
@@ -27,76 +27,90 @@ import type { AccessPoint, AccessPointDevice } from './types';
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Add Door Modal
+// Add Device Modal
 // ---------------------------------------------------------------------------
 
-const DOOR_ROLES = [
+const DEVICE_ROLES = [
     { value: 'reader_in', label: 'Reader In' },
     { value: 'reader_out', label: 'Reader Out' },
     { value: 'controller', label: 'Controller' },
     { value: 'camera', label: 'Camera' },
 ] as const;
 
-interface AvailableDoor {
+interface AvailableDevice {
     id: string;
-    name: string;
+    name?: string;
+    device_id?: string;
     type?: string;
     status?: string;
 }
 
-interface AddDoorModalProps {
+interface AddDeviceModalProps {
     open: boolean;
     onOpenChange: (v: boolean) => void;
-    linkedDoorIds: string[];
+    linkedDeviceIds: string[];
     onSubmit: (access_device_ids: string[], role: string) => Promise<boolean>;
 }
 
-function AddDoorModal({ open, onOpenChange, linkedDoorIds, onSubmit }: AddDoorModalProps) {
+function AddDeviceModal({ open, onOpenChange, linkedDeviceIds, onSubmit }: AddDeviceModalProps) {
     const { t } = useTranslation('accessPoints');
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [role, setRole] = useState('reader_in');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
-    const [allDoors, setAllDoors] = useState<AvailableDoor[]>([]);
-    const [loadingDoors, setLoadingDoors] = useState(false);
+    const [allDevices, setAllDevices] = useState<AvailableDevice[]>([]);
+    const [loadingDevices, setLoadingDevices] = useState(false);
     const [search, setSearch] = useState('');
+    const [filterType, setFilterType] = useState('all');
     const [page, setPage] = useState(1);
     const PAGE_SIZE = 10;
 
     useEffect(() => {
         if (!open) return;
-        setLoadingDoors(true);
-        apiFetch<{ data?: AvailableDoor[] }>('/api/v1/access/access-devices?limit=200')
-            .then((res) => setAllDoors(res.data ?? []))
-            .catch(() => setAllDoors([]))
-            .finally(() => setLoadingDoors(false));
+        setLoadingDevices(true);
+        apiFetch<AvailableDevice[]>('/api/v1/gateway/devices?limit=200')
+            .then((res) => setAllDevices(Array.isArray(res) ? res : []))
+            .catch(() => setAllDevices([]))
+            .finally(() => setLoadingDevices(false));
     }, [open]);
 
-    const availableDoors = useMemo(() => allDoors.filter((d) => !linkedDoorIds.includes(d.id)), [allDoors, linkedDoorIds]);
+    const availableDevices = useMemo(() => allDevices.filter((d) => !linkedDeviceIds.includes(d.id)), [allDevices, linkedDeviceIds]);
 
-    const filteredDoors = useMemo(() => {
+    const filteredDevices = useMemo(() => {
+        let result = availableDevices;
+
+        // Filter by type
+        if (filterType !== 'all') {
+            result = result.filter((d) => d.type === filterType);
+        }
+
+        // Filter by search
         const q = search.toLowerCase();
-        return q ? availableDoors.filter((d) => d.name.toLowerCase().includes(q) || d.type?.toLowerCase().includes(q)) : availableDoors;
-    }, [availableDoors, search]);
+        if (q) {
+            result = result.filter((d) => (d.name ?? '').toLowerCase().includes(q) || (d.device_id ?? '').toLowerCase().includes(q) || d.type?.toLowerCase().includes(q));
+        }
 
-    // Reset to page 1 when search or available doors change
+        return result;
+    }, [availableDevices, search, filterType]);
+
+    // Reset to page 1 when search, filter, or available devices change
     useEffect(() => {
         setPage(1);
-    }, [search, availableDoors.length]);
+    }, [search, filterType, availableDevices.length]);
 
-    const totalPages = Math.max(1, Math.ceil(filteredDoors.length / PAGE_SIZE));
-    const pagedDoors = filteredDoors.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    const totalPages = Math.max(1, Math.ceil(filteredDevices.length / PAGE_SIZE));
+    const pagedDevices = filteredDevices.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-    const allFilteredSelected = filteredDoors.length > 0 && filteredDoors.every((d) => selected.has(d.id));
-    const someFilteredSelected = filteredDoors.some((d) => selected.has(d.id));
+    const allFilteredSelected = filteredDevices.length > 0 && filteredDevices.every((d) => selected.has(d.id));
+    const someFilteredSelected = filteredDevices.some((d) => selected.has(d.id));
 
     const toggleAll = () => {
         setSelected((prev) => {
             const next = new Set(prev);
             if (allFilteredSelected) {
-                filteredDoors.forEach((d) => next.delete(d.id));
+                filteredDevices.forEach((d) => next.delete(d.id));
             } else {
-                filteredDoors.forEach((d) => next.add(d.id));
+                filteredDevices.forEach((d) => next.add(d.id));
             }
             return next;
         });
@@ -114,9 +128,10 @@ function AddDoorModal({ open, onOpenChange, linkedDoorIds, onSubmit }: AddDoorMo
     const handleOpenChange = (v: boolean) => {
         if (!v) {
             setSelected(new Set());
-            setRole('reader_in');
             setError('');
             setSearch('');
+            setFilterType('all');
+            setRole('reader_in');
             setPage(1);
         }
         onOpenChange(v);
@@ -124,7 +139,7 @@ function AddDoorModal({ open, onOpenChange, linkedDoorIds, onSubmit }: AddDoorMo
 
     const handleSubmit = async () => {
         if (selected.size === 0) {
-            setError(t('selectDoorRequired'));
+            setError(t('selectDeviceRequired'));
             return;
         }
         setSubmitting(true);
@@ -139,8 +154,8 @@ function AddDoorModal({ open, onOpenChange, linkedDoorIds, onSubmit }: AddDoorMo
             onOpenChange={handleOpenChange}
             title={
                 <span className="flex items-center gap-2">
-                    <DoorOpen size={16} />
-                    {t('addDoor', 'Add Door')}
+                    <Cpu size={16} />
+                    {t('addDevice', 'Add Device')}
                 </span>
             }
             size="md"
@@ -148,18 +163,63 @@ function AddDoorModal({ open, onOpenChange, linkedDoorIds, onSubmit }: AddDoorMo
             cancelLabel={t('cancel', 'Cancel')}
             errorMessage={error || undefined}
             primaryAction={{
-                label: submitting ? t('adding') : selected.size > 0 ? t('addNDoors', { count: selected.size }) : t('add'),
+                label: submitting ? t('adding') : selected.size > 0 ? t('addNDevices', { count: selected.size }) : t('add'),
                 onClick: handleSubmit,
                 disabled: submitting || selected.size === 0,
                 loading: submitting,
             }}
         >
             <div className="space-y-3">
-                {/* Role selector */}
-                <div className="flex items-center gap-3">
-                    <Label className="shrink-0">{t('role')}</Label>
-                    <Select value={role} onValueChange={setRole} disabled={submitting} className="w-44">
-                        {DOOR_ROLES.map((r) => (
+                {/* Search */}
+                <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder={t('searchDevices')}
+                    className="h-8 text-[13px]"
+                    disabled={submitting}
+                />
+
+                {/* Type Filter */}
+                <div className="flex gap-2">
+                    <Button
+                        variant={filterType === 'all' ? 'default' : 'outline'}
+                        onClick={() => setFilterType('all')}
+                        className="h-8 text-[13px]"
+                        disabled={submitting}
+                    >
+                        All
+                    </Button>
+                    <Button
+                        variant={filterType === 'camera' ? 'default' : 'outline'}
+                        onClick={() => setFilterType('camera')}
+                        className="h-8 text-[13px]"
+                        disabled={submitting}
+                    >
+                        Camera
+                    </Button>
+                    <Button
+                        variant={filterType === 'reader' ? 'default' : 'outline'}
+                        onClick={() => setFilterType('reader')}
+                        className="h-8 text-[13px]"
+                        disabled={submitting}
+                    >
+                        Reader
+                    </Button>
+                    <Button
+                        variant={filterType === 'controller' ? 'default' : 'outline'}
+                        onClick={() => setFilterType('controller')}
+                        className="h-8 text-[13px]"
+                        disabled={submitting}
+                    >
+                        Controller
+                    </Button>
+                </div>
+
+                {/* Role Selector */}
+                <div className="flex items-center gap-2">
+                    <Label className="text-[13px] shrink-0">{t('role', 'Role')}:</Label>
+                    <Select value={role} onValueChange={setRole} disabled={submitting} className="h-8 text-[13px] flex-1">
+                        {DEVICE_ROLES.map((r) => (
                             <SelectOption key={r.value} value={r.value}>
                                 {r.label}
                             </SelectOption>
@@ -167,28 +227,19 @@ function AddDoorModal({ open, onOpenChange, linkedDoorIds, onSubmit }: AddDoorMo
                     </Select>
                 </div>
 
-                {/* Search */}
-                <Input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder={t('searchDoors')}
-                    className="h-8 text-[13px]"
-                    disabled={submitting}
-                />
-
-                {/* Door table */}
+                {/* Device table */}
                 <div className="rounded-md border border-border overflow-hidden">
-                    {loadingDoors ? (
+                    {loadingDevices ? (
                         <div className="flex items-center justify-center gap-2 py-10 text-[13px] text-muted-foreground">
                             <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
                             Loading…
                         </div>
-                    ) : availableDoors.length === 0 ? (
+                    ) : availableDevices.length === 0 ? (
                         <div className="py-10 text-center text-[13px] text-muted-foreground">
-                            {allDoors.length === 0 ? t('noDoorsInSystem') : t('allDoorsAssigned')}
+                            {allDevices.length === 0 ? t('noDevicesInSystem') : t('allDevicesAssigned')}
                         </div>
-                    ) : filteredDoors.length === 0 ? (
-                        <div className="py-10 text-center text-[13px] text-muted-foreground">{t('noDoorsMatch')}</div>
+                    ) : filteredDevices.length === 0 ? (
+                        <div className="py-10 text-center text-[13px] text-muted-foreground">{t('noDevicesMatch')}</div>
                     ) : (
                         <>
                             <table className="w-full text-[13px]">
@@ -202,13 +253,13 @@ function AddDoorModal({ open, onOpenChange, linkedDoorIds, onSubmit }: AddDoorMo
                                                 disabled={submitting}
                                             />
                                         </th>
-                                        <th className="px-3 py-2 text-left font-medium text-foreground">{t('doorName')}</th>
-                                        <th className="px-3 py-2 text-left font-medium text-foreground">{t('doorType')}</th>
+                                        <th className="px-3 py-2 text-left font-medium text-foreground">{t('deviceName')}</th>
+                                        <th className="px-3 py-2 text-left font-medium text-foreground">{t('deviceType')}</th>
                                         <th className="px-3 py-2 text-left font-medium text-foreground">{t('status')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {pagedDoors.map((d) => (
+                                    {pagedDevices.map((d) => (
                                         <tr
                                             key={d.id}
                                             onClick={() => !submitting && toggleOne(d.id)}
@@ -221,7 +272,7 @@ function AddDoorModal({ open, onOpenChange, linkedDoorIds, onSubmit }: AddDoorMo
                                                     disabled={submitting}
                                                 />
                                             </td>
-                                            <td className="px-3 py-2 font-medium text-foreground">{d.name}</td>
+                                            <td className="px-3 py-2 font-medium text-foreground">{d.name || d.device_id || '—'}</td>
                                             <td className="px-3 py-2">
                                                 {d.type ? (
                                                     <Badge variant="outline" className="text-[11px]">
@@ -232,7 +283,7 @@ function AddDoorModal({ open, onOpenChange, linkedDoorIds, onSubmit }: AddDoorMo
                                                 )}
                                             </td>
                                             <td className="px-3 py-2">
-                                                <DoorStatusBadge status={d.status} />
+                                                <DeviceStatusBadge status={d.status} />
                                             </td>
                                         </tr>
                                     ))}
@@ -241,31 +292,27 @@ function AddDoorModal({ open, onOpenChange, linkedDoorIds, onSubmit }: AddDoorMo
                             <TablePaginationFooter
                                 page={page}
                                 pageSize={PAGE_SIZE}
-                                total={filteredDoors.length}
+                                total={filteredDevices.length}
                                 totalPages={totalPages}
                                 onPageChange={setPage}
-                                loading={loadingDoors}
+                                loading={loadingDevices}
                                 className="border-t border-border"
                             />
                         </>
                     )}
                 </div>
 
-                {selected.size > 0 && <p className="text-[12px] text-muted-foreground">{t('doorsSelected', { count: selected.size })}</p>}
+                {selected.size > 0 && <p className="text-[12px] text-muted-foreground">{t('devicesSelected', { count: selected.size })}</p>}
             </div>
         </AppModal>
     );
 }
 
 // ---------------------------------------------------------------------------
-// Add Access Group Modal
+// Device status badge helper
 // ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// Door status badge helper
-// ---------------------------------------------------------------------------
-
-function DoorStatusBadge({ status }: { status?: string }) {
+function DeviceStatusBadge({ status }: { status?: string }) {
     const variantMap: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
         online: 'default',
         offline: 'secondary',
@@ -283,7 +330,7 @@ function roleBadgeVariant(role: string): 'default' | 'secondary' | 'outline' {
 }
 
 function roleLabel(role: string): string {
-    return DOOR_ROLES.find((r) => r.value === role)?.label ?? role;
+    return DEVICE_ROLES.find((r) => r.value === role)?.label ?? role;
 }
 
 // ---------------------------------------------------------------------------
@@ -299,14 +346,14 @@ export function AccessPointDetailPage() {
     const [ap, setAP] = useState<AccessPoint | null>(null);
     const [apLoading, setAPLoading] = useState(true);
 
-    // Doors tab
-    const [doors, setDoors] = useState<AccessPointDevice[]>([]);
-    const [doorsLoading, setDoorsLoading] = useState(false);
-    const [showAddDoorModal, setShowAddDoorModal] = useState(false);
-    const [removingDoorId, setRemovingDoorId] = useState<string | null>(null);
+    // Devices tab
+    const [devices, setDevices] = useState<AccessPointDevice[]>([]);
+    const [devicesLoading, setDevicesLoading] = useState(false);
+    const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
+    const [removingDeviceId, setRemovingDeviceId] = useState<string | null>(null);
 
     // Active tab
-    const [activeTab, setActiveTab] = useState<'doors'>('doors');
+    const [activeTab, setActiveTab] = useState<'devices'>('devices');
 
     // Edit modal
     const [showEditModal, setShowEditModal] = useState(false);
@@ -331,69 +378,80 @@ export function AccessPointDetailPage() {
         }
     }, [id]);
 
-    // ── Fetch doors ─────────────────────────────────────────────────────────
+    // ── Fetch devices ───────────────────────────────────────────────────────
 
-    const fetchDoors = useCallback(async () => {
+    const fetchDevices = useCallback(async () => {
         if (!id) return;
-        setDoorsLoading(true);
+        setDevicesLoading(true);
         try {
-            const data = await apiFetch<{ doors?: AccessPointDevice[]; data?: AccessPointDevice[] }>(`/api/v1/access/access-points/${id}/doors`);
-            setDoors(data.doors ?? data.data ?? (data as unknown as AccessPointDevice[]));
+            const [linkedRes, gatewayRes] = await Promise.all([
+                apiFetch<{ data?: AccessPointDevice[] }>(`/api/v1/access/access-points/${id}/devices`),
+                apiFetch<{ id: string; name: string; type: string; status: string; device_id?: string }[]>('/api/v1/gateway/devices?limit=500'),
+            ]);
+            const linked = linkedRes.data ?? [];
+            const gatewayMap = new Map((Array.isArray(gatewayRes) ? gatewayRes : []).map((d) => [d.id, d]));
+            setDevices(linked.map((item) => {
+                const gw = gatewayMap.get(item.access_device_id);
+                return {
+                    ...item,
+                    device: gw ? { id: gw.id, name: gw.name || gw.device_id || item.access_device_id, type: gw.type, status: gw.status, state: '' } : undefined,
+                };
+            }));
         } catch (err) {
-            console.error('Failed to fetch doors:', err);
+            console.error('Failed to fetch devices:', err);
         } finally {
-            setDoorsLoading(false);
+            setDevicesLoading(false);
         }
     }, [id]);
 
-    const handleAddDoor = useCallback(
+    const handleAddDevice = useCallback(
         async (access_device_ids: string[], role: string): Promise<boolean> => {
             if (!id) return false;
             try {
                 await Promise.all(
                     access_device_ids.map((access_device_id) =>
-                        apiFetch(`/api/v1/access/access-points/${id}/doors`, {
+                        apiFetch(`/api/v1/access/access-points/${id}/devices`, {
                             method: 'POST',
                             body: JSON.stringify({ access_device_id, role }),
                         }),
                     ),
                 );
-                await fetchDoors();
+                await fetchDevices();
                 await fetchAP();
                 return true;
             } catch (err) {
-                console.error('Failed to add door:', err);
+                console.error('Failed to add device:', err);
                 return false;
             }
         },
-        [id, fetchDoors, fetchAP],
+        [id, fetchDevices, fetchAP],
     );
 
-    const handleRemoveDoor = useCallback(
-        async (doorId: string) => {
+    const handleRemoveDevice = useCallback(
+        async (deviceId: string) => {
             if (!id) return;
-            setRemovingDoorId(doorId);
+            setRemovingDeviceId(deviceId);
             try {
-                await apiFetch(`/api/v1/access/access-points/${id}/doors/${doorId}`, {
+                await apiFetch(`/api/v1/access/access-points/${id}/devices/${deviceId}`, {
                     method: 'DELETE',
                 });
-                await fetchDoors();
+                await fetchDevices();
                 await fetchAP();
             } catch (err) {
-                console.error('Failed to remove door:', err);
+                console.error('Failed to remove device:', err);
             } finally {
-                setRemovingDoorId(null);
+                setRemovingDeviceId(null);
             }
         },
-        [id, fetchDoors, fetchAP],
+        [id, fetchDevices, fetchAP],
     );
 
     // ── Initial load ────────────────────────────────────────────────────────
 
     useEffect(() => {
         fetchAP();
-        fetchDoors();
-    }, [fetchAP, fetchDoors]);
+        fetchDevices();
+    }, [fetchAP, fetchDevices]);
 
     // ── Edit handlers ───────────────────────────────────────────────────────
 
@@ -442,16 +500,16 @@ export function AccessPointDetailPage() {
 
     // ── Column definitions ──────────────────────────────────────────────────
 
-    const doorColumns = useMemo(
+    const deviceColumns = useMemo(
         (): Column<AccessPointDevice>[] => [
             {
-                key: 'door_name',
-                header: t('doorName', 'Door Name'),
+                key: 'device_name',
+                header: t('deviceName', 'Device Name'),
                 render: (d) => <span className="text-[13px] font-medium">{d.device?.name ?? d.access_device_id}</span>,
             },
             {
-                key: 'door_type',
-                header: t('doorType', 'Type'),
+                key: 'device_type',
+                header: t('deviceType', 'Type'),
                 render: (d) =>
                     d.device?.type ? <Badge variant="outline">{d.device.type}</Badge> : <span className="text-[12px] text-muted-foreground">—</span>,
             },
@@ -461,9 +519,9 @@ export function AccessPointDetailPage() {
                 render: (d) => <Badge variant={roleBadgeVariant(d.role)}>{roleLabel(d.role)}</Badge>,
             },
             {
-                key: 'door_status',
+                key: 'device_status',
                 header: t('status', 'Status'),
-                render: (d) => <DoorStatusBadge status={d.device?.status} />,
+                render: (d) => <DeviceStatusBadge status={d.device?.status} />,
             },
             {
                 key: 'actions',
@@ -474,16 +532,16 @@ export function AccessPointDetailPage() {
                         variant="ghost"
                         size="sm"
                         className="h-7 text-[12px] text-destructive hover:text-destructive"
-                        onClick={() => handleRemoveDoor(d.access_device_id)}
-                        disabled={removingDoorId === d.access_device_id}
+                        onClick={() => handleRemoveDevice(d.access_device_id)}
+                        disabled={removingDeviceId === d.access_device_id}
                     >
                         <Trash2 size={13} className="mr-1" />
-                        {removingDoorId === d.access_device_id ? t('removing', 'Removing…') : t('remove', 'Remove')}
+                        {removingDeviceId === d.access_device_id ? t('removing', 'Removing…') : t('remove', 'Remove')}
                     </Button>
                 ),
             },
         ],
-        [t, handleRemoveDoor, removingDoorId],
+        [t, handleRemoveDevice, removingDeviceId],
     );
 
     // ── Render ──────────────────────────────────────────────────────────────
@@ -535,52 +593,52 @@ export function AccessPointDetailPage() {
             {/* Tabs */}
             <Tabs
                 value={activeTab}
-                onValueChange={(v) => setActiveTab(v as 'doors')}
+                onValueChange={(v) => setActiveTab(v as 'devices')}
                 className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm"
             >
                 {/* Card header: tabs + action button */}
                 <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2">
                     <TabsList variant="line">
-                        <TabsTrigger value="doors" className="text-[12px] px-3 whitespace-nowrap">
-                            <DoorOpen size={13} className="mr-1.5" />
-                            {t('doorsTab', 'Doors')} ({doors.length})
+                        <TabsTrigger value="devices" className="text-[12px] px-3 whitespace-nowrap">
+                            <Cpu size={13} className="mr-1.5" />
+                            {t('devicesTab', 'Devices')} ({devices.length})
                         </TabsTrigger>
                     </TabsList>
 
-                    {activeTab === 'doors' && (
-                        <Button size="sm" onClick={() => setShowAddDoorModal(true)}>
+                    {activeTab === 'devices' && (
+                        <Button size="sm" onClick={() => setShowAddDeviceModal(true)}>
                             <Plus size={14} className="mr-1.5" />
-                            {t('addDoor', 'Add Door')}
+                            {t('addDevice', 'Add Device')}
                         </Button>
                     )}
                 </div>
 
-                {/* Doors tab content */}
-                <TabsContent value="doors" className="min-h-0 flex-1 overflow-auto">
-                    {doorsLoading ? (
+                {/* Devices tab content */}
+                <TabsContent value="devices" className="min-h-0 flex-1 overflow-auto">
+                    {devicesLoading ? (
                         <div className="flex justify-center py-12">
                             <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
                         </div>
-                    ) : doors.length === 0 ? (
+                    ) : devices.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 text-center">
-                            <DoorOpen size={36} className="mb-3 text-muted-foreground/40" />
-                            <p className="text-[13px] font-medium text-foreground">{t('noDoorsTitle', 'No doors linked')}</p>
+                            <Cpu size={36} className="mb-3 text-muted-foreground/40" />
+                            <p className="text-[13px] font-medium text-foreground">{t('noDevicesTitle', 'No devices linked')}</p>
                             <p className="mt-1 text-[12px] text-muted-foreground">
-                                {t('noDoorsHint', 'Click "Add Door" to link a door to this access point.')}
+                                {t('noDevicesHint', 'Click "Add Device" to link a device to this access point.')}
                             </p>
                         </div>
                     ) : (
-                        <DataTable embedded stickyHeader paginate={false} columns={doorColumns} data={doors} rowKey={(d) => d.id} />
+                        <DataTable embedded stickyHeader paginate={false} columns={deviceColumns} data={devices} rowKey={(d) => d.id} />
                     )}
                 </TabsContent>
             </Tabs>
 
-            {/* Add Door Modal */}
-            <AddDoorModal
-                open={showAddDoorModal}
-                onOpenChange={setShowAddDoorModal}
-                linkedDoorIds={doors.map((d) => d.access_device_id)}
-                onSubmit={handleAddDoor}
+            {/* Add Device Modal */}
+            <AddDeviceModal
+                open={showAddDeviceModal}
+                onOpenChange={setShowAddDeviceModal}
+                linkedDeviceIds={devices.map((d) => d.access_device_id)}
+                onSubmit={handleAddDevice}
             />
 
             {/* Edit Access Point Modal */}

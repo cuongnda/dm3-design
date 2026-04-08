@@ -237,12 +237,10 @@ func (h *AccessHandlers) ListAccessPointDevices(w http.ResponseWriter, r *http.R
 	}
 
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT apd.id, apd.tenant_id, apd.access_point_id, apd.access_device_id, apd.role, apd.created_at,
-		        d.name, d.type, d.status, d.state
+		`SELECT apd.id, apd.tenant_id, apd.access_point_id, apd.access_device_id, apd.role, apd.created_at
 		 FROM dm3_access.access_point_devices apd
-		 JOIN dm3_access.access_devices d ON d.id = apd.access_device_id
 		 WHERE apd.access_point_id = $1::uuid
-		 ORDER BY d.name ASC`,
+		 ORDER BY apd.created_at DESC`,
 		apID,
 	)
 	if err != nil {
@@ -255,16 +253,12 @@ func (h *AccessHandlers) ListAccessPointDevices(w http.ResponseWriter, r *http.R
 	result := []models.AccessPointDevice{}
 	for rows.Next() {
 		var item models.AccessPointDevice
-		var d models.AccessDevice
 		if err := rows.Scan(
 			&item.ID, &item.TenantID, &item.AccessPointID, &item.AccessDeviceID, &item.Role, &item.CreatedAt,
-			&d.Name, &d.Type, &d.Status, &d.State,
 		); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		d.ID = item.AccessDeviceID
-		item.Device = &d
 		result = append(result, item)
 	}
 	httputil.JSON(w, http.StatusOK, map[string]any{"data": result, "total": len(result)})
@@ -294,8 +288,8 @@ func (h *AccessHandlers) AddAccessPointDevice(w http.ResponseWriter, r *http.Req
 	var id string
 	err := h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO dm3_access.access_point_devices (tenant_id, access_point_id, access_device_id, role)
-		 VALUES ($1::uuid, $2::uuid, $3::uuid, $4)
-		 ON CONFLICT (access_point_id, access_device_id) DO NOTHING
+		 VALUES ($1::uuid, $2::uuid, $3, $4)
+		 ON CONFLICT (access_point_id, access_device_id) DO UPDATE SET role = $4
 		 RETURNING id`,
 		cid, apID, req.AccessDeviceID, req.Role,
 	).Scan(&id)

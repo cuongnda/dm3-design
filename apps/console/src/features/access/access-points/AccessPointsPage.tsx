@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Plus, Search, MoreHorizontal, Edit, Trash2, Eye, Clock } from 'lucide-react';
+import { Shield, Plus, Search, MoreHorizontal, Edit, Trash2, Eye } from 'lucide-react';
 import {
     Button,
     Input,
@@ -21,7 +21,7 @@ import {
 } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
 import { useAccessPoints } from './hooks/useAccessPoints';
-import type { AccessPoint, AccessPointFormData, Zone, AccessTime } from './types';
+import type { AccessPoint, AccessPointFormData, Zone } from './types';
 
 // ---------------------------------------------------------------------------
 // Inline modal for create / edit
@@ -33,18 +33,16 @@ interface AccessPointModalProps {
     title: string;
     initial?: AccessPoint;
     zones: Zone[];
-    accessTimes: AccessTime[];
     onSubmit: (data: AccessPointFormData) => Promise<boolean>;
 }
 
-function AccessPointModal({ open, onOpenChange, title, initial, zones, accessTimes, onSubmit }: AccessPointModalProps) {
+function AccessPointModal({ open, onOpenChange, title, initial, zones, onSubmit }: AccessPointModalProps) {
     const { t } = useTranslation('accessPoints');
     const [submitting, setSubmitting] = useState(false);
     const [form, setForm] = useState<AccessPointFormData>({
         name: initial?.name ?? '',
         description: initial?.description ?? '',
         zone_id: initial?.zone_id ?? '',
-        access_time_id: initial?.access_time_id ?? '',
     });
     const [nameError, setNameError] = useState('');
 
@@ -55,7 +53,6 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, accessTim
                 name: initial?.name ?? '',
                 description: initial?.description ?? '',
                 zone_id: initial?.zone_id ?? '',
-                access_time_id: initial?.access_time_id ?? '',
             });
             setNameError('');
         }
@@ -72,7 +69,6 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, accessTim
             name: form.name.trim(),
             ...(form.description?.trim() && { description: form.description.trim() }),
             ...(form.zone_id && { zone_id: form.zone_id }),
-            ...(form.access_time_id && { access_time_id: form.access_time_id }),
         };
         const ok = await onSubmit(payload);
         setSubmitting(false);
@@ -142,24 +138,6 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, accessTim
                         ))}
                     </Select>
                 </div>
-
-                {/* Access Time */}
-                <div>
-                    <Label>{t('accessTime', 'Access Time')}</Label>
-                    <Select
-                        value={form.access_time_id ?? ''}
-                        onValueChange={(v) => set('access_time_id', v)}
-                        placeholder={t('noRestriction', 'No restriction (24/7)')}
-                        disabled={submitting}
-                    >
-                        <SelectOption value="">{t('noRestriction', 'No restriction (24/7)')}</SelectOption>
-                        {accessTimes.map((at) => (
-                            <SelectOption key={at.id} value={at.id}>
-                                {at.name}
-                            </SelectOption>
-                        ))}
-                    </Select>
-                </div>
             </div>
         </AppModal>
     );
@@ -176,7 +154,6 @@ export function AccessPointsPage() {
     const {
         accessPoints,
         zones,
-        accessTimes,
         loading,
         filters,
         fetchAccessPoints,
@@ -192,7 +169,6 @@ export function AccessPointsPage() {
     const [deleteError, setDeleteError] = useState<string | null>(null);
 
     const zoneMap = useMemo(() => new Map(zones.map((z) => [z.id, z.name])), [zones]);
-    const accessTimeMap = useMemo(() => new Map(accessTimes.map((at) => [at.id, at.name])), [accessTimes]);
 
     const handleCreate = async (data: AccessPointFormData) => createAccessPoint(data);
 
@@ -237,7 +213,6 @@ export function AccessPointsPage() {
         return {
             total: accessPoints.length,
             filtered: filtered.length,
-            withTiming: accessPoints.filter((ap) => ap.access_time_id).length,
             withDevices: accessPoints.filter((ap) => (ap.access_device_count ?? 0) > 0).length,
         };
     }, [accessPoints, filters]);
@@ -264,7 +239,7 @@ export function AccessPointsPage() {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-semibold">{t('title', 'Access Points')}</h1>
-                    <p className="text-muted-foreground">{t('description', 'Manage physical access points and their door assignments')}</p>
+                    <p className="text-muted-foreground">{t('description', 'Manage physical access points and their device assignments')}</p>
                 </div>
                 <Button onClick={() => setShowCreateModal(true)}>
                     <Plus size={16} className="mr-2" />
@@ -283,20 +258,6 @@ export function AccessPointsPage() {
                             <div>
                                 <div className="text-2xl font-bold text-primary">{stats.total}</div>
                                 <div className="text-sm text-muted-foreground">{t('stats.total', 'Total')}</div>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                                <Clock size={20} className="text-blue-600" />
-                            </div>
-                            <div>
-                                <div className="text-2xl font-bold text-blue-600">{stats.withTiming}</div>
-                                <div className="text-sm text-muted-foreground">{t('stats.timed', 'With Timing')}</div>
                             </div>
                         </div>
                     </CardContent>
@@ -421,17 +382,6 @@ export function AccessPointsPage() {
                                         </div>
                                     )}
                                     <div className="flex justify-between items-center">
-                                        <span className="text-sm text-muted-foreground">{t('accessTime', 'Access Time')}</span>
-                                        {ap.access_time_id && accessTimeMap.get(ap.access_time_id) ? (
-                                            <Badge variant="secondary" className="text-xs">
-                                                <Clock size={12} className="mr-1" />
-                                                {accessTimeMap.get(ap.access_time_id)}
-                                            </Badge>
-                                        ) : (
-                                            <Badge variant="outline" className="text-xs">{t('allDay', '24/7')}</Badge>
-                                        )}
-                                    </div>
-                                    <div className="flex justify-between items-center">
                                         <span className="text-sm text-muted-foreground">{t('devices', 'Devices')}</span>
                                         <Badge variant="secondary">{ap.access_device_count ?? 0}</Badge>
                                     </div>
@@ -452,7 +402,6 @@ export function AccessPointsPage() {
                 onOpenChange={setShowCreateModal}
                 title={t('createTitle', 'New Access Point')}
                 zones={zones}
-                accessTimes={accessTimes}
                 onSubmit={handleCreate}
             />
 
@@ -466,7 +415,6 @@ export function AccessPointsPage() {
                     title={t('editTitle', 'Edit Access Point')}
                     initial={editingAP}
                     zones={zones}
-                    accessTimes={accessTimes}
                     onSubmit={handleEdit}
                 />
             )}

@@ -1,64 +1,75 @@
-import { useState } from 'react';
-import { Plus, Search, Monitor, Camera, Cpu, Radio, Settings, Eye } from 'lucide-react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@dm3/ui';
+import { useState, useEffect } from 'react';
+import { Plus, Search, Monitor, Camera, Cpu, Radio, Settings, Trash2 } from 'lucide-react';
+import { Button, Card, CardContent, CardHeader, CardTitle, Input, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, AppModal, Label } from '@dm3/ui';
+import { apiFetch } from '@/lib/api';
 
 interface Device {
   id: string;
   name: string;
-  type: 'camera' | 'reader' | 'controller' | 'sensor';
-  location: string;
-  status: 'online' | 'offline' | 'warning' | 'error';
-  ip_address: string;
-  last_seen: string;
+  type: string;
+  status: string;
+  location?: string;
+  device_id?: string;
+  firmware_version?: string;
+  site_id?: string;
+  last_seen?: string;
+  created_at: string;
+  updated_at: string;
 }
 
-const mockDevices: Device[] = [
-  {
-    id: '1',
-    name: 'Main Entrance Camera',
-    type: 'camera',
-    location: 'Ground Floor - Main Entrance',
-    status: 'online',
-    ip_address: '192.168.1.100',
-    last_seen: '2026-04-04 18:30:00'
-  },
-  {
-    id: '2',
-    name: 'Card Reader - Door 1',
-    type: 'reader',
-    location: 'Ground Floor - Reception',
-    status: 'online',
-    ip_address: '192.168.1.101',
-    last_seen: '2026-04-04 18:29:00'
-  },
-  {
-    id: '3',
-    name: 'Access Controller',
-    type: 'controller',
-    location: 'Server Room',
-    status: 'warning',
-    ip_address: '192.168.1.102',
-    last_seen: '2026-04-04 18:15:00'
-  },
-  {
-    id: '4',
-    name: 'Motion Sensor',
-    type: 'sensor',
-    location: 'Floor 2 - Hallway',
-    status: 'offline',
-    ip_address: '192.168.1.103',
-    last_seen: '2026-04-04 17:45:00'
-  }
-];
+interface DeviceFormData {
+  device_id: string;
+  name: string;
+  type: string;
+  location: string;
+  site_id: string;
+}
 
 export function DevicesPage() {
-  const [devices] = useState<Device[]>(mockDevices);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'camera' | 'reader' | 'controller' | 'sensor'>('all');
+  const [filterType, setFilterType] = useState<string>('all');
+
+  // Modal states
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [editingDevice, setEditingDevice] = useState<Device | null>(null);
+  const [deletingDevice, setDeletingDevice] = useState<Device | null>(null);
+  const [formData, setFormData] = useState<DeviceFormData>({
+    device_id: '',
+    name: '',
+    type: 'camera',
+    location: '',
+    site_id: '',
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  const fetchDevices = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await apiFetch<Device[]>('/api/v1/gateway/devices');
+      setDevices(Array.isArray(data) ? data : []);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch devices';
+      setError(message);
+      setDevices([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDevices();
+  }, []);
 
   const filteredDevices = devices.filter(device => {
-    const matchesSearch = device.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         device.location.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (device.name ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (device.location?.toLowerCase() ?? '').includes(searchTerm.toLowerCase());
     const matchesType = filterType === 'all' || device.type === filterType;
     return matchesSearch && matchesType;
   });
@@ -87,6 +98,118 @@ export function DevicesPage() {
   const offlineCount = devices.filter(d => d.status === 'offline').length;
   const warningCount = devices.filter(d => d.status === 'warning').length;
 
+  const handleCreateOpen = () => {
+    setFormData({ device_id: '', name: '', type: 'camera', location: '', site_id: '' });
+    setFormError('');
+    setShowCreateModal(true);
+  };
+
+  const handleEditOpen = (device: Device) => {
+    setEditingDevice(device);
+    setFormData({
+      device_id: device.device_id || '',
+      name: device.name,
+      type: device.type,
+      location: device.location || '',
+      site_id: device.site_id || '',
+    });
+    setFormError('');
+    setShowEditModal(true);
+  };
+
+  const handleDeleteOpen = (device: Device) => {
+    setDeletingDevice(device);
+    setShowDeleteModal(true);
+  };
+
+  const handleCreateDevice = async () => {
+    if (!formData.device_id.trim() || !formData.type.trim()) {
+      setFormError('Device ID and Type are required');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await apiFetch('/api/v1/gateway/devices', {
+        method: 'POST',
+        body: JSON.stringify({
+          device_id: formData.device_id.trim(),
+          name: formData.name.trim() || undefined,
+          type: formData.type.trim(),
+          location: formData.location.trim() || undefined,
+          site_id: formData.site_id.trim() || undefined,
+        }),
+      });
+      setShowCreateModal(false);
+      await fetchDevices();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to create device');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUpdateDevice = async () => {
+    if (!editingDevice) return;
+
+    setSubmitting(true);
+    try {
+      await apiFetch(`/api/v1/gateway/devices/${editingDevice.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: formData.name.trim() || undefined,
+          location: formData.location.trim() || undefined,
+          site_id: formData.site_id.trim() || undefined,
+        }),
+      });
+      setShowEditModal(false);
+      await fetchDevices();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to update device');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteDevice = async () => {
+    if (!deletingDevice) return;
+
+    setSubmitting(true);
+    try {
+      await apiFetch(`/api/v1/gateway/devices/${deletingDevice.id}`, {
+        method: 'DELETE',
+      });
+      setShowDeleteModal(false);
+      await fetchDevices();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to delete device');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+          <p className="text-sm text-muted-foreground">Loading devices...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <p className="text-sm text-red-600">{error}</p>
+          <Button onClick={() => window.location.reload()}>Retry</Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -95,7 +218,7 @@ export function DevicesPage() {
           <h1 className="text-2xl font-semibold">Device Management</h1>
           <p className="text-muted-foreground">Monitor and manage security devices</p>
         </div>
-        <Button>
+        <Button onClick={handleCreateOpen}>
           <Plus size={16} className="mr-2" />
           Add Device
         </Button>
@@ -208,9 +331,8 @@ export function DevicesPage() {
                 <TableHead>Device</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Location</TableHead>
-                <TableHead>IP Address</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Last Seen</TableHead>
+                <TableHead>Firmware</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -220,27 +342,26 @@ export function DevicesPage() {
                   <TableCell>
                     <div className="flex items-center gap-3">
                       {getTypeIcon(device.type)}
-                      <span className="font-medium">{device.name}</span>
+                      <span className="font-medium">{device.name || device.device_id || 'Unknown Device'}</span>
                     </div>
                   </TableCell>
                   <TableCell className="capitalize">{device.type}</TableCell>
-                  <TableCell>{device.location}</TableCell>
-                  <TableCell className="font-mono text-sm">{device.ip_address}</TableCell>
+                  <TableCell>{device.location ?? '—'}</TableCell>
                   <TableCell>
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(device.status)}`}>
                       {device.status}
                     </span>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {device.last_seen}
+                    {device.firmware_version ?? '—'}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" title="View Details">
-                        <Eye size={16} />
-                      </Button>
-                      <Button variant="ghost" size="sm" title="Settings">
+                      <Button variant="ghost" size="sm" title="Edit" onClick={() => handleEditOpen(device)}>
                         <Settings size={16} />
+                      </Button>
+                      <Button variant="ghost" size="sm" title="Delete" onClick={() => handleDeleteOpen(device)}>
+                        <Trash2 size={16} className="text-destructive" />
                       </Button>
                     </div>
                   </TableCell>
@@ -256,6 +377,165 @@ export function DevicesPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Create Device Modal */}
+      <AppModal
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
+        title="Add New Device"
+        size="sm"
+        showCancelButton
+        cancelLabel="Cancel"
+        errorMessage={formError || undefined}
+        primaryAction={{
+          label: submitting ? 'Creating...' : 'Create',
+          onClick: handleCreateDevice,
+          disabled: submitting,
+          loading: submitting,
+        }}
+      >
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="create-device-id">Device ID *</Label>
+            <Input
+              id="create-device-id"
+              value={formData.device_id}
+              onChange={(e) => setFormData({ ...formData, device_id: e.target.value })}
+              placeholder="e.g., ICU300N_001"
+              disabled={submitting}
+            />
+          </div>
+          <div>
+            <Label htmlFor="create-type">Type *</Label>
+            <Input
+              id="create-type"
+              value={formData.type}
+              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+              placeholder="e.g., camera, reader, controller"
+              disabled={submitting}
+            />
+          </div>
+          <div>
+            <Label htmlFor="create-name">Device Name</Label>
+            <Input
+              id="create-name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="Optional display name"
+              disabled={submitting}
+            />
+          </div>
+          <div>
+            <Label htmlFor="create-location">Location</Label>
+            <Input
+              id="create-location"
+              value={formData.location}
+              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+              placeholder="e.g., Main Entrance"
+              disabled={submitting}
+            />
+          </div>
+          <div>
+            <Label htmlFor="create-site">Site ID</Label>
+            <Input
+              id="create-site"
+              value={formData.site_id}
+              onChange={(e) => setFormData({ ...formData, site_id: e.target.value })}
+              placeholder="Optional site identifier"
+              disabled={submitting}
+            />
+          </div>
+        </div>
+      </AppModal>
+
+      {/* Edit Device Modal */}
+      <AppModal
+        open={showEditModal}
+        onOpenChange={setShowEditModal}
+        title="Edit Device"
+        size="sm"
+        showCancelButton
+        cancelLabel="Cancel"
+        errorMessage={formError || undefined}
+        primaryAction={{
+          label: submitting ? 'Saving...' : 'Save',
+          onClick: handleUpdateDevice,
+          disabled: submitting,
+          loading: submitting,
+        }}
+      >
+        <div className="space-y-4">
+          <div>
+            <Label>Device ID</Label>
+            <Input value={formData.device_id} disabled className="bg-muted" />
+          </div>
+          <div>
+            <Label htmlFor="edit-type">Type</Label>
+            <Input
+              id="edit-type"
+              value={formData.type}
+              disabled
+              className="bg-muted"
+            />
+          </div>
+          <div>
+            <Label htmlFor="edit-name">Device Name</Label>
+            <Input
+              id="edit-name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="Display name"
+              disabled={submitting}
+            />
+          </div>
+          <div>
+            <Label htmlFor="edit-location">Location</Label>
+            <Input
+              id="edit-location"
+              value={formData.location}
+              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+              placeholder="e.g., Main Entrance"
+              disabled={submitting}
+            />
+          </div>
+          <div>
+            <Label htmlFor="edit-site">Site ID</Label>
+            <Input
+              id="edit-site"
+              value={formData.site_id}
+              onChange={(e) => setFormData({ ...formData, site_id: e.target.value })}
+              placeholder="Site identifier"
+              disabled={submitting}
+            />
+          </div>
+        </div>
+      </AppModal>
+
+      {/* Delete Device Modal */}
+      <AppModal
+        open={showDeleteModal}
+        onOpenChange={setShowDeleteModal}
+        title="Delete Device"
+        size="sm"
+        showCancelButton
+        cancelLabel="Cancel"
+        primaryAction={{
+          label: submitting ? 'Deleting...' : 'Delete',
+          onClick: handleDeleteDevice,
+          disabled: submitting,
+          loading: submitting,
+          variant: 'destructive',
+        }}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete <span className="font-semibold">{deletingDevice?.name || deletingDevice?.device_id || 'this device'}</span>?
+          </p>
+          <p className="text-xs text-muted-foreground">
+            This action cannot be undone.
+          </p>
+        </div>
+      </AppModal>
     </div>
   );
 }
