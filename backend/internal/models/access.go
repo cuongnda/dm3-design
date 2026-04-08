@@ -63,57 +63,26 @@ type AccessTimeSlot struct {
 
 // ─── Access Point ─────────────────────────────────────────────────────────────
 
-// AccessPoint is a logical entry/exit point that groups physical doors.
+// AccessPoint is a single entrance controlled by one device.
 // access_time_id = nil means 24/7 unrestricted access.
 type AccessPoint struct {
-	ID           string      `json:"id"`
-	TenantID     string      `json:"tenant_id"`
-	ZoneID       *string     `json:"zone_id,omitempty"`
-	AccessTimeID *string     `json:"access_time_id,omitempty"`
-	Name         string      `json:"name"`
-	Description  *string     `json:"description,omitempty"`
-	DoorCount    int         `json:"door_count,omitempty"`
-	Zone         *Zone       `json:"zone,omitempty"`
-	AccessTime   *AccessTime `json:"access_time,omitempty"`
-	CreatedAt    time.Time   `json:"created_at"`
-	UpdatedAt    time.Time   `json:"updated_at"`
-}
-
-// ─── Door (physical device in access context) ─────────────────────────────────
-
-type Door struct {
-	ID               string          `json:"id"`
-	TenantID         string          `json:"tenant_id"`
-	DeviceID         *string         `json:"device_id,omitempty"`
-	Name             string          `json:"name"`
-	Type             string          `json:"type"`
-	Status           string          `json:"status"`
-	State            string          `json:"state"`
-	Mode             string          `json:"mode"`
-	UnlockDurationMs int             `json:"unlock_duration_ms"`
-	AntiPassback     bool            `json:"anti_passback"`
-	EmergencyUnlock  bool            `json:"emergency_unlock"`
-	FirmwareVersion  *string         `json:"firmware_version,omitempty"`
-	IPAddress        *string         `json:"ip_address,omitempty"`
-	LastEventAt      *time.Time      `json:"last_event_at,omitempty"`
-	LastHeartbeatAt  *time.Time      `json:"last_heartbeat_at,omitempty"`
-	ConfigVersion    int             `json:"config_version"`
-	UserDBVersion    int             `json:"user_db_version"`
-	RulesVersion     int             `json:"rules_version"`
-	Metadata         json.RawMessage `json:"metadata,omitempty"`
-	CreatedAt        time.Time       `json:"created_at"`
-	UpdatedAt        time.Time       `json:"updated_at"`
-}
-
-// AccessPointDoor is one row in the access_point_doors junction.
-type AccessPointDoor struct {
-	ID             string    `json:"id"`
-	TenantID       string    `json:"tenant_id"`
-	AccessPointID  string    `json:"access_point_id"`
-	DoorID         string    `json:"door_id"`
-	Role           string    `json:"role"` // reader_in | reader_out | controller | camera
-	Door           *Door     `json:"door,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID               string      `json:"id"`
+	TenantID         string      `json:"tenant_id"`
+	ZoneID           *string     `json:"zone_id,omitempty"`
+	AccessTimeID     *string     `json:"access_time_id,omitempty"`
+	DeviceID         *string     `json:"device_id,omitempty"`
+	Name             string      `json:"name"`
+	Description      *string     `json:"description,omitempty"`
+	Status           string      `json:"status"`
+	State            string      `json:"state"`
+	Mode             string      `json:"mode"`
+	AntiPassback     bool        `json:"anti_passback"`
+	UnlockDurationMs int         `json:"unlock_duration_ms"`
+	LastEventAt      *time.Time  `json:"last_event_at,omitempty"`
+	Zone             *Zone       `json:"zone,omitempty"`
+	AccessTime       *AccessTime `json:"access_time,omitempty"`
+	CreatedAt        time.Time   `json:"created_at"`
+	UpdatedAt        time.Time   `json:"updated_at"`
 }
 
 // AccessGroupAccessPoint is one row in the access_group_access_points junction.
@@ -122,8 +91,20 @@ type AccessGroupAccessPoint struct {
 	TenantID      string       `json:"tenant_id"`
 	AccessGroupID string       `json:"access_group_id"`
 	AccessPointID string       `json:"access_point_id"`
+	AccessTimeID  *string      `json:"access_time_id,omitempty"`
 	AccessPoint   *AccessPoint `json:"access_point,omitempty"`
 	CreatedAt     time.Time    `json:"created_at"`
+}
+
+// AccessGroupUser is one row in the access_group_users junction (M:N user ↔ access group).
+type AccessGroupUser struct {
+	ID            string     `json:"id"`
+	TenantID      string     `json:"tenant_id"`
+	AccessGroupID string     `json:"access_group_id"`
+	UserID        string     `json:"user_id"`
+	EffectiveFrom time.Time  `json:"effective_from"`
+	EffectiveTo   *time.Time `json:"effective_to,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
 }
 
 // ─── Access Rule (legacy, kept for sync package) ──────────────────────────────
@@ -176,12 +157,6 @@ type DashboardStats struct {
 	GrantedToday int           `json:"granted_today"`
 	DeniedToday  int           `json:"denied_today"`
 	RecentEvents []AccessEvent `json:"recent_events"`
-}
-
-type SyncPackage struct {
-	DoorID       string       `json:"door_id"`
-	Rules        []AccessRule `json:"rules"`
-	RulesVersion int          `json:"rules_version"`
 }
 
 // ─── Legacy access time models (kept for existing handlers) ───────────────────

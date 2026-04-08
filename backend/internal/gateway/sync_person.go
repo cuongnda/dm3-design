@@ -81,7 +81,7 @@ func (s *PersonSyncer) PushPersonSync(ctx context.Context, tenantID, deviceID st
 	// 1. Fetch all active users for the tenant
 	userRows, err := s.db.Pool.Query(ctx, `
 		SELECT u.id, CONCAT(u.first_name, ' ', u.last_name),
-		       u.effective_date, u.expired_date, u.access_group_id
+		       u.effective_date, u.expired_date
 		FROM dm3_identity.users u
 		WHERE u.tenant_id = $1::uuid
 		  AND u.status = 'active'
@@ -94,16 +94,15 @@ func (s *PersonSyncer) PushPersonSync(ctx context.Context, tenantID, deviceID st
 	defer userRows.Close()
 
 	type userRow struct {
-		ID            string
-		Name          string
-		ValidFrom     *time.Time
-		ValidUntil    *time.Time
-		AccessGroupID *string
+		ID         string
+		Name       string
+		ValidFrom  *time.Time
+		ValidUntil *time.Time
 	}
 	var users []userRow
 	for userRows.Next() {
 		var u userRow
-		if err := userRows.Scan(&u.ID, &u.Name, &u.ValidFrom, &u.ValidUntil, &u.AccessGroupID); err != nil {
+		if err := userRows.Scan(&u.ID, &u.Name, &u.ValidFrom, &u.ValidUntil); err != nil {
 			slog.Warn("person_sync: scan user", "error", err)
 			continue
 		}
@@ -152,6 +151,30 @@ func (s *PersonSyncer) PushPersonSync(ctx context.Context, tenantID, deviceID st
 		return fmt.Errorf("person_sync: iterate credentials: %w", err)
 	}
 
+	// 2b. Fetch user → access_group mappings from junction table
+	aguRows, err := s.db.Pool.Query(ctx, `
+		SELECT agu.user_id::text, agu.access_group_id::text
+		FROM dm3_access.access_group_users agu
+		WHERE agu.tenant_id = $1::uuid
+		  AND (agu.effective_to IS NULL OR agu.effective_to > now())
+	`, tenantID)
+	if err != nil {
+		return fmt.Errorf("person_sync: query user groups: %w", err)
+	}
+	defer aguRows.Close()
+
+	groupsByUser := map[string][]string{} // user_id → []access_group_id
+	for aguRows.Next() {
+		var userID, groupID string
+		if err := aguRows.Scan(&userID, &groupID); err != nil {
+			continue
+		}
+		groupsByUser[userID] = append(groupsByUser[userID], groupID)
+	}
+	if err := aguRows.Err(); err != nil {
+		return fmt.Errorf("person_sync: iterate user groups: %w", err)
+	}
+
 	// 3. Fetch access zones per access_group (access_group → access_point → zone)
 	zoneRows, err := s.db.Pool.Query(ctx, `
 		SELECT agap.access_group_id, z.id::text
@@ -179,12 +202,13 @@ func (s *PersonSyncer) PushPersonSync(ctx context.Context, tenantID, deviceID st
 		return fmt.Errorf("person_sync: iterate zones: %w", err)
 	}
 
-	// 4. Fetch schedule_id per access_group (access_group → access_point → access_time)
+	// 4. Fetch schedule_id per access_group (prefer group-specific, fall back to AP default)
 	schedRows, err := s.db.Pool.Query(ctx, `
-		SELECT DISTINCT agap.access_group_id, ap.access_time_id::text
+		SELECT DISTINCT agap.access_group_id, COALESCE(agap.access_time_id, ap.access_time_id)::text
 		FROM dm3_access.access_group_access_points agap
 		JOIN dm3_access.access_points ap ON ap.id = agap.access_point_id
-		WHERE agap.tenant_id = $1::uuid AND ap.access_time_id IS NOT NULL
+		WHERE agap.tenant_id = $1::uuid
+		  AND COALESCE(agap.access_time_id, ap.access_time_id) IS NOT NULL
 	`, tenantID)
 	if err != nil {
 		return fmt.Errorf("person_sync: query schedules: %w", err)
@@ -220,10 +244,17 @@ func (s *PersonSyncer) PushPersonSync(ctx context.Context, tenantID, deviceID st
 			ms := u.ValidUntil.UnixMilli()
 			su.ValidUntil = &ms
 		}
-		if u.AccessGroupID != nil {
-			su.AccessZones = zonesByGroup[*u.AccessGroupID]
-			if sched, ok := schedByGroup[*u.AccessGroupID]; ok {
-				su.ScheduleID = &sched
+		// Aggregate zones and schedule from all access groups the user belongs to
+		for _, gid := range groupsByUser[u.ID] {
+			for _, z := range zonesByGroup[gid] {
+				if !slices.Contains(su.AccessZones, z) {
+					su.AccessZones = append(su.AccessZones, z)
+				}
+			}
+			if su.ScheduleID == nil {
+				if sched, ok := schedByGroup[gid]; ok {
+					su.ScheduleID = &sched
+				}
 			}
 		}
 		if su.AccessZones == nil {

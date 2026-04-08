@@ -277,17 +277,3 @@ func (h *AccessHandlers) ListZoneDoors(w http.ResponseWriter, r *http.Request) {
 	httputil.Paginated(w, accessPoints, total, page, limit)
 }
 
-// GET /doors/:id/devices — stubbed: dm3_access.door_devices is dropped
-func (h *AccessHandlers) ListDoorDevices(w http.ResponseWriter, r *http.Request) {
-	httputil.Error(w, http.StatusNotImplemented, "door devices have been replaced by access point doors")
-}
-
-// POST /doors/:id/devices — stubbed: dm3_access.door_devices is dropped
-func (h *AccessHandlers) AddDoorDevice(w http.ResponseWriter, r *http.Request) {
-	httputil.Error(w, http.StatusNotImplemented, "door devices have been replaced by access point doors")
-}
-
-// DELETE /doors/:id/devices/:deviceId — stubbed: dm3_access.door_devices is dropped
-func (h *AccessHandlers) RemoveDoorDevice(w http.ResponseWriter, r *http.Request) {
-	httputil.Error(w, http.StatusNotImplemented, "door devices have been replaced by access point doors")
-}

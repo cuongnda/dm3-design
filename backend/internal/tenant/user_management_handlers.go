@@ -91,7 +91,14 @@ func (h *UserManagementHandlers) GetUsers(w http.ResponseWriter, r *http.Request
 		FROM dm3_identity.users u
 		LEFT JOIN dm3_auth.accounts a ON u.account_id = a.id
 		LEFT JOIN dm3_identity.departments d ON u.department_id = d.id
-		LEFT JOIN dm3_access.access_groups ag ON u.access_group_id = ag.id
+		LEFT JOIN LATERAL (
+			SELECT string_agg(ag2.name, ', ' ORDER BY ag2.name) AS name
+			FROM dm3_access.access_group_users agu2
+			JOIN dm3_access.access_groups ag2 ON ag2.id = agu2.access_group_id
+				AND (ag2.is_deleted = false OR ag2.is_deleted IS NULL)
+			WHERE agu2.user_id = u.id
+			  AND (agu2.effective_to IS NULL OR agu2.effective_to > now())
+		) ag ON true
 		WHERE u.tenant_id = $1::uuid
 		AND (u.is_deleted = false OR u.is_deleted IS NULL)
 	`
@@ -120,9 +127,9 @@ func (h *UserManagementHandlers) GetUsers(w http.ResponseWriter, r *http.Request
 		argIndex++
 	}
 
-	// Add access group filter
+	// Add access group filter (via junction table)
 	if accessGroupID != "" {
-		query += fmt.Sprintf(` AND u.access_group_id = $%d::uuid`, argIndex)
+		query += fmt.Sprintf(` AND u.id IN (SELECT agu.user_id FROM dm3_access.access_group_users agu WHERE agu.access_group_id = $%d::uuid AND (agu.effective_to IS NULL OR agu.effective_to > now()))`, argIndex)
 		args = append(args, accessGroupID)
 		argIndex++
 	}
@@ -898,44 +905,48 @@ func (h *UserManagementHandlers) BulkUpdateDepartment(w http.ResponseWriter, r *
 	})
 }
 
-// BulkUpdateAccessGroup updates access group for multiple users
+// BulkUpdateAccessGroup assigns multiple users to an access group via the junction table
 func (h *UserManagementHandlers) BulkUpdateAccessGroup(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		UserIDs       []string `json:"user_ids"`
 		AccessGroupID string   `json:"access_group_id"`
 	}
-	
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	
+
 	if len(req.UserIDs) == 0 || req.AccessGroupID == "" {
 		httputil.Error(w, http.StatusBadRequest, "user_ids and access_group_id required")
 		return
 	}
-	
+
 	// Get tenant ID for validation
 	tenantID, err := TenantIDFromContext(r.Context())
 	if err != nil {
 		httputil.Error(w, http.StatusBadRequest, "tenant context required")
 		return
 	}
-	
+
 	result, err := h.db.Pool.Exec(r.Context(), `
-		UPDATE dm3_identity.users 
-		SET access_group_id = $1::uuid, updated_on = NOW()
-		WHERE id = ANY($2::uuid[]) AND tenant_id = $3::uuid AND is_deleted = false
+		INSERT INTO dm3_access.access_group_users (tenant_id, access_group_id, user_id)
+		SELECT u.tenant_id, $1::uuid, u.id
+		FROM dm3_identity.users u
+		WHERE u.id = ANY($2::uuid[])
+		  AND u.tenant_id = $3::uuid
+		  AND (u.is_deleted = false OR u.is_deleted IS NULL)
+		ON CONFLICT (access_group_id, user_id) DO NOTHING
 	`, req.AccessGroupID, req.UserIDs, tenantID)
-	
+
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to update users")
+		httputil.Error(w, http.StatusInternalServerError, "failed to assign users")
 		return
 	}
-	
+
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{
-		"message": fmt.Sprintf("updated %d users", result.RowsAffected()),
-		"updated_count": result.RowsAffected(),
+		"message": fmt.Sprintf("assigned %d users", result.RowsAffected()),
+		"assigned_count": result.RowsAffected(),
 	})
 }
 

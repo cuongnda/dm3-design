@@ -117,24 +117,9 @@ func main() {
 			apr.Get("/access-points/{id}", handlers.GetAccessPoint)
 			apr.Put("/access-points/{id}", handlers.UpdateAccessPoint)
 			apr.Delete("/access-points/{id}", handlers.DeleteAccessPoint)
-			apr.Get("/access-points/{id}/doors", handlers.ListAccessPointDoors)
-			apr.Post("/access-points/{id}/doors", handlers.AddAccessPointDoor)
-			apr.Delete("/access-points/{id}/doors/{doorId}", handlers.RemoveAccessPointDoor)
 			apr.Get("/access-points/{id}/access-groups", handlers.ListAccessPointGroups)
 			apr.Post("/access-points/{id}/access-groups", handlers.AddAccessPointGroup)
 			apr.Delete("/access-points/{id}/access-groups/{groupId}", handlers.RemoveAccessPointGroup)
-		})
-
-		// Doors
-		r.Group(func(dr chi.Router) {
-			dr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
-			dr.Get("/doors", handlers.ListDoors)
-			dr.Post("/doors", handlers.CreateDoor)
-			dr.Post("/doors/bulk-delete", handlers.BulkDeleteDoors)
-			dr.Get("/doors/{id}", handlers.GetDoor)
-			dr.Put("/doors/{id}", handlers.UpdateDoor)
-			dr.Delete("/doors/{id}", handlers.DeleteDoor)
-			dr.Get("/doors/{id}/sync-package", handlers.GetSyncPackage)
 		})
 
 		// Access Groups

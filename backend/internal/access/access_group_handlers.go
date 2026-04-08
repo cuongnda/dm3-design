@@ -44,11 +44,12 @@ func (h *AccessHandlers) ListAccessGroups(w http.ResponseWriter, r *http.Request
 	query := fmt.Sprintf(`
 		SELECT ag.id, ag.tenant_id, ag.parent_id, ag.name, ag.is_default, ag.type,
 		       COUNT(DISTINCT agap.access_point_id) AS access_point_count,
-		       COUNT(DISTINCT u.id) AS user_count,
+		       COUNT(DISTINCT agu.user_id) AS user_count,
 		       ag.created_on, ag.updated_on
 		FROM dm3_access.access_groups ag
 		LEFT JOIN dm3_access.access_group_access_points agap ON agap.access_group_id = ag.id
-		LEFT JOIN dm3_identity.users u ON u.access_group_id = ag.id AND (u.is_deleted = false OR u.is_deleted IS NULL)
+		LEFT JOIN dm3_access.access_group_users agu ON agu.access_group_id = ag.id
+		    AND (agu.effective_to IS NULL OR agu.effective_to > now())
 		%s
 		GROUP BY ag.id
 		ORDER BY ag.name ASC
@@ -80,20 +81,26 @@ func (h *AccessHandlers) GetAccessGroup(w http.ResponseWriter, r *http.Request) 
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+
 	var g models.AccessGroup
 	err := h.db.Pool.QueryRow(r.Context(),
 		`SELECT ag.id, ag.tenant_id, ag.parent_id, ag.name, ag.is_default, ag.type,
 		        COUNT(DISTINCT agap.access_point_id) AS access_point_count,
-		        COUNT(DISTINCT u.id) AS user_count,
+		        COUNT(DISTINCT agu.user_id) AS user_count,
 		        ag.created_on, ag.updated_on
 		 FROM dm3_access.access_groups ag
 		 LEFT JOIN dm3_access.access_group_access_points agap ON agap.access_group_id = ag.id
-		 LEFT JOIN dm3_identity.users u ON u.access_group_id = ag.id AND (u.is_deleted = false OR u.is_deleted IS NULL)
+		 LEFT JOIN dm3_access.access_group_users agu ON agu.access_group_id = ag.id
+		     AND (agu.effective_to IS NULL OR agu.effective_to > now())
 		 WHERE ag.id = $1::uuid
-		   AND ($2::uuid IS NULL OR ag.tenant_id = $2::uuid)
+		   AND ag.tenant_id = $2::uuid
 		   AND ag.is_deleted = false
 		 GROUP BY ag.id`,
-		id, nilIfEmpty(cid),
+		id, cid,
 	).Scan(&g.ID, &g.TenantID, &g.ParentID, &g.Name, &g.IsDefault, &g.Type,
 		&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
@@ -157,6 +164,11 @@ func (h *AccessHandlers) UpdateAccessGroup(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+
 	var g models.AccessGroup
 	err := h.db.Pool.QueryRow(r.Context(),
 		`UPDATE dm3_access.access_groups
@@ -165,10 +177,10 @@ func (h *AccessHandlers) UpdateAccessGroup(w http.ResponseWriter, r *http.Reques
 		     is_default = COALESCE($4, is_default),
 		     updated_on = now()
 		 WHERE id = $1::uuid
-		   AND ($5::uuid IS NULL OR tenant_id = $5::uuid)
+		   AND tenant_id = $5::uuid
 		   AND is_deleted = false
 		 RETURNING id, tenant_id, parent_id, name, is_default, type, 0, 0, created_on, updated_on`,
-		id, req.Name, req.ParentID, req.IsDefault, nilIfEmpty(cid),
+		id, req.Name, req.ParentID, req.IsDefault, cid,
 	).Scan(&g.ID, &g.TenantID, &g.ParentID, &g.Name, &g.IsDefault, &g.Type,
 		&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
@@ -233,13 +245,17 @@ func (h *AccessHandlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *h
 	groupID := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+
 	// Verify group exists
 	var exists bool
 	_ = h.db.Pool.QueryRow(r.Context(),
 		`SELECT EXISTS(SELECT 1 FROM dm3_access.access_groups
-		  WHERE id = $1::uuid AND is_deleted = false
-		    AND ($2::uuid IS NULL OR tenant_id = $2::uuid))`,
-		groupID, nilIfEmpty(cid),
+		  WHERE id = $1::uuid AND is_deleted = false AND tenant_id = $2::uuid)`,
+		groupID, cid,
 	).Scan(&exists)
 	if !exists {
 		httputil.Error(w, http.StatusNotFound, "access group not found")
@@ -248,7 +264,7 @@ func (h *AccessHandlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *h
 
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT agap.id, agap.tenant_id, agap.access_group_id, agap.access_point_id,
-		        agap.created_at,
+		        agap.access_time_id, agap.created_at,
 		        ap.name, ap.description
 		 FROM dm3_access.access_group_access_points agap
 		 JOIN dm3_access.access_points ap ON ap.id = agap.access_point_id
@@ -270,7 +286,7 @@ func (h *AccessHandlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *h
 
 		if err := rows.Scan(
 			&item.ID, &item.TenantID, &item.AccessGroupID, &item.AccessPointID,
-			&item.CreatedAt,
+			&item.AccessTimeID, &item.CreatedAt,
 			&ap.Name, &ap.Description,
 		); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
@@ -289,7 +305,8 @@ func (h *AccessHandlers) AddAccessGroupAccessPoint(w http.ResponseWriter, r *htt
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
 	var req struct {
-		AccessPointID string `json:"access_point_id"`
+		AccessPointID string  `json:"access_point_id"`
+		AccessTimeID  *string `json:"access_time_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -303,11 +320,12 @@ func (h *AccessHandlers) AddAccessGroupAccessPoint(w http.ResponseWriter, r *htt
 	var id string
 	err := h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO dm3_access.access_group_access_points
-		    (tenant_id, access_group_id, access_point_id)
-		 VALUES ($1::uuid, $2::uuid, $3::uuid)
-		 ON CONFLICT (access_group_id, access_point_id) DO NOTHING
+		    (tenant_id, access_group_id, access_point_id, access_time_id)
+		 VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid)
+		 ON CONFLICT (access_group_id, access_point_id) DO UPDATE
+		   SET access_time_id = EXCLUDED.access_time_id
 		 RETURNING id`,
-		cid, groupID, req.AccessPointID,
+		cid, groupID, req.AccessPointID, req.AccessTimeID,
 	).Scan(&id)
 	if err != nil {
 		slog.Error("add access group access point error", "error", err)
@@ -321,13 +339,16 @@ func (h *AccessHandlers) AddAccessGroupAccessPoint(w http.ResponseWriter, r *htt
 func (h *AccessHandlers) ListAccessGroupUsers(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
 
 	var exists bool
 	_ = h.db.Pool.QueryRow(r.Context(),
 		`SELECT EXISTS(SELECT 1 FROM dm3_access.access_groups
-		  WHERE id = $1::uuid AND is_deleted = false
-		    AND ($2::uuid IS NULL OR tenant_id = $2::uuid))`,
-		groupID, nilIfEmpty(cid),
+		  WHERE id = $1::uuid AND is_deleted = false AND tenant_id = $2::uuid)`,
+		groupID, cid,
 	).Scan(&exists)
 	if !exists {
 		httputil.Error(w, http.StatusNotFound, "access group not found")
@@ -335,19 +356,24 @@ func (h *AccessHandlers) ListAccessGroupUsers(w http.ResponseWriter, r *http.Req
 	}
 
 	type userRow struct {
-		ID        string  `json:"id"`
-		FirstName string  `json:"first_name"`
-		LastName  string  `json:"last_name"`
-		Email     *string `json:"email,omitempty"`
-		Position  *string `json:"position,omitempty"`
-		Status    string  `json:"status"`
+		ID            string     `json:"id"`
+		FirstName     string     `json:"first_name"`
+		LastName      string     `json:"last_name"`
+		Email         *string    `json:"email,omitempty"`
+		Position      *string    `json:"position,omitempty"`
+		Status        string     `json:"status"`
+		EffectiveFrom *string    `json:"effective_from,omitempty"`
+		EffectiveTo   *string    `json:"effective_to,omitempty"`
 	}
 
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT u.id, u.first_name, u.last_name, u.email, u.position, u.status
-		 FROM dm3_identity.users u
-		 WHERE u.access_group_id = $1::uuid
+		`SELECT u.id, u.first_name, u.last_name, u.email, u.position, u.status,
+		        agu.effective_from::text, agu.effective_to::text
+		 FROM dm3_access.access_group_users agu
+		 JOIN dm3_identity.users u ON u.id = agu.user_id
+		 WHERE agu.access_group_id = $1::uuid
 		   AND (u.is_deleted = false OR u.is_deleted IS NULL)
+		   AND (agu.effective_to IS NULL OR agu.effective_to > now())
 		 ORDER BY u.last_name ASC, u.first_name ASC`,
 		groupID,
 	)
@@ -361,7 +387,8 @@ func (h *AccessHandlers) ListAccessGroupUsers(w http.ResponseWriter, r *http.Req
 	users := []userRow{}
 	for rows.Next() {
 		var u userRow
-		if err := rows.Scan(&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Position, &u.Status); err != nil {
+		if err := rows.Scan(&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Position, &u.Status,
+			&u.EffectiveFrom, &u.EffectiveTo); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
@@ -374,6 +401,10 @@ func (h *AccessHandlers) ListAccessGroupUsers(w http.ResponseWriter, r *http.Req
 func (h *AccessHandlers) AssignUsersToGroup(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
 
 	var req struct {
 		UserIDs []string `json:"user_ids"`
@@ -386,9 +417,8 @@ func (h *AccessHandlers) AssignUsersToGroup(w http.ResponseWriter, r *http.Reque
 	var exists bool
 	_ = h.db.Pool.QueryRow(r.Context(),
 		`SELECT EXISTS(SELECT 1 FROM dm3_access.access_groups
-		  WHERE id = $1::uuid AND is_deleted = false
-		    AND ($2::uuid IS NULL OR tenant_id = $2::uuid))`,
-		groupID, nilIfEmpty(cid),
+		  WHERE id = $1::uuid AND is_deleted = false AND tenant_id = $2::uuid)`,
+		groupID, cid,
 	).Scan(&exists)
 	if !exists {
 		httputil.Error(w, http.StatusNotFound, "access group not found")
@@ -396,18 +426,21 @@ func (h *AccessHandlers) AssignUsersToGroup(w http.ResponseWriter, r *http.Reque
 	}
 
 	tag, err := h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_identity.users SET access_group_id = $1::uuid, updated_at = now()
-		 WHERE id = ANY($2::uuid[])
-		   AND ($3::uuid IS NULL OR tenant_id = $3::uuid)
-		   AND (is_deleted = false OR is_deleted IS NULL)`,
-		groupID, req.UserIDs, nilIfEmpty(cid),
+		`INSERT INTO dm3_access.access_group_users (tenant_id, access_group_id, user_id)
+		 SELECT u.tenant_id, $1::uuid, u.id
+		 FROM dm3_identity.users u
+		 WHERE u.id = ANY($2::uuid[])
+		   AND u.tenant_id = $3::uuid
+		   AND (u.is_deleted = false OR u.is_deleted IS NULL)
+		 ON CONFLICT (access_group_id, user_id) DO NOTHING`,
+		groupID, req.UserIDs, cid,
 	)
 	if err != nil {
 		slog.Error("assign users to group error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	httputil.JSON(w, http.StatusOK, map[string]any{"updated": tag.RowsAffected()})
+	httputil.JSON(w, http.StatusOK, map[string]any{"assigned": tag.RowsAffected()})
 }
 
 // DELETE /access-groups/:id/users/:userId — remove user from group
@@ -415,13 +448,15 @@ func (h *AccessHandlers) RemoveUserFromGroup(w http.ResponseWriter, r *http.Requ
 	groupID := chi.URLParam(r, "id")
 	userID := chi.URLParam(r, "userId")
 	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
 
 	tag, err := h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_identity.users SET access_group_id = NULL, updated_at = now()
-		 WHERE id = $1::uuid AND access_group_id = $2::uuid
-		   AND ($3::uuid IS NULL OR tenant_id = $3::uuid)
-		   AND (is_deleted = false OR is_deleted IS NULL)`,
-		userID, groupID, nilIfEmpty(cid),
+		`DELETE FROM dm3_access.access_group_users
+		 WHERE access_group_id = $1::uuid AND user_id = $2::uuid AND tenant_id = $3::uuid`,
+		groupID, userID, cid,
 	)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
