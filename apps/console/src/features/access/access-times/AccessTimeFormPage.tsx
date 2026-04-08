@@ -138,23 +138,28 @@ export function AccessTimeFormPage() {
                 });
             });
 
-            const payload = {
-                name: name.trim(),
-                description: description.trim() || undefined,
-                timezone,
-                is_active: isActive,
-                slots: slotInputs,
-            };
-
             if (isNew) {
+                const createPayload = {
+                    name: name.trim(),
+                    description: description.trim() || undefined,
+                    timezone,
+                    time_slots: slotInputs,
+                };
                 await apiFetch('/api/v1/access/access-times', {
                     method: 'POST',
-                    body: JSON.stringify(payload),
+                    body: JSON.stringify(createPayload),
                 });
             } else {
+                const updatePayload = {
+                    name: name.trim(),
+                    description: description.trim() || undefined,
+                    timezone,
+                    is_active: isActive,
+                    time_slots: slotInputs,
+                };
                 await apiFetch(`/api/v1/access/access-times/${id}`, {
                     method: 'PUT',
-                    body: JSON.stringify(payload),
+                    body: JSON.stringify(updatePayload),
                 });
             }
             navigate('/access/access-times');
