@@ -20,16 +20,16 @@ func (h *AccessHandlers) ListZones(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
-	where := "WHERE 1=1"
-	args := []any{}
-	idx := 1
-
 	cid := authsvc.CompanyIDFromContext(r.Context())
-	if cid != "" {
-		where += fmt.Sprintf(" AND z.tenant_id = $%d::uuid", idx)
-		args = append(args, cid)
-		idx++
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
 	}
+
+	where := "WHERE z.tenant_id = $1::uuid"
+	args := []any{cid}
+	idx := 2
+
 	if v := r.URL.Query().Get("parent_id"); v != "" {
 		where += fmt.Sprintf(" AND z.parent_id = $%d::uuid", idx)
 		args = append(args, v)
@@ -62,7 +62,7 @@ func (h *AccessHandlers) ListZones(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
 		slog.Error("list zones query error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
@@ -72,7 +72,7 @@ func (h *AccessHandlers) ListZones(w http.ResponseWriter, r *http.Request) {
 		var z models.Zone
 		if err := rows.Scan(&z.ID, &z.TenantID, &z.ParentID, &z.Name, &z.Description,
 			&z.AccessPointCount, &z.CreatedAt, &z.UpdatedAt); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		zones = append(zones, z)
@@ -108,7 +108,7 @@ func (h *AccessHandlers) CreateZone(w http.ResponseWriter, r *http.Request) {
 		&z.AccessPointCount, &z.CreatedAt, &z.UpdatedAt)
 	if err != nil {
 		slog.Error("create zone error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusCreated, z)
@@ -175,15 +175,15 @@ func (h *AccessHandlers) DeleteZone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
-	query := `DELETE FROM dm3_access.zones WHERE id = $1::uuid`
-	args := []any{id}
-	if cid != "" {
-		query += " AND tenant_id = $2::uuid"
-		args = append(args, cid)
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
 	}
+	query := `DELETE FROM dm3_access.zones WHERE id = $1::uuid AND tenant_id = $2::uuid`
+	args := []any{id, cid}
 	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -217,7 +217,7 @@ func (h *AccessHandlers) BulkDeleteZones(w http.ResponseWriter, r *http.Request)
 	)
 	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusOK, map[string]any{"deleted": tag.RowsAffected()})
@@ -230,15 +230,14 @@ func (h *AccessHandlers) ListZoneDoors(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
-	where := "WHERE zone_id = $1::uuid"
-	args := []any{zoneID}
-	idx := 2
-
-	if cid != "" {
-		where += fmt.Sprintf(" AND tenant_id = $%d::uuid", idx)
-		args = append(args, cid)
-		idx++
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
 	}
+
+	where := "WHERE zone_id = $1::uuid AND tenant_id = $2::uuid"
+	args := []any{zoneID, cid}
+	idx := 3
 	if v := r.URL.Query().Get("search"); v != "" {
 		where += fmt.Sprintf(" AND name ILIKE $%d", idx)
 		args = append(args, "%"+v+"%")
@@ -260,7 +259,7 @@ func (h *AccessHandlers) ListZoneDoors(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
 		slog.Error("list zone access points error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
@@ -270,7 +269,7 @@ func (h *AccessHandlers) ListZoneDoors(w http.ResponseWriter, r *http.Request) {
 		var ap models.AccessPoint
 		if err := rows.Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
 			&ap.Name, &ap.Description, &ap.CreatedAt, &ap.UpdatedAt); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		accessPoints = append(accessPoints, ap)

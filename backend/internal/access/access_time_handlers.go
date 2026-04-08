@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"errors"
+
 	"github.com/jackc/pgx/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
@@ -28,11 +30,13 @@ func (h *AccessHandlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.
 	idx := 1
 
 	cid := authsvc.CompanyIDFromContext(r.Context())
-	if cid != "" {
-		where += fmt.Sprintf(" AND t.tenant_id = $%d::uuid", idx)
-		args = append(args, cid)
-		idx++
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
 	}
+	where += fmt.Sprintf(" AND t.tenant_id = $%d::uuid", idx)
+	args = append(args, cid)
+	idx++
 
 	if v := r.URL.Query().Get("active"); v != "" {
 		where += fmt.Sprintf(" AND t.is_active = $%d", idx)
@@ -103,7 +107,7 @@ func (h *AccessHandlers) GetAccessTimeTemplate(w http.ResponseWriter, r *http.Re
 		&template.CreatedAt, &template.UpdatedAt,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			i18n.ErrorResponse(w, r, http.StatusNotFound, "access_time.template_not_found")
 			return
 		}
@@ -156,7 +160,12 @@ func (h *AccessHandlers) CreateAccessTimeTemplate(w http.ResponseWriter, r *http
 	}
 
 	companyID := authsvc.CompanyIDFromContext(r.Context())
-	userID := authsvc.ClaimsFromContext(r.Context()).Sub
+	claims := authsvc.ClaimsFromContext(r.Context())
+	if claims == nil {
+		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "system.unauthorized")
+		return
+	}
+	userID := claims.Sub
 
 	// Validate required fields
 	if req.Name == "" {
@@ -420,13 +429,4 @@ func (h *AccessHandlers) GetAccessTimeStats(w http.ResponseWriter, r *http.Reque
 	}
 
 	httputil.JSON(w, http.StatusOK, stats)
-}
-
-// ─── Helper Functions ────────────────────────────────────────────────────────
-
-func getSlotDisplayName(slotName *string) string {
-	if slotName != nil && *slotName != "" {
-		return *slotName
-	}
-	return "time"
 }

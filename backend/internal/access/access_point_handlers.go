@@ -59,7 +59,7 @@ func (h *AccessHandlers) ListAccessPoints(w http.ResponseWriter, r *http.Request
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
 		slog.Error("list access points query error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
@@ -70,7 +70,7 @@ func (h *AccessHandlers) ListAccessPoints(w http.ResponseWriter, r *http.Request
 		if err := rows.Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
 			&ap.Name, &ap.Description, &ap.DoorCount,
 			&ap.CreatedAt, &ap.UpdatedAt); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		aps = append(aps, ap)
@@ -133,7 +133,7 @@ func (h *AccessHandlers) CreateAccessPoint(w http.ResponseWriter, r *http.Reques
 		&ap.CreatedAt, &ap.UpdatedAt)
 	if err != nil {
 		slog.Error("create access point error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusCreated, ap)
@@ -185,7 +185,7 @@ func (h *AccessHandlers) DeleteAccessPoint(w http.ResponseWriter, r *http.Reques
 		`DELETE FROM dm3_access.access_points WHERE id = $1::uuid AND tenant_id = $2::uuid`,
 		id, cid)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -213,7 +213,7 @@ func (h *AccessHandlers) BulkDeleteAccessPoints(w http.ResponseWriter, r *http.R
 	query := fmt.Sprintf(`DELETE FROM dm3_access.access_points WHERE tenant_id = $1::uuid AND id IN (%s)`, strings.Join(placeholders, ","))
 	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusOK, map[string]any{"deleted": tag.RowsAffected()})
@@ -247,7 +247,7 @@ func (h *AccessHandlers) ListAccessPointDoors(w http.ResponseWriter, r *http.Req
 	)
 	if err != nil {
 		slog.Error("list access point doors error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
@@ -260,7 +260,7 @@ func (h *AccessHandlers) ListAccessPointDoors(w http.ResponseWriter, r *http.Req
 			&item.ID, &item.TenantID, &item.AccessPointID, &item.DoorID, &item.Role, &item.CreatedAt,
 			&d.Name, &d.Type, &d.Status, &d.State,
 		); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		d.ID = item.DoorID
@@ -301,7 +301,7 @@ func (h *AccessHandlers) AddAccessPointDoor(w http.ResponseWriter, r *http.Reque
 	).Scan(&id)
 	if err != nil {
 		slog.Error("add access point door error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id})
@@ -338,7 +338,7 @@ func (h *AccessHandlers) ListAccessPointGroups(w http.ResponseWriter, r *http.Re
 	)
 	if err != nil {
 		slog.Error("list access point groups error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
@@ -347,7 +347,7 @@ func (h *AccessHandlers) ListAccessPointGroups(w http.ResponseWriter, r *http.Re
 	for rows.Next() {
 		var ag models.AccessGroup
 		if err := rows.Scan(&ag.ID, &ag.TenantID, &ag.Name, &ag.UserCount); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		result = append(result, ag)
@@ -382,7 +382,7 @@ func (h *AccessHandlers) AddAccessPointGroup(w http.ResponseWriter, r *http.Requ
 	).Scan(&id)
 	if err != nil {
 		slog.Error("add access point group error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id})
@@ -392,14 +392,19 @@ func (h *AccessHandlers) AddAccessPointGroup(w http.ResponseWriter, r *http.Requ
 func (h *AccessHandlers) RemoveAccessPointGroup(w http.ResponseWriter, r *http.Request) {
 	apID := chi.URLParam(r, "id")
 	groupID := chi.URLParam(r, "groupId")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
 
 	tag, err := h.db.Pool.Exec(r.Context(),
 		`DELETE FROM dm3_access.access_group_access_points
-		 WHERE access_point_id = $1::uuid AND access_group_id = $2::uuid`,
-		apID, groupID,
+		 WHERE access_point_id = $1::uuid AND access_group_id = $2::uuid AND tenant_id = $3::uuid`,
+		apID, groupID, cid,
 	)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -413,14 +418,19 @@ func (h *AccessHandlers) RemoveAccessPointGroup(w http.ResponseWriter, r *http.R
 func (h *AccessHandlers) RemoveAccessPointDoor(w http.ResponseWriter, r *http.Request) {
 	apID := chi.URLParam(r, "id")
 	doorID := chi.URLParam(r, "doorId")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
 
 	tag, err := h.db.Pool.Exec(r.Context(),
 		`DELETE FROM dm3_access.access_point_doors
-		 WHERE access_point_id = $1::uuid AND door_id = $2::uuid`,
-		apID, doorID,
+		 WHERE access_point_id = $1::uuid AND door_id = $2::uuid AND tenant_id = $3::uuid`,
+		apID, doorID, cid,
 	)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if tag.RowsAffected() == 0 {

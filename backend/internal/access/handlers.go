@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"errors"
+
 	"github.com/jackc/pgx/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
@@ -32,15 +34,15 @@ func (h *AccessHandlers) ListDoors(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
-	where := "WHERE 1=1"
-	args := []any{}
-	idx := 1
-
-	if cid := authsvc.CompanyIDFromContext(r.Context()); cid != "" {
-		where += fmt.Sprintf(" AND tenant_id = $%d::uuid", idx)
-		args = append(args, cid)
-		idx++
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
 	}
+
+	where := "WHERE tenant_id = $1::uuid"
+	args := []any{cid}
+	idx := 2
 
 	if v := r.URL.Query().Get("status"); v != "" {
 		where += fmt.Sprintf(" AND status = $%d", idx)
@@ -78,7 +80,7 @@ func (h *AccessHandlers) ListDoors(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
 		slog.Error("list doors query error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
@@ -91,7 +93,7 @@ func (h *AccessHandlers) ListDoors(w http.ResponseWriter, r *http.Request) {
 			&d.FirmwareVersion, &d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt,
 			&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Metadata,
 			&d.CreatedAt, &d.UpdatedAt); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		doors = append(doors, d)
@@ -149,7 +151,7 @@ func (h *AccessHandlers) CreateDoor(w http.ResponseWriter, r *http.Request) {
 		&d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
 		slog.Error("create door error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusCreated, d)
@@ -212,15 +214,15 @@ func (h *AccessHandlers) UpdateDoor(w http.ResponseWriter, r *http.Request) {
 func (h *AccessHandlers) DeleteDoor(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
-	query := `DELETE FROM dm3_access.doors WHERE id = $1::uuid`
-	args := []any{id}
-	if cid != "" {
-		query += " AND tenant_id = $2::uuid"
-		args = append(args, cid)
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
 	}
+	query := `DELETE FROM dm3_access.doors WHERE id = $1::uuid AND tenant_id = $2::uuid`
+	args := []any{id, cid}
 	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -248,7 +250,7 @@ func (h *AccessHandlers) BulkDeleteDoors(w http.ResponseWriter, r *http.Request)
 	query := fmt.Sprintf(`DELETE FROM dm3_access.doors WHERE tenant_id = $1::uuid AND id IN (%s)`, strings.Join(placeholders, ","))
 	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusOK, map[string]any{"deleted": tag.RowsAffected()})
@@ -304,15 +306,15 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
-	where := "WHERE 1=1"
-	args := []any{}
-	idx := 1
-
-	if cid := authsvc.CompanyIDFromContext(r.Context()); cid != "" {
-		where += fmt.Sprintf(" AND tenant_id = $%d::uuid", idx)
-		args = append(args, cid)
-		idx++
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
 	}
+
+	where := "WHERE tenant_id = $1::uuid"
+	args := []any{cid}
+	idx := 2
 
 	if v := r.URL.Query().Get("door_id"); v != "" {
 		where += fmt.Sprintf(" AND door_id = $%d::uuid", idx)
@@ -363,7 +365,7 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
 		slog.Error("list events query error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
@@ -374,7 +376,7 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.DoorID, &e.DeviceID,
 			&e.UserID, &e.UserName, &e.CredentialType, &e.Direction, &e.Decision,
 			&e.Reason, &e.Confidence, &e.PhotoRef, &e.Metadata); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		events = append(events, e)
@@ -404,43 +406,26 @@ type eventResponse struct {
 func (h *AccessHandlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	var stats models.DashboardStats
 	cid := authsvc.CompanyIDFromContext(r.Context())
-
-	if cid != "" {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE tenant_id = $1::uuid`, cid).Scan(&stats.DoorsTotal)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='online' AND tenant_id = $1::uuid`, cid).Scan(&stats.DoorsOnline)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='offline' AND tenant_id = $1::uuid`, cid).Scan(&stats.DoorsOffline)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='alarm' AND tenant_id = $1::uuid`, cid).Scan(&stats.DoorsAlarm)
-	} else {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors`).Scan(&stats.DoorsTotal)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='online'`).Scan(&stats.DoorsOnline)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='offline'`).Scan(&stats.DoorsOffline)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='alarm'`).Scan(&stats.DoorsAlarm)
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
 	}
+
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE tenant_id = $1::uuid`, cid).Scan(&stats.DoorsTotal)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='online' AND tenant_id = $1::uuid`, cid).Scan(&stats.DoorsOnline)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='offline' AND tenant_id = $1::uuid`, cid).Scan(&stats.DoorsOffline)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='alarm' AND tenant_id = $1::uuid`, cid).Scan(&stats.DoorsAlarm)
 
 	today := time.Now().Truncate(24 * time.Hour)
-	if cid != "" {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND tenant_id = $2::uuid`, today, cid).Scan(&stats.EventsToday)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='granted' AND tenant_id = $2::uuid`, today, cid).Scan(&stats.GrantedToday)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='denied' AND tenant_id = $2::uuid`, today, cid).Scan(&stats.DeniedToday)
-	} else {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1`, today).Scan(&stats.EventsToday)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='granted'`, today).Scan(&stats.GrantedToday)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='denied'`, today).Scan(&stats.DeniedToday)
-	}
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND tenant_id = $2::uuid`, today, cid).Scan(&stats.EventsToday)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='granted' AND tenant_id = $2::uuid`, today, cid).Scan(&stats.GrantedToday)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='denied' AND tenant_id = $2::uuid`, today, cid).Scan(&stats.DeniedToday)
 
 	// Recent events
-	var recentQuery string
-	var recentArgs []any
-	if cid != "" {
-		recentQuery = `SELECT id, tenant_id, time, door_id, user_id, user_name, credential_type,
+	recentQuery := `SELECT id, tenant_id, time, door_id, user_id, user_name, credential_type,
 		 direction, decision, reason, metadata
 		 FROM dm3_access.access_events WHERE tenant_id = $1::uuid ORDER BY time DESC LIMIT 10`
-		recentArgs = []any{cid}
-	} else {
-		recentQuery = `SELECT id, tenant_id, time, door_id, user_id, user_name, credential_type,
-		 direction, decision, reason, metadata
-		 FROM dm3_access.access_events ORDER BY time DESC LIMIT 10`
-	}
+	recentArgs := []any{cid}
 	rows, err := h.db.Pool.Query(r.Context(), recentQuery, recentArgs...)
 	if err == nil {
 		defer rows.Close()
@@ -463,12 +448,17 @@ func (h *AccessHandlers) GetStats(w http.ResponseWriter, r *http.Request) {
 
 func (h *AccessHandlers) GetSyncPackage(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
 
-	// Verify door exists
+	// Verify door exists and belongs to caller's tenant
 	var doorID string
 	var rulesVersion int
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, rules_version FROM dm3_access.doors WHERE id = $1::uuid`, id).Scan(&doorID, &rulesVersion)
+		`SELECT id, rules_version FROM dm3_access.doors WHERE id = $1::uuid AND tenant_id = $2::uuid`, id, cid).Scan(&doorID, &rulesVersion)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "door not found")
 		return
@@ -499,7 +489,7 @@ func (h *AccessHandlers) scanDoor(r *http.Request, id string) (models.Door, erro
 		&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Metadata,
 		&d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return d, fmt.Errorf("not found")
 		}
 		return d, err
@@ -528,11 +518,4 @@ func nilIfEmpty(s string) *string {
 		return nil
 	}
 	return &s
-}
-
-func boolVal(p *bool, def bool) bool {
-	if p != nil {
-		return *p
-	}
-	return def
 }

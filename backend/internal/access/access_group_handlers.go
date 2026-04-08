@@ -21,16 +21,14 @@ func (h *AccessHandlers) ListAccessGroups(w http.ResponseWriter, r *http.Request
 	offset := (page - 1) * limit
 
 	cid := authsvc.CompanyIDFromContext(r.Context())
-
-	where := "WHERE ag.is_deleted = false"
-	args := []any{}
-	idx := 1
-
-	if cid != "" {
-		where += fmt.Sprintf(" AND ag.tenant_id = $%d::uuid", idx)
-		args = append(args, cid)
-		idx++
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
 	}
+
+	where := "WHERE ag.is_deleted = false AND ag.tenant_id = $1::uuid"
+	args := []any{cid}
+	idx := 2
 	if v := r.URL.Query().Get("search"); v != "" {
 		where += fmt.Sprintf(" AND ag.name ILIKE $%d", idx)
 		args = append(args, "%"+v+"%")
@@ -60,7 +58,7 @@ func (h *AccessHandlers) ListAccessGroups(w http.ResponseWriter, r *http.Request
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
 		slog.Error("list access groups query error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
@@ -70,7 +68,7 @@ func (h *AccessHandlers) ListAccessGroups(w http.ResponseWriter, r *http.Request
 		var g models.AccessGroup
 		if err := rows.Scan(&g.ID, &g.TenantID, &g.ParentID, &g.Name, &g.IsDefault, &g.Type,
 			&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		groups = append(groups, g)
@@ -137,7 +135,7 @@ func (h *AccessHandlers) CreateAccessGroup(w http.ResponseWriter, r *http.Reques
 		&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		slog.Error("create access group error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusCreated, g)
@@ -184,17 +182,17 @@ func (h *AccessHandlers) DeleteAccessGroup(w http.ResponseWriter, r *http.Reques
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
-	query := `UPDATE dm3_access.access_groups SET is_deleted = true, updated_on = now()
-	          WHERE id = $1::uuid AND is_deleted = false`
-	args := []any{id}
-	if cid != "" {
-		query += " AND tenant_id = $2::uuid"
-		args = append(args, cid)
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
 	}
+	query := `UPDATE dm3_access.access_groups SET is_deleted = true, updated_on = now()
+	          WHERE id = $1::uuid AND is_deleted = false AND tenant_id = $2::uuid`
+	args := []any{id, cid}
 
 	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -222,7 +220,7 @@ func (h *AccessHandlers) BulkDeleteAccessGroups(w http.ResponseWriter, r *http.R
 	query := fmt.Sprintf(`UPDATE dm3_access.access_groups SET is_deleted = true, updated_on = now() WHERE tenant_id = $1::uuid AND id IN (%s) AND is_deleted = false`, strings.Join(placeholders, ","))
 	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusOK, map[string]any{"deleted": tag.RowsAffected()})
@@ -260,7 +258,7 @@ func (h *AccessHandlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *h
 	)
 	if err != nil {
 		slog.Error("list access group access points error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
@@ -275,7 +273,7 @@ func (h *AccessHandlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *h
 			&item.CreatedAt,
 			&ap.Name, &ap.Description,
 		); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		ap.ID = item.AccessPointID
@@ -313,7 +311,7 @@ func (h *AccessHandlers) AddAccessGroupAccessPoint(w http.ResponseWriter, r *htt
 	).Scan(&id)
 	if err != nil {
 		slog.Error("add access group access point error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id})
@@ -355,7 +353,7 @@ func (h *AccessHandlers) ListAccessGroupUsers(w http.ResponseWriter, r *http.Req
 	)
 	if err != nil {
 		slog.Error("list access group users error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
@@ -364,7 +362,7 @@ func (h *AccessHandlers) ListAccessGroupUsers(w http.ResponseWriter, r *http.Req
 	for rows.Next() {
 		var u userRow
 		if err := rows.Scan(&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Position, &u.Status); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		users = append(users, u)
@@ -406,7 +404,7 @@ func (h *AccessHandlers) AssignUsersToGroup(w http.ResponseWriter, r *http.Reque
 	)
 	if err != nil {
 		slog.Error("assign users to group error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httputil.JSON(w, http.StatusOK, map[string]any{"updated": tag.RowsAffected()})
@@ -426,7 +424,7 @@ func (h *AccessHandlers) RemoveUserFromGroup(w http.ResponseWriter, r *http.Requ
 		userID, groupID, nilIfEmpty(cid),
 	)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -440,14 +438,19 @@ func (h *AccessHandlers) RemoveUserFromGroup(w http.ResponseWriter, r *http.Requ
 func (h *AccessHandlers) RemoveAccessGroupAccessPoint(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "id")
 	apID := chi.URLParam(r, "apId")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
 
 	tag, err := h.db.Pool.Exec(r.Context(),
 		`DELETE FROM dm3_access.access_group_access_points
-		 WHERE access_group_id = $1::uuid AND access_point_id = $2::uuid`,
-		groupID, apID,
+		 WHERE access_group_id = $1::uuid AND access_point_id = $2::uuid AND tenant_id = $3::uuid`,
+		groupID, apID, cid,
 	)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if tag.RowsAffected() == 0 {

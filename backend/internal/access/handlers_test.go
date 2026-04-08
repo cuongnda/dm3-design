@@ -32,25 +32,6 @@ func TestParsePagination(t *testing.T) {
 	}
 }
 
-// TestBoolVal tests the boolean default helper.
-func TestBoolVal(t *testing.T) {
-	trueVal := true
-	falseVal := false
-
-	if boolVal(nil, true) != true {
-		t.Error("boolVal(nil, true) should be true")
-	}
-	if boolVal(nil, false) != false {
-		t.Error("boolVal(nil, false) should be false")
-	}
-	if boolVal(&trueVal, false) != true {
-		t.Error("boolVal(&true, false) should be true")
-	}
-	if boolVal(&falseVal, true) != false {
-		t.Error("boolVal(&false, true) should be false")
-	}
-}
-
 // TestCreateDoorRequestValidation tests request validation without DB.
 func TestCreateDoorValidation(t *testing.T) {
 	h := &AccessHandlers{db: nil} // nil DB — we expect validation to fail before DB call
@@ -74,29 +55,29 @@ func TestCreateDoorValidation(t *testing.T) {
 	}
 }
 
-// TestCreateRuleValidation tests rule request validation without DB.
-func TestCreateRuleValidation(t *testing.T) {
+// TestCreateRuleReturnsNotImplemented verifies rules stub returns 501.
+func TestCreateRuleReturnsNotImplemented(t *testing.T) {
 	h := &AccessHandlers{db: nil}
 
 	body := `{"name":"test"}`
 	r := httptest.NewRequest("POST", "/api/v1/rules", bytes.NewBufferString(body))
 	w := httptest.NewRecorder()
 	h.CreateRule(w, r)
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
+	if w.Code != http.StatusNotImplemented {
+		t.Errorf("expected 501, got %d", w.Code)
 	}
 }
 
-// TestCreateScheduleValidation tests schedule request validation.
-func TestCreateScheduleValidation(t *testing.T) {
+// TestCreateScheduleReturnsNotImplemented verifies schedules stub returns 501.
+func TestCreateScheduleReturnsNotImplemented(t *testing.T) {
 	h := &AccessHandlers{db: nil}
 
 	body := `{"timezone":"UTC"}`
 	r := httptest.NewRequest("POST", "/api/v1/schedules", bytes.NewBufferString(body))
 	w := httptest.NewRecorder()
 	h.CreateSchedule(w, r)
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
+	if w.Code != http.StatusNotImplemented {
+		t.Errorf("expected 501, got %d", w.Code)
 	}
 }
 
