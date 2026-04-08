@@ -94,7 +94,7 @@ export function DepartmentManagementPage() {
   const deptColumns = useMemo((): Column<Department>[] => [
     {
       key: 'name',
-      header: 'Department',
+      header: t('col.department'),
       sortable: true,
       render: (d) => (
         <div className="flex items-center gap-2">
@@ -108,31 +108,31 @@ export function DepartmentManagementPage() {
     },
     {
       key: 'manager_name',
-      header: 'Manager',
+      header: t('col.manager'),
       sortable: true,
       render: (d) => (
         <Badge variant={d.manager_name ? 'secondary' : 'outline'}>
-          {d.manager_name || 'No Manager'}
+          {d.manager_name || t('noManager')}
         </Badge>
       ),
     },
     {
       key: 'parent_name',
-      header: 'Parent',
+      header: t('col.parent'),
       render: (d) => d.parent_name
         ? <Badge variant="outline">{d.parent_name}</Badge>
         : <span className="text-[13px] text-muted-foreground">—</span>,
     },
     {
       key: 'user_count',
-      header: 'Users',
+      header: t('col.users'),
       width: '72px',
       sortable: true,
       render: (d) => <Badge variant="secondary">{d.user_count || 0}</Badge>,
     },
     {
       key: 'created_on',
-      header: 'Created',
+      header: t('col.created'),
       width: '100px',
       sortable: true,
       render: (d) => (
@@ -153,20 +153,20 @@ export function DepartmentManagementPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => setEditingDepartment(d)}>
-                <Edit size={14} className="mr-2" />Edit
+                <Edit size={14} className="mr-2" />{t('actions.edit')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => { setSelectedDepartmentForUsers(d); setShowUserAssignModal(true); }}>
-                <Users size={14} className="mr-2" />Manage Users
+                <Users size={14} className="mr-2" />{t('actions.manageUsers')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => { setDepartmentToDelete(d); setDeleteError(null); setShowDeleteDialog(true); }} className="text-destructive">
-                <Trash2 size={14} className="mr-2" />Delete
+                <Trash2 size={14} className="mr-2" />{t('actions.delete')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       ),
     },
-  ], []);
+  ], [t]);
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden">
@@ -198,11 +198,11 @@ export function DepartmentManagementPage() {
       </div>
 
       <DataTableCard
-        title={<span className="text-[14px] font-semibold">Departments ({pagination.total})</span>}
+        title={<span className="text-[14px] font-semibold">{t('table.title', { count: pagination.total })}</span>}
         selectedCount={selectedDepartments.length}
         onClearSelection={() => setSelectedDepartments([])}
         onBulkDelete={handleBulkDelete}
-        bulkDeleteLabel={`${selectedDepartments.length} departments`}
+        bulkDeleteLabel={t('bulkDelete.label', { count: selectedDepartments.length })}
         pagination={{
           page: pagination.page,
           pageSize: pagination.limit,
@@ -213,11 +213,11 @@ export function DepartmentManagementPage() {
           onPageSizeChange: changePageSize,
           loading,
           sortColumns: [
-            { value: 'name', label: 'Name' },
-            { value: 'number', label: 'Number' },
-            { value: 'manager_name', label: 'Manager' },
-            { value: 'user_count', label: 'Users' },
-            { value: 'created_on', label: 'Created' },
+            { value: 'name', label: t('sort.name') },
+            { value: 'number', label: t('sort.number') },
+            { value: 'manager_name', label: t('sort.manager') },
+            { value: 'user_count', label: t('sort.users') },
+            { value: 'created_on', label: t('sort.created') },
           ],
           sortBy,
           sortDir,
@@ -230,7 +230,7 @@ export function DepartmentManagementPage() {
           </div>
         ) : departments.length === 0 ? (
           <div className="py-12 text-center text-[13px] text-muted-foreground">
-            {filters.search ? 'No departments match your search' : 'No departments yet. Add the first one.'}
+            {filters.search ? t('table.empty.search') : t('table.empty.default')}
           </div>
         ) : (
           <DataTable
@@ -281,17 +281,17 @@ export function DepartmentManagementPage() {
         }}
         title={
           <span className="flex items-center gap-2 text-destructive">
-            <Trash2 size={16} />Delete Department
+            <Trash2 size={16} />{t('delete.title')}
           </span>
         }
         size="xs"
         style={{ maxWidth: '22rem' }}
         showCancelButton
-        cancelLabel="Cancel"
+        cancelLabel={t('delete.cancel')}
         cancelDisabled={deleteLoading}
         errorMessage={deleteError ?? undefined}
         primaryAction={{
-          label: deleteLoading ? 'Deleting...' : 'Delete',
+          label: deleteLoading ? t('delete.loading') : t('delete.submit'),
           variant: 'destructive',
           onClick: handleDeleteConfirm,
           loading: deleteLoading,
@@ -299,11 +299,12 @@ export function DepartmentManagementPage() {
         }}
       >
         <p className="text-[13px] text-muted-foreground">
-          Are you sure you want to delete{' '}
-          <span className="font-medium text-foreground">"{departmentToDelete?.name}"</span>?
+          {t('delete.confirmPre')}{' '}
+          <span className="font-medium text-foreground">"{departmentToDelete?.name}"</span>
+          {t('delete.confirmPost')}
           {(departmentToDelete?.user_count || 0) > 0 && (
             <span className="block mt-2 text-destructive">
-              ⚠ This department has {departmentToDelete?.user_count} users assigned.
+              {t('delete.usersWarning', { count: departmentToDelete?.user_count })}
             </span>
           )}
         </p>

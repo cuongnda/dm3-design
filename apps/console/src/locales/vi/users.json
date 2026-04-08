@@ -45,5 +45,7 @@
   "modal.status": "Trạng thái",
   "modal.cancel": "Hủy",
   "modal.save": "Lưu",
-  "modal.saving": "Đang lưu..."
+  "modal.saving": "Đang lưu...",
+  "delete.confirmPre": "Bạn có chắc chắn muốn xóa",
+  "delete.confirmPost": "? Hành động này không thể hoàn tác."
 }

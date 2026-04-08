@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft, Clock, Trash2, Save, Copy, Files,
 } from 'lucide-react';
@@ -64,9 +65,10 @@ interface EditDayModalProps {
 }
 
 function EditDayModal({ open, onOpenChange, dayOfWeek, slots, onSave }: EditDayModalProps) {
+  const { t } = useTranslation('accessTimes');
   const [local, setLocal] = useState<DaySlot[]>([]);
   const [error, setError] = useState('');
-  const dayLabel = DAYS.find(d => d.value === dayOfWeek)?.label ?? '';
+  const dayLabel = t(`days.${dayOfWeek}`, DAYS.find(d => d.value === dayOfWeek)?.label ?? '');
 
   useEffect(() => {
     if (open) { setLocal(slots.map(s => ({ ...s }))); setError(''); }
@@ -85,14 +87,14 @@ function EditDayModal({ open, onOpenChange, dayOfWeek, slots, onSave }: EditDayM
   const handleSave = () => {
     for (let i = 0; i < local.length; i++) {
       if (timeToMin(local[i].start) >= timeToMin(local[i].end)) {
-        setError(`Slot ${i + 1}: end time must be after start time`);
+        setError(t('form.slotEndAfterStart', { n: i + 1 }));
         return;
       }
     }
     const sorted = [...local].sort((a, b) => timeToMin(a.start) - timeToMin(b.start));
     for (let i = 1; i < sorted.length; i++) {
       if (timeToMin(sorted[i].start) < timeToMin(sorted[i - 1].end)) {
-        setError('Slots must not overlap');
+        setError(t('form.slotsOverlap'));
         return;
       }
     }
@@ -107,13 +109,13 @@ function EditDayModal({ open, onOpenChange, dayOfWeek, slots, onSave }: EditDayM
       title={<span className="font-bold text-[15px]">{dayLabel}</span>}
       size="sm"
       showCancelButton
-      cancelLabel="Cancel"
+      cancelLabel={t('cancel')}
       errorMessage={error || undefined}
-      primaryAction={{ label: 'Save', onClick: handleSave }}
+      primaryAction={{ label: t('save'), onClick: handleSave }}
     >
       <div className="space-y-3">
         {local.length === 0 && (
-          <p className="text-center text-[13px] text-muted-foreground py-4">No time slots</p>
+          <p className="text-center text-[13px] text-muted-foreground py-4">{t('form.noTimeSlots')}</p>
         )}
         {local.map((s, idx) => (
           <div key={idx} className="flex items-center gap-2">
@@ -158,8 +160,9 @@ interface CopyDayModalProps {
 }
 
 function CopyDayModal({ open, onOpenChange, sourceDay, targetDays, onConfirm }: CopyDayModalProps) {
+  const { t } = useTranslation('accessTimes');
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  const sourceDayLabel = DAYS.find(d => d.value === sourceDay)?.label ?? '';
+  const sourceDayLabel = t(`days.${sourceDay}`, DAYS.find(d => d.value === sourceDay)?.label ?? '');
 
   const toggle = (day: number) => {
     setSelected(prev => {
@@ -178,18 +181,18 @@ function CopyDayModal({ open, onOpenChange, sourceDay, targetDays, onConfirm }: 
     <AppModal
       open={open}
       onOpenChange={handleOpenChange}
-      title={<span className="flex items-center gap-2"><Copy size={15} />Copy "{sourceDayLabel}" to…</span>}
+      title={<span className="flex items-center gap-2"><Copy size={15} />{t('form.copyTitle', { day: sourceDayLabel })}</span>}
       size="xs"
       showCancelButton
-      cancelLabel="Cancel"
+      cancelLabel={t('cancel')}
       primaryAction={{
-        label: selected.size > 0 ? `Copy to ${selected.size} day(s)` : 'Copy',
+        label: selected.size > 0 ? t('form.copyBtnN', { count: selected.size }) : t('save'),
         onClick: () => { onConfirm([...selected]); onOpenChange(false); },
         disabled: selected.size === 0,
       }}
     >
       {targetDays.length === 0 ? (
-        <p className="text-[13px] text-muted-foreground">No other days configured.</p>
+        <p className="text-[13px] text-muted-foreground">{t('form.noDaysConfigured')}</p>
       ) : (
         <div className="space-y-2">
           {targetDays.map(day => (
@@ -200,7 +203,7 @@ function CopyDayModal({ open, onOpenChange, sourceDay, targetDays, onConfirm }: 
                 checked={selected.has(day)}
                 onChange={() => toggle(day)}
               />
-              <span className="text-[13px]">{DAYS.find(d => d.value === day)?.label}</span>
+              <span className="text-[13px]">{t(`days.${day}`, DAYS.find(d => d.value === day)?.label ?? '')}</span>
             </label>
           ))}
         </div>
@@ -224,8 +227,9 @@ interface DayRowProps {
 }
 
 function DayRow({ dayOfWeek, slots, canApplyAll, onSlotsChange, onRemove, onCopy, onApplyAll }: DayRowProps) {
+  const { t } = useTranslation('accessTimes');
   const [editOpen, setEditOpen] = useState(false);
-  const dayLabel = DAYS.find(d => d.value === dayOfWeek)?.label ?? '';
+  const dayLabel = t(`days.${dayOfWeek}`, DAYS.find(d => d.value === dayOfWeek)?.label ?? '');
 
   // Click on empty timeline → create 2-hour slot (same logic as dmw-ai EachDays.onClick)
   const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -287,7 +291,7 @@ function DayRow({ dayOfWeek, slots, canApplyAll, onSlotsChange, onRemove, onCopy
           className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
           onClick={onApplyAll}
           disabled={!canApplyAll}
-          title="Apply to all days"
+          title={t('form.applyAllTitle')}
         >
           <Files size={15} />
         </Button>
@@ -295,7 +299,7 @@ function DayRow({ dayOfWeek, slots, canApplyAll, onSlotsChange, onRemove, onCopy
           variant="ghost" size="sm"
           className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
           onClick={onCopy}
-          title="Copy to other days"
+          title={t('form.copyToOtherTitle')}
         >
           <Copy size={15} />
         </Button>
@@ -303,7 +307,7 @@ function DayRow({ dayOfWeek, slots, canApplyAll, onSlotsChange, onRemove, onCopy
           variant="ghost" size="sm"
           className="h-8 w-8 p-0 text-destructive hover:text-destructive"
           onClick={onRemove}
-          title="Remove this day"
+          title={t('form.removeDayTitle')}
         >
           <Trash2 size={15} />
         </Button>
@@ -342,7 +346,7 @@ function DayRow({ dayOfWeek, slots, canApplyAll, onSlotsChange, onRemove, onCopy
                   style={{ left: `${left}%`, width: `${Math.max(width, 0.5)}%` }}
                   onMouseDown={handleSlotMouseDown}
                   onDoubleClick={(e) => handleSlotDoubleClick(e, idx)}
-                  title="Click to edit · Double-click to delete"
+                  title={t('form.slotClickHint')}
                 >
                   {width > 6 && (
                     <span className="truncate px-0.5 font-mono text-[8px] font-bold leading-none text-white">
@@ -380,6 +384,7 @@ function DayRow({ dayOfWeek, slots, canApplyAll, onSlotsChange, onRemove, onCopy
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function AccessTimeFormPage() {
+  const { t } = useTranslation('accessTimes');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isNew = !id || id === 'new';
@@ -480,7 +485,7 @@ export function AccessTimeFormPage() {
   };
 
   const handleSave = async () => {
-    if (!name.trim()) { setNameError('Name is required'); return; }
+    if (!name.trim()) { setNameError(t('form.nameRequired')); return; }
     setSaving(true);
     setPageError('');
     try {
@@ -530,18 +535,18 @@ export function AccessTimeFormPage() {
           onClick={() => navigate('/access/access-times')}
           className="mb-3 flex items-center gap-1.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
         >
-          <ArrowLeft size={13} />Access Times
+          <ArrowLeft size={13} />{t('backToList')}
         </button>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Clock size={20} className="shrink-0 text-primary" />
             <h1 className="text-[18px] font-semibold text-foreground">
-              {isNew ? 'New Access Time' : (name || '…')}
+              {isNew ? t('form.titleNew') : (name || '…')}
             </h1>
           </div>
           <Button size="sm" onClick={handleSave} disabled={saving}>
             <Save size={14} className="mr-1.5" />
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? t('saving') : t('save')}
           </Button>
         </div>
         {pageError && (
@@ -557,12 +562,12 @@ export function AccessTimeFormPage() {
           {/* Name */}
           <div>
             <label className="mb-1.5 block text-[12px] font-medium text-foreground">
-              Access Time Name <span className="text-destructive">*</span>
+              {t('form.fieldName')} <span className="text-destructive">*</span>
             </label>
             <Input
               value={name}
               onChange={(e) => { setName(e.target.value); setNameError(''); }}
-              placeholder="e.g. Business Hours"
+              placeholder={t('placeholders.name')}
             />
             {nameError && <p className="mt-1 text-[12px] text-destructive">{nameError}</p>}
           </div>
@@ -570,9 +575,9 @@ export function AccessTimeFormPage() {
           {/* Timezone */}
           <div>
             <label className="mb-1.5 block text-[12px] font-medium text-foreground">
-              Timezone <span className="text-destructive">*</span>
+              {t('fields.timezone')} <span className="text-destructive">*</span>
             </label>
-            <Select value={timezone} onValueChange={setTimezone} placeholder="Select timezone">
+            <Select value={timezone} onValueChange={setTimezone} placeholder={t('fields.timezone')}>
               {TIMEZONES.map(tz => (
                 <SelectOption key={tz.value} value={tz.value}>{tz.label}</SelectOption>
               ))}
@@ -581,11 +586,11 @@ export function AccessTimeFormPage() {
 
           {/* Remark */}
           <div className="sm:col-span-2">
-            <label className="mb-1.5 block text-[12px] font-medium text-foreground">Remark</label>
+            <label className="mb-1.5 block text-[12px] font-medium text-foreground">{t('form.fieldRemark')}</label>
             <Input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional remark"
+              placeholder={t('form.fieldRemarkPlaceholder')}
             />
           </div>
 
@@ -599,7 +604,7 @@ export function AccessTimeFormPage() {
               onChange={(e) => setIsActive(e.target.checked)}
             />
             <label htmlFor="is_active" className="cursor-pointer select-none text-[13px] text-foreground">
-              Active
+              {t('fields.isActive')}
             </label>
           </div>
         </div>
@@ -610,13 +615,13 @@ export function AccessTimeFormPage() {
         {/* Add Day row */}
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-[15px] font-bold text-foreground">
-            Schedule
+            {t('form.schedule')}
           </h2>
           <div className="flex items-center gap-2">
             {availableDays.length > 0 && (
-              <Select value="" onValueChange={handleAddDay} placeholder="+ Add Day" className="w-36">
+              <Select value="" onValueChange={handleAddDay} placeholder={t('form.addDay')} className="w-36">
                 {availableDays.map(d => (
-                  <SelectOption key={d.value} value={String(d.value)}>{d.label}</SelectOption>
+                  <SelectOption key={d.value} value={String(d.value)}>{t(`days.${d.value}`, d.label)}</SelectOption>
                 ))}
               </Select>
             )}
@@ -626,7 +631,7 @@ export function AccessTimeFormPage() {
         {activeDays.length === 0 ? (
           <div className="rounded-md border border-dashed border-border py-14 text-center text-[13px] text-muted-foreground">
             <Clock size={30} className="mx-auto mb-2 text-muted-foreground/30" />
-            <p>No days configured. Use "Add Day" to build your schedule.</p>
+            <p>{t('form.noDays')}</p>
           </div>
         ) : (
           <div>
@@ -643,7 +648,7 @@ export function AccessTimeFormPage() {
               />
             ))}
             <p className="text-[11px] text-muted-foreground/50">
-              Click on timeline to add a slot (max 4). Click slot to edit · Double-click to delete.
+              {t('form.hint')}
             </p>
           </div>
         )}

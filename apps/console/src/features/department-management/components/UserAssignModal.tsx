@@ -168,12 +168,12 @@ export function UserAssignModal({ isOpen, onClose, department }: UserAssignModal
       title={
         <span className="flex items-center gap-2">
           <Users size={16} />
-          Manage Users — {department.name}
+          {t('assign.title', { name: department.name })}
         </span>
       }
       size="2xl"
       showCancelButton
-      cancelLabel="Close"
+      cancelLabel={t('close')}
     >
       <Tabs
         value={activeTab}
@@ -185,7 +185,7 @@ export function UserAssignModal({ isOpen, onClose, department }: UserAssignModal
           <div className="relative flex-1">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <Input
-              placeholder="Search users by name, email, or code…"
+              placeholder={t('assign.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9 h-8 text-[13px]"
@@ -194,17 +194,17 @@ export function UserAssignModal({ isOpen, onClose, department }: UserAssignModal
           <TabsList className="shrink-0">
             <TabsTrigger value="current" className="text-[12px] px-3">
               <Users size={13} className="mr-1.5" />
-              Current ({currentUsers.length})
+              {t('assign.currentTab')} ({currentUsers.length})
             </TabsTrigger>
             <TabsTrigger value="assign" className="text-[12px] px-3">
               <UserPlus size={13} className="mr-1.5" />
-              Assign{selectedUsers.length > 0 ? ` (${selectedUsers.length})` : ''}
+              {selectedUsers.length > 0 ? t('assign.assignTab') + ` (${selectedUsers.length})` : t('assign.assignTab')}
             </TabsTrigger>
           </TabsList>
           {activeTab === 'assign' && selectedUsers.length > 0 && (
             <Button size="sm" onClick={handleAssignUsers} disabled={loading} className="shrink-0">
               <Check size={13} className="mr-1.5" />
-              Assign {selectedUsers.length}
+              {t('assign.assignBtn', { count: selectedUsers.length })}
             </Button>
           )}
         </div>
@@ -219,22 +219,22 @@ export function UserAssignModal({ isOpen, onClose, department }: UserAssignModal
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Users size={36} className="text-muted-foreground/40 mb-3" />
               <p className="text-[13px] font-medium text-foreground">
-                {currentUsers.length === 0 ? 'No users in this department' : 'No users match your search'}
+                {currentUsers.length === 0 ? t('assign.noUsersInDept') : t('assign.noUsersMatch')}
               </p>
               <p className="text-[12px] text-muted-foreground mt-1">
                 {currentUsers.length === 0
-                  ? 'Switch to "Assign" tab to add users'
-                  : 'Try a different search term'}
+                  ? t('assign.switchToAssign')
+                  : t('assign.tryDifferentSearch')}
               </p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-[11px]">User</TableHead>
-                  <TableHead className="text-[11px]">Email</TableHead>
-                  <TableHead className="text-[11px]">Position</TableHead>
-                  <TableHead className="text-[11px]">Status</TableHead>
+                  <TableHead className="text-[11px]">{t('assign.colUser')}</TableHead>
+                  <TableHead className="text-[11px]">{t('assign.colEmail')}</TableHead>
+                  <TableHead className="text-[11px]">{t('assign.colPosition')}</TableHead>
+                  <TableHead className="text-[11px]">{t('assign.colStatus')}</TableHead>
                   <TableHead className="w-20 text-[11px]" />
                 </TableRow>
               </TableHeader>
@@ -273,7 +273,7 @@ export function UserAssignModal({ isOpen, onClose, department }: UserAssignModal
                         disabled={loading}
                       >
                         <UserMinus size={13} className="mr-1" />
-                        Remove
+                        {t('assign.removeBtn')}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -293,12 +293,12 @@ export function UserAssignModal({ isOpen, onClose, department }: UserAssignModal
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <UserPlus size={36} className="text-muted-foreground/40 mb-3" />
               <p className="text-[13px] font-medium text-foreground">
-                {availableUsers.length === 0 ? 'No users available' : 'No users match your search'}
+                {availableUsers.length === 0 ? t('assign.noUsersAvailable') : t('assign.noUsersMatch')}
               </p>
               <p className="text-[12px] text-muted-foreground mt-1">
                 {availableUsers.length === 0
-                  ? 'All users are already assigned to a department'
-                  : 'Try a different search term'}
+                  ? t('assign.allAssigned')
+                  : t('assign.tryDifferentSearch')}
               </p>
             </div>
           ) : (
@@ -315,10 +315,10 @@ export function UserAssignModal({ isOpen, onClose, department }: UserAssignModal
                       }}
                     />
                   </TableHead>
-                  <TableHead className="text-[11px]">User</TableHead>
-                  <TableHead className="text-[11px]">Email</TableHead>
-                  <TableHead className="text-[11px]">Department</TableHead>
-                  <TableHead className="text-[11px]">Position</TableHead>
+                  <TableHead className="text-[11px]">{t('assign.colUser')}</TableHead>
+                  <TableHead className="text-[11px]">{t('assign.colEmail')}</TableHead>
+                  <TableHead className="text-[11px]">{t('assign.colDepartment')}</TableHead>
+                  <TableHead className="text-[11px]">{t('assign.colPosition')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
