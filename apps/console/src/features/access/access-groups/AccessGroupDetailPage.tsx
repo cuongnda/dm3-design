@@ -33,20 +33,29 @@ interface AvailableAP {
   description?: string;
 }
 
+interface AvailableAccessTime {
+  id: string;
+  name: string;
+  description?: string;
+}
+
 interface AddAccessPointModalProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   linkedAPIds: string[];
-  onSubmit: (accessPointId: string) => Promise<boolean>;
+  onSubmit: (accessPointId: string, accessTimeId?: string) => Promise<boolean>;
 }
 
 function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddAccessPointModalProps) {
   const { t } = useTranslation('accessGroups');
   const [selectedId, setSelectedId] = useState('');
+  const [selectedAccessTimeId, setSelectedAccessTimeId] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [allAPs, setAllAPs] = useState<AvailableAP[]>([]);
+  const [allAccessTimes, setAllAccessTimes] = useState<AvailableAccessTime[]>([]);
   const [loadingAPs, setLoadingAPs] = useState(false);
+  const [loadingAccessTimes, setLoadingAccessTimes] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
@@ -54,10 +63,19 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
   useEffect(() => {
     if (!open) return;
     setLoadingAPs(true);
-    apiFetch<{ data?: AvailableAP[] }>('/api/v1/access-points?limit=200')
-      .then((res) => setAllAPs(res.data ?? []))
-      .catch(() => setAllAPs([]))
-      .finally(() => setLoadingAPs(false));
+    setLoadingAccessTimes(true);
+
+    Promise.all([
+      apiFetch<{ data?: AvailableAP[] }>('/api/v1/access/access-points?limit=200')
+        .then((res) => setAllAPs(res.data ?? []))
+        .catch(() => setAllAPs([])),
+      apiFetch<{ data?: AvailableAccessTime[] }>('/api/v1/access/access-times?limit=100')
+        .then((res) => setAllAccessTimes(res.data ?? []))
+        .catch(() => setAllAccessTimes([])),
+    ]).finally(() => {
+      setLoadingAPs(false);
+      setLoadingAccessTimes(false);
+    });
   }, [open]);
 
   const availableAPs = useMemo(
@@ -80,6 +98,7 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
   const handleOpenChange = (v: boolean) => {
     if (!v) {
       setSelectedId('');
+      setSelectedAccessTimeId('');
       setError('');
       setSearch('');
       setPage(1);
@@ -93,7 +112,7 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
       return;
     }
     setSubmitting(true);
-    const ok = await onSubmit(selectedId);
+    const ok = await onSubmit(selectedId, selectedAccessTimeId || undefined);
     setSubmitting(false);
     if (ok) onOpenChange(false);
   };
@@ -119,7 +138,7 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
         loading: submitting,
       }}
     >
-      <div className="space-y-3">
+      <div className="space-y-4">
         {/* Search */}
         <Input
           value={search}
@@ -128,6 +147,33 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
           className="h-8 text-[13px]"
           disabled={submitting}
         />
+
+        {/* Access Time Selection */}
+        <div>
+          <Label className="text-[12px] mb-1.5 block">
+            {t('accessTime', 'Access Time')} <span className="text-muted-foreground text-[11px]">{t('optional', '(optional)')}</span>
+          </Label>
+          {loadingAccessTimes ? (
+            <div className="h-8 flex items-center justify-center text-[13px] text-muted-foreground">
+              <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary/30 border-t-primary mr-2" />
+              Loading access times…
+            </div>
+          ) : (
+            <select
+              value={selectedAccessTimeId}
+              onChange={(e) => setSelectedAccessTimeId(e.target.value)}
+              disabled={submitting}
+              className="w-full h-8 px-3 py-1 text-[13px] border border-border rounded-md bg-input text-foreground disabled:opacity-50 appearance-none cursor-pointer"
+            >
+              <option value="">{t('noAccessTimeSelected', 'No specific access time')}</option>
+              {allAccessTimes.map((at) => (
+                <option key={at.id} value={at.id}>
+                  {at.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
 
         {/* Access Point table */}
         <div className="rounded-md border border-border overflow-hidden">
@@ -236,7 +282,7 @@ function AddUserModal({ open, onOpenChange, linkedUserIds, onSubmit }: AddUserMo
   useEffect(() => {
     if (!open) return;
     setLoadingUsers(true);
-    apiFetch<{ users?: AvailableUser[] }>('/api/v1/users?limit=100&status=active')
+    apiFetch<{ users?: AvailableUser[] }>('/api/v1/identity/users?limit=100&status=active')
       .then((res) => setAllUsers(res.users ?? []))
       .catch(() => setAllUsers([]))
       .finally(() => setLoadingUsers(false));
@@ -458,7 +504,7 @@ export function AccessGroupDetailPage() {
     if (!id) return;
     setLoadingGroup(true);
     try {
-      const data = await apiFetch(`/api/v1/access-groups/${id}`);
+      const data = await apiFetch(`/api/v1/access/access-groups/${id}`);
       setGroup(data.access_group ?? data);
     } catch (err) {
       console.error('Failed to fetch access group:', err);
@@ -471,7 +517,7 @@ export function AccessGroupDetailPage() {
     if (!id) return;
     setLoadingAPs(true);
     try {
-      const data = await apiFetch(`/api/v1/access-groups/${id}/access-points`);
+      const data = await apiFetch(`/api/v1/access/access-groups/${id}/access-points`);
       setAccessPoints(data.access_points ?? data.data ?? data.items ?? []);
     } catch (err) {
       console.error('Failed to fetch access points:', err);
@@ -484,7 +530,7 @@ export function AccessGroupDetailPage() {
     if (!id) return;
     setLoadingUsers(true);
     try {
-      const data = await apiFetch(`/api/v1/access-groups/${id}/users`);
+      const data = await apiFetch(`/api/v1/access/access-groups/${id}/users`);
       setUsers(data.data ?? []);
     } catch (err) {
       console.error('Failed to fetch users:', err);
@@ -514,7 +560,7 @@ export function AccessGroupDetailPage() {
     }
     setSubmittingEdit(true);
     try {
-      await apiFetch(`/api/v1/access-groups/${id}`, {
+      await apiFetch(`/api/v1/access/access-groups/${id}`, {
         method: 'PUT',
         body: JSON.stringify(editForm),
       });
@@ -527,12 +573,16 @@ export function AccessGroupDetailPage() {
     }
   };
 
-  const handleAddAccessPoint = useCallback(async (accessPointId: string): Promise<boolean> => {
+  const handleAddAccessPoint = useCallback(async (accessPointId: string, accessTimeId?: string): Promise<boolean> => {
     if (!id) return false;
     try {
-      await apiFetch(`/api/v1/access-groups/${id}/access-points`, {
+      const body: Record<string, string> = { access_point_id: accessPointId };
+      if (accessTimeId) {
+        body.access_time_id = accessTimeId;
+      }
+      await apiFetch(`/api/v1/access/access-groups/${id}/access-points`, {
         method: 'POST',
-        body: JSON.stringify({ access_point_id: accessPointId }),
+        body: JSON.stringify(body),
       });
       await fetchAccessPoints();
       await fetchGroup();
@@ -547,7 +597,7 @@ export function AccessGroupDetailPage() {
     if (!id) return;
     setRemovingAPId(accessPointId);
     try {
-      await apiFetch(`/api/v1/access-groups/${id}/access-points/${accessPointId}`, {
+      await apiFetch(`/api/v1/access/access-groups/${id}/access-points/${accessPointId}`, {
         method: 'DELETE',
       });
       await fetchAccessPoints();
@@ -562,7 +612,7 @@ export function AccessGroupDetailPage() {
   const handleAssignUsers = useCallback(async (userIds: string[]): Promise<boolean> => {
     if (!id) return false;
     try {
-      await apiFetch(`/api/v1/access-groups/${id}/users`, {
+      await apiFetch(`/api/v1/access/access-groups/${id}/users`, {
         method: 'POST',
         body: JSON.stringify({ user_ids: userIds }),
       });
@@ -579,7 +629,7 @@ export function AccessGroupDetailPage() {
     if (!id) return;
     setRemovingUserId(userId);
     try {
-      await apiFetch(`/api/v1/access-groups/${id}/users/${userId}`, { method: 'DELETE' });
+      await apiFetch(`/api/v1/access/access-groups/${id}/users/${userId}`, { method: 'DELETE' });
       await fetchUsers();
       await fetchGroup();
     } catch (err) {
@@ -663,6 +713,16 @@ export function AccessGroupDetailPage() {
       render: (ap) => (
         <span className="text-[13px] text-muted-foreground">
           {ap.access_point?.description ?? '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'access_time',
+      header: t('columns.accessTime', 'Access Time'),
+      width: '150px',
+      render: (ap) => (
+        <span className="text-[13px] text-muted-foreground">
+          {ap.access_time?.name ?? '—'}
         </span>
       ),
     },
