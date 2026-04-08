@@ -182,9 +182,9 @@ export function AccessTimeFormPage() {
     }
 
     return (
-        <div className="space-y-4">
+        <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="shrink-0 flex items-center justify-between">
                 <div>
                     <h1 className="text-[18px] font-semibold text-foreground">
                         {isNew ? t('form.title.new', 'New Access Time') : t('form.title.edit', 'Edit Access Time')}
@@ -197,12 +197,13 @@ export function AccessTimeFormPage() {
             </div>
 
             {error && (
-                <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-md">
+                <div className="shrink-0 p-3 bg-destructive/10 border border-destructive/30 rounded-md">
                     <p className="text-[13px] text-destructive">{error}</p>
                 </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="min-h-0 flex-1 overflow-auto">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pr-4">
                 {/* Left: Details */}
                 <Card className="p-4 space-y-3 lg:col-span-1">
                     <div>
@@ -310,9 +311,10 @@ export function AccessTimeFormPage() {
                     ))}
                 </div>
             </div>
+            </div>
 
             {/* Actions */}
-            <div className="flex gap-2 justify-between">
+            <div className="shrink-0 flex gap-2 justify-between">
                 <div>
                     {!isNew && (
                         <Button

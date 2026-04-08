@@ -122,55 +122,65 @@ export function AccessTimesPage() {
     ];
 
     return (
-        <div className="space-y-4">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-[18px] font-semibold text-foreground">{t('title', 'Access Times')}</h1>
-                    <p className="text-[13px] text-muted-foreground">{t('description', 'Manage access time schedules')}</p>
+        <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden">
+            {/* Header & Stats */}
+            <div className="shrink-0 space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-[18px] font-semibold text-foreground">{t('title', 'Access Times')}</h1>
+                        <p className="text-[13px] text-muted-foreground">{t('description', 'Manage access time schedules')}</p>
+                    </div>
+                    <Button size="sm" onClick={() => navigate('/access/access-times/new')}>
+                        <Plus size={14} className="mr-1.5" />
+                        {t('newAccessTime', 'New Access Time')}
+                    </Button>
                 </div>
-                <Button size="sm" onClick={() => navigate('/access/access-times/new')}>
-                    <Plus size={14} className="mr-1.5" />
-                    {t('newAccessTime', 'New Access Time')}
-                </Button>
+
+                {/* Stats */}
+                {!loading && (
+                    <div className="grid grid-cols-3 gap-3">
+                        <Card className="p-3">
+                            <div className="text-2xl font-bold">{accessTimes.filter(a => a.is_active).length}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.active', 'Active')}</div>
+                        </Card>
+                        <Card className="p-3">
+                            <div className="text-2xl font-bold">{accessTimes.length}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.total', 'Total')}</div>
+                        </Card>
+                        <Card className="p-3">
+                            <div className="text-2xl font-bold">{accessTimes.filter(a => !a.is_active).length}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.inactive', 'Inactive')}</div>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Search */}
+                <Input
+                    placeholder={t('searchPlaceholder', 'Search access times...')}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="h-8 text-[13px]"
+                />
             </div>
 
-            {/* Stats */}
-            {!loading && (
-                <div className="grid grid-cols-3 gap-3">
-                    <Card className="p-3">
-                        <div className="text-2xl font-bold">{accessTimes.filter(a => a.is_active).length}</div>
-                        <div className="text-xs text-muted-foreground">{t('stats.active', 'Active')}</div>
-                    </Card>
-                    <Card className="p-3">
-                        <div className="text-2xl font-bold">{accessTimes.length}</div>
-                        <div className="text-xs text-muted-foreground">{t('stats.total', 'Total')}</div>
-                    </Card>
-                    <Card className="p-3">
-                        <div className="text-2xl font-bold">{accessTimes.filter(a => !a.is_active).length}</div>
-                        <div className="text-xs text-muted-foreground">{t('stats.inactive', 'Inactive')}</div>
-                    </Card>
-                </div>
-            )}
-
-            {/* Search */}
-            <Input
-                placeholder={t('searchPlaceholder', 'Search access times...')}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-8 text-[13px]"
-            />
-
-            {/* Table */}
+            {/* Table - scrollable */}
             {loading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading...</div>
+                <div className="flex items-center justify-center flex-1">
+                    <div className="text-muted-foreground">Loading...</div>
+                </div>
             ) : (
-                <DataTable
-                    columns={columns}
-                    data={filteredTimes}
-                    rowKey={(at) => at.id}
-                    onRowClick={(at) => navigate(`/access/access-times/${at.id}`)}
-                />
+                <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border">
+                    <DataTable
+                        embedded
+                        stickyHeader
+                        paginate={false}
+                        columns={columns}
+                        data={filteredTimes}
+                        rowKey={(at) => at.id}
+                        onRowClick={(at) => navigate(`/access/access-times/${at.id}`)}
+                    />
+                </div>
             )}
 
             {/* Delete Confirmation */}
