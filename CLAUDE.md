@@ -135,9 +135,24 @@ Single migration file: `backend/pkg/db/migrations/001_initial.sql`.
 ## Docs & Specs
 
 - `docs/` is the single source of truth — do not create doc files elsewhere
-- `docs/specs/` — 29 feature specs (authoritative for feature behaviour)
-- `docs/changelog/` — major architecture decisions
-- `diagrams/er-diagram.drawio` — current ER diagram (draw.io, use the app to view)
+- `AGENTS.md` — AI assistant quick-start guide (read alongside this file)
+
+**Before implementing any feature:** read `docs/IMPLEMENTATION_STATUS.md` first.  
+Most OPERATE, SMART, and SECURE frontend pages are mock-data-only shells with no real backend APIs.
+Only a handful of pages (Dashboard, Devices, Identities, System Settings) connect to live backend endpoints.
+
+| Directory | Purpose |
+|---|---|
+| `docs/IMPLEMENTATION_STATUS.md` | ⚠️ What is real vs mock data — check before every feature task |
+| `docs/VISION.md` | Product north star |
+| `docs/architecture/` | System design, MQTT protocol, tech stack decisions |
+| `docs/specs/` | 29 feature specs (authoritative for feature behaviour) |
+| `docs/changelog/` | Major architecture decisions |
+| `docs/design/` | Design system — colors, typography, components |
+| `docs/ux/` | UX specs for webapp, mobile, terminal, guard station |
+| `docs/CODE_CONVENTIONS.md` | Code style and conventions |
+| `docs/research/` | Reference material (not source of truth) |
+| `diagrams/er-diagram.drawio` | Current ER diagram (draw.io, use the app to view) |
 
 ## Git Conventions
 
