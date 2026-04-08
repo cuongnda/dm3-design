@@ -10,7 +10,7 @@
         <mxCell id="title" value="Duall Master 3.0 — ER Diagram (Current Schema)" style="text;html=1;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#0B1120;" vertex="1" parent="1">
           <mxGeometry x="550" y="20" width="1000" height="40" as="geometry"/>
         </mxCell>
-        <mxCell id="subtitle" value="Source of truth: backend/pkg/db/migrations/000001_initial.up.sql · Schemas: dm3_auth, dm3_devices, dm3_access, dm3_identity · Updated 2026-04-08" style="text;html=1;fontSize=12;align=center;fillColor=none;strokeColor=none;fontColor=#6B7280;" vertex="1" parent="1">
+        <mxCell id="subtitle" value="Source of truth: backend/pkg/db/migrations/ · Schemas: dm3_auth, dm3_devices, dm3_access, dm3_identity · Updated 2026-04-08" style="text;html=1;fontSize=12;align=center;fillColor=none;strokeColor=none;fontColor=#6B7280;" vertex="1" parent="1">
           <mxGeometry x="400" y="55" width="1300" height="25" as="geometry"/>
         </mxCell>
 
@@ -70,12 +70,12 @@
           <mxGeometry x="55" y="838" width="150" height="20" as="geometry"/>
         </mxCell>
 
-        <mxCell id="departments" value="&lt;b style='color:#8B5CF6'&gt;departments&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → companies&lt;br/&gt;🔗 parent_id → departments (self)&lt;br/&gt;department_manager_id : UUID&lt;br/&gt;name : VARCHAR(255) NOT NULL&lt;br/&gt;number : VARCHAR(100)&lt;br/&gt;access_group_id : UUID (logical)&lt;br/&gt;is_deleted : BOOL&lt;br/&gt;created_on / updated_on&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="60" y="870" width="220" height="210" as="geometry"/>
+        <mxCell id="departments" value="&lt;b style='color:#8B5CF6'&gt;departments&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → companies&lt;br/&gt;🔗 parent_id → departments (self)&lt;br/&gt;department_manager_id : UUID&lt;br/&gt;name : VARCHAR(255) NOT NULL&lt;br/&gt;number : VARCHAR(100)&lt;br/&gt;is_deleted : BOOL&lt;br/&gt;created_on / updated_on&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="870" width="220" height="200" as="geometry"/>
         </mxCell>
 
-        <mxCell id="identity_users" value="&lt;b style='color:#8B5CF6'&gt;users&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → companies&lt;br/&gt;🔗 account_id → accounts SET NULL&lt;br/&gt;🔗 department_id → departments&lt;br/&gt;🔗 access_group_id → access_groups&lt;br/&gt;first_name / last_name : VARCHAR(255)&lt;br/&gt;email : VARCHAR(255)&lt;br/&gt;phone : VARCHAR(50)&lt;br/&gt;user_code / emp_number : VARCHAR(100)&lt;br/&gt;position : VARCHAR(255)&lt;br/&gt;address : TEXT&lt;br/&gt;sex : BOOL · birth_day : DATE&lt;br/&gt;effective_date / expired_date : DATE&lt;br/&gt;avatar : VARCHAR(500)&lt;br/&gt;status : VARCHAR(20) def 'active'&lt;br/&gt;is_deleted : BOOL · is_master_card : BOOL&lt;br/&gt;created_at / updated_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="60" y="1100" width="230" height="310" as="geometry"/>
+        <mxCell id="identity_users" value="&lt;b style='color:#8B5CF6'&gt;users&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → companies&lt;br/&gt;🔗 account_id → accounts SET NULL&lt;br/&gt;🔗 department_id → departments&lt;br/&gt;first_name / last_name : VARCHAR(255)&lt;br/&gt;email : VARCHAR(255)&lt;br/&gt;phone : VARCHAR(50)&lt;br/&gt;user_code / emp_number : VARCHAR(100)&lt;br/&gt;position : VARCHAR(255)&lt;br/&gt;address : TEXT&lt;br/&gt;sex : BOOL · birth_day : DATE&lt;br/&gt;effective_date / expired_date : DATE&lt;br/&gt;avatar : VARCHAR(500)&lt;br/&gt;status : VARCHAR(20) def 'active'&lt;br/&gt;is_deleted : BOOL · is_master_card : BOOL&lt;br/&gt;created_at / updated_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="1090" width="230" height="300" as="geometry"/>
         </mxCell>
 
         <mxCell id="credentials" value="&lt;b style='color:#8B5CF6'&gt;credentials&lt;/b&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → companies&lt;br/&gt;🔗 user_id → users CASCADE&lt;br/&gt;type : VARCHAR(50) NOT NULL&lt;br/&gt;value : TEXT NOT NULL&lt;br/&gt;status : VARCHAR(20) def 'active'&lt;br/&gt;valid_from / valid_until : TZ&lt;br/&gt;created_at / updated_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
@@ -116,37 +116,33 @@
           <mxGeometry x="850" y="410" width="220" height="230" as="geometry"/>
         </mxCell>
 
-        <mxCell id="access_points" value="&lt;b style='color:#3B82F6'&gt;access_points&lt;/b&gt;&lt;br/&gt;&lt;i style='font-size:10px;color:#94A3B8'&gt;Logical point: groups N doors&lt;/i&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → companies&lt;br/&gt;🔗 zone_id → zones SET NULL&lt;br/&gt;🔗 access_time_id → access_times SET NULL&lt;br/&gt;&lt;i style='font-size:10px'&gt;(NULL = 24/7 unrestricted)&lt;/i&gt;&lt;br/&gt;name : VARCHAR(255) NOT NULL&lt;br/&gt;description : VARCHAR(500)&lt;br/&gt;created_at / updated_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="1100" y="410" width="220" height="220" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="doors" value="&lt;b style='color:#3B82F6'&gt;doors&lt;/b&gt;&lt;br/&gt;&lt;i style='font-size:10px;color:#94A3B8'&gt;Physical door / device in access context&lt;/i&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → companies&lt;br/&gt;🔗 device_id → dm3_devices.devices&lt;br/&gt;name : VARCHAR(255) NOT NULL&lt;br/&gt;type : VARCHAR(20) def 'door'&lt;br/&gt;status : VARCHAR(20) def 'offline'&lt;br/&gt;state : VARCHAR(20) def 'locked'&lt;br/&gt;mode : VARCHAR(20) def 'normal'&lt;br/&gt;unlock_duration_ms : INT def 5000&lt;br/&gt;anti_passback : BOOL def false&lt;br/&gt;emergency_unlock : BOOL def true&lt;br/&gt;firmware_version : VARCHAR(20)&lt;br/&gt;ip_address : INET&lt;br/&gt;last_event_at / last_heartbeat_at : TZ&lt;br/&gt;config_version / user_db_version / rules_version : INT&lt;br/&gt;metadata : JSONB def '{}'&lt;br/&gt;created_at / updated_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="1350" y="400" width="230" height="370" as="geometry"/>
+        <mxCell id="access_points" value="&lt;b style='color:#3B82F6'&gt;access_points&lt;/b&gt;&lt;br/&gt;&lt;i style='font-size:10px;color:#94A3B8'&gt;Single entrance = one device&lt;/i&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → companies&lt;br/&gt;🔗 zone_id → zones SET NULL&lt;br/&gt;🔗 access_time_id → access_times SET NULL&lt;br/&gt;&lt;i style='font-size:10px'&gt;(NULL = 24/7 unrestricted)&lt;/i&gt;&lt;br/&gt;🔗 device_id → dm3_devices.devices&lt;br/&gt;name : VARCHAR(255) NOT NULL&lt;br/&gt;description : VARCHAR(500)&lt;br/&gt;status : VARCHAR(20) def 'offline'&lt;br/&gt;state : VARCHAR(20) def 'locked'&lt;br/&gt;mode : VARCHAR(20) def 'normal'&lt;br/&gt;anti_passback : BOOL def false&lt;br/&gt;unlock_duration_ms : INT def 5000&lt;br/&gt;last_event_at : TIMESTAMPTZ&lt;br/&gt;created_at / updated_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="400" width="230" height="340" as="geometry"/>
         </mxCell>
 
         <!-- Row 3: Junction tables -->
-        <mxCell id="access_group_access_points" value="&lt;b style='color:#3B82F6'&gt;access_group_access_points&lt;/b&gt;&lt;br/&gt;&lt;i style='font-size:10px;color:#94A3B8'&gt;junction: WHO → WHERE&lt;/i&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → companies&lt;br/&gt;🔗 access_group_id → access_groups CASCADE&lt;br/&gt;🔗 access_point_id → access_points CASCADE&lt;br/&gt;⚡ UNIQUE(access_group_id, access_point_id)&lt;br/&gt;created_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#3B82F6;strokeWidth=1;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="600" y="680" width="260" height="170" as="geometry"/>
+        <mxCell id="access_group_access_points" value="&lt;b style='color:#3B82F6'&gt;access_group_access_points&lt;/b&gt;&lt;br/&gt;&lt;i style='font-size:10px;color:#94A3B8'&gt;junction: WHO → WHERE + WHEN override&lt;/i&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → companies&lt;br/&gt;🔗 access_group_id → access_groups CASCADE&lt;br/&gt;🔗 access_point_id → access_points CASCADE&lt;br/&gt;🔗 access_time_id → access_times SET NULL&lt;br/&gt;&lt;i style='font-size:10px'&gt;(override schedule; NULL = use AP default)&lt;/i&gt;&lt;br/&gt;⚡ UNIQUE(access_group_id, access_point_id)&lt;br/&gt;created_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#3B82F6;strokeWidth=1;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="600" y="680" width="270" height="210" as="geometry"/>
         </mxCell>
 
-        <mxCell id="access_point_doors" value="&lt;b style='color:#3B82F6'&gt;access_point_doors&lt;/b&gt;&lt;br/&gt;&lt;i style='font-size:10px;color:#94A3B8'&gt;junction: access point → N doors&lt;/i&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → companies&lt;br/&gt;🔗 access_point_id → access_points CASCADE&lt;br/&gt;🔗 door_id → doors CASCADE&lt;br/&gt;role : VARCHAR(20) def 'reader_in'&lt;br/&gt;&lt;i style='font-size:10px'&gt;(reader_in | reader_out | controller | camera)&lt;/i&gt;&lt;br/&gt;⚡ UNIQUE(access_point_id, door_id)&lt;br/&gt;created_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#3B82F6;strokeWidth=1;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="1100" y="680" width="230" height="200" as="geometry"/>
+        <mxCell id="access_group_users" value="&lt;b style='color:#3B82F6'&gt;access_group_users&lt;/b&gt;&lt;br/&gt;&lt;i style='font-size:10px;color:#94A3B8'&gt;junction: M:N user ↔ access group&lt;/i&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → companies&lt;br/&gt;🔗 access_group_id → access_groups CASCADE&lt;br/&gt;🔗 user_id → dm3_identity.users CASCADE&lt;br/&gt;effective_from : TIMESTAMPTZ def now()&lt;br/&gt;effective_to : TIMESTAMPTZ (nullable)&lt;br/&gt;&lt;i style='font-size:10px'&gt;(NULL = no expiry)&lt;/i&gt;&lt;br/&gt;⚡ UNIQUE(access_group_id, user_id)&lt;br/&gt;created_at&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#3B82F6;strokeWidth=1;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="780" width="260" height="220" as="geometry"/>
         </mxCell>
 
         <!-- Row 4: Events (hypertable) -->
-        <mxCell id="access_events" value="&lt;b style='color:#F59E0B'&gt;access_events ⏱️&lt;/b&gt;&lt;br/&gt;&lt;i style='font-size:10px;color:#94A3B8'&gt;TimescaleDB hypertable&lt;/i&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 (tenant_id, time, id) PK&lt;br/&gt;tenant_id : UUID def demo UUID&lt;br/&gt;time : TIMESTAMPTZ def now()&lt;br/&gt;access_point_id : UUID (logical)&lt;br/&gt;door_id : UUID (logical)&lt;br/&gt;user_id : UUID (logical)&lt;br/&gt;user_name : VARCHAR(255)&lt;br/&gt;credential_type : VARCHAR(50)&lt;br/&gt;direction : VARCHAR(10)&lt;br/&gt;decision : VARCHAR(20) NOT NULL&lt;br/&gt;reason : VARCHAR(255)&lt;br/&gt;confidence / temperature : FLOAT&lt;br/&gt;photo_ref : VARCHAR(200)&lt;br/&gt;decided_locally : BOOL def true&lt;br/&gt;metadata : JSONB&lt;br/&gt;&lt;br/&gt;&lt;i style='font-size:10px'&gt;No FK constraints (hypertable).&lt;br/&gt;Logical refs to access_points, doors, users.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#F59E0B;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
-          <mxGeometry x="600" y="920" width="270" height="360" as="geometry"/>
+        <mxCell id="access_events" value="&lt;b style='color:#F59E0B'&gt;access_events ⏱️&lt;/b&gt;&lt;br/&gt;&lt;i style='font-size:10px;color:#94A3B8'&gt;TimescaleDB hypertable&lt;/i&gt;&lt;hr size='1'/&gt;&lt;div style='text-align:left;font-size:11px;padding:4px'&gt;🔑 (tenant_id, time, id) PK&lt;br/&gt;tenant_id : UUID def demo UUID&lt;br/&gt;time : TIMESTAMPTZ def now()&lt;br/&gt;access_point_id : UUID (logical)&lt;br/&gt;user_id : UUID (logical)&lt;br/&gt;user_name : VARCHAR(255)&lt;br/&gt;credential_type : VARCHAR(50)&lt;br/&gt;direction : VARCHAR(10)&lt;br/&gt;decision : VARCHAR(20) NOT NULL&lt;br/&gt;reason : VARCHAR(255)&lt;br/&gt;confidence / temperature : FLOAT&lt;br/&gt;photo_ref : VARCHAR(200)&lt;br/&gt;decided_locally : BOOL def true&lt;br/&gt;metadata : JSONB&lt;br/&gt;&lt;br/&gt;&lt;i style='font-size:10px'&gt;No FK constraints (hypertable).&lt;br/&gt;Logical refs to access_points, users.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#F59E0B;strokeWidth=2;verticalAlign=top;spacingTop=0;" vertex="1" parent="1">
+          <mxGeometry x="600" y="950" width="270" height="340" as="geometry"/>
         </mxCell>
 
         <!-- ═══════════════════ LEGEND ═══════════════════ -->
         <mxCell id="legend-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#E5E7EB;arcSize=8;" vertex="1" parent="1">
-          <mxGeometry x="1640" y="870" width="420" height="380" as="geometry"/>
+          <mxGeometry x="1640" y="870" width="420" height="400" as="geometry"/>
         </mxCell>
         <mxCell id="legend-title" value="Legend" style="text;html=1;fontSize=13;fontStyle=1;align=left;fillColor=none;strokeColor=none;fontColor=#374151;" vertex="1" parent="1">
           <mxGeometry x="1660" y="885" width="120" height="20" as="geometry"/>
         </mxCell>
-        <mxCell id="legend-content" value="&lt;span style='font-size:11px'&gt;🔑 Primary Key&lt;br/&gt;🔗 Foreign Key (hard FK constraint)&lt;br/&gt;⚡ Unique constraint&lt;br/&gt;⏱️ TimescaleDB hypertable&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Schemas (5)&lt;/b&gt;&lt;br/&gt;&lt;span style='color:#6B7280'&gt;■&lt;/span&gt; dm3_auth — companies, accounts, refresh_tokens&lt;br/&gt;&lt;span style='color:#3B82F6'&gt;■&lt;/span&gt; dm3_devices — devices, firmwares, provisioning&lt;br/&gt;&lt;span style='color:#3B82F6'&gt;■&lt;/span&gt; dm3_access — access control (9 tables)&lt;br/&gt;&lt;span style='color:#8B5CF6'&gt;■&lt;/span&gt; dm3_identity — users, departments, credentials&lt;br/&gt;&lt;span style='color:#94A3B8'&gt;■&lt;/span&gt; dm3_audit — (empty, reserved)&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Multi-tenancy&lt;/b&gt;: All tables have tenant_id → companies&lt;br/&gt;(tenant_id edges omitted for readability)&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Not shown&lt;/b&gt;: dm3_identity.sync_meta (KV store),&lt;br/&gt;dm3_identity.user_details (VIEW), triggers&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Junction tables&lt;/b&gt; shown with thin border + gray fill&lt;br/&gt;&lt;b&gt;Dashed edges&lt;/b&gt; = logical reference (no FK)&lt;br/&gt;&lt;b&gt;Solid edges&lt;/b&gt; = hard FK constraint&lt;br/&gt;&lt;br/&gt;Source: 000001_initial.up.sql (single migration)&lt;/span&gt;" style="text;html=1;align=left;fillColor=none;strokeColor=none;" vertex="1" parent="1">
-          <mxGeometry x="1660" y="915" width="380" height="320" as="geometry"/>
+        <mxCell id="legend-content" value="&lt;span style='font-size:11px'&gt;🔑 Primary Key&lt;br/&gt;🔗 Foreign Key (hard FK constraint)&lt;br/&gt;⚡ Unique constraint&lt;br/&gt;⏱️ TimescaleDB hypertable&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Schemas (5)&lt;/b&gt;&lt;br/&gt;&lt;span style='color:#6B7280'&gt;■&lt;/span&gt; dm3_auth — companies, accounts, refresh_tokens&lt;br/&gt;&lt;span style='color:#3B82F6'&gt;■&lt;/span&gt; dm3_devices — devices, firmwares, provisioning&lt;br/&gt;&lt;span style='color:#3B82F6'&gt;■&lt;/span&gt; dm3_access — access control (8 tables)&lt;br/&gt;&lt;span style='color:#8B5CF6'&gt;■&lt;/span&gt; dm3_identity — users, departments, credentials&lt;br/&gt;&lt;span style='color:#94A3B8'&gt;■&lt;/span&gt; dm3_audit — (empty, reserved)&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Multi-tenancy&lt;/b&gt;: All tables have tenant_id → companies&lt;br/&gt;(tenant_id edges omitted for readability)&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Key changes (migration 002+003)&lt;/b&gt;&lt;br/&gt;• doors + access_point_doors removed&lt;br/&gt;• access_points now links directly to device&lt;br/&gt;• access_group_users M:N junction added&lt;br/&gt;• access_group_access_points has access_time_id override&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Junction tables&lt;/b&gt; shown with thin border + gray fill&lt;br/&gt;&lt;b&gt;Dashed edges&lt;/b&gt; = logical reference (no FK)&lt;br/&gt;&lt;b&gt;Solid edges&lt;/b&gt; = hard FK constraint&lt;/span&gt;" style="text;html=1;align=left;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="1660" y="915" width="380" height="340" as="geometry"/>
         </mxCell>
 
         <!-- ═══════════════════ RELATIONSHIPS ═══════════════════ -->
@@ -194,10 +190,14 @@
         <mxCell id="rel-accesspoints-agap" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#3B82F6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="access_points" target="access_group_access_points">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-accesspoints-apdoors" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#3B82F6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="access_points" target="access_point_doors">
+
+        <!-- access_group_access_points → access_times (schedule override) -->
+        <mxCell id="rel-agap-accesstimes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#3B82F6;dashed=1;dashPattern=4 4;endArrow=open;endSize=8;" edge="1" parent="1" source="access_group_access_points" target="access_times">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-doors-apdoors" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#3B82F6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="doors" target="access_point_doors">
+
+        <!-- access_group_users junction -->
+        <mxCell id="rel-accessgroups-agu" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#3B82F6;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="access_groups" target="access_group_users">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
 
@@ -206,13 +206,13 @@
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
 
-        <!-- CROSS-SCHEMA: Access → Identity (access_group_id FK on users) -->
-        <mxCell id="rel-accessgroups-identityusers" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#10B981;strokeWidth=2;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="access_groups" target="identity_users">
+        <!-- CROSS-SCHEMA: Access → Identity (via access_group_users M:N) -->
+        <mxCell id="rel-agu-identityusers" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#10B981;strokeWidth=2;endArrow=ERmany;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="identity_users" target="access_group_users">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
 
-        <!-- CROSS-SCHEMA: Devices → Access (device_id FK on doors) -->
-        <mxCell id="rel-devices-doors" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#10B981;strokeWidth=2;endArrow=ERone;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="devices" target="doors">
+        <!-- CROSS-SCHEMA: Devices → Access (device_id FK on access_points) -->
+        <mxCell id="rel-devices-accesspoints" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#10B981;strokeWidth=2;endArrow=ERone;startArrow=ERone;startSize=12;endSize=12;" edge="1" parent="1" source="devices" target="access_points">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
 
@@ -220,16 +220,13 @@
         <mxCell id="rel-events-accesspoints" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#F59E0B;dashed=1;dashPattern=8 4;endArrow=open;endSize=8;" edge="1" parent="1" source="access_events" target="access_points">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-events-doors" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#F59E0B;dashed=1;dashPattern=8 4;endArrow=open;endSize=8;" edge="1" parent="1" source="access_events" target="doors">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
         <mxCell id="rel-events-identityusers" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#F59E0B;dashed=1;dashPattern=8 4;endArrow=open;endSize=8;" edge="1" parent="1" source="access_events" target="identity_users">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
 
         <!-- Access control flow annotation -->
-        <mxCell id="flow-annotation" value="&lt;div style='font-size:11px;color:#6B7280;text-align:center'&gt;&lt;b&gt;Access Control Flow&lt;/b&gt;&lt;br/&gt;identity.users → access_groups → access_group_access_points → access_points → access_point_doors → doors → devices&lt;br/&gt;&lt;i&gt;(WHO → WHERE → WHAT)&lt;/i&gt;&lt;/div&gt;" style="text;html=1;align=center;fillColor=#F0FDF4;strokeColor=#86EFAC;rounded=1;arcSize=10;" vertex="1" parent="1">
-          <mxGeometry x="600" y="1310" width="580" height="60" as="geometry"/>
+        <mxCell id="flow-annotation" value="&lt;div style='font-size:11px;color:#6B7280;text-align:center'&gt;&lt;b&gt;Access Control Flow&lt;/b&gt;&lt;br/&gt;identity.users → access_group_users → access_groups → access_group_access_points → access_points → devices&lt;br/&gt;&lt;i&gt;WHO → GROUP → WHERE → DEVICE&lt;/i&gt;&lt;br/&gt;Schedule: COALESCE(agap.access_time_id, ap.access_time_id) → access_time_slots&lt;/div&gt;" style="text;html=1;align=center;fillColor=#F0FDF4;strokeColor=#86EFAC;rounded=1;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="600" y="1330" width="580" height="70" as="geometry"/>
         </mxCell>
 
       </root>
