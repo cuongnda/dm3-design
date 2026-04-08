@@ -1,4 +1,5 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { Component } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@dm3/ui';
 
@@ -70,7 +71,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </p>
             </div>
 
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+            {import.meta.env.MODE === 'development' && this.state.error && (
               <div className="bg-muted p-4 rounded-md text-left">
                 <h3 className="font-medium text-foreground mb-2">Error Details:</h3>
                 <pre className="text-xs text-muted-foreground whitespace-pre-wrap">

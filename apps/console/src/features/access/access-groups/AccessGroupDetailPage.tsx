@@ -13,6 +13,7 @@ import {
 } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
 import type { AccessGroup, AccessGroupAccessPoint, AccessGroupFormData, AccessTime } from './types';
+import type { User } from '@/features/user-management/types';
 
 interface GroupUser {
   id: string;
@@ -364,7 +365,8 @@ function AddUserModal({ open, onOpenChange, linkedUserIds, onSubmit }: AddUserMo
                   <tr>
                     <th className="w-10 px-3 py-2 text-left">
                       <Checkbox
-                        checked={allFilteredSelected ? true : someFilteredSelected ? 'indeterminate' : false}
+                        checked={allFilteredSelected}
+                        indeterminate={someFilteredSelected && !allFilteredSelected}
                         onCheckedChange={toggleAll}
                         disabled={submitting}
                       />
@@ -459,8 +461,8 @@ export function AccessGroupDetailPage() {
     if (!id) return;
     setLoadingGroup(true);
     try {
-      const data = await apiFetch(`/api/v1/access/access-groups/${id}`);
-      setGroup(data.access_group ?? data);
+      const data = await apiFetch<{ access_group?: AccessGroup }>(`/api/v1/access/access-groups/${id}`);
+      setGroup(data.access_group || {} as AccessGroup);
     } catch (err) {
       console.error('Failed to fetch access group:', err);
     } finally {
@@ -472,8 +474,8 @@ export function AccessGroupDetailPage() {
     if (!id) return;
     setLoadingAPs(true);
     try {
-      const data = await apiFetch(`/api/v1/access/access-groups/${id}/access-points`);
-      setAccessPoints(data.access_points ?? data.data ?? data.items ?? []);
+      const data = await apiFetch<{ access_points?: AccessGroupAccessPoint[] }>(`/api/v1/access/access-groups/${id}/access-points`);
+      setAccessPoints(data.access_points ?? []);
     } catch (err) {
       console.error('Failed to fetch access points:', err);
     } finally {
@@ -485,7 +487,7 @@ export function AccessGroupDetailPage() {
     if (!id) return;
     setLoadingUsers(true);
     try {
-      const data = await apiFetch(`/api/v1/access/access-groups/${id}/users`);
+      const data = await apiFetch<{ data?: User[] }>(`/api/v1/access/access-groups/${id}/users`);
       setUsers(data.data ?? []);
     } catch (err) {
       console.error('Failed to fetch users:', err);

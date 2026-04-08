@@ -39,7 +39,7 @@ export function UserAccountListPage() {
     fetchUserAccounts(page, 20, params)
       .then((res) => {
         setUsers(Array.isArray(res.data) ? res.data : []);
-        setTotal(typeof res.total === 'number' ? res.total : 0);
+        setTotal(typeof res.pagination?.total === 'number' ? res.pagination.total : 0);
       })
       .catch(() => {})
       .finally(() => setLoading(false));

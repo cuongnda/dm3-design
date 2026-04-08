@@ -173,7 +173,7 @@ export function useUserManagement() {
       });
       return false;
     }
-  }, [tenant, getAuthHeaders, toast, fetchUsers]);
+  }, [tenant, getAuthHeaders, showToast, fetchUsers]);
 
   // Update user
   const updateUser = useCallback(async (userId: string, userData: Partial<UpdateUserRequest>): Promise<boolean> => {
@@ -210,7 +210,7 @@ export function useUserManagement() {
       });
       return false;
     }
-  }, [tenant, getAuthHeaders, toast, fetchUsers]);
+  }, [tenant, getAuthHeaders, showToast, fetchUsers]);
 
   // Delete user
   const deleteUser = useCallback(async (userId: string): Promise<boolean> => {
@@ -245,7 +245,7 @@ export function useUserManagement() {
       });
       return false;
     }
-  }, [tenant, getAuthHeaders, toast, fetchUsers]);
+  }, [tenant, getAuthHeaders, showToast, fetchUsers]);
 
   // Get user by ID
   const getUser = useCallback(async (userId: string): Promise<User | null> => {
@@ -361,7 +361,7 @@ export function useUserManagement() {
       });
       return false;
     }
-  }, [tenant, getAuthHeaders, toast, fetchUsers]);
+  }, [tenant, getAuthHeaders, showToast, fetchUsers]);
 
   const bulkUpdateDepartment = useCallback(async (userIds: string[], departmentId: string): Promise<boolean> => {
     if (!tenant || userIds.length === 0 || !departmentId) return false;
@@ -400,7 +400,7 @@ export function useUserManagement() {
       });
       return false;
     }
-  }, [tenant, getAuthHeaders, toast, fetchUsers]);
+  }, [tenant, getAuthHeaders, showToast, fetchUsers]);
 
   const bulkUpdateAccessGroup = useCallback(async (userIds: string[], accessGroupId: string): Promise<boolean> => {
     if (!tenant || userIds.length === 0 || !accessGroupId) return false;
@@ -439,7 +439,7 @@ export function useUserManagement() {
       });
       return false;
     }
-  }, [tenant, getAuthHeaders, toast, fetchUsers]);
+  }, [tenant, getAuthHeaders, showToast, fetchUsers]);
 
   const bulkUpdateStatus = useCallback(async (userIds: string[], status: string, reason?: string): Promise<boolean> => {
     if (!tenant || userIds.length === 0 || !status) return false;
@@ -482,7 +482,7 @@ export function useUserManagement() {
       });
       return false;
     }
-  }, [tenant, getAuthHeaders, toast, fetchUsers]);
+  }, [tenant, getAuthHeaders, showToast, fetchUsers]);
 
   // Multi-Company operations
   const getUserCompanyMatrix = useCallback(async (userId: string): Promise<UserAccount | null> => {

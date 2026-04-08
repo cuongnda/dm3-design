@@ -48,7 +48,7 @@ export function UserManagementPage() {
     const [deleteLoading, setDeleteLoading] = useState(false);
 
     useEffect(() => {
-        apiFetch<{ departments: Department[] }>('/api/v1/departments?limit=200')
+        apiFetch<{ departments: Department[] }>('/api/v1/identity/departments?limit=200')
             .then((d) => setDepartments(d.departments || []))
             .catch(() => {});
     }, []);
@@ -66,7 +66,7 @@ export function UserManagementPage() {
             const data = await apiFetch<{
                 users: User[];
                 pagination: { total: number; total_pages: number };
-            }>(`/api/v1/users?${params}`);
+            }>(`/api/v1/identity/users?${params}`);
             setUsers(data.users || []);
             setTotal(data.pagination?.total || 0);
             setTotalPages(data.pagination?.total_pages || 1);
@@ -90,7 +90,7 @@ export function UserManagementPage() {
     }, [page, search]);
 
     const handleCreate = async (data: Partial<User>) => {
-        const result = await apiFetch<{ id: string }>('/api/v1/users', { method: 'POST', body: JSON.stringify(data) });
+        const result = await apiFetch<{ id: string }>('/api/v1/identity/users', { method: 'POST', body: JSON.stringify(data) });
         setShowCreateModal(false);
         fetchUsers();
         return result;
@@ -98,7 +98,7 @@ export function UserManagementPage() {
 
     const handleEdit = async (data: Partial<User>) => {
         if (!editingUser) return;
-        await apiFetch(`/api/v1/users/${editingUser.id}`, { method: 'PUT', body: JSON.stringify(data) });
+        await apiFetch(`/api/v1/identity/users/${editingUser.id}`, { method: 'PUT', body: JSON.stringify(data) });
         setEditingUser(null);
         fetchUsers();
         return editingUser;
@@ -108,7 +108,7 @@ export function UserManagementPage() {
         if (!deletingUser) return;
         setDeleteLoading(true);
         try {
-            await apiFetch(`/api/v1/users/${deletingUser.id}`, { method: 'DELETE' });
+            await apiFetch(`/api/v1/identity/users/${deletingUser.id}`, { method: 'DELETE' });
             setDeletingUser(null);
             fetchUsers();
         } catch (err) {
@@ -119,7 +119,7 @@ export function UserManagementPage() {
     };
 
     const handleBulkDelete = async () => {
-        await apiFetch('/api/v1/users/bulk-delete', {
+        await apiFetch('/api/v1/identity/users/bulk-delete', {
             method: 'POST',
             body: JSON.stringify({ ids: Array.from(selected) }),
         });
@@ -147,7 +147,12 @@ export function UserManagementPage() {
                 sortable: true,
                 render: (u) => <span className="text-[13px] font-medium">{u.full_name || `${u.first_name} ${u.last_name}`}</span>,
             },
-            { key: 'email', header: t('col.email'), sortable: true, render: (u) => <span className="text-[13px] text-muted-foreground">{u.email}</span> },
+            {
+                key: 'email',
+                header: t('col.email'),
+                sortable: true,
+                render: (u) => <span className="text-[13px] text-muted-foreground">{u.email}</span>,
+            },
             { key: 'position', header: t('col.position'), sortable: true, render: (u) => <span className="text-[13px]">{u.position || '—'}</span> },
             {
                 key: 'department_name',

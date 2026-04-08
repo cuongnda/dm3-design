@@ -5,7 +5,7 @@ export interface AccessPoint {
   access_time_id?: string;
   name: string;
   description?: string;
-  door_count: number;
+  access_device_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -17,12 +17,12 @@ export interface AccessPointFormData {
   access_time_id?: string;
 }
 
-export interface AccessPointDoor {
+export interface AccessPointDevice {
   id: string;
   access_point_id: string;
-  door_id: string;
+  access_device_id: string;
   role: string; // reader_in | reader_out | controller | camera
-  door?: {
+  device?: {
     id: string;
     name: string;
     type: string;

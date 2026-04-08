@@ -11,7 +11,7 @@ interface PaginatedResponse<T> {
   };
 }
 
-const SYSTEM_URL = '/api/v1/system';
+const AUTH_SYSTEM_URL = '/api/v1/auth/system';
 
 // ─── User Accounts ──────────────────────────────────────────
 
@@ -58,37 +58,37 @@ export interface UpdateUserAccountRequest {
 
 export async function fetchUserAccounts(page = 1, limit = 20, params: Record<string, string> = {}): Promise<PaginatedResponse<UserAccountDTO>> {
   const query = new URLSearchParams({ page: page.toString(), limit: limit.toString(), ...params });
-  return apiFetch<PaginatedResponse<UserAccountDTO>>(`${SYSTEM_URL}/accounts?${query}`);
+  return apiFetch<PaginatedResponse<UserAccountDTO>>(`${AUTH_SYSTEM_URL}/accounts?${query}`);
 }
 
 export async function fetchUserAccount(id: string): Promise<UserAccountDTO> {
-  return apiFetch<UserAccountDTO>(`${SYSTEM_URL}/accounts/${id}`);
+  return apiFetch<UserAccountDTO>(`${AUTH_SYSTEM_URL}/accounts/${id}`);
 }
 
 export async function createUserAccount(data: CreateUserAccountRequest): Promise<CreateUserAccountResponse> {
-  return apiFetch<CreateUserAccountResponse>(`${SYSTEM_URL}/accounts`, {
+  return apiFetch<CreateUserAccountResponse>(`${AUTH_SYSTEM_URL}/accounts`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
 export async function updateUserAccount(id: string, data: UpdateUserAccountRequest): Promise<UserAccountDTO> {
-  return apiFetch<UserAccountDTO>(`${SYSTEM_URL}/accounts/${id}`, {
+  return apiFetch<UserAccountDTO>(`${AUTH_SYSTEM_URL}/accounts/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
   });
 }
 
 export async function deleteUserAccount(id: string): Promise<void> {
-  await apiFetch<void>(`${SYSTEM_URL}/accounts/${id}`, { method: 'DELETE' });
+  await apiFetch<void>(`${AUTH_SYSTEM_URL}/accounts/${id}`, { method: 'DELETE' });
 }
 
 export async function resetUserPassword(id: string): Promise<{ password: string; message: string }> {
-  return apiFetch<{ password: string; message: string }>(`${SYSTEM_URL}/accounts/${id}/reset-password`, { method: 'POST' });
+  return apiFetch<{ password: string; message: string }>(`${AUTH_SYSTEM_URL}/accounts/${id}/reset-password`, { method: 'POST' });
 }
 
 export async function changeUserPassword(id: string, newPassword: string): Promise<{ message: string }> {
-  return apiFetch<{ message: string }>(`${SYSTEM_URL}/accounts/${id}/change-password`, {
+  return apiFetch<{ message: string }>(`${AUTH_SYSTEM_URL}/accounts/${id}/change-password`, {
     method: 'PUT',
     body: JSON.stringify({ password: newPassword }),
   });

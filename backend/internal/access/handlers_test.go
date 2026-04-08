@@ -51,24 +51,24 @@ func TestBoolVal(t *testing.T) {
 	}
 }
 
-// TestCreateDoorRequestValidation tests request validation without DB.
-func TestCreateDoorValidation(t *testing.T) {
+// TestCreateAccessDeviceValidation tests request validation without DB.
+func TestCreateAccessDeviceValidation(t *testing.T) {
 	h := &AccessHandlers{db: nil} // nil DB — we expect validation to fail before DB call
 
 	// Missing required fields
-	body := `{"location":"test"}`
-	r := httptest.NewRequest("POST", "/api/v1/doors", bytes.NewBufferString(body))
+	body := `{"type":"door"}`
+	r := httptest.NewRequest("POST", "/api/v1/access-devices", bytes.NewBufferString(body))
 	w := httptest.NewRecorder()
-	h.CreateDoor(w, r)
+	h.CreateAccessDevice(w, r)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", w.Code)
 	}
 
 	// Invalid JSON
-	r = httptest.NewRequest("POST", "/api/v1/doors", bytes.NewBufferString("{bad"))
+	r = httptest.NewRequest("POST", "/api/v1/access-devices", bytes.NewBufferString("{bad"))
 	w = httptest.NewRecorder()
-	h.CreateDoor(w, r)
+	h.CreateAccessDevice(w, r)
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for bad JSON, got %d", w.Code)
 	}
@@ -100,24 +100,24 @@ func TestCreateScheduleValidation(t *testing.T) {
 	}
 }
 
-// TestDeleteDoorNotFound tests 404 on delete with nil db (will panic-recover or we test routes).
+// TestAccessDeviceRoutes tests that access device routes can be registered without panic.
 func TestRouteSetup(t *testing.T) {
 	// Verify routes can be registered without panic
 	r := chi.NewRouter()
 	h := &AccessHandlers{db: nil}
 
-	r.Get("/api/v1/doors", h.ListDoors)
-	r.Post("/api/v1/doors", h.CreateDoor)
-	r.Get("/api/v1/doors/{id}", h.GetDoor)
-	r.Put("/api/v1/doors/{id}", h.UpdateDoor)
-	r.Delete("/api/v1/doors/{id}", h.DeleteDoor)
+	r.Get("/api/v1/access-devices", h.ListAccessDevices)
+	r.Post("/api/v1/access-devices", h.CreateAccessDevice)
+	r.Get("/api/v1/access-devices/{id}", h.GetAccessDevice)
+	r.Put("/api/v1/access-devices/{id}", h.UpdateAccessDevice)
+	r.Delete("/api/v1/access-devices/{id}", h.DeleteAccessDevice)
 	r.Get("/api/v1/rules", h.ListRules)
 	r.Post("/api/v1/rules", h.CreateRule)
 	r.Get("/api/v1/schedules", h.ListSchedules)
 	r.Post("/api/v1/schedules", h.CreateSchedule)
 	r.Get("/api/v1/events", h.ListEvents)
 	r.Get("/api/v1/stats", h.GetStats)
-	r.Get("/api/v1/doors/{id}/sync-package", h.GetSyncPackage)
+	r.Get("/api/v1/access-devices/{id}/sync-package", h.GetSyncPackage)
 
 	// Test that routes are registered by walking
 	walkCount := 0

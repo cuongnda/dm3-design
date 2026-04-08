@@ -26,9 +26,9 @@ func NewAccessHandlers(database *db.DB) *AccessHandlers {
 	return &AccessHandlers{db: database}
 }
 
-// ─── Doors ───────────────────────────────────────────────────────────────────
+// ─── Access Devices ──────────────────────────────────────────────────────────
 
-func (h *AccessHandlers) ListDoors(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) ListAccessDevices(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
@@ -66,26 +66,26 @@ func (h *AccessHandlers) ListDoors(w http.ResponseWriter, r *http.Request) {
 	var total int64
 	countArgs := make([]any, len(args))
 	copy(countArgs, args)
-	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_access.doors "+where, countArgs...).Scan(&total)
+	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_access.access_devices "+where, countArgs...).Scan(&total)
 
 	query := fmt.Sprintf(`SELECT id, tenant_id, device_id, name, type,
 		status, state, mode, unlock_duration_ms, anti_passback, emergency_unlock,
 		firmware_version, ip_address, last_event_at, last_heartbeat_at,
 		config_version, user_db_version, rules_version, metadata, created_at, updated_at
-		FROM dm3_access.doors %s ORDER BY name ASC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
+		FROM dm3_access.access_devices %s ORDER BY name ASC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
 	args = append(args, limit, offset)
 
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
-		slog.Error("list doors query error", "error", err)
+		slog.Error("list access devices query error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	defer rows.Close()
 
-	doors := []models.Door{}
+	devices := []models.AccessDevice{}
 	for rows.Next() {
-		var d models.Door
+		var d models.AccessDevice
 		if err := rows.Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type,
 			&d.Status, &d.State, &d.Mode, &d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock,
 			&d.FirmwareVersion, &d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt,
@@ -94,12 +94,12 @@ func (h *AccessHandlers) ListDoors(w http.ResponseWriter, r *http.Request) {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		doors = append(doors, d)
+		devices = append(devices, d)
 	}
-	httputil.Paginated(w, doors, total, page, limit)
+	httputil.Paginated(w, devices, total, page, limit)
 }
 
-type createDoorRequest struct {
+type createAccessDeviceRequest struct {
 	Name             string  `json:"name"`
 	Type             string  `json:"type"`
 	DeviceID         *string `json:"device_id"`
@@ -108,8 +108,8 @@ type createDoorRequest struct {
 	EmergencyUnlock  *bool   `json:"emergency_unlock"`
 }
 
-func (h *AccessHandlers) CreateDoor(w http.ResponseWriter, r *http.Request) {
-	var req createDoorRequest
+func (h *AccessHandlers) CreateAccessDevice(w http.ResponseWriter, r *http.Request) {
+	var req createAccessDeviceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -133,9 +133,9 @@ func (h *AccessHandlers) CreateDoor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cid := authsvc.CompanyIDFromContext(r.Context())
-	var d models.Door
+	var d models.AccessDevice
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_access.doors (name, type, device_id, unlock_duration_ms, anti_passback, emergency_unlock, tenant_id)
+		`INSERT INTO dm3_access.access_devices (name, type, device_id, unlock_duration_ms, anti_passback, emergency_unlock, tenant_id)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7::uuid)
 		 RETURNING id, tenant_id, device_id, name, type,
 		 status, state, mode, unlock_duration_ms, anti_passback, emergency_unlock,
@@ -148,24 +148,24 @@ func (h *AccessHandlers) CreateDoor(w http.ResponseWriter, r *http.Request) {
 		&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Metadata,
 		&d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
-		slog.Error("create door error", "error", err)
+		slog.Error("create access device error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	httputil.JSON(w, http.StatusCreated, d)
 }
 
-func (h *AccessHandlers) GetDoor(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) GetAccessDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	d, err := h.scanDoor(r, id)
+	d, err := h.scanAccessDevice(r, id)
 	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "door not found")
+		httputil.Error(w, http.StatusNotFound, "access device not found")
 		return
 	}
 	httputil.JSON(w, http.StatusOK, d)
 }
 
-type updateDoorRequest struct {
+type updateAccessDeviceRequest struct {
 	Name             *string `json:"name"`
 	Status           *string `json:"status"`
 	State            *string `json:"state"`
@@ -176,18 +176,18 @@ type updateDoorRequest struct {
 	EmergencyUnlock  *bool   `json:"emergency_unlock"`
 }
 
-func (h *AccessHandlers) UpdateDoor(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) UpdateAccessDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
-	var req updateDoorRequest
+	var req updateAccessDeviceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	var d models.Door
+	var d models.AccessDevice
 	err := h.db.Pool.QueryRow(r.Context(),
-		`UPDATE dm3_access.doors SET
+		`UPDATE dm3_access.access_devices SET
 			name = COALESCE($2, name),
 			status = COALESCE($3, status), state = COALESCE($4, state), mode = COALESCE($5, mode),
 			device_id = COALESCE($6, device_id), updated_at = now()
@@ -203,16 +203,16 @@ func (h *AccessHandlers) UpdateDoor(w http.ResponseWriter, r *http.Request) {
 		&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Metadata,
 		&d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "door not found")
+		httputil.Error(w, http.StatusNotFound, "access device not found")
 		return
 	}
 	httputil.JSON(w, http.StatusOK, d)
 }
 
-func (h *AccessHandlers) DeleteDoor(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) DeleteAccessDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
-	query := `DELETE FROM dm3_access.doors WHERE id = $1::uuid`
+	query := `DELETE FROM dm3_access.access_devices WHERE id = $1::uuid`
 	args := []any{id}
 	if cid != "" {
 		query += " AND tenant_id = $2::uuid"
@@ -224,13 +224,13 @@ func (h *AccessHandlers) DeleteDoor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if tag.RowsAffected() == 0 {
-		httputil.Error(w, http.StatusNotFound, "door not found")
+		httputil.Error(w, http.StatusNotFound, "access device not found")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *AccessHandlers) BulkDeleteDoors(w http.ResponseWriter, r *http.Request) {
+func (h *AccessHandlers) BulkDeleteAccessDevices(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	var req struct {
 		IDs []string `json:"ids"`
@@ -245,7 +245,7 @@ func (h *AccessHandlers) BulkDeleteDoors(w http.ResponseWriter, r *http.Request)
 		placeholders[i] = fmt.Sprintf("$%d::uuid", i+2)
 		args = append(args, id)
 	}
-	query := fmt.Sprintf(`DELETE FROM dm3_access.doors WHERE tenant_id = $1::uuid AND id IN (%s)`, strings.Join(placeholders, ","))
+	query := fmt.Sprintf(`DELETE FROM dm3_access.access_devices WHERE tenant_id = $1::uuid AND id IN (%s)`, strings.Join(placeholders, ","))
 	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -406,15 +406,15 @@ func (h *AccessHandlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
 	if cid != "" {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE tenant_id = $1::uuid`, cid).Scan(&stats.DoorsTotal)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='online' AND tenant_id = $1::uuid`, cid).Scan(&stats.DoorsOnline)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='offline' AND tenant_id = $1::uuid`, cid).Scan(&stats.DoorsOffline)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='alarm' AND tenant_id = $1::uuid`, cid).Scan(&stats.DoorsAlarm)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesTotal)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='online' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesOnline)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='offline' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesOffline)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='alarm' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesAlarm)
 	} else {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors`).Scan(&stats.DoorsTotal)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='online'`).Scan(&stats.DoorsOnline)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='offline'`).Scan(&stats.DoorsOffline)
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.doors WHERE status='alarm'`).Scan(&stats.DoorsAlarm)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices`).Scan(&stats.AccessDevicesTotal)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='online'`).Scan(&stats.AccessDevicesOnline)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='offline'`).Scan(&stats.AccessDevicesOffline)
+		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='alarm'`).Scan(&stats.AccessDevicesAlarm)
 	}
 
 	today := time.Now().Truncate(24 * time.Hour)
@@ -464,35 +464,35 @@ func (h *AccessHandlers) GetStats(w http.ResponseWriter, r *http.Request) {
 func (h *AccessHandlers) GetSyncPackage(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	// Verify door exists
-	var doorID string
+	// Verify access device exists
+	var accessDeviceID string
 	var rulesVersion int
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, rules_version FROM dm3_access.doors WHERE id = $1::uuid`, id).Scan(&doorID, &rulesVersion)
+		`SELECT id, rules_version FROM dm3_access.access_devices WHERE id = $1::uuid`, id).Scan(&accessDeviceID, &rulesVersion)
 	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "door not found")
+		httputil.Error(w, http.StatusNotFound, "access device not found")
 		return
 	}
 
 	// access_rules table is dropped; return empty rules list
 	pkg := models.SyncPackage{
-		DoorID:       doorID,
-		Rules:        []models.AccessRule{},
-		RulesVersion: rulesVersion,
+		AccessDeviceID: accessDeviceID,
+		Rules:          []models.AccessRule{},
+		RulesVersion:   rulesVersion,
 	}
 	httputil.JSON(w, http.StatusOK, pkg)
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-func (h *AccessHandlers) scanDoor(r *http.Request, id string) (models.Door, error) {
-	var d models.Door
+func (h *AccessHandlers) scanAccessDevice(r *http.Request, id string) (models.AccessDevice, error) {
+	var d models.AccessDevice
 	err := h.db.Pool.QueryRow(r.Context(),
 		`SELECT id, tenant_id, device_id, name, type,
 		 status, state, mode, unlock_duration_ms, anti_passback, emergency_unlock,
 		 firmware_version, ip_address, last_event_at, last_heartbeat_at,
 		 config_version, user_db_version, rules_version, metadata, created_at, updated_at
-		 FROM dm3_access.doors WHERE id = $1::uuid`, id,
+		 FROM dm3_access.access_devices WHERE id = $1::uuid`, id,
 	).Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type,
 		&d.Status, &d.State, &d.Mode, &d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock,
 		&d.FirmwareVersion, &d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt,

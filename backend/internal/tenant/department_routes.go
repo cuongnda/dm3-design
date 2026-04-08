@@ -6,7 +6,7 @@ import (
 
 // AddDepartmentRoutes adds department management routes
 func AddDepartmentRoutes(r chi.Router, h *UserManagementHandlers) {
-	r.Route("/api/v1/departments", func(r chi.Router) {
+	r.Route("/api/v1/identity/departments", func(r chi.Router) {
 		r.Get("/", h.ListDepartments)
 		r.Post("/", h.CreateDepartment)
 

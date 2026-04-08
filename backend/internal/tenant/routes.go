@@ -13,7 +13,7 @@ func RegisterRoutes(r chi.Router, database *db.DB, jwtSecret string) {
 	handlers := NewTenantHandlers(database)
 
 	// Public tenant routes (require authentication + tenant context)
-	r.Route("/api/v1/tenant", func(r chi.Router) {
+	r.Route("/api/v1/auth/tenant", func(r chi.Router) {
 		r.Use(authsvc.AuthMiddleware(jwtSecret))
 		r.Use(Middleware(database, IsolationModeSystemAdmin))
 
@@ -24,7 +24,7 @@ func RegisterRoutes(r chi.Router, database *db.DB, jwtSecret string) {
 	})
 
 	// Admin tenant routes (system admin only)
-	r.Route("/api/v1/admin/tenants", func(r chi.Router) {
+	r.Route("/api/v1/auth/admin/tenants", func(r chi.Router) {
 		// Auth + system admin middleware
 		r.Use(authsvc.AuthMiddleware(jwtSecret))
 		r.Use(authsvc.RequireRole("system_admin"))
@@ -35,7 +35,7 @@ func RegisterRoutes(r chi.Router, database *db.DB, jwtSecret string) {
 	})
 
 	// Tenant-scoped routes with strict isolation
-	r.Route("/api/v1/scoped", func(r chi.Router) {
+	r.Route("/api/v1/auth/scoped", func(r chi.Router) {
 		// Auth + strict tenant middleware
 		r.Use(authsvc.AuthMiddleware(jwtSecret))
 		r.Use(authsvc.RequireCompany())

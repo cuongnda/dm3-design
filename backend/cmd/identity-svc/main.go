@@ -90,7 +90,7 @@ func main() {
 	// Serve uploaded photos/avatars
 	r.Handle("/photos/*", http.StripPrefix("/photos/", http.FileServer(http.Dir("data/photos"))))
 
-	r.Route("/api/v1", func(r chi.Router) {
+	r.Route("/api/v1/identity", func(r chi.Router) {
 		r.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
 		r.Use(authsvc.RequireCompany())
 

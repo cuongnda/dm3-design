@@ -134,7 +134,7 @@ func main() {
 		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
 
-	r.Route("/api/v1", func(r chi.Router) {
+	r.Route("/api/v1/gateway", func(r chi.Router) {
 		r.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
 
 		// System admin only: pending device management
@@ -187,8 +187,8 @@ func main() {
 	})
 
 	// No-auth endpoints (device activation does not require user auth)
-	r.Post("/api/v1/devices/activate", provHandlers.ActivateDevice)
-	r.Post("/api/v1/devices/refresh-token", provHandlers.RefreshToken)
+	r.Post("/api/v1/gateway/devices/activate", provHandlers.ActivateDevice)
+	r.Post("/api/v1/gateway/devices/refresh-token", provHandlers.RefreshToken)
 
 	// WebSocket endpoint — requires valid user JWT to prevent unauthenticated
 	// clients from receiving the real-time event stream.

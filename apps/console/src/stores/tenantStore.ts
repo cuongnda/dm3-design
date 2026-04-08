@@ -91,7 +91,7 @@ export const useTenantStore = create<TenantState>()(
         try {
           setLoadingTenant(true)
           setTenantError(null)
-          const data = await apiFetch<{ tenant: TenantInfo }>('/api/v1/tenant/current')
+          const data = await apiFetch<{ tenant: TenantInfo }>('/api/v1/auth/tenant/current')
           setTenant(data.tenant)
         } catch (error) {
           // apiFetch redirects to /login on 401 — only log non-auth errors
@@ -110,7 +110,7 @@ export const useTenantStore = create<TenantState>()(
         try {
           setLoadingUsage(true)
           setUsageError(null)
-          const data = await apiFetch<{ usage: TenantUsage }>('/api/v1/tenant/stats')
+          const data = await apiFetch<{ usage: TenantUsage }>('/api/v1/auth/tenant/stats')
           setUsage(data.usage)
         } catch (error) {
           if (error instanceof Error && error.message !== 'Unauthorized') {

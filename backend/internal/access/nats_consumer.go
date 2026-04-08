@@ -113,16 +113,16 @@ func (c *NATSConsumer) handleEvent(subject string, data []byte) error {
 		return err
 	}
 
-	// Update door's last_event_at
-	if doorUUID := toUUIDPtr(ald.DoorID); doorUUID != nil {
+	// Update access device's last_event_at
+	if deviceUUID := toUUIDPtr(ald.DoorID); deviceUUID != nil {
 		updateCtx, updateCancel := context.WithTimeout(c.ctx, 5*time.Second)
 		if _, err := c.db.Pool.Exec(updateCtx,
-			`UPDATE dm3_access.doors SET last_event_at = $1 WHERE id = $2::uuid`, evtTime, *doorUUID); err != nil {
-			slog.Warn("nats: failed to update door last_event_at", "error", err, "door", *doorUUID)
+			`UPDATE dm3_access.access_devices SET last_event_at = $1 WHERE id = $2::uuid`, evtTime, *deviceUUID); err != nil {
+			slog.Warn("nats: failed to update access device last_event_at", "error", err, "device", *deviceUUID)
 		}
 		updateCancel()
 	}
 
-	slog.Debug("access event ingested", "door", ald.DoorID, "decision", ald.Decision, "user", ald.UserName)
+	slog.Debug("access event ingested", "device", ald.DoorID, "decision", ald.Decision, "user", ald.UserName)
 	return nil
 }

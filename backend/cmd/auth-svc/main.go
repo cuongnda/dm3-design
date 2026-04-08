@@ -75,21 +75,12 @@ func main() {
 		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "auth-svc"})
 	})
 
-	// Public auth routes
+	// Public routes (no auth required)
 	r.Post("/api/v1/auth/login", h.Login)
 	r.Post("/api/v1/auth/login-step2", h.LoginStep2)
 	r.Post("/api/v1/auth/refresh", h.Refresh)
 
-	// User & Department management routes (require auth + company context)
-	umHandlers := tenant.NewUserManagementHandlers(database)
-	r.Group(func(pr chi.Router) {
-		pr.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
-		pr.Use(authsvc.RequireCompany())
-		tenant.AddUserManagementRoutes(pr, umHandlers)
-		tenant.AddDepartmentRoutes(pr, umHandlers)
-	})
-
-	// Protected routes
+	// Protected routes — all under /api/v1/auth/ prefix
 	r.Group(func(pr chi.Router) {
 		pr.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
 
@@ -97,26 +88,26 @@ func main() {
 		pr.Get("/api/v1/auth/me", h.Me)
 		pr.Patch("/api/v1/auth/me", h.UpdateMe)
 		pr.Post("/api/v1/auth/device-token", h.DeviceToken)
-		pr.Get("/api/v1/roles", h.ListRoles)
+		pr.Get("/api/v1/auth/roles", h.ListRoles)
 
 		// System admin only: company management + stats
 		pr.Group(func(sr chi.Router) {
 			sr.Use(authsvc.RequireRole("system_admin"))
-			sr.Get("/api/v1/system/stats", h.SystemStats)
-			sr.Get("/api/v1/system/companies", h.ListCompanies)
-			sr.Post("/api/v1/system/companies", h.CreateCompany)
-			sr.Get("/api/v1/system/companies/{id}", h.GetCompany)
-			sr.Put("/api/v1/system/companies/{id}", h.UpdateCompany)
-			sr.Delete("/api/v1/system/companies/{id}", h.DeleteCompany)
+			sr.Get("/api/v1/auth/system/stats", h.SystemStats)
+			sr.Get("/api/v1/auth/system/companies", h.ListCompanies)
+			sr.Post("/api/v1/auth/system/companies", h.CreateCompany)
+			sr.Get("/api/v1/auth/system/companies/{id}", h.GetCompany)
+			sr.Put("/api/v1/auth/system/companies/{id}", h.UpdateCompany)
+			sr.Delete("/api/v1/auth/system/companies/{id}", h.DeleteCompany)
 
 			// Account management
-			sr.Get("/api/v1/system/accounts", h.ListUserAccounts)
-			sr.Post("/api/v1/system/accounts", h.CreateUserAccount)
-			sr.Get("/api/v1/system/accounts/{id}", h.GetUserAccount)
-			sr.Patch("/api/v1/system/accounts/{id}", h.UpdateUserAccount)
-			sr.Delete("/api/v1/system/accounts/{id}", h.DeleteUserAccount)
-			sr.Post("/api/v1/system/accounts/{id}/reset-password", h.ResetUserPassword)
-			sr.Put("/api/v1/system/accounts/{id}/change-password", h.ChangeUserPassword)
+			sr.Get("/api/v1/auth/system/accounts", h.ListUserAccounts)
+			sr.Post("/api/v1/auth/system/accounts", h.CreateUserAccount)
+			sr.Get("/api/v1/auth/system/accounts/{id}", h.GetUserAccount)
+			sr.Patch("/api/v1/auth/system/accounts/{id}", h.UpdateUserAccount)
+			sr.Delete("/api/v1/auth/system/accounts/{id}", h.DeleteUserAccount)
+			sr.Post("/api/v1/auth/system/accounts/{id}/reset-password", h.ResetUserPassword)
+			sr.Put("/api/v1/auth/system/accounts/{id}/change-password", h.ChangeUserPassword)
 		})
 	})
 

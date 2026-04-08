@@ -1,4 +1,4 @@
-export interface Door {
+export interface AccessDevice {
   id: string;
   tenant_id: string;
   device_id?: string;
@@ -18,7 +18,7 @@ export interface Door {
   updated_at: string;
 }
 
-export interface DoorFormData {
+export interface AccessDeviceFormData {
   name: string;
   type: string;
   device_id?: string;

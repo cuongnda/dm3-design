@@ -46,10 +46,10 @@ func (h *AccessHandlers) ListAccessPoints(w http.ResponseWriter, r *http.Request
 	query := fmt.Sprintf(`
 		SELECT ap.id, ap.tenant_id, ap.zone_id, ap.access_time_id,
 		       ap.name, ap.description,
-		       COUNT(DISTINCT apd.door_id) AS door_count,
+		       COUNT(DISTINCT apd.access_device_id) AS access_device_count,
 		       ap.created_at, ap.updated_at
 		FROM dm3_access.access_points ap
-		LEFT JOIN dm3_access.access_point_doors apd ON apd.access_point_id = ap.id
+		LEFT JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
 		%s
 		GROUP BY ap.id
 		ORDER BY ap.name ASC
@@ -68,7 +68,7 @@ func (h *AccessHandlers) ListAccessPoints(w http.ResponseWriter, r *http.Request
 	for rows.Next() {
 		var ap models.AccessPoint
 		if err := rows.Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
-			&ap.Name, &ap.Description, &ap.DoorCount,
+			&ap.Name, &ap.Description, &ap.AccessDeviceCount,
 			&ap.CreatedAt, &ap.UpdatedAt); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -86,15 +86,15 @@ func (h *AccessHandlers) GetAccessPoint(w http.ResponseWriter, r *http.Request) 
 	err := h.db.Pool.QueryRow(r.Context(),
 		`SELECT ap.id, ap.tenant_id, ap.zone_id, ap.access_time_id,
 		        ap.name, ap.description,
-		        COUNT(DISTINCT apd.door_id) AS door_count,
+		        COUNT(DISTINCT apd.access_device_id) AS access_device_count,
 		        ap.created_at, ap.updated_at
 		 FROM dm3_access.access_points ap
-		 LEFT JOIN dm3_access.access_point_doors apd ON apd.access_point_id = ap.id
+		 LEFT JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
 		 WHERE ap.id = $1::uuid AND ap.tenant_id = $2::uuid
 		 GROUP BY ap.id`,
 		id, cid,
 	).Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
-		&ap.Name, &ap.Description, &ap.DoorCount,
+		&ap.Name, &ap.Description, &ap.AccessDeviceCount,
 		&ap.CreatedAt, &ap.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "access point not found")
@@ -129,7 +129,7 @@ func (h *AccessHandlers) CreateAccessPoint(w http.ResponseWriter, r *http.Reques
 		 RETURNING id, tenant_id, zone_id, access_time_id, name, description, 0, created_at, updated_at`,
 		cid, req.ZoneID, req.AccessTimeID, req.Name, req.Description,
 	).Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
-		&ap.Name, &ap.Description, &ap.DoorCount,
+		&ap.Name, &ap.Description, &ap.AccessDeviceCount,
 		&ap.CreatedAt, &ap.UpdatedAt)
 	if err != nil {
 		slog.Error("create access point error", "error", err)
@@ -168,7 +168,7 @@ func (h *AccessHandlers) UpdateAccessPoint(w http.ResponseWriter, r *http.Reques
 		 RETURNING id, tenant_id, zone_id, access_time_id, name, description, 0, created_at, updated_at`,
 		id, req.Name, req.Description, req.ZoneID, req.AccessTimeID, cid,
 	).Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
-		&ap.Name, &ap.Description, &ap.DoorCount,
+		&ap.Name, &ap.Description, &ap.AccessDeviceCount,
 		&ap.CreatedAt, &ap.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "access point not found")
@@ -219,10 +219,10 @@ func (h *AccessHandlers) BulkDeleteAccessPoints(w http.ResponseWriter, r *http.R
 	httputil.JSON(w, http.StatusOK, map[string]any{"deleted": tag.RowsAffected()})
 }
 
-// ─── Access Point → Doors ─────────────────────────────────────────────────────
+// ─── Access Point → Devices ───────────────────────────────────────────────────
 
-// GET /access-points/:id/doors
-func (h *AccessHandlers) ListAccessPointDoors(w http.ResponseWriter, r *http.Request) {
+// GET /access-points/:id/devices
+func (h *AccessHandlers) ListAccessPointDevices(w http.ResponseWriter, r *http.Request) {
 	apID := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
@@ -237,54 +237,54 @@ func (h *AccessHandlers) ListAccessPointDoors(w http.ResponseWriter, r *http.Req
 	}
 
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT apd.id, apd.tenant_id, apd.access_point_id, apd.door_id, apd.role, apd.created_at,
+		`SELECT apd.id, apd.tenant_id, apd.access_point_id, apd.access_device_id, apd.role, apd.created_at,
 		        d.name, d.type, d.status, d.state
-		 FROM dm3_access.access_point_doors apd
-		 JOIN dm3_access.doors d ON d.id = apd.door_id
+		 FROM dm3_access.access_point_devices apd
+		 JOIN dm3_access.access_devices d ON d.id = apd.access_device_id
 		 WHERE apd.access_point_id = $1::uuid
 		 ORDER BY d.name ASC`,
 		apID,
 	)
 	if err != nil {
-		slog.Error("list access point doors error", "error", err)
+		slog.Error("list access point devices error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	defer rows.Close()
 
-	result := []models.AccessPointDoor{}
+	result := []models.AccessPointDevice{}
 	for rows.Next() {
-		var item models.AccessPointDoor
-		var d models.Door
+		var item models.AccessPointDevice
+		var d models.AccessDevice
 		if err := rows.Scan(
-			&item.ID, &item.TenantID, &item.AccessPointID, &item.DoorID, &item.Role, &item.CreatedAt,
+			&item.ID, &item.TenantID, &item.AccessPointID, &item.AccessDeviceID, &item.Role, &item.CreatedAt,
 			&d.Name, &d.Type, &d.Status, &d.State,
 		); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		d.ID = item.DoorID
-		item.Door = &d
+		d.ID = item.AccessDeviceID
+		item.Device = &d
 		result = append(result, item)
 	}
 	httputil.JSON(w, http.StatusOK, map[string]any{"data": result, "total": len(result)})
 }
 
-// POST /access-points/:id/doors
-func (h *AccessHandlers) AddAccessPointDoor(w http.ResponseWriter, r *http.Request) {
+// POST /access-points/:id/devices
+func (h *AccessHandlers) AddAccessPointDevice(w http.ResponseWriter, r *http.Request) {
 	apID := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
 	var req struct {
-		DoorID string `json:"door_id"`
-		Role   string `json:"role"`
+		AccessDeviceID string `json:"access_device_id"`
+		Role           string `json:"role"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.DoorID == "" {
-		httputil.Error(w, http.StatusBadRequest, "door_id is required")
+	if req.AccessDeviceID == "" {
+		httputil.Error(w, http.StatusBadRequest, "access_device_id is required")
 		return
 	}
 	if req.Role == "" {
@@ -293,14 +293,14 @@ func (h *AccessHandlers) AddAccessPointDoor(w http.ResponseWriter, r *http.Reque
 
 	var id string
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_access.access_point_doors (tenant_id, access_point_id, door_id, role)
+		`INSERT INTO dm3_access.access_point_devices (tenant_id, access_point_id, access_device_id, role)
 		 VALUES ($1::uuid, $2::uuid, $3::uuid, $4)
-		 ON CONFLICT (access_point_id, door_id) DO NOTHING
+		 ON CONFLICT (access_point_id, access_device_id) DO NOTHING
 		 RETURNING id`,
-		cid, apID, req.DoorID, req.Role,
+		cid, apID, req.AccessDeviceID, req.Role,
 	).Scan(&id)
 	if err != nil {
-		slog.Error("add access point door error", "error", err)
+		slog.Error("add access point device error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -409,22 +409,22 @@ func (h *AccessHandlers) RemoveAccessPointGroup(w http.ResponseWriter, r *http.R
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DELETE /access-points/:id/doors/:doorId
-func (h *AccessHandlers) RemoveAccessPointDoor(w http.ResponseWriter, r *http.Request) {
+// DELETE /access-points/:id/devices/:deviceId
+func (h *AccessHandlers) RemoveAccessPointDevice(w http.ResponseWriter, r *http.Request) {
 	apID := chi.URLParam(r, "id")
-	doorID := chi.URLParam(r, "doorId")
+	deviceID := chi.URLParam(r, "deviceId")
 
 	tag, err := h.db.Pool.Exec(r.Context(),
-		`DELETE FROM dm3_access.access_point_doors
-		 WHERE access_point_id = $1::uuid AND door_id = $2::uuid`,
-		apID, doorID,
+		`DELETE FROM dm3_access.access_point_devices
+		 WHERE access_point_id = $1::uuid AND access_device_id = $2::uuid`,
+		apID, deviceID,
 	)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if tag.RowsAffected() == 0 {
-		httputil.Error(w, http.StatusNotFound, "door not in this access point")
+		httputil.Error(w, http.StatusNotFound, "access device not in this access point")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

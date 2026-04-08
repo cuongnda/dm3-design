@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  fetchDevices, fetchDevice, updateDevice, deleteDevice, fetchStats, fetchDoors, fetchDoor, fetchEvents, fetchPersons, fetchPerson,
+  fetchDevices, fetchDevice, updateDevice, deleteDevice, fetchStats, fetchAccessDevices, fetchAccessDevice, fetchEvents, fetchPersons, fetchPerson,
   fetchRules, fetchRule, fetchCredentials, fetchGroups, fetchGroupMembers, fetchSchedules,
   createPerson, updatePerson, deletePerson, createCredential, deleteCredential, uploadPhoto,
   createGroup, updateGroup, deleteGroup, addGroupMember, removeGroupMember,
-  createDoor, updateDoor, deleteDoor, createRule, updateRule, deleteRule, createSchedule,
+  createAccessDevice, updateAccessDevice, deleteAccessDevice, createRule, updateRule, deleteRule, createSchedule,
   sendDeviceCommand, provisionDevice, fetchPendingDevices, approvePendingDevice, rejectPendingDevice,
   fetchAccessTimeTemplates, fetchAccessTimeTemplate, createAccessTimeTemplate, updateAccessTimeTemplate, deleteAccessTimeTemplate,
   assignAccessTime, fetchUserAccessTime, validateAccessTime, fetchAccessTimeStats,
@@ -88,52 +88,52 @@ export function useStats() {
   return useQuery({ queryKey: ['stats'], queryFn: fetchStats, refetchInterval: 10_000 });
 }
 
-// ─── Doors ───────────────────────────────────────────────────────────────────
+// ─── Access Devices ──────────────────────────────────────────────────────────
 
-export function useDoors(page = 1, params?: Record<string, string>, limit = 50) {
+export function useAccessDevices(page = 1, params?: Record<string, string>, limit = 50) {
   return useQuery({
-    queryKey: ['doors', page, params, limit],
-    queryFn: () => fetchDoors(page, limit, params),
+    queryKey: ['access-devices', page, params, limit],
+    queryFn: () => fetchAccessDevices(page, limit, params),
     refetchInterval: 15_000,
   });
 }
 
-export function useDoor(id: string) {
-  return useQuery({ 
-    queryKey: ['door', id], 
-    queryFn: () => fetchDoor(id), 
+export function useAccessDevice(id: string) {
+  return useQuery({
+    queryKey: ['access-device', id],
+    queryFn: () => fetchAccessDevice(id),
     enabled: !!id,
     refetchInterval: 10_000
   });
 }
 
-export function useCreateDoor() {
+export function useCreateAccessDevice() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: createDoor,
+    mutationFn: createAccessDevice,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['doors'] });
+      queryClient.invalidateQueries({ queryKey: ['access-devices'] });
     },
   });
 }
 
-export function useUpdateDoor() {
+export function useUpdateAccessDevice() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => updateDoor(id, data),
+    mutationFn: ({ id, data }: { id: string; data: any }) => updateAccessDevice(id, data),
     onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: ['door', id] });
-      queryClient.invalidateQueries({ queryKey: ['doors'] });
+      queryClient.invalidateQueries({ queryKey: ['access-device', id] });
+      queryClient.invalidateQueries({ queryKey: ['access-devices'] });
     },
   });
 }
 
-export function useDeleteDoor() {
+export function useDeleteAccessDevice() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: deleteDoor,
+    mutationFn: deleteAccessDevice,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['doors'] });
+      queryClient.invalidateQueries({ queryKey: ['access-devices'] });
     },
   });
 }

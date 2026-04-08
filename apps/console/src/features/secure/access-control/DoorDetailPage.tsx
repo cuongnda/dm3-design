@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { DataTable, type Column, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, AppModal, Button, Input, Label, Select, SelectOption } from '@dm3/ui';
 import { cn } from '@/lib/utils';
-import { useDoor, useEvents, useRules, useUpdateDoor, useSendCommand } from '@/lib/hooks';
+import { useAccessDevice, useEvents, useRules, useUpdateAccessDevice, useSendCommand } from '@/lib/hooks';
 import type { EventDTO, AccessRuleDTO } from '@/lib/api';
 
 /* ── Helper Functions ─────────────────────────────────────────────── */
@@ -53,10 +53,10 @@ export function DoorDetailPage() {
     antiPassback: false,
   });
 
-  const { data: door, isLoading: doorLoading } = useDoor(id!);
-  const { data: eventsData } = useEvents(1, { door_id: id ?? '' });
-  const { data: rulesData } = useRules(1, { door_id: id ?? '' });
-  const updateDoorMutation = useUpdateDoor();
+  const { data: door, isLoading: doorLoading } = useAccessDevice(id!);
+  const { data: eventsData } = useEvents(1, { access_device_id: id ?? '' });
+  const { data: rulesData } = useRules(1, { access_device_id: id ?? '' });
+  const updateDoorMutation = useUpdateAccessDevice();
   const sendCommandMutation = useSendCommand();
 
   // Initialize settings when door data loads
@@ -192,7 +192,7 @@ export function DoorDetailPage() {
             <h1 className="text-[20px] font-semibold text-foreground">{door.name}</h1>
             <StatusBadge status={door.status as 'online' | 'offline' | 'alarm' | 'warning'} />
           </div>
-          <p className="text-[13px] text-muted-foreground mt-0.5">{door.location} · {door.type}</p>
+          <p className="text-[13px] text-muted-foreground mt-0.5">{door.type}</p>
         </div>
       </div>
 
@@ -208,7 +208,7 @@ export function DoorDetailPage() {
               <InfoItem icon={<Lock size={14} />} label={/* TODO: add i18n key */"State"} value={sc.label} valueClass={sc.color} />
               <InfoItem icon={<Shield size={14} />} label={/* TODO: add i18n key */"Mode"} value={door.mode || /* TODO: add i18n key */"Normal"} />
               <InfoItem icon={<Clock size={14} />} label={/* TODO: add i18n key */"Last Event"} value={door.last_event_at ? new Date(door.last_event_at).toLocaleTimeString('vi-VN') : '—'} />
-              <InfoItem icon={<Cpu size={14} />} label={/* TODO: add i18n key */"Controller"} value={door.controller_id || '—'} />
+              <InfoItem icon={<Cpu size={14} />} label={/* TODO: add i18n key */"Device ID"} value={door.device_id || '—'} />
               <InfoItem icon={<Wifi size={14} />} label={/* TODO: add i18n key */"IP Address"} value={door.ip_address || '—'} />
               <InfoItem icon={<Settings size={14} />} label={/* TODO: add i18n key */"Firmware"} value={door.firmware_version || '—'} />
             </div>
@@ -371,9 +371,6 @@ export function DoorDetailPage() {
             </SettingField>
             <SettingField label={/* TODO: add i18n key */"Device ID"}>
               <p className="text-[13px] text-muted-foreground">{door.device_id || '—'}</p>
-            </SettingField>
-            <SettingField label={/* TODO: add i18n key */"Camera ID"}>
-              <p className="text-[13px] text-muted-foreground">{door.camera_id || '—'}</p>
             </SettingField>
             <SettingField label={/* TODO: add i18n key */"Last Heartbeat"}>
               <p className="text-[13px] text-muted-foreground">

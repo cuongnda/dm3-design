@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Plus, Pencil, Trash2, Shield, Clock, DoorOpen, Users, ChevronDown, ChevronRight } from 'lucide-react';
 import { PageHeader, DataTable, type Column, AppModal, Button, Input, Label } from '@dm3/ui';
 import { cn } from '@/lib/utils';
-import { useRules, useCreateRule, useUpdateRule, useDeleteRule, useDoors, useGroups } from '@/lib/hooks';
+import { useRules, useCreateRule, useUpdateRule, useDeleteRule, useAccessDevices, useGroups } from '@/lib/hooks';
 import type { AccessRuleDTO } from '@/lib/api';
 
 /* ── Types ─────────────────────────────────────────────────── */
@@ -93,7 +93,7 @@ export function AccessRulesPage() {
   const [search, setSearch] = useState('');
 
   const { data: rulesData } = useRules(1, search ? { search } : undefined);
-  const { data: doorsData } = useDoors(1, {}, 100); // Get more doors for selection
+  const { data: doorsData } = useAccessDevices(1, {}, 100); // Get more access devices for selection
   const { data: groupsData } = useGroups(1, 100); // Get more groups for selection
 
   const createRuleMutation = useCreateRule();
