@@ -44,14 +44,31 @@ if [ "$OLD_TABLE_EXISTS" = "t" ] && [ "$NEW_TABLE_EXISTS" = "f" ]; then
   echo "  Old tracking table preserved as _schema_migrations (can be dropped manually)"
 fi
 
-# Fix dirty migration state if present
-DIRTY=$(psql "$DATABASE_URL" -tAc \
-  "SELECT dirty FROM schema_migrations LIMIT 1" 2>/dev/null || echo "")
-if [ "$DIRTY" = "t" ]; then
-  echo "==> WARNING: dirty migration state detected, forcing clean..."
-  VERSION=$(psql "$DATABASE_URL" -tAc "SELECT version FROM schema_migrations LIMIT 1")
-  migrate -path "$MIGRATIONS_DIR" -database "$DATABASE_URL" force "$VERSION"
-  echo "  Forced version $VERSION to clean state."
+# Fix migration version mismatch: if schema_migrations references a version
+# that doesn't exist in our migrations directory, reset to the highest
+# version we actually have (e.g. old system used version 13, we use 000001).
+CURRENT_VERSION=$(psql "$DATABASE_URL" -tAc \
+  "SELECT version FROM schema_migrations LIMIT 1" 2>/dev/null || echo "")
+
+if [ -n "$CURRENT_VERSION" ]; then
+  # Find the highest migration version in our directory
+  HIGHEST_VERSION=$(ls "$MIGRATIONS_DIR"/*.up.sql 2>/dev/null | sed 's/.*\///' | sed 's/_.*//' | sort -n | tail -1 | sed 's/^0*//' || echo "1")
+  HIGHEST_VERSION=${HIGHEST_VERSION:-1}
+
+  if [ "$CURRENT_VERSION" -ne "$HIGHEST_VERSION" ] 2>/dev/null; then
+    echo "==> WARNING: DB has version $CURRENT_VERSION but highest migration file is $HIGHEST_VERSION"
+    echo "  Forcing version to $HIGHEST_VERSION (schema already applied by old migration system)..."
+    migrate -path "$MIGRATIONS_DIR" -database "$DATABASE_URL" force "$HIGHEST_VERSION"
+  fi
+
+  # Fix dirty state if present
+  DIRTY=$(psql "$DATABASE_URL" -tAc \
+    "SELECT dirty FROM schema_migrations LIMIT 1" 2>/dev/null || echo "")
+  if [ "$DIRTY" = "t" ]; then
+    echo "==> WARNING: dirty migration state detected, forcing clean..."
+    migrate -path "$MIGRATIONS_DIR" -database "$DATABASE_URL" force "$HIGHEST_VERSION"
+    echo "  Forced version $HIGHEST_VERSION to clean state."
+  fi
 fi
 
 echo "==> Running migrations from $MIGRATIONS_DIR ..."
