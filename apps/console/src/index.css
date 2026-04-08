@@ -88,6 +88,7 @@
   --accent: #1E3A5F;
   --accent-foreground: #3B82F6;
   --destructive: #EF4444;
+  --color-destructive: #EF4444;
   --border: #1E293B;
   --input: #334155;
   --ring: #3B82F6;
@@ -125,6 +126,7 @@
   --accent: #DBEAFE;
   --accent-foreground: #1E40AF;
   --destructive: #EF4444;
+  --color-destructive: #EF4444;
   --border: #E2E8F0;
   --input: #E2E8F0;
   --ring: #3B82F6;

@@ -5,26 +5,94 @@ import (
 	"time"
 )
 
+// ─── Access Group ─────────────────────────────────────────────────────────────
+
+type AccessGroup struct {
+	ID               string    `json:"id"`
+	TenantID         string    `json:"tenant_id"`
+	ParentID         *string   `json:"parent_id,omitempty"`
+	Name             string    `json:"name"`
+	IsDefault        bool      `json:"is_default"`
+	Type             int       `json:"type"`
+	AccessPointCount int       `json:"access_point_count,omitempty"`
+	UserCount        int       `json:"user_count,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+// ─── Zone ─────────────────────────────────────────────────────────────────────
+
+type Zone struct {
+	ID               string    `json:"id"`
+	TenantID         string    `json:"tenant_id"`
+	ParentID         *string   `json:"parent_id,omitempty"`
+	Name             string    `json:"name"`
+	Description      *string   `json:"description,omitempty"`
+	AccessPointCount int       `json:"access_point_count,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+// ─── Access Time ──────────────────────────────────────────────────────────────
+
+type AccessTime struct {
+	ID          string           `json:"id"`
+	TenantID    string           `json:"tenant_id"`
+	Name        string           `json:"name"`
+	Description *string          `json:"description,omitempty"`
+	Timezone    string           `json:"timezone"`
+	IsActive    bool             `json:"is_active"`
+	CreatedBy   *string          `json:"created_by,omitempty"`
+	SlotCount   int              `json:"slot_count,omitempty"`
+	Slots       []AccessTimeSlot `json:"slots,omitempty"`
+	CreatedAt   time.Time        `json:"created_at"`
+	UpdatedAt   time.Time        `json:"updated_at"`
+}
+
+type AccessTimeSlot struct {
+	ID           string    `json:"id"`
+	TenantID     string    `json:"tenant_id"`
+	AccessTimeID string    `json:"access_time_id"`
+	DayOfWeek    int       `json:"day_of_week"` // 0=Sunday ... 6=Saturday
+	StartTime    string    `json:"start_time"`  // "08:00:00"
+	EndTime      string    `json:"end_time"`    // "17:00:00"
+	SlotName     *string   `json:"slot_name,omitempty"`
+	IsActive     bool      `json:"is_active"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// ─── Access Point ─────────────────────────────────────────────────────────────
+
+// AccessPoint is a logical entry/exit point that groups physical doors.
+// access_time_id = nil means 24/7 unrestricted access.
+type AccessPoint struct {
+	ID           string      `json:"id"`
+	TenantID     string      `json:"tenant_id"`
+	ZoneID       *string     `json:"zone_id,omitempty"`
+	AccessTimeID *string     `json:"access_time_id,omitempty"`
+	Name         string      `json:"name"`
+	Description  *string     `json:"description,omitempty"`
+	DoorCount    int         `json:"door_count,omitempty"`
+	Zone         *Zone       `json:"zone,omitempty"`
+	AccessTime   *AccessTime `json:"access_time,omitempty"`
+	CreatedAt    time.Time   `json:"created_at"`
+	UpdatedAt    time.Time   `json:"updated_at"`
+}
+
+// ─── Door (physical device in access context) ─────────────────────────────────
+
 type Door struct {
 	ID               string          `json:"id"`
-	TenantID   string `json:"tenant_id"`
-	SiteID           *string         `json:"site_id,omitempty"`
-	ZoneID           *string         `json:"zone_id,omitempty"`
+	TenantID         string          `json:"tenant_id"`
+	DeviceID         *string         `json:"device_id,omitempty"`
 	Name             string          `json:"name"`
-	Description      *string         `json:"description,omitempty"`
 	Type             string          `json:"type"`
-	Location         string          `json:"location"`
-	Floor            *string         `json:"floor,omitempty"`
-	Building         *string         `json:"building,omitempty"`
 	Status           string          `json:"status"`
 	State            string          `json:"state"`
 	Mode             string          `json:"mode"`
-	ControllerID     *string         `json:"controller_id,omitempty"`
-	DeviceID         *string         `json:"device_id,omitempty"`
 	UnlockDurationMs int             `json:"unlock_duration_ms"`
 	AntiPassback     bool            `json:"anti_passback"`
 	EmergencyUnlock  bool            `json:"emergency_unlock"`
-	CameraID         *string         `json:"camera_id,omitempty"`
 	FirmwareVersion  *string         `json:"firmware_version,omitempty"`
 	IPAddress        *string         `json:"ip_address,omitempty"`
 	LastEventAt      *time.Time      `json:"last_event_at,omitempty"`
@@ -37,9 +105,32 @@ type Door struct {
 	UpdatedAt        time.Time       `json:"updated_at"`
 }
 
+// AccessPointDoor is one row in the access_point_doors junction.
+type AccessPointDoor struct {
+	ID             string    `json:"id"`
+	TenantID       string    `json:"tenant_id"`
+	AccessPointID  string    `json:"access_point_id"`
+	DoorID         string    `json:"door_id"`
+	Role           string    `json:"role"` // reader_in | reader_out | controller | camera
+	Door           *Door     `json:"door,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+// AccessGroupAccessPoint is one row in the access_group_access_points junction.
+type AccessGroupAccessPoint struct {
+	ID            string       `json:"id"`
+	TenantID      string       `json:"tenant_id"`
+	AccessGroupID string       `json:"access_group_id"`
+	AccessPointID string       `json:"access_point_id"`
+	AccessPoint   *AccessPoint `json:"access_point,omitempty"`
+	CreatedAt     time.Time    `json:"created_at"`
+}
+
+// ─── Access Rule (legacy, kept for sync package) ──────────────────────────────
+
 type AccessRule struct {
 	ID                string          `json:"id"`
-	TenantID   string `json:"tenant_id"`
+	TenantID          string          `json:"tenant_id"`
 	SiteID            *string         `json:"site_id,omitempty"`
 	Name              string          `json:"name"`
 	Description       *string         `json:"description,omitempty"`
@@ -60,9 +151,11 @@ type AccessRule struct {
 	UpdatedAt         time.Time       `json:"updated_at"`
 }
 
+// ─── Schedule (legacy, kept for existing rule handlers) ───────────────────────
+
 type Schedule struct {
 	ID                string          `json:"id"`
-	TenantID   string `json:"tenant_id"`
+	TenantID          string          `json:"tenant_id"`
 	Name              string          `json:"name"`
 	Timezone          string          `json:"timezone"`
 	Periods           json.RawMessage `json:"periods"`
@@ -72,78 +165,57 @@ type Schedule struct {
 	UpdatedAt         time.Time       `json:"updated_at"`
 }
 
+// ─── Stats ────────────────────────────────────────────────────────────────────
+
 type DashboardStats struct {
-	DoorsOnline  int            `json:"doors_online"`
-	DoorsOffline int            `json:"doors_offline"`
-	DoorsAlarm   int            `json:"doors_alarm"`
-	DoorsTotal   int            `json:"doors_total"`
-	EventsToday  int            `json:"events_today"`
-	GrantedToday int            `json:"granted_today"`
-	DeniedToday  int            `json:"denied_today"`
-	RecentEvents []AccessEvent  `json:"recent_events"`
+	DoorsOnline  int           `json:"doors_online"`
+	DoorsOffline int           `json:"doors_offline"`
+	DoorsAlarm   int           `json:"doors_alarm"`
+	DoorsTotal   int           `json:"doors_total"`
+	EventsToday  int           `json:"events_today"`
+	GrantedToday int           `json:"granted_today"`
+	DeniedToday  int           `json:"denied_today"`
+	RecentEvents []AccessEvent `json:"recent_events"`
 }
 
 type SyncPackage struct {
-	DoorID       string          `json:"door_id"`
-	Rules        []AccessRule    `json:"rules"`
-	RulesVersion int             `json:"rules_version"`
+	DoorID       string       `json:"door_id"`
+	Rules        []AccessRule `json:"rules"`
+	RulesVersion int          `json:"rules_version"`
 }
 
-// ─── Access Time Models ─────────────────────────────────────────────────────
+// ─── Legacy access time models (kept for existing handlers) ───────────────────
 
-type AccessTimeTemplate struct {
-	ID          string               `json:"id"`
-	TenantID   string `json:"tenant_id"`
-	Name        string               `json:"name"`
-	Description *string              `json:"description,omitempty"`
-	Timezone    string               `json:"timezone"`
-	IsActive    bool                 `json:"is_active"`
-	CreatedBy   *string              `json:"created_by,omitempty"`
-	TimeSlots   []AccessTimeSlot     `json:"time_slots,omitempty"`
-	UserCount   int                  `json:"user_count,omitempty"` // For list view
-	CreatedAt   time.Time            `json:"created_at"`
-	UpdatedAt   time.Time            `json:"updated_at"`
-}
-
-type AccessTimeSlot struct {
-	ID         string  `json:"id"`
-	TemplateID string  `json:"template_id"`
-	DayOfWeek  int     `json:"day_of_week"`  // 0=Sunday, 1=Monday, ..., 6=Saturday
-	StartTime  string  `json:"start_time"`   // "08:00:00"
-	EndTime    string  `json:"end_time"`     // "17:00:00"
-	SlotName   *string `json:"slot_name,omitempty"`
-	IsActive   bool    `json:"is_active"`
-	CreatedAt  time.Time `json:"created_at"`
-}
+type AccessTimeTemplate = AccessTime
 
 type UserAccessTime struct {
-	ID            string               `json:"id"`
-	TenantID   string `json:"tenant_id"`
-	UserID        string               `json:"user_id"`
-	TemplateID    string               `json:"template_id"`
-	Template      *AccessTimeTemplate  `json:"template,omitempty"` // For detailed view
-	EffectiveFrom time.Time            `json:"effective_from"`
-	EffectiveTo   *time.Time           `json:"effective_to,omitempty"`
-	AssignedBy    *string              `json:"assigned_by,omitempty"`
-	CreatedAt     time.Time            `json:"created_at"`
-	UpdatedAt     time.Time            `json:"updated_at"`
+	ID            string      `json:"id"`
+	TenantID      string      `json:"tenant_id"`
+	UserID        string      `json:"user_id"`
+	TemplateID    string      `json:"template_id"`
+	Template      *AccessTime `json:"template,omitempty"`
+	EffectiveFrom time.Time   `json:"effective_from"`
+	EffectiveTo   *time.Time  `json:"effective_to,omitempty"`
+	AssignedBy    *string     `json:"assigned_by,omitempty"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
 }
 
 type AccessTimeValidation struct {
-	ID            string               `json:"id"`
-	TenantID   string `json:"tenant_id"`
-	UserID        string               `json:"user_id"`
-	TemplateID    *string              `json:"template_id,omitempty"`
-	DoorID        *string              `json:"door_id,omitempty"`
-	ValidationTime time.Time           `json:"validation_time"`
-	RequestedTime time.Time            `json:"requested_time"`
-	IsAllowed     bool                 `json:"is_allowed"`
-	Reason        *string              `json:"reason,omitempty"`
-	MatchedSlotID *string              `json:"matched_slot_id,omitempty"`
-	CreatedAt     time.Time            `json:"created_at"`
+	ID             string    `json:"id"`
+	TenantID       string    `json:"tenant_id"`
+	UserID         string    `json:"user_id"`
+	TemplateID     *string   `json:"template_id,omitempty"`
+	DoorID         *string   `json:"door_id,omitempty"`
+	ValidationTime time.Time `json:"validation_time"`
+	RequestedTime  time.Time `json:"requested_time"`
+	IsAllowed      bool      `json:"is_allowed"`
+	Reason         *string   `json:"reason,omitempty"`
+	MatchedSlotID  *string   `json:"matched_slot_id,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
-// ─── Request/Response DTOs ──────────────────────────────────────────────────
+// ─── Request/Response DTOs ────────────────────────────────────────────────────
 
 type CreateAccessTimeTemplateRequest struct {
 	Name        string           `json:"name" validate:"required,min=1,max=100"`
@@ -153,11 +225,11 @@ type CreateAccessTimeTemplateRequest struct {
 }
 
 type UpdateAccessTimeTemplateRequest struct {
-	Name        *string          `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
-	Description *string          `json:"description,omitempty"`
-	Timezone    *string          `json:"timezone,omitempty"`
-	IsActive    *bool            `json:"is_active,omitempty"`
-	TimeSlots   []TimeSlotInput  `json:"time_slots,omitempty"`
+	Name        *string         `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
+	Description *string         `json:"description,omitempty"`
+	Timezone    *string         `json:"timezone,omitempty"`
+	IsActive    *bool           `json:"is_active,omitempty"`
+	TimeSlots   []TimeSlotInput `json:"time_slots,omitempty"`
 }
 
 type TimeSlotInput struct {
@@ -182,18 +254,18 @@ type ValidateAccessRequest struct {
 }
 
 type ValidateAccessResponse struct {
-	IsAllowed     bool                 `json:"is_allowed"`
-	Reason        string               `json:"reason"`
-	MatchedSlot   *AccessTimeSlot      `json:"matched_slot,omitempty"`
-	Template      *AccessTimeTemplate  `json:"template,omitempty"`
-	NextAllowed   *time.Time           `json:"next_allowed,omitempty"`  // When access will be allowed next
+	IsAllowed   bool            `json:"is_allowed"`
+	Reason      string          `json:"reason"`
+	MatchedSlot *AccessTimeSlot `json:"matched_slot,omitempty"`
+	Template    *AccessTime     `json:"template,omitempty"`
+	NextAllowed *time.Time      `json:"next_allowed,omitempty"`
 }
 
 type AccessTimeStats struct {
-	TemplatesActive   int `json:"templates_active"`
-	TemplatesTotal    int `json:"templates_total"`
-	UsersAssigned     int `json:"users_assigned"`
-	ValidationsToday  int `json:"validations_today"`
+	TemplatesActive    int `json:"templates_active"`
+	TemplatesTotal     int `json:"templates_total"`
+	UsersAssigned      int `json:"users_assigned"`
+	ValidationsToday   int `json:"validations_today"`
 	ValidationsAllowed int `json:"validations_allowed"`
-	ValidationsDenied int `json:"validations_denied"`
+	ValidationsDenied  int `json:"validations_denied"`
 }

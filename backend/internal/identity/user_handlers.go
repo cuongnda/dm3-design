@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -339,16 +340,18 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		FirstName    string  `json:"first_name"`
-		LastName     string  `json:"last_name"`
-		Email        string  `json:"email"`
-		Position     *string `json:"position"`
-		Phone        *string `json:"phone"`
-		Address      *string `json:"address"`
-		Sex          *bool   `json:"sex"`
-		BirthDay     *string `json:"birth_day"`
-		DepartmentID *string `json:"department_id"`
-		EmpNumber    *string `json:"emp_number"`
+		FirstName     string  `json:"first_name"`
+		LastName      string  `json:"last_name"`
+		Email         string  `json:"email"`
+		Position      *string `json:"position"`
+		Phone         *string `json:"phone"`
+		Address       *string `json:"address"`
+		Sex           *bool   `json:"sex"`
+		BirthDay      *string `json:"birth_day"`
+		EffectiveDate *string `json:"effective_date"`
+		ExpiredDate   *string `json:"expired_date"`
+		DepartmentID  *string `json:"department_id"`
+		EmpNumber     *string `json:"emp_number"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -409,22 +412,33 @@ func (h *Handlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 		birthDay = req.BirthDay
 	}
 
+	effectiveDate := req.EffectiveDate
+	if effectiveDate == nil || *effectiveDate == "" {
+		today := time.Now().Format("2006-01-02")
+		effectiveDate = &today
+	}
+	expiredDate := req.ExpiredDate
+	if expiredDate == nil || *expiredDate == "" {
+		far := "3000-01-01"
+		expiredDate = &far
+	}
+
 	var userID string
 	if err := h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.users (
-			tenant_id, tenant_id, first_name, last_name, email,
+			tenant_id, first_name, last_name, email,
 			user_code, emp_number, position, phone, address,
-			sex, birth_day, department_id, account_id,
+			sex, birth_day, effective_date, expired_date, department_id, account_id,
 			status, created_at, updated_at
 		) VALUES (
-			$1::uuid, $1::uuid, $2, $3, $4,
+			$1::uuid, $2, $3, $4,
 			$5, $6, $7, $8, $9,
-			$10, $11::date, $12::uuid, $13::uuid,
+			$10, $11::date, $12::date, $13::date, $14::uuid, $15::uuid,
 			'active', NOW(), NOW()
 		) RETURNING id
 	`, companyID, req.FirstName, req.LastName, req.Email,
 		userCode, req.EmpNumber, req.Position, req.Phone, req.Address,
-		req.Sex, birthDay, deptID, accountID,
+		req.Sex, birthDay, effectiveDate, expiredDate, deptID, accountID,
 	).Scan(&userID); err != nil {
 		httputil.Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to create user: %v", err))
 		return

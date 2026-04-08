@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -41,16 +42,6 @@ func (h *Handlers) ListDoors(w http.ResponseWriter, r *http.Request) {
 		idx++
 	}
 
-	if v := r.URL.Query().Get("site_id"); v != "" {
-		where += fmt.Sprintf(" AND site_id = $%d", idx)
-		args = append(args, v)
-		idx++
-	}
-	if v := r.URL.Query().Get("zone_id"); v != "" {
-		where += fmt.Sprintf(" AND zone_id = $%d", idx)
-		args = append(args, v)
-		idx++
-	}
 	if v := r.URL.Query().Get("status"); v != "" {
 		where += fmt.Sprintf(" AND status = $%d", idx)
 		args = append(args, v)
@@ -67,7 +58,7 @@ func (h *Handlers) ListDoors(w http.ResponseWriter, r *http.Request) {
 		idx++
 	}
 	if v := r.URL.Query().Get("search"); v != "" {
-		where += fmt.Sprintf(" AND (name ILIKE $%d OR location ILIKE $%d)", idx, idx)
+		where += fmt.Sprintf(" AND name ILIKE $%d", idx)
 		args = append(args, "%"+v+"%")
 		idx++
 	}
@@ -77,9 +68,9 @@ func (h *Handlers) ListDoors(w http.ResponseWriter, r *http.Request) {
 	copy(countArgs, args)
 	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_access.doors "+where, countArgs...).Scan(&total)
 
-	query := fmt.Sprintf(`SELECT id, tenant_id, site_id, zone_id, name, description, type, COALESCE(location,''), floor, building,
-		status, state, mode, controller_id, device_id, unlock_duration_ms, anti_passback, emergency_unlock,
-		camera_id, firmware_version, ip_address, last_event_at, last_heartbeat_at,
+	query := fmt.Sprintf(`SELECT id, tenant_id, device_id, name, type,
+		status, state, mode, unlock_duration_ms, anti_passback, emergency_unlock,
+		firmware_version, ip_address, last_event_at, last_heartbeat_at,
 		config_version, user_db_version, rules_version, metadata, created_at, updated_at
 		FROM dm3_access.doors %s ORDER BY name ASC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
 	args = append(args, limit, offset)
@@ -95,11 +86,11 @@ func (h *Handlers) ListDoors(w http.ResponseWriter, r *http.Request) {
 	doors := []models.Door{}
 	for rows.Next() {
 		var d models.Door
-		if err := rows.Scan(&d.ID, &d.TenantID, &d.SiteID, &d.ZoneID, &d.Name, &d.Description, &d.Type, &d.Location,
-			&d.Floor, &d.Building, &d.Status, &d.State, &d.Mode, &d.ControllerID, &d.DeviceID,
-			&d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock, &d.CameraID, &d.FirmwareVersion,
-			&d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt, &d.ConfigVersion, &d.UserDBVersion,
-			&d.RulesVersion, &d.Metadata, &d.CreatedAt, &d.UpdatedAt); err != nil {
+		if err := rows.Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type,
+			&d.Status, &d.State, &d.Mode, &d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock,
+			&d.FirmwareVersion, &d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt,
+			&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Metadata,
+			&d.CreatedAt, &d.UpdatedAt); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -110,18 +101,11 @@ func (h *Handlers) ListDoors(w http.ResponseWriter, r *http.Request) {
 
 type createDoorRequest struct {
 	Name             string  `json:"name"`
-	SiteID           *string `json:"site_id"`
-	ZoneID           *string `json:"zone_id"`
-	Description      *string `json:"description"`
 	Type             string  `json:"type"`
-	Location         string  `json:"location"`
-	Floor            *string `json:"floor"`
-	Building         *string `json:"building"`
 	DeviceID         *string `json:"device_id"`
 	UnlockDurationMs *int    `json:"unlock_duration_ms"`
 	AntiPassback     *bool   `json:"anti_passback"`
 	EmergencyUnlock  *bool   `json:"emergency_unlock"`
-	CameraID         *string `json:"camera_id"`
 }
 
 func (h *Handlers) CreateDoor(w http.ResponseWriter, r *http.Request) {
@@ -151,19 +135,18 @@ func (h *Handlers) CreateDoor(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	var d models.Door
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_access.doors (name, site_id, zone_id, description, type, location, floor, building, device_id, unlock_duration_ms, anti_passback, emergency_unlock, camera_id, tenant_id)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::uuid)
-		 RETURNING id, tenant_id, site_id, zone_id, name, description, type, COALESCE(location,''), floor, building,
-		 status, state, mode, controller_id, device_id, unlock_duration_ms, anti_passback, emergency_unlock,
-		 camera_id, firmware_version, ip_address, last_event_at, last_heartbeat_at,
+		`INSERT INTO dm3_access.doors (name, type, device_id, unlock_duration_ms, anti_passback, emergency_unlock, tenant_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7::uuid)
+		 RETURNING id, tenant_id, device_id, name, type,
+		 status, state, mode, unlock_duration_ms, anti_passback, emergency_unlock,
+		 firmware_version, ip_address, last_event_at, last_heartbeat_at,
 		 config_version, user_db_version, rules_version, metadata, created_at, updated_at`,
-		req.Name, req.SiteID, req.ZoneID, req.Description, req.Type, req.Location, req.Floor, req.Building,
-		req.DeviceID, unlockMs, antiPassback, emergencyUnlock, req.CameraID, cid,
-	).Scan(&d.ID, &d.TenantID, &d.SiteID, &d.ZoneID, &d.Name, &d.Description, &d.Type, &d.Location,
-		&d.Floor, &d.Building, &d.Status, &d.State, &d.Mode, &d.ControllerID, &d.DeviceID,
-		&d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock, &d.CameraID, &d.FirmwareVersion,
-		&d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt, &d.ConfigVersion, &d.UserDBVersion,
-		&d.RulesVersion, &d.Metadata, &d.CreatedAt, &d.UpdatedAt)
+		req.Name, req.Type, req.DeviceID, unlockMs, antiPassback, emergencyUnlock, cid,
+	).Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type,
+		&d.Status, &d.State, &d.Mode, &d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock,
+		&d.FirmwareVersion, &d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt,
+		&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Metadata,
+		&d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
 		slog.Error("create door error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -184,12 +167,6 @@ func (h *Handlers) GetDoor(w http.ResponseWriter, r *http.Request) {
 
 type updateDoorRequest struct {
 	Name             *string `json:"name"`
-	SiteID           *string `json:"site_id"`
-	ZoneID           *string `json:"zone_id"`
-	Description      *string `json:"description"`
-	Location         *string `json:"location"`
-	Floor            *string `json:"floor"`
-	Building         *string `json:"building"`
 	Status           *string `json:"status"`
 	State            *string `json:"state"`
 	Mode             *string `json:"mode"`
@@ -197,7 +174,6 @@ type updateDoorRequest struct {
 	UnlockDurationMs *int    `json:"unlock_duration_ms"`
 	AntiPassback     *bool   `json:"anti_passback"`
 	EmergencyUnlock  *bool   `json:"emergency_unlock"`
-	CameraID         *string `json:"camera_id"`
 }
 
 func (h *Handlers) UpdateDoor(w http.ResponseWriter, r *http.Request) {
@@ -212,23 +188,20 @@ func (h *Handlers) UpdateDoor(w http.ResponseWriter, r *http.Request) {
 	var d models.Door
 	err := h.db.Pool.QueryRow(r.Context(),
 		`UPDATE dm3_access.doors SET
-			name = COALESCE($2, name), site_id = COALESCE($3, site_id), zone_id = COALESCE($4, zone_id),
-			description = COALESCE($5, description), location = COALESCE($6, location),
-			floor = COALESCE($7, floor), building = COALESCE($8, building),
-			status = COALESCE($9, status), state = COALESCE($10, state), mode = COALESCE($11, mode),
-			device_id = COALESCE($12, device_id), camera_id = COALESCE($13, camera_id), updated_at = now()
-		 WHERE id = $1::uuid AND ($14::uuid IS NULL OR tenant_id = $14::uuid)
-		 RETURNING id, tenant_id, site_id, zone_id, name, description, type, COALESCE(location,''), floor, building,
-		 status, state, mode, controller_id, device_id, unlock_duration_ms, anti_passback, emergency_unlock,
-		 camera_id, firmware_version, ip_address, last_event_at, last_heartbeat_at,
+			name = COALESCE($2, name),
+			status = COALESCE($3, status), state = COALESCE($4, state), mode = COALESCE($5, mode),
+			device_id = COALESCE($6, device_id), updated_at = now()
+		 WHERE id = $1::uuid AND ($7::uuid IS NULL OR tenant_id = $7::uuid)
+		 RETURNING id, tenant_id, device_id, name, type,
+		 status, state, mode, unlock_duration_ms, anti_passback, emergency_unlock,
+		 firmware_version, ip_address, last_event_at, last_heartbeat_at,
 		 config_version, user_db_version, rules_version, metadata, created_at, updated_at`,
-		id, req.Name, req.SiteID, req.ZoneID, req.Description, req.Location, req.Floor, req.Building,
-		req.Status, req.State, req.Mode, req.DeviceID, req.CameraID, nilIfEmpty(cid),
-	).Scan(&d.ID, &d.TenantID, &d.SiteID, &d.ZoneID, &d.Name, &d.Description, &d.Type, &d.Location,
-		&d.Floor, &d.Building, &d.Status, &d.State, &d.Mode, &d.ControllerID, &d.DeviceID,
-		&d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock, &d.CameraID, &d.FirmwareVersion,
-		&d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt, &d.ConfigVersion, &d.UserDBVersion,
-		&d.RulesVersion, &d.Metadata, &d.CreatedAt, &d.UpdatedAt)
+		id, req.Name, req.Status, req.State, req.Mode, req.DeviceID, nilIfEmpty(cid),
+	).Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type,
+		&d.Status, &d.State, &d.Mode, &d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock,
+		&d.FirmwareVersion, &d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt,
+		&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Metadata,
+		&d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "door not found")
 		return
@@ -257,354 +230,72 @@ func (h *Handlers) DeleteDoor(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ─── Access Rules ────────────────────────────────────────────────────────────
-
-func (h *Handlers) ListRules(w http.ResponseWriter, r *http.Request) {
-	page, limit := parsePagination(r)
-	offset := (page - 1) * limit
-
-	where := "WHERE 1=1"
-	args := []any{}
-	idx := 1
-
-	if cid := authsvc.CompanyIDFromContext(r.Context()); cid != "" {
-		where += fmt.Sprintf(" AND tenant_id = $%d::uuid", idx)
-		args = append(args, cid)
-		idx++
-	}
-
-	if v := r.URL.Query().Get("site_id"); v != "" {
-		where += fmt.Sprintf(" AND site_id = $%d", idx)
-		args = append(args, v)
-		idx++
-	}
-	if v := r.URL.Query().Get("door_id"); v != "" {
-		where += fmt.Sprintf(" AND $%d::uuid = ANY(door_ids)", idx)
-		args = append(args, v)
-		idx++
-	}
-	if v := r.URL.Query().Get("enabled"); v != "" {
-		where += fmt.Sprintf(" AND enabled = $%d", idx)
-		args = append(args, v == "true")
-		idx++
-	}
-
-	var total int64
-	countArgs := make([]any, len(args))
-	copy(countArgs, args)
-	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_access.access_rules "+where, countArgs...).Scan(&total)
-
-	query := fmt.Sprintf(`SELECT id, tenant_id, site_id, name, description, door_ids, user_group_ids,
-		schedule_id, schedule, anti_passback, multi_factor, max_failed_attempts, lockout_duration_ms,
-		priority, enabled, valid_from, valid_until, created_by, created_at, updated_at
-		FROM dm3_access.access_rules %s ORDER BY priority DESC, name ASC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
-	args = append(args, limit, offset)
-
-	rows, err := h.db.Pool.Query(r.Context(), query, args...)
-	if err != nil {
-		slog.Error("list rules query error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	defer rows.Close()
-
-	rules := []models.AccessRule{}
-	for rows.Next() {
-		var ar models.AccessRule
-		if err := rows.Scan(&ar.ID, &ar.TenantID, &ar.SiteID, &ar.Name, &ar.Description,
-			&ar.DoorIDs, &ar.UserGroupIDs, &ar.ScheduleID, &ar.Schedule,
-			&ar.AntiPassback, &ar.MultiFactor, &ar.MaxFailedAttempts, &ar.LockoutDurationMs,
-			&ar.Priority, &ar.Enabled, &ar.ValidFrom, &ar.ValidUntil, &ar.CreatedBy,
-			&ar.CreatedAt, &ar.UpdatedAt); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		rules = append(rules, ar)
-	}
-	httputil.Paginated(w, rules, total, page, limit)
-}
-
-type createRuleRequest struct {
-	Name              string          `json:"name"`
-	SiteID            *string         `json:"site_id"`
-	Description       *string         `json:"description"`
-	DoorIDs           []string        `json:"door_ids"`
-	UserGroupIDs      []string        `json:"user_group_ids"`
-	ScheduleID        *string         `json:"schedule_id"`
-	ScheduleInline    json.RawMessage `json:"schedule_inline"`
-	AntiPassback      *bool           `json:"anti_passback"`
-	MultiFactor       *bool           `json:"multi_factor"`
-	MaxFailedAttempts *int            `json:"max_failed_attempts"`
-	LockoutDurationMs *int            `json:"lockout_duration_ms"`
-	Priority          *int            `json:"priority"`
-	Enabled           *bool           `json:"enabled"`
-	ValidFrom         *time.Time      `json:"valid_from"`
-	ValidUntil        *time.Time      `json:"valid_until"`
-}
-
-func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
-	var req createRuleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	if req.Name == "" || len(req.DoorIDs) == 0 {
-		httputil.Error(w, http.StatusBadRequest, "name and door_ids are required")
-		return
-	}
-
-	enabled := true
-	if req.Enabled != nil {
-		enabled = *req.Enabled
-	}
-	priority := 0
-	if req.Priority != nil {
-		priority = *req.Priority
-	}
-	maxFailed := 5
-	if req.MaxFailedAttempts != nil {
-		maxFailed = *req.MaxFailedAttempts
-	}
-	lockoutMs := 300000
-	if req.LockoutDurationMs != nil {
-		lockoutMs = *req.LockoutDurationMs
-	}
-
-	var ar models.AccessRule
-	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_access.access_rules (name, site_id, description, door_ids, user_group_ids, schedule_id, schedule,
-		 anti_passback, multi_factor, max_failed_attempts, lockout_duration_ms, priority, enabled, valid_from, valid_until)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-		 RETURNING id, tenant_id, site_id, name, description, door_ids, user_group_ids, schedule_id, schedule,
-		 anti_passback, multi_factor, max_failed_attempts, lockout_duration_ms, priority, enabled, valid_from, valid_until, created_by, created_at, updated_at`,
-		req.Name, req.SiteID, req.Description, req.DoorIDs, req.UserGroupIDs, req.ScheduleID, req.ScheduleInline,
-		boolVal(req.AntiPassback, false), boolVal(req.MultiFactor, false), maxFailed, lockoutMs, priority, enabled,
-		req.ValidFrom, req.ValidUntil,
-	).Scan(&ar.ID, &ar.TenantID, &ar.SiteID, &ar.Name, &ar.Description, &ar.DoorIDs, &ar.UserGroupIDs,
-		&ar.ScheduleID, &ar.Schedule, &ar.AntiPassback, &ar.MultiFactor, &ar.MaxFailedAttempts,
-		&ar.LockoutDurationMs, &ar.Priority, &ar.Enabled, &ar.ValidFrom, &ar.ValidUntil, &ar.CreatedBy,
-		&ar.CreatedAt, &ar.UpdatedAt)
-	if err != nil {
-		slog.Error("create rule error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	httputil.JSON(w, http.StatusCreated, ar)
-}
-
-func (h *Handlers) GetRule(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	var ar models.AccessRule
-	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, tenant_id, site_id, name, description, door_ids, user_group_ids, schedule_id, schedule,
-		 anti_passback, multi_factor, max_failed_attempts, lockout_duration_ms, priority, enabled, valid_from, valid_until, created_by, created_at, updated_at
-		 FROM dm3_access.access_rules WHERE id = $1::uuid`, id,
-	).Scan(&ar.ID, &ar.TenantID, &ar.SiteID, &ar.Name, &ar.Description, &ar.DoorIDs, &ar.UserGroupIDs,
-		&ar.ScheduleID, &ar.Schedule, &ar.AntiPassback, &ar.MultiFactor, &ar.MaxFailedAttempts,
-		&ar.LockoutDurationMs, &ar.Priority, &ar.Enabled, &ar.ValidFrom, &ar.ValidUntil, &ar.CreatedBy,
-		&ar.CreatedAt, &ar.UpdatedAt)
-	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "rule not found")
-		return
-	}
-	httputil.JSON(w, http.StatusOK, ar)
-}
-
-func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	var req createRuleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	var ar models.AccessRule
-	err := h.db.Pool.QueryRow(r.Context(),
-		`UPDATE dm3_access.access_rules SET
-			name = COALESCE(NULLIF($2,''), name), site_id = COALESCE($3, site_id), description = COALESCE($4, description),
-			door_ids = COALESCE($5, door_ids), user_group_ids = COALESCE($6, user_group_ids),
-			schedule_id = COALESCE($7, schedule_id), schedule = COALESCE($8, schedule),
-			priority = COALESCE($9, priority), enabled = COALESCE($10, enabled),
-			valid_from = COALESCE($11, valid_from), valid_until = COALESCE($12, valid_until),
-			updated_at = now()
-		 WHERE id = $1::uuid
-		 RETURNING id, tenant_id, site_id, name, description, door_ids, user_group_ids, schedule_id, schedule,
-		 anti_passback, multi_factor, max_failed_attempts, lockout_duration_ms, priority, enabled, valid_from, valid_until, created_by, created_at, updated_at`,
-		id, req.Name, req.SiteID, req.Description, req.DoorIDs, req.UserGroupIDs, req.ScheduleID, req.ScheduleInline,
-		req.Priority, req.Enabled, req.ValidFrom, req.ValidUntil,
-	).Scan(&ar.ID, &ar.TenantID, &ar.SiteID, &ar.Name, &ar.Description, &ar.DoorIDs, &ar.UserGroupIDs,
-		&ar.ScheduleID, &ar.Schedule, &ar.AntiPassback, &ar.MultiFactor, &ar.MaxFailedAttempts,
-		&ar.LockoutDurationMs, &ar.Priority, &ar.Enabled, &ar.ValidFrom, &ar.ValidUntil, &ar.CreatedBy,
-		&ar.CreatedAt, &ar.UpdatedAt)
-	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "rule not found")
-		return
-	}
-	httputil.JSON(w, http.StatusOK, ar)
-}
-
-func (h *Handlers) DeleteRule(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+func (h *Handlers) BulkDeleteDoors(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
-	query := `DELETE FROM dm3_access.access_rules WHERE id = $1::uuid`
-	args := []any{id}
-	if cid != "" {
-		query += " AND tenant_id = $2::uuid"
-		args = append(args, cid)
+	var req struct {
+		IDs []string `json:"ids"`
 	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+		httputil.Error(w, http.StatusBadRequest, "ids required")
+		return
+	}
+	placeholders := make([]string, len(req.IDs))
+	args := []any{cid}
+	for i, id := range req.IDs {
+		placeholders[i] = fmt.Sprintf("$%d::uuid", i+2)
+		args = append(args, id)
+	}
+	query := fmt.Sprintf(`DELETE FROM dm3_access.doors WHERE tenant_id = $1::uuid AND id IN (%s)`, strings.Join(placeholders, ","))
 	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if tag.RowsAffected() == 0 {
-		httputil.Error(w, http.StatusNotFound, "rule not found")
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	httputil.JSON(w, http.StatusOK, map[string]any{"deleted": tag.RowsAffected()})
+}
+
+// ─── Access Rules ────────────────────────────────────────────────────────────
+
+func (h *Handlers) ListRules(w http.ResponseWriter, r *http.Request) {
+	httputil.Error(w, http.StatusNotImplemented, "access rules have been replaced by access groups")
+}
+
+func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
+	httputil.Error(w, http.StatusNotImplemented, "access rules have been replaced by access groups")
+}
+
+func (h *Handlers) GetRule(w http.ResponseWriter, r *http.Request) {
+	httputil.Error(w, http.StatusNotImplemented, "access rules have been replaced by access groups")
+}
+
+func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
+	httputil.Error(w, http.StatusNotImplemented, "access rules have been replaced by access groups")
+}
+
+func (h *Handlers) DeleteRule(w http.ResponseWriter, r *http.Request) {
+	httputil.Error(w, http.StatusNotImplemented, "access rules have been replaced by access groups")
 }
 
 // ─── Schedules ───────────────────────────────────────────────────────────────
 
 func (h *Handlers) ListSchedules(w http.ResponseWriter, r *http.Request) {
-	page, limit := parsePagination(r)
-	offset := (page - 1) * limit
-	cid := authsvc.CompanyIDFromContext(r.Context())
-
-	var total int64
-	if cid != "" {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.schedules WHERE tenant_id = $1::uuid`, cid).Scan(&total)
-	} else {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.schedules`).Scan(&total)
-	}
-
-	var schedQuery string
-	var schedArgs []any
-	if cid != "" {
-		schedQuery = `SELECT id, tenant_id, name, timezone, periods, holidays_excluded, holiday_calendar_id, created_at, updated_at
-		 FROM dm3_access.schedules WHERE tenant_id = $1::uuid ORDER BY name ASC LIMIT $2 OFFSET $3`
-		schedArgs = []any{cid, limit, offset}
-	} else {
-		schedQuery = `SELECT id, tenant_id, name, timezone, periods, holidays_excluded, holiday_calendar_id, created_at, updated_at
-		 FROM dm3_access.schedules ORDER BY name ASC LIMIT $1 OFFSET $2`
-		schedArgs = []any{limit, offset}
-	}
-
-	rows, err := h.db.Pool.Query(r.Context(), schedQuery, schedArgs...)
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	defer rows.Close()
-
-	schedules := []models.Schedule{}
-	for rows.Next() {
-		var s models.Schedule
-		if err := rows.Scan(&s.ID, &s.TenantID, &s.Name, &s.Timezone, &s.Periods,
-			&s.HolidaysExcluded, &s.HolidayCalendarID, &s.CreatedAt, &s.UpdatedAt); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		schedules = append(schedules, s)
-	}
-	httputil.Paginated(w, schedules, total, page, limit)
-}
-
-type createScheduleRequest struct {
-	Name              string          `json:"name"`
-	Timezone          string          `json:"timezone"`
-	Periods           json.RawMessage `json:"periods"`
-	HolidaysExcluded  *bool           `json:"holidays_excluded"`
-	HolidayCalendarID *string         `json:"holiday_calendar_id"`
+	httputil.Error(w, http.StatusNotImplemented, "schedules have been removed")
 }
 
 func (h *Handlers) CreateSchedule(w http.ResponseWriter, r *http.Request) {
-	var req createScheduleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	if req.Name == "" || len(req.Periods) == 0 {
-		httputil.Error(w, http.StatusBadRequest, "name and periods are required")
-		return
-	}
-	if req.Timezone == "" {
-		req.Timezone = "Asia/Ho_Chi_Minh"
-	}
-
-	var s models.Schedule
-	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_access.schedules (name, timezone, periods, holidays_excluded, holiday_calendar_id)
-		 VALUES ($1,$2,$3,$4,$5)
-		 RETURNING id, tenant_id, name, timezone, periods, holidays_excluded, holiday_calendar_id, created_at, updated_at`,
-		req.Name, req.Timezone, req.Periods, boolVal(req.HolidaysExcluded, true), req.HolidayCalendarID,
-	).Scan(&s.ID, &s.TenantID, &s.Name, &s.Timezone, &s.Periods, &s.HolidaysExcluded, &s.HolidayCalendarID, &s.CreatedAt, &s.UpdatedAt)
-	if err != nil {
-		slog.Error("create schedule error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	httputil.JSON(w, http.StatusCreated, s)
+	httputil.Error(w, http.StatusNotImplemented, "schedules have been removed")
 }
 
 func (h *Handlers) GetSchedule(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	var s models.Schedule
-	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, tenant_id, name, timezone, periods, holidays_excluded, holiday_calendar_id, created_at, updated_at
-		 FROM dm3_access.schedules WHERE id = $1::uuid`, id,
-	).Scan(&s.ID, &s.TenantID, &s.Name, &s.Timezone, &s.Periods, &s.HolidaysExcluded, &s.HolidayCalendarID, &s.CreatedAt, &s.UpdatedAt)
-	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "schedule not found")
-		return
-	}
-	httputil.JSON(w, http.StatusOK, s)
+	httputil.Error(w, http.StatusNotImplemented, "schedules have been removed")
 }
 
 func (h *Handlers) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	var req createScheduleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	var s models.Schedule
-	err := h.db.Pool.QueryRow(r.Context(),
-		`UPDATE dm3_access.schedules SET
-			name = COALESCE(NULLIF($2,''), name), timezone = COALESCE(NULLIF($3,''), timezone),
-			periods = COALESCE($4, periods), holidays_excluded = COALESCE($5, holidays_excluded),
-			holiday_calendar_id = COALESCE($6, holiday_calendar_id), updated_at = now()
-		 WHERE id = $1::uuid
-		 RETURNING id, tenant_id, name, timezone, periods, holidays_excluded, holiday_calendar_id, created_at, updated_at`,
-		id, req.Name, req.Timezone, req.Periods, req.HolidaysExcluded, req.HolidayCalendarID,
-	).Scan(&s.ID, &s.TenantID, &s.Name, &s.Timezone, &s.Periods, &s.HolidaysExcluded, &s.HolidayCalendarID, &s.CreatedAt, &s.UpdatedAt)
-	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "schedule not found")
-		return
-	}
-	httputil.JSON(w, http.StatusOK, s)
+	httputil.Error(w, http.StatusNotImplemented, "schedules have been removed")
 }
 
 func (h *Handlers) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	cid := authsvc.CompanyIDFromContext(r.Context())
-	query := `DELETE FROM dm3_access.schedules WHERE id = $1::uuid`
-	args := []any{id}
-	if cid != "" {
-		query += " AND tenant_id = $2::uuid"
-		args = append(args, cid)
-	}
-	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if tag.RowsAffected() == 0 {
-		httputil.Error(w, http.StatusNotFound, "schedule not found")
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	httputil.Error(w, http.StatusNotImplemented, "schedules have been removed")
 }
 
 // ─── Events ──────────────────────────────────────────────────────────────────
@@ -693,12 +384,12 @@ func (h *Handlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 
 type eventResponse struct {
 	ID             string         `json:"id"`
-	TenantID      string         `json:"tenant_id"`
+	TenantID       string         `json:"tenant_id"`
 	Time           time.Time      `json:"time"`
 	DoorID         string         `json:"door_id,omitempty"`
 	DeviceID       string         `json:"device_id,omitempty"`
-	UserID       string         `json:"user_id,omitempty"`
-	UserName     string         `json:"user_name,omitempty"`
+	UserID         string         `json:"user_id,omitempty"`
+	UserName       string         `json:"user_name,omitempty"`
 	CredentialType string         `json:"credential_type,omitempty"`
 	Direction      string         `json:"direction,omitempty"`
 	Decision       string         `json:"decision"`
@@ -741,15 +432,13 @@ func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	var recentQuery string
 	var recentArgs []any
 	if cid != "" {
-		recentQuery = `SELECT id, tenant_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''),
-		 COALESCE(user_id::text,''), COALESCE(user_name,''), COALESCE(credential_type,''),
-		 COALESCE(direction,''), decision, COALESCE(reason,''), metadata
+		recentQuery = `SELECT id, tenant_id, time, door_id, user_id, user_name, credential_type,
+		 direction, decision, reason, metadata
 		 FROM dm3_access.access_events WHERE tenant_id = $1::uuid ORDER BY time DESC LIMIT 10`
 		recentArgs = []any{cid}
 	} else {
-		recentQuery = `SELECT id, tenant_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''),
-		 COALESCE(user_id::text,''), COALESCE(user_name,''), COALESCE(credential_type,''),
-		 COALESCE(direction,''), decision, COALESCE(reason,''), metadata
+		recentQuery = `SELECT id, tenant_id, time, door_id, user_id, user_name, credential_type,
+		 direction, decision, reason, metadata
 		 FROM dm3_access.access_events ORDER BY time DESC LIMIT 10`
 	}
 	rows, err := h.db.Pool.Query(r.Context(), recentQuery, recentArgs...)
@@ -757,7 +446,7 @@ func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close()
 		for rows.Next() {
 			var e models.AccessEvent
-			if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.DoorID, &e.DeviceID, &e.UserID,
+			if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.DoorID, &e.UserID,
 				&e.UserName, &e.CredentialType, &e.Direction, &e.Decision, &e.Reason, &e.Metadata); err == nil {
 				stats.RecentEvents = append(stats.RecentEvents, e)
 			}
@@ -785,34 +474,10 @@ func (h *Handlers) GetSyncPackage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get rules that apply to this door
-	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, tenant_id, site_id, name, description, door_ids, user_group_ids, schedule_id, schedule,
-		 anti_passback, multi_factor, max_failed_attempts, lockout_duration_ms, priority, enabled, valid_from, valid_until, created_by, created_at, updated_at
-		 FROM dm3_access.access_rules WHERE $1::uuid = ANY(door_ids) AND enabled = true ORDER BY priority DESC`, id)
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	defer rows.Close()
-
-	rules := []models.AccessRule{}
-	for rows.Next() {
-		var ar models.AccessRule
-		if err := rows.Scan(&ar.ID, &ar.TenantID, &ar.SiteID, &ar.Name, &ar.Description,
-			&ar.DoorIDs, &ar.UserGroupIDs, &ar.ScheduleID, &ar.Schedule,
-			&ar.AntiPassback, &ar.MultiFactor, &ar.MaxFailedAttempts, &ar.LockoutDurationMs,
-			&ar.Priority, &ar.Enabled, &ar.ValidFrom, &ar.ValidUntil, &ar.CreatedBy,
-			&ar.CreatedAt, &ar.UpdatedAt); err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		rules = append(rules, ar)
-	}
-
+	// access_rules table is dropped; return empty rules list
 	pkg := models.SyncPackage{
 		DoorID:       doorID,
-		Rules:        rules,
+		Rules:        []models.AccessRule{},
 		RulesVersion: rulesVersion,
 	}
 	httputil.JSON(w, http.StatusOK, pkg)
@@ -823,16 +488,16 @@ func (h *Handlers) GetSyncPackage(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) scanDoor(r *http.Request, id string) (models.Door, error) {
 	var d models.Door
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, tenant_id, site_id, zone_id, name, description, type, COALESCE(location,''), floor, building,
-		 status, state, mode, controller_id, device_id, unlock_duration_ms, anti_passback, emergency_unlock,
-		 camera_id, firmware_version, ip_address, last_event_at, last_heartbeat_at,
+		`SELECT id, tenant_id, device_id, name, type,
+		 status, state, mode, unlock_duration_ms, anti_passback, emergency_unlock,
+		 firmware_version, ip_address, last_event_at, last_heartbeat_at,
 		 config_version, user_db_version, rules_version, metadata, created_at, updated_at
 		 FROM dm3_access.doors WHERE id = $1::uuid`, id,
-	).Scan(&d.ID, &d.TenantID, &d.SiteID, &d.ZoneID, &d.Name, &d.Description, &d.Type, &d.Location,
-		&d.Floor, &d.Building, &d.Status, &d.State, &d.Mode, &d.ControllerID, &d.DeviceID,
-		&d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock, &d.CameraID, &d.FirmwareVersion,
-		&d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt, &d.ConfigVersion, &d.UserDBVersion,
-		&d.RulesVersion, &d.Metadata, &d.CreatedAt, &d.UpdatedAt)
+	).Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type,
+		&d.Status, &d.State, &d.Mode, &d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock,
+		&d.FirmwareVersion, &d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt,
+		&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Metadata,
+		&d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return d, fmt.Errorf("not found")

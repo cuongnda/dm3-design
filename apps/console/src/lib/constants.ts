@@ -37,8 +37,14 @@ export const ROUTES = {
   emergency: '/secure/emergency',
   // MANAGE
   users: '/manage/users',
-  departments: '/manage/departments', 
+  departments: '/manage/departments',
   identities: '/manage/identities',
+  // ACCESS
+  zones: '/access/zones',
+  accessPoints: '/access/access-points',
+  doors: '/access/doors',
+  accessGroups: '/access/access-groups',
+  accessTimes: '/access/access-times',
   // DEVICES
   devices: '/devices',
   // SETTINGS

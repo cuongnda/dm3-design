@@ -325,11 +325,11 @@ func (h *Handlers) GetDeviceEvents(w http.ResponseWriter, r *http.Request) {
 
 	var total int64
 	h.db.Pool.QueryRow(r.Context(),
-		`SELECT COUNT(*) FROM dm3_access.access_events WHERE device_id = $1::uuid`, id).Scan(&total)
+		`SELECT COUNT(*) FROM dm3_access.access_events WHERE door_id = $1::uuid`, id).Scan(&total)
 
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, tenant_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''), COALESCE(user_id::text,''), COALESCE(user_name,''), COALESCE(credential_type,''), COALESCE(direction,''), decision, COALESCE(reason,''), metadata
-		 FROM dm3_access.access_events WHERE device_id = $1::uuid ORDER BY time DESC LIMIT $2 OFFSET $3`,
+		`SELECT id, tenant_id, time, COALESCE(access_point_id::text,''), COALESCE(door_id::text,''), COALESCE(user_id::text,''), COALESCE(user_name,''), COALESCE(credential_type,''), COALESCE(direction,''), decision, COALESCE(reason,''), metadata
+		 FROM dm3_access.access_events WHERE door_id = $1::uuid ORDER BY time DESC LIMIT $2 OFFSET $3`,
 		id, limit, offset)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -340,10 +340,18 @@ func (h *Handlers) GetDeviceEvents(w http.ResponseWriter, r *http.Request) {
 	events := []models.AccessEvent{}
 	for rows.Next() {
 		var e models.AccessEvent
-		if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.DoorID, &e.DeviceID, &e.UserID, &e.UserName, &e.CredentialType, &e.Direction, &e.Decision, &e.Reason, &e.Metadata); err != nil {
+		var apID, doorID, userID, userName, credType, direction, reason string
+		if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &apID, &doorID, &userID, &userName, &credType, &direction, &e.Decision, &reason, &e.Metadata); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		if apID != "" { e.AccessPointID = &apID }
+		if doorID != "" { e.DoorID = &doorID }
+		if userID != "" { e.UserID = &userID }
+		if userName != "" { e.UserName = &userName }
+		if credType != "" { e.CredentialType = &credType }
+		if direction != "" { e.Direction = &direction }
+		if reason != "" { e.Reason = &reason }
 		events = append(events, e)
 	}
 	httputil.Paginated(w, events, total, page, limit)
@@ -365,11 +373,11 @@ func (h *Handlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	var evtQuery string
 	var evtArgs []any
 	if cid != "" {
-		evtQuery = `SELECT id, tenant_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''), COALESCE(user_id::text,''), COALESCE(user_name,''), COALESCE(credential_type,''), COALESCE(direction,''), decision, COALESCE(reason,''), metadata
+		evtQuery = `SELECT id, tenant_id, time, COALESCE(access_point_id::text,''), COALESCE(door_id::text,''), COALESCE(user_id::text,''), COALESCE(user_name,''), COALESCE(credential_type,''), COALESCE(direction,''), decision, COALESCE(reason,''), metadata
 		 FROM dm3_access.access_events WHERE tenant_id = $1::uuid ORDER BY time DESC LIMIT $2 OFFSET $3`
 		evtArgs = []any{cid, limit, offset}
 	} else {
-		evtQuery = `SELECT id, tenant_id, time, COALESCE(door_id::text,''), COALESCE(device_id::text,''), COALESCE(user_id::text,''), COALESCE(user_name,''), COALESCE(credential_type,''), COALESCE(direction,''), decision, COALESCE(reason,''), metadata
+		evtQuery = `SELECT id, tenant_id, time, COALESCE(access_point_id::text,''), COALESCE(door_id::text,''), COALESCE(user_id::text,''), COALESCE(user_name,''), COALESCE(credential_type,''), COALESCE(direction,''), decision, COALESCE(reason,''), metadata
 		 FROM dm3_access.access_events ORDER BY time DESC LIMIT $1 OFFSET $2`
 		evtArgs = []any{limit, offset}
 	}
@@ -384,10 +392,18 @@ func (h *Handlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	events := []models.AccessEvent{}
 	for rows.Next() {
 		var e models.AccessEvent
-		if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.DoorID, &e.DeviceID, &e.UserID, &e.UserName, &e.CredentialType, &e.Direction, &e.Decision, &e.Reason, &e.Metadata); err != nil {
+		var apID, doorID, userID, userName, credType, direction, reason string
+		if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &apID, &doorID, &userID, &userName, &credType, &direction, &e.Decision, &reason, &e.Metadata); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		if apID != "" { e.AccessPointID = &apID }
+		if doorID != "" { e.DoorID = &doorID }
+		if userID != "" { e.UserID = &userID }
+		if userName != "" { e.UserName = &userName }
+		if credType != "" { e.CredentialType = &credType }
+		if direction != "" { e.Direction = &direction }
+		if reason != "" { e.Reason = &reason }
 		events = append(events, e)
 	}
 	httputil.Paginated(w, events, total, page, limit)

@@ -83,9 +83,8 @@ export function DataTableCard({
                 {onBulkDelete && (
                   <Button
                     size="sm"
-                    variant="destructive"
                     onClick={() => setConfirmOpen(true)}
-                    className="gap-1.5"
+                    className="gap-1.5 border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20"
                   >
                     <Trash2 size={13} />
                     Delete {selectedCount}
@@ -127,7 +126,8 @@ export function DataTableCard({
         cancelDisabled={deleting}
         primaryAction={{
           label: deleting ? 'Deleting...' : `Delete ${label}`,
-          variant: 'destructive',
+          variant: 'outline',
+          className: 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20',
           onClick: handleConfirm,
           loading: deleting,
           disabled: deleting,

@@ -44,6 +44,8 @@ export function DepartmentManagementPage() {
   const [departmentToDelete, setDepartmentToDelete] = useState<Department | null>(null);
   const [showUserAssignModal, setShowUserAssignModal] = useState(false);
   const [selectedDepartmentForUsers, setSelectedDepartmentForUsers] = useState<Department | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDepartments();
@@ -63,10 +65,19 @@ export function DepartmentManagementPage() {
 
   const handleDeleteConfirm = async () => {
     if (!departmentToDelete) return;
-    const success = await deleteDepartment(departmentToDelete.id);
-    if (success) {
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      await apiFetch(`/api/v1/departments/${departmentToDelete.id}`, { method: 'DELETE' });
       setShowDeleteDialog(false);
       setDepartmentToDelete(null);
+      fetchDepartments();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete department';
+      try { const j = JSON.parse(msg.replace(/^API \d+: /, '')); setDeleteError(j.message || j.error || msg); }
+      catch { setDeleteError(msg.replace(/^API \d+: /, '')); }
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -147,7 +158,7 @@ export function DepartmentManagementPage() {
               <DropdownMenuItem onClick={() => { setSelectedDepartmentForUsers(d); setShowUserAssignModal(true); }}>
                 <Users size={14} className="mr-2" />Manage Users
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setDepartmentToDelete(d); setShowDeleteDialog(true); }} className="text-destructive">
+              <DropdownMenuItem onClick={() => { setDepartmentToDelete(d); setDeleteError(null); setShowDeleteDialog(true); }} className="text-destructive">
                 <Trash2 size={14} className="mr-2" />Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -265,7 +276,9 @@ export function DepartmentManagementPage() {
 
       <AppModal
         open={showDeleteDialog}
-        onOpenChange={setShowDeleteDialog}
+        onOpenChange={(open) => {
+          if (!open) { setShowDeleteDialog(false); setDepartmentToDelete(null); setDeleteError(null); }
+        }}
         title={
           <span className="flex items-center gap-2 text-destructive">
             <Trash2 size={16} />Delete Department
@@ -275,10 +288,14 @@ export function DepartmentManagementPage() {
         style={{ maxWidth: '22rem' }}
         showCancelButton
         cancelLabel="Cancel"
+        cancelDisabled={deleteLoading}
+        errorMessage={deleteError ?? undefined}
         primaryAction={{
-          label: 'Delete',
+          label: deleteLoading ? 'Deleting...' : 'Delete',
           variant: 'destructive',
           onClick: handleDeleteConfirm,
+          loading: deleteLoading,
+          disabled: deleteLoading,
         }}
       >
         <p className="text-[13px] text-muted-foreground">

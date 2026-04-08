@@ -325,7 +325,8 @@ export function UserManagementPage() {
                 cancelDisabled={deleteLoading}
                 primaryAction={{
                     label: deleteLoading ? 'Deleting...' : 'Delete',
-                    variant: 'destructive',
+                    variant: 'outline',
+                    className: 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20',
                     onClick: handleDeleteConfirm,
                     loading: deleteLoading,
                     disabled: deleteLoading,

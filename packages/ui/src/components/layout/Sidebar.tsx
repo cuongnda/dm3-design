@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Bell, DoorOpen, UserCheck, Building2, Cpu, Settings, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
+import { LayoutDashboard, Bell, DoorOpen, UserCheck, Building2, Cpu, Settings, ChevronLeft, ChevronRight, LogOut, MapPin, Shield, Users2, Clock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useThemeStore } from '@/stores/themeStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -120,7 +120,11 @@ export function Sidebar() {
                 <SidebarNavItem to={ROUTES.departments} icon={<Building2 size={iconSize} />} label={t('nav.departments')} collapsed={c} />
 
                 <SectionLabel label={t('nav.access')} colorClass="text-amber-500 dark:text-amber-400" collapsed={c} />
-                <SidebarNavItem to={ROUTES.accessControl} icon={<DoorOpen size={iconSize} />} label={t('nav.accessControl')} collapsed={c} />
+                <SidebarNavItem to={ROUTES.zones} icon={<MapPin size={iconSize} />} label={t('nav.zones')} collapsed={c} />
+                <SidebarNavItem to={ROUTES.accessPoints} icon={<Shield size={iconSize} />} label={t('nav.accessPoints')} collapsed={c} />
+                <SidebarNavItem to={ROUTES.doors} icon={<DoorOpen size={iconSize} />} label={t('nav.doors')} collapsed={c} />
+                <SidebarNavItem to={ROUTES.accessGroups} icon={<Users2 size={iconSize} />} label={t('nav.accessGroups')} collapsed={c} />
+                <SidebarNavItem to={ROUTES.accessTimes} icon={<Clock size={iconSize} />} label={t('nav.accessTimes')} collapsed={c} />
 
                 <SectionLabel label={t('nav.devicesGroup')} colorClass="text-cyan-500 dark:text-cyan-400" collapsed={c} />
                 <SidebarNavItem to={ROUTES.devices} icon={<Cpu size={iconSize} />} label={t('nav.devices')} collapsed={c} />

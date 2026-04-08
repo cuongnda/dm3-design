@@ -23,14 +23,14 @@ export type AppModalSize =
   | "full"
 
 const sizeClass: Record<AppModalSize, string> = {
-  xs: "sm:max-w-xs",
-  sm: "sm:max-w-sm",
-  md: "sm:max-w-md",
-  lg: "sm:max-w-lg",
-  xl: "sm:max-w-xl",
-  "2xl": "sm:max-w-2xl",
-  "4xl": "sm:max-w-4xl",
-  full: "sm:max-w-[min(96rem,calc(100%-2rem))]",
+  xs: "max-w-xs",
+  sm: "max-w-sm",
+  md: "max-w-md",
+  lg: "max-w-lg",
+  xl: "max-w-xl",
+  "2xl": "max-w-2xl",
+  "4xl": "max-w-4xl",
+  full: "max-w-[min(96rem,calc(100%-2rem))]",
 }
 
 /** Footer action: label, handler, optional variant / loading / disabled (for validation). */
@@ -138,6 +138,12 @@ function AppModal({
     Boolean(primaryAction?.disabled) ||
     submitDisabled ||
     primaryLoading
+  const destructivePrimaryClass =
+    "border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20"
+  const primaryClassName = cn(
+    primaryAction?.variant === "destructive" && destructivePrimaryClass,
+    primaryAction?.className
+  )
 
   const dismissCancel = React.useCallback(() => {
     if (onCancel) onCancel()
@@ -149,7 +155,7 @@ function AppModal({
     (showCancelButton || secondaryAction || primaryAction) ? (
       <DialogFooter
         className={cn(
-          "flex-col-reverse gap-2 border-t border-border px-6 py-4 sm:flex-row sm:justify-end",
+          "flex-row justify-end gap-2 border-t border-border px-6 py-4",
           footerClassName
         )}
       >
@@ -182,7 +188,7 @@ function AppModal({
             variant={primaryAction.variant ?? "default"}
             size={primaryAction.size ?? "sm"}
             disabled={primaryDisabled}
-            className={primaryAction.className}
+            className={primaryClassName}
             onClick={() => void runPrimary()}
           >
             {primaryLoading ? (

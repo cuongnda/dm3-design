@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -386,6 +387,16 @@ func (h *UserManagementHandlers) CreateUser(w http.ResponseWriter, r *http.Reque
 	// Set company ID from context
 	req.TenantID = companyID
 
+	// Apply date defaults
+	if req.EffectiveDate == nil || *req.EffectiveDate == "" {
+		today := time.Now().Format("2006-01-02")
+		req.EffectiveDate = &today
+	}
+	if req.ExpiredDate == nil || *req.ExpiredDate == "" {
+		far := "3000-01-01"
+		req.ExpiredDate = &far
+	}
+
 	// Auto-generate sequential user code (per company, padded 6 digits like dmpw pattern)
 	var maxCode int
 	_ = h.db.Pool.QueryRow(r.Context(), `
@@ -400,17 +411,17 @@ func (h *UserManagementHandlers) CreateUser(w http.ResponseWriter, r *http.Reque
 	var userID string
 	err = h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.users (
-			tenant_id, tenant_id, first_name, last_name, email,
+			tenant_id, first_name, last_name, email,
 			user_code, emp_number, position, phone, address,
-			sex, birth_day, department_id, status, created_at, updated_at
+			sex, birth_day, effective_date, expired_date, department_id, status, created_at, updated_at
 		) VALUES (
-			$1::uuid, $1::uuid, $2, $3, $4,
+			$1::uuid, $2, $3, $4,
 			$5, $6, $7, $8, $9,
-			$10, $11, $12::uuid, 'active', NOW(), NOW()
+			$10, $11, $12, $13, $14::uuid, 'active', NOW(), NOW()
 		) RETURNING id
 	`, companyID, req.FirstName, req.LastName, req.Email,
 		req.UserCode, req.EmpNumber, req.Position, req.Phone, req.Address,
-		req.Sex, req.BirthDay, req.DepartmentID).Scan(&userID)
+		req.Sex, req.BirthDay, req.EffectiveDate, req.ExpiredDate, req.DepartmentID).Scan(&userID)
 
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to create user: %v", err))
@@ -472,6 +483,40 @@ func (h *UserManagementHandlers) UpdateUser(w http.ResponseWriter, r *http.Reque
 	if req.Phone != nil {
 		setParts = append(setParts, fmt.Sprintf("phone = $%d", argIndex))
 		args = append(args, *req.Phone)
+		argIndex++
+	}
+	if req.Address != nil {
+		setParts = append(setParts, fmt.Sprintf("address = $%d", argIndex))
+		args = append(args, *req.Address)
+		argIndex++
+	}
+	if req.EmpNumber != nil {
+		setParts = append(setParts, fmt.Sprintf("emp_number = $%d", argIndex))
+		args = append(args, *req.EmpNumber)
+		argIndex++
+	}
+	if req.Sex != nil {
+		setParts = append(setParts, fmt.Sprintf("sex = $%d", argIndex))
+		args = append(args, *req.Sex)
+		argIndex++
+	}
+	if req.BirthDay != nil {
+		if *req.BirthDay == "" {
+			setParts = append(setParts, "birth_day = NULL")
+		} else {
+			setParts = append(setParts, fmt.Sprintf("birth_day = $%d", argIndex))
+			args = append(args, *req.BirthDay)
+			argIndex++
+		}
+	}
+	if req.EffectiveDate != nil {
+		setParts = append(setParts, fmt.Sprintf("effective_date = $%d", argIndex))
+		args = append(args, *req.EffectiveDate)
+		argIndex++
+	}
+	if req.ExpiredDate != nil {
+		setParts = append(setParts, fmt.Sprintf("expired_date = $%d", argIndex))
+		args = append(args, *req.ExpiredDate)
 		argIndex++
 	}
 	if req.Status != nil {
@@ -649,28 +694,36 @@ func (h *UserManagementHandlers) GetAccessGroups(w http.ResponseWriter, r *http.
 
 // Request/Response types
 type CreateUserRequest struct {
-	TenantID    string  `json:"-"`
-	FirstName    string  `json:"first_name"`
-	LastName     string  `json:"last_name"`
-	Email        string  `json:"email"`
-	UserCode     *string `json:"user_code"`
-	EmpNumber    *string `json:"emp_number"`
-	Position     *string `json:"position"`
-	Phone        *string `json:"phone"`
-	Address      *string `json:"address"`
-	Sex          *bool   `json:"sex"`
-	BirthDay     *string `json:"birth_day"`
-	DepartmentID *string `json:"department_id"`
+	TenantID      string  `json:"-"`
+	FirstName     string  `json:"first_name"`
+	LastName      string  `json:"last_name"`
+	Email         string  `json:"email"`
+	UserCode      *string `json:"user_code"`
+	EmpNumber     *string `json:"emp_number"`
+	Position      *string `json:"position"`
+	Phone         *string `json:"phone"`
+	Address       *string `json:"address"`
+	Sex           *bool   `json:"sex"`
+	BirthDay      *string `json:"birth_day"`
+	EffectiveDate *string `json:"effective_date"`
+	ExpiredDate   *string `json:"expired_date"`
+	DepartmentID  *string `json:"department_id"`
 }
 
 type UpdateUserRequest struct {
-	FirstName    *string `json:"first_name"`
-	LastName     *string `json:"last_name"`
-	Email        *string `json:"email"`
-	Position     *string `json:"position"`
-	Phone        *string `json:"phone"`
-	Status       *string `json:"status"`
-	DepartmentID *string `json:"department_id"`
+	FirstName     *string `json:"first_name"`
+	LastName      *string `json:"last_name"`
+	Email         *string `json:"email"`
+	Position      *string `json:"position"`
+	Phone         *string `json:"phone"`
+	Address       *string `json:"address"`
+	EmpNumber     *string `json:"emp_number"`
+	Sex           *bool   `json:"sex"`
+	BirthDay      *string `json:"birth_day"`
+	EffectiveDate *string `json:"effective_date"`
+	ExpiredDate   *string `json:"expired_date"`
+	Status        *string `json:"status"`
+	DepartmentID  *string `json:"department_id"`
 }
 
 // BulkOperationRequest represents a bulk operation request

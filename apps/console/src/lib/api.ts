@@ -97,6 +97,10 @@ export async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<
     throw new Error(`API ${res.status}: ${text}`);
   }
 
+  if (res.status === 204 || res.headers.get('content-length') === '0') {
+    return undefined as unknown as T;
+  }
+
   return res.json();
 }
 

@@ -92,35 +92,73 @@ func main() {
 		r.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
 		r.Use(authsvc.RequireCompany())
 
-		// Doors: viewer can read, manager+ can write
+		// Zones
+		r.Group(func(zr chi.Router) {
+			zr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			zr.Get("/zones", handlers.ListZones)
+			zr.Post("/zones", handlers.CreateZone)
+			zr.Post("/zones/bulk-delete", handlers.BulkDeleteZones)
+			zr.Get("/zones/{id}", handlers.GetZone)
+			zr.Put("/zones/{id}", handlers.UpdateZone)
+			zr.Delete("/zones/{id}", handlers.DeleteZone)
+			zr.Get("/zones/{id}/access-points", handlers.ListZoneDoors)
+		})
+
+		// Access Points
+		r.Group(func(apr chi.Router) {
+			apr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			apr.Get("/access-points", handlers.ListAccessPoints)
+			apr.Post("/access-points", handlers.CreateAccessPoint)
+			apr.Post("/access-points/bulk-delete", handlers.BulkDeleteAccessPoints)
+			apr.Get("/access-points/{id}", handlers.GetAccessPoint)
+			apr.Put("/access-points/{id}", handlers.UpdateAccessPoint)
+			apr.Delete("/access-points/{id}", handlers.DeleteAccessPoint)
+			apr.Get("/access-points/{id}/doors", handlers.ListAccessPointDoors)
+			apr.Post("/access-points/{id}/doors", handlers.AddAccessPointDoor)
+			apr.Delete("/access-points/{id}/doors/{doorId}", handlers.RemoveAccessPointDoor)
+			apr.Get("/access-points/{id}/access-groups", handlers.ListAccessPointGroups)
+			apr.Post("/access-points/{id}/access-groups", handlers.AddAccessPointGroup)
+			apr.Delete("/access-points/{id}/access-groups/{groupId}", handlers.RemoveAccessPointGroup)
+		})
+
+		// Doors
 		r.Group(func(dr chi.Router) {
 			dr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
 			dr.Get("/doors", handlers.ListDoors)
 			dr.Post("/doors", handlers.CreateDoor)
+			dr.Post("/doors/bulk-delete", handlers.BulkDeleteDoors)
 			dr.Get("/doors/{id}", handlers.GetDoor)
 			dr.Put("/doors/{id}", handlers.UpdateDoor)
 			dr.Delete("/doors/{id}", handlers.DeleteDoor)
 			dr.Get("/doors/{id}/sync-package", handlers.GetSyncPackage)
 		})
 
-		// Access Rules: viewer can read, manager+ can write
-		r.Group(func(ar chi.Router) {
-			ar.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
-			ar.Get("/rules", handlers.ListRules)
-			ar.Post("/rules", handlers.CreateRule)
-			ar.Get("/rules/{id}", handlers.GetRule)
-			ar.Put("/rules/{id}", handlers.UpdateRule)
-			ar.Delete("/rules/{id}", handlers.DeleteRule)
+		// Access Groups
+		r.Group(func(agr chi.Router) {
+			agr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			agr.Get("/access-groups", handlers.ListAccessGroups)
+			agr.Post("/access-groups", handlers.CreateAccessGroup)
+			agr.Post("/access-groups/bulk-delete", handlers.BulkDeleteAccessGroups)
+			agr.Get("/access-groups/{id}", handlers.GetAccessGroup)
+			agr.Put("/access-groups/{id}", handlers.UpdateAccessGroup)
+			agr.Delete("/access-groups/{id}", handlers.DeleteAccessGroup)
+			agr.Get("/access-groups/{id}/access-points", handlers.ListAccessGroupAccessPoints)
+			agr.Post("/access-groups/{id}/access-points", handlers.AddAccessGroupAccessPoint)
+			agr.Delete("/access-groups/{id}/access-points/{apId}", handlers.RemoveAccessGroupAccessPoint)
+			agr.Get("/access-groups/{id}/users", handlers.ListAccessGroupUsers)
+			agr.Post("/access-groups/{id}/users", handlers.AssignUsersToGroup)
+			agr.Delete("/access-groups/{id}/users/{userId}", handlers.RemoveUserFromGroup)
 		})
 
-		// Schedules: viewer can read, manager+ can write
-		r.Group(func(sr chi.Router) {
-			sr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
-			sr.Get("/schedules", handlers.ListSchedules)
-			sr.Post("/schedules", handlers.CreateSchedule)
-			sr.Get("/schedules/{id}", handlers.GetSchedule)
-			sr.Put("/schedules/{id}", handlers.UpdateSchedule)
-			sr.Delete("/schedules/{id}", handlers.DeleteSchedule)
+		// Access Times
+		r.Group(func(atr chi.Router) {
+			atr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			atr.Get("/access-times", handlers.ListAccessTimeTemplates)
+			atr.Post("/access-times", handlers.CreateAccessTimeTemplate)
+			atr.Post("/access-times/bulk-delete", handlers.BulkDeleteAccessTimes)
+			atr.Get("/access-times/{id}", handlers.GetAccessTimeTemplate)
+			atr.Put("/access-times/{id}", handlers.UpdateAccessTimeTemplate)
+			atr.Delete("/access-times/{id}", handlers.DeleteAccessTimeTemplate)
 		})
 
 		// Events: all roles can read
@@ -128,19 +166,6 @@ func main() {
 
 		// Dashboard stats: all roles can read
 		r.Get("/stats", handlers.GetStats)
-
-		// Access Time Templates: manager+ can manage, viewer can read
-		r.Group(func(atr chi.Router) {
-			atr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
-			atr.Get("/access-time/templates", handlers.ListAccessTimeTemplates)
-			atr.Post("/access-time/templates", handlers.CreateAccessTimeTemplate)
-			atr.Get("/access-time/templates/{id}", handlers.GetAccessTimeTemplate)
-			atr.Put("/access-time/templates/{id}", handlers.UpdateAccessTimeTemplate)
-			atr.Delete("/access-time/templates/{id}", handlers.DeleteAccessTimeTemplate)
-		})
-
-		// Access Time Stats: all roles can read
-		r.Get("/access-time/stats", handlers.GetAccessTimeStats)
 	})
 
 	// Start server

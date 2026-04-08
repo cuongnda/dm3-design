@@ -18,7 +18,7 @@ import { CreateUserAccountPage } from '@/features/system/CreateUserAccountPage';
 import { ProtectedRoute } from './ProtectedRoute';
 import { RoleBasedRoute } from './RoleBasedRoute';
 
-// Essential Security Features
+// Essential Security Features (legacy)
 const AccessControlPage = lazy(() =>
   import('@/features/secure/access-control/AccessControlPage').then((m) => ({ default: m.AccessControlPage }))
 );
@@ -54,7 +54,33 @@ const EmergencyPage = lazy(() =>
   import('@/features/secure/emergency/EmergencyPage').then((m) => ({ default: m.EmergencyPage }))
 );
 
-// MANAGE  
+// ACCESS
+const ZonesPage = lazy(() =>
+  import('@/features/access/zones/ZonesPage').then((m) => ({ default: m.ZonesPage }))
+);
+const AccessPointsPage = lazy(() =>
+  import('@/features/access/access-points/AccessPointsPage').then((m) => ({ default: m.AccessPointsPage }))
+);
+const AccessPointDetailPage = lazy(() =>
+  import('@/features/access/access-points/AccessPointDetailPage').then((m) => ({ default: m.AccessPointDetailPage }))
+);
+const DoorsPage = lazy(() =>
+  import('@/features/access/doors/DoorsPage').then((m) => ({ default: m.DoorsPage }))
+);
+const AccessGroupsPage = lazy(() =>
+  import('@/features/access/access-groups/AccessGroupsPage').then((m) => ({ default: m.AccessGroupsPage }))
+);
+const AccessGroupDetailPage = lazy(() =>
+  import('@/features/access/access-groups/AccessGroupDetailPage').then((m) => ({ default: m.AccessGroupDetailPage }))
+);
+const AccessTimesPage = lazy(() =>
+  import('@/features/access/access-times/AccessTimesPage').then((m) => ({ default: m.AccessTimesPage }))
+);
+const AccessTimeFormPage2 = lazy(() =>
+  import('@/features/access/access-times/AccessTimeFormPage').then((m) => ({ default: m.AccessTimeFormPage }))
+);
+
+// MANAGE
 const IdentitiesPage = lazy(() =>
   import('@/features/manage/identities/IdentitiesPage').then((m) => ({ default: m.IdentitiesPage }))
 );
@@ -67,8 +93,6 @@ const UserManagementPage = lazy(() =>
 const DepartmentManagementPage = lazy(() =>
   import('@/features/department-management/DepartmentManagementPage').then((m) => ({ default: m.DepartmentManagementPage }))
 );
-
-
 
 // DEVICES
 const DevicesPage = lazy(() =>
@@ -153,7 +177,7 @@ export const Router = createBrowserRouter([
               { index: true, element: <DashboardPage /> },
               { path: 'alerts', element: <LazyWrap><AlertsPage /></LazyWrap> },
 
-              // SECURE
+              // SECURE (legacy routes)
               { path: 'secure/access-control', element: <LazyWrap><AccessControlPage /></LazyWrap> },
               { path: 'secure/access-control/rules', element: <LazyWrap><AccessRulesPage /></LazyWrap> },
               { path: 'secure/access-control/access-time', element: <LazyWrap><AccessTimeListPage /></LazyWrap> },
@@ -167,13 +191,24 @@ export const Router = createBrowserRouter([
               { path: 'secure/ai-detection', element: <LazyWrap><AIDetectionPage /></LazyWrap> },
               { path: 'secure/emergency', element: <LazyWrap><EmergencyPage /></LazyWrap> },
 
+              // ACCESS (new)
+              { path: 'access/zones', element: <LazyWrap><ZonesPage /></LazyWrap> },
+              { path: 'access/access-points', element: <LazyWrap><AccessPointsPage /></LazyWrap> },
+              { path: 'access/access-points/:id', element: <LazyWrap><AccessPointDetailPage /></LazyWrap> },
+              { path: 'access/doors', element: <LazyWrap><DoorsPage /></LazyWrap> },
+              { path: 'access/access-groups', element: <LazyWrap><AccessGroupsPage /></LazyWrap> },
+              { path: 'access/access-groups/:id', element: <LazyWrap><AccessGroupDetailPage /></LazyWrap> },
+              { path: 'access/access-times', element: <LazyWrap><AccessTimesPage /></LazyWrap> },
+              { path: 'access/access-times/new', element: <LazyWrap><AccessTimeFormPage2 /></LazyWrap> },
+              { path: 'access/access-times/:id', element: <LazyWrap><AccessTimeFormPage2 /></LazyWrap> },
+
               // MANAGE
               { path: 'manage/users', element: <LazyWrap><UserManagementPage /></LazyWrap> },
               { path: 'manage/departments', element: <LazyWrap><DepartmentManagementPage /></LazyWrap> },
               { path: 'manage/identities', element: <LazyWrap><IdentitiesPage /></LazyWrap> },
               { path: 'manage/identities/:id', element: <LazyWrap><PersonDetailPage /></LazyWrap> },
 
-              // ACCESS CONTROL
+              // ACCESS CONTROL (legacy)
               { path: 'access-control', element: <LazyWrap><AccessControlPage /></LazyWrap> },
               { path: 'access-control/rules', element: <LazyWrap><AccessRulesPage /></LazyWrap> },
               { path: 'access-control/:id', element: <LazyWrap><DoorDetailPage /></LazyWrap> },

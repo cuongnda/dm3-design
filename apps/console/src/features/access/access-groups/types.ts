@@ -1,0 +1,30 @@
+export interface AccessGroup {
+  id: string;
+  tenant_id: string;
+  parent_id?: string;
+  name: string;
+  is_default: boolean;
+  type: number;
+  access_point_count: number;
+  user_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccessGroupFormData {
+  name: string;
+  parent_id?: string;
+  is_default?: boolean;
+}
+
+export interface AccessGroupAccessPoint {
+  id: string;
+  access_group_id: string;
+  access_point_id: string;
+  created_at: string;
+  access_point?: {
+    id: string;
+    name: string;
+    description?: string;
+  };
+}
