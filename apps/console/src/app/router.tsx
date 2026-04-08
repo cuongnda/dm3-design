@@ -159,6 +159,14 @@ const PendingDevicesPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage }))
 );
+const TenantAuditLogPage = lazy(() =>
+  import('@/features/settings/AuditLogPage').then((m) => ({ default: m.TenantAuditLogPage }))
+);
+
+// SYSTEM AUDIT
+const AuditLogPage = lazy(() =>
+  import('@/features/system/AuditLogPage').then((m) => ({ default: m.AuditLogPage }))
+);
 
 // ALERTS
 const AlertsPage = lazy(() =>
@@ -212,6 +220,7 @@ export const Router = createBrowserRouter([
           { path: 'firmware/upload', element: <FirmwareUploadPage /> },
           { path: 'firmware/:id', element: <FirmwareDetailPage /> },
           { path: 'settings', element: <LazyWrap><SystemSettingsPage /></LazyWrap> },
+          { path: 'audit', element: <LazyWrap><AuditLogPage /></LazyWrap> },
         ],
       },
       {
@@ -286,6 +295,7 @@ export const Router = createBrowserRouter([
 
               // SETTINGS
               { path: 'settings', element: <LazyWrap><SettingsPage /></LazyWrap> },
+              { path: 'settings/audit-log', element: <LazyWrap><TenantAuditLogPage /></LazyWrap> },
             ],
           },
         ],

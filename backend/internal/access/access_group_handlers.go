@@ -173,6 +173,7 @@ func (h *AccessHandlers) CreateAccessGroup(w http.ResponseWriter, r *http.Reques
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.group.create", "access_group", g.ID, g.Name, "success", nil, g)
 	httputil.JSON(w, http.StatusCreated, g)
 }
 
@@ -217,6 +218,7 @@ func (h *AccessHandlers) UpdateAccessGroup(w http.ResponseWriter, r *http.Reques
 		httputil.Error(w, http.StatusNotFound, "access group not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.group.update", "access_group", g.ID, g.Name, "success", nil, g)
 	httputil.JSON(w, http.StatusOK, g)
 }
 
@@ -241,6 +243,7 @@ func (h *AccessHandlers) DeleteAccessGroup(w http.ResponseWriter, r *http.Reques
 		httputil.Error(w, http.StatusNotFound, "access group not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.group.delete", "access_group", id, "", "success", nil, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -269,6 +272,7 @@ func (h *AccessHandlers) BulkDeleteAccessGroups(w http.ResponseWriter, r *http.R
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.group.bulk_delete", "access_group", "", "", "success", nil, map[string]any{"ids": req.IDs})
 	httputil.JSON(w, http.StatusOK, map[string]any{"deleted": tag.RowsAffected()})
 }
 
@@ -394,6 +398,7 @@ func (h *AccessHandlers) AddAccessGroupAccessPoint(w http.ResponseWriter, r *htt
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.group.add_access_point", "access_group", groupID, "", "success", nil, map[string]any{"access_point_id": req.AccessPointID})
 	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id})
 }
 
@@ -509,6 +514,7 @@ func (h *AccessHandlers) AssignUsersToGroup(w http.ResponseWriter, r *http.Reque
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.group.assign_users", "access_group", groupID, "", "success", nil, map[string]any{"user_ids": req.UserIDs})
 	httputil.JSON(w, http.StatusOK, map[string]any{"assigned": tag.RowsAffected()})
 }
 
@@ -535,6 +541,7 @@ func (h *AccessHandlers) RemoveUserFromGroup(w http.ResponseWriter, r *http.Requ
 		httputil.Error(w, http.StatusNotFound, "user not in this group")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.group.remove_user", "access_group", groupID, "", "success", nil, map[string]any{"user_id": userID})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -561,5 +568,6 @@ func (h *AccessHandlers) RemoveAccessGroupAccessPoint(w http.ResponseWriter, r *
 		httputil.Error(w, http.StatusNotFound, "access point not in this group")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.group.remove_access_point", "access_group", groupID, "", "success", nil, map[string]any{"access_point_id": apID})
 	w.WriteHeader(http.StatusNoContent)
 }

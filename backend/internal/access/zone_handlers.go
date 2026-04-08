@@ -111,6 +111,7 @@ func (h *AccessHandlers) CreateZone(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.zone.create", "zone", z.ID, z.Name, "success", nil, z)
 	httputil.JSON(w, http.StatusCreated, z)
 }
 
@@ -168,6 +169,7 @@ func (h *AccessHandlers) UpdateZone(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusNotFound, "zone not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.zone.update", "zone", z.ID, z.Name, "success", nil, z)
 	httputil.JSON(w, http.StatusOK, z)
 }
 
@@ -190,6 +192,7 @@ func (h *AccessHandlers) DeleteZone(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusNotFound, "zone not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.zone.delete", "zone", id, "", "success", nil, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -220,6 +223,7 @@ func (h *AccessHandlers) BulkDeleteZones(w http.ResponseWriter, r *http.Request)
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.zone.bulk_delete", "zone", "", "", "success", nil, map[string]any{"ids": req.IDs})
 	httputil.JSON(w, http.StatusOK, map[string]any{"deleted": tag.RowsAffected()})
 }
 

@@ -83,5 +83,9 @@
   "integrations.configure": "Cấu hình",
   "integrations.status.connected": "Đã kết nối",
   "integrations.status.disconnected": "Đã ngắt kết nối",
-  "integrations.status.error": "Lỗi"
+  "integrations.status.error": "Lỗi",
+
+  "settings.tabs.auditLog": "Nhật ký hoạt động",
+  "auditLog.title": "Nhật ký hoạt động",
+  "auditLog.description": "Xem tất cả thay đổi và hành động trong tổ chức"
 }

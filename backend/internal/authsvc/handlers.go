@@ -16,6 +16,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/i18n"
@@ -57,10 +58,11 @@ type DeviceClaims struct {
 type AuthHandlers struct {
 	db        *db.DB
 	jwtSecret string
+	audit     *audit.Logger
 }
 
-func NewAuthHandlers(database *db.DB, jwtSecret string) *AuthHandlers {
-	return &AuthHandlers{db: database, jwtSecret: jwtSecret}
+func NewAuthHandlers(database *db.DB, jwtSecret string, auditLog *audit.Logger) *AuthHandlers {
+	return &AuthHandlers{db: database, jwtSecret: jwtSecret, audit: auditLog}
 }
 
 // ─── Auth Routes ─────────────────────────────────────────────────────────────
@@ -161,6 +163,15 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 
 	// Verify password against the first account found (all share the same password).
 	if err := bcrypt.CompareHashAndPassword([]byte(accounts[0].passwordHash), []byte(req.Password)); err != nil {
+		h.audit.Log(audit.Entry{
+			ActorEmail: req.Email,
+			ActorIP:    audit.IPFromRequest(r),
+			UserAgent:  r.Header.Get("User-Agent"),
+			Action:     "auth.login_failed",
+			EntityType: "account",
+			EntityName: req.Email,
+			Status:     "failure",
+		})
 		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.invalid_credentials")
 		return
 	}
@@ -192,6 +203,17 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			slog.Error("failed to create refresh token", "error", err, "user_id", first.id)
 		}
+		h.audit.Log(audit.Entry{
+			ActorID:    first.id,
+			ActorEmail: first.email,
+			ActorIP:    audit.IPFromRequest(r),
+			UserAgent:  r.Header.Get("User-Agent"),
+			Action:     "auth.login",
+			EntityType: "account",
+			EntityID:   first.id,
+			EntityName: first.email,
+			Status:     "success",
+		})
 		httputil.JSON(w, http.StatusOK, loginStepResponse{
 			Step:         "complete",
 			AccessToken:  accessToken,
@@ -247,6 +269,18 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 			return
 		}
+		h.audit.Log(audit.Entry{
+			TenantID:   c.ID,
+			ActorID:    chosenAccount.id,
+			ActorEmail: chosenAccount.email,
+			ActorIP:    audit.IPFromRequest(r),
+			UserAgent:  r.Header.Get("User-Agent"),
+			Action:     "auth.login",
+			EntityType: "account",
+			EntityID:   chosenAccount.id,
+			EntityName: chosenAccount.email,
+			Status:     "success",
+		})
 		httputil.JSON(w, http.StatusOK, loginStepResponse{
 			Step:         "complete",
 			AccessToken:  accessToken,
@@ -333,6 +367,18 @@ func (h *AuthHandlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 		slog.Error("failed to create refresh token in step2", "error", err, "user_id", account.id)
 	}
 
+	h.audit.Log(audit.Entry{
+		TenantID:   req.TenantID,
+		ActorID:    account.id,
+		ActorEmail: account.email,
+		ActorIP:    audit.IPFromRequest(r),
+		UserAgent:  r.Header.Get("User-Agent"),
+		Action:     "auth.login",
+		EntityType: "account",
+		EntityID:   account.id,
+		EntityName: account.email,
+		Status:     "success",
+	})
 	httputil.JSON(w, http.StatusOK, loginStepResponse{
 		Step:         "complete",
 		AccessToken:  accessToken,
@@ -420,6 +466,18 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.audit.Log(audit.Entry{
+		TenantID:   companyID,
+		ActorID:    userID,
+		ActorEmail: email,
+		ActorIP:    audit.IPFromRequest(r),
+		UserAgent:  r.Header.Get("User-Agent"),
+		Action:     "auth.token_refresh",
+		EntityType: "account",
+		EntityID:   userID,
+		EntityName: email,
+		Status:     "success",
+	})
 	httputil.JSON(w, http.StatusOK, tokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -441,6 +499,7 @@ func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
+	h.audit.LogFromRequest(r, "auth.logout", "account", claims.Sub, claims.Email, "success", nil, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -534,6 +593,8 @@ func (h *AuthHandlers) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.database_error")
 		return
 	}
+
+	h.audit.LogFromRequest(r, "account.self_update", "account", claims.Sub, claims.Email, "success", nil, req)
 
 	// Return updated me.
 	h.Me(w, r)
@@ -953,6 +1014,7 @@ func (h *AuthHandlers) ResetUserPassword(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	h.audit.LogFromRequest(r, "account.password_reset", "account", userID, userID, "success", nil, nil)
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{
 		"password": newPassword,
 		"message":  "password reset successfully",
@@ -1001,6 +1063,7 @@ func (h *AuthHandlers) ChangeUserPassword(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	h.audit.LogFromRequest(r, "account.password_change", "account", userID, userID, "success", nil, nil)
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{
 		"message": "password changed successfully",
 	})

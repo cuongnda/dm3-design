@@ -226,6 +226,7 @@ func (h *AccessHandlers) CreateAccessTimeTemplate(w http.ResponseWriter, r *http
 		return
 	}
 
+	h.audit.LogFromRequest(r, "access.time.create", "access_time", templateID, req.Name, "success", nil, map[string]any{"name": req.Name, "timezone": req.Timezone})
 	httputil.JSON(w, http.StatusCreated, map[string]string{
 		"id":      templateID,
 		"message": "Access time template created successfully",
@@ -340,6 +341,7 @@ func (h *AccessHandlers) UpdateAccessTimeTemplate(w http.ResponseWriter, r *http
 		return
 	}
 
+	h.audit.LogFromRequest(r, "access.time.update", "access_time", templateID, "", "success", nil, nil)
 	httputil.JSON(w, http.StatusOK, map[string]string{
 		"message": "Access time template updated successfully",
 	})
@@ -364,6 +366,7 @@ func (h *AccessHandlers) DeleteAccessTimeTemplate(w http.ResponseWriter, r *http
 		return
 	}
 
+	h.audit.LogFromRequest(r, "access.time.delete", "access_time", templateID, "", "success", nil, nil)
 	httputil.JSON(w, http.StatusOK, map[string]string{
 		"message": "Access time template deleted successfully",
 	})
@@ -390,6 +393,7 @@ func (h *AccessHandlers) BulkDeleteAccessTimes(w http.ResponseWriter, r *http.Re
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.audit.LogFromRequest(r, "access.time.bulk_delete", "access_time", "", "", "success", nil, map[string]any{"ids": req.IDs})
 	httputil.JSON(w, http.StatusOK, map[string]any{"deleted": tag.RowsAffected()})
 }
 

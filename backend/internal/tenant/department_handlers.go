@@ -292,6 +292,10 @@ func (h *UserManagementHandlers) CreateDepartment(w http.ResponseWriter, r *http
 		return
 	}
 
+	h.audit.LogFromRequest(r, "identity.department.create", "department", dept.ID, dept.Name, "success", nil, map[string]any{
+		"name":   dept.Name,
+		"number": dept.Number,
+	})
 	httputil.JSON(w, http.StatusCreated, dept)
 }
 
@@ -416,6 +420,7 @@ func (h *UserManagementHandlers) UpdateDepartment(w http.ResponseWriter, r *http
 		return
 	}
 
+	h.audit.LogFromRequest(r, "identity.department.update", "department", dept.ID, dept.Name, "success", nil, data)
 	httputil.JSON(w, http.StatusOK, dept)
 }
 
@@ -459,6 +464,7 @@ func (h *UserManagementHandlers) DeleteDepartment(w http.ResponseWriter, r *http
 		return
 	}
 
+	h.audit.LogFromRequest(r, "identity.department.delete", "department", departmentID, departmentID, "success", nil, nil)
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "Department deleted successfully"})
 }
 
@@ -508,6 +514,10 @@ func (h *UserManagementHandlers) BulkDeleteDepartments(w http.ResponseWriter, r 
 		return
 	}
 
+	h.audit.LogFromRequest(r, "identity.department.bulk_delete", "department", "", fmt.Sprintf("%d departments", result.RowsAffected()), "success", nil, map[string]any{
+		"ids":   req.IDs,
+		"count": result.RowsAffected(),
+	})
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{
 		"message":       "Departments deleted successfully",
 		"affected_rows": result.RowsAffected(),

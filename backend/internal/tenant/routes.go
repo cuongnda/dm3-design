@@ -5,12 +5,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/duali/dm3-backend/internal/authsvc"
+	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 )
 
 // RegisterRoutes adds tenant management routes to the router
-func RegisterRoutes(r chi.Router, database *db.DB, jwtSecret string) {
-	handlers := NewTenantHandlers(database)
+func RegisterRoutes(r chi.Router, database *db.DB, jwtSecret string, auditLog *audit.Logger) {
+	handlers := NewTenantHandlers(database, auditLog)
 
 	// Public tenant routes (require authentication + tenant context)
 	r.Route("/api/v1/auth/tenant", func(r chi.Router) {

@@ -8,18 +8,20 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/duali/dm3-backend/internal/authsvc"
+	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
 // TenantHandlers provides tenant/company management endpoints
 type TenantHandlers struct {
-	db *db.DB
+	db    *db.DB
+	audit *audit.Logger
 }
 
 // NewTenantHandlers creates a new tenant handlers instance
-func NewTenantHandlers(database *db.DB) *TenantHandlers {
-	return &TenantHandlers{db: database}
+func NewTenantHandlers(database *db.DB, auditLog *audit.Logger) *TenantHandlers {
+	return &TenantHandlers{db: database, audit: auditLog}
 }
 
 // GetCurrentTenant returns information about the current user's tenant
@@ -190,6 +192,9 @@ func (h *TenantHandlers) UpdateTenantStatus(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	h.audit.LogFromRequest(r, "tenant.status_change", "tenant", tenantID, tenantID, "success", nil, map[string]any{
+		"status": req.Status,
+	})
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{
 		"tenant": info,
 		"message": "tenant status updated successfully",

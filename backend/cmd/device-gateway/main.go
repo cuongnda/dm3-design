@@ -15,6 +15,7 @@ import (
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/config"
 	"github.com/duali/dm3-backend/internal/gateway"
+	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/i18n"
@@ -112,9 +113,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Audit logger
+	auditLog := audit.New(database.Pool, "device-gateway")
+	defer auditLog.Close()
+	audit.SetContextExtractor(audit.ContextExtractor{
+		ActorFromContext: func(ctx context.Context) (string, string) {
+			c := authsvc.ClaimsFromContext(ctx)
+			if c == nil {
+				return "", ""
+			}
+			return c.Sub, c.Email
+		},
+		CompanyIDFromContext: authsvc.CompanyIDFromContext,
+	})
+
 	// HTTP handlers
-	handlers := gateway.NewGatewayHandlers(database, mqttClient)
-	provHandlers := gateway.NewProvisioningHandlers(database, mqttClient, cfg)
+	handlers := gateway.NewGatewayHandlers(database, mqttClient, auditLog)
+	provHandlers := gateway.NewProvisioningHandlers(database, mqttClient, cfg, auditLog)
 	firmwareHandlers := gateway.NewFirmwareHandlers(database)
 
 	// HTTP routes

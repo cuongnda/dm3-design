@@ -16,6 +16,7 @@ import (
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/models"
+	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/natsutil"
@@ -29,12 +30,13 @@ var (
 )
 
 type IdentityHandlers struct {
-	db   *db.DB
-	nats *natsutil.Client
+	db    *db.DB
+	nats  *natsutil.Client
+	audit *audit.Logger
 }
 
-func NewIdentityHandlers(database *db.DB, nats *natsutil.Client) *IdentityHandlers {
-	return &IdentityHandlers{db: database, nats: nats}
+func NewIdentityHandlers(database *db.DB, nats *natsutil.Client, auditLog *audit.Logger) *IdentityHandlers {
+	return &IdentityHandlers{db: database, nats: nats, audit: auditLog}
 }
 
 // publishEvent publishes a NATS event for identity changes.
@@ -116,6 +118,7 @@ func (h *IdentityHandlers) UploadPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.publishEvent("dm3.identity.user.updated", map[string]string{"id": id, "photo_url": photoURL})
+	h.audit.LogFromRequest(r, "identity.user.photo_upload", "user", id, id, "success", nil, map[string]any{"photo_url": photoURL})
 	httputil.JSON(w, http.StatusOK, map[string]string{"photo_url": photoURL})
 }
 
@@ -203,6 +206,7 @@ func (h *IdentityHandlers) CreateCredential(w http.ResponseWriter, r *http.Reque
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.audit.LogFromRequest(r, "identity.credential.create", "credential", c.ID, c.Type, "success", nil, map[string]any{"type": c.Type, "user_id": userID})
 	httputil.JSON(w, http.StatusCreated, c)
 }
 
@@ -249,6 +253,7 @@ func (h *IdentityHandlers) UpdateCredential(w http.ResponseWriter, r *http.Reque
 		httputil.Error(w, http.StatusNotFound, "credential not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "identity.credential.update", "credential", c.ID, c.Type, "success", nil, req)
 	httputil.JSON(w, http.StatusOK, c)
 }
 
@@ -266,6 +271,7 @@ func (h *IdentityHandlers) DeleteCredential(w http.ResponseWriter, r *http.Reque
 		httputil.Error(w, http.StatusNotFound, "credential not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "identity.credential.delete", "credential", credID, credID, "success", nil, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -490,6 +496,7 @@ func (h *IdentityHandlers) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.audit.LogFromRequest(r, "identity.group.create", "group", g.ID, g.Name, "success", nil, req)
 	httputil.JSON(w, http.StatusCreated, g)
 }
 
@@ -528,6 +535,7 @@ func (h *IdentityHandlers) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusNotFound, "group not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "identity.group.update", "group", g.ID, g.Name, "success", nil, req)
 	httputil.JSON(w, http.StatusOK, g)
 }
 
@@ -538,6 +546,7 @@ func (h *IdentityHandlers) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusNotFound, "group not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "identity.group.delete", "group", id, id, "success", nil, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -587,6 +596,7 @@ func (h *IdentityHandlers) AddGroupMember(w http.ResponseWriter, r *http.Request
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.audit.LogFromRequest(r, "identity.group.add_member", "group", groupID, groupID, "success", nil, map[string]any{"user_id": req.UserID})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -596,6 +606,7 @@ func (h *IdentityHandlers) RemoveGroupMember(w http.ResponseWriter, r *http.Requ
 	h.db.Pool.Exec(r.Context(),
 		`DELETE FROM dm3_identity.user_group_members WHERE group_id = $1::uuid AND user_id = $2::uuid`,
 		groupID, userID)
+	h.audit.LogFromRequest(r, "identity.group.remove_member", "group", groupID, groupID, "success", nil, map[string]any{"user_id": userID})
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -14,18 +14,20 @@ import (
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/models"
+	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/mqtt"
 )
 
 type GatewayHandlers struct {
-	db   *db.DB
-	mqtt *mqtt.Client
+	db    *db.DB
+	mqtt  *mqtt.Client
+	audit *audit.Logger
 }
 
-func NewGatewayHandlers(database *db.DB, mqttClient *mqtt.Client) *GatewayHandlers {
-	return &GatewayHandlers{db: database, mqtt: mqttClient}
+func NewGatewayHandlers(database *db.DB, mqttClient *mqtt.Client, auditLog *audit.Logger) *GatewayHandlers {
+	return &GatewayHandlers{db: database, mqtt: mqttClient, audit: auditLog}
 }
 
 // ListDevices handles GET /api/v1/devices (company-scoped)
@@ -184,6 +186,7 @@ func (h *GatewayHandlers) CreateDevice(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
+	h.audit.LogFromRequest(r, "device.create", "device", d.ID, d.Name, "success", nil, d)
 	httputil.JSON(w, http.StatusCreated, d)
 }
 
@@ -247,6 +250,7 @@ func (h *GatewayHandlers) UpdateDevice(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "device.update", "device", d.ID, d.Name, "success", nil, d)
 	httputil.JSON(w, http.StatusOK, d)
 }
 
@@ -272,6 +276,7 @@ func (h *GatewayHandlers) DeleteDevice(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "device.delete", "device", id, "", "success", nil, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -329,6 +334,7 @@ func (h *GatewayHandlers) SendCommand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("command sent", "device", deviceID, "type", req.Type, "topic", topic)
+	h.audit.LogFromRequest(r, "device.command", "device", id, deviceID, "success", nil, map[string]any{"command_type": req.Type, "message_id": envelope.ID})
 	httputil.JSON(w, http.StatusAccepted, map[string]string{
 		"message":    "command sent",
 		"message_id": envelope.ID,

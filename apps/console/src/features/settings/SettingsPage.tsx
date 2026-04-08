@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { User, Shield, Bell, Palette, Save } from 'lucide-react';
+import { User, Shield, Bell, Palette, Save, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '@dm3/ui';
 
 type Tab = 'profile' | 'security' | 'notifications' | 'appearance';
 
 export function SettingsPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [profile, setProfile] = useState({
     name: 'John Smith',
@@ -39,8 +41,7 @@ export function SettingsPage() {
   ];
 
   const handleSave = () => {
-    console.log('Saving settings...', { profile, security, notifications, appearance });
-    // Here you would typically save to backend
+    // Save handled by individual tab forms
   };
 
   return (
@@ -78,6 +79,14 @@ export function SettingsPage() {
                 </button>
               );
             })}
+            <button
+              type="button"
+              onClick={() => navigate('/settings/audit-log')}
+              className="w-full flex items-center gap-3 px-3 py-2 text-left rounded-md transition-colors hover:bg-muted"
+            >
+              <FileText size={18} />
+              {t('settings.tabs.auditLog')}
+            </button>
           </nav>
         </div>
 

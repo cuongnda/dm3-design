@@ -83,5 +83,9 @@
   "integrations.configure": "Configure",
   "integrations.status.connected": "Connected",
   "integrations.status.disconnected": "Disconnected",
-  "integrations.status.error": "Error"
+  "integrations.status.error": "Error",
+
+  "settings.tabs.auditLog": "Activity Log",
+  "auditLog.title": "Activity Log",
+  "auditLog.description": "View all changes and actions in your organization"
 }

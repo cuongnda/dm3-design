@@ -177,6 +177,11 @@ func (h *AuthHandlers) CreateCompany(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.audit.LogFromRequest(r, "company.create", "company", company.ID, company.Name, "success", nil, map[string]any{
+		"name": company.Name,
+		"code": company.Code,
+		"plan": company.Plan,
+	})
 	httputil.JSON(w, http.StatusCreated, createCompanyResponse{
 		Company: company,
 		Admin: adminInfo{
@@ -242,6 +247,7 @@ func (h *AuthHandlers) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusNotFound, "company not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "company.update", "company", c.ID, c.Name, "success", nil, req)
 	httputil.JSON(w, http.StatusOK, c)
 }
 
@@ -259,5 +265,6 @@ func (h *AuthHandlers) DeleteCompany(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusNotFound, "company not found or already suspended")
 		return
 	}
+	h.audit.LogFromRequest(r, "company.delete", "company", id, id, "success", nil, nil)
 	w.WriteHeader(http.StatusNoContent)
 }

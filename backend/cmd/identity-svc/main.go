@@ -16,6 +16,7 @@ import (
 	"github.com/duali/dm3-backend/internal/config"
 	"github.com/duali/dm3-backend/internal/identity"
 	"github.com/duali/dm3-backend/internal/tenant"
+	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/i18n"
@@ -66,9 +67,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Audit logger
+	auditLog := audit.New(database.Pool, "identity-svc")
+	defer auditLog.Close()
+	audit.SetContextExtractor(audit.ContextExtractor{
+		ActorFromContext: func(ctx context.Context) (string, string) {
+			c := authsvc.ClaimsFromContext(ctx)
+			if c == nil {
+				return "", ""
+			}
+			return c.Sub, c.Email
+		},
+		CompanyIDFromContext: authsvc.CompanyIDFromContext,
+	})
+
 	// HTTP handlers
-	handlers := identity.NewIdentityHandlers(database, natsClient)
-	umHandlers := tenant.NewUserManagementHandlers(database)
+	handlers := identity.NewIdentityHandlers(database, natsClient, auditLog)
+	umHandlers := tenant.NewUserManagementHandlers(database, auditLog)
 
 	// HTTP routes
 	r := httputil.NewRouter()

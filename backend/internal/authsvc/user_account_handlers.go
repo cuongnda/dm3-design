@@ -248,6 +248,10 @@ func (h *AuthHandlers) CreateUserAccount(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	h.audit.LogFromRequest(r, "account.create", "account", u.ID, u.Email, "success", nil, map[string]any{
+		"email": u.Email,
+		"role":  u.Role,
+	})
 	httputil.JSON(w, http.StatusCreated, createUserAccountResponse{
 		User:     u,
 		Password: password,
@@ -300,6 +304,7 @@ func (h *AuthHandlers) UpdateUserAccount(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	h.audit.LogFromRequest(r, "account.update", "account", u.ID, u.Email, "success", nil, req)
 	httputil.JSON(w, http.StatusOK, u)
 }
 
@@ -323,6 +328,7 @@ func (h *AuthHandlers) DeleteUserAccount(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	h.audit.LogFromRequest(r, "account.delete", "account", id, id, "success", nil, nil)
 	httputil.JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 

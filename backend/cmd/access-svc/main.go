@@ -15,6 +15,7 @@ import (
 	"github.com/duali/dm3-backend/internal/access"
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/config"
+	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/i18n"
@@ -72,8 +73,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Audit logger
+	auditLog := audit.New(database.Pool, "access-svc")
+	defer auditLog.Close()
+	audit.SetContextExtractor(audit.ContextExtractor{
+		ActorFromContext: func(ctx context.Context) (string, string) {
+			c := authsvc.ClaimsFromContext(ctx)
+			if c == nil {
+				return "", ""
+			}
+			return c.Sub, c.Email
+		},
+		CompanyIDFromContext: authsvc.CompanyIDFromContext,
+	})
+
 	// HTTP handlers
-	handlers := access.NewAccessHandlers(database)
+	handlers := access.NewAccessHandlers(database, auditLog)
 
 	// HTTP routes
 	r := httputil.NewRouter()

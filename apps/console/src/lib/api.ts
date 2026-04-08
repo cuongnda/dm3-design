@@ -825,12 +825,21 @@ export interface AccountDTO {
 
 export interface AuditEntryDTO {
     id: string;
+    time: string;
+    tenant_id?: string;
     actor_id?: string;
     actor_email?: string;
+    actor_ip?: string;
+    user_agent?: string;
+    service: string;
     action: string;
-    changes: Record<string, unknown>;
-    ip_address?: string;
-    created_at: string;
+    entity_type: string;
+    entity_id?: string;
+    entity_name?: string;
+    status: string;
+    old_values?: Record<string, unknown>;
+    new_values?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
 }
 
 export interface CreateAccountRequest {
@@ -893,6 +902,60 @@ export async function reactivateAccount(id: string): Promise<void> {
 
 export async function fetchAccountAudit(id: string, page = 1, limit = 20): Promise<Paginated<AuditEntryDTO>> {
     return apiFetch<Paginated<AuditEntryDTO>>(`${AUTH_SYSTEM_URL}/accounts/${id}/audit?page=${page}&limit=${limit}`);
+}
+
+// ─── Audit Log APIs ────────────────────────────────────────────────────────
+const AUDIT_URL = '/api/v1/audit';
+
+export interface AuditFilters {
+    tenant_id?: string;
+    actor_id?: string;
+    action?: string;
+    entity_type?: string;
+    entity_id?: string;
+    service?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+    search?: string;
+}
+
+export interface AuditStatsDTO {
+    stats: { action: string; count: number }[];
+    by_service: { service: string; count: number }[];
+    total: number;
+}
+
+export async function fetchAuditLogs(page = 1, limit = 50, filters?: AuditFilters): Promise<Paginated<AuditEntryDTO>> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (filters) {
+        Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });
+    }
+    return apiFetch<Paginated<AuditEntryDTO>>(`${AUDIT_URL}/logs?${params}`);
+}
+
+export async function fetchTenantAuditLogs(page = 1, limit = 50, filters?: AuditFilters): Promise<Paginated<AuditEntryDTO>> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (filters) {
+        Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });
+    }
+    return apiFetch<Paginated<AuditEntryDTO>>(`${AUDIT_URL}/tenant/logs?${params}`);
+}
+
+export async function fetchAuditStats(filters?: { from?: string; to?: string; tenant_id?: string }): Promise<AuditStatsDTO> {
+    const params = new URLSearchParams();
+    if (filters) {
+        Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });
+    }
+    return apiFetch<AuditStatsDTO>(`${AUDIT_URL}/stats?${params}`);
+}
+
+export function exportAuditLogsUrl(filters?: AuditFilters): string {
+    const params = new URLSearchParams();
+    if (filters) {
+        Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });
+    }
+    return `${AUDIT_URL}/export?${params}`;
 }
 
 // ─── System Admin Device APIs ────────────────────────────────

@@ -15,16 +15,18 @@ import (
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/models"
+	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
 type AccessHandlers struct {
-	db *db.DB
+	db    *db.DB
+	audit *audit.Logger
 }
 
-func NewAccessHandlers(database *db.DB) *AccessHandlers {
-	return &AccessHandlers{db: database}
+func NewAccessHandlers(database *db.DB, auditLog *audit.Logger) *AccessHandlers {
+	return &AccessHandlers{db: database, audit: auditLog}
 }
 
 // ─── Access Devices ──────────────────────────────────────────────────────────
@@ -159,6 +161,7 @@ func (h *AccessHandlers) CreateAccessDevice(w http.ResponseWriter, r *http.Reque
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.device.create", "access_device", d.ID, d.Name, "success", nil, d)
 	httputil.JSON(w, http.StatusCreated, d)
 }
 
@@ -217,6 +220,7 @@ func (h *AccessHandlers) UpdateAccessDevice(w http.ResponseWriter, r *http.Reque
 		httputil.Error(w, http.StatusNotFound, "access device not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.device.update", "access_device", d.ID, d.Name, "success", nil, d)
 	httputil.JSON(w, http.StatusOK, d)
 }
 
@@ -239,6 +243,7 @@ func (h *AccessHandlers) DeleteAccessDevice(w http.ResponseWriter, r *http.Reque
 		httputil.Error(w, http.StatusNotFound, "access device not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.device.delete", "access_device", id, "", "success", nil, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -264,6 +269,7 @@ func (h *AccessHandlers) BulkDeleteAccessDevices(w http.ResponseWriter, r *http.
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.device.bulk_delete", "access_device", "", "", "success", nil, map[string]any{"ids": req.IDs})
 	httputil.JSON(w, http.StatusOK, map[string]any{"deleted": tag.RowsAffected()})
 }
 

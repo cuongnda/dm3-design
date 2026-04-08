@@ -87,7 +87,9 @@ Four services, all in one Go module (`github.com/duali/dm3-backend`):
 - `internal/middleware/` — JWT auth middleware (`auth.go`), CORS, logging
 - `internal/authsvc/`, `internal/access/`, `internal/identity/`, `internal/gateway/` — per-service handlers
 - `pkg/db/` — pgx connection pool, migrations
+- `pkg/audit/` — async audit logger (buffered channel → batch INSERT into `dm3_audit.audit_logs`)
 - `pkg/natsutil/`, `pkg/mqtt/` — NATS JetStream and MQTT helpers
+- `internal/audit/` — audit log query API (list, filter, export CSV, stats)
 
 **Event flow:** Simulator → EMQX (MQTT :1884) → `device-gateway` → NATS JetStream → `access-svc` → TimescaleDB
 
@@ -96,6 +98,7 @@ Four services, all in one Go module (`github.com/duali/dm3-backend`):
 - **Multi-tenancy**: company = tenant; `tenant_id` on all tenant-scoped tables; two-step login (company code → credentials)
 - NATS subjects carry `tenant_id` — extract it from subject, not just payload (see `internal/access/nats_consumer.go`)
 - 7-day grace period for expired JWT refresh tokens (to support offline devices)
+- **Audit trail**: every CREATE/UPDATE/DELETE and auth event is logged to `dm3_audit.audit_logs` (TimescaleDB hypertable). Async writes via `pkg/audit.Logger` (buffered channel, batch INSERT). The table is INSERT+SELECT only (no UPDATE/DELETE by application user). Retention: 2 years, compression after 30 days. Query API at `/api/v1/audit/` (system admin) and `/api/v1/audit/tenant/` (tenant-scoped).
 
 ### Frontend — Turborepo (`apps/` + `packages/`)
 

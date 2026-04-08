@@ -17,6 +17,7 @@ import (
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/config"
+	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/mqtt"
@@ -24,13 +25,14 @@ import (
 
 // ProvisioningHandlers handles device provisioning endpoints.
 type ProvisioningHandlers struct {
-	db   *db.DB
-	mqtt *mqtt.Client
-	cfg  *config.Config
+	db    *db.DB
+	mqtt  *mqtt.Client
+	cfg   *config.Config
+	audit *audit.Logger
 }
 
-func NewProvisioningHandlers(database *db.DB, mqttClient *mqtt.Client, cfg *config.Config) *ProvisioningHandlers {
-	return &ProvisioningHandlers{db: database, mqtt: mqttClient, cfg: cfg}
+func NewProvisioningHandlers(database *db.DB, mqttClient *mqtt.Client, cfg *config.Config, auditLog *audit.Logger) *ProvisioningHandlers {
+	return &ProvisioningHandlers{db: database, mqtt: mqttClient, cfg: cfg, audit: auditLog}
 }
 
 // ─── QR Flow ─────────────────────────────────────────────────────────────────
@@ -115,13 +117,14 @@ func (h *ProvisioningHandlers) ProvisionDevice(w http.ResponseWriter, r *http.Re
 		slog.Error("failed to store provisioning token", "error", err)
 	}
 
+	h.audit.LogFromRequest(r, "device.provision", "device", deviceDBID, req.Name, "success", nil, map[string]any{"device_id": req.DeviceID, "type": req.Type})
 	httputil.JSON(w, http.StatusCreated, map[string]any{
 		"device": map[string]any{
-			"id":         deviceDBID,
-			"device_id":  req.DeviceID,
-			"name":       req.Name,
-			"type":       req.Type,
-			"status":     "provisioning",
+			"id":        deviceDBID,
+			"device_id": req.DeviceID,
+			"name":      req.Name,
+			"type":      req.Type,
+			"status":    "provisioning",
 			"tenant_id": companyID,
 		},
 		"provisioning": map[string]any{
@@ -262,6 +265,17 @@ func (h *ProvisioningHandlers) ActivateDevice(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	h.audit.Log(audit.Entry{
+		TenantID:   qrClaims.CID,
+		ActorIP:    audit.IPFromRequest(r),
+		UserAgent:  r.Header.Get("User-Agent"),
+		Action:     "device.activate",
+		EntityType: "device",
+		EntityID:   qrClaims.DID,
+		EntityName: deviceID,
+		Status:     "success",
+		NewValues:  map[string]any{"device_id": deviceID, "type": qrClaims.DType},
+	})
 	httputil.JSON(w, http.StatusOK, map[string]any{
 		"status":    "activated",
 		"device_id": deviceID,
@@ -438,6 +452,7 @@ func (h *ProvisioningHandlers) ApprovePending(w http.ResponseWriter, r *http.Req
 		slog.Error("failed to publish approval to bootstrap channel", "error", err, "rid", rid)
 	}
 
+	h.audit.LogFromRequest(r, "device.approve", "device", deviceDBID, rid, "success", nil, map[string]any{"rid": rid, "tenant_id": req.TenantID})
 	httputil.JSON(w, http.StatusOK, map[string]any{
 		"status":    "approved",
 		"device_id": deviceDBID,
@@ -489,6 +504,7 @@ func (h *ProvisioningHandlers) RejectPending(w http.ResponseWriter, r *http.Requ
 		slog.Error("failed to publish rejection", "error", err, "rid", rid)
 	}
 
+	h.audit.LogFromRequest(r, "device.reject", "device", regID, rid, "success", nil, map[string]any{"rid": rid})
 	httputil.JSON(w, http.StatusOK, map[string]any{"status": "rejected", "rid": rid})
 }
 
@@ -567,6 +583,15 @@ func (h *ProvisioningHandlers) RefreshToken(w http.ResponseWriter, r *http.Reque
 		"UPDATE dm3_devices.devices SET last_seen = now(), status = 'online' WHERE device_id = $1", dc.DID)
 
 	slog.Info("device token refreshed", "device_id", dc.DID, "tenant_id", dc.CID)
+	h.audit.Log(audit.Entry{
+		TenantID:   dc.CID,
+		ActorIP:    audit.IPFromRequest(r),
+		UserAgent:  r.Header.Get("User-Agent"),
+		Action:     "device.token_refresh",
+		EntityType: "device",
+		EntityID:   dc.DID,
+		Status:     "success",
+	})
 
 	httputil.JSON(w, http.StatusOK, map[string]any{
 		"token":      newToken,

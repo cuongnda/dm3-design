@@ -87,6 +87,7 @@ func (h *IdentityHandlers) UploadUserAvatar(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	h.audit.LogFromRequest(r, "identity.user.photo_upload", "user", userID, userID, "success", nil, map[string]any{"avatar": avatarURL})
 	httputil.JSON(w, http.StatusOK, map[string]string{"avatar": avatarURL})
 }
 
@@ -444,6 +445,11 @@ func (h *IdentityHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.audit.LogFromRequest(r, "identity.user.create", "user", userID, req.FirstName+" "+req.LastName, "success", nil, map[string]any{
+		"first_name": req.FirstName,
+		"last_name":  req.LastName,
+		"email":      req.Email,
+	})
 	httputil.JSON(w, http.StatusCreated, map[string]interface{}{
 		"id":         userID,
 		"account_id": accountID,
@@ -588,6 +594,7 @@ func (h *IdentityHandlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.audit.LogFromRequest(r, "identity.user.update", "user", userID, userID, "success", nil, req)
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "user updated successfully"})
 }
 
@@ -614,6 +621,7 @@ func (h *IdentityHandlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.audit.LogFromRequest(r, "identity.user.delete", "user", userID, userID, "success", nil, nil)
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "user deleted successfully"})
 }
 
@@ -651,6 +659,7 @@ func (h *IdentityHandlers) BulkDeleteUsers(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	h.audit.LogFromRequest(r, "identity.user.bulk_delete", "user", "", fmt.Sprintf("%d users", len(req.IDs)), "success", nil, map[string]any{"ids": req.IDs})
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{"deleted": len(req.IDs)})
 }
 

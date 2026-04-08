@@ -12,19 +12,22 @@ import (
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
 // UserManagementHandlers provides user management endpoints for company managers
 type UserManagementHandlers struct {
-	db *db.DB
+	db    *db.DB
+	audit *audit.Logger
 }
 
 // NewUserManagementHandlers creates new user management handlers
-func NewUserManagementHandlers(database *db.DB) *UserManagementHandlers {
+func NewUserManagementHandlers(database *db.DB, auditLog *audit.Logger) *UserManagementHandlers {
 	return &UserManagementHandlers{
-		db: database,
+		db:    database,
+		audit: auditLog,
 	}
 }
 
@@ -435,6 +438,11 @@ func (h *UserManagementHandlers) CreateUser(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	h.audit.LogFromRequest(r, "identity.user.create", "user", userID, req.FirstName+" "+req.LastName, "success", nil, map[string]any{
+		"first_name": req.FirstName,
+		"last_name":  req.LastName,
+		"email":      req.Email,
+	})
 	httputil.JSON(w, http.StatusCreated, map[string]interface{}{
 		"user_id": userID,
 		"message": "user created successfully (login accounts managed separately in System Admin)",
@@ -566,6 +574,7 @@ func (h *UserManagementHandlers) UpdateUser(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	h.audit.LogFromRequest(r, "identity.user.update", "user", userID, userID, "success", nil, req)
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{
 		"message": "user updated successfully",
 	})
@@ -603,6 +612,7 @@ func (h *UserManagementHandlers) DeleteUser(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	h.audit.LogFromRequest(r, "identity.user.delete", "user", userID, userID, "success", nil, nil)
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{
 		"message": "user deleted successfully",
 	})
@@ -854,6 +864,10 @@ func (h *UserManagementHandlers) BulkDeleteUsers(w http.ResponseWriter, r *http.
 		return
 	}
 	
+	h.audit.LogFromRequest(r, "identity.user.bulk_delete", "user", "", fmt.Sprintf("%d users", result.RowsAffected()), "success", nil, map[string]any{
+		"user_ids": validUserIDs,
+		"count":    result.RowsAffected(),
+	})
 	response := BulkOperationResponse{
 		Success:      true,
 		Message:      fmt.Sprintf("Successfully deleted %d users", result.RowsAffected()),

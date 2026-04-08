@@ -142,6 +142,7 @@ func (h *AccessHandlers) CreateAccessPoint(w http.ResponseWriter, r *http.Reques
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.point.create", "access_point", ap.ID, ap.Name, "success", nil, ap)
 	httputil.JSON(w, http.StatusCreated, ap)
 }
 
@@ -180,6 +181,7 @@ func (h *AccessHandlers) UpdateAccessPoint(w http.ResponseWriter, r *http.Reques
 		httputil.Error(w, http.StatusNotFound, "access point not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.point.update", "access_point", ap.ID, ap.Name, "success", nil, ap)
 	httputil.JSON(w, http.StatusOK, ap)
 }
 
@@ -198,6 +200,7 @@ func (h *AccessHandlers) DeleteAccessPoint(w http.ResponseWriter, r *http.Reques
 		httputil.Error(w, http.StatusNotFound, "access point not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.point.delete", "access_point", id, "", "success", nil, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -222,6 +225,7 @@ func (h *AccessHandlers) BulkDeleteAccessPoints(w http.ResponseWriter, r *http.R
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.point.bulk_delete", "access_point", "", "", "success", nil, map[string]any{"ids": req.IDs})
 	httputil.JSON(w, http.StatusOK, map[string]any{"deleted": tag.RowsAffected()})
 }
 
@@ -310,6 +314,7 @@ func (h *AccessHandlers) AddAccessPointDevice(w http.ResponseWriter, r *http.Req
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.point.add_device", "access_point", apID, "", "success", nil, map[string]any{"access_device_id": req.AccessDeviceID})
 	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id})
 }
 
@@ -337,6 +342,7 @@ func (h *AccessHandlers) RemoveAccessPointDevice(w http.ResponseWriter, r *http.
 		httputil.Error(w, http.StatusNotFound, "access device not in this access point")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.point.remove_device", "access_point", apID, "", "success", nil, map[string]any{"access_device_id": deviceID})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -426,6 +432,7 @@ func (h *AccessHandlers) AddAccessPointGroup(w http.ResponseWriter, r *http.Requ
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.point.add_group", "access_point", apID, "", "success", nil, map[string]any{"access_group_id": req.AccessGroupID})
 	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id})
 }
 
@@ -452,5 +459,6 @@ func (h *AccessHandlers) RemoveAccessPointGroup(w http.ResponseWriter, r *http.R
 		httputil.Error(w, http.StatusNotFound, "access group not in this access point")
 		return
 	}
+	h.audit.LogFromRequest(r, "access.point.remove_group", "access_point", apID, "", "success", nil, map[string]any{"access_group_id": groupID})
 	w.WriteHeader(http.StatusNoContent)
 }
