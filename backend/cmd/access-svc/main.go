@@ -218,6 +218,34 @@ func main() {
 		r.Get("/stats", handlers.GetStats)
 	})
 
+	r.Route("/api/v1/parking", func(r chi.Router) {
+		r.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
+		r.Use(authsvc.RequireCompany())
+
+		r.Group(func(pr chi.Router) {
+			pr.Use(authsvc.RequireWriteRole("operator", "manager", "primary_manager", "system_admin"))
+			pr.Get("/vehicles", handlers.ListParkingVehicles)
+			pr.Post("/vehicles", handlers.CreateParkingVehicle)
+			pr.Get("/vehicles/{id}", handlers.GetParkingVehicle)
+			pr.Get("/sessions", handlers.ListParkingSessions)
+			pr.Post("/sessions", handlers.CreateParkingSession)
+			pr.Get("/sessions/{id}", handlers.GetParkingSession)
+			pr.Put("/sessions/{id}/exit", handlers.ExitParkingSession)
+		})
+
+		r.Group(func(pr chi.Router) {
+			pr.Use(authsvc.RequireWriteRole("manager", "primary_manager", "system_admin"))
+			pr.Get("/lots", handlers.ListParkingLots)
+			pr.Post("/lots", handlers.CreateParkingLot)
+			pr.Get("/lots/{id}", handlers.GetParkingLot)
+			pr.Get("/zones", handlers.ListParkingZones)
+			pr.Post("/zones", handlers.CreateParkingZone)
+			pr.Get("/zones/{id}", handlers.GetParkingZone)
+			pr.Get("/fee-rules", handlers.ListParkingFeeRules)
+			pr.Post("/fee-rules", handlers.CreateParkingFeeRule)
+		})
+	})
+
 	// Start server
 	addr := fmt.Sprintf(":%d", cfg.HTTPPort)
 	srv := &http.Server{Addr: addr, Handler: r}
