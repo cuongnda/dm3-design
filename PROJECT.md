@@ -13,14 +13,15 @@ Next-gen access control & smart building platform. Codename: DM3.
 ### 1. Start Infrastructure
 ```bash
 cd ~/db   # or wherever your docker-compose file is
-docker compose up -d postgres-db-timescale nats emqx
-# Add Valkey/MinIO if needed
+docker compose up -d postgres-db-timescale nats emqx valkey minio
 ```
 
 Required services:
 - TimescaleDB `:5433`
 - NATS + JetStream `:4222`
 - EMQX MQTT `:1884` (Dashboard: `http://localhost:18083`, login: admin/public)
+- Valkey `:6380`
+- MinIO `:9002` (Console: `http://localhost:9003`)
 
 ### 2. Start Backend (VSCode)
 Open project in VSCode → Run & Debug → select **"All Backend Services"** → F5
@@ -174,6 +175,9 @@ dm3/
 
 ## Patterns & Gotchas
 - E2E pipeline: Simulator → EMQX → gateway → NATS → access-svc → TimescaleDB
+- Zone indoor map uploads are now stored in MinIO bucket `dm3` and served back through access-svc `/assets/...` routes. Keep the tenant-scoped key contract under `tenants/{tenant_id}/access/zones/{zone_id}/map.{ext}`.
+- Spatial zones are now the canonical location and map owner for access control. The console uses a tree-first zone explorer, then a zone detail page with list and map views over the same zone-scoped access points.
+- DM3 uses a shared objectstore abstraction across access-svc, identity-svc, and device-gateway. Runtime defaults currently point all managed assets at the shared `dm3` bucket with tenant-prefixed object keys.
 - Brand name: "Duall Master" (not Duali, not DMPW)
 - Users can belong to multiple companies (user_companies junction table)
 - 7-day grace period for expired JWT refresh (offline devices)

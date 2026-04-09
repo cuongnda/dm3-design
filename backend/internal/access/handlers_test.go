@@ -128,6 +128,7 @@ func TestRouteSetup(t *testing.T) {
 	r.Get("/api/v1/zones/{id}/access-points", h.ListZoneDoors)
 	r.Get("/api/v1/zones/{id}/map", h.GetZoneMap)
 	r.Put("/api/v1/zones/{id}/map", h.UpdateZoneMap)
+	r.Post("/api/v1/zones/{id}/map/upload", h.UploadZoneMap)
 
 	// Access Points
 	r.Get("/api/v1/access-points", h.ListAccessPoints)
@@ -157,8 +158,8 @@ func TestRouteSetup(t *testing.T) {
 		walkCount++
 		return nil
 	})
-	if walkCount != 31 {
-		t.Errorf("expected 31 routes, got %d", walkCount)
+	if walkCount != 32 {
+		t.Errorf("expected 32 routes, got %d", walkCount)
 	}
 }
 
@@ -288,5 +289,67 @@ func TestEventResponseJSON(t *testing.T) {
 	}
 	if _, ok := m["device_id"]; ok {
 		t.Error("device_id should not be in eventResponse JSON")
+	}
+}
+
+func TestBuildZoneMapObjectKey(t *testing.T) {
+	got := buildZoneMapObjectKey("tenant-1", "zone-1", ".png")
+	want := "tenants/tenant-1/access/zones/zone-1/map.png"
+	if got != want {
+		t.Fatalf("buildZoneMapObjectKey() = %q, want %q", got, want)
+	}
+}
+
+func TestZoneMapExtension(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+		filename    string
+		wantExt     string
+		wantOK      bool
+	}{
+		{name: "png by content type", contentType: "image/png", filename: "floor.bin", wantExt: ".png", wantOK: true},
+		{name: "jpeg by extension fallback", contentType: "application/octet-stream", filename: "floor.jpeg", wantExt: ".jpg", wantOK: true},
+		{name: "reject pdf", contentType: "application/pdf", filename: "floor.pdf", wantExt: "", wantOK: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotExt, gotOK := zoneMapExtension(tt.contentType, tt.filename)
+			if gotExt != tt.wantExt || gotOK != tt.wantOK {
+				t.Fatalf("zoneMapExtension(%q, %q) = (%q, %v), want (%q, %v)", tt.contentType, tt.filename, gotExt, gotOK, tt.wantExt, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestManagedAssetObjectKey(t *testing.T) {
+	tests := []struct {
+		name   string
+		raw    string
+		want   string
+		wantOK bool
+	}{
+		{name: "public path", raw: "/assets/tenants/t1/access/zones/z1/map.png", want: "tenants/t1/access/zones/z1/map.png", wantOK: true},
+		{name: "bare key", raw: "tenants/t1/access/zones/z1/map.png", want: "tenants/t1/access/zones/z1/map.png", wantOK: true},
+		{name: "reject traversal", raw: "/assets/../secrets.txt", want: "", wantOK: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := managedAssetObjectKey(tt.raw)
+			if got != tt.want || ok != tt.wantOK {
+				t.Fatalf("managedAssetObjectKey(%q) = (%q, %v), want (%q, %v)", tt.raw, got, ok, tt.want, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestContentTypeForExt(t *testing.T) {
+	if got := contentTypeForExt(".jpg", "application/octet-stream"); got != "image/jpeg" {
+		t.Fatalf("contentTypeForExt(.jpg) = %q", got)
+	}
+	if got := contentTypeForExt(".weird", "application/octet-stream"); got != "application/octet-stream" {
+		t.Fatalf("contentTypeForExt fallback = %q", got)
 	}
 }

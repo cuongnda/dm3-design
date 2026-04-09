@@ -16,84 +16,86 @@ Zones form a hierarchy via `parent_id` (e.g., Building → Floor → Area).
 Each zone can optionally carry location metadata and an indoor map/floor plan image
 on which Access Points can be positioned.
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| id | uuid | yes | auto | Primary key |
-| tenant_id | uuid | yes | - | Tenant isolation |
-| parent_id | uuid | no | null | Parent zone (hierarchy: building → floor → area) |
-| name | string(255) | yes | - | Display name, e.g. "Tòa A — Tầng 3" |
-| description | string(500) | no | null | Notes |
-| timezone | string(50) | no | null | IANA timezone (e.g. "Asia/Ho_Chi_Minh"). If null, inherits from parent zone or site default |
-| latitude | decimal | no | null | GPS latitude of zone centroid |
-| longitude | decimal | no | null | GPS longitude of zone centroid |
-| address | text | no | null | Human-readable address |
-| floor | string(50) | no | null | Floor/level identifier (e.g. "1F", "B1") |
-| building | string(100) | no | null | Building name |
-| map_image_url | string(500) | no | null | Path/URL to indoor map or floor plan image (stored in MinIO) |
-| map_width | int | no | null | Map image natural width in pixels (for coordinate normalization) |
-| map_height | int | no | null | Map image natural height in pixels |
-| map_metadata | jsonb | no | {} | Optional layout metadata (origin, overlays, scale hints) |
-| created_at | timestamp | yes | now() | Creation time |
-| updated_at | timestamp | yes | now() | Last update |
+| Field         | Type        | Required | Default | Description                                                                                 |
+| ------------- | ----------- | -------- | ------- | ------------------------------------------------------------------------------------------- |
+| id            | uuid        | yes      | auto    | Primary key                                                                                 |
+| tenant_id     | uuid        | yes      | -       | Tenant isolation                                                                            |
+| parent_id     | uuid        | no       | null    | Parent zone (hierarchy: building → floor → area)                                            |
+| name          | string(255) | yes      | -       | Display name, e.g. "Tòa A — Tầng 3"                                                         |
+| description   | string(500) | no       | null    | Notes                                                                                       |
+| timezone      | string(50)  | no       | null    | IANA timezone (e.g. "Asia/Ho_Chi_Minh"). If null, inherits from parent zone or site default |
+| latitude      | decimal     | no       | null    | GPS latitude of zone centroid                                                               |
+| longitude     | decimal     | no       | null    | GPS longitude of zone centroid                                                              |
+| address       | text        | no       | null    | Human-readable address                                                                      |
+| floor         | string(50)  | no       | null    | Floor/level identifier (e.g. "1F", "B1")                                                    |
+| building      | string(100) | no       | null    | Building name                                                                               |
+| map_image_url | string(500) | no       | null    | Managed tenant-scoped asset path/object reference for the indoor map image                  |
+| map_width     | int         | no       | null    | Map image natural width in pixels (for coordinate normalization)                            |
+| map_height    | int         | no       | null    | Map image natural height in pixels                                                          |
+| map_metadata  | jsonb       | no       | {}      | Optional layout metadata (origin, overlays, scale hints)                                    |
+| created_at    | timestamp   | yes      | now()   | Creation time                                                                               |
+| updated_at    | timestamp   | yes      | now()   | Last update                                                                                 |
 
 **Zone as Map Owner:** When `map_image_url` is set, Access Points assigned to this zone can store
 normalized placement coordinates (`map_x`, `map_y` in 0.0–1.0 range) to position themselves on
 the zone's floor plan. This avoids a separate Location entity for v1.
 
 ### Access Point
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| id | uuid | yes | auto | Primary key |
-| tenant_id | uuid | yes | - | Tenant isolation |
-| site_id | uuid | yes | - | Site this access point belongs to |
-| zone_id | uuid | no | null | Zone this AP belongs to (spatial container) |
-| name | string(100) | yes | - | Display name, e.g. "Cổng chính — Tòa A" |
-| description | string(500) | no | null | Notes |
-| type | APTypeEnum | yes | - | Physical type of access point |
-| location | string(200) | yes | - | Human-readable location |
-| floor | string(50) | no | null | Floor identifier |
-| building | string(100) | no | null | Building identifier |
-| map_x | decimal | no | null | X position on zone map (0.0–1.0 normalized). Only meaningful when zone has a map |
-| map_y | decimal | no | null | Y position on zone map (0.0–1.0 normalized) |
-| map_rotation | decimal | no | 0 | Rotation angle in degrees (0–360) for map icon orientation |
-| map_label | string(100) | no | null | Optional short label displayed on the zone map |
-| status | APStatusEnum | yes | offline | Current connection status |
-| state | APStateEnum | yes | locked | Current physical state |
-| mode | APModeEnum | yes | normal | Operating mode |
-| access_time_id | uuid | no | null | Passage Time schedule — when AP is freely open for everyone (overrides all AG rules) |
-| controller_id | uuid | no | null | Associated controller device |
-| device_id | uuid | no | null | Terminal device (if integrated) |
-| reader_in_type | string(50) | no | null | Entry reader model |
-| reader_out_type | string(50) | no | null | Exit reader model |
-| unlock_duration_ms | int | yes | 5000 | How long AP stays unlocked |
-| anti_passback | boolean | yes | false | Anti-passback enabled |
-| interlock_group_id | uuid | no | null | Interlock group (mantrap) |
-| emergency_unlock | boolean | yes | true | Unlock on fire alarm |
-| camera_id | uuid | no | null | Linked CCTV camera |
-| firmware_version | string(20) | no | null | Controller firmware |
-| ip_address | inet | no | null | Controller IP |
-| mac_address | macaddr | no | null | Controller MAC |
-| last_event_at | timestamp | no | null | Last access event time |
-| last_heartbeat_at | timestamp | no | null | Last device heartbeat |
-| config_version | int | yes | 0 | Current config version synced |
-| person_db_version | int | yes | 0 | Current user DB version on device |
-| rules_version | int | yes | 0 | Current rules version on device |
-| metadata | jsonb | no | {} | Extra data |
-| created_at | timestamp | yes | now() | Creation time |
-| updated_at | timestamp | yes | now() | Last update |
+
+| Field              | Type         | Required | Default | Description                                                                          |
+| ------------------ | ------------ | -------- | ------- | ------------------------------------------------------------------------------------ |
+| id                 | uuid         | yes      | auto    | Primary key                                                                          |
+| tenant_id          | uuid         | yes      | -       | Tenant isolation                                                                     |
+| site_id            | uuid         | yes      | -       | Site this access point belongs to                                                    |
+| zone_id            | uuid         | no       | null    | Zone this AP belongs to (spatial container)                                          |
+| name               | string(100)  | yes      | -       | Display name, e.g. "Cổng chính — Tòa A"                                              |
+| description        | string(500)  | no       | null    | Notes                                                                                |
+| type               | APTypeEnum   | yes      | -       | Physical type of access point                                                        |
+| location           | string(200)  | yes      | -       | Human-readable location                                                              |
+| floor              | string(50)   | no       | null    | Floor identifier                                                                     |
+| building           | string(100)  | no       | null    | Building identifier                                                                  |
+| map_x              | decimal      | no       | null    | X position on zone map (0.0–1.0 normalized). Only meaningful when zone has a map     |
+| map_y              | decimal      | no       | null    | Y position on zone map (0.0–1.0 normalized)                                          |
+| map_rotation       | decimal      | no       | 0       | Rotation angle in degrees (0–360) for map icon orientation                           |
+| map_label          | string(100)  | no       | null    | Optional short label displayed on the zone map                                       |
+| status             | APStatusEnum | yes      | offline | Current connection status                                                            |
+| state              | APStateEnum  | yes      | locked  | Current physical state                                                               |
+| mode               | APModeEnum   | yes      | normal  | Operating mode                                                                       |
+| access_time_id     | uuid         | no       | null    | Passage Time schedule — when AP is freely open for everyone (overrides all AG rules) |
+| controller_id      | uuid         | no       | null    | Associated controller device                                                         |
+| device_id          | uuid         | no       | null    | Terminal device (if integrated)                                                      |
+| reader_in_type     | string(50)   | no       | null    | Entry reader model                                                                   |
+| reader_out_type    | string(50)   | no       | null    | Exit reader model                                                                    |
+| unlock_duration_ms | int          | yes      | 5000    | How long AP stays unlocked                                                           |
+| anti_passback      | boolean      | yes      | false   | Anti-passback enabled                                                                |
+| interlock_group_id | uuid         | no       | null    | Interlock group (mantrap)                                                            |
+| emergency_unlock   | boolean      | yes      | true    | Unlock on fire alarm                                                                 |
+| camera_id          | uuid         | no       | null    | Linked CCTV camera                                                                   |
+| firmware_version   | string(20)   | no       | null    | Controller firmware                                                                  |
+| ip_address         | inet         | no       | null    | Controller IP                                                                        |
+| mac_address        | macaddr      | no       | null    | Controller MAC                                                                       |
+| last_event_at      | timestamp    | no       | null    | Last access event time                                                               |
+| last_heartbeat_at  | timestamp    | no       | null    | Last device heartbeat                                                                |
+| config_version     | int          | yes      | 0       | Current config version synced                                                        |
+| person_db_version  | int          | yes      | 0       | Current user DB version on device                                                    |
+| rules_version      | int          | yes      | 0       | Current rules version on device                                                      |
+| metadata           | jsonb        | no       | {}      | Extra data                                                                           |
+| created_at         | timestamp    | yes      | now()   | Creation time                                                                        |
+| updated_at         | timestamp    | yes      | now()   | Last update                                                                          |
 
 ### Access Group
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| id | uuid | yes | auto | Primary key |
-| tenant_id | uuid | yes | - | Tenant isolation |
-| name | string(100) | yes | - | e.g. "IT Team", "Cleaning Crew" |
-| description | string(500) | no | null | Description |
-| is_default | boolean | yes | false | Default group for new users |
-| type | string(50) | no | null | Group classification |
-| access_time_id | uuid | no | null | Access Time schedule — when AG members can use APs in this group (NULL = 24/7) |
-| created_at | timestamp | yes | now() | Creation time |
-| updated_at | timestamp | yes | now() | Last update |
+
+| Field          | Type        | Required | Default | Description                                                                    |
+| -------------- | ----------- | -------- | ------- | ------------------------------------------------------------------------------ |
+| id             | uuid        | yes      | auto    | Primary key                                                                    |
+| tenant_id      | uuid        | yes      | -       | Tenant isolation                                                               |
+| name           | string(100) | yes      | -       | e.g. "IT Team", "Cleaning Crew"                                                |
+| description    | string(500) | no       | null    | Description                                                                    |
+| is_default     | boolean     | yes      | false   | Default group for new users                                                    |
+| type           | string(50)  | no       | null    | Group classification                                                           |
+| access_time_id | uuid        | no       | null    | Access Time schedule — when AG members can use APs in this group (NULL = 24/7) |
+| created_at     | timestamp   | yes      | now()   | Creation time                                                                  |
+| updated_at     | timestamp   | yes      | now()   | Last update                                                                    |
 
 An Access Group links a set of Access Points and a set of Users. Both are M:N relationships:
 
@@ -102,6 +104,7 @@ An Access Group links a set of Access Points and a set of Users. Both are M:N re
 |-------|------|-------------|
 | access_group_id | uuid | FK, CASCADE delete |
 | access_point_id | uuid | FK, CASCADE delete |
+
 - UNIQUE constraint: `(access_group_id, access_point_id)`
 - No per-link time override — Access Time is defined at the AG level only
 
@@ -112,18 +115,20 @@ An Access Group links a set of Access Points and a set of Users. Both are M:N re
 | user_id | uuid | FK, CASCADE delete |
 | effective_from | timestamptz | When membership becomes active (default now) |
 | effective_to | timestamptz | When membership expires (NULL = permanent) |
+
 - UNIQUE constraint: `(access_group_id, user_id)`
 
 ### Access Time
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| id | uuid | yes | auto | Primary key |
-| tenant_id | uuid | yes | - | Tenant isolation |
-| name | string(100) | yes | - | e.g. "Business Hours", "24/7" |
-| timezone | string(50) | yes | Asia/Ho_Chi_Minh | Timezone |
-| is_active | boolean | yes | true | Active/inactive toggle |
-| created_at | timestamp | yes | now() | Creation time |
-| updated_at | timestamp | yes | now() | Last update |
+
+| Field      | Type        | Required | Default          | Description                   |
+| ---------- | ----------- | -------- | ---------------- | ----------------------------- |
+| id         | uuid        | yes      | auto             | Primary key                   |
+| tenant_id  | uuid        | yes      | -                | Tenant isolation              |
+| name       | string(100) | yes      | -                | e.g. "Business Hours", "24/7" |
+| timezone   | string(50)  | yes      | Asia/Ho_Chi_Minh | Timezone                      |
+| is_active  | boolean     | yes      | true             | Active/inactive toggle        |
+| created_at | timestamp   | yes      | now()            | Creation time                 |
+| updated_at | timestamp   | yes      | now()            | Last update                   |
 
 **access_time_slots** — individual time windows for an Access Time:
 | Field | Type | Description |
@@ -134,40 +139,43 @@ An Access Group links a set of Access Points and a set of Users. Both are M:N re
 | end_time | TIME | End of window |
 
 ### AccessEvent (Hypertable)
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| id | uuid | yes | auto | Primary key |
-| tenant_id | uuid | yes | - | Tenant isolation |
-| time | timestamptz | yes | - | Event timestamp (device clock) |
-| access_point_id | uuid | yes | - | Which access point |
-| user_id | uuid | no | null | Matched user (null if unknown) |
-| user_name | string(100) | no | null | Denormalized name |
-| credential_type | CredentialTypeEnum | yes | - | Method used |
-| direction | DirectionEnum | no | null | entry / exit |
-| decision | DecisionEnum | yes | - | granted / denied / forced |
-| decided_locally | boolean | yes | true | Always true in offline-first |
-| decision_time_ms | int | no | null | Time to make decision on device |
-| reason | DenialReasonEnum | no | null | Reason for denial |
-| confidence | float | no | null | Biometric match confidence 0-1 |
-| photo_ref | string(200) | no | null | MinIO reference for snapshot |
-| temperature | float | no | null | Thermal reading if enabled |
-| mask_detected | boolean | no | null | Mask detection result |
-| local_db_version | int | no | null | Device's user DB version |
-| local_person_count | int | no | null | Device's user count |
-| device_id | uuid | no | null | Source device |
-| metadata | jsonb | no | {} | Extra data |
+
+| Field              | Type               | Required | Default | Description                     |
+| ------------------ | ------------------ | -------- | ------- | ------------------------------- |
+| id                 | uuid               | yes      | auto    | Primary key                     |
+| tenant_id          | uuid               | yes      | -       | Tenant isolation                |
+| time               | timestamptz        | yes      | -       | Event timestamp (device clock)  |
+| access_point_id    | uuid               | yes      | -       | Which access point              |
+| user_id            | uuid               | no       | null    | Matched user (null if unknown)  |
+| user_name          | string(100)        | no       | null    | Denormalized name               |
+| credential_type    | CredentialTypeEnum | yes      | -       | Method used                     |
+| direction          | DirectionEnum      | no       | null    | entry / exit                    |
+| decision           | DecisionEnum       | yes      | -       | granted / denied / forced       |
+| decided_locally    | boolean            | yes      | true    | Always true in offline-first    |
+| decision_time_ms   | int                | no       | null    | Time to make decision on device |
+| reason             | DenialReasonEnum   | no       | null    | Reason for denial               |
+| confidence         | float              | no       | null    | Biometric match confidence 0-1  |
+| photo_ref          | string(200)        | no       | null    | MinIO reference for snapshot    |
+| temperature        | float              | no       | null    | Thermal reading if enabled      |
+| mask_detected      | boolean            | no       | null    | Mask detection result           |
+| local_db_version   | int                | no       | null    | Device's user DB version        |
+| local_person_count | int                | no       | null    | Device's user count             |
+| device_id          | uuid               | no       | null    | Source device                   |
+| metadata           | jsonb              | no       | {}      | Extra data                      |
 
 ### InterlockGroup
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| id | uuid | yes | auto | Primary key |
-| tenant_id | uuid | yes | - | Tenant isolation |
-| name | string(100) | yes | - | e.g. "Mantrap Kho quỹ" |
-| access_point_ids | uuid[] | yes | - | Access points in group (must be 2+) |
-| mode | InterlockModeEnum | yes | mutual_exclusive | Interlock logic |
-| created_at | timestamp | yes | now() | Creation time |
+
+| Field            | Type              | Required | Default          | Description                         |
+| ---------------- | ----------------- | -------- | ---------------- | ----------------------------------- |
+| id               | uuid              | yes      | auto             | Primary key                         |
+| tenant_id        | uuid              | yes      | -                | Tenant isolation                    |
+| name             | string(100)       | yes      | -                | e.g. "Mantrap Kho quỹ"              |
+| access_point_ids | uuid[]            | yes      | -                | Access points in group (must be 2+) |
+| mode             | InterlockModeEnum | yes      | mutual_exclusive | Interlock logic                     |
+| created_at       | timestamp         | yes      | now()            | Creation time                       |
 
 ### Enums
+
 ```
 APTypeEnum: door | gate | barrier | turnstile | lift
 APStatusEnum: online | offline | alarm | warning
@@ -183,6 +191,7 @@ InterlockModeEnum: mutual_exclusive | sequential
 ## API Endpoints
 
 ### GET /api/v1/access/zones/{id}/map
+
 - **Auth:** role >= viewer
 - **Description:** Returns the zone's map metadata plus placed access points for layout UIs.
 - **Response 200:**
@@ -192,10 +201,10 @@ InterlockModeEnum: mutual_exclusive | sequential
       "id": "uuid",
       "name": "Tòa A — Tầng 3",
       "timezone": "Asia/Ho_Chi_Minh",
-      "map_image_url": "https://cdn.example.com/maps/floor-3.png",
+      "map_image_url": "/assets/tenants/{tenant_id}/access/zones/{zone_id}/map.png",
       "map_width": 1600,
       "map_height": 900,
-      "map_metadata": {"origin": "top-left"}
+      "map_metadata": { "origin": "top-left" }
     },
     "access_points": [
       {
@@ -212,19 +221,28 @@ InterlockModeEnum: mutual_exclusive | sequential
   ```
 
 ### PUT /api/v1/access/zones/{id}/map
+
 - **Auth:** role >= admin
 - **Description:** Updates the zone-owned indoor map metadata without editing unrelated zone fields.
 - **Body:**
   ```json
   {
-    "map_image_url": "https://cdn.example.com/maps/floor-3.png",
+    "map_image_url": "/assets/tenants/{tenant_id}/access/zones/{zone_id}/map.png",
     "map_width": 1600,
     "map_height": 900,
-    "map_metadata": {"origin": "top-left", "unit": "normalized"}
+    "map_metadata": { "origin": "top-left", "unit": "normalized" }
   }
   ```
 
+### POST /api/v1/access/zones/{id}/map/upload
+
+- **Auth:** role >= admin
+- **Description:** Uploads an indoor map image for the zone using multipart/form-data. The backend stores the binary in MinIO under the managed tenant-scoped object key `tenants/{tenant_id}/access/zones/{zone_id}/map.{ext}`, serves it back through `GET /assets/...`, then persists the resulting `map_image_url`, `map_width`, and `map_height` on the zone.
+- **Body:** `multipart/form-data` with field `map` (PNG/JPEG/GIF)
+- **Response 200:** Updated Zone resource
+
 ### GET /api/v1/access/access-points
+
 - **Auth:** Bearer token, role >= viewer
 - **Query params:**
   | Param | Type | Default | Description |
@@ -264,11 +282,13 @@ InterlockModeEnum: mutual_exclusive | sequential
 - **Errors:** 401, 403, 422
 
 ### GET /api/v1/access/access-points/{id}
+
 - **Auth:** role >= viewer
 - **Response 200:** Full Access Point object with nested controller info, linked camera, access groups, recent events (last 10)
 - **Errors:** 401, 403, 404
 
 ### POST /api/v1/access/access-points
+
 - **Auth:** role >= admin
 - **Body:**
   ```json
@@ -297,6 +317,7 @@ InterlockModeEnum: mutual_exclusive | sequential
 - **Errors:** 401, 403, 409 (duplicate name), 422
 
 ### PUT /api/v1/access/access-points/{id}
+
 - **Auth:** role >= admin
 - **Body:** Partial access point fields
 - **Side effects:** Audit log, MQTT `cfg.patch` to device if config changed; if `access_time_id` changed, triggers `cfg.access_rules` re-sync to this AP's device
@@ -304,12 +325,14 @@ InterlockModeEnum: mutual_exclusive | sequential
 - **Errors:** 401, 403, 404, 422
 
 ### DELETE /api/v1/access/access-points/{id}
+
 - **Auth:** role >= site_admin
 - **Side effects:** Audit log, remove AP from all access groups, notify device
 - **Response 204:** Deleted
 - **Errors:** 401, 403, 404, 409 (AP has active alarm)
 
 ### POST /api/v1/access/access-points/{id}/unlock
+
 - **Auth:** role >= operator
 - **Body:**
   ```json
@@ -331,12 +354,14 @@ InterlockModeEnum: mutual_exclusive | sequential
 - **Errors:** 401, 403, 404, 408 (device timeout), 503 (device offline)
 
 ### POST /api/v1/access/access-points/{id}/lock
+
 - **Auth:** role >= operator
 - **Side effects:** MQTT `cmd.door` (action=lock) → device, audit log
 - **Response 200:** Same as unlock
 - **Errors:** 401, 403, 404, 408, 503
 
 ### POST /api/v1/access/access-points/{id}/hold-open
+
 - **Auth:** role >= admin
 - **Body:** `{ "duration_ms": 60000, "reason": "Sự kiện công ty" }`
 - **Side effects:** MQTT `cmd.door` (action=hold_open), audit log
@@ -344,6 +369,7 @@ InterlockModeEnum: mutual_exclusive | sequential
 - **Errors:** 401, 403, 404, 408, 503
 
 ### GET /api/v1/access/access-points/{id}/events
+
 - **Auth:** role >= viewer
 - **Query params:**
   | Param | Type | Default | Description |
@@ -378,6 +404,7 @@ InterlockModeEnum: mutual_exclusive | sequential
   ```
 
 ### POST /api/v1/access/access-points/{id}/sync
+
 - **Auth:** role >= admin
 - **Description:** Force full user DB + rules sync to a specific device
 - **Side effects:** MQTT `cfg.person_sync` (action=full_sync) + `cfg.access_rules` (action=full_sync)
@@ -385,6 +412,7 @@ InterlockModeEnum: mutual_exclusive | sequential
 - **Errors:** 401, 403, 404, 503 (device offline)
 
 ### GET /api/v1/access/access-points/{id}/sync-status
+
 - **Auth:** role >= operator
 - **Response 200:**
   ```json
@@ -403,6 +431,7 @@ InterlockModeEnum: mutual_exclusive | sequential
   ```
 
 ### GET /api/v1/access/zones
+
 - **Auth:** role >= viewer
 - **Query params:**
   | Param | Type | Default | Description |
@@ -412,8 +441,10 @@ InterlockModeEnum: mutual_exclusive | sequential
   | parent_id | uuid | - | Filter by parent zone |
   | search | string | - | Search zone name |
 - **Response 200:** Paginated list of zones with `access_point_count`
+- **UI usage note:** The console consumes this as a tree-first explorer. Search/filter should preserve enough ancestor context for operators to understand where a matched zone sits in the hierarchy.
 
 ### POST /api/v1/access/zones
+
 - **Auth:** role >= admin
 - **Body:**
   ```json
@@ -427,7 +458,7 @@ InterlockModeEnum: mutual_exclusive | sequential
     "address": "123 Nguyễn Huệ, Quận 1",
     "floor": "3F",
     "building": "Tòa A",
-    "map_image_url": "zones/toa-a-3f-floorplan.png",
+    "map_image_url": "/assets/tenants/{tenant_id}/access/zones/{zone_id}/map.png",
     "map_width": 1920,
     "map_height": 1080
   }
@@ -437,26 +468,31 @@ InterlockModeEnum: mutual_exclusive | sequential
 - **Errors:** 401, 403, 422
 
 ### GET /api/v1/access/zones/{id}
+
 - **Auth:** role >= viewer
 - **Response 200:** Full zone object with `access_point_count`
 
 ### PUT /api/v1/access/zones/{id}
+
 - **Auth:** role >= admin
 - **Body:** Partial zone fields (any field from POST body)
 - **Side effects:** Audit log
 - **Response 200:** Updated zone
 
 ### DELETE /api/v1/access/zones/{id}
+
 - **Auth:** role >= admin
 - **Side effects:** Audit log, access points in this zone have `zone_id` set to null
 - **Response 204**
 
 ### GET /api/v1/access/access-groups
+
 - **Auth:** role >= viewer
 - **Query params:** search, page, limit
 - **Response 200:** Paginated list of Access Groups with nested access time, AP count, user count
 
 ### POST /api/v1/access/access-groups
+
 - **Auth:** role >= admin
 - **Body:**
   ```json
@@ -471,11 +507,13 @@ InterlockModeEnum: mutual_exclusive | sequential
 - **Errors:** 401, 403, 409 (duplicate name), 422
 
 ### GET /api/v1/access/access-groups/{id}
+
 - **Auth:** role >= viewer
 - **Response 200:** Full Access Group with access points, users (with temporal membership), and access time
 - **Errors:** 401, 403, 404
 
 ### PUT /api/v1/access/access-groups/{id}
+
 - **Auth:** role >= admin
 - **Body:** Partial access group fields (name, description, access_time_id)
 - **Side effects:** Audit log, triggers `cfg.access_rules` re-sync to all APs in this AG
@@ -483,16 +521,19 @@ InterlockModeEnum: mutual_exclusive | sequential
 - **Errors:** 401, 403, 404, 422
 
 ### DELETE /api/v1/access/access-groups/{id}
+
 - **Auth:** role >= admin
 - **Side effects:** Audit log, cascades to remove all AP and user links, triggers re-sync
 - **Response 204**
 - **Errors:** 401, 403, 404
 
 ### GET /api/v1/access/access-groups/{id}/access-points
+
 - **Auth:** role >= viewer
 - **Response 200:** List of Access Points assigned to this AG
 
 ### POST /api/v1/access/access-groups/{id}/access-points
+
 - **Auth:** role >= admin
 - **Body:** `{ "access_point_id": "uuid" }`
 - **Side effects:** Audit log, triggers `cfg.access_rules` re-sync to the added AP's device
@@ -500,16 +541,19 @@ InterlockModeEnum: mutual_exclusive | sequential
 - **Errors:** 401, 403, 404, 409 (already assigned)
 
 ### DELETE /api/v1/access/access-groups/{id}/access-points/{apId}
+
 - **Auth:** role >= admin
 - **Side effects:** Audit log, triggers `cfg.access_rules` re-sync to the removed AP's device
 - **Response 204**
 - **Errors:** 401, 403, 404
 
 ### GET /api/v1/access/access-groups/{id}/users
+
 - **Auth:** role >= viewer
 - **Response 200:** List of users in this AG with their `effective_from` / `effective_to` membership bounds
 
 ### POST /api/v1/access/access-groups/{id}/users
+
 - **Auth:** role >= admin
 - **Body:**
   ```json
@@ -524,6 +568,7 @@ InterlockModeEnum: mutual_exclusive | sequential
 - **Errors:** 401, 403, 404, 409 (already a member)
 
 ### PUT /api/v1/access/access-groups/{id}/users/{userId}
+
 - **Auth:** role >= admin
 - **Body:** `{ "effective_from": "...", "effective_to": "..." }`
 - **Description:** Update temporal membership bounds for a user in this AG
@@ -532,35 +577,38 @@ InterlockModeEnum: mutual_exclusive | sequential
 - **Errors:** 401, 403, 404
 
 ### DELETE /api/v1/access/access-groups/{id}/users/{userId}
+
 - **Auth:** role >= admin
 - **Side effects:** Audit log, triggers `cfg.access_rules` re-sync to all APs in this AG
 - **Response 204**
 - **Errors:** 401, 403, 404
 
 ### GET /api/v1/access/interlock-groups
+
 - **Auth:** role >= viewer
 - **Query params:** site_id (required)
 - **Response 200:** List of interlock groups
 
 ### POST /api/v1/access/interlock-groups
+
 - **Auth:** role >= site_admin
 - **Body:** InterlockGroup object
 - **Response 201:** Created interlock group
 
 ## MQTT Topics
 
-| Topic | Direction | QoS | Payload Schema | Description |
-|-------|-----------|-----|----------------|-------------|
-| `dm/{tid}/device/{did}/evt` (type: access.log) | device→server | 1 | See mqtt-protocol.md §4.1 | Access event log — decision already made locally |
-| `dm/{tid}/device/{did}/evt` (type: door.state) | device→server | 1 | See mqtt-protocol.md §4.2 | AP physical state change |
-| `dm/{tid}/device/{did}/cmd` (type: cmd.door) | server→device | 2 | `{action, access_point_id, duration_ms, reason, operator_id}` | Remote AP control |
-| `dm/{tid}/device/{did}/cmd/resp` (type: cmd.door.resp) | device→server | 2 | `{access_point_id, current_state, executed_at}` | AP command response |
-| `dm/{tid}/device/{did}/cfg` (type: cfg.person_sync) | server→device | 2 | See mqtt-protocol.md §7.3 | User DB sync to device |
-| `dm/{tid}/device/{did}/cfg` (type: cfg.access_rules) | server→device | 2 | See mqtt-protocol.md §7.5 | Access rules sync — passage_time + per-user schedules from AGs |
-| `dm/{tid}/device/{did}/cfg` (type: cfg.blacklist) | server→device | 2 | See mqtt-protocol.md §7.4 | Blacklist push (priority) |
-| `dm/{tid}/device/{did}/cfg/ack` | device→server | 2 | Ack with local versions and counts | Sync confirmation |
-| `dm/{tid}/device/{did}/sta` (type: status.heartbeat) | device→server | 0 | See mqtt-protocol.md §5.1 | Device health + sync status |
-| `dm/{tid}/emergency/broadcast` (type: cmd.lockdown) | server→all | 2 | See mqtt-protocol.md §6.5 | Emergency lockdown broadcast |
+| Topic                                                  | Direction     | QoS | Payload Schema                                                | Description                                                    |
+| ------------------------------------------------------ | ------------- | --- | ------------------------------------------------------------- | -------------------------------------------------------------- |
+| `dm/{tid}/device/{did}/evt` (type: access.log)         | device→server | 1   | See mqtt-protocol.md §4.1                                     | Access event log — decision already made locally               |
+| `dm/{tid}/device/{did}/evt` (type: door.state)         | device→server | 1   | See mqtt-protocol.md §4.2                                     | AP physical state change                                       |
+| `dm/{tid}/device/{did}/cmd` (type: cmd.door)           | server→device | 2   | `{action, access_point_id, duration_ms, reason, operator_id}` | Remote AP control                                              |
+| `dm/{tid}/device/{did}/cmd/resp` (type: cmd.door.resp) | device→server | 2   | `{access_point_id, current_state, executed_at}`               | AP command response                                            |
+| `dm/{tid}/device/{did}/cfg` (type: cfg.person_sync)    | server→device | 2   | See mqtt-protocol.md §7.3                                     | User DB sync to device                                         |
+| `dm/{tid}/device/{did}/cfg` (type: cfg.access_rules)   | server→device | 2   | See mqtt-protocol.md §7.5                                     | Access rules sync — passage_time + per-user schedules from AGs |
+| `dm/{tid}/device/{did}/cfg` (type: cfg.blacklist)      | server→device | 2   | See mqtt-protocol.md §7.4                                     | Blacklist push (priority)                                      |
+| `dm/{tid}/device/{did}/cfg/ack`                        | device→server | 2   | Ack with local versions and counts                            | Sync confirmation                                              |
+| `dm/{tid}/device/{did}/sta` (type: status.heartbeat)   | device→server | 0   | See mqtt-protocol.md §5.1                                     | Device health + sync status                                    |
+| `dm/{tid}/emergency/broadcast` (type: cmd.lockdown)    | server→all    | 2   | See mqtt-protocol.md §6.5                                     | Emergency lockdown broadcast                                   |
 
 ## Business Rules
 
@@ -584,25 +632,29 @@ InterlockModeEnum: mutual_exclusive | sequential
 18. **BR-AC-018 — Zone-Owned Spatial Context:** Zone is the canonical spatial container for access control. Indoor maps, zone-local timezone, and spatial metadata belong to the zone.
 19. **BR-AC-019 — Relative Placement:** Access Point coordinates are always interpreted relative to the owning zone map. Reassigning a point to another zone requires placement recalibration.
 20. **BR-AC-020 — Optional Indoor Map:** Zones may carry location metadata and timezone without an indoor map asset. Spatial placement becomes active only when a map is configured.
+21. **BR-AC-021 — Tree-First Zone Operations:** Zone management UI must present the hierarchy first so operators can understand building → floor → area relationships without switching screens.
+22. **BR-AC-022 — Search With Hierarchy Context:** When search/filter narrows the zone explorer, matched zones should remain visible with their ancestor chain so their physical context is still clear.
+23. **BR-AC-023 — Dual Access Point Views:** Zone detail must provide both a list view and a map view over the same zone-scoped access point set.
+24. **BR-AC-024 — Direct Map Editing:** In map view, operators may drag access point markers directly on the indoor map. Updated normalized coordinates persist through the standard access point update API.
 
 ## Permissions Matrix
 
-| Action | viewer | operator | admin | site_admin | super_admin |
-|--------|--------|----------|-------|------------|-------------|
-| List access points | ✅ | ✅ | ✅ | ✅ | ✅ |
-| View access point detail | ✅ | ✅ | ✅ | ✅ | ✅ |
-| View events | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Remote unlock/lock | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Hold open | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Create/edit access points | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Delete access points | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Create/edit access groups | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Delete access groups | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Manage AG members (users) | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Manage AG access points | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Force device sync | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Create interlock groups | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Emergency lockdown | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Action                    | viewer | operator | admin | site_admin | super_admin |
+| ------------------------- | ------ | -------- | ----- | ---------- | ----------- |
+| List access points        | ✅     | ✅       | ✅    | ✅         | ✅          |
+| View access point detail  | ✅     | ✅       | ✅    | ✅         | ✅          |
+| View events               | ✅     | ✅       | ✅    | ✅         | ✅          |
+| Remote unlock/lock        | ❌     | ✅       | ✅    | ✅         | ✅          |
+| Hold open                 | ❌     | ❌       | ✅    | ✅         | ✅          |
+| Create/edit access points | ❌     | ❌       | ✅    | ✅         | ✅          |
+| Delete access points      | ❌     | ❌       | ❌    | ✅         | ✅          |
+| Create/edit access groups | ❌     | ❌       | ✅    | ✅         | ✅          |
+| Delete access groups      | ❌     | ❌       | ✅    | ✅         | ✅          |
+| Manage AG members (users) | ❌     | ❌       | ✅    | ✅         | ✅          |
+| Manage AG access points   | ❌     | ❌       | ✅    | ✅         | ✅          |
+| Force device sync         | ❌     | ❌       | ✅    | ✅         | ✅          |
+| Create interlock groups   | ❌     | ❌       | ❌    | ✅         | ✅          |
+| Emergency lockdown        | ❌     | ✅       | ✅    | ✅         | ✅          |
 
 ## Offline Behavior
 
@@ -617,42 +669,42 @@ InterlockModeEnum: mutual_exclusive | sequential
 
 ## UI Pages
 
-| Route | Page | Key Components |
-|-------|------|----------------|
-| /secure/access-control | Access Point List | DataTable with status tabs (All/Online/Offline/Alarm/Warning), filters, stat cards |
+| Route                      | Page                | Key Components                                                                                                   |
+| -------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| /secure/access-control     | Access Point List   | DataTable with status tabs (All/Online/Offline/Alarm/Warning), filters, stat cards                               |
 | /secure/access-control/:id | Access Point Detail | AP info, state controls (unlock/lock/hold), live event timeline, linked camera, access groups tab, device health |
-| /secure/zones | Zone List | DataTable of zones with spatial info, hierarchy, map indicator |
-| /secure/zones/:id | Zone Detail | Zone info, indoor map with AP placements, child zones |
-| /secure/access-groups | Access Groups | DataTable of AGs, create/edit dialog with access time picker |
-| /secure/access-groups/:id | Access Group Detail | AG info, access points tab, users tab (with effective_from/effective_to), access time assignment |
+| /secure/zones              | Zone Explorer       | Tree-first zone explorer with hierarchy, inline search/filter, map readiness, AP counts                          |
+| /secure/zones/:id          | Zone Detail         | Zone info, child zones, Access Point List View, Access Point Map View with direct marker repositioning           |
+| /secure/access-groups      | Access Groups       | DataTable of AGs, create/edit dialog with access time picker                                                     |
+| /secure/access-groups/:id  | Access Group Detail | AG info, access points tab, users tab (with effective_from/effective_to), access time assignment                 |
 
 ## Events & Audit Log
 
-| Event Type | Trigger | Payload | Retention |
-|------------|---------|---------|-----------|
-| access.ap.created | POST create | full access point resource | 1 year |
-| access.ap.updated | PUT update | diff only | 1 year |
-| access.ap.deleted | DELETE | id + actor | permanent |
-| access.ap.unlocked | POST unlock command | access_point_id, actor, reason, duration | 1 year |
-| access.ap.locked | POST lock command | access_point_id, actor | 1 year |
-| access.ap.held_open | POST hold-open | access_point_id, actor, duration | 1 year |
-| access.event.granted | Device access.log | user, access_point, credential, time | 2 years |
-| access.event.denied | Device access.log | user/unknown, access_point, reason, time | 2 years |
-| access.event.forced | Device door.state forced | access_point, time, photo | permanent |
-| access.group.created | POST access group | full AG resource | 1 year |
-| access.group.updated | PUT access group | diff | 1 year |
-| access.group.deleted | DELETE access group | id + actor | permanent |
-| access.group.ap_added | POST AG access point | ag_id, access_point_id, actor | 1 year |
-| access.group.ap_removed | DELETE AG access point | ag_id, access_point_id, actor | 1 year |
-| access.group.user_added | POST AG user | ag_id, user_id, effective_from, effective_to, actor | 1 year |
-| access.group.user_updated | PUT AG user | ag_id, user_id, membership bounds diff, actor | 1 year |
-| access.group.user_removed | DELETE AG user | ag_id, user_id, actor | 1 year |
-| access.sync.initiated | POST sync | access_point_id, sync_type, actor | 90 days |
-| access.sync.completed | cfg/ack received | access_point_id, versions, counts | 90 days |
-| access.alarm.door_forced | Device alarm event | access_point_id, time, photo | permanent |
-| access.alarm.door_held | Device alarm event | access_point_id, duration | 1 year |
-| access.lockdown.activated | Emergency broadcast | actor, level, zones | permanent |
-| access.lockdown.deactivated | Emergency deactivate | actor, override_code_hash | permanent |
+| Event Type                  | Trigger                  | Payload                                             | Retention |
+| --------------------------- | ------------------------ | --------------------------------------------------- | --------- |
+| access.ap.created           | POST create              | full access point resource                          | 1 year    |
+| access.ap.updated           | PUT update               | diff only                                           | 1 year    |
+| access.ap.deleted           | DELETE                   | id + actor                                          | permanent |
+| access.ap.unlocked          | POST unlock command      | access_point_id, actor, reason, duration            | 1 year    |
+| access.ap.locked            | POST lock command        | access_point_id, actor                              | 1 year    |
+| access.ap.held_open         | POST hold-open           | access_point_id, actor, duration                    | 1 year    |
+| access.event.granted        | Device access.log        | user, access_point, credential, time                | 2 years   |
+| access.event.denied         | Device access.log        | user/unknown, access_point, reason, time            | 2 years   |
+| access.event.forced         | Device door.state forced | access_point, time, photo                           | permanent |
+| access.group.created        | POST access group        | full AG resource                                    | 1 year    |
+| access.group.updated        | PUT access group         | diff                                                | 1 year    |
+| access.group.deleted        | DELETE access group      | id + actor                                          | permanent |
+| access.group.ap_added       | POST AG access point     | ag_id, access_point_id, actor                       | 1 year    |
+| access.group.ap_removed     | DELETE AG access point   | ag_id, access_point_id, actor                       | 1 year    |
+| access.group.user_added     | POST AG user             | ag_id, user_id, effective_from, effective_to, actor | 1 year    |
+| access.group.user_updated   | PUT AG user              | ag_id, user_id, membership bounds diff, actor       | 1 year    |
+| access.group.user_removed   | DELETE AG user           | ag_id, user_id, actor                               | 1 year    |
+| access.sync.initiated       | POST sync                | access_point_id, sync_type, actor                   | 90 days   |
+| access.sync.completed       | cfg/ack received         | access_point_id, versions, counts                   | 90 days   |
+| access.alarm.door_forced    | Device alarm event       | access_point_id, time, photo                        | permanent |
+| access.alarm.door_held      | Device alarm event       | access_point_id, duration                           | 1 year    |
+| access.lockdown.activated   | Emergency broadcast      | actor, level, zones                                 | permanent |
+| access.lockdown.deactivated | Emergency deactivate     | actor, override_code_hash                           | permanent |
 
 ## Integration Points
 

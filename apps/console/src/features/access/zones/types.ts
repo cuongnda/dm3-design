@@ -52,6 +52,7 @@ export interface ZoneMapResponse {
     map_x?: number;
     map_y?: number;
     map_rotation?: number;
+    map_label?: string;
     created_at: string;
     updated_at: string;
   }>;

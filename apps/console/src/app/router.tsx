@@ -59,6 +59,9 @@ const EmergencyPage = lazy(() =>
 const ZonesPage = lazy(() =>
   import('@/features/access/zones/ZonesPage').then((m) => ({ default: m.ZonesPage }))
 );
+const ZoneDetailPage = lazy(() =>
+  import('@/features/access/zones/ZoneDetailPage').then((m) => ({ default: m.ZoneDetailPage }))
+);
 const AccessPointsPage = lazy(() =>
   import('@/features/access/access-points/AccessPointsPage').then((m) => ({ default: m.AccessPointsPage }))
 );
@@ -257,6 +260,7 @@ export const Router = createBrowserRouter([
 
               // ACCESS (new)
               { path: 'access/zones', element: <LazyWrap><ZonesPage /></LazyWrap> },
+              { path: 'access/zones/:id', element: <LazyWrap><ZoneDetailPage /></LazyWrap> },
               { path: 'access/access-points', element: <LazyWrap><AccessPointsPage /></LazyWrap> },
               { path: 'access/access-points/:id', element: <LazyWrap><AccessPointDetailPage /></LazyWrap> },
               { path: 'access/access-groups', element: <LazyWrap><AccessGroupsPage /></LazyWrap> },

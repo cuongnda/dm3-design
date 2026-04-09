@@ -1215,12 +1215,14 @@ Hardware requirements (per camera):
 │  ┌──────────────────────────────────────────┐                       │
 │  │           MinIO                           │                       │
 │  │                                          │                       │
-│  │  Bucket per tenant:                       │                       │
-│  │  /{tenant_id}/clips/                      │                       │
-│  │  /{tenant_id}/photos/                     │                       │
-│  │  /{tenant_id}/documents/                  │                       │
+│  │  Shared bucket + tenant-prefixed keys:   │                       │
+│  │  tenants/{tenant_id}/access/...          │                       │
+│  │  tenants/{tenant_id}/identity/...        │                       │
+│  │  tenants/{tenant_id}/devices/...         │                       │
 │  │                                          │                       │
-│  │  IAM policies restrict bucket access      │                       │
+│  │  Services use a shared objectstore        │                       │
+│  │  abstraction and keep public serving      │                       │
+│  │  behind domain routes where needed        │                       │
 │  └──────────────────────────────────────────┘                       │
 │                                                                      │
 │  ┌──────────────────────────────────────────┐                       │
@@ -1240,7 +1242,7 @@ Onboarding:
   1. tenant-svc creates tenant record
   2. Keycloak realm or client created for tenant
   3. RLS policies automatically apply (tenant_id column)
-  4. MinIO bucket created
+  4. Shared MinIO bucket/policies available and tenant keyspace ready
   5. EMQX ACLs configured for tenant MQTT topics
   6. Default admin user created, welcome email sent
 

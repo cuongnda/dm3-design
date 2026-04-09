@@ -12,9 +12,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
+
+const testTenantID = "00000000-0000-0000-0000-000000000001"
 
 func setupTestDB(t *testing.T) *db.DB {
 	t.Helper()
@@ -31,6 +34,22 @@ func setupTestDB(t *testing.T) *db.DB {
 
 func setupRouter(h *IdentityHandlers) http.Handler {
 	r := httputil.NewRouter()
+
+	// Inject test auth context so handlers see a valid tenant
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := authsvc.WithClaims(r.Context(), &authsvc.AccessClaims{
+				Sub:   "test-user",
+				CID:   testTenantID,
+				Email: "test@example.com",
+				Role:  "primary_manager",
+				Roles: []string{"primary_manager"},
+			})
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	})
+	r.Use(authsvc.RequireCompany())
+
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/users", h.ListUsers)
 		r.Post("/users", h.CreateUser)
@@ -63,7 +82,7 @@ func TestPersonsCRUD(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewIdentityHandlers(database, nil, nil)
+	h := NewIdentityHandlers(database, nil, nil, nil)
 	router := setupRouter(h)
 
 	// Create
@@ -100,12 +119,13 @@ func TestPersonsCRUD(t *testing.T) {
 
 	var listResp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &listResp)
-	if listResp["total"].(float64) < 1 {
+	pagination, _ := listResp["pagination"].(map[string]any)
+	if pagination == nil || pagination["total"].(float64) < 1 {
 		t.Fatal("expected at least 1 user in search results")
 	}
 
 	// Update
-	body = `{"department":"Sales"}`
+	body = `{"position":"Sales Manager"}`
 	req = httptest.NewRequest("PUT", "/api/v1/users/"+userID, bytes.NewBufferString(body))
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -114,10 +134,15 @@ func TestPersonsCRUD(t *testing.T) {
 		t.Fatalf("update user: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var updated map[string]any
-	json.Unmarshal(w.Body.Bytes(), &updated)
-	if updated["department"] != "Sales" {
-		t.Fatalf("expected department Sales, got %v", updated["department"])
+	// Verify update by fetching the user
+	req = httptest.NewRequest("GET", "/api/v1/users/"+userID, nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	var getResp map[string]any
+	json.Unmarshal(w.Body.Bytes(), &getResp)
+	updated, _ := getResp["user"].(map[string]any)
+	if updated == nil || updated["position"] != "Sales Manager" {
+		t.Fatalf("expected position Sales Manager, got %v", updated["position"])
 	}
 
 	// Delete
@@ -125,8 +150,8 @@ func TestPersonsCRUD(t *testing.T) {
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("delete user: expected 204, got %d", w.Code)
+	if w.Code != http.StatusOK {
+		t.Fatalf("delete user: expected 200, got %d", w.Code)
 	}
 
 	// Verify deleted
@@ -142,7 +167,7 @@ func TestCredentialsCRUD(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewIdentityHandlers(database, nil, nil)
+	h := NewIdentityHandlers(database, nil, nil, nil)
 	router := setupRouter(h)
 
 	// Create user first
@@ -213,7 +238,7 @@ func TestGroupsCRUD(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewIdentityHandlers(database, nil, nil)
+	h := NewIdentityHandlers(database, nil, nil, nil)
 	router := setupRouter(h)
 
 	// Create group
@@ -231,7 +256,7 @@ func TestGroupsCRUD(t *testing.T) {
 	groupID := group["id"].(string)
 
 	// Create a user to add as member
-	body = `{"first_name":"Member","last_name":"One"}`
+	body = `{"first_name":"Member","last_name":"One","email":"member@test.com"}`
 	req = httptest.NewRequest("POST", "/api/v1/users", bytes.NewBufferString(body))
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -240,7 +265,7 @@ func TestGroupsCRUD(t *testing.T) {
 	userID := user["id"].(string)
 
 	// Add member
-	body = fmt.Sprintf(`{"person_id":"%s"}`, userID)
+	body = fmt.Sprintf(`{"user_id":"%s"}`, userID)
 	req = httptest.NewRequest("POST", fmt.Sprintf("/api/v1/groups/%s/members", groupID), bytes.NewBufferString(body))
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -291,7 +316,7 @@ func TestSyncEndpoint(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewIdentityHandlers(database, nil, nil)
+	h := NewIdentityHandlers(database, nil, nil, nil)
 	router := setupRouter(h)
 
 	// Sync with epoch gets all
@@ -322,7 +347,7 @@ func TestStatsEndpoint(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewIdentityHandlers(database, nil, nil)
+	h := NewIdentityHandlers(database, nil, nil, nil)
 	router := setupRouter(h)
 
 	req := httptest.NewRequest("GET", "/api/v1/stats", nil)
@@ -344,7 +369,7 @@ func TestValidation(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewIdentityHandlers(database, nil, nil)
+	h := NewIdentityHandlers(database, nil, nil, nil)
 	router := setupRouter(h)
 
 	// Missing required fields
@@ -370,5 +395,36 @@ func TestValidation(t *testing.T) {
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("not found: expected 404, got %d", w.Code)
+	}
+}
+
+func TestManagedIdentityAssetObjectKey(t *testing.T) {
+	tests := []struct {
+		name   string
+		raw    string
+		want   string
+		wantOK bool
+	}{
+		{name: "public path", raw: "/photos/tenants/t1/identity/users/u1/photo.png", want: "tenants/t1/identity/users/u1/photo.png", wantOK: true},
+		{name: "bare key", raw: "tenants/t1/identity/users/u1/avatar.jpg", want: "tenants/t1/identity/users/u1/avatar.jpg", wantOK: true},
+		{name: "reject traversal", raw: "/photos/../secret.txt", want: "", wantOK: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := managedIdentityAssetObjectKey(tt.raw)
+			if got != tt.want || ok != tt.wantOK {
+				t.Fatalf("managedIdentityAssetObjectKey(%q) = (%q, %v), want (%q, %v)", tt.raw, got, ok, tt.want, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestIdentityImageExtension(t *testing.T) {
+	ext, contentType, ok := identityImageExtension("", "avatar.jpeg", []byte(""))
+	if !ok || ext != ".jpg" || contentType != "image/jpeg" {
+		t.Fatalf("identityImageExtension by filename = (%q, %q, %v)", ext, contentType, ok)
+	}
+	if _, _, ok := identityImageExtension("application/pdf", "avatar.pdf", []byte("not image")); ok {
+		t.Fatal("expected pdf upload to be rejected")
 	}
 }

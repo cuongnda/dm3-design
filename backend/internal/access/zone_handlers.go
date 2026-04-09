@@ -1,10 +1,19 @@
 package access
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"io"
 	"log/slog"
 	"net/http"
+	pathpkg "path"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -20,6 +29,10 @@ import (
 const zoneSelectCols = `z.id, z.tenant_id, z.parent_id, z.name, z.description,
 	z.timezone, z.latitude, z.longitude, z.address, z.floor, z.building,
 	z.map_image_url, z.map_width, z.map_height`
+
+const zoneReturningCols = `id, tenant_id, parent_id, name, description,
+	timezone, latitude, longitude, address, floor, building,
+	map_image_url, map_width, map_height`
 
 // scanZone scans all zone columns (including spatial fields) from a row.
 func scanZone(row interface{ Scan(dest ...any) error }, z *models.Zone) error {
@@ -159,15 +172,20 @@ func (h *AccessHandlers) GetZone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+
 	var z models.Zone
 	err := scanZone(h.db.Pool.QueryRow(r.Context(),
 		fmt.Sprintf(`SELECT %s,
 		        COUNT(ap.id) AS access_point_count, z.created_at, z.updated_at
 		 FROM dm3_access.zones z
 		 LEFT JOIN dm3_access.access_points ap ON ap.zone_id = z.id
-		 WHERE z.id = $1::uuid AND ($2::uuid IS NULL OR z.tenant_id = $2::uuid)
+		 WHERE z.id = $1::uuid AND z.tenant_id = $2::uuid
 		 GROUP BY z.id`, zoneSelectCols),
-		id, nilIfEmpty(cid),
+		id, cid,
 	), &z)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "zone not found")
@@ -194,6 +212,11 @@ type updateZoneRequest struct {
 func (h *AccessHandlers) UpdateZone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
+
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
 
 	var req updateZoneRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -432,7 +455,7 @@ func (h *AccessHandlers) UpdateZoneMap(w http.ResponseWriter, r *http.Request) {
 		     map_height    = COALESCE($4, map_height),
 		     updated_at    = now()
 		 WHERE id = $1::uuid AND tenant_id = $5::uuid
-		 RETURNING `+zoneSelectCols+`, 0, created_at, updated_at`,
+		 RETURNING `+zoneReturningCols+`, 0, created_at, updated_at`,
 		id, req.MapImageURL, req.MapWidth, req.MapHeight, cid,
 	), &zone)
 	if err != nil {
@@ -442,4 +465,238 @@ func (h *AccessHandlers) UpdateZoneMap(w http.ResponseWriter, r *http.Request) {
 
 	h.audit.LogFromRequest(r, "access.zone.map.update", "zone", zone.ID, zone.Name, "success", nil, zone)
 	httputil.JSON(w, http.StatusOK, zone)
+}
+
+func (h *AccessHandlers) UploadZoneMap(w http.ResponseWriter, r *http.Request) {
+	zoneID := chi.URLParam(r, "id")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+
+	var zone models.Zone
+	err := scanZone(h.db.Pool.QueryRow(r.Context(),
+		`SELECT `+zoneSelectCols+`, COUNT(ap.id) AS access_point_count, z.created_at, z.updated_at
+		 FROM dm3_access.zones z
+		 LEFT JOIN dm3_access.access_points ap ON ap.zone_id = z.id
+		 WHERE z.id = $1::uuid AND z.tenant_id = $2::uuid
+		 GROUP BY z.id`,
+		zoneID, cid,
+	), &zone)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "zone not found")
+		return
+	}
+
+	if err := r.ParseMultipartForm(20 << 20); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "file too large or invalid multipart")
+		return
+	}
+
+	file, header, err := r.FormFile("map")
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, "map field required")
+		return
+	}
+	defer file.Close()
+
+	contentType := header.Header.Get("Content-Type")
+	ext, ok := zoneMapExtension(contentType, header.Filename)
+	if !ok {
+		httputil.Error(w, http.StatusBadRequest, "map must be a PNG, JPEG, or GIF image")
+		return
+	}
+
+	data, err := io.ReadAll(io.LimitReader(file, 20<<20+1))
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to read uploaded file")
+		return
+	}
+	if len(data) == 0 {
+		httputil.Error(w, http.StatusBadRequest, "uploaded file is empty")
+		return
+	}
+	if len(data) > 20<<20 {
+		httputil.Error(w, http.StatusBadRequest, "file too large or invalid multipart")
+		return
+	}
+
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid image file")
+		return
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 {
+		httputil.Error(w, http.StatusBadRequest, "image dimensions are invalid")
+		return
+	}
+	if cfg.Width > 20000 || cfg.Height > 20000 {
+		httputil.Error(w, http.StatusBadRequest, "image dimensions exceed maximum (20000x20000)")
+		return
+	}
+
+	// Derive content-type and extension strictly from decoded image format, not client header
+	var safeContentType string
+	switch format {
+	case "png":
+		ext = ".png"
+		safeContentType = "image/png"
+	case "jpeg":
+		ext = ".jpg"
+		safeContentType = "image/jpeg"
+	case "gif":
+		ext = ".gif"
+		safeContentType = "image/gif"
+	default:
+		httputil.Error(w, http.StatusBadRequest, "unsupported image format")
+		return
+	}
+
+	objectKey := buildZoneMapObjectKey(cid, zoneID, ext)
+	if h.objects == nil {
+		httputil.Error(w, http.StatusInternalServerError, "object storage is not configured")
+		return
+	}
+	if err := h.objects.PutObject(r.Context(), objectKey, bytes.NewReader(data), int64(len(data)), safeContentType); err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to save uploaded file")
+		return
+	}
+
+	publicPath := buildZoneMapPublicPath(objectKey)
+	previousObjectKey, hasPreviousObject := "", false
+	if zone.MapImageURL != nil {
+		previousObjectKey, hasPreviousObject = managedAssetObjectKey(*zone.MapImageURL)
+	}
+	err = scanZone(h.db.Pool.QueryRow(r.Context(),
+		`UPDATE dm3_access.zones
+		 SET map_image_url = $2,
+		     map_width     = $3,
+		     map_height    = $4,
+		     updated_at    = now()
+		 WHERE id = $1::uuid AND tenant_id = $5::uuid
+		 RETURNING `+zoneReturningCols+`, 0, created_at, updated_at`,
+		zoneID, publicPath, cfg.Width, cfg.Height, cid,
+	), &zone)
+	if err != nil {
+		if derr := h.objects.DeleteObject(r.Context(), objectKey); derr != nil {
+			slog.Warn("failed to delete orphaned zone map after DB error", "key", objectKey, "error", derr)
+		}
+		httputil.Error(w, http.StatusInternalServerError, "failed to update zone")
+		return
+	}
+	if hasPreviousObject && previousObjectKey != objectKey {
+		if err := h.objects.DeleteObject(r.Context(), previousObjectKey); err != nil {
+			slog.Warn("failed to delete superseded zone map object", "key", previousObjectKey, "error", err)
+		}
+	}
+
+	h.audit.LogFromRequest(r, "access.zone.map.upload", "zone", zone.ID, zone.Name, "success", nil, map[string]any{
+		"map_image_url": publicPath,
+		"map_width":     cfg.Width,
+		"map_height":    cfg.Height,
+		"content_type":  contentType,
+	})
+	httputil.JSON(w, http.StatusOK, zone)
+}
+
+func (h *AccessHandlers) ServeManagedAsset(w http.ResponseWriter, r *http.Request) {
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	objectKey, ok := managedAssetObjectKey(chi.URLParam(r, "*"))
+	if !ok || h.objects == nil {
+		httputil.Error(w, http.StatusNotFound, "asset not found")
+		return
+	}
+	// Enforce tenant isolation: asset must belong to the caller's tenant
+	if cid != "" && !strings.HasPrefix(objectKey, "tenants/"+cid+"/") {
+		httputil.Error(w, http.StatusForbidden, "access denied")
+		return
+	}
+
+	reader, info, err := h.objects.GetObject(r.Context(), objectKey)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, io.EOF) || strings.Contains(strings.ToLower(err.Error()), "not exist") || strings.Contains(strings.ToLower(err.Error()), "no such key") {
+			status = http.StatusNotFound
+		}
+		httputil.Error(w, status, "asset not found")
+		return
+	}
+	defer reader.Close()
+
+	if info.ContentType != "" {
+		w.Header().Set("Content-Type", info.ContentType)
+	}
+	if info.ETag != "" {
+		w.Header().Set("ETag", info.ETag)
+	}
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	if info.Size > 0 {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size))
+	}
+	if _, err := io.Copy(w, reader); err != nil {
+		slog.Warn("failed to stream managed asset", "key", objectKey, "error", err)
+	}
+}
+
+func buildZoneMapObjectKey(companyID, zoneID, ext string) string {
+	return fmt.Sprintf("tenants/%s/access/zones/%s/map%s", companyID, zoneID, ext)
+}
+
+func buildZoneMapPublicPath(objectKey string) string {
+	return "/assets/" + objectKey
+}
+
+func managedAssetObjectKey(raw string) (string, bool) {
+	trimmed := strings.TrimSpace(raw)
+	trimmed = strings.TrimPrefix(trimmed, "/assets/")
+	trimmed = strings.TrimPrefix(trimmed, "/")
+	if trimmed == "" {
+		return "", false
+	}
+	for _, segment := range strings.Split(trimmed, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return "", false
+		}
+	}
+	cleaned := pathpkg.Clean("/" + trimmed)
+	if cleaned == "/" || cleaned == "." {
+		return "", false
+	}
+	return strings.TrimPrefix(cleaned, "/"), true
+}
+
+func contentTypeForExt(ext, fallback string) string {
+	switch strings.ToLower(ext) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	default:
+		return fallback
+	}
+}
+
+func zoneMapExtension(contentType, filename string) (string, bool) {
+	switch strings.ToLower(contentType) {
+	case "image/png":
+		return ".png", true
+	case "image/jpeg", "image/jpg":
+		return ".jpg", true
+	case "image/gif":
+		return ".gif", true
+	}
+
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".png", ".jpg", ".jpeg", ".gif":
+		ext := strings.ToLower(filepath.Ext(filename))
+		if ext == ".jpeg" {
+			ext = ".jpg"
+		}
+		return ext, true
+	default:
+		return "", false
+	}
 }

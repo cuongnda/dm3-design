@@ -154,12 +154,19 @@ services:
       JWT_SECRET: dm3-local-jwt-secret-change-me
       NATS_URL: nats://nats:4222
       MQTT_BROKER: tcp://emqx:1883
+      OBJECT_STORE_ENDPOINT: minio:9000
+      OBJECT_STORE_ACCESS_KEY: dm3admin
+      OBJECT_STORE_SECRET_KEY: dm3secret123
+      OBJECT_STORE_BUCKET: dm3
+      OBJECT_STORE_USE_SSL: "false"
     volumes:
       - identity_photos:/app/data/photos
     depends_on:
       migrate:
         condition: service_completed_successfully
       nats:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - dm3-local
@@ -182,10 +189,17 @@ services:
       JWT_SECRET: dm3-local-jwt-secret-change-me
       NATS_URL: nats://nats:4222
       MQTT_BROKER: tcp://emqx:1883
+      OBJECT_STORE_ENDPOINT: minio:9000
+      OBJECT_STORE_ACCESS_KEY: dm3admin
+      OBJECT_STORE_SECRET_KEY: dm3secret123
+      OBJECT_STORE_BUCKET: dm3
+      OBJECT_STORE_USE_SSL: "false"
     depends_on:
       migrate:
         condition: service_completed_successfully
       nats:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - dm3-local
@@ -235,6 +249,11 @@ services:
       MQTT_BROKER: tcp://emqx:1883
       VALKEY_URL: valkey:6379
       BOOTSTRAP_SECRET: dm3-bootstrap-v1-dev-secret
+      OBJECT_STORE_ENDPOINT: minio:9000
+      OBJECT_STORE_ACCESS_KEY: dm3admin
+      OBJECT_STORE_SECRET_KEY: dm3secret123
+      OBJECT_STORE_BUCKET: dm3
+      OBJECT_STORE_USE_SSL: "false"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -243,6 +262,8 @@ services:
       nats:
         condition: service_healthy
       valkey:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - dm3-local

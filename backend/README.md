@@ -126,11 +126,15 @@ make build
 
 Or run one at a time for development:
 ```bash
-go run ./cmd/device-gateway/
-go run ./cmd/access-svc/
-go run ./cmd/identity-svc/
+OBJECT_STORE_ENDPOINT=localhost:9002 OBJECT_STORE_ACCESS_KEY=dm3admin OBJECT_STORE_SECRET_KEY=dm3secret123 OBJECT_STORE_BUCKET=dm3 go run ./cmd/device-gateway/
+OBJECT_STORE_ENDPOINT=localhost:9002 OBJECT_STORE_ACCESS_KEY=dm3admin OBJECT_STORE_SECRET_KEY=dm3secret123 OBJECT_STORE_BUCKET=dm3 go run ./cmd/access-svc/
+OBJECT_STORE_ENDPOINT=localhost:9002 OBJECT_STORE_ACCESS_KEY=dm3admin OBJECT_STORE_SECRET_KEY=dm3secret123 OBJECT_STORE_BUCKET=dm3 go run ./cmd/identity-svc/
 go run ./cmd/auth-svc/
 ```
+
+`access-svc` serves zone indoor maps from MinIO while preserving `/assets/tenants/{tenant_id}/access/zones/{zone_id}/map.{ext}`.
+`identity-svc` serves user photos and avatars from MinIO via `/photos/tenants/{tenant_id}/identity/users/{user_id}/{photo|avatar}.{ext}`.
+`device-gateway` stores firmware binaries in MinIO and streams downloads back through the existing firmware download endpoint.
 
 ### 4. Verify the pipeline
 
@@ -143,6 +147,9 @@ curl http://localhost:8002/api/v1/devices
 
 # Access events should be flowing
 curl http://localhost:8003/api/v1/events?limit=10
+
+# Zone map assets are backed by MinIO but still served via access-svc
+curl -I http://localhost:8003/assets/tenants/<tenant-id>/access/zones/<zone-id>/map.png
 ```
 
 ### 5. Start the webapp

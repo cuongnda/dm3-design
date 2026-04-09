@@ -21,6 +21,7 @@ import (
 	"github.com/duali/dm3-backend/pkg/i18n"
 	"github.com/duali/dm3-backend/pkg/mqtt"
 	"github.com/duali/dm3-backend/pkg/natsutil"
+	"github.com/duali/dm3-backend/pkg/objectstore"
 )
 
 func main() {
@@ -133,10 +134,23 @@ func main() {
 		CompanyIDFromContext: authsvc.CompanyIDFromContext,
 	})
 
+	objectStore, err := objectstore.NewMinIOStore(ctx, objectstore.Config{
+		Endpoint:         cfg.ObjectStoreEndpoint,
+		AccessKeyID:      cfg.ObjectStoreAccessKeyID,
+		SecretAccessKey:  cfg.ObjectStoreSecretAccessKey,
+		Bucket:           cfg.ObjectStoreBucket,
+		UseSSL:           cfg.ObjectStoreUseSSL,
+		AutoCreateBucket: cfg.ObjectStoreAutoCreateBucket,
+	})
+	if err != nil {
+		slog.Error("failed to initialize object storage", "error", err)
+		os.Exit(1)
+	}
+
 	// HTTP handlers
 	handlers := gateway.NewGatewayHandlers(database, mqttClient, auditLog)
 	provHandlers := gateway.NewProvisioningHandlers(database, mqttClient, cfg, auditLog)
-	firmwareHandlers := gateway.NewFirmwareHandlers(database)
+	firmwareHandlers := gateway.NewFirmwareHandlers(database, objectStore)
 
 	// HTTP routes
 	r := httputil.NewRouter()

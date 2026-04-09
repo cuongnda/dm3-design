@@ -170,6 +170,45 @@ func RequireWriteRole(roles ...string) func(http.Handler) http.Handler {
 	}
 }
 
+// AssetAuthMiddleware validates JWT from Authorization header or ?token= query parameter.
+// Used for asset-serving routes where <img src> cannot send Authorization headers.
+func AssetAuthMiddleware(jwtSecret string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var tokenStr string
+			if header := r.Header.Get("Authorization"); header != "" {
+				tokenStr = strings.TrimPrefix(header, "Bearer ")
+			} else if t := r.URL.Query().Get("token"); t != "" {
+				tokenStr = t
+			}
+			if tokenStr == "" {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing authorization"})
+				return
+			}
+
+			token, err := jwt.ParseWithClaims(tokenStr, &AccessClaims{}, func(t *jwt.Token) (interface{}, error) {
+				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+				}
+				return []byte(jwtSecret), nil
+			})
+			if err != nil {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+				return
+			}
+
+			claims, ok := token.Claims.(*AccessClaims)
+			if !ok || !token.Valid {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token claims"})
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), claimsContextKey, claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
 func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

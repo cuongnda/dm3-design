@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -20,23 +18,18 @@ import (
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/natsutil"
-)
-
-// Aliases for testability
-var (
-	ensureDir  = func(path string) error { return os.MkdirAll(path, 0755) }
-	createFile = func(path string) (*os.File, error) { return os.Create(path) }
-	copyFile   = func(dst io.Writer, src io.Reader) (int64, error) { return io.Copy(dst, src) }
+	"github.com/duali/dm3-backend/pkg/objectstore"
 )
 
 type IdentityHandlers struct {
-	db    *db.DB
-	nats  *natsutil.Client
-	audit *audit.Logger
+	db      *db.DB
+	nats    *natsutil.Client
+	audit   *audit.Logger
+	objects objectstore.Store
 }
 
-func NewIdentityHandlers(database *db.DB, nats *natsutil.Client, auditLog *audit.Logger) *IdentityHandlers {
-	return &IdentityHandlers{db: database, nats: nats, audit: auditLog}
+func NewIdentityHandlers(database *db.DB, nats *natsutil.Client, auditLog *audit.Logger, objects objectstore.Store) *IdentityHandlers {
+	return &IdentityHandlers{db: database, nats: nats, audit: auditLog, objects: objects}
 }
 
 // publishEvent publishes a NATS event for identity changes.
@@ -59,77 +52,28 @@ func (h *IdentityHandlers) publishEvent(subject string, data any) {
 // ─── Photo Upload ────────────────────────────────────────────────────────────
 
 func (h *IdentityHandlers) UploadPhoto(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-
-	// Verify user exists
-	var exists bool
-	_ = h.db.Pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM dm3_identity.users WHERE id = $1::uuid)`, id).Scan(&exists)
-	if !exists {
-		httputil.Error(w, http.StatusNotFound, "user not found")
+	userID := chi.URLParam(r, "id")
+	companyID := authsvc.CompanyIDFromContext(r.Context())
+	assetURL, uploadErr := h.uploadUserImage(r, userID, companyID, "photo", identityPhotoVariant)
+	if uploadErr != nil {
+		httputil.Error(w, uploadErr.status, uploadErr.message)
 		return
 	}
 
-	// Parse multipart (max 10MB)
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "file too large or invalid multipart")
-		return
-	}
-
-	file, header, err := r.FormFile("photo")
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, "photo field required")
-		return
-	}
-	defer file.Close()
-
-	// Store to local filesystem (would use MinIO in production)
-	photoDir := "data/photos"
-	if err := ensureDir(photoDir); err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to create photo directory")
-		return
-	}
-
-	ext := ".jpg"
-	if ct := header.Header.Get("Content-Type"); ct == "image/png" {
-		ext = ".png"
-	}
-	filename := fmt.Sprintf("%s%s", id, ext)
-	filepath := fmt.Sprintf("%s/%s", photoDir, filename)
-
-	dst, err := createFile(filepath)
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to save photo")
-		return
-	}
-	defer dst.Close()
-
-	if _, err := copyFile(dst, file); err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to write photo")
-		return
-	}
-
-	photoURL := fmt.Sprintf("/photos/%s", filename)
-	_, err = h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_identity.users SET photo_url = $2, updated_at = now() WHERE id = $1::uuid`,
-		id, photoURL)
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	h.publishEvent("dm3.identity.user.updated", map[string]string{"id": id, "photo_url": photoURL})
-	h.audit.LogFromRequest(r, "identity.user.photo_upload", "user", id, id, "success", nil, map[string]any{"photo_url": photoURL})
-	httputil.JSON(w, http.StatusOK, map[string]string{"photo_url": photoURL})
+	h.publishEvent("dm3.identity.user.updated", map[string]string{"id": userID, "photo_url": assetURL})
+	h.audit.LogFromRequest(r, "identity.user.photo_upload", "user", userID, userID, "success", nil, map[string]any{"photo_url": assetURL})
+	httputil.JSON(w, http.StatusOK, map[string]string{"photo_url": assetURL})
 }
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
 func (h *IdentityHandlers) ListCredentials(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
+	cid := authsvc.CompanyIDFromContext(r.Context())
 
-	// Verify user exists
+	// Verify user exists and belongs to caller's tenant
 	var exists bool
-	_ = h.db.Pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM dm3_identity.users WHERE id = $1::uuid)`, userID).Scan(&exists)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM dm3_identity.users WHERE id = $1::uuid AND tenant_id = $2::uuid)`, userID, cid).Scan(&exists)
 	if !exists {
 		httputil.Error(w, http.StatusNotFound, "user not found")
 		return
@@ -294,10 +238,12 @@ func (h *IdentityHandlers) SyncUsers(w http.ResponseWriter, r *http.Request) {
 
 	// Get users changed since timestamp
 	personRows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, tenant_id, first_name, last_name, COALESCE(email,''), COALESCE(phone,''),
-		 COALESCE(department,''), COALESCE(role,''), COALESCE(employee_id,''), status, COALESCE(photo_url,''),
-		 created_at, updated_at
-		 FROM dm3_identity.users WHERE updated_at > $1 ORDER BY updated_at ASC`, since)
+		`SELECT u.id, u.tenant_id, u.first_name, u.last_name, COALESCE(u.email,''), COALESCE(u.phone,''),
+		 COALESCE(d.name,''), COALESCE(u.position,''), COALESCE(u.emp_number,''), u.status, COALESCE(u.avatar,''),
+		 u.created_at, u.updated_at
+		 FROM dm3_identity.users u
+		 LEFT JOIN dm3_identity.departments d ON u.department_id = d.id
+		 WHERE u.updated_at > $1 ORDER BY u.updated_at ASC`, since)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -338,7 +284,7 @@ func (h *IdentityHandlers) SyncUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := models.SyncResponse{
-		Users:     users,
+		Users:       users,
 		Credentials: creds,
 		Since:       sinceStr,
 		Timestamp:   now.Format(time.RFC3339),
@@ -350,8 +296,8 @@ func (h *IdentityHandlers) SyncUsers(w http.ResponseWriter, r *http.Request) {
 
 func (h *IdentityHandlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	stats := models.IdentityStats{
-		UsersByStatus:  make(map[string]int64),
-		UsersByDept:    make(map[string]int64),
+		UsersByStatus:    make(map[string]int64),
+		UsersByDept:      make(map[string]int64),
 		CredentialCounts: make(map[string]int64),
 	}
 	cid := authsvc.CompanyIDFromContext(r.Context())
@@ -482,6 +428,11 @@ type createGroupRequest struct {
 }
 
 func (h *IdentityHandlers) CreateGroup(w http.ResponseWriter, r *http.Request) {
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusBadRequest, "company context required")
+		return
+	}
 	var req createGroupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
 		httputil.Error(w, http.StatusBadRequest, "name required")
@@ -489,9 +440,9 @@ func (h *IdentityHandlers) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	}
 	var g models.UserGroup
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_identity.user_groups (name, description) VALUES ($1,$2)
+		`INSERT INTO dm3_identity.user_groups (tenant_id, name, description) VALUES ($1::uuid,$2,$3)
 		 RETURNING id, tenant_id, name, COALESCE(description,''), 0, created_at, updated_at`,
-		req.Name, nilIfEmpty(req.Description),
+		cid, req.Name, nilIfEmpty(req.Description),
 	).Scan(&g.ID, &g.TenantID, &g.Name, &g.Description, &g.MemberCount, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -555,10 +506,11 @@ func (h *IdentityHandlers) ListGroupMembers(w http.ResponseWriter, r *http.Reque
 	groupID := chi.URLParam(r, "id")
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT p.id, p.tenant_id, p.first_name, p.last_name, COALESCE(p.email,''), COALESCE(p.phone,''),
-		 COALESCE(p.department,''), COALESCE(p.role,''), COALESCE(p.employee_id,''), p.status, COALESCE(p.photo_url,''),
+		 COALESCE(d.name,''), COALESCE(p.position,''), COALESCE(p.emp_number,''), p.status, COALESCE(p.avatar,''),
 		 p.created_at, p.updated_at
 		 FROM dm3_identity.users p
 		 JOIN dm3_identity.user_group_members m ON m.user_id = p.id
+		 LEFT JOIN dm3_identity.departments d ON p.department_id = d.id
 		 WHERE m.group_id = $1::uuid ORDER BY p.last_name, p.first_name`, groupID)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
