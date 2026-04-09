@@ -29,12 +29,23 @@ An Access Group is the central policy mechanism. It is a **flat structure** (no 
 
 If an AG has no access time assigned (`access_time_id = NULL`), members have **24/7 unrestricted** access to the group's APs (subject to passage time taking priority when active).
 
+### Zones
+
+A Zone is the **spatial container** for access control. It can represent a building, floor, room cluster, or other physical area. Key properties:
+
+- **Hierarchy** via `parent_id` (building → floor → area)
+- **Local timezone + location metadata** for site-aware UX and future hierarchy alignment
+- **Optional indoor map** owned by the zone itself
+
+We intentionally do **not** introduce a separate Location entity in v1. Zone already exists in the model and can carry the spatial metadata without creating a second overlapping abstraction.
+
 ### Access Points (AP)
 
 An Access Point is a logical entry/exit point (door, gate, turnstile, barrier). It may have one or more physical devices attached. Key properties:
 
 - **Passage Time** (`access_time_id` on `access_points` table): when the door is freely open
-- **Zone**: physical grouping (floor, area, building)
+- **Zone**: physical grouping and map owner
+- **Placement metadata** (`map_x`, `map_y`, optional `map_rotation`, `map_label`) relative to the zone map
 - An AP can belong to **multiple Access Groups**
 
 ### Users
@@ -62,8 +73,14 @@ AccessTime (weekly schedule template)
 ├── id, name, timezone, is_active
 └── slots[] → day_of_week (0-6), start_time (TIME), end_time (TIME)
 
+Zone
+├── id, parent_id, name, timezone
+├── address, building, floor, geo_lat, geo_lng
+└── map_image_url, map_width, map_height, map_metadata
+
 AccessPoint
 ├── id, name, description, zone_id
+├── map_x, map_y, map_rotation, map_label
 └── access_time_id → AccessTime  [PASSAGE TIME: when door is open for all]
 
 AccessGroup
@@ -218,6 +235,14 @@ The time schedule belongs to the Access Group, not to individual AP assignments 
 ### Why passage time on the AP, not on a rule?
 
 Passage time is a physical property of the access point — "this door is open from 8am to 6pm regardless of who is presenting credentials." It is enforced by the device autonomously and has the highest priority. It is not a user-level policy.
+
+### Why spatial metadata on Zone instead of a new Location entity?
+
+Because a second location abstraction would be redundant in v1 and would fight the existing zone hierarchy.
+- Zone already exists as the physical grouping concept.
+- Zone can evolve into the tenant/site hierarchy's spatial layer cleanly.
+- Access Point placement only needs coordinates relative to its zone map, not a globally reusable geometry system.
+- This keeps API and UI changes incremental while leaving room for richer GIS later if the product actually needs it.
 
 ## Related Documents
 

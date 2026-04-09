@@ -42,6 +42,10 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, onSubmit 
         name: initial?.name ?? '',
         description: initial?.description ?? '',
         zone_id: initial?.zone_id ?? '',
+        map_x: initial?.map_x,
+        map_y: initial?.map_y,
+        map_rotation: initial?.map_rotation,
+        map_label: initial?.map_label ?? '',
     });
     const [nameError, setNameError] = useState('');
 
@@ -52,6 +56,10 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, onSubmit 
                 name: initial?.name ?? '',
                 description: initial?.description ?? '',
                 zone_id: initial?.zone_id ?? '',
+                map_x: initial?.map_x,
+                map_y: initial?.map_y,
+                map_rotation: initial?.map_rotation,
+                map_label: initial?.map_label ?? '',
             });
             setNameError('');
         }
@@ -68,15 +76,23 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, onSubmit 
             name: form.name.trim(),
             ...(form.description?.trim() && { description: form.description.trim() }),
             ...(form.zone_id && { zone_id: form.zone_id }),
+            ...(typeof form.map_x === 'number' && !Number.isNaN(form.map_x) && { map_x: form.map_x }),
+            ...(typeof form.map_y === 'number' && !Number.isNaN(form.map_y) && { map_y: form.map_y }),
+            ...(typeof form.map_rotation === 'number' && !Number.isNaN(form.map_rotation) && { map_rotation: form.map_rotation }),
+            ...(form.map_label?.trim() && { map_label: form.map_label.trim() }),
         };
         const ok = await onSubmit(payload);
         setSubmitting(false);
         if (ok) onOpenChange(false);
     };
 
-    const set = (field: keyof AccessPointFormData, value: string) => {
+    const setField = (field: keyof AccessPointFormData, value: AccessPointFormData[keyof AccessPointFormData]) => {
         setForm((prev) => ({ ...prev, [field]: value }));
         if (field === 'name') setNameError('');
+    };
+
+    const setNumber = (field: 'map_x' | 'map_y' | 'map_rotation', value: string) => {
+        setForm((prev) => ({ ...prev, [field]: value === '' ? undefined : Number(value) }));
     };
 
     return (
@@ -100,7 +116,7 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, onSubmit 
                     <Input
                         id="ap-name"
                         value={form.name}
-                        onChange={(e) => set('name', e.target.value)}
+                        onChange={(e) => setField('name', e.target.value)}
                         placeholder={t('namePlaceholder', 'e.g. Main Entrance')}
                         className={nameError ? 'border-destructive' : ''}
                         disabled={submitting}
@@ -114,7 +130,7 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, onSubmit 
                     <Input
                         id="ap-description"
                         value={form.description ?? ''}
-                        onChange={(e) => set('description', e.target.value)}
+                        onChange={(e) => setField('description', e.target.value)}
                         placeholder={t('descriptionPlaceholder', 'Optional description')}
                         disabled={submitting}
                     />
@@ -125,7 +141,7 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, onSubmit 
                     <Label>{t('zone', 'Zone')}</Label>
                     <Select
                         value={form.zone_id ?? ''}
-                        onValueChange={(v) => set('zone_id', v)}
+                        onValueChange={(v) => setField('zone_id', v)}
                         placeholder={t('noZone', '— No zone —')}
                         disabled={submitting}
                     >
@@ -136,6 +152,28 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, onSubmit 
                             </SelectOption>
                         ))}
                     </Select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <Label htmlFor="ap-map-x">Map X</Label>
+                        <Input id="ap-map-x" type="number" step="0.01" value={form.map_x ?? ''} onChange={(e) => setNumber('map_x', e.target.value)} disabled={submitting} />
+                    </div>
+                    <div>
+                        <Label htmlFor="ap-map-y">Map Y</Label>
+                        <Input id="ap-map-y" type="number" step="0.01" value={form.map_y ?? ''} onChange={(e) => setNumber('map_y', e.target.value)} disabled={submitting} />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <Label htmlFor="ap-map-rotation">Rotation</Label>
+                        <Input id="ap-map-rotation" type="number" step="1" value={form.map_rotation ?? ''} onChange={(e) => setNumber('map_rotation', e.target.value)} disabled={submitting} />
+                    </div>
+                    <div>
+                        <Label htmlFor="ap-map-label">Map Label</Label>
+                        <Input id="ap-map-label" value={form.map_label ?? ''} onChange={(e) => setField('map_label', e.target.value)} disabled={submitting} />
+                    </div>
                 </div>
             </div>
         </AppModal>
@@ -212,6 +250,7 @@ export function AccessPointsPage() {
             total: accessPoints.length,
             filtered: filtered.length,
             withDevices: accessPoints.filter((ap) => (ap.access_device_count ?? 0) > 0).length,
+            mapped: accessPoints.filter((ap) => typeof ap.map_x === 'number' && typeof ap.map_y === 'number').length,
         };
     }, [accessPoints, filters]);
 
@@ -284,6 +323,20 @@ export function AccessPointsPage() {
                             <div>
                                 <div className="text-2xl font-bold text-purple-600">{stats.filtered}</div>
                                 <div className="text-sm text-muted-foreground">{t('stats.filtered', 'Filtered')}</div>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                                <Shield size={20} className="text-amber-600" />
+                            </div>
+                            <div>
+                                <div className="text-2xl font-bold text-amber-600">{stats.mapped}</div>
+                                <div className="text-sm text-muted-foreground">{t('stats.mapped', 'Placed on Map')}</div>
                             </div>
                         </div>
                     </CardContent>
@@ -383,6 +436,12 @@ export function AccessPointsPage() {
                                         <span className="text-sm text-muted-foreground">{t('devices', 'Devices')}</span>
                                         <Badge variant="secondary">{ap.access_device_count ?? 0}</Badge>
                                     </div>
+                                    {typeof ap.map_x === 'number' && typeof ap.map_y === 'number' && (
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-sm text-muted-foreground">Map</span>
+                                            <Badge variant="outline">{`${ap.map_x}, ${ap.map_y}`}</Badge>
+                                        </div>
+                                    )}
                                     <div className="flex justify-between items-center text-xs text-muted-foreground pt-2 border-t border-border">
                                         <span>{t('created', 'Created')}</span>
                                         <span>{new Date(ap.created_at).toLocaleDateString()}</span>

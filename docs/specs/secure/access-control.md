@@ -9,19 +9,54 @@ The Access Control System is the foundation of the SECURE domain — controlling
 
 ## Data Models
 
+### Zone (Spatial Container)
+
+A Zone is a spatial container representing a physical area (building, floor, room, parking level, etc.).
+Zones form a hierarchy via `parent_id` (e.g., Building → Floor → Area).
+Each zone can optionally carry location metadata and an indoor map/floor plan image
+on which Access Points can be positioned.
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| id | uuid | yes | auto | Primary key |
+| tenant_id | uuid | yes | - | Tenant isolation |
+| parent_id | uuid | no | null | Parent zone (hierarchy: building → floor → area) |
+| name | string(255) | yes | - | Display name, e.g. "Tòa A — Tầng 3" |
+| description | string(500) | no | null | Notes |
+| timezone | string(50) | no | null | IANA timezone (e.g. "Asia/Ho_Chi_Minh"). If null, inherits from parent zone or site default |
+| latitude | decimal | no | null | GPS latitude of zone centroid |
+| longitude | decimal | no | null | GPS longitude of zone centroid |
+| address | text | no | null | Human-readable address |
+| floor | string(50) | no | null | Floor/level identifier (e.g. "1F", "B1") |
+| building | string(100) | no | null | Building name |
+| map_image_url | string(500) | no | null | Path/URL to indoor map or floor plan image (stored in MinIO) |
+| map_width | int | no | null | Map image natural width in pixels (for coordinate normalization) |
+| map_height | int | no | null | Map image natural height in pixels |
+| map_metadata | jsonb | no | {} | Optional layout metadata (origin, overlays, scale hints) |
+| created_at | timestamp | yes | now() | Creation time |
+| updated_at | timestamp | yes | now() | Last update |
+
+**Zone as Map Owner:** When `map_image_url` is set, Access Points assigned to this zone can store
+normalized placement coordinates (`map_x`, `map_y` in 0.0–1.0 range) to position themselves on
+the zone's floor plan. This avoids a separate Location entity for v1.
+
 ### Access Point
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | - | Tenant isolation |
 | site_id | uuid | yes | - | Site this access point belongs to |
-| zone_id | uuid | no | null | Zone grouping (floor, area) |
+| zone_id | uuid | no | null | Zone this AP belongs to (spatial container) |
 | name | string(100) | yes | - | Display name, e.g. "Cổng chính — Tòa A" |
 | description | string(500) | no | null | Notes |
 | type | APTypeEnum | yes | - | Physical type of access point |
 | location | string(200) | yes | - | Human-readable location |
 | floor | string(50) | no | null | Floor identifier |
 | building | string(100) | no | null | Building identifier |
+| map_x | decimal | no | null | X position on zone map (0.0–1.0 normalized). Only meaningful when zone has a map |
+| map_y | decimal | no | null | Y position on zone map (0.0–1.0 normalized) |
+| map_rotation | decimal | no | 0 | Rotation angle in degrees (0–360) for map icon orientation |
+| map_label | string(100) | no | null | Optional short label displayed on the zone map |
 | status | APStatusEnum | yes | offline | Current connection status |
 | state | APStateEnum | yes | locked | Current physical state |
 | mode | APModeEnum | yes | normal | Operating mode |
@@ -147,6 +182,48 @@ InterlockModeEnum: mutual_exclusive | sequential
 
 ## API Endpoints
 
+### GET /api/v1/access/zones/{id}/map
+- **Auth:** role >= viewer
+- **Description:** Returns the zone's map metadata plus placed access points for layout UIs.
+- **Response 200:**
+  ```json
+  {
+    "zone": {
+      "id": "uuid",
+      "name": "Tòa A — Tầng 3",
+      "timezone": "Asia/Ho_Chi_Minh",
+      "map_image_url": "https://cdn.example.com/maps/floor-3.png",
+      "map_width": 1600,
+      "map_height": 900,
+      "map_metadata": {"origin": "top-left"}
+    },
+    "access_points": [
+      {
+        "id": "uuid",
+        "name": "Cửa phòng Lab",
+        "zone_id": "uuid",
+        "map_x": 0.42,
+        "map_y": 0.31,
+        "map_rotation": 90,
+        "map_label": "LAB-01"
+      }
+    ]
+  }
+  ```
+
+### PUT /api/v1/access/zones/{id}/map
+- **Auth:** role >= admin
+- **Description:** Updates the zone-owned indoor map metadata without editing unrelated zone fields.
+- **Body:**
+  ```json
+  {
+    "map_image_url": "https://cdn.example.com/maps/floor-3.png",
+    "map_width": 1600,
+    "map_height": 900,
+    "map_metadata": {"origin": "top-left", "unit": "normalized"}
+  }
+  ```
+
 ### GET /api/v1/access/access-points
 - **Auth:** Bearer token, role >= viewer
 - **Query params:**
@@ -208,7 +285,11 @@ InterlockModeEnum: mutual_exclusive | sequential
     "unlock_duration_ms": 5000,
     "anti_passback": false,
     "emergency_unlock": true,
-    "camera_id": "uuid"
+    "camera_id": "uuid",
+    "map_x": 0.42,
+    "map_y": 0.31,
+    "map_rotation": 90,
+    "map_label": "LAB-01"
   }
   ```
 - **Side effects:** Audit log, MQTT `cfg.full` push to device if device_id set
@@ -320,6 +401,55 @@ InterlockModeEnum: mutual_exclusive | sequential
     "sync_health": "healthy"
   }
   ```
+
+### GET /api/v1/access/zones
+- **Auth:** role >= viewer
+- **Query params:**
+  | Param | Type | Default | Description |
+  |-------|------|---------|-------------|
+  | page | int | 1 | Page number |
+  | limit | int | 20 | Items per page (max 100) |
+  | parent_id | uuid | - | Filter by parent zone |
+  | search | string | - | Search zone name |
+- **Response 200:** Paginated list of zones with `access_point_count`
+
+### POST /api/v1/access/zones
+- **Auth:** role >= admin
+- **Body:**
+  ```json
+  {
+    "name": "Tòa A — Tầng 3",
+    "description": "Office floor",
+    "parent_id": "uuid",
+    "timezone": "Asia/Ho_Chi_Minh",
+    "latitude": 10.7769,
+    "longitude": 106.7009,
+    "address": "123 Nguyễn Huệ, Quận 1",
+    "floor": "3F",
+    "building": "Tòa A",
+    "map_image_url": "zones/toa-a-3f-floorplan.png",
+    "map_width": 1920,
+    "map_height": 1080
+  }
+  ```
+- **Side effects:** Audit log
+- **Response 201:** Created zone
+- **Errors:** 401, 403, 422
+
+### GET /api/v1/access/zones/{id}
+- **Auth:** role >= viewer
+- **Response 200:** Full zone object with `access_point_count`
+
+### PUT /api/v1/access/zones/{id}
+- **Auth:** role >= admin
+- **Body:** Partial zone fields (any field from POST body)
+- **Side effects:** Audit log
+- **Response 200:** Updated zone
+
+### DELETE /api/v1/access/zones/{id}
+- **Auth:** role >= admin
+- **Side effects:** Audit log, access points in this zone have `zone_id` set to null
+- **Response 204**
 
 ### GET /api/v1/access/access-groups
 - **Auth:** role >= viewer
@@ -451,6 +581,9 @@ InterlockModeEnum: mutual_exclusive | sequential
 15. **BR-AC-015 — Multi-Factor Access:** Devices configured with `multi_factor=true` require users to present 2+ credentials (e.g., card + face) within a 30-second window. Both must match the same user.
 16. **BR-AC-016 — Credential Validity Window:** Each user credential has `valid_from` and `valid_until`. Device rejects expired credentials locally without server involvement.
 17. **BR-AC-017 — Event Queue Ordering:** When device reconnects, queued events are uploaded in chronological order (oldest first), throttled at 100 events/second.
+18. **BR-AC-018 — Zone-Owned Spatial Context:** Zone is the canonical spatial container for access control. Indoor maps, zone-local timezone, and spatial metadata belong to the zone.
+19. **BR-AC-019 — Relative Placement:** Access Point coordinates are always interpreted relative to the owning zone map. Reassigning a point to another zone requires placement recalibration.
+20. **BR-AC-020 — Optional Indoor Map:** Zones may carry location metadata and timezone without an indoor map asset. Spatial placement becomes active only when a map is configured.
 
 ## Permissions Matrix
 
@@ -488,6 +621,8 @@ InterlockModeEnum: mutual_exclusive | sequential
 |-------|------|----------------|
 | /secure/access-control | Access Point List | DataTable with status tabs (All/Online/Offline/Alarm/Warning), filters, stat cards |
 | /secure/access-control/:id | Access Point Detail | AP info, state controls (unlock/lock/hold), live event timeline, linked camera, access groups tab, device health |
+| /secure/zones | Zone List | DataTable of zones with spatial info, hierarchy, map indicator |
+| /secure/zones/:id | Zone Detail | Zone info, indoor map with AP placements, child zones |
 | /secure/access-groups | Access Groups | DataTable of AGs, create/edit dialog with access time picker |
 | /secure/access-groups/:id | Access Group Detail | AG info, access points tab, users tab (with effective_from/effective_to), access time assignment |
 

@@ -30,6 +30,15 @@ type Zone struct {
 	ParentID         *string   `json:"parent_id,omitempty"`
 	Name             string    `json:"name"`
 	Description      *string   `json:"description,omitempty"`
+	Timezone         *string   `json:"timezone,omitempty"`
+	Latitude         *float64  `json:"latitude,omitempty"`
+	Longitude        *float64  `json:"longitude,omitempty"`
+	Address          *string   `json:"address,omitempty"`
+	Floor            *string   `json:"floor,omitempty"`
+	Building         *string   `json:"building,omitempty"`
+	MapImageURL      *string   `json:"map_image_url,omitempty"`
+	MapWidth         *int      `json:"map_width,omitempty"`
+	MapHeight        *int      `json:"map_height,omitempty"`
 	AccessPointCount int       `json:"access_point_count,omitempty"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
@@ -74,6 +83,9 @@ type AccessPoint struct {
 	AccessTimeID      *string     `json:"access_time_id,omitempty"`
 	Name              string      `json:"name"`
 	Description       *string     `json:"description,omitempty"`
+	MapX              *float64    `json:"map_x,omitempty"`
+	MapY              *float64    `json:"map_y,omitempty"`
+	MapRotation       *float64    `json:"map_rotation,omitempty"`
 	AccessDeviceCount int         `json:"access_device_count,omitempty"`
 	Zone              *Zone       `json:"zone,omitempty"`
 	AccessTime        *AccessTime `json:"access_time,omitempty"`

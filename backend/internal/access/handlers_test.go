@@ -22,8 +22,8 @@ func TestParsePagination(t *testing.T) {
 		{"?page=2&limit=50", 2, 50},
 		{"?page=-1&limit=200", 1, 20}, // -1 invalid → default; 200 > 100 → default
 		{"?page=abc", 1, 20},
-		{"?page=0", 1, 20},    // 0 invalid → default
-		{"?limit=0", 1, 20},   // 0 invalid → default
+		{"?page=0", 1, 20},     // 0 invalid → default
+		{"?limit=0", 1, 20},    // 0 invalid → default
 		{"?limit=100", 1, 100}, // max allowed
 	}
 
@@ -119,6 +119,16 @@ func TestRouteSetup(t *testing.T) {
 	r.Delete("/api/v1/access-devices/{id}", h.DeleteAccessDevice)
 	r.Get("/api/v1/access-devices/{id}/sync-package", h.GetSyncPackage)
 
+	// Zones
+	r.Get("/api/v1/zones", h.ListZones)
+	r.Post("/api/v1/zones", h.CreateZone)
+	r.Get("/api/v1/zones/{id}", h.GetZone)
+	r.Put("/api/v1/zones/{id}", h.UpdateZone)
+	r.Delete("/api/v1/zones/{id}", h.DeleteZone)
+	r.Get("/api/v1/zones/{id}/access-points", h.ListZoneDoors)
+	r.Get("/api/v1/zones/{id}/map", h.GetZoneMap)
+	r.Put("/api/v1/zones/{id}/map", h.UpdateZoneMap)
+
 	// Access Points
 	r.Get("/api/v1/access-points", h.ListAccessPoints)
 	r.Post("/api/v1/access-points", h.CreateAccessPoint)
@@ -147,8 +157,8 @@ func TestRouteSetup(t *testing.T) {
 		walkCount++
 		return nil
 	})
-	if walkCount != 23 {
-		t.Errorf("expected 23 routes, got %d", walkCount)
+	if walkCount != 31 {
+		t.Errorf("expected 31 routes, got %d", walkCount)
 	}
 }
 
