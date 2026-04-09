@@ -45,6 +45,12 @@ func (h *AccessHandlers) ListAccessGroups(w http.ResponseWriter, r *http.Request
 	_ = h.db.Pool.QueryRow(r.Context(),
 		"SELECT COUNT(*) FROM dm3_access.access_groups ag "+where, countArgs...).Scan(&total)
 
+	sortCol, sortDir := parseSorting(r, map[string]string{
+		"name":               "ag.name",
+		"created_at":         "ag.created_at",
+		"access_point_count": "COUNT(DISTINCT agap.access_point_id)",
+		"user_count":         "COUNT(DISTINCT agu.user_id)",
+	}, "ag.name")
 	query := fmt.Sprintf(`
 		SELECT ag.id, ag.tenant_id, ag.access_time_id, ag.name, ag.description, ag.is_default, ag.type,
 		       COUNT(DISTINCT agap.access_point_id) AS access_point_count,
@@ -56,8 +62,8 @@ func (h *AccessHandlers) ListAccessGroups(w http.ResponseWriter, r *http.Request
 		    AND (agu.effective_to IS NULL OR agu.effective_to > now())
 		%s
 		GROUP BY ag.id
-		ORDER BY ag.name ASC
-		LIMIT $%d OFFSET $%d`, where, idx, idx+1)
+		ORDER BY %s %s
+		LIMIT $%d OFFSET $%d`, where, sortCol, sortDir, idx, idx+1)
 	args = append(args, limit, offset)
 
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)

@@ -22,7 +22,7 @@ export function ProvisioningPage() {
     { key: 'zones', header: t('provisioning.template.zones'), render: (r) => <span className="text-muted-foreground">{r.zones.join(', ')}</span> },
     { key: 'schedule', header: t('provisioning.template.schedule'), render: (r) => <span className="text-muted-foreground font-mono text-[11px]">{r.schedule}</span> },
     { key: 'assignedCount', header: t('provisioning.template.people'), width: '70px', render: (r) => <span className="font-medium text-manage">{r.assignedCount}</span> },
-    { key: 'actions', header: '', width: '60px', render: (r) => <Button variant="ghost" size="xs" onClick={(e) => { e.stopPropagation(); setEditTemplate(r); }}>{t('provisioning.template.edit')}</Button> },
+    { key: 'actions', header: t('common:table.actions'), width: '60px', render: (r) => <Button variant="ghost" size="xs" onClick={(e) => { e.stopPropagation(); setEditTemplate(r); }}>{t('provisioning.template.edit')}</Button> },
   ];
 
   const requestColumns: Column<ProvisioningRequest>[] = [
@@ -38,7 +38,7 @@ export function ProvisioningPage() {
       </span>
     )},
     ...(true ? [{
-      key: 'actions' as string, header: '', width: '120px',
+      key: 'actions' as string, header: t('common:table.actions'), width: '120px',
       render: (r: ProvisioningRequest) => r.status === 'pending' ? (
         <div className="flex gap-1">
           <Button size="xs" className="bg-success hover:bg-success/90">{t('provisioning.request.approve')}</Button>

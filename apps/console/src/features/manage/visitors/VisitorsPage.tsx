@@ -59,7 +59,7 @@ export function VisitorsPage() {
     )},
     { key: 'preRegistered', header: '', width: '40px', render: (r) => r.preRegistered ? <span title={t('visitors.preRegisteredTooltip')} className="text-[14px]">📋</span> : null },
     ...(activeTab === 'waiting' ? [{
-      key: 'actions' as string, header: '', width: '80px',
+      key: 'actions' as string, header: t('common:table.actions'), width: '80px',
       render: () => <Button size="xs" className="bg-manage hover:bg-manage/90">{t('visitors.checkin')}</Button>,
     }] : []),
   ];

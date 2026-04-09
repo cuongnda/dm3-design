@@ -12,6 +12,7 @@ import {
   TablePaginationFooter, Checkbox,
 } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import type { AccessGroup, AccessGroupAccessPoint, AccessGroupFormData, AccessTime } from './types';
 import type { User } from '@/features/user-management/types';
 
@@ -40,12 +41,12 @@ interface AddAccessPointModalProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   linkedAPIds: string[];
-  onSubmit: (accessPointId: string) => Promise<boolean>;
+  onSubmit: (accessPointIds: string[]) => Promise<boolean>;
 }
 
 function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddAccessPointModalProps) {
   const { t } = useTranslation('accessGroups');
-  const [selectedId, setSelectedId] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [allAPs, setAllAPs] = useState<AvailableAP[]>([]);
@@ -79,10 +80,32 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
 
   const totalPages = Math.max(1, Math.ceil(filteredAPs.length / PAGE_SIZE));
   const pagedAPs = filteredAPs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const allFilteredSelected = filteredAPs.length > 0 && filteredAPs.every((ap) => selected.has(ap.id));
+  const someFilteredSelected = filteredAPs.some((ap) => selected.has(ap.id));
+
+  const toggleAll = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        filteredAPs.forEach((ap) => next.delete(ap.id));
+      } else {
+        filteredAPs.forEach((ap) => next.add(ap.id));
+      }
+      return next;
+    });
+  };
+
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const handleOpenChange = (v: boolean) => {
     if (!v) {
-      setSelectedId('');
+      setSelected(new Set());
       setError('');
       setSearch('');
       setPage(1);
@@ -91,12 +114,12 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
   };
 
   const handleSubmit = async () => {
-    if (!selectedId) {
-      setError(t('selectAccessPointRequired', 'Please select an access point'));
+    if (selected.size === 0) {
+      setError(t('selectAccessPointRequired', 'Please select at least one access point'));
       return;
     }
     setSubmitting(true);
-    const ok = await onSubmit(selectedId);
+    const ok = await onSubmit([...selected]);
     setSubmitting(false);
     if (ok) onOpenChange(false);
   };
@@ -116,14 +139,17 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
       cancelLabel={t('cancel', 'Cancel')}
       errorMessage={error || undefined}
       primaryAction={{
-        label: submitting ? t('adding', 'Adding...') : t('add', 'Add'),
+        label: submitting
+          ? t('adding', 'Adding...')
+          : selected.size > 0
+            ? t('addNAccessPoints', { defaultValue: 'Add ({{count}})', count: selected.size })
+            : t('add', 'Add'),
         onClick: handleSubmit,
-        disabled: submitting || !selectedId,
+        disabled: submitting || selected.size === 0,
         loading: submitting,
       }}
     >
       <div className="space-y-3">
-        {/* Search */}
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -133,7 +159,6 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
           data-testid="access-input-searchAP"
         />
 
-        {/* Access Point table */}
         <div className="rounded-md border border-border overflow-hidden">
           {loadingAPs ? (
             <div className="flex items-center justify-center gap-2 py-10 text-[13px] text-muted-foreground">
@@ -155,36 +180,36 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
               <table className="w-full text-[13px]">
                 <thead className="bg-muted/60 border-b border-border">
                   <tr>
-                    <th className="w-8 px-3 py-2" />
+                    <th className="w-10 px-3 py-2 text-left">
+                      <Checkbox
+                        checked={allFilteredSelected}
+                        indeterminate={someFilteredSelected && !allFilteredSelected}
+                        onCheckedChange={toggleAll}
+                        disabled={submitting}
+                      />
+                    </th>
                     <th className="px-3 py-2 text-left font-medium text-foreground">{t('columns.accessPointName', 'Access Point')}</th>
                     <th className="px-3 py-2 text-left font-medium text-foreground">{t('columns.description', 'Description')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {pagedAPs.map((ap) => {
-                    const isSelected = selectedId === ap.id;
-                    return (
-                      <tr
-                        key={ap.id}
-                        onClick={() => !submitting && setSelectedId(isSelected ? '' : ap.id)}
-                        className={`border-b border-border last:border-0 cursor-pointer transition-colors ${
-                          isSelected ? 'bg-primary/10' : 'hover:bg-muted/40'
-                        }`}
-                      >
-                        <td className="w-8 px-3 py-2">
-                          <div className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${
-                            isSelected
-                              ? 'border-primary bg-primary'
-                              : 'border-muted-foreground/40'
-                          }`}>
-                            {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 font-medium text-foreground">{ap.name}</td>
-                        <td className="px-3 py-2 text-muted-foreground">{ap.description ?? '—'}</td>
-                      </tr>
-                    );
-                  })}
+                  {pagedAPs.map((ap) => (
+                    <tr
+                      key={ap.id}
+                      onClick={() => !submitting && toggleOne(ap.id)}
+                      className="border-b border-border last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
+                    >
+                      <td className="w-10 px-3 py-2">
+                        <Checkbox
+                          checked={selected.has(ap.id)}
+                          onCheckedChange={() => toggleOne(ap.id)}
+                          disabled={submitting}
+                        />
+                      </td>
+                      <td className="px-3 py-2 font-medium text-foreground">{ap.name}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{ap.description ?? '—'}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
               <TablePaginationFooter
@@ -199,6 +224,12 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
             </>
           )}
         </div>
+
+        {selected.size > 0 && (
+          <p className="text-[12px] text-muted-foreground">
+            {t('accessPointsSelected', { defaultValue: '{{count}} access point(s) selected', count: selected.size })}
+          </p>
+        )}
       </div>
     </AppModal>
   );
@@ -544,29 +575,39 @@ export function AccessGroupDetailPage() {
       });
       await fetchGroup();
       setShowEditModal(false);
+      toast(t('toast.updated'), 'success');
     } catch (err) {
-      setEditError(err instanceof Error ? err.message : 'Failed to update access group');
+      const message = err instanceof Error ? err.message : 'Failed to update access group';
+      setEditError(message);
+      toast(message, 'error');
     } finally {
       setSubmittingEdit(false);
     }
   };
 
-  const handleAddAccessPoint = useCallback(async (accessPointId: string): Promise<boolean> => {
-    if (!id) return false;
+  const handleAddAccessPoints = useCallback(async (accessPointIds: string[]): Promise<boolean> => {
+    if (!id || accessPointIds.length === 0) return false;
     try {
-      await apiFetch(`/api/v1/access/access-groups/${id}/access-points`, {
-        method: 'POST',
-        body: JSON.stringify({ access_point_id: accessPointId }),
-      });
+      for (const apId of accessPointIds) {
+        await apiFetch(`/api/v1/access/access-groups/${id}/access-points`, {
+          method: 'POST',
+          body: JSON.stringify({ access_point_id: apId }),
+        });
+      }
       setError(null);
       await fetchAccessPoints();
       await fetchGroup();
+      toast(t('toast.apAdded', { count: accessPointIds.length }), 'success');
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add access point');
+      const message = err instanceof Error ? err.message : 'Failed to add access point(s)';
+      setError(message);
+      toast(message, 'error');
+      await fetchAccessPoints();
+      await fetchGroup();
       return false;
     }
-  }, [id, fetchAccessPoints, fetchGroup]);
+  }, [id, fetchAccessPoints, fetchGroup, t]);
 
   const handleRemoveAccessPoint = useCallback(async (accessPointId: string) => {
     if (!id) return;
@@ -578,12 +619,15 @@ export function AccessGroupDetailPage() {
       setError(null);
       await fetchAccessPoints();
       await fetchGroup();
+      toast(t('toast.apRemoved'), 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove access point');
+      const message = err instanceof Error ? err.message : 'Failed to remove access point';
+      setError(message);
+      toast(message, 'error');
     } finally {
       setRemovingAPId(null);
     }
-  }, [id, fetchAccessPoints, fetchGroup]);
+  }, [id, fetchAccessPoints, fetchGroup, t]);
 
   const handleAssignUsers = useCallback(async (userIds: string[]): Promise<boolean> => {
     if (!id) return false;
@@ -595,12 +639,15 @@ export function AccessGroupDetailPage() {
       setError(null);
       await fetchUsers();
       await fetchGroup();
+      toast(t('toast.userAssigned', { count: userIds.length }), 'success');
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to assign users');
+      const message = err instanceof Error ? err.message : 'Failed to assign users';
+      setError(message);
+      toast(message, 'error');
       return false;
     }
-  }, [id, fetchUsers, fetchGroup]);
+  }, [id, fetchUsers, fetchGroup, t]);
 
   const handleRemoveUser = useCallback(async (userId: string) => {
     if (!id) return;
@@ -610,12 +657,15 @@ export function AccessGroupDetailPage() {
       setError(null);
       await fetchUsers();
       await fetchGroup();
+      toast(t('toast.userRemoved'), 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove user');
+      const message = err instanceof Error ? err.message : 'Failed to remove user';
+      setError(message);
+      toast(message, 'error');
     } finally {
       setRemovingUserId(null);
     }
-  }, [id, fetchUsers, fetchGroup]);
+  }, [id, fetchUsers, fetchGroup, t]);
 
   const userColumns = useMemo((): Column<GroupUser>[] => [
     {
@@ -675,7 +725,7 @@ export function AccessGroupDetailPage() {
     },
     {
       key: 'actions',
-      header: '',
+      header: t('common:table.actions'),
       width: '80px',
       render: (u) => (
         <Button
@@ -717,7 +767,7 @@ export function AccessGroupDetailPage() {
     },
     {
       key: 'actions',
-      header: '',
+      header: t('common:table.actions'),
       width: '80px',
       render: (ap) => (
         <Button
@@ -918,6 +968,7 @@ export function AccessGroupDetailPage() {
           label: submittingEdit ? t('saving', 'Saving...') : t('save', 'Save'),
           onClick: handleEditSubmit,
           disabled: submittingEdit,
+          loading: submittingEdit,
         }}
       >
         <div className="flex flex-col gap-4">
@@ -978,7 +1029,7 @@ export function AccessGroupDetailPage() {
         open={showAddAPModal}
         onOpenChange={setShowAddAPModal}
         linkedAPIds={accessPoints.map((ap) => ap.access_point_id)}
-        onSubmit={handleAddAccessPoint}
+        onSubmit={handleAddAccessPoints}
       />
 
       {/* Add User Modal */}

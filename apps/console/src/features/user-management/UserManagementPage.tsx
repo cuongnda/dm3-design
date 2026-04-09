@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Search, Edit, Trash2 } from 'lucide-react';
-import { Button, Input, Multiselect, Badge, AppModal, DataTableCard, DataTable, type Column } from '@dm3/ui';
+import { Plus, Edit, Trash2, Trash, Users } from 'lucide-react';
+import { Button, Input, Multiselect, Badge, AppModal, DataTable, type Column, Card, TablePaginationFooter } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { UserModal } from './UserModal';
 import type { User } from './types';
 
@@ -46,6 +47,8 @@ export function UserManagementPage() {
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [deletingUser, setDeletingUser] = useState<User | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
+    const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
+    const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
 
     useEffect(() => {
         apiFetch<{ departments: Department[] }>('/api/v1/identity/departments?limit=200')
@@ -90,18 +93,32 @@ export function UserManagementPage() {
     }, [page, search]);
 
     const handleCreate = async (data: Partial<User>) => {
-        const result = await apiFetch<{ id: string }>('/api/v1/identity/users', { method: 'POST', body: JSON.stringify(data) });
-        setShowCreateModal(false);
-        fetchUsers();
-        return result;
+        try {
+            const result = await apiFetch<{ id: string }>('/api/v1/identity/users', { method: 'POST', body: JSON.stringify(data) });
+            setShowCreateModal(false);
+            fetchUsers();
+            toast(t('toast.created'), 'success');
+            return result;
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to create user';
+            toast(message, 'error');
+            throw err;
+        }
     };
 
     const handleEdit = async (data: Partial<User>) => {
         if (!editingUser) return;
-        await apiFetch(`/api/v1/identity/users/${editingUser.id}`, { method: 'PUT', body: JSON.stringify(data) });
-        setEditingUser(null);
-        fetchUsers();
-        return editingUser;
+        try {
+            await apiFetch(`/api/v1/identity/users/${editingUser.id}`, { method: 'PUT', body: JSON.stringify(data) });
+            setEditingUser(null);
+            fetchUsers();
+            toast(t('toast.updated'), 'success');
+            return editingUser;
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to update user';
+            toast(message, 'error');
+            throw err;
+        }
     };
 
     const handleDeleteConfirm = async () => {
@@ -111,20 +128,32 @@ export function UserManagementPage() {
             await apiFetch(`/api/v1/identity/users/${deletingUser.id}`, { method: 'DELETE' });
             setDeletingUser(null);
             fetchUsers();
+            toast(t('toast.deleted'), 'success');
         } catch (err) {
-            console.error('Failed to delete user:', err);
+            const message = err instanceof Error ? err.message : 'Failed to delete user';
+            toast(message, 'error');
         } finally {
             setDeleteLoading(false);
         }
     };
 
-    const handleBulkDelete = async () => {
-        await apiFetch('/api/v1/identity/users/bulk-delete', {
-            method: 'POST',
-            body: JSON.stringify({ ids: Array.from(selected) }),
-        });
-        setSelected(new Set());
-        fetchUsers();
+    const handleBulkDeleteConfirm = async () => {
+        setBulkDeleteLoading(true);
+        try {
+            await apiFetch('/api/v1/identity/users/bulk-delete', {
+                method: 'POST',
+                body: JSON.stringify({ ids: Array.from(selected) }),
+            });
+            setSelected(new Set());
+            setShowBulkDeleteDialog(false);
+            fetchUsers();
+            toast(t('toast.bulkDeleted', { count: selected.size }), 'success');
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Bulk delete failed';
+            toast(message, 'error');
+        } finally {
+            setBulkDeleteLoading(false);
+        }
     };
 
     const handleSortChange = useCallback((col: string | null, dir: 'asc' | 'desc' | null) => {
@@ -169,7 +198,7 @@ export function UserManagementPage() {
             },
             {
                 key: 'actions',
-                header: '',
+                header: t('common:table.actions'),
                 width: '88px',
                 render: (u) => (
                     <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
@@ -194,24 +223,41 @@ export function UserManagementPage() {
 
     return (
         <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between shrink-0">
-                <div>
-                    <h1 className="text-[18px] font-semibold text-foreground">{t('title')}</h1>
-                    <p className="text-[13px] text-muted-foreground">{t('description')}</p>
+            {/* Header & Stats */}
+            <div className="shrink-0 space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-[18px] font-semibold text-foreground">{t('title')}</h1>
+                        <p className="text-[13px] text-muted-foreground">{t('description')}</p>
+                    </div>
+                    <Button size="sm" onClick={() => setShowCreateModal(true)}>
+                        <Plus size={14} className="mr-1.5" />
+                        {t('addUser')}
+                    </Button>
                 </div>
-                <Button size="sm" onClick={() => setShowCreateModal(true)}>
-                    <Plus size={14} className="mr-1.5" />
-                    {t('addUser')}
-                </Button>
-            </div>
 
-            {/* Search + filters */}
-            <div className="flex items-center gap-2 shrink-0">
-                <div className="relative flex-1">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                    <Input placeholder={t('searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
-                </div>
+                {/* Stats */}
+                {!loading && (
+                    <div className="grid grid-cols-3 gap-3">
+                        <Card className="p-3">
+                            <div className="text-2xl font-bold">{total}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.total', 'Total')}</div>
+                        </Card>
+                        <Card className="p-3">
+                            <div className="text-2xl font-bold">{users.filter((u) => u.status === 'active').length}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.active', 'Active')}</div>
+                        </Card>
+                        <Card className="p-3">
+                            <div className="text-2xl font-bold">{users.filter((u) => u.status !== 'active').length}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.inactive', 'Inactive')}</div>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Search + filters */}
+                <div className="flex items-center gap-2">
+                <Input placeholder={t('searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} className="h-8 text-[13px] flex-1" />
 
                 <Multiselect
                     options={[
@@ -248,63 +294,63 @@ export function UserManagementPage() {
                     </Button>
                 )}
             </div>
+            </div>
 
-            <DataTableCard
-                title={<span className="text-[14px] font-semibold">{t('table.title', { count: total })}</span>}
-                selectedCount={selected.size}
-                onClearSelection={() => setSelected(new Set())}
-                onBulkDelete={handleBulkDelete}
-                bulkDeleteLabel={t('bulkDelete.label', { count: selected.size })}
-                pagination={{
-                    page,
-                    pageSize,
-                    total,
-                    totalPages,
-                    pageSizeOptions: PAGE_SIZE_OPTIONS,
-                    onPageChange: setPage,
-                    onPageSizeChange: setPageSize,
-                    loading,
-                    sortColumns: [
-                        { value: 'user_code', label: t('col.code') },
-                        { value: 'full_name', label: t('col.name') },
-                        { value: 'email', label: t('col.email') },
-                        { value: 'position', label: t('col.position') },
-                        { value: 'department_name', label: t('col.department') },
-                        { value: 'status', label: t('col.status') },
-                    ],
-                    sortBy,
-                    sortDir,
-                    onSortChange: handleSortChange,
-                }}
-            >
-                {loading ? (
-                    <div className="flex justify-center py-12">
-                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                    </div>
-                ) : users.length === 0 ? (
-                    <div className="py-12 text-center text-[13px] text-muted-foreground">
-                        {search ? t('table.empty.search') : t('table.empty.default')}
-                    </div>
-                ) : (
+            {/* Table */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+                <div className="min-h-0 flex-1 overflow-auto">
                     <DataTable
                         embedded
                         stickyHeader
                         paginate={false}
+                        loading={loading}
                         columns={userColumns}
                         data={users}
                         rowKey={(u) => u.id}
                         sortState={{ col: sortBy, dir: sortDir }}
                         onSortChange={handleSortChange}
                         onRowDoubleClick={(u) => setEditingUser(u)}
+                        emptyMessage={search ? t('table.empty.search') : t('table.empty.default')}
+                        emptyIcon={<Users size={32} strokeWidth={1.2} />}
                         selection={{
                             selectedIds: Array.from(selected),
                             onSelectedIdsChange: (ids) => setSelected(new Set(ids)),
                             selectAllScope: 'page',
                             selectOnRowClick: true,
+                            bulkActions: [
+                                {
+                                    icon: <Trash size={13} className="text-destructive" />,
+                                    label: t('common:table.deleteSelected'),
+                                    variant: 'ghost',
+                                    className: 'text-destructive hover:text-destructive hover:bg-destructive/10',
+                                    onClick: () => setShowBulkDeleteDialog(true),
+                                },
+                            ],
                         }}
                     />
-                )}
-            </DataTableCard>
+                </div>
+                <TablePaginationFooter
+                    page={page}
+                    pageSize={pageSize}
+                    total={total}
+                    totalPages={totalPages}
+                    pageSizeOptions={PAGE_SIZE_OPTIONS}
+                    onPageChange={setPage}
+                    onPageSizeChange={setPageSize}
+                    loading={loading}
+                    sortColumns={[
+                        { value: 'user_code', label: t('col.code') },
+                        { value: 'full_name', label: t('col.name') },
+                        { value: 'email', label: t('col.email') },
+                        { value: 'position', label: t('col.position') },
+                        { value: 'department_name', label: t('col.department') },
+                        { value: 'status', label: t('col.status') },
+                    ]}
+                    sortBy={sortBy}
+                    sortDir={sortDir}
+                    onSortChange={handleSortChange}
+                />
+            </div>
 
             {/* Create Modal */}
             <UserModal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} onSave={handleCreate} />
@@ -344,6 +390,36 @@ export function UserManagementPage() {
                         {deletingUser?.full_name || `${deletingUser?.first_name} ${deletingUser?.last_name}`}
                     </span>
                     {t('delete.confirmPost')}
+                </p>
+            </AppModal>
+
+            {/* Bulk delete confirmation */}
+            <AppModal
+                open={showBulkDeleteDialog}
+                onOpenChange={(open) => { if (!open) setShowBulkDeleteDialog(false); }}
+                title={
+                    <span className="flex items-center gap-2 text-destructive">
+                        <Trash2 size={16} />
+                        {t('delete.bulkTitle', 'Delete Users')}
+                    </span>
+                }
+                size="xs"
+                showCancelButton
+                cancelLabel={t('delete.cancel')}
+                cancelDisabled={bulkDeleteLoading}
+                primaryAction={{
+                    label: bulkDeleteLoading ? t('delete.loading') : t('delete.submit'),
+                    variant: 'outline',
+                    className: 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20',
+                    onClick: handleBulkDeleteConfirm,
+                    loading: bulkDeleteLoading,
+                    disabled: bulkDeleteLoading,
+                }}
+            >
+                <p className="text-[13px] text-muted-foreground">
+                    {t('delete.bulkConfirm', 'Are you sure you want to delete')}{' '}
+                    <span className="font-medium text-foreground">{selected.size}</span>{' '}
+                    {t('delete.bulkSuffix', 'users? This cannot be undone.')}
                 </p>
             </AppModal>
         </div>

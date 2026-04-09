@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { apiFetch } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import type { AccessPoint, AccessPointFormData, Zone, AccessTime } from '../types';
 
 interface AccessPointPagination {
@@ -22,6 +24,8 @@ interface UseAccessPointsReturn {
     error: string | null;
     pagination: AccessPointPagination;
     filters: AccessPointFilters;
+    sortBy: string | null;
+    sortDir: 'asc' | 'desc' | null;
 
     fetchAccessPoints: () => Promise<void>;
     createAccessPoint: (data: AccessPointFormData) => Promise<boolean>;
@@ -29,6 +33,8 @@ interface UseAccessPointsReturn {
     deleteAccessPoint: (id: string) => Promise<boolean>;
     updateFilters: (partial: Partial<AccessPointFilters>) => void;
     changePage: (page: number) => void;
+    changePageSize: (size: number) => void;
+    changeSort: (col: string | null, dir: 'asc' | 'desc' | null) => void;
 }
 
 const initialFilters: AccessPointFilters = {
@@ -37,6 +43,7 @@ const initialFilters: AccessPointFilters = {
 };
 
 export function useAccessPoints(): UseAccessPointsReturn {
+    const { t } = useTranslation('accessPoints');
     const [accessPoints, setAccessPoints] = useState<AccessPoint[]>([]);
     const [zones, setZones] = useState<Zone[]>([]);
     const [accessTimes, setAccessTimes] = useState<AccessTime[]>([]);
@@ -49,6 +56,8 @@ export function useAccessPoints(): UseAccessPointsReturn {
         total_pages: 0,
     });
     const [filters, setFilters] = useState<AccessPointFilters>(initialFilters);
+    const [sortBy, setSortBy] = useState<string | null>('name');
+    const [sortDir, setSortDir] = useState<'asc' | 'desc' | null>('asc');
 
     // Fetch supporting lists (zones, access times) once on mount
     const fetchZones = useCallback(async () => {
@@ -79,6 +88,8 @@ export function useAccessPoints(): UseAccessPointsReturn {
                 ...(filters.search && { search: filters.search }),
                 ...(filters.zone_id && { zone_id: filters.zone_id }),
             });
+            if (sortBy) params.set('sort_by', sortBy);
+            if (sortDir) params.set('sort_order', sortDir);
 
             const data = await apiFetch<{
                 access_points?: AccessPoint[];
@@ -100,7 +111,7 @@ export function useAccessPoints(): UseAccessPointsReturn {
         } finally {
             setLoading(false);
         }
-    }, [pagination.page, pagination.limit, filters]);
+    }, [pagination.page, pagination.limit, filters, sortBy, sortDir]);
 
     const createAccessPoint = useCallback(
         async (data: AccessPointFormData): Promise<boolean> => {
@@ -110,13 +121,16 @@ export function useAccessPoints(): UseAccessPointsReturn {
                     body: JSON.stringify(data),
                 });
                 await fetchAccessPoints();
+                toast(t('toast.created'), 'success');
                 return true;
             } catch (err) {
-                console.error('Failed to create access point:', err);
+                const message = err instanceof Error ? err.message : 'Failed to create access point';
+                setError(message);
+                toast(message, 'error');
                 return false;
             }
         },
-        [fetchAccessPoints],
+        [fetchAccessPoints, t],
     );
 
     const updateAccessPoint = useCallback(
@@ -127,13 +141,16 @@ export function useAccessPoints(): UseAccessPointsReturn {
                     body: JSON.stringify(data),
                 });
                 await fetchAccessPoints();
+                toast(t('toast.updated'), 'success');
                 return true;
             } catch (err) {
-                console.error('Failed to update access point:', err);
+                const message = err instanceof Error ? err.message : 'Failed to update access point';
+                setError(message);
+                toast(message, 'error');
                 return false;
             }
         },
-        [fetchAccessPoints],
+        [fetchAccessPoints, t],
     );
 
     const deleteAccessPoint = useCallback(
@@ -141,13 +158,16 @@ export function useAccessPoints(): UseAccessPointsReturn {
             try {
                 await apiFetch(`/api/v1/access/access-points/${id}`, { method: 'DELETE' });
                 await fetchAccessPoints();
+                toast(t('toast.deleted'), 'success');
                 return true;
             } catch (err) {
-                console.error('Failed to delete access point:', err);
+                const message = err instanceof Error ? err.message : 'Failed to delete access point';
+                setError(message);
+                toast(message, 'error');
                 return false;
             }
         },
-        [fetchAccessPoints],
+        [fetchAccessPoints, t],
     );
 
     const updateFilters = useCallback((partial: Partial<AccessPointFilters>) => {
@@ -157,6 +177,16 @@ export function useAccessPoints(): UseAccessPointsReturn {
 
     const changePage = useCallback((page: number) => {
         setPagination((prev) => ({ ...prev, page }));
+    }, []);
+
+    const changePageSize = useCallback((size: number) => {
+        setPagination((prev) => ({ ...prev, limit: size, page: 1 }));
+    }, []);
+
+    const changeSort = useCallback((col: string | null, dir: 'asc' | 'desc' | null) => {
+        setSortBy(col);
+        setSortDir(dir);
+        setPagination((prev) => ({ ...prev, page: 1 }));
     }, []);
 
     useEffect(() => {
@@ -176,11 +206,15 @@ export function useAccessPoints(): UseAccessPointsReturn {
         error,
         pagination,
         filters,
+        sortBy,
+        sortDir,
         fetchAccessPoints,
         createAccessPoint,
         updateAccessPoint,
         deleteAccessPoint,
         updateFilters,
         changePage,
+        changePageSize,
+        changeSort,
     };
 }

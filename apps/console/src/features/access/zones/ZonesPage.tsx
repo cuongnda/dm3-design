@@ -1,23 +1,21 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MapPin, Plus, Search, MoreHorizontal, Edit, Trash2 } from 'lucide-react';
+import { MapPin, Plus, Edit, Trash2, Trash } from 'lucide-react';
 import {
     Button,
     Input,
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
     Badge,
     AppModal,
-    DataTableCard,
     DataTable,
     type Column,
     Select,
     SelectOption,
     Label,
+    Card,
+    TablePaginationFooter,
 } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { useZones } from './hooks/useZones';
 import type { Zone, ZoneFormData } from './types';
 
@@ -44,7 +42,7 @@ function zoneFormToData(form: ZoneFormState): ZoneFormData {
 export function ZonesPage() {
     const { t } = useTranslation('zones');
 
-    const { zones, loading, pagination, fetchZones, createZone, updateZone, deleteZone, changePage } = useZones();
+    const { zones, loading, pagination, sortBy, sortDir, fetchZones, createZone, updateZone, changePage, changePageSize, changeSort } = useZones();
 
     const [search, setSearch] = useState('');
     const [selected, setSelected] = useState<string[]>([]);
@@ -57,21 +55,14 @@ export function ZonesPage() {
     const [formData, setFormData] = useState<ZoneFormState>(emptyForm);
     const [formErrors, setFormErrors] = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState(false);
-
-    useEffect(() => {
-        fetchZones();
-    }, [fetchZones]);
+    const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
+    const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
 
     const filteredZones = useMemo(() => {
         if (!search.trim()) return zones;
         const q = search.toLowerCase();
         return zones.filter((z) => z.name.toLowerCase().includes(q) || (z.description ?? '').toLowerCase().includes(q));
     }, [zones, search]);
-
-    const getParentName = (parentId?: string): string | undefined => {
-        if (!parentId) return undefined;
-        return zones.find((z) => z.id === parentId)?.name;
-    };
 
     const openCreate = () => {
         setFormData(emptyForm);
@@ -129,6 +120,7 @@ export function ZonesPage() {
             setShowDeleteDialog(false);
             setZoneToDelete(null);
             fetchZones();
+            toast(t('toast.deleted'), 'success');
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Failed to delete zone';
             try {
@@ -137,18 +129,26 @@ export function ZonesPage() {
             } catch {
                 setDeleteError(msg.replace(/^API \d+: /, ''));
             }
+            toast(msg, 'error');
         } finally {
             setDeleteLoading(false);
         }
     };
 
-    const handleBulkDelete = async () => {
+    const handleBulkDeleteConfirm = async () => {
+        setBulkDeleteLoading(true);
         try {
             await apiFetch('/api/v1/access/zones/bulk-delete', { method: 'POST', body: JSON.stringify({ ids: selected }) });
+            toast(t('toast.bulkDeleted', { count: selected.length }), 'success');
             setSelected([]);
+            setShowBulkDeleteDialog(false);
             fetchZones();
         } catch (err) {
-            setDeleteError(err instanceof Error ? err.message : 'Bulk delete failed');
+            const message = err instanceof Error ? err.message : 'Bulk delete failed';
+            setDeleteError(message);
+            toast(message, 'error');
+        } finally {
+            setBulkDeleteLoading(false);
         }
     };
 
@@ -166,7 +166,7 @@ export function ZonesPage() {
                 header: t('columns.name', 'Name'),
                 sortable: true,
                 render: (z) => {
-                    const parentName = getParentName(z.parent_id);
+                    const parentName = z.parent_id ? zones.find((p) => p.id === z.parent_id)?.name : undefined;
                     return (
                         <div className="flex items-center gap-2">
                             <MapPin size={14} className="text-primary shrink-0" />
@@ -185,6 +185,7 @@ export function ZonesPage() {
             {
                 key: 'description',
                 header: t('columns.description', 'Description'),
+                sortable: true,
                 render: (z) =>
                     z.description ? (
                         <span className="text-[13px] text-muted-foreground truncate max-w-[240px] block">{z.description}</span>
@@ -196,43 +197,33 @@ export function ZonesPage() {
                 key: 'access_point_count',
                 header: t('columns.accessPoints', 'Access Points'),
                 width: '120px',
+                sortable: true,
                 render: (z) => <Badge variant="secondary">{z.access_point_count}</Badge>,
             },
             {
                 key: 'created_at',
                 header: t('columns.createdAt', 'Created'),
                 width: '100px',
+                sortable: true,
                 render: (z) => <span className="text-[12px] text-muted-foreground">{new Date(z.created_at).toLocaleDateString()}</span>,
             },
             {
                 key: 'actions',
-                header: '',
-                width: '48px',
+                header: t('common:table.actions'),
+                width: '72px',
                 render: (z) => (
-                    <div onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                    <MoreHorizontal size={14} />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => openEdit(z)}>
-                                    <Edit size={14} className="mr-2" />
-                                    {t('actions.edit', 'Edit')}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => openDelete(z)} className="text-destructive">
-                                    <Trash2 size={14} className="mr-2" />
-                                    {t('actions.delete', 'Delete')}
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon-sm" onClick={() => openEdit(z)}>
+                            <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => openDelete(z)}>
+                            <Trash2 className="w-4 h-4" />
+                        </Button>
                     </div>
                 ),
             },
-            // eslint-disable-next-line react-hooks/exhaustive-deps
         ],
-        [zones, t],
+        [t, zones],
     );
 
     const zoneForm = (
@@ -284,79 +275,100 @@ export function ZonesPage() {
 
     return (
         <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between shrink-0">
-                <div>
-                    <h1 className="text-[18px] font-semibold text-foreground">{t('title', 'Zones')}</h1>
-                    <p className="text-[13px] text-muted-foreground">{t('description', 'Manage physical zones and access areas')}</p>
+            {/* Header & Stats */}
+            <div className="shrink-0 space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-[18px] font-semibold text-foreground">{t('title', 'Zones')}</h1>
+                        <p className="text-[13px] text-muted-foreground">{t('description', 'Manage physical zones and access areas')}</p>
+                    </div>
+                    <Button size="sm" onClick={openCreate}>
+                        <Plus size={14} className="mr-1.5" />
+                        {t('addZone', 'Add Zone')}
+                    </Button>
                 </div>
-                <Button size="sm" onClick={openCreate}>
-                    <Plus size={14} className="mr-1.5" />
-                    {t('addZone', 'Add Zone')}
-                </Button>
-            </div>
 
-            {/* Toolbar */}
-            <div className="flex items-center gap-2 shrink-0">
-                <div className="relative flex-1">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                    <Input
-                        placeholder={t('searchPlaceholder', 'Search zones...')}
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="pl-9"
-                    />
-                </div>
+                {/* Stats */}
+                {!loading && (
+                    <div className="grid grid-cols-3 gap-3">
+                        <Card className="p-3">
+                            <div className="text-2xl font-bold">{pagination.total}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.total', 'Total')}</div>
+                        </Card>
+                        <Card className="p-3">
+                            <div className="text-2xl font-bold">{zones.filter((z) => !z.parent_id).length}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.root', 'Root Zones')}</div>
+                        </Card>
+                        <Card className="p-3">
+                            <div className="text-2xl font-bold">{zones.filter((z) => !!z.parent_id).length}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.sub', 'Sub-Zones')}</div>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Search */}
+                <Input
+                    placeholder={t('searchPlaceholder', 'Search zones...')}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="h-8 text-[13px]"
+                />
             </div>
 
             {/* Table */}
-            <DataTableCard
-                title={
-                    <span className="text-[14px] font-semibold">
-                        {t('tableTitle', 'Zones')} ({pagination.total})
-                    </span>
-                }
-                selectedCount={selected.length}
-                onClearSelection={() => setSelected([])}
-                onBulkDelete={handleBulkDelete}
-                bulkDeleteLabel={`${selected.length} zones`}
-                pagination={{
-                    page: pagination.page,
-                    pageSize: pagination.limit,
-                    total: pagination.total,
-                    totalPages: Math.ceil(pagination.total / pagination.limit),
-                    pageSizeOptions: [10, 20, 50],
-                    onPageChange: changePage,
-                    onPageSizeChange: () => {},
-                    loading,
-                }}
-            >
-                {loading ? (
-                    <div className="flex justify-center py-12">
-                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                    </div>
-                ) : filteredZones.length === 0 ? (
-                    <div className="py-12 text-center text-[13px] text-muted-foreground">
-                        {search ? t('noResults', 'No zones match your search') : t('empty', 'No zones yet. Add the first one.')}
-                    </div>
-                ) : (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+                <div className="min-h-0 flex-1 overflow-auto">
                     <DataTable
                         embedded
                         stickyHeader
                         paginate={false}
+                        loading={loading}
                         columns={columns}
                         data={filteredZones}
+                        sortState={{ col: sortBy, dir: sortDir }}
+                        onSortChange={changeSort}
                         rowKey={(z) => z.id}
                         onRowDoubleClick={(z) => openEdit(z)}
+                        emptyMessage={search ? t('noResults', 'No zones match your search') : t('empty', 'No zones yet. Add the first one.')}
+                        emptyIcon={<MapPin size={32} strokeWidth={1.2} />}
                         selection={{
                             selectedIds: selected,
                             onSelectedIdsChange: setSelected,
                             selectAllScope: 'page',
                             selectOnRowClick: true,
+                            bulkActions: [
+                                {
+                                    icon: <Trash size={13} className="text-destructive" />,
+                                    label: t('common:table.deleteSelected'),
+                                    variant: 'ghost',
+                                    className: 'text-destructive hover:text-destructive hover:bg-destructive/10',
+                                    onClick: () => setShowBulkDeleteDialog(true),
+                                },
+                            ],
                         }}
                     />
-                )}
-            </DataTableCard>
+                </div>
+                <TablePaginationFooter
+                    page={pagination.page}
+                    pageSize={pagination.limit}
+                    total={pagination.total}
+                    totalPages={pagination.total_pages}
+                    pageSizeOptions={[10, 20, 50, 100]}
+                    onPageChange={changePage}
+                    onPageSizeChange={changePageSize}
+                    loading={loading}
+                    sortColumns={[
+                        { value: 'name', label: t('columns.name', 'Name') },
+                        { value: 'description', label: t('columns.description', 'Description') },
+                        { value: 'access_point_count', label: t('columns.accessPoints', 'Access Points') },
+                        { value: 'created_at', label: t('columns.createdAt', 'Created') },
+                    ]}
+                    sortBy={sortBy}
+                    sortDir={sortDir}
+                    onSortChange={changeSort}
+                />
+            </div>
 
             {/* Create Modal */}
             <AppModal
@@ -375,6 +387,7 @@ export function ZonesPage() {
                     label: submitting ? t('saving', 'Saving...') : t('save', 'Save'),
                     onClick: handleCreateSubmit,
                     disabled: submitting,
+                    loading: submitting,
                 }}
             >
                 {zoneForm}
@@ -399,6 +412,7 @@ export function ZonesPage() {
                     label: submitting ? t('saving', 'Saving...') : t('save', 'Save'),
                     onClick: handleEditSubmit,
                     disabled: submitting,
+                    loading: submitting,
                 }}
             >
                 {zoneForm}
@@ -443,6 +457,36 @@ export function ZonesPage() {
                             {t('deleteWarningPoints', 'access points assigned.')}
                         </span>
                     )}
+                </p>
+            </AppModal>
+
+            {/* Bulk delete confirmation */}
+            <AppModal
+                open={showBulkDeleteDialog}
+                onOpenChange={(open) => { if (!open) setShowBulkDeleteDialog(false); }}
+                title={
+                    <span className="flex items-center gap-2 text-destructive">
+                        <Trash2 size={16} />
+                        {t('bulkDeleteTitle', 'Delete Zones')}
+                    </span>
+                }
+                size="xs"
+                showCancelButton
+                cancelLabel={t('cancel', 'Cancel')}
+                cancelDisabled={bulkDeleteLoading}
+                primaryAction={{
+                    label: bulkDeleteLoading ? t('deleting', 'Deleting...') : t('delete', 'Delete'),
+                    variant: 'outline',
+                    className: 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20',
+                    onClick: handleBulkDeleteConfirm,
+                    loading: bulkDeleteLoading,
+                    disabled: bulkDeleteLoading,
+                }}
+            >
+                <p className="text-[13px] text-muted-foreground">
+                    {t('bulkDeleteConfirm', 'Are you sure you want to delete')}{' '}
+                    <span className="font-medium text-foreground">{selected.length}</span>{' '}
+                    {t('bulkDeleteSuffix', 'zones? This cannot be undone.')}
                 </p>
             </AppModal>
         </div>

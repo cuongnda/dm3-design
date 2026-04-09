@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Clock, Plus, Edit, Settings, Trash2 } from 'lucide-react';
+import { Clock, Plus, Settings, Trash2 } from 'lucide-react';
 import {
     Button,
     Input,
@@ -10,8 +10,10 @@ import {
     DataTable,
     type Column,
     Card,
+    TablePaginationFooter,
 } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { useAccessTimes } from './hooks/useAccessTimes';
 import type { AccessTime } from './types';
 
@@ -19,7 +21,7 @@ export function AccessTimesPage() {
     const { t } = useTranslation('accessTimes');
     const navigate = useNavigate();
 
-    const { accessTimes, loading, pagination, fetchAccessTimes } = useAccessTimes();
+    const { accessTimes, loading, pagination, sortBy, sortDir, fetchAccessTimes, changePage, changePageSize, changeSort } = useAccessTimes();
 
     const [search, setSearch] = useState('');
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -27,10 +29,12 @@ export function AccessTimesPage() {
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
 
-    const filteredTimes = accessTimes.filter((at) =>
-        at.name.toLowerCase().includes(search.toLowerCase()) ||
-        (at.description ?? '').toLowerCase().includes(search.toLowerCase())
-    );
+    const filteredTimes = useMemo(() =>
+        accessTimes.filter((at) =>
+            at.name.toLowerCase().includes(search.toLowerCase()) ||
+            (at.description ?? '').toLowerCase().includes(search.toLowerCase())
+        ),
+    [accessTimes, search]);
 
     const handleDelete = (at: AccessTime) => {
         setTimeToDelete(at);
@@ -46,9 +50,11 @@ export function AccessTimesPage() {
             setShowDeleteDialog(false);
             setTimeToDelete(null);
             fetchAccessTimes();
+            toast(t('toast.deleted'), 'success');
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Failed to delete access time';
             setDeleteError(msg.replace(/^API \d+: /, ''));
+            toast(msg, 'error');
         } finally {
             setDeleteLoading(false);
         }
@@ -58,6 +64,7 @@ export function AccessTimesPage() {
         {
             key: 'name',
             header: t('columns.name', 'Name'),
+            sortable: true,
             render: (at) => (
                 <div className="flex items-center gap-3">
                     <div className={`w-2.5 h-2.5 rounded-full ${at.is_active ? 'bg-green-500' : 'bg-gray-400'}`} />
@@ -71,12 +78,14 @@ export function AccessTimesPage() {
         {
             key: 'timezone',
             header: t('columns.timezone', 'Timezone'),
+            sortable: true,
             render: (at) => <span className="text-[13px] text-muted-foreground">{at.timezone}</span>,
         },
         {
             key: 'is_active',
             header: t('columns.active', 'Status'),
             width: '80px',
+            sortable: true,
             render: (at) => (
                 <Badge variant={at.is_active ? 'default' : 'secondary'}>
                     {at.is_active ? t('badge.active', 'Active') : t('badge.inactive', 'Inactive')}
@@ -87,11 +96,12 @@ export function AccessTimesPage() {
             key: 'slots',
             header: t('columns.slots', 'Slots'),
             width: '72px',
+            sortable: true,
             render: (at) => <Badge variant="secondary">{at.slot_count ?? at.slots?.length ?? 0}</Badge>,
         },
         {
             key: 'actions',
-            header: '',
+            header: t('common:table.actions'),
             width: '100px',
             render: (at) => (
                 <div className="flex items-center gap-1">
@@ -141,12 +151,12 @@ export function AccessTimesPage() {
                 {!loading && (
                     <div className="grid grid-cols-3 gap-3">
                         <Card className="p-3">
-                            <div className="text-2xl font-bold">{accessTimes.filter(a => a.is_active).length}</div>
-                            <div className="text-xs text-muted-foreground">{t('stats.active', 'Active')}</div>
+                            <div className="text-2xl font-bold">{pagination.total}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.total', 'Total')}</div>
                         </Card>
                         <Card className="p-3">
-                            <div className="text-2xl font-bold">{accessTimes.length}</div>
-                            <div className="text-xs text-muted-foreground">{t('stats.total', 'Total')}</div>
+                            <div className="text-2xl font-bold">{accessTimes.filter(a => a.is_active).length}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.active', 'Active')}</div>
                         </Card>
                         <Card className="p-3">
                             <div className="text-2xl font-bold">{accessTimes.filter(a => !a.is_active).length}</div>
@@ -164,24 +174,44 @@ export function AccessTimesPage() {
                 />
             </div>
 
-            {/* Table - scrollable */}
-            {loading ? (
-                <div className="flex items-center justify-center flex-1">
-                    <div className="text-muted-foreground">Loading...</div>
-                </div>
-            ) : (
-                <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border">
+            {/* Table */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+                <div className="min-h-0 flex-1 overflow-auto">
                     <DataTable
                         embedded
                         stickyHeader
                         paginate={false}
+                        loading={loading}
                         columns={columns}
                         data={filteredTimes}
                         rowKey={(at) => at.id}
-                        onRowClick={(at) => navigate(`/access/access-times/${at.id}`)}
+                        sortState={{ col: sortBy, dir: sortDir }}
+                        onSortChange={changeSort}
+                        onRowDoubleClick={(at) => navigate(`/access/access-times/${at.id}`)}
+                        emptyMessage={search ? t('noResults', 'No access times match your search') : t('empty', 'No access times yet.')}
+                        emptyIcon={<Clock size={32} strokeWidth={1.2} />}
                     />
                 </div>
-            )}
+                <TablePaginationFooter
+                    page={pagination.page}
+                    pageSize={pagination.limit}
+                    total={pagination.total}
+                    totalPages={pagination.total_pages}
+                    pageSizeOptions={[10, 20, 50, 100]}
+                    onPageChange={changePage}
+                    onPageSizeChange={changePageSize}
+                    loading={loading}
+                    sortColumns={[
+                        { value: 'name', label: t('columns.name', 'Name') },
+                        { value: 'timezone', label: t('columns.timezone', 'Timezone') },
+                        { value: 'is_active', label: t('columns.active', 'Status') },
+                        { value: 'slot_count', label: t('columns.slots', 'Slots') },
+                    ]}
+                    sortBy={sortBy}
+                    sortDir={sortDir}
+                    onSortChange={changeSort}
+                />
+            </div>
 
             {/* Delete Confirmation */}
             <AppModal

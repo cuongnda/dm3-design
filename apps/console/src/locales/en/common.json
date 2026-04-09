@@ -43,5 +43,21 @@
   "status.offline": "Offline",
   "status.online": "Online",
   "status.cached": "Cached",
-  "breadcrumb.overview": "Overview"
+  "breadcrumb.overview": "Overview",
+  "table.selected": "{{count}} selected",
+  "table.noData": "No data",
+  "table.pagination": "{{from}}–{{to}} / {{total}}",
+  "table.prevPage": "Previous page",
+  "table.nextPage": "Next page",
+  "table.selectAll": "Select all",
+  "table.selectRow": "Select row",
+  "table.actions": "Actions",
+  "table.deleteSelected": "Delete selected",
+  "pagination.pageOf": "Page {{page}} of {{total}}",
+  "pagination.totalRows": "{{count}} total",
+  "pagination.perPage": "Per page",
+  "pagination.sort": "Sort",
+  "pagination.sortDefault": "Default",
+  "pagination.sortAsc": "Ascending — click for descending",
+  "pagination.sortDesc": "Descending — click for ascending"
 }

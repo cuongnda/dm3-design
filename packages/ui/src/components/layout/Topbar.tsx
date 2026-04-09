@@ -19,6 +19,7 @@ import { Button } from '../ui/button';
 function getBreadcrumb(
   pathname: string,
   domainMap: Record<string, { label: string; colorClass: string }>,
+  segmentMap: Record<string, string>,
   overviewLabel: string,
   dashboardLabel: string,
 ): { domain?: string; domainColorClass?: string; segments: string[] } {
@@ -26,9 +27,11 @@ function getBreadcrumb(
   if (parts.length === 0) return { segments: [overviewLabel, dashboardLabel] };
 
   const domain = domainMap[parts[0]];
-  const segments = parts.map((p) =>
-    p.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-  );
+  // Translate known segments, fallback to capitalizing URL slug
+  const toLabel = (p: string) =>
+    segmentMap[p] ?? p.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+  const segments = parts.map(toLabel);
 
   if (domain) {
     return { domain: domain.label, domainColorClass: domain.colorClass, segments: segments.slice(1) };
@@ -47,12 +50,48 @@ export function Topbar() {
 
   const domainMap: Record<string, { label: string; colorClass: string }> = {
     secure: { label: t('nav.secure'), colorClass: 'text-secure' },
+    access: { label: t('nav.access'), colorClass: 'text-operate' },
     manage: { label: t('nav.manage'), colorClass: 'text-manage' },
     operate: { label: t('nav.operate'), colorClass: 'text-operate' },
-    smart: { label: '🧠 SMART', colorClass: 'text-smart' },
+    smart: { label: t('nav.smart', '🧠 SMART'), colorClass: 'text-smart' },
   };
 
-  const bc = getBreadcrumb(location.pathname, domainMap, t('breadcrumb.overview'), t('nav.dashboard'));
+  const segmentMap: Record<string, string> = {
+    // access
+    zones:          t('nav.zones', 'Zones'),
+    'access-points': t('nav.accessPoints', 'Access Points'),
+    'access-groups': t('nav.accessGroups', 'Access Groups'),
+    'access-times':  t('nav.accessTimes', 'Access Times'),
+    devices:        t('nav.devices', 'Devices'),
+    // manage
+    users:          t('nav.users', 'Users'),
+    departments:    t('nav.departments', 'Departments'),
+    identities:     t('nav.identities', 'Identities'),
+    visitors:       t('nav.visitors', 'Visitors'),
+    contractors:    t('nav.contractors', 'Contractors'),
+    attendance:     t('nav.attendance', 'Attendance'),
+    deliveries:     t('nav.deliveries', 'Deliveries'),
+    // secure
+    'access-control': t('nav.accessControl', 'Access Control'),
+    cctv:           t('nav.cctv', 'CCTV'),
+    intrusion:      t('nav.intrusion', 'Intrusion'),
+    intercom:       t('nav.intercom', 'Intercom'),
+    emergency:      t('nav.emergency', 'Emergency'),
+    // operate
+    'room-booking': t('nav.roomBooking', 'Room Booking'),
+    parking:        t('nav.parking', 'Parking'),
+    maintenance:    t('nav.maintenance', 'Maintenance'),
+    'guard-tour':   t('nav.guardTour', 'Guard Tour'),
+    keys:           t('nav.keys', 'Keys'),
+    // smart
+    'ai-assistant': t('nav.aiAssistant', 'AI Assistant'),
+    analytics:      t('nav.analytics', 'Analytics'),
+    automation:     t('nav.automation', 'Automation'),
+    // special
+    new:            t('breadcrumb.new', 'New'),
+  };
+
+  const bc = getBreadcrumb(location.pathname, domainMap, segmentMap, t('breadcrumb.overview'), t('nav.dashboard'));
 
   // Cmd+K shortcut
   useEffect(() => {

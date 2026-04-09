@@ -30,5 +30,20 @@
   "form.description": "Mô tả",
   "form.descriptionPlaceholder": "Mô tả tùy chọn",
   "form.parentZone": "Khu vực cha",
-  "form.noParent": "Không có cha (cấp cao nhất)"
+  "form.noParent": "Không có cha (cấp cao nhất)",
+  "toast.created": "Đã tạo khu vực",
+  "toast.updated": "Đã cập nhật khu vực",
+  "toast.deleted": "Đã xóa khu vực",
+  "toast.createFailed": "Tạo khu vực thất bại",
+  "toast.updateFailed": "Cập nhật khu vực thất bại",
+  "toast.deleteFailed": "Xóa khu vực thất bại",
+  "toast.bulkDeleted": "Đã xóa {{count}} khu vực",
+  "toast.bulkDeleteFailed": "Xóa hàng loạt thất bại",
+  "stats.total": "Tổng",
+  "stats.root": "Khu vực gốc",
+  "stats.sub": "Khu vực con",
+  "bulkDelete": "Xóa đã chọn",
+  "bulkDeleteTitle": "Xóa khu vực",
+  "bulkDeleteConfirm": "Bạn có chắc muốn xóa",
+  "bulkDeleteSuffix": "khu vực? Thao tác này không thể hoàn tác."
 }

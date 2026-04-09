@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { apiFetch } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import type { AccessGroup, AccessGroupFormData } from '../types';
 
 interface AccessGroupPagination {
@@ -22,6 +24,8 @@ interface UseAccessGroupsReturn {
     error: string | null;
     pagination: AccessGroupPagination;
     search: string;
+    sortBy: string | null;
+    sortDir: 'asc' | 'desc' | null;
     setSearch: (value: string) => void;
     fetchAccessGroups: () => Promise<void>;
     createAccessGroup: (data: AccessGroupFormData) => Promise<boolean>;
@@ -29,15 +33,19 @@ interface UseAccessGroupsReturn {
     deleteAccessGroup: (id: string) => Promise<boolean>;
     changePage: (page: number) => void;
     changePageSize: (size: number) => void;
+    changeSort: (col: string | null, dir: 'asc' | 'desc' | null) => void;
 }
 
 export function useAccessGroups(): UseAccessGroupsReturn {
+    const { t } = useTranslation('accessGroups');
     const [accessGroups, setAccessGroups] = useState<AccessGroup[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [search, setSearchRaw] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+    const [sortBy, setSortBy] = useState<string | null>('name');
+    const [sortDir, setSortDir] = useState<'asc' | 'desc' | null>('asc');
     const [pagination, setPagination] = useState<AccessGroupPagination>({
         page: 1,
         limit: 20,
@@ -62,9 +70,9 @@ export function useAccessGroups(): UseAccessGroupsReturn {
                 page: pagination.page.toString(),
                 limit: pagination.limit.toString(),
             });
-            if (debouncedSearch.trim()) {
-                params.set('search', debouncedSearch.trim());
-            }
+            if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
+            if (sortBy) params.set('sort_by', sortBy);
+            if (sortDir) params.set('sort_order', sortDir);
             const data = await apiFetch<PaginatedResponse<AccessGroup>>(`/api/v1/access/access-groups?${params}`);
             setAccessGroups(data.data ?? []);
             const total = data.total ?? 0;
@@ -79,7 +87,7 @@ export function useAccessGroups(): UseAccessGroupsReturn {
         } finally {
             setLoading(false);
         }
-    }, [pagination.page, pagination.limit, debouncedSearch]);
+    }, [pagination.page, pagination.limit, debouncedSearch, sortBy, sortDir]);
 
     const createAccessGroup = useCallback(
         async (data: AccessGroupFormData): Promise<boolean> => {
@@ -89,14 +97,16 @@ export function useAccessGroups(): UseAccessGroupsReturn {
                     body: JSON.stringify(data),
                 });
                 await fetchAccessGroups();
+                toast(t('toast.created'), 'success');
                 return true;
             } catch (err) {
                 const message = err instanceof Error ? err.message : 'Failed to create access group';
                 setError(message);
+                toast(message, 'error');
                 return false;
             }
         },
-        [fetchAccessGroups],
+        [fetchAccessGroups, t],
     );
 
     const updateAccessGroup = useCallback(
@@ -107,14 +117,16 @@ export function useAccessGroups(): UseAccessGroupsReturn {
                     body: JSON.stringify(data),
                 });
                 await fetchAccessGroups();
+                toast(t('toast.updated'), 'success');
                 return true;
             } catch (err) {
                 const message = err instanceof Error ? err.message : 'Failed to update access group';
                 setError(message);
+                toast(message, 'error');
                 return false;
             }
         },
-        [fetchAccessGroups],
+        [fetchAccessGroups, t],
     );
 
     const deleteAccessGroup = useCallback(
@@ -122,14 +134,16 @@ export function useAccessGroups(): UseAccessGroupsReturn {
             try {
                 await apiFetch(`/api/v1/access/access-groups/${id}`, { method: 'DELETE' });
                 await fetchAccessGroups();
+                toast(t('toast.deleted'), 'success');
                 return true;
             } catch (err) {
                 const message = err instanceof Error ? err.message : 'Failed to delete access group';
                 setError(message);
+                toast(message, 'error');
                 return false;
             }
         },
-        [fetchAccessGroups],
+        [fetchAccessGroups, t],
     );
 
     const changePage = useCallback((page: number) => {
@@ -138,6 +152,12 @@ export function useAccessGroups(): UseAccessGroupsReturn {
 
     const changePageSize = useCallback((size: number) => {
         setPagination((prev) => ({ ...prev, limit: size, page: 1 }));
+    }, []);
+
+    const changeSort = useCallback((col: string | null, dir: 'asc' | 'desc' | null) => {
+        setSortBy(col);
+        setSortDir(dir);
+        setPagination((prev) => ({ ...prev, page: 1 }));
     }, []);
 
     useEffect(() => {
@@ -150,6 +170,8 @@ export function useAccessGroups(): UseAccessGroupsReturn {
         error,
         pagination,
         search,
+        sortBy,
+        sortDir,
         setSearch,
         fetchAccessGroups,
         createAccessGroup,
@@ -157,5 +179,6 @@ export function useAccessGroups(): UseAccessGroupsReturn {
         deleteAccessGroup,
         changePage,
         changePageSize,
+        changeSort,
     };
 }

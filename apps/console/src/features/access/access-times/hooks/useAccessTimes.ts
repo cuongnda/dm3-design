@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { apiFetch } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import type { AccessTime, AccessTimeFormData } from '../types';
 
 interface AccessTimePagination {
@@ -14,6 +16,8 @@ interface UseAccessTimesReturn {
     loading: boolean;
     error: string | null;
     pagination: AccessTimePagination;
+    sortBy: string | null;
+    sortDir: 'asc' | 'desc' | null;
     fetchAccessTimes: () => Promise<void>;
     createAccessTime: (data: AccessTimeFormData) => Promise<boolean>;
     updateAccessTime: (id: string, data: AccessTimeFormData) => Promise<boolean>;
@@ -21,12 +25,16 @@ interface UseAccessTimesReturn {
     getAccessTime: (id: string) => Promise<AccessTime | null>;
     changePage: (page: number) => void;
     changePageSize: (size: number) => void;
+    changeSort: (col: string | null, dir: 'asc' | 'desc' | null) => void;
 }
 
 export function useAccessTimes(): UseAccessTimesReturn {
+    const { t } = useTranslation('accessTimes');
     const [accessTimes, setAccessTimes] = useState<AccessTime[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [sortBy, setSortBy] = useState<string | null>('name');
+    const [sortDir, setSortDir] = useState<'asc' | 'desc' | null>('asc');
     const [pagination, setPagination] = useState<AccessTimePagination>({
         page: 1,
         limit: 20,
@@ -42,6 +50,8 @@ export function useAccessTimes(): UseAccessTimesReturn {
                 page: pagination.page.toString(),
                 limit: pagination.limit.toString(),
             });
+            if (sortBy) params.set('sort_by', sortBy);
+            if (sortDir) params.set('sort_order', sortDir);
             const data = await apiFetch<any>(`/api/v1/access/access-times?${params}`);
             setAccessTimes(data.data ?? []);
             setPagination((prev) => ({
@@ -55,7 +65,7 @@ export function useAccessTimes(): UseAccessTimesReturn {
         } finally {
             setLoading(false);
         }
-    }, [pagination.page, pagination.limit]);
+    }, [pagination.page, pagination.limit, sortBy, sortDir]);
 
     const createAccessTime = useCallback(
         async (data: AccessTimeFormData): Promise<boolean> => {
@@ -65,14 +75,16 @@ export function useAccessTimes(): UseAccessTimesReturn {
                     body: JSON.stringify(data),
                 });
                 await fetchAccessTimes();
+                toast(t('toast.created'), 'success');
                 return true;
             } catch (err) {
                 const message = err instanceof Error ? err.message : 'Failed to create access time';
                 setError(message);
+                toast(message, 'error');
                 return false;
             }
         },
-        [fetchAccessTimes],
+        [fetchAccessTimes, t],
     );
 
     const updateAccessTime = useCallback(
@@ -83,14 +95,16 @@ export function useAccessTimes(): UseAccessTimesReturn {
                     body: JSON.stringify(data),
                 });
                 await fetchAccessTimes();
+                toast(t('toast.updated'), 'success');
                 return true;
             } catch (err) {
                 const message = err instanceof Error ? err.message : 'Failed to update access time';
                 setError(message);
+                toast(message, 'error');
                 return false;
             }
         },
-        [fetchAccessTimes],
+        [fetchAccessTimes, t],
     );
 
     const deleteAccessTime = useCallback(
@@ -98,14 +112,16 @@ export function useAccessTimes(): UseAccessTimesReturn {
             try {
                 await apiFetch(`/api/v1/access/access-times/${id}`, { method: 'DELETE' });
                 await fetchAccessTimes();
+                toast(t('toast.deleted'), 'success');
                 return true;
             } catch (err) {
                 const message = err instanceof Error ? err.message : 'Failed to delete access time';
                 setError(message);
+                toast(message, 'error');
                 return false;
             }
         },
-        [fetchAccessTimes],
+        [fetchAccessTimes, t],
     );
 
     const getAccessTime = useCallback(async (id: string): Promise<AccessTime | null> => {
@@ -127,6 +143,12 @@ export function useAccessTimes(): UseAccessTimesReturn {
         setPagination((prev) => ({ ...prev, limit: size, page: 1 }));
     }, []);
 
+    const changeSort = useCallback((col: string | null, dir: 'asc' | 'desc' | null) => {
+        setSortBy(col);
+        setSortDir(dir);
+        setPagination((prev) => ({ ...prev, page: 1 }));
+    }, []);
+
     useEffect(() => {
         fetchAccessTimes();
     }, [fetchAccessTimes]);
@@ -136,6 +158,8 @@ export function useAccessTimes(): UseAccessTimesReturn {
         loading,
         error,
         pagination,
+        sortBy,
+        sortDir,
         fetchAccessTimes,
         createAccessTime,
         updateAccessTime,
@@ -143,5 +167,6 @@ export function useAccessTimes(): UseAccessTimesReturn {
         getAccessTime,
         changePage,
         changePageSize,
+        changeSort,
     };
 }

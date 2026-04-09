@@ -111,5 +111,17 @@
   "assign.colDepartment": "Phòng ban",
   "assign.removeBtn": "Gỡ",
   "assign.noUsersAvailable": "Không có nhân viên khả dụng",
-  "assign.allAssigned": "Tất cả nhân viên đã được phân công vào phòng ban"
+  "assign.allAssigned": "Tất cả nhân viên đã được phân công vào phòng ban",
+  "toast.created": "Đã tạo phòng ban",
+  "toast.updated": "Đã cập nhật phòng ban",
+  "toast.deleted": "Đã xóa phòng ban",
+  "toast.createFailed": "Tạo phòng ban thất bại",
+  "toast.updateFailed": "Cập nhật phòng ban thất bại",
+  "toast.deleteFailed": "Xóa phòng ban thất bại",
+  "toast.bulkDeleted": "Đã xóa {{count}} phòng ban",
+  "toast.bulkDeleteFailed": "Xóa hàng loạt thất bại",
+  "toast.usersAssigned": "Đã gán {{count}} nhân viên",
+  "toast.userRemoved": "Đã gỡ nhân viên khỏi phòng ban",
+  "toast.exported": "Đã xuất dữ liệu phòng ban",
+  "toast.imported": "Đã nhập {{count}} phòng ban"
 }

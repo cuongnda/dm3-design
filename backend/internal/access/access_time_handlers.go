@@ -50,6 +50,13 @@ func (h *AccessHandlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.
 	_ = h.db.Pool.QueryRow(r.Context(),
 		"SELECT COUNT(*) FROM dm3_access.access_times t "+where, countArgs...).Scan(&total)
 
+	sortCol, sortDir := parseSorting(r, map[string]string{
+		"name":       "t.name",
+		"created_at": "t.created_at",
+		"is_active":  "t.is_active",
+		"timezone":   "t.timezone",
+		"slot_count": "(SELECT COUNT(*) FROM dm3_access.access_time_slots s WHERE s.access_time_id = t.id)",
+	}, "t.name")
 	query := fmt.Sprintf(`
 		SELECT
 			t.id, t.tenant_id, t.name, t.description, t.timezone,
@@ -57,9 +64,9 @@ func (h *AccessHandlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.
 			(SELECT COUNT(*) FROM dm3_access.access_time_slots s WHERE s.access_time_id = t.id) AS slot_count
 		FROM dm3_access.access_times t
 		%s
-		ORDER BY t.created_at DESC
+		ORDER BY %s %s
 		LIMIT $%d OFFSET $%d
-	`, where, idx, idx+1)
+	`, where, sortCol, sortDir, idx, idx+1)
 
 	args = append(args, limit, offset)
 

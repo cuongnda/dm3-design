@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-// import { useToast } from '@dm3/ui';
+import { useTranslation } from 'react-i18next';
+import { toast } from '@/lib/toast';
 import { useTenantContext } from '../../../components/tenant';
 import type {
   User,
@@ -20,8 +21,7 @@ import type {
 const API_BASE = '/api/v1';
 
 export function useUserManagement() {
-  // const { showToast } = useToast();
-  const showToast = (options: any) => console.log('Toast:', options.title, options.description);
+  const { t } = useTranslation('users');
   const { tenant } = useTenantContext();
   
   // State
@@ -97,15 +97,12 @@ export function useUserManagement() {
       
     } catch (error) {
       console.error('Failed to fetch users:', error);
-      showToast({
-        title: 'Error',
-        description: 'Failed to fetch users. Please try again.',
-        type: 'error',
-      });
+      const message = error instanceof Error ? error.message : 'Failed to fetch users';
+      toast(message, 'error');
     } finally {
       setLoading(false);
     }
-  }, [tenant, pagination.page, pagination.limit, filters, getAuthHeaders, showToast]);
+  }, [tenant, pagination.page, pagination.limit, filters, getAuthHeaders]);
 
   // Fetch reference data (departments, access groups, positions)
   const fetchReferenceData = useCallback(async () => {
@@ -129,15 +126,12 @@ export function useUserManagement() {
       
     } catch (error) {
       console.error('Failed to fetch reference data:', error);
-      showToast({
-        title: 'Warning',
-        description: 'Failed to load filter options.',
-        type: 'error',
-      });
+      const message = error instanceof Error ? error.message : 'Failed to load filter options';
+      toast(message, 'error');
     } finally {
       setReferenceDataLoading(false);
     }
-  }, [tenant, getAuthHeaders, showToast]);
+  }, [tenant, getAuthHeaders]);
 
   // Create new user
   const createUser = useCallback(async (userData: UserFormData): Promise<boolean> => {
@@ -155,25 +149,17 @@ export function useUserManagement() {
         throw new Error(errorData.message || `Failed to create user: ${response.status}`);
       }
 
-      showToast({
-        title: 'Success',
-        description: 'User created successfully.',
-      });
+      toast(t('toast.created'), 'success');
       
-      // Refresh user list
       await fetchUsers();
       return true;
       
     } catch (error: any) {
       console.error('Failed to create user:', error);
-      showToast({
-        title: 'Error',
-        description: error.message || 'Failed to create user. Please try again.',
-        type: 'error',
-      });
+      toast(error.message || t('toast.createFailed'), 'error');
       return false;
     }
-  }, [tenant, getAuthHeaders, showToast, fetchUsers]);
+  }, [tenant, getAuthHeaders, fetchUsers, t]);
 
   // Update user
   const updateUser = useCallback(async (userId: string, userData: Partial<UpdateUserRequest>): Promise<boolean> => {
@@ -192,25 +178,17 @@ export function useUserManagement() {
         throw new Error(errorData.message || `Failed to update user: ${response.status}`);
       }
 
-      showToast({
-        title: 'Success',
-        description: 'User updated successfully.',
-      });
+      toast(t('toast.updated'), 'success');
       
-      // Refresh user list
       await fetchUsers();
       return true;
       
     } catch (error: any) {
       console.error('Failed to update user:', error);
-      showToast({
-        title: 'Error',
-        description: error.message || 'Failed to update user. Please try again.',
-        type: 'error',
-      });
+      toast(error.message || t('toast.updateFailed'), 'error');
       return false;
     }
-  }, [tenant, getAuthHeaders, showToast, fetchUsers]);
+  }, [tenant, getAuthHeaders, fetchUsers, t]);
 
   // Delete user
   const deleteUser = useCallback(async (userId: string): Promise<boolean> => {
@@ -227,25 +205,17 @@ export function useUserManagement() {
         throw new Error(errorData.message || `Failed to delete user: ${response.status}`);
       }
 
-      showToast({
-        title: 'Success',
-        description: 'User deleted successfully.',
-      });
+      toast(t('toast.deleted'), 'success');
       
-      // Refresh user list
       await fetchUsers();
       return true;
       
     } catch (error: any) {
       console.error('Failed to delete user:', error);
-      showToast({
-        title: 'Error',
-        description: error.message || 'Failed to delete user. Please try again.',
-        type: 'error',
-      });
+      toast(error.message || t('toast.deleteFailed'), 'error');
       return false;
     }
-  }, [tenant, getAuthHeaders, showToast, fetchUsers]);
+  }, [tenant, getAuthHeaders, fetchUsers, t]);
 
   // Get user by ID
   const getUser = useCallback(async (userId: string): Promise<User | null> => {
@@ -265,14 +235,11 @@ export function useUserManagement() {
       
     } catch (error) {
       console.error('Failed to get user:', error);
-      showToast({
-        title: 'Error',
-        description: 'Failed to load user details. Please try again.',
-        type: 'error',
-      });
+      const message = error instanceof Error ? error.message : 'Failed to load user details';
+      toast(message, 'error');
       return null;
     }
-  }, [tenant, getAuthHeaders, showToast]);
+  }, [tenant, getAuthHeaders]);
 
   // Filter functions
   const updateFilters = useCallback((newFilters: Partial<UserFilters>) => {
@@ -344,24 +311,17 @@ export function useUserManagement() {
 
       const result = await response.json();
       
-      showToast({
-        title: 'Success',
-        description: result.message || `Successfully deleted ${userIds.length} users`,
-      });
+      toast(t('toast.bulkDeleted', { count: userIds.length }), 'success');
 
-      fetchUsers(); // Refresh the list
+      fetchUsers();
       return true;
       
     } catch (error) {
       console.error('Failed to delete users:', error);
-      showToast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to delete users',
-        type: 'error',
-      });
+      toast(error instanceof Error ? error.message : t('toast.bulkDeleteFailed'), 'error');
       return false;
     }
-  }, [tenant, getAuthHeaders, showToast, fetchUsers]);
+  }, [tenant, getAuthHeaders, fetchUsers, t]);
 
   const bulkUpdateDepartment = useCallback(async (userIds: string[], departmentId: string): Promise<boolean> => {
     if (!tenant || userIds.length === 0 || !departmentId) return false;
@@ -383,24 +343,17 @@ export function useUserManagement() {
 
       const result = await response.json();
       
-      showToast({
-        title: 'Success',
-        description: result.message || `Successfully updated department for ${userIds.length} users`,
-      });
+      toast(t('toast.bulkDeptUpdated', { count: userIds.length }), 'success');
 
-      fetchUsers(); // Refresh the list
+      fetchUsers();
       return true;
       
     } catch (error) {
       console.error('Failed to update departments:', error);
-      showToast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to update departments',
-        type: 'error',
-      });
+      toast(error instanceof Error ? error.message : 'Failed to update departments', 'error');
       return false;
     }
-  }, [tenant, getAuthHeaders, showToast, fetchUsers]);
+  }, [tenant, getAuthHeaders, fetchUsers, t]);
 
   const bulkUpdateAccessGroup = useCallback(async (userIds: string[], accessGroupId: string): Promise<boolean> => {
     if (!tenant || userIds.length === 0 || !accessGroupId) return false;
@@ -422,24 +375,17 @@ export function useUserManagement() {
 
       const result = await response.json();
       
-      showToast({
-        title: 'Success',
-        description: result.message || `Successfully updated access group for ${userIds.length} users`,
-      });
+      toast(t('toast.bulkAccessGroupUpdated', { count: userIds.length }), 'success');
 
-      fetchUsers(); // Refresh the list
+      fetchUsers();
       return true;
       
     } catch (error) {
       console.error('Failed to update access groups:', error);
-      showToast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to update access groups',
-        type: 'error',
-      });
+      toast(error instanceof Error ? error.message : 'Failed to update access groups', 'error');
       return false;
     }
-  }, [tenant, getAuthHeaders, showToast, fetchUsers]);
+  }, [tenant, getAuthHeaders, fetchUsers, t]);
 
   const bulkUpdateStatus = useCallback(async (userIds: string[], status: string, reason?: string): Promise<boolean> => {
     if (!tenant || userIds.length === 0 || !status) return false;
@@ -465,24 +411,17 @@ export function useUserManagement() {
 
       const result = await response.json();
       
-      showToast({
-        title: 'Success',
-        description: result.message || `Successfully ${status} ${userIds.length} users`,
-      });
+      toast(t('toast.bulkStatusUpdated', { count: userIds.length }), 'success');
 
-      fetchUsers(); // Refresh the list
+      fetchUsers();
       return true;
       
     } catch (error) {
       console.error(`Failed to ${status} users:`, error);
-      showToast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : `Failed to ${status} users`,
-        type: 'error',
-      });
+      toast(error instanceof Error ? error.message : `Failed to ${status} users`, 'error');
       return false;
     }
-  }, [tenant, getAuthHeaders, showToast, fetchUsers]);
+  }, [tenant, getAuthHeaders, fetchUsers, t]);
 
   // Multi-Company operations
   const getUserCompanyMatrix = useCallback(async (userId: string): Promise<UserAccount | null> => {
@@ -502,14 +441,11 @@ export function useUserManagement() {
       
     } catch (error) {
       console.error('Failed to fetch user company matrix:', error);
-      showToast({
-        title: 'Error',
-        description: 'Failed to fetch user company information',
-        type: 'error',
-      });
+      const message = error instanceof Error ? error.message : 'Failed to fetch user company information';
+      toast(message, 'error');
       return null;
     }
-  }, [tenant, getAuthHeaders, showToast]);
+  }, [tenant, getAuthHeaders]);
 
   const getAvailableCompanies = useCallback(async (userId: string): Promise<AvailableCompany[]> => {
     if (!tenant || !userId) return [];
@@ -528,14 +464,11 @@ export function useUserManagement() {
       
     } catch (error) {
       console.error('Failed to fetch available companies:', error);
-      showToast({
-        title: 'Error',
-        description: 'Failed to fetch available companies',
-        type: 'error',
-      });
+      const message = error instanceof Error ? error.message : 'Failed to fetch available companies';
+      toast(message, 'error');
       return [];
     }
-  }, [tenant, getAuthHeaders, showToast]);
+  }, [tenant, getAuthHeaders]);
 
   const addUserToCompany = useCallback(async (userId: string, assignment: CompanyAssignmentRequest): Promise<boolean> => {
     if (!tenant || !userId) return false;
@@ -554,23 +487,16 @@ export function useUserManagement() {
 
       const result = await response.json();
       
-      showToast({
-        title: 'Success',
-        description: `User added to ${result.company_name} with role ${result.role}`,
-      });
+      toast(t('toast.companyAdded'), 'success');
 
       return true;
       
     } catch (error) {
       console.error('Failed to add user to company:', error);
-      showToast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to add user to company',
-        type: 'error',
-      });
+      toast(error instanceof Error ? error.message : 'Failed to add user to company', 'error');
       return false;
     }
-  }, [tenant, getAuthHeaders, showToast]);
+  }, [tenant, getAuthHeaders, t]);
 
   const removeUserFromCompany = useCallback(async (userId: string, companyId: string): Promise<boolean> => {
     if (!tenant || !userId || !companyId) return false;
@@ -588,23 +514,16 @@ export function useUserManagement() {
 
       const result = await response.json();
       
-      showToast({
-        title: 'Success',
-        description: result.message || 'User removed from company successfully',
-      });
+      toast(t('toast.companyRemoved'), 'success');
 
       return true;
       
     } catch (error) {
       console.error('Failed to remove user from company:', error);
-      showToast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to remove user from company',
-        type: 'error',
-      });
+      toast(error instanceof Error ? error.message : 'Failed to remove user from company', 'error');
       return false;
     }
-  }, [tenant, getAuthHeaders, showToast]);
+  }, [tenant, getAuthHeaders, t]);
 
   const updateUserCompanyRole = useCallback(async (userId: string, companyId: string, roleUpdate: CompanyRoleUpdateRequest): Promise<boolean> => {
     if (!tenant || !userId || !companyId) return false;
@@ -623,23 +542,16 @@ export function useUserManagement() {
 
       const result = await response.json();
       
-      showToast({
-        title: 'Success',
-        description: result.message || `Role updated to ${roleUpdate.role}`,
-      });
+      toast(t('toast.roleUpdated'), 'success');
 
       return true;
       
     } catch (error) {
       console.error('Failed to update user role:', error);
-      showToast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to update user role',
-        type: 'error',
-      });
+      toast(error instanceof Error ? error.message : 'Failed to update user role', 'error');
       return false;
     }
-  }, [tenant, getAuthHeaders, showToast]);
+  }, [tenant, getAuthHeaders, t]);
 
   return {
     // Data
