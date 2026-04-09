@@ -412,6 +412,7 @@ InterlockModeEnum: mutual_exclusive | sequential
   | parent_id | uuid | - | Filter by parent zone |
   | search | string | - | Search zone name |
 - **Response 200:** Paginated list of zones with `access_point_count`
+- **UI usage note:** The console consumes this as a tree-first explorer. Search/filter should preserve enough ancestor context for operators to understand where a matched zone sits in the hierarchy.
 
 ### POST /api/v1/access/zones
 - **Auth:** role >= admin
@@ -584,6 +585,10 @@ InterlockModeEnum: mutual_exclusive | sequential
 18. **BR-AC-018 — Zone-Owned Spatial Context:** Zone is the canonical spatial container for access control. Indoor maps, zone-local timezone, and spatial metadata belong to the zone.
 19. **BR-AC-019 — Relative Placement:** Access Point coordinates are always interpreted relative to the owning zone map. Reassigning a point to another zone requires placement recalibration.
 20. **BR-AC-020 — Optional Indoor Map:** Zones may carry location metadata and timezone without an indoor map asset. Spatial placement becomes active only when a map is configured.
+21. **BR-AC-021 — Tree-First Zone Operations:** Zone management UI must present the hierarchy first so operators can understand building → floor → area relationships without switching screens.
+22. **BR-AC-022 — Search With Hierarchy Context:** When search/filter narrows the zone explorer, matched zones should remain visible with their ancestor chain so their physical context is still clear.
+23. **BR-AC-023 — Dual Access Point Views:** Zone detail must provide both a list view and a map view over the same zone-scoped access point set.
+24. **BR-AC-024 — Direct Map Editing:** In map view, operators may drag access point markers directly on the indoor map. Updated normalized coordinates persist through the standard access point update API.
 
 ## Permissions Matrix
 
@@ -621,8 +626,8 @@ InterlockModeEnum: mutual_exclusive | sequential
 |-------|------|----------------|
 | /secure/access-control | Access Point List | DataTable with status tabs (All/Online/Offline/Alarm/Warning), filters, stat cards |
 | /secure/access-control/:id | Access Point Detail | AP info, state controls (unlock/lock/hold), live event timeline, linked camera, access groups tab, device health |
-| /secure/zones | Zone List | DataTable of zones with spatial info, hierarchy, map indicator |
-| /secure/zones/:id | Zone Detail | Zone info, indoor map with AP placements, child zones |
+| /secure/zones | Zone Explorer | Tree-first zone explorer with hierarchy, inline search/filter, map readiness, AP counts |
+| /secure/zones/:id | Zone Detail | Zone info, child zones, Access Point List View, Access Point Map View with direct marker repositioning |
 | /secure/access-groups | Access Groups | DataTable of AGs, create/edit dialog with access time picker |
 | /secure/access-groups/:id | Access Group Detail | AG info, access points tab, users tab (with effective_from/effective_to), access time assignment |
 

@@ -33,7 +33,7 @@ export function useZones(): UseZonesReturn {
     const [error, setError] = useState<string | null>(null);
     const [pagination, setPagination] = useState<ZonesPagination>({
         page: 1,
-        limit: 20,
+        limit: 200,
         total: 0,
     });
 
