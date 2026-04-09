@@ -3,6 +3,7 @@ package access
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -11,7 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
+	pathpkg "path"
 	"path/filepath"
 	"strings"
 
@@ -520,17 +521,20 @@ func (h *AccessHandlers) UploadZoneMap(w http.ResponseWriter, r *http.Request) {
 	}
 
 	objectKey := buildZoneMapObjectKey(cid, zoneID, ext)
-	filePath := filepath.Join("data", filepath.FromSlash(objectKey))
-	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to prepare storage")
+	if h.objects == nil {
+		httputil.Error(w, http.StatusInternalServerError, "object storage is not configured")
 		return
 	}
-	if err := os.WriteFile(filePath, data, 0o644); err != nil {
+	if err := h.objects.PutObject(r.Context(), objectKey, bytes.NewReader(data), int64(len(data)), contentTypeForExt(ext, contentType)); err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to save uploaded file")
 		return
 	}
 
-	publicPath := "/assets/" + objectKey
+	publicPath := buildZoneMapPublicPath(objectKey)
+	previousObjectKey, hasPreviousObject := "", false
+	if zone.MapImageURL != nil {
+		previousObjectKey, hasPreviousObject = managedAssetObjectKey(*zone.MapImageURL)
+	}
 	err = scanZone(h.db.Pool.QueryRow(r.Context(),
 		`UPDATE dm3_access.zones
 		 SET map_image_url = $2,
@@ -542,8 +546,14 @@ func (h *AccessHandlers) UploadZoneMap(w http.ResponseWriter, r *http.Request) {
 		zoneID, publicPath, cfg.Width, cfg.Height, cid,
 	), &zone)
 	if err != nil {
+		_ = h.objects.DeleteObject(r.Context(), objectKey)
 		httputil.Error(w, http.StatusNotFound, "zone not found")
 		return
+	}
+	if hasPreviousObject && previousObjectKey != objectKey {
+		if err := h.objects.DeleteObject(r.Context(), previousObjectKey); err != nil {
+			slog.Warn("failed to delete superseded zone map object", "key", previousObjectKey, "error", err)
+		}
 	}
 
 	h.audit.LogFromRequest(r, "access.zone.map.upload", "zone", zone.ID, zone.Name, "success", nil, map[string]any{
@@ -555,8 +565,77 @@ func (h *AccessHandlers) UploadZoneMap(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, zone)
 }
 
+func (h *AccessHandlers) ServeManagedAsset(w http.ResponseWriter, r *http.Request) {
+	objectKey, ok := managedAssetObjectKey(chi.URLParam(r, "*"))
+	if !ok || h.objects == nil {
+		httputil.Error(w, http.StatusNotFound, "asset not found")
+		return
+	}
+
+	reader, info, err := h.objects.GetObject(r.Context(), objectKey)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, io.EOF) || strings.Contains(strings.ToLower(err.Error()), "not exist") || strings.Contains(strings.ToLower(err.Error()), "no such key") {
+			status = http.StatusNotFound
+		}
+		httputil.Error(w, status, "asset not found")
+		return
+	}
+	defer reader.Close()
+
+	if info.ContentType != "" {
+		w.Header().Set("Content-Type", info.ContentType)
+	}
+	if info.ETag != "" {
+		w.Header().Set("ETag", info.ETag)
+	}
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	if info.Size >= 0 {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size))
+	}
+	if _, err := io.Copy(w, reader); err != nil {
+		slog.Warn("failed to stream managed asset", "key", objectKey, "error", err)
+	}
+}
+
 func buildZoneMapObjectKey(companyID, zoneID, ext string) string {
 	return fmt.Sprintf("tenants/%s/access/zones/%s/map%s", companyID, zoneID, ext)
+}
+
+func buildZoneMapPublicPath(objectKey string) string {
+	return "/assets/" + objectKey
+}
+
+func managedAssetObjectKey(raw string) (string, bool) {
+	trimmed := strings.TrimSpace(raw)
+	trimmed = strings.TrimPrefix(trimmed, "/assets/")
+	trimmed = strings.TrimPrefix(trimmed, "/")
+	if trimmed == "" {
+		return "", false
+	}
+	for _, segment := range strings.Split(trimmed, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return "", false
+		}
+	}
+	cleaned := pathpkg.Clean("/" + trimmed)
+	if cleaned == "/" || cleaned == "." {
+		return "", false
+	}
+	return strings.TrimPrefix(cleaned, "/"), true
+}
+
+func contentTypeForExt(ext, fallback string) string {
+	switch strings.ToLower(ext) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	default:
+		return fallback
+	}
 }
 
 func zoneMapExtension(contentType, filename string) (string, bool) {

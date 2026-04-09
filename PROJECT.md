@@ -174,6 +174,7 @@ dm3/
 
 ## Patterns & Gotchas
 - E2E pipeline: Simulator → EMQX → gateway → NATS → access-svc → TimescaleDB
+- Zone indoor map uploads are now stored in MinIO bucket `dm3` and served back through access-svc `/assets/...` routes. Keep the tenant-scoped key contract under `tenants/{tenant_id}/access/zones/{zone_id}/map.{ext}`.
 - Brand name: "Duall Master" (not Duali, not DMPW)
 - Users can belong to multiple companies (user_companies junction table)
 - 7-day grace period for expired JWT refresh (offline devices)

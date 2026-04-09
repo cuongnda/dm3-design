@@ -322,3 +322,34 @@ func TestZoneMapExtension(t *testing.T) {
 		})
 	}
 }
+
+func TestManagedAssetObjectKey(t *testing.T) {
+	tests := []struct {
+		name   string
+		raw    string
+		want   string
+		wantOK bool
+	}{
+		{name: "public path", raw: "/assets/tenants/t1/access/zones/z1/map.png", want: "tenants/t1/access/zones/z1/map.png", wantOK: true},
+		{name: "bare key", raw: "tenants/t1/access/zones/z1/map.png", want: "tenants/t1/access/zones/z1/map.png", wantOK: true},
+		{name: "reject traversal", raw: "/assets/../secrets.txt", want: "", wantOK: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := managedAssetObjectKey(tt.raw)
+			if got != tt.want || ok != tt.wantOK {
+				t.Fatalf("managedAssetObjectKey(%q) = (%q, %v), want (%q, %v)", tt.raw, got, ok, tt.want, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestContentTypeForExt(t *testing.T) {
+	if got := contentTypeForExt(".jpg", "application/octet-stream"); got != "image/jpeg" {
+		t.Fatalf("contentTypeForExt(.jpg) = %q", got)
+	}
+	if got := contentTypeForExt(".weird", "application/octet-stream"); got != "application/octet-stream" {
+		t.Fatalf("contentTypeForExt fallback = %q", got)
+	}
+}

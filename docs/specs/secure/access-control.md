@@ -237,7 +237,7 @@ InterlockModeEnum: mutual_exclusive | sequential
 ### POST /api/v1/access/zones/{id}/map/upload
 
 - **Auth:** role >= admin
-- **Description:** Uploads an indoor map image for the zone using multipart/form-data. The backend stores the binary in the managed tenant-scoped object path, then persists the resulting `map_image_url`, `map_width`, and `map_height` on the zone.
+- **Description:** Uploads an indoor map image for the zone using multipart/form-data. The backend stores the binary in MinIO under the managed tenant-scoped object key `tenants/{tenant_id}/access/zones/{zone_id}/map.{ext}`, serves it back through `GET /assets/...`, then persists the resulting `map_image_url`, `map_width`, and `map_height` on the zone.
 - **Body:** `multipart/form-data` with field `map` (PNG/JPEG/GIF)
 - **Response 200:** Updated Zone resource
 

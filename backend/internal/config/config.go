@@ -34,6 +34,14 @@ type Config struct {
 	BootstrapSecret    string
 	KnownAppSignatures []string
 
+	// Object Storage (MinIO / S3-compatible)
+	ObjectStoreEndpoint         string
+	ObjectStoreAccessKeyID      string
+	ObjectStoreSecretAccessKey  string
+	ObjectStoreBucket           string
+	ObjectStoreUseSSL           bool
+	ObjectStoreAutoCreateBucket bool
+
 	// Bug Reporter (DV Tasks integration)
 	BugReporterEnabled   bool
 	BugReporterURL       string // DV Tasks API base URL
@@ -45,17 +53,24 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		HTTPPort:     envInt("HTTP_PORT", 8002),
-		DatabaseURL:  env("DATABASE_URL", "postgres://dm3:dm3secret@localhost:5433/dm3?sslmode=disable"),
-		MQTTBroker:   env("MQTT_BROKER", "tcp://localhost:1884"),
-		MQTTClientID: env("MQTT_CLIENT_ID", "dm3-device-gateway"),
-		MQTTUsername: env("MQTT_USERNAME", ""),
-		MQTTPassword: env("MQTT_PASSWORD", ""),
-		NATSURL:      env("NATS_URL", "nats://localhost:4222"),
-		JWTSecret:    env("JWT_SECRET", "dm3-dev-secret-key"),
+		HTTPPort:           envInt("HTTP_PORT", 8002),
+		DatabaseURL:        env("DATABASE_URL", "postgres://dm3:dm3secret@localhost:5433/dm3?sslmode=disable"),
+		MQTTBroker:         env("MQTT_BROKER", "tcp://localhost:1884"),
+		MQTTClientID:       env("MQTT_CLIENT_ID", "dm3-device-gateway"),
+		MQTTUsername:       env("MQTT_USERNAME", ""),
+		MQTTPassword:       env("MQTT_PASSWORD", ""),
+		NATSURL:            env("NATS_URL", "nats://localhost:4222"),
+		JWTSecret:          env("JWT_SECRET", "dm3-dev-secret-key"),
 		ValkeyURL:          env("VALKEY_URL", "localhost:6380"),
 		BootstrapSecret:    env("BOOTSTRAP_SECRET", "dm3-bootstrap-v1-dev-secret"),
 		KnownAppSignatures: envSlice("KNOWN_APP_SIGNATURES"),
+
+		ObjectStoreEndpoint:         env("OBJECT_STORE_ENDPOINT", "localhost:9002"),
+		ObjectStoreAccessKeyID:      env("OBJECT_STORE_ACCESS_KEY", env("MINIO_ROOT_USER", "dm3admin")),
+		ObjectStoreSecretAccessKey:  env("OBJECT_STORE_SECRET_KEY", env("MINIO_ROOT_PASSWORD", "dm3secret123")),
+		ObjectStoreBucket:           env("OBJECT_STORE_BUCKET", "dm3"),
+		ObjectStoreUseSSL:           env("OBJECT_STORE_USE_SSL", "") == "true",
+		ObjectStoreAutoCreateBucket: env("OBJECT_STORE_AUTO_CREATE_BUCKET", "true") != "false",
 
 		BugReporterEnabled:   env("BUG_REPORTER_ENABLED", "") == "true",
 		BugReporterURL:       env("BUG_REPORTER_URL", "https://tasks.duali.vn/api"),

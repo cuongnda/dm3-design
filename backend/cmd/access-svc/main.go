@@ -20,6 +20,7 @@ import (
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/i18n"
 	"github.com/duali/dm3-backend/pkg/natsutil"
+	"github.com/duali/dm3-backend/pkg/objectstore"
 )
 
 func main() {
@@ -93,8 +94,21 @@ func main() {
 		CompanyIDFromContext: authsvc.CompanyIDFromContext,
 	})
 
+	objectStore, err := objectstore.NewMinIOStore(ctx, objectstore.Config{
+		Endpoint:         cfg.ObjectStoreEndpoint,
+		AccessKeyID:      cfg.ObjectStoreAccessKeyID,
+		SecretAccessKey:  cfg.ObjectStoreSecretAccessKey,
+		Bucket:           cfg.ObjectStoreBucket,
+		UseSSL:           cfg.ObjectStoreUseSSL,
+		AutoCreateBucket: cfg.ObjectStoreAutoCreateBucket,
+	})
+	if err != nil {
+		slog.Error("failed to initialize object store", "error", err)
+		os.Exit(1)
+	}
+
 	// HTTP handlers
-	handlers := access.NewAccessHandlers(database, auditLog, natsClient)
+	handlers := access.NewAccessHandlers(database, auditLog, natsClient, objectStore)
 
 	// HTTP routes
 	r := httputil.NewRouter()
@@ -102,8 +116,8 @@ func main() {
 	// Add i18n middleware to all routes
 	r.Use(i18n.LocaleMiddleware)
 
-	// Serve managed zone map assets from the local object-store fallback.
-	r.Handle("/assets/*", http.StripPrefix("/assets/", http.FileServer(http.Dir("data"))))
+	// Serve managed zone map assets from MinIO-backed object storage.
+	r.Get("/assets/*", handlers.ServeManagedAsset)
 
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "access-svc"})
