@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { PageHeader, Button, Select, SelectOption } from '@dm3/ui';
 import { WebSocketDemo } from './WebSocketDemo';
 import { useWebSocket } from '@dm3/api-client';
+import { toast } from '@/lib/toast';
 
 export function RealtimeTestPage() {
   const [toastMode, setToastMode] = useState<'notification' | 'custom' | 'console'>('custom');
@@ -15,14 +16,7 @@ export function RealtimeTestPage() {
   });
 
   const sendTestEvent = () => {
-    // Simulate a test event
-    window.dispatchEvent(new CustomEvent('dm3-toast', {
-      detail: {
-        message: 'Test Event',
-        type: 'info',
-        description: 'This is a test notification from the WebSocket system'
-      }
-    }));
+    toast('Test Event', 'info', 'This is a test notification from the WebSocket system');
   };
 
   return (

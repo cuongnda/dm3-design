@@ -523,6 +523,20 @@ func (h *AccessHandlers) scanAccessDevice(r *http.Request, id string) (models.Ac
 	return d, nil
 }
 
+// parseSorting extracts sort_by / sort_order query params and maps them to
+// safe SQL column expressions. allowed maps frontend key → SQL expression.
+// Returns the SQL column expression and "ASC" or "DESC".
+func parseSorting(r *http.Request, allowed map[string]string, defaultCol string) (col, dir string) {
+	sortOrder := strings.ToUpper(r.URL.Query().Get("sort_order"))
+	if sortOrder != "ASC" && sortOrder != "DESC" {
+		sortOrder = "ASC"
+	}
+	if mapped, ok := allowed[r.URL.Query().Get("sort_by")]; ok {
+		return mapped, sortOrder
+	}
+	return defaultCol, sortOrder
+}
+
 func parsePagination(r *http.Request) (int, int) {
 	page := 1
 	limit := 20

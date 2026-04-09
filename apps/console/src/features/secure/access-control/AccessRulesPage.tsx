@@ -267,7 +267,7 @@ export function AccessRulesPage() {
       ),
     },
     {
-      key: 'actions', header: '', width: '80px',
+      key: 'actions', header: t('common:table.actions'), width: '80px',
       render: (r) => (
         <span className="flex gap-1">
           <Button

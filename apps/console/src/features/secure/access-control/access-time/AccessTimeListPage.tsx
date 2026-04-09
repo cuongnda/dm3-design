@@ -70,7 +70,7 @@ export function AccessTimeListPage() {
     },
     {
       key: 'actions',
-      header: '',
+      header: t('common:table.actions'),
       render: (row) => (
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); handleToggleActive(row); }}>

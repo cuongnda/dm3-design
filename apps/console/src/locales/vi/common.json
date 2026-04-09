@@ -43,5 +43,21 @@
   "status.offline": "Ngoại tuyến",
   "status.online": "Trực tuyến",
   "status.cached": "Đã lưu",
-  "breadcrumb.overview": "Tổng quan"
+  "breadcrumb.overview": "Tổng quan",
+  "table.selected": "Đã chọn {{count}}",
+  "table.noData": "Không có dữ liệu",
+  "table.pagination": "{{from}}–{{to}} / {{total}}",
+  "table.prevPage": "Trang trước",
+  "table.nextPage": "Trang sau",
+  "table.selectAll": "Chọn tất cả",
+  "table.selectRow": "Chọn dòng",
+  "table.actions": "Hành động",
+  "table.deleteSelected": "Xóa đã chọn",
+  "pagination.pageOf": "Trang {{page}} / {{total}}",
+  "pagination.totalRows": "{{count}} bản ghi",
+  "pagination.perPage": "Mỗi trang",
+  "pagination.sort": "Sắp xếp",
+  "pagination.sortDefault": "Mặc định",
+  "pagination.sortAsc": "Tăng dần — nhấn để giảm dần",
+  "pagination.sortDesc": "Giảm dần — nhấn để tăng dần"
 }

@@ -49,6 +49,12 @@ func (h *AccessHandlers) ListAccessPoints(w http.ResponseWriter, r *http.Request
 	_ = h.db.Pool.QueryRow(r.Context(),
 		"SELECT COUNT(*) FROM dm3_access.access_points ap "+where, countArgs...).Scan(&total)
 
+	sortCol, sortDir := parseSorting(r, map[string]string{
+		"name":                "ap.name",
+		"zone_id":             "(SELECT name FROM dm3_access.zones WHERE id = ap.zone_id)",
+		"access_device_count": "COUNT(DISTINCT apd.access_device_id)",
+		"created_at":          "ap.created_at",
+	}, "ap.name")
 	query := fmt.Sprintf(`
 		SELECT ap.id, ap.tenant_id, ap.zone_id, ap.access_time_id,
 		       ap.name, ap.description, ap.map_x, ap.map_y, ap.map_rotation,
@@ -58,8 +64,8 @@ func (h *AccessHandlers) ListAccessPoints(w http.ResponseWriter, r *http.Request
 		LEFT JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
 		%s
 		GROUP BY ap.id
-		ORDER BY ap.name ASC
-		LIMIT $%d OFFSET $%d`, where, idx, idx+1)
+		ORDER BY %s %s
+		LIMIT $%d OFFSET $%d`, where, sortCol, sortDir, idx, idx+1)
 	args = append(args, limit, offset)
 
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)

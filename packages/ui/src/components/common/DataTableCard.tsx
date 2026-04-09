@@ -10,6 +10,7 @@ export type BulkAction = {
   label?: ReactNode;
   onClick: () => void;
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost';
+  className?: string;
   icon?: ReactNode;
   disabled?: boolean;
   size?: ComponentProps<typeof Button>['size'];

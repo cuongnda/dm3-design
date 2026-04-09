@@ -1,4 +1,5 @@
 import { ArrowDownUp, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/button';
 import { Select } from '../ui/select';
 import { cn } from '../../lib/utils';
@@ -53,6 +54,7 @@ export function TablePaginationFooter({
   sortDir,
   onSortChange,
 }: TablePaginationFooterProps) {
+  const { t } = useTranslation('common');
   if (total <= 0) {
     return null;
   }
@@ -71,11 +73,11 @@ export function TablePaginationFooter({
     >
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-[12px] text-muted-foreground">
-          Page {safePage} of {safeTotalPages} · {total} total
+          {t('pagination.pageOf', { page: safePage, total: safeTotalPages })} · {t('pagination.totalRows', { count: total })}
         </p>
         {onPageSizeChange ? (
           <div className="flex items-center gap-2">
-            <span className="text-[12px] text-muted-foreground whitespace-nowrap">Per page</span>
+            <span className="text-[12px] text-muted-foreground whitespace-nowrap">{t('pagination.perPage')}</span>
             <Select
               className="w-18 shrink-0 [&_button]:h-8 [&_button]:px-2 [&_button]:text-xs"
               value={String(pageSize)}
@@ -91,11 +93,11 @@ export function TablePaginationFooter({
         ) : null}
         {sortColumns && onSortChange ? (
           <div className="flex items-center gap-2">
-            <span className="text-[12px] text-muted-foreground whitespace-nowrap">Sort</span>
+            <span className="text-[12px] text-muted-foreground whitespace-nowrap">{t('pagination.sort')}</span>
             <Select
               className="w-32 shrink-0 [&_button]:h-8 [&_button]:px-2 [&_button]:text-xs"
               value={sortBy ?? ''}
-              placeholder="Default"
+              placeholder={t('pagination.sortDefault')}
               onValueChange={(v) => onSortChange(v || null, v ? (sortDir ?? 'asc') : null)}
               disabled={loading}
               options={sortColumns}
@@ -107,7 +109,7 @@ export function TablePaginationFooter({
                 className="h-8 w-8 p-0 shrink-0"
                 onClick={() => onSortChange(sortBy, sortDir === 'asc' ? 'desc' : 'asc')}
                 disabled={loading}
-                title={sortDir === 'asc' ? 'Ascending — click for descending' : 'Descending — click for ascending'}
+                title={sortDir === 'asc' ? t('pagination.sortAsc') : t('pagination.sortDesc')}
               >
                 {sortDir === 'desc' ? <ArrowDownUp size={13} /> : <ArrowUpDown size={13} />}
               </Button>

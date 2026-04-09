@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from '@/lib/toast';
 import { Users, UserPlus, UserMinus, Search, User, Mail, Building2, Check } from 'lucide-react';
 import {
     AppModal,
@@ -55,10 +56,6 @@ export function UserAssignModal({ isOpen, onClose, department }: UserAssignModal
         };
     };
 
-    const showToast = (options: { title: string; description: string; variant?: 'default' | 'destructive' }) => {
-        console.log('Toast:', options.title, options.description);
-    };
-
     const fetchCurrentUsers = async () => {
         if (!department) return;
         setLoading(true);
@@ -106,14 +103,14 @@ export function UserAssignModal({ isOpen, onClose, department }: UserAssignModal
                 const errorData = await response.json();
                 throw new Error(errorData.message || 'Failed to assign users');
             }
-            showToast({ title: 'Success', description: `${selectedUsers.length} users assigned successfully` });
+            toast(t('toast.usersAssigned', { count: selectedUsers.length }), 'success');
             setSelectedUsers([]);
             await fetchCurrentUsers();
             await fetchAvailableUsers();
             setActiveTab('current');
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to assign users';
-            showToast({ title: 'Error', description: message, variant: 'destructive' });
+            toast(message, 'error');
         } finally {
             setLoading(false);
         }
@@ -131,12 +128,12 @@ export function UserAssignModal({ isOpen, onClose, department }: UserAssignModal
                 const errorData = await response.json();
                 throw new Error(errorData.message || 'Failed to remove user');
             }
-            showToast({ title: 'Success', description: 'User removed from department' });
+            toast(t('toast.userRemoved'), 'success');
             await fetchCurrentUsers();
             await fetchAvailableUsers();
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to remove user';
-            showToast({ title: 'Error', description: message, variant: 'destructive' });
+            toast(message, 'error');
         } finally {
             setLoading(false);
         }

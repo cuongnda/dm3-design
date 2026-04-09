@@ -111,5 +111,17 @@
   "assign.colDepartment": "Department",
   "assign.removeBtn": "Remove",
   "assign.noUsersAvailable": "No users available",
-  "assign.allAssigned": "All users are already assigned to a department"
+  "assign.allAssigned": "All users are already assigned to a department",
+  "toast.created": "Department created",
+  "toast.updated": "Department updated",
+  "toast.deleted": "Department deleted",
+  "toast.createFailed": "Failed to create department",
+  "toast.updateFailed": "Failed to update department",
+  "toast.deleteFailed": "Failed to delete department",
+  "toast.bulkDeleted": "{{count}} department(s) deleted",
+  "toast.bulkDeleteFailed": "Failed to delete departments",
+  "toast.usersAssigned": "{{count}} user(s) assigned",
+  "toast.userRemoved": "User removed from department",
+  "toast.exported": "Departments exported",
+  "toast.imported": "Imported {{count}} departments"
 }

@@ -1,173 +1,175 @@
-import { useState, useCallback, useEffect } from "react";
-import { apiFetch } from "@/lib/api";
-import type { Zone, ZoneFormData } from "../types";
+import { useState, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { apiFetch } from '@/lib/api';
+import { toast } from '@/lib/toast';
+import type { Zone, ZoneFormData } from '../types';
 
 interface ZonesPagination {
-  page: number;
-  limit: number;
-  total: number;
+    page: number;
+    limit: number;
+    total: number;
+    total_pages: number;
 }
 
 interface ZonesResponse {
-  data: Zone[];
-  total: number;
-  page: number;
-  limit: number;
+    data: Zone[];
+    total: number;
+    page: number;
+    limit: number;
 }
 
 interface UseZonesReturn {
-  zones: Zone[];
-  loading: boolean;
-  error: string | null;
-  pagination: ZonesPagination;
-  fetchZones: () => Promise<void>;
-  createZone: (data: ZoneFormData) => Promise<Zone | null>;
-  updateZone: (id: string, data: ZoneFormData) => Promise<Zone | null>;
-  uploadZoneMap: (id: string, file: File) => Promise<Zone | null>;
-  deleteZone: (id: string) => Promise<boolean>;
-  changePage: (page: number) => void;
+    zones: Zone[];
+    loading: boolean;
+    error: string | null;
+    pagination: ZonesPagination;
+    sortBy: string | null;
+    sortDir: 'asc' | 'desc' | null;
+    fetchZones: () => Promise<void>;
+    createZone: (data: ZoneFormData) => Promise<boolean>;
+    updateZone: (id: string, data: ZoneFormData) => Promise<boolean>;
+    deleteZone: (id: string) => Promise<boolean>;
+    changePage: (page: number) => void;
+    changePageSize: (size: number) => void;
+    changeSort: (col: string | null, dir: 'asc' | 'desc' | null) => void;
 }
 
 export function useZones(): UseZonesReturn {
-  const [zones, setZones] = useState<Zone[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pagination, setPagination] = useState<ZonesPagination>({
-    page: 1,
-    limit: 200,
-    total: 0,
-  });
+    const { t } = useTranslation('zones');
+    const [zones, setZones] = useState<Zone[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [sortBy, setSortBy] = useState<string | null>('name');
+    const [sortDir, setSortDir] = useState<'asc' | 'desc' | null>('asc');
+    const [pagination, setPagination] = useState<ZonesPagination>({
+        page: 1,
+        limit: 20,
+        total: 0,
+        total_pages: 0,
+    });
 
-  const fetchZones = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({
-        page: pagination.page.toString(),
-        limit: pagination.limit.toString(),
-      });
-      const response = await apiFetch<ZonesResponse>(
-        `/api/v1/access/zones?${params}`,
-      );
-      setZones(response.data ?? []);
-      setPagination((prev) => ({
-        ...prev,
-        total: response.total ?? 0,
-      }));
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to fetch zones";
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  }, [pagination.page, pagination.limit]);
+    const fetchZones = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const params = new URLSearchParams({
+                page: pagination.page.toString(),
+                limit: pagination.limit.toString(),
+            });
+            if (sortBy) params.set('sort_by', sortBy);
+            if (sortDir) params.set('sort_order', sortDir);
+            const response = await apiFetch<ZonesResponse>(`/api/v1/access/zones?${params}`);
+            setZones(response.data ?? []);
+            setPagination((prev) => ({
+                ...prev,
+                total: response.total ?? 0,
+                total_pages: Math.ceil((response.total ?? 0) / prev.limit),
+            }));
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to fetch zones';
+            setError(message);
+        } finally {
+            setLoading(false);
+        }
+    }, [pagination.page, pagination.limit, sortBy, sortDir]);
 
-  const createZone = useCallback(
-    async (data: ZoneFormData): Promise<Zone | null> => {
-      try {
-        const payload: ZoneFormData = {
-          ...data,
-          parent_id: data.parent_id || undefined,
-          description: data.description || undefined,
-        };
-        const zone = await apiFetch<Zone>("/api/v1/access/zones", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
-        await fetchZones();
-        return zone;
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to create zone";
-        setError(message);
-        return null;
-      }
-    },
-    [fetchZones],
-  );
+    const createZone = useCallback(
+        async (data: ZoneFormData): Promise<boolean> => {
+            try {
+                const payload: ZoneFormData = {
+                    ...data,
+                    parent_id: data.parent_id || undefined,
+                    description: data.description || undefined,
+                };
+                await apiFetch<Zone>('/api/v1/access/zones', {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                });
+                await fetchZones();
+                toast(t('toast.created'), 'success');
+                return true;
+            } catch (err) {
+                const message = err instanceof Error ? err.message : 'Failed to create zone';
+                setError(message);
+                toast(message, 'error');
+                return false;
+            }
+        },
+        [fetchZones, t],
+    );
 
-  const updateZone = useCallback(
-    async (id: string, data: ZoneFormData): Promise<Zone | null> => {
-      try {
-        const payload: ZoneFormData = {
-          ...data,
-          parent_id: data.parent_id || undefined,
-          description: data.description || undefined,
-        };
-        const zone = await apiFetch<Zone>(`/api/v1/access/zones/${id}`, {
-          method: "PUT",
-          body: JSON.stringify(payload),
-        });
-        await fetchZones();
-        return zone;
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to update zone";
-        setError(message);
-        return null;
-      }
-    },
-    [fetchZones],
-  );
+    const updateZone = useCallback(
+        async (id: string, data: ZoneFormData): Promise<boolean> => {
+            try {
+                const payload: ZoneFormData = {
+                    ...data,
+                    parent_id: data.parent_id || undefined,
+                    description: data.description || undefined,
+                };
+                await apiFetch<Zone>(`/api/v1/access/zones/${id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(payload),
+                });
+                await fetchZones();
+                toast(t('toast.updated'), 'success');
+                return true;
+            } catch (err) {
+                const message = err instanceof Error ? err.message : 'Failed to update zone';
+                setError(message);
+                toast(message, 'error');
+                return false;
+            }
+        },
+        [fetchZones, t],
+    );
 
-  const uploadZoneMap = useCallback(
-    async (id: string, file: File): Promise<Zone | null> => {
-      try {
-        const formData = new FormData();
-        formData.append("map", file);
-        const zone = (await apiFetch(`/api/v1/access/zones/${id}/map/upload`, {
-          method: "POST",
-          body: formData,
-        })) as Zone;
-        await fetchZones();
-        return zone;
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to upload zone map";
-        setError(message);
-        return null;
-      }
-    },
-    [fetchZones],
-  );
+    const deleteZone = useCallback(
+        async (id: string): Promise<boolean> => {
+            try {
+                await apiFetch<void>(`/api/v1/access/zones/${id}`, { method: 'DELETE' });
+                await fetchZones();
+                toast(t('toast.deleted'), 'success');
+                return true;
+            } catch (err) {
+                const message = err instanceof Error ? err.message : 'Failed to delete zone';
+                setError(message);
+                throw err;
+            }
+        },
+        [fetchZones, t],
+    );
 
-  const deleteZone = useCallback(
-    async (id: string): Promise<boolean> => {
-      try {
-        await apiFetch<void>(`/api/v1/access/zones/${id}`, {
-          method: "DELETE",
-        });
-        await fetchZones();
-        return true;
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to delete zone";
-        setError(message);
-        return false;
-      }
-    },
-    [fetchZones],
-  );
+    const changePage = useCallback((page: number) => {
+        setPagination((prev) => ({ ...prev, page }));
+    }, []);
 
-  const changePage = useCallback((page: number) => {
-    setPagination((prev) => ({ ...prev, page }));
-  }, []);
+    const changePageSize = useCallback((size: number) => {
+        setPagination((prev) => ({ ...prev, limit: size, page: 1 }));
+    }, []);
 
-  useEffect(() => {
-    fetchZones();
-  }, [fetchZones]);
+    const changeSort = useCallback((col: string | null, dir: 'asc' | 'desc' | null) => {
+        setSortBy(col);
+        setSortDir(dir);
+        setPagination((prev) => ({ ...prev, page: 1 }));
+    }, []);
 
-  return {
-    zones,
-    loading,
-    error,
-    pagination,
-    fetchZones,
-    createZone,
-    updateZone,
-    uploadZoneMap,
-    deleteZone,
-    changePage,
-  };
+    useEffect(() => {
+        fetchZones();
+    }, [fetchZones]);
+
+    return {
+        zones,
+        loading,
+        error,
+        pagination,
+        sortBy,
+        sortDir,
+        fetchZones,
+        createZone,
+        updateZone,
+        deleteZone,
+        changePage,
+        changePageSize,
+        changeSort,
+    };
 }

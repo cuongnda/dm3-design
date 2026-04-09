@@ -1,109 +1,137 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import { cn } from './lib/utils';
+import React, { useSyncExternalStore } from 'react';
+
+// ── Types ────────────────────────────────────────────────────
 
 interface Toast {
   id: string;
   title: string;
   description?: string;
   type: 'info' | 'warning' | 'error' | 'success';
-  duration?: number;
 }
 
-interface ToastContextType {
-  toasts: Toast[];
-  showToast: (toast: Omit<Toast, 'id'>) => void;
-  hideToast: (id: string) => void;
+// ── Global state (module-level, no React dependency) ─────────
+
+let toasts: Toast[] = [];
+const listeners = new Set<() => void>();
+
+function emit() {
+  for (const fn of listeners) fn();
 }
 
-const ToastContext = createContext<ToastContextType | null>(null);
+function subscribe(cb: () => void) {
+  listeners.add(cb);
+  return () => { listeners.delete(cb); };
+}
 
-export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([]);
+function getSnapshot(): Toast[] {
+  return toasts;
+}
 
-  const showToast = useCallback((toast: Omit<Toast, 'id'>) => {
-    const id = Math.random().toString(36).substring(2, 9);
-    const newToast: Toast = { ...toast, id };
-    
-    setToasts(prev => [...prev, newToast]);
+export function showToast(opts: Omit<Toast, 'id'>) {
+  const id = String(Date.now()) + Math.random().toString(36).slice(2, 6);
+  toasts = [...toasts, { ...opts, id }];
+  emit();
+  setTimeout(() => {
+    toasts = toasts.filter((t) => t.id !== id);
+    emit();
+  }, 4000);
+}
 
-    // Auto-hide after duration
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, toast.duration || 5000);
-  }, []);
+function dismiss(id: string) {
+  toasts = toasts.filter((t) => t.id !== id);
+  emit();
+}
 
-  const hideToast = useCallback((id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  }, []);
+// ── Hook (optional) ──────────────────────────────────────────
 
+export function useToast() {
+  const current = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return { toasts: current, showToast, hideToast: dismiss };
+}
+
+// ── Styles (inline to avoid any Tailwind scanning issues) ────
+
+const TYPE_STYLES: Record<Toast['type'], React.CSSProperties> = {
+  success: { background: '#14532D', borderColor: '#22C55E', color: '#D1FAE5' },
+  error:   { background: '#7F1D1D', borderColor: '#EF4444', color: '#FEE2E2' },
+  warning: { background: '#78350F', borderColor: '#F59E0B', color: '#FEF3C7' },
+  info:    { background: '#1E3A5F', borderColor: '#3B82F6', color: '#E0F2FE' },
+};
+
+const ICON: Record<Toast['type'], string> = {
+  success: '✅',
+  error: '🚨',
+  warning: '⚠️',
+  info: 'ℹ️',
+};
+
+const containerStyle: React.CSSProperties = {
+  position: 'fixed',
+  bottom: 16,
+  right: 16,
+  zIndex: 99999,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 8,
+  pointerEvents: 'none',
+};
+
+const itemStyle: React.CSSProperties = {
+  minWidth: 320,
+  maxWidth: 420,
+  padding: '12px 16px',
+  borderRadius: 8,
+  border: '1px solid',
+  boxShadow: '0 4px 12px rgba(0,0,0,.3)',
+  pointerEvents: 'auto',
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: 10,
+  animation: 'dm3-toast-in .3s ease-out',
+  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+};
+
+// ── Components ───────────────────────────────────────────────
+
+function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
+  const colors = TYPE_STYLES[toast.type];
   return (
-    <ToastContext.Provider value={{ toasts, showToast, hideToast }}>
-      {children}
-      <ToastContainer />
-    </ToastContext.Provider>
+    <div style={{ ...itemStyle, ...colors }}>
+      <span style={{ fontSize: 18, lineHeight: 1 }}>{ICON[toast.type]}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 500, fontSize: 13 }}>{toast.title}</div>
+        {toast.description && (
+          <div style={{ fontSize: 12, marginTop: 4, opacity: 0.8 }}>{toast.description}</div>
+        )}
+      </div>
+      <button
+        onClick={onClose}
+        style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', opacity: 0.6, fontSize: 14, padding: 0 }}
+      >
+        ✕
+      </button>
+    </div>
   );
 }
 
 function ToastContainer() {
-  const context = useContext(ToastContext);
-  if (!context) return null;
-  
-  const { toasts, hideToast } = context;
-
-  if (toasts.length === 0) return null;
-
+  const list = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  if (list.length === 0) return null;
   return (
-    <div className="fixed bottom-4 right-4 z-50 space-y-2">
-      {toasts.map(toast => (
-        <ToastItem key={toast.id} toast={toast} onClose={() => hideToast(toast.id)} />
+    <div style={containerStyle}>
+      {list.map((t) => (
+        <ToastItem key={t.id} toast={t} onClose={() => dismiss(t.id)} />
       ))}
     </div>
   );
 }
 
-function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
-  const typeStyles = {
-    info: 'bg-[#1E3A5F] border-[#3B82F6] text-[#E0F2FE]',
-    warning: 'bg-[#78350F] border-[#F59E0B] text-[#FEF3C7]',
-    error: 'bg-[#7F1D1D] border-[#EF4444] text-[#FEE2E2]',
-    success: 'bg-[#14532D] border-[#22C55E] text-[#D1FAE5]',
-  };
-
-  const iconMap = {
-    info: 'ℹ️',
-    warning: '⚠️',
-    error: '🚨',
-    success: '✅',
-  };
-
+export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
-    <div className={cn(
-      'min-w-80 p-4 rounded-lg border shadow-lg animate-in slide-in-from-right-full',
-      typeStyles[toast.type]
-    )}>
-      <div className="flex items-start gap-3">
-        <span className="text-lg">{iconMap[toast.type]}</span>
-        <div className="flex-1">
-          <div className="font-medium text-sm">{toast.title}</div>
-          {toast.description && (
-            <div className="text-xs mt-1 opacity-80">{toast.description}</div>
-          )}
-        </div>
-        <button 
-          onClick={onClose}
-          className="text-xs opacity-60 hover:opacity-100 ml-2"
-        >
-          ✕
-        </button>
-      </div>
-    </div>
+    <>
+      {children}
+      <ToastContainer />
+      <style>{`@keyframes dm3-toast-in { from { opacity:0; transform:translateX(100%); } to { opacity:1; transform:translateX(0); } }`}</style>
+    </>
   );
-}
-
-export function useToast() {
-  const context = useContext(ToastContext);
-  if (!context) {
-    throw new Error('useToast must be used within ToastProvider');
-  }
-  return context;
 }

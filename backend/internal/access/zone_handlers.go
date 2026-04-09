@@ -75,6 +75,12 @@ func (h *AccessHandlers) ListZones(w http.ResponseWriter, r *http.Request) {
 	_ = h.db.Pool.QueryRow(r.Context(),
 		"SELECT COUNT(*) FROM dm3_access.zones z "+where, countArgs...).Scan(&total)
 
+	sortCol, sortDir := parseSorting(r, map[string]string{
+		"name":               "z.name",
+		"description":        "COALESCE(z.description, '')",
+		"access_point_count": "COUNT(ap.id)",
+		"created_at":         "z.created_at",
+	}, "z.name")
 	query := fmt.Sprintf(`
 		SELECT %s,
 		       COUNT(ap.id) AS access_point_count,
@@ -83,8 +89,8 @@ func (h *AccessHandlers) ListZones(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN dm3_access.access_points ap ON ap.zone_id = z.id
 		%s
 		GROUP BY z.id
-		ORDER BY z.name ASC
-		LIMIT $%d OFFSET $%d`, zoneSelectCols, where, idx, idx+1)
+		ORDER BY %s %s
+		LIMIT $%d OFFSET $%d`, zoneSelectCols, where, sortCol, sortDir, idx, idx+1)
 	args = append(args, limit, offset)
 
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)

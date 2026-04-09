@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 import { apiFetch } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import type { Department, DepartmentFormData, DepartmentFilters, DepartmentUser, DepartmentImportData, DepartmentManager } from '../types';
 
 interface DepartmentPagination {
@@ -73,6 +75,7 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
     const [sortBy, setSortBy] = useState<string | null>('name');
     const [sortDir, setSortDir] = useState<'asc' | 'desc' | null>('asc');
 
+    const { t } = useTranslation('departments');
     const user = useAuthStore((s) => s.user);
 
     const getAuthHeaders = () => {
@@ -83,11 +86,6 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
         };
     };
 
-    const showToast = (options: { title: string; description: string; variant?: 'default' | 'destructive' }) => {
-        console.log('Toast:', options.title, options.description);
-    };
-
-    // Fetch departments with search and filters
     const fetchDepartments = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -120,13 +118,9 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
                 total_pages: data.pagination?.total_pages ?? data.total_pages ?? 0,
             }));
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to fetch departments';
+            const message = err instanceof Error ? err.message : t('toast.createFailed');
             setError(message);
-            showToast({
-                title: 'Error',
-                description: message,
-                variant: 'destructive',
-            });
+            toast(message, 'error');
         } finally {
             setLoading(false);
         }
@@ -147,27 +141,19 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
                     throw new Error(errorData.message || 'Failed to create department');
                 }
 
-                showToast({
-                    title: 'Success',
-                    description: 'Department created successfully',
-                });
+                toast(t('toast.created'), 'success');
 
                 await fetchDepartments();
                 return true;
             } catch (err) {
-                const message = err instanceof Error ? err.message : 'Failed to create department';
-                showToast({
-                    title: 'Error',
-                    description: message,
-                    variant: 'destructive',
-                });
+                const message = err instanceof Error ? err.message : t('toast.createFailed');
+                toast(message, 'error');
                 return false;
             }
         },
-        [fetchDepartments],
+        [fetchDepartments, t],
     );
 
-    // Update department
     const updateDepartment = useCallback(
         async (id: string, data: DepartmentFormData): Promise<boolean> => {
             try {
@@ -179,27 +165,20 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
 
                 if (!response.ok) {
                     const errorData = await response.json();
-                    throw new Error(errorData.message || 'Failed to update department');
+                    throw new Error(errorData.message || t('toast.updateFailed'));
                 }
 
-                showToast({
-                    title: 'Success',
-                    description: 'Department updated successfully',
-                });
+                toast(t('toast.updated'), 'success');
 
                 await fetchDepartments();
                 return true;
             } catch (err) {
-                const message = err instanceof Error ? err.message : 'Failed to update department';
-                showToast({
-                    title: 'Error',
-                    description: message,
-                    variant: 'destructive',
-                });
+                const message = err instanceof Error ? err.message : t('toast.updateFailed');
+                toast(message, 'error');
                 return false;
             }
         },
-        [fetchDepartments],
+        [fetchDepartments, t],
     );
 
     // Delete department
@@ -216,27 +195,19 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
                     throw new Error(errorData.message || 'Failed to delete department');
                 }
 
-                showToast({
-                    title: 'Success',
-                    description: 'Department deleted successfully',
-                });
+                toast(t('toast.deleted'), 'success');
 
                 await fetchDepartments();
                 return true;
             } catch (err) {
-                const message = err instanceof Error ? err.message : 'Failed to delete department';
-                showToast({
-                    title: 'Error',
-                    description: message,
-                    variant: 'destructive',
-                });
+                const message = err instanceof Error ? err.message : t('toast.deleteFailed');
+                toast(message, 'error');
                 return false;
             }
         },
-        [fetchDepartments],
+        [fetchDepartments, t],
     );
 
-    // Get department users
     const getDepartmentUsers = useCallback(async (id: string): Promise<DepartmentUser[]> => {
         try {
             const response = await fetch(`/api/v1/identity/departments/${id}/users`, {
@@ -251,16 +222,11 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
             return data.users || [];
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to fetch department users';
-            showToast({
-                title: 'Error',
-                description: message,
-                variant: 'destructive',
-            });
+            toast(message, 'error');
             return [];
         }
     }, []);
 
-    // Assign users to department
     const assignUsersToDetpartment = useCallback(
         async (departmentId: string, userIds: string[]): Promise<boolean> => {
             try {
@@ -275,27 +241,19 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
                     throw new Error(errorData.message || 'Failed to assign users');
                 }
 
-                showToast({
-                    title: 'Success',
-                    description: `${userIds.length} users assigned successfully`,
-                });
+                toast(t('toast.usersAssigned', { count: userIds.length }), 'success');
 
                 await fetchDepartments();
                 return true;
             } catch (err) {
                 const message = err instanceof Error ? err.message : 'Failed to assign users';
-                showToast({
-                    title: 'Error',
-                    description: message,
-                    variant: 'destructive',
-                });
+                toast(message, 'error');
                 return false;
             }
         },
-        [fetchDepartments],
+        [fetchDepartments, t],
     );
 
-    // Remove user from department
     const removeUserFromDepartment = useCallback(
         async (departmentId: string, userId: string): Promise<boolean> => {
             try {
@@ -309,24 +267,17 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
                     throw new Error(errorData.message || 'Failed to remove user');
                 }
 
-                showToast({
-                    title: 'Success',
-                    description: 'User removed from department successfully',
-                });
+                toast(t('toast.userRemoved'), 'success');
 
                 await fetchDepartments();
                 return true;
             } catch (err) {
                 const message = err instanceof Error ? err.message : 'Failed to remove user';
-                showToast({
-                    title: 'Error',
-                    description: message,
-                    variant: 'destructive',
-                });
+                toast(message, 'error');
                 return false;
             }
         },
-        [fetchDepartments],
+        [fetchDepartments, t],
     );
 
     // Export departments
@@ -355,19 +306,12 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            showToast({
-                title: 'Success',
-                description: 'Departments exported successfully',
-            });
+            toast(t('toast.exported'), 'success');
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to export departments';
-            showToast({
-                title: 'Error',
-                description: message,
-                variant: 'destructive',
-            });
+            toast(message, 'error');
         }
-    }, []);
+    }, [t]);
 
     // Import departments
     const importDepartments = useCallback(
@@ -391,10 +335,7 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
 
                 const result = await response.json();
 
-                showToast({
-                    title: 'Success',
-                    description: `Imported ${result.success} departments successfully`,
-                });
+                toast(t('toast.imported', { count: result.success }), 'success');
 
                 if (result.errors && result.errors.length > 0) {
                     console.warn('Import warnings:', result.errors);
@@ -404,15 +345,11 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
                 return true;
             } catch (err) {
                 const message = err instanceof Error ? err.message : 'Failed to import departments';
-                showToast({
-                    title: 'Error',
-                    description: message,
-                    variant: 'destructive',
-                });
+                toast(message, 'error');
                 return false;
             }
         },
-        [fetchDepartments],
+        [fetchDepartments, t],
     );
 
     // Fetch managers

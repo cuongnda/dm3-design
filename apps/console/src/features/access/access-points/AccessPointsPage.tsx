@@ -1,25 +1,22 @@
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Plus, Search, MoreHorizontal, Edit, Trash2, Eye } from 'lucide-react';
+import { Shield, Plus, Edit, Trash2, Eye, Trash } from 'lucide-react';
 import {
     Button,
     Input,
     Badge,
     AppModal,
     Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
+    DataTable,
+    type Column,
     Select,
     SelectOption,
     Label,
+    TablePaginationFooter,
 } from '@dm3/ui';
 import { useAccessPoints } from './hooks/useAccessPoints';
+import { toast } from '@/lib/toast';
 import type { AccessPoint, AccessPointFormData, Zone } from './types';
 
 // ---------------------------------------------------------------------------
@@ -49,7 +46,6 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, onSubmit 
     });
     const [nameError, setNameError] = useState('');
 
-    // Reset form when modal opens with new initial data
     const handleOpenChange = (v: boolean) => {
         if (v) {
             setForm({
@@ -107,10 +103,10 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, onSubmit 
                 label: submitting ? t('saving', 'Saving…') : t('save', 'Save'),
                 onClick: handleSubmit,
                 disabled: submitting,
+                loading: submitting,
             }}
         >
             <div className="space-y-4">
-                {/* Name */}
                 <div>
                     <Label htmlFor="ap-name">{t('name', 'Name')} *</Label>
                     <Input
@@ -124,7 +120,6 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, onSubmit 
                     {nameError && <p className="mt-1 text-[11px] text-destructive">{nameError}</p>}
                 </div>
 
-                {/* Description */}
                 <div>
                     <Label htmlFor="ap-description">{t('description', 'Description')}</Label>
                     <Input
@@ -136,7 +131,6 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, onSubmit 
                     />
                 </div>
 
-                {/* Zone */}
                 <div>
                     <Label>{t('zone', 'Zone')}</Label>
                     <Select
@@ -192,18 +186,27 @@ export function AccessPointsPage() {
         accessPoints,
         zones,
         loading,
+        pagination,
         filters,
+        sortBy,
+        sortDir,
         createAccessPoint,
         updateAccessPoint,
         deleteAccessPoint,
         updateFilters,
+        changePage,
+        changePageSize,
+        changeSort,
     } = useAccessPoints();
 
+    const [selected, setSelected] = useState<string[]>([]);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingAP, setEditingAP] = useState<AccessPoint | null>(null);
     const [deletingAP, setDeletingAP] = useState<AccessPoint | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
+    const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
 
     const zoneMap = useMemo(() => new Map(zones.map((z) => [z.id, z.name])), [zones]);
 
@@ -234,27 +237,20 @@ export function AccessPointsPage() {
         }
     };
 
-    // Calculate summary stats
-    const stats = useMemo(() => {
-        const filtered = accessPoints.filter((ap) => {
-            if (filters.search) {
-                const q = filters.search.toLowerCase();
-                if (!ap.name.toLowerCase().includes(q) && !(ap.description && ap.description.toLowerCase().includes(q))) {
-                    return false;
-                }
-            }
-            if (filters.zone_id && ap.zone_id !== filters.zone_id) return false;
-            return true;
-        });
-        return {
-            total: accessPoints.length,
-            filtered: filtered.length,
-            withDevices: accessPoints.filter((ap) => (ap.access_device_count ?? 0) > 0).length,
-            mapped: accessPoints.filter((ap) => typeof ap.map_x === 'number' && typeof ap.map_y === 'number').length,
-        };
-    }, [accessPoints, filters]);
+    const handleBulkDeleteConfirm = async () => {
+        setBulkDeleteLoading(true);
+        try {
+            await Promise.all(selected.map((apId) => deleteAccessPoint(apId)));
+            toast(t('toast.bulkDeleted', { count: selected.length }), 'success');
+            setSelected([]);
+            setShowBulkDeleteDialog(false);
+        } catch {
+            // individual errors already handled inside deleteAccessPoint
+        } finally {
+            setBulkDeleteLoading(false);
+        }
+    };
 
-    // Filter access points
     const filteredAPs = useMemo(() => {
         let result = accessPoints;
         if (filters.search) {
@@ -270,188 +266,210 @@ export function AccessPointsPage() {
         return result;
     }, [accessPoints, filters]);
 
-    return (
-        <div className="space-y-6 overflow-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-semibold">{t('title', 'Access Points')}</h1>
-                    <p className="text-muted-foreground">{t('description', 'Manage physical access points and their device assignments')}</p>
+    const withDevices = accessPoints.filter((ap) => (ap.access_device_count ?? 0) > 0).length;
+
+    const columns: Column<AccessPoint>[] = [
+        {
+            key: 'name',
+            header: t('columns.name', 'Name'),
+            sortable: true,
+            render: (ap) => (
+                <div className="flex items-center gap-3">
+                    <div className="w-2.5 h-2.5 rounded-full bg-primary/60 shrink-0" />
+                    <div>
+                        <p className="text-[13px] font-medium">{ap.name}</p>
+                        {ap.description && (
+                            <p className="text-[11px] text-muted-foreground">{ap.description}</p>
+                        )}
+                    </div>
                 </div>
-                <Button onClick={() => setShowCreateModal(true)}>
-                    <Plus size={16} className="mr-2" />
-                    {t('newAccessPoint', 'New Access Point')}
-                </Button>
+            ),
+        },
+        {
+            key: 'zone_id',
+            header: t('columns.zone', 'Zone'),
+            sortable: true,
+            render: (ap) =>
+                ap.zone_id && zoneMap.get(ap.zone_id) ? (
+                    <Badge variant="outline">{zoneMap.get(ap.zone_id)}</Badge>
+                ) : (
+                    <span className="text-[13px] text-muted-foreground/50">—</span>
+                ),
+        },
+        {
+            key: 'access_device_count',
+            header: t('columns.devices', 'Devices'),
+            width: '80px',
+            sortable: true,
+            render: (ap) => <Badge variant="secondary">{ap.access_device_count ?? 0}</Badge>,
+        },
+        {
+            key: 'created_at',
+            header: t('columns.created', 'Created'),
+            width: '110px',
+            sortable: true,
+            render: (ap) => (
+                <span className="text-[13px] text-muted-foreground">
+                    {new Date(ap.created_at).toLocaleDateString()}
+                </span>
+            ),
+        },
+        {
+            key: 'actions',
+            header: t('common:table.actions'),
+            width: '96px',
+            render: (ap) => (
+                <div className="flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/access/access-points/${ap.id}`);
+                        }}
+                    >
+                        <Eye className="w-4 h-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingAP(ap);
+                        }}
+                    >
+                        <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-destructive"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingAP(ap);
+                        }}
+                    >
+                        <Trash2 className="w-4 h-4" />
+                    </Button>
+                </div>
+            ),
+        },
+    ];
+
+    return (
+        <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden">
+            {/* Header & Stats */}
+            <div className="shrink-0 space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-[18px] font-semibold text-foreground">{t('title', 'Access Points')}</h1>
+                        <p className="text-[13px] text-muted-foreground">{t('description', 'Manage physical access points and their device assignments')}</p>
+                    </div>
+                    <Button size="sm" onClick={() => setShowCreateModal(true)}>
+                        <Plus size={14} className="mr-1.5" />
+                        {t('newAccessPoint', 'New Access Point')}
+                    </Button>
+                </div>
+
+                {/* Stats */}
+                {!loading && (
+                    <div className="grid grid-cols-3 gap-3">
+                        <Card className="p-3">
+                            <div className="text-2xl font-bold">{accessPoints.length}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.total', 'Total')}</div>
+                        </Card>
+                        <Card className="p-3">
+                            <div className="text-2xl font-bold">{withDevices}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.assigned', 'With Devices')}</div>
+                        </Card>
+                        <Card className="p-3">
+                            <div className="text-2xl font-bold">{filteredAPs.length}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.filtered', 'Filtered')}</div>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Search & Zone filter */}
+                <div className="flex gap-2">
+                    <Input
+                        placeholder={t('searchPlaceholder', 'Search by name or description…')}
+                        value={filters.search}
+                        onChange={(e) => updateFilters({ search: e.target.value })}
+                        className="h-8 text-[13px] flex-1"
+                    />
+                    {zones.length > 0 && (
+                        <Select
+                            className="w-40 shrink-0 [&_button]:h-8 [&_button]:text-xs"
+                            value={filters.zone_id}
+                            onValueChange={(v) => updateFilters({ zone_id: v })}
+                            placeholder={t('allZones', 'All Zones')}
+                        >
+                            <SelectOption value="">{t('allZones', 'All Zones')}</SelectOption>
+                            {zones.map((z) => (
+                                <SelectOption key={z.id} value={z.id}>
+                                    {z.name}
+                                </SelectOption>
+                            ))}
+                        </Select>
+                    )}
+                </div>
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                                <Shield size={20} className="text-primary" />
-                            </div>
-                            <div>
-                                <div className="text-2xl font-bold text-primary">{stats.total}</div>
-                                <div className="text-sm text-muted-foreground">{t('stats.total', 'Total')}</div>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                                <Shield size={20} className="text-green-600" />
-                            </div>
-                            <div>
-                                <div className="text-2xl font-bold text-green-600">{stats.withDevices}</div>
-                                <div className="text-sm text-muted-foreground">{t('stats.assigned', 'With Devices')}</div>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                                <Shield size={20} className="text-purple-600" />
-                            </div>
-                            <div>
-                                <div className="text-2xl font-bold text-purple-600">{stats.filtered}</div>
-                                <div className="text-sm text-muted-foreground">{t('stats.filtered', 'Filtered')}</div>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-                                <Shield size={20} className="text-amber-600" />
-                            </div>
-                            <div>
-                                <div className="text-2xl font-bold text-amber-600">{stats.mapped}</div>
-                                <div className="text-sm text-muted-foreground">{t('stats.mapped', 'Placed on Map')}</div>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Search & Filter */}
-            <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
-                <Input
-                    type="text"
-                    placeholder={t('searchPlaceholder', 'Search by name or description…')}
-                    value={filters.search}
-                    onChange={(e) => updateFilters({ search: e.target.value })}
-                    className="pl-10"
+            {/* Table */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+                <div className="min-h-0 flex-1 overflow-auto">
+                    <DataTable
+                        embedded
+                        stickyHeader
+                        paginate={false}
+                        loading={loading}
+                        columns={columns}
+                        data={filteredAPs}
+                        rowKey={(ap) => ap.id}
+                        sortState={{ col: sortBy, dir: sortDir }}
+                        onSortChange={changeSort}
+                        onRowDoubleClick={(ap) => navigate(`/access/access-points/${ap.id}`)}
+                        emptyMessage={t('noAccessPoints', 'No access points found')}
+                        emptyIcon={<Shield size={32} strokeWidth={1.2} />}
+                        selection={{
+                            selectedIds: selected,
+                            onSelectedIdsChange: setSelected,
+                            selectAllScope: 'page',
+                            selectOnRowClick: true,
+                            bulkActions: [
+                                {
+                                    icon: <Trash size={13} className="text-destructive" />,
+                                    label: t('common:table.deleteSelected'),
+                                    variant: 'ghost',
+                                    className: 'text-destructive hover:text-destructive hover:bg-destructive/10',
+                                    onClick: () => setShowBulkDeleteDialog(true),
+                                },
+                            ],
+                        }}
+                    />
+                </div>
+                <TablePaginationFooter
+                    page={pagination.page}
+                    pageSize={pagination.limit}
+                    total={pagination.total}
+                    totalPages={pagination.total_pages}
+                    pageSizeOptions={[10, 20, 50, 100]}
+                    onPageChange={changePage}
+                    onPageSizeChange={changePageSize}
+                    loading={loading}
+                    sortColumns={[
+                        { value: 'name', label: t('columns.name', 'Name') },
+                        { value: 'zone_id', label: t('columns.zone', 'Zone') },
+                        { value: 'access_device_count', label: t('columns.devices', 'Devices') },
+                        { value: 'created_at', label: t('columns.created', 'Created') },
+                    ]}
+                    sortBy={sortBy}
+                    sortDir={sortDir}
+                    onSortChange={changeSort}
                 />
             </div>
 
-            {/* Zone Filter */}
-            {zones.length > 0 && (
-                <Select value={filters.zone_id} onValueChange={(v) => updateFilters({ zone_id: v })} placeholder={t('allZones', 'All Zones')}>
-                    <SelectOption value="">{t('allZones', 'All Zones')}</SelectOption>
-                    {zones.map((z) => (
-                        <SelectOption key={z.id} value={z.id}>
-                            {z.name}
-                        </SelectOption>
-                    ))}
-                </Select>
-            )}
-
-            {/* Grid of Cards */}
-            {loading ? (
-                <div className="flex justify-center py-16">
-                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                </div>
-            ) : filteredAPs.length === 0 ? (
-                <Card>
-                    <CardContent className="text-center py-12">
-                        <Shield size={48} className="mx-auto text-muted-foreground mb-4" />
-                        <h3 className="text-lg font-semibold mb-2">{t('noAccessPoints', 'No access points found')}</h3>
-                        <p className="text-muted-foreground">
-                            {filters.search || filters.zone_id
-                                ? t('noResults', 'No access points match your filters')
-                                : t('empty', 'No access points yet. Add the first one.')}
-                        </p>
-                    </CardContent>
-                </Card>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredAPs.map((ap) => (
-                        <Card key={ap.id} className="hover:shadow-md transition-shadow cursor-pointer">
-                            <CardHeader className="pb-3">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-center gap-3 flex-1">
-                                        <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
-                                            <Shield size={20} className="text-primary" />
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <CardTitle className="text-base truncate">{ap.name}</CardTitle>
-                                            {ap.description && (
-                                                <p className="text-sm text-muted-foreground truncate">{ap.description}</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                            <Button variant="ghost" size="sm" className="shrink-0">
-                                                <MoreHorizontal size={16} />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={() => navigate(`/access/access-points/${ap.id}`)}>
-                                                <Eye size={14} className="mr-2" />
-                                                {t('view', 'View')}
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => setEditingAP(ap)}>
-                                                <Edit size={14} className="mr-2" />
-                                                {t('edit', 'Edit')}
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => setDeletingAP(ap)} className="text-destructive">
-                                                <Trash2 size={14} className="mr-2" />
-                                                {t('delete', 'Delete')}
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-3">
-                                    {ap.zone_id && zoneMap.get(ap.zone_id) && (
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-sm text-muted-foreground">{t('zone', 'Zone')}</span>
-                                            <Badge variant="outline">{zoneMap.get(ap.zone_id)}</Badge>
-                                        </div>
-                                    )}
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-muted-foreground">{t('devices', 'Devices')}</span>
-                                        <Badge variant="secondary">{ap.access_device_count ?? 0}</Badge>
-                                    </div>
-                                    {typeof ap.map_x === 'number' && typeof ap.map_y === 'number' && (
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-sm text-muted-foreground">Map</span>
-                                            <Badge variant="outline">{`${ap.map_x}, ${ap.map_y}`}</Badge>
-                                        </div>
-                                    )}
-                                    <div className="flex justify-between items-center text-xs text-muted-foreground pt-2 border-t border-border">
-                                        <span>{t('created', 'Created')}</span>
-                                        <span>{new Date(ap.created_at).toLocaleDateString()}</span>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            )}
 
             {/* Create modal */}
             <AccessPointModal
@@ -466,9 +484,7 @@ export function AccessPointsPage() {
             {editingAP && (
                 <AccessPointModal
                     open={!!editingAP}
-                    onOpenChange={(v) => {
-                        if (!v) setEditingAP(null);
-                    }}
+                    onOpenChange={(v) => { if (!v) setEditingAP(null); }}
                     title={t('editTitle', 'Edit Access Point')}
                     initial={editingAP}
                     zones={zones}
@@ -492,7 +508,6 @@ export function AccessPointsPage() {
                     </span>
                 }
                 size="xs"
-                style={{ maxWidth: '22rem' }}
                 showCancelButton
                 cancelLabel={t('cancel', 'Cancel')}
                 cancelDisabled={deleteLoading}
@@ -506,7 +521,37 @@ export function AccessPointsPage() {
                 }}
             >
                 <p className="text-[13px] text-muted-foreground">
-                    {t('deleteConfirm', 'Are you sure you want to delete')} <span className="font-medium text-foreground">"{deletingAP?.name}"</span>?
+                    {t('deleteConfirm', 'Are you sure you want to delete')}{' '}
+                    <span className="font-medium text-foreground">"{deletingAP?.name}"</span>?
+                </p>
+            </AppModal>
+
+            {/* Bulk delete confirmation */}
+            <AppModal
+                open={showBulkDeleteDialog}
+                onOpenChange={(open) => { if (!open) setShowBulkDeleteDialog(false); }}
+                title={
+                    <span className="flex items-center gap-2 text-destructive">
+                        <Trash2 size={16} />
+                        {t('bulkDeleteTitle', 'Delete Access Points')}
+                    </span>
+                }
+                size="xs"
+                showCancelButton
+                cancelLabel={t('cancel', 'Cancel')}
+                cancelDisabled={bulkDeleteLoading}
+                primaryAction={{
+                    label: bulkDeleteLoading ? t('deleting', 'Deleting…') : t('delete', 'Delete'),
+                    variant: 'destructive',
+                    onClick: handleBulkDeleteConfirm,
+                    loading: bulkDeleteLoading,
+                    disabled: bulkDeleteLoading,
+                }}
+            >
+                <p className="text-[13px] text-muted-foreground">
+                    {t('bulkDeleteConfirm', 'Are you sure you want to delete')}{' '}
+                    <span className="font-medium text-foreground">{selected.length}</span>{' '}
+                    {t('bulkDeleteSuffix', 'access points? This cannot be undone.')}
                 </p>
             </AppModal>
         </div>

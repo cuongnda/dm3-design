@@ -22,15 +22,15 @@ export type AppModalSize =
   | "4xl"
   | "full"
 
-const sizeClass: Record<AppModalSize, string> = {
-  xs: "max-w-xs",
-  sm: "max-w-sm",
-  md: "max-w-md",
-  lg: "max-w-lg",
-  xl: "max-w-xl",
-  "2xl": "max-w-2xl",
-  "4xl": "max-w-4xl",
-  full: "max-w-[min(96rem,calc(100%-2rem))]",
+const sizeStyle: Record<AppModalSize, string> = {
+  xs: "20rem",
+  sm: "24rem",
+  md: "28rem",
+  lg: "32rem",
+  xl: "36rem",
+  "2xl": "42rem",
+  "4xl": "56rem",
+  full: "min(96rem, calc(100% - 2rem))",
 }
 
 /** Footer action: label, handler, optional variant / loading / disabled (for validation). */
@@ -206,10 +206,9 @@ function AppModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={showCloseButton}
-        style={style}
+        style={{ maxWidth: sizeStyle[size], ...style }}
         className={cn(
           "flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0",
-          sizeClass[size],
           className
         )}
       >

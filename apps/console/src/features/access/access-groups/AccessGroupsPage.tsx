@@ -1,26 +1,24 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Shield, Plus, Search, MoreHorizontal, Eye, Edit, Trash2, Clock } from 'lucide-react';
+import { Shield, Plus, Eye, Edit, Trash2, Trash, Clock } from 'lucide-react';
 import {
     Button,
     Input,
     Label,
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
     Badge,
     AppModal,
-    DataTableCard,
     DataTable,
     type Column,
+    Card,
+    TablePaginationFooter,
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger,
 } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { useAccessGroups } from './hooks/useAccessGroups';
 import type { AccessGroup, AccessGroupFormData, AccessTime } from './types';
 
@@ -33,6 +31,8 @@ export function AccessGroupsPage() {
         loading,
         pagination,
         search,
+        sortBy,
+        sortDir,
         setSearch,
         fetchAccessGroups,
         createAccessGroup,
@@ -40,8 +40,8 @@ export function AccessGroupsPage() {
         deleteAccessGroup,
         changePage,
         changePageSize,
+        changeSort,
     } = useAccessGroups();
-
     const [selected, setSelected] = useState<string[]>([]);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingGroup, setEditingGroup] = useState<AccessGroup | null>(null);
@@ -49,6 +49,8 @@ export function AccessGroupsPage() {
     const [groupToDelete, setGroupToDelete] = useState<AccessGroup | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
+    const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
     const [formData, setFormData] = useState<AccessGroupFormData>({ name: '', is_default: false });
     const [formError, setFormError] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -79,10 +81,7 @@ export function AccessGroupsPage() {
     };
 
     const handleCreateSubmit = async () => {
-        if (!formData.name.trim()) {
-            setFormError(t('validation.nameRequired', 'Name is required'));
-            return;
-        }
+        if (!formData.name.trim()) { setFormError(t('validation.nameRequired', 'Name is required')); return; }
         setSubmitting(true);
         const success = await createAccessGroup(formData);
         setSubmitting(false);
@@ -91,10 +90,7 @@ export function AccessGroupsPage() {
 
     const handleEditSubmit = async () => {
         if (!editingGroup) return;
-        if (!formData.name.trim()) {
-            setFormError(t('validation.nameRequired', 'Name is required'));
-            return;
-        }
+        if (!formData.name.trim()) { setFormError(t('validation.nameRequired', 'Name is required')); return; }
         setSubmitting(true);
         const success = await updateAccessGroup(editingGroup.id, formData);
         setSubmitting(false);
@@ -122,14 +118,19 @@ export function AccessGroupsPage() {
         }
     };
 
-    const handleBulkDelete = async () => {
-        setDeleteError(null);
+    const handleBulkDeleteConfirm = async () => {
+        setBulkDeleteLoading(true);
         try {
             await apiFetch('/api/v1/access/access-groups/bulk-delete', { method: 'POST', body: JSON.stringify({ ids: selected }) });
+            toast(t('toast.bulkDeleted', { count: selected.length }), 'success');
             setSelected([]);
+            setShowBulkDeleteDialog(false);
             fetchAccessGroups();
         } catch (err) {
-            setDeleteError(err instanceof Error ? err.message : 'Bulk delete failed');
+            const message = err instanceof Error ? err.message : 'Bulk delete failed';
+            toast(message, 'error');
+        } finally {
+            setBulkDeleteLoading(false);
         }
     };
 
@@ -144,29 +145,23 @@ export function AccessGroupsPage() {
                         <Shield size={14} className="text-primary shrink-0" />
                         <span className="text-[13px] font-medium">{g.name}</span>
                         {g.is_default && (
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                                Default
-                            </Badge>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Default</Badge>
                         )}
                     </div>
                 ),
             },
             {
-                key: 'is_default',
-                header: t('columns.default', 'Default'),
-                width: '80px',
-                render: (g) => (g.is_default ? <Badge variant="default">Yes</Badge> : <span className="text-[13px] text-muted-foreground">—</span>),
-            },
-            {
                 key: 'access_point_count',
                 header: t('columns.accessPoints', 'Access Points'),
                 width: '110px',
+                sortable: true,
                 render: (g) => <Badge variant="secondary">{g.access_point_count ?? 0}</Badge>,
             },
             {
                 key: 'user_count',
                 header: t('columns.users', 'Users'),
                 width: '72px',
+                sortable: true,
                 render: (g) => <Badge variant="outline">{g.user_count ?? 0}</Badge>,
             },
             {
@@ -208,37 +203,19 @@ export function AccessGroupsPage() {
             },
             {
                 key: 'actions',
-                header: '',
-                width: '48px',
+                header: t('common:table.actions'),
+                width: '96px',
                 render: (g) => (
-                    <div onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                    <MoreHorizontal size={14} />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => navigate(`/access/access-groups/${g.id}`)}>
-                                    <Eye size={14} className="mr-2" />
-                                    View
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => openEditModal(g)}>
-                                    <Edit size={14} className="mr-2" />
-                                    Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                    onClick={() => {
-                                        setGroupToDelete(g);
-                                        setShowDeleteDialog(true);
-                                    }}
-                                    className="text-destructive"
-                                >
-                                    <Trash2 size={14} className="mr-2" />
-                                    Delete
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon-sm" onClick={() => navigate(`/access/access-groups/${g.id}`)}>
+                            <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" onClick={() => openEditModal(g)}>
+                            <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => { setGroupToDelete(g); setShowDeleteDialog(true); }}>
+                            <Trash2 className="w-4 h-4" />
+                        </Button>
                     </div>
                 ),
             },
@@ -256,10 +233,7 @@ export function AccessGroupsPage() {
                     id="group-name"
                     data-testid="access-input-name"
                     value={formData.name}
-                    onChange={(e) => {
-                        setFormData((prev) => ({ ...prev, name: e.target.value }));
-                        setFormError('');
-                    }}
+                    onChange={(e) => { setFormData((prev) => ({ ...prev, name: e.target.value })); setFormError(''); }}
                     placeholder={t('form.namePlaceholder', 'Group name')}
                 />
                 {formError && <p className="text-[12px] text-destructive mt-1">{formError}</p>}
@@ -308,84 +282,101 @@ export function AccessGroupsPage() {
     return (
         <TooltipProvider>
         <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between shrink-0">
-                <div>
-                    <h1 className="text-[18px] font-semibold text-foreground">{t('title', 'Access Groups')}</h1>
-                    <p className="text-[13px] text-muted-foreground">{t('description', 'Manage access groups and their assigned access points')}</p>
+            {/* Header & Stats */}
+            <div className="shrink-0 space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-[18px] font-semibold text-foreground">{t('title', 'Access Groups')}</h1>
+                        <p className="text-[13px] text-muted-foreground">{t('description', 'Manage access groups and their assigned access points')}</p>
+                    </div>
+                    <Button size="sm" onClick={openCreateModal} data-testid="access-button-create">
+                        <Plus size={14} className="mr-1.5" />
+                        {t('newGroup', 'New Group')}
+                    </Button>
                 </div>
-                <Button size="sm" onClick={openCreateModal} data-testid="access-button-create">
-                    <Plus size={14} className="mr-1.5" />
-                    {t('newGroup', 'New Group')}
-                </Button>
+
+                {/* Stats */}
+                {!loading && (
+                    <div className="grid grid-cols-3 gap-3">
+                        <Card className="p-3">
+                            <div className="text-2xl font-bold">{pagination.total}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.total', 'Total')}</div>
+                        </Card>
+                        <Card className="p-3">
+                            <div className="text-2xl font-bold">{accessGroups.filter((g) => g.is_default).length}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.default', 'Default')}</div>
+                        </Card>
+                        <Card className="p-3">
+                            <div className="text-2xl font-bold">{accessGroups.reduce((s, g) => s + (g.user_count ?? 0), 0)}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.users', 'Users Assigned')}</div>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Search */}
+                <Input
+                    placeholder={t('searchPlaceholder', 'Search access groups...')}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="h-8 text-[13px]"
+                    data-testid="access-input-search"
+                />
             </div>
 
-            {/* Search */}
-            <div className="flex items-center gap-2 shrink-0">
-                <div className="relative flex-1">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                    <Input
-                        placeholder={t('searchPlaceholder', 'Search access groups...')}
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="pl-9"
-                        data-testid="access-input-search"
-                    />
-                </div>
-            </div>
-
-            {/* Bulk delete error banner */}
-            {deleteError && !showDeleteDialog && (
-                <div className="text-red-500 text-sm p-2 bg-red-50 rounded shrink-0">{deleteError}</div>
-            )}
-
-            <DataTableCard
-                title={
-                    <span className="text-[14px] font-semibold">
-                        {t('title', 'Access Groups')} ({pagination.total})
-                    </span>
-                }
-                selectedCount={selected.length}
-                onClearSelection={() => setSelected([])}
-                onBulkDelete={handleBulkDelete}
-                bulkDeleteLabel={`${selected.length} access groups`}
-                pagination={{
-                    page: pagination.page,
-                    pageSize: pagination.limit,
-                    total: pagination.total,
-                    totalPages: pagination.total_pages,
-                    pageSizeOptions: [10, 20, 50, 100],
-                    onPageChange: changePage,
-                    onPageSizeChange: changePageSize,
-                    loading,
-                }}
-            >
-                {loading ? (
-                    <div className="flex justify-center py-12">
-                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                    </div>
-                ) : accessGroups.length === 0 ? (
-                    <div className="py-12 text-center text-[13px] text-muted-foreground">
-                        {search ? t('noResults', 'No access groups match your search') : t('empty', 'No access groups yet. Create the first one.')}
-                    </div>
-                ) : (
+            {/* Table */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+                <div className="min-h-0 flex-1 overflow-auto">
                     <DataTable
                         embedded
                         stickyHeader
                         paginate={false}
+                        loading={loading}
                         columns={columns}
                         data={accessGroups}
                         rowKey={(g) => g.id}
+                        sortState={{ col: sortBy, dir: sortDir }}
+                        onSortChange={changeSort}
                         onRowDoubleClick={(g) => navigate(`/access/access-groups/${g.id}`)}
+                        emptyMessage={search ? t('noResults', 'No access groups match your search') : t('empty', 'No access groups yet. Create the first one.')}
+                        emptyIcon={<Shield size={32} strokeWidth={1.2} />}
                         data-testid="access-table-groups"
                         selection={{
                             selectedIds: selected,
                             onSelectedIdsChange: setSelected,
                             selectAllScope: 'page',
+                            selectOnRowClick: true,
+                            bulkActions: [
+                                {
+                                    icon: <Trash size={13} className="text-destructive" />,
+                                    label: t('common:table.deleteSelected'),
+                                    variant: 'ghost',
+                                    className: 'text-destructive hover:text-destructive hover:bg-destructive/10',
+                                    onClick: () => setShowBulkDeleteDialog(true),
+                                },
+                            ],
                         }}
                     />
-                )}
-            </DataTableCard>
+                </div>
+                <TablePaginationFooter
+                    page={pagination.page}
+                    pageSize={pagination.limit}
+                    total={pagination.total}
+                    totalPages={pagination.total_pages}
+                    pageSizeOptions={[10, 20, 50, 100]}
+                    onPageChange={changePage}
+                    onPageSizeChange={changePageSize}
+                    loading={loading}
+                    sortColumns={[
+                        { value: 'name', label: t('columns.name', 'Name') },
+                        { value: 'access_point_count', label: t('columns.accessPoints', 'Access Points') },
+                        { value: 'user_count', label: t('columns.users', 'Users') },
+                    ]}
+                    sortBy={sortBy}
+                    sortDir={sortDir}
+                    onSortChange={changeSort}
+                />
+            </div>
 
             {/* Create Modal */}
             <AppModal
@@ -404,6 +395,7 @@ export function AccessGroupsPage() {
                     label: submitting ? t('creating', 'Creating...') : t('create', 'Create'),
                     onClick: handleCreateSubmit,
                     disabled: submitting,
+                    loading: submitting,
                 }}
             >
                 {GroupFormContent}
@@ -412,9 +404,7 @@ export function AccessGroupsPage() {
             {/* Edit Modal */}
             <AppModal
                 open={!!editingGroup}
-                onOpenChange={(open) => {
-                    if (!open) setEditingGroup(null);
-                }}
+                onOpenChange={(open) => { if (!open) setEditingGroup(null); }}
                 title={
                     <span className="flex items-center gap-2">
                         <Edit size={16} className="text-primary" />
@@ -428,6 +418,7 @@ export function AccessGroupsPage() {
                     label: submitting ? t('saving', 'Saving...') : t('save', 'Save'),
                     onClick: handleEditSubmit,
                     disabled: submitting,
+                    loading: submitting,
                 }}
             >
                 {GroupFormContent}
@@ -437,11 +428,7 @@ export function AccessGroupsPage() {
             <AppModal
                 open={showDeleteDialog}
                 onOpenChange={(open) => {
-                    if (!open) {
-                        setShowDeleteDialog(false);
-                        setGroupToDelete(null);
-                        setDeleteError(null);
-                    }
+                    if (!open) { setShowDeleteDialog(false); setGroupToDelete(null); setDeleteError(null); }
                 }}
                 title={
                     <span className="flex items-center gap-2 text-destructive">
@@ -471,6 +458,36 @@ export function AccessGroupsPage() {
                             ⚠ {t('deleteWarningUsers', 'This group has {{count}} users assigned.', { count: groupToDelete?.user_count })}
                         </span>
                     )}
+                </p>
+            </AppModal>
+
+            {/* Bulk Delete Confirmation */}
+            <AppModal
+                open={showBulkDeleteDialog}
+                onOpenChange={(open) => { if (!open) setShowBulkDeleteDialog(false); }}
+                title={
+                    <span className="flex items-center gap-2 text-destructive">
+                        <Trash2 size={16} />
+                        {t('bulkDeleteTitle', 'Delete Access Groups')}
+                    </span>
+                }
+                size="xs"
+                showCancelButton
+                cancelLabel={t('cancel', 'Cancel')}
+                cancelDisabled={bulkDeleteLoading}
+                primaryAction={{
+                    label: bulkDeleteLoading ? t('deleting', 'Deleting...') : t('delete', 'Delete'),
+                    variant: 'outline',
+                    className: 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20',
+                    onClick: handleBulkDeleteConfirm,
+                    loading: bulkDeleteLoading,
+                    disabled: bulkDeleteLoading,
+                }}
+            >
+                <p className="text-[13px] text-muted-foreground">
+                    {t('bulkDeleteConfirm', 'Are you sure you want to delete')}{' '}
+                    <span className="font-medium text-foreground">{selected.length}</span>{' '}
+                    {t('bulkDeleteSuffix', 'access groups? This cannot be undone.')}
                 </p>
             </AppModal>
         </div>

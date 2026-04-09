@@ -20,6 +20,7 @@ import {
     TablePaginationFooter,
 } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import type { AccessPoint, AccessPointDevice } from './types';
 
 // ---------------------------------------------------------------------------
@@ -422,10 +423,12 @@ export function AccessPointDetailPage() {
                 setError(null);
                 await fetchDevices();
                 await fetchAP();
+                toast(t('toast.deviceAdded', { count: access_device_ids.length }), 'success');
                 return true;
             } catch (err) {
-                console.error('Failed to add device:', err);
-                setError(err instanceof Error ? err.message : 'Failed to add device');
+                const message = err instanceof Error ? err.message : 'Failed to add device';
+                setError(message);
+                toast(message, 'error');
                 return false;
             }
         },
@@ -443,9 +446,11 @@ export function AccessPointDetailPage() {
                 setError(null);
                 await fetchDevices();
                 await fetchAP();
+                toast(t('toast.deviceRemoved'), 'success');
             } catch (err) {
-                console.error('Failed to remove device:', err);
-                setError(err instanceof Error ? err.message : 'Failed to remove device');
+                const message = err instanceof Error ? err.message : 'Failed to remove device';
+                setError(message);
+                toast(message, 'error');
             } finally {
                 setRemovingDeviceId(null);
             }
@@ -510,9 +515,11 @@ export function AccessPointDetailPage() {
             });
             await fetchAP();
             setShowEditModal(false);
+            toast(t('toast.updated'), 'success');
         } catch (err) {
-            console.error('Failed to update access point:', err);
-            setError(err instanceof Error ? err.message : 'Failed to update access point');
+            const message = err instanceof Error ? err.message : 'Failed to update access point';
+            setError(message);
+            toast(message, 'error');
         } finally {
             setSubmittingEdit(false);
         }
@@ -545,7 +552,7 @@ export function AccessPointDetailPage() {
             },
             {
                 key: 'actions',
-                header: '',
+                header: t('common:table.actions'),
                 width: '80px',
                 render: (d) => (
                     <Button
@@ -685,6 +692,7 @@ export function AccessPointDetailPage() {
                     label: submittingEdit ? t('saving', 'Saving…') : t('save', 'Save'),
                     onClick: handleEditSubmit,
                     disabled: submittingEdit,
+                    loading: submittingEdit,
                 }}
             >
                 <div className="space-y-4">

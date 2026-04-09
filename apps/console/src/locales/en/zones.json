@@ -57,5 +57,20 @@
   "detail.positioned": "Positioned",
   "detail.notPositioned": "Needs placement",
   "detail.noMapConfigured": "No indoor map configured for this zone",
-  "detail.savePosition": "Save"
+  "detail.savePosition": "Save",
+  "toast.created": "Zone created",
+  "toast.updated": "Zone updated",
+  "toast.deleted": "Zone deleted",
+  "toast.createFailed": "Failed to create zone",
+  "toast.updateFailed": "Failed to update zone",
+  "toast.deleteFailed": "Failed to delete zone",
+  "toast.bulkDeleted": "{{count}} zone(s) deleted",
+  "toast.bulkDeleteFailed": "Failed to delete zones",
+  "stats.total": "Total",
+  "stats.root": "Root Zones",
+  "stats.sub": "Sub-Zones",
+  "bulkDelete": "Delete selected",
+  "bulkDeleteTitle": "Delete Zones",
+  "bulkDeleteConfirm": "Are you sure you want to delete",
+  "bulkDeleteSuffix": "zones? This cannot be undone."
 }

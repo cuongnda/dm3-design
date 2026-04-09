@@ -57,5 +57,20 @@
   "detail.positioned": "Đã đặt vị trí",
   "detail.notPositioned": "Cần đặt vị trí",
   "detail.noMapConfigured": "Khu vực này chưa cấu hình bản đồ indoor",
-  "detail.savePosition": "Lưu"
+  "detail.savePosition": "Lưu",
+  "toast.created": "Đã tạo khu vực",
+  "toast.updated": "Đã cập nhật khu vực",
+  "toast.deleted": "Đã xóa khu vực",
+  "toast.createFailed": "Tạo khu vực thất bại",
+  "toast.updateFailed": "Cập nhật khu vực thất bại",
+  "toast.deleteFailed": "Xóa khu vực thất bại",
+  "toast.bulkDeleted": "Đã xóa {{count}} khu vực",
+  "toast.bulkDeleteFailed": "Xóa hàng loạt thất bại",
+  "stats.total": "Tổng",
+  "stats.root": "Khu vực gốc",
+  "stats.sub": "Khu vực con",
+  "bulkDelete": "Xóa đã chọn",
+  "bulkDeleteTitle": "Xóa khu vực",
+  "bulkDeleteConfirm": "Bạn có chắc muốn xóa",
+  "bulkDeleteSuffix": "khu vực? Thao tác này không thể hoàn tác."
 }
