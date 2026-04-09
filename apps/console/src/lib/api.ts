@@ -971,7 +971,7 @@ export interface ProvisionRequest {
     device_id: string;
     name: string;
     type: string;
-    company_id?: string;
+    tenant_id?: string;
     site_id?: string;
     location?: string;
 }
@@ -983,7 +983,7 @@ export interface ProvisionResponse {
         name: string;
         type: string;
         status: string;
-        company_id: string;
+        tenant_id: string;
     };
     provisioning: {
         qr_token: string;

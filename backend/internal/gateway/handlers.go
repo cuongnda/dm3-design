@@ -2,15 +2,12 @@ package gateway
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/models"
@@ -30,7 +27,50 @@ func NewGatewayHandlers(database *db.DB, mqttClient *mqtt.Client, auditLog *audi
 	return &GatewayHandlers{db: database, mqtt: mqttClient, audit: auditLog}
 }
 
-// ListDevices handles GET /api/v1/devices (company-scoped)
+// ─── Shared scan helpers ────────────────────────────────────────────────────
+
+// deviceColumns is the canonical SELECT column list for dm3_devices.devices.
+const deviceColumns = `id, tenant_id, device_id, COALESCE(name,''), type, status,
+	COALESCE(model,''), COALESCE(firmware_version,''), COALESCE(location,''),
+	ip_address, mac_address,
+	COALESCE(timezone,'Asia/Ho_Chi_Minh'), COALESCE(open_relay_ms,3000),
+	verify_methods, COALESCE(verify_logic,'or'),
+	last_seen, created_at, updated_at`
+
+func scanDevice(row pgx.Row) (models.Device, error) {
+	var d models.Device
+	err := row.Scan(
+		&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type, &d.Status,
+		&d.Model, &d.FirmwareVersion, &d.Location,
+		&d.IPAddress, &d.MACAddress,
+		&d.Timezone, &d.OpenRelayMs,
+		&d.VerifyMethods, &d.VerifyLogic,
+		&d.LastSeen, &d.CreatedAt, &d.UpdatedAt,
+	)
+	return d, err
+}
+
+func scanDeviceRows(rows pgx.Rows) ([]models.Device, error) {
+	var devices []models.Device
+	for rows.Next() {
+		var d models.Device
+		if err := rows.Scan(
+			&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type, &d.Status,
+			&d.Model, &d.FirmwareVersion, &d.Location,
+			&d.IPAddress, &d.MACAddress,
+			&d.Timezone, &d.OpenRelayMs,
+			&d.VerifyMethods, &d.VerifyLogic,
+			&d.LastSeen, &d.CreatedAt, &d.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		devices = append(devices, d)
+	}
+	return devices, rows.Err()
+}
+
+// ─── List Devices (company-scoped) ──────────────────────────────────────────
+
 func (h *GatewayHandlers) ListDevices(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	if cid == "" {
@@ -38,12 +78,9 @@ func (h *GatewayHandlers) ListDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := `SELECT id, tenant_id, device_id, COALESCE(name,''), type, status, COALESCE(firmware_version,''), COALESCE(site_id,''), COALESCE(location,''), last_seen, created_at, updated_at FROM dm3_devices.devices WHERE tenant_id = $1::uuid`
+	query := `SELECT ` + deviceColumns + ` FROM dm3_devices.devices WHERE tenant_id = $1::uuid`
 	args := []any{cid}
 	argIdx := 2
-
-	// Exclude pending/provisioning for company view — only show provisioned devices
-	query += " AND status NOT IN ('pending')"
 
 	if s := r.URL.Query().Get("status"); s != "" {
 		query += fmt.Sprintf(" AND status = $%d", argIdx)
@@ -53,11 +90,6 @@ func (h *GatewayHandlers) ListDevices(w http.ResponseWriter, r *http.Request) {
 	if t := r.URL.Query().Get("type"); t != "" {
 		query += fmt.Sprintf(" AND type = $%d", argIdx)
 		args = append(args, t)
-		argIdx++
-	}
-	if s := r.URL.Query().Get("site_id"); s != "" {
-		query += fmt.Sprintf(" AND site_id = $%d", argIdx)
-		args = append(args, s)
 		argIdx++
 	}
 
@@ -71,27 +103,28 @@ func (h *GatewayHandlers) ListDevices(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	devices := []models.Device{}
-	for rows.Next() {
-		var d models.Device
-		if err := rows.Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type, &d.Status, &d.FirmwareVersion, &d.SiteID, &d.Location, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt); err != nil {
-			slog.Error("ListDevices: scan failed", "error", err)
-			httputil.Error(w, http.StatusInternalServerError, "internal server error")
-			return
-		}
-		devices = append(devices, d)
-	}
-	if err := rows.Err(); err != nil {
-		slog.Error("ListDevices: rows error", "error", err)
+	devices, err := scanDeviceRows(rows)
+	if err != nil {
+		slog.Error("ListDevices: scan failed", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal server error")
 		return
+	}
+	if devices == nil {
+		devices = []models.Device{}
 	}
 	httputil.JSON(w, http.StatusOK, devices)
 }
 
-// ListDevicesGlobal handles GET /api/v1/system/devices (system admin only, all companies)
+// ─── List Devices Global (system admin) ─────────────────────────────────────
+
 func (h *GatewayHandlers) ListDevicesGlobal(w http.ResponseWriter, r *http.Request) {
-	query := `SELECT d.id, d.tenant_id, d.device_id, COALESCE(d.name,''), d.type, d.status, COALESCE(d.firmware_version,''), COALESCE(d.site_id,''), COALESCE(d.location,''), d.last_seen, d.created_at, d.updated_at, COALESCE(c.name,'') as company_name
+	query := `SELECT d.id, d.tenant_id, d.device_id, COALESCE(d.name,''), d.type, d.status,
+		COALESCE(d.model,''), COALESCE(d.firmware_version,''), COALESCE(d.location,''),
+		d.ip_address, d.mac_address,
+		COALESCE(d.timezone,'Asia/Ho_Chi_Minh'), COALESCE(d.open_relay_ms,3000),
+		d.verify_methods, COALESCE(d.verify_logic,'or'),
+		d.last_seen, d.created_at, d.updated_at,
+		COALESCE(c.name,'') as company_name
 	FROM dm3_devices.devices d LEFT JOIN dm3_auth.tenants c ON c.id = d.tenant_id WHERE 1=1`
 	args := []any{}
 	argIdx := 1
@@ -126,10 +159,18 @@ func (h *GatewayHandlers) ListDevicesGlobal(w http.ResponseWriter, r *http.Reque
 		models.Device
 		CompanyName string `json:"company_name"`
 	}
-	devices := []deviceWithCompany{}
+	var devices []deviceWithCompany
 	for rows.Next() {
 		var d deviceWithCompany
-		if err := rows.Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type, &d.Status, &d.FirmwareVersion, &d.SiteID, &d.Location, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt, &d.CompanyName); err != nil {
+		if err := rows.Scan(
+			&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type, &d.Status,
+			&d.Model, &d.FirmwareVersion, &d.Location,
+			&d.IPAddress, &d.MACAddress,
+			&d.Timezone, &d.OpenRelayMs,
+			&d.VerifyMethods, &d.VerifyLogic,
+			&d.LastSeen, &d.CreatedAt, &d.UpdatedAt,
+			&d.CompanyName,
+		); err != nil {
 			slog.Error("ListDevicesGlobal: scan failed", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal server error")
 			return
@@ -141,18 +182,21 @@ func (h *GatewayHandlers) ListDevicesGlobal(w http.ResponseWriter, r *http.Reque
 		httputil.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
+	if devices == nil {
+		devices = []deviceWithCompany{}
+	}
 	httputil.JSON(w, http.StatusOK, devices)
 }
+
+// ─── Create Device ──────────────────────────────────────────────────────────
 
 type createDeviceRequest struct {
 	DeviceID string `json:"device_id"`
 	Name     string `json:"name"`
 	Type     string `json:"type"`
-	SiteID   string `json:"site_id"`
 	Location string `json:"location"`
 }
 
-// CreateDevice handles POST /api/v1/devices
 func (h *GatewayHandlers) CreateDevice(w http.ResponseWriter, r *http.Request) {
 	var req createDeviceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -163,6 +207,10 @@ func (h *GatewayHandlers) CreateDevice(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusBadRequest, "device_id and type are required")
 		return
 	}
+	if !models.IsValidDeviceType(req.Type) {
+		httputil.Error(w, http.StatusBadRequest, "invalid device type: must be terminal, controller, camera, or sensor")
+		return
+	}
 
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	if cid == "" {
@@ -170,13 +218,12 @@ func (h *GatewayHandlers) CreateDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var d models.Device
-	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_devices.devices (device_id, name, type, site_id, location, tenant_id)
-		 VALUES ($1, $2, $3, $4, $5, $6::uuid)
-		 RETURNING id, tenant_id, device_id, COALESCE(name,''), type, status, COALESCE(firmware_version,''), COALESCE(site_id,''), COALESCE(location,''), last_seen, created_at, updated_at`,
-		req.DeviceID, req.Name, req.Type, req.SiteID, req.Location, cid,
-	).Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type, &d.Status, &d.FirmwareVersion, &d.SiteID, &d.Location, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt)
+	d, err := scanDevice(h.db.Pool.QueryRow(r.Context(),
+		`INSERT INTO dm3_devices.devices (device_id, name, type, location, tenant_id)
+		 VALUES ($1, $2, $3, $4, $5::uuid)
+		 RETURNING `+deviceColumns,
+		req.DeviceID, req.Name, req.Type, req.Location, cid,
+	))
 	if err != nil {
 		if isUniqueViolation(err) {
 			httputil.Error(w, http.StatusConflict, "device_id already exists")
@@ -190,20 +237,18 @@ func (h *GatewayHandlers) CreateDevice(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusCreated, d)
 }
 
-// GetDevice handles GET /api/v1/devices/{id}
+// ─── Get Device ─────────────────────────────────────────────────────────────
+
 func (h *GatewayHandlers) GetDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
-	query := `SELECT id, tenant_id, device_id, COALESCE(name,''), type, status, COALESCE(firmware_version,''), COALESCE(site_id,''), COALESCE(location,''), last_seen, created_at, updated_at
-		 FROM dm3_devices.devices WHERE id = $1::uuid`
+	query := `SELECT ` + deviceColumns + ` FROM dm3_devices.devices WHERE id = $1::uuid`
 	args := []any{id}
 	if cid != "" {
 		query += " AND tenant_id = $2::uuid"
 		args = append(args, cid)
 	}
-	var d models.Device
-	err := h.db.Pool.QueryRow(r.Context(), query, args...
-	).Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type, &d.Status, &d.FirmwareVersion, &d.SiteID, &d.Location, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt)
+	d, err := scanDevice(h.db.Pool.QueryRow(r.Context(), query, args...))
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
@@ -211,14 +256,14 @@ func (h *GatewayHandlers) GetDevice(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, d)
 }
 
+// ─── Update Device ──────────────────────────────────────────────────────────
+
 type updateDeviceRequest struct {
 	Name     *string `json:"name"`
-	SiteID   *string `json:"site_id"`
 	Location *string `json:"location"`
 	Status   *string `json:"status"`
 }
 
-// UpdateDevice handles PUT /api/v1/devices/{id}
 func (h *GatewayHandlers) UpdateDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
@@ -228,24 +273,25 @@ func (h *GatewayHandlers) UpdateDevice(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	if req.Status != nil && !models.IsValidDeviceStatus(*req.Status) {
+		httputil.Error(w, http.StatusBadRequest, "invalid status: must be online, offline, or warning")
+		return
+	}
 
 	query := `UPDATE dm3_devices.devices SET
 			name = COALESCE($2, name),
-			site_id = COALESCE($3, site_id),
-			location = COALESCE($4, location),
-			status = COALESCE($5, status),
+			location = COALESCE($3, location),
+			status = COALESCE($4, status),
 			updated_at = now()
 		 WHERE id = $1::uuid`
-	args := []any{id, req.Name, req.SiteID, req.Location, req.Status}
+	args := []any{id, req.Name, req.Location, req.Status}
 	if cid != "" {
-		query += " AND tenant_id = $6::uuid"
+		query += " AND tenant_id = $5::uuid"
 		args = append(args, cid)
 	}
-	query += ` RETURNING id, tenant_id, device_id, COALESCE(name,''), type, status, COALESCE(firmware_version,''), COALESCE(site_id,''), COALESCE(location,''), last_seen, created_at, updated_at`
+	query += ` RETURNING ` + deviceColumns
 
-	var d models.Device
-	err := h.db.Pool.QueryRow(r.Context(), query, args...,
-	).Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type, &d.Status, &d.FirmwareVersion, &d.SiteID, &d.Location, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt)
+	d, err := scanDevice(h.db.Pool.QueryRow(r.Context(), query, args...))
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
@@ -254,7 +300,8 @@ func (h *GatewayHandlers) UpdateDevice(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, d)
 }
 
-// DeleteDevice handles DELETE /api/v1/devices/{id}
+// ─── Delete Device ──────────────────────────────────────────────────────────
+
 func (h *GatewayHandlers) DeleteDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
@@ -265,27 +312,22 @@ func (h *GatewayHandlers) DeleteDevice(w http.ResponseWriter, r *http.Request) {
 		query += " AND tenant_id = $2::uuid"
 		args = append(args, cid)
 	}
-
 	tag, err := h.db.Pool.Exec(r.Context(), query, args...)
-	if err != nil {
-		slog.Error("DeleteDevice: exec failed", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
-	if tag.RowsAffected() == 0 {
+	if err != nil || tag.RowsAffected() == 0 {
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
 	}
 	h.audit.LogFromRequest(r, "device.delete", "device", id, "", "success", nil, nil)
-	w.WriteHeader(http.StatusNoContent)
+	httputil.JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
+
+// ─── Send Command ───────────────────────────────────────────────────────────
 
 type sendCommandRequest struct {
 	Type string         `json:"type"`
 	Data map[string]any `json:"data"`
 }
 
-// SendCommand handles POST /api/v1/devices/{id}/command
 func (h *GatewayHandlers) SendCommand(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -295,71 +337,67 @@ func (h *GatewayHandlers) SendCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Type == "" {
-		httputil.Error(w, http.StatusBadRequest, "type is required")
+		httputil.Error(w, http.StatusBadRequest, "command type is required")
 		return
 	}
 
-	// Look up device to get tenant_id and device_id (company-scoped)
-	cid := authsvc.CompanyIDFromContext(r.Context())
-	var companyID, deviceID string
 	cmdQuery := `SELECT tenant_id, device_id FROM dm3_devices.devices WHERE id = $1::uuid`
 	cmdArgs := []any{id}
+	cid := authsvc.CompanyIDFromContext(r.Context())
 	if cid != "" {
 		cmdQuery += " AND tenant_id = $2::uuid"
 		cmdArgs = append(cmdArgs, cid)
 	}
-	err := h.db.Pool.QueryRow(r.Context(), cmdQuery, cmdArgs...).Scan(&companyID, &deviceID)
-	if err != nil {
+	var tenantID, deviceID string
+	if err := h.db.Pool.QueryRow(r.Context(), cmdQuery, cmdArgs...).Scan(&tenantID, &deviceID); err != nil {
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
 	}
 
-	// Build MQTT command envelope
-	dataBytes, _ := json.Marshal(req.Data)
-	envelope := MQTTEnvelope{
-		Version: 1,
-		ID:      fmt.Sprintf("cmd-%d", time.Now().UnixMilli()),
-		TS:      time.Now().UnixMilli(),
-		Src:     "server:device-gateway",
-		Type:    req.Type,
-		Data:    dataBytes,
-	}
-	payload, _ := json.Marshal(envelope)
+	topic := fmt.Sprintf("dm/%s/device/%s/cmd", tenantID, deviceID)
+	payload, _ := json.Marshal(map[string]any{
+		"type": req.Type,
+		"data": req.Data,
+	})
 
-	topic := fmt.Sprintf("dm/%s/device/%s/cmd", companyID, deviceID)
 	if err := h.mqtt.Publish(r.Context(), topic, 2, payload); err != nil {
-		slog.Error("failed to publish command", "error", err, "topic", topic)
+		slog.Error("SendCommand: mqtt publish failed", "error", err, "topic", topic)
 		httputil.Error(w, http.StatusInternalServerError, "failed to send command")
 		return
 	}
 
-	slog.Info("command sent", "device", deviceID, "type", req.Type, "topic", topic)
-	h.audit.LogFromRequest(r, "device.command", "device", id, deviceID, "success", nil, map[string]any{"command_type": req.Type, "message_id": envelope.ID})
-	httputil.JSON(w, http.StatusAccepted, map[string]string{
-		"message":    "command sent",
-		"message_id": envelope.ID,
-		"topic":      topic,
-	})
+	h.audit.LogFromRequest(r, "device.command", "device", id, deviceID, "success", nil, map[string]any{"command": req.Type})
+	httputil.JSON(w, http.StatusOK, map[string]string{"status": "sent", "topic": topic})
 }
 
-// GetDeviceEvents handles GET /api/v1/devices/{id}/events
-func (h *GatewayHandlers) GetDeviceEvents(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	page, limit := parsePagination(r)
-	offset := (page - 1) * limit
+// ─── Events ─────────────────────────────────────────────────────────────────
 
-	var total int64
-	if err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT COUNT(*) FROM dm3_access.access_events WHERE door_id = $1::uuid`, id).Scan(&total); err != nil {
-		slog.Error("GetDeviceEvents: count failed", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+func (h *GatewayHandlers) GetDeviceEvents(w http.ResponseWriter, r *http.Request) {
+	deviceDBID := chi.URLParam(r, "id")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+
+	var deviceID string
+	dq := `SELECT device_id FROM dm3_devices.devices WHERE id = $1::uuid`
+	dqArgs := []any{deviceDBID}
+	if cid != "" {
+		dq += " AND tenant_id = $2::uuid"
+		dqArgs = append(dqArgs, cid)
+	}
+	if err := h.db.Pool.QueryRow(r.Context(), dq, dqArgs...).Scan(&deviceID); err != nil {
+		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
 	}
 
+	page, limit := parsePagination(r)
+
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, tenant_id, time, COALESCE(access_point_id::text,''), COALESCE(door_id::text,''), COALESCE(user_id::text,''), COALESCE(user_name,''), COALESCE(credential_type,''), COALESCE(direction,''), decision, COALESCE(reason,''), metadata
-		 FROM dm3_access.access_events WHERE door_id = $1::uuid ORDER BY time DESC LIMIT $2 OFFSET $3`,
-		id, limit, offset)
+		`SELECT id, tenant_id, device_id, event_type, COALESCE(user_id,''), COALESCE(user_name,''),
+			COALESCE(method,''), COALESCE(door_id,''), COALESCE(direction,''), COALESCE(decision,''),
+			COALESCE(reason,''), confidence, time
+		 FROM dm3_access.access_events
+		 WHERE device_id = $1 AND tenant_id = $2::uuid
+		 ORDER BY time DESC LIMIT $3 OFFSET $4`,
+		deviceID, cid, limit, (page-1)*limit)
 	if err != nil {
 		slog.Error("GetDeviceEvents: query failed", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal server error")
@@ -367,64 +405,53 @@ func (h *GatewayHandlers) GetDeviceEvents(w http.ResponseWriter, r *http.Request
 	}
 	defer rows.Close()
 
-	events := []models.AccessEvent{}
+	events := []map[string]any{}
 	for rows.Next() {
-		var e models.AccessEvent
-		var apID, doorID, userID, userName, credType, direction, reason string
-		if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &apID, &doorID, &userID, &userName, &credType, &direction, &e.Decision, &reason, &e.Metadata); err != nil {
-			slog.Error("GetDeviceEvents: scan failed", "error", err)
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
-			return
+		var e struct {
+			ID, TenantID, DeviceID, EventType, UserID, UserName string
+			Method, DoorID, Direction, Decision, Reason         string
+			Confidence                                          float64
+			Time                                                interface{}
 		}
-		if apID != "" { e.AccessPointID = &apID }
-		if doorID != "" { e.DoorID = &doorID }
-		if userID != "" { e.UserID = &userID }
-		if userName != "" { e.UserName = &userName }
-		if credType != "" { e.CredentialType = &credType }
-		if direction != "" { e.Direction = &direction }
-		if reason != "" { e.Reason = &reason }
-		events = append(events, e)
+		if err := rows.Scan(&e.ID, &e.TenantID, &e.DeviceID, &e.EventType, &e.UserID, &e.UserName,
+			&e.Method, &e.DoorID, &e.Direction, &e.Decision, &e.Reason, &e.Confidence, &e.Time); err != nil {
+			continue
+		}
+		events = append(events, map[string]any{
+			"id":         e.ID,
+			"tenant_id":  e.TenantID,
+			"device_id":  e.DeviceID,
+			"event_type": e.EventType,
+			"user_id":    e.UserID,
+			"user_name":  e.UserName,
+			"method":     e.Method,
+			"door_id":    e.DoorID,
+			"direction":  e.Direction,
+			"decision":   e.Decision,
+			"reason":     e.Reason,
+			"confidence": e.Confidence,
+			"time":       e.Time,
+		})
 	}
-	if err := rows.Err(); err != nil {
-		slog.Error("GetDeviceEvents: rows error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
-	httputil.Paginated(w, events, total, page, limit)
+	httputil.JSON(w, http.StatusOK, events)
 }
 
-// ListEvents handles GET /api/v1/events
 func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
-	page, limit := parsePagination(r)
-	offset := (page - 1) * limit
 	cid := authsvc.CompanyIDFromContext(r.Context())
-
-	var total int64
-	var countErr error
-	if cid != "" {
-		countErr = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE tenant_id = $1::uuid`, cid).Scan(&total)
-	} else {
-		countErr = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events`).Scan(&total)
-	}
-	if countErr != nil {
-		slog.Error("ListEvents: count failed", "error", countErr)
-		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
 		return
 	}
+	page, limit := parsePagination(r)
 
-	var evtQuery string
-	var evtArgs []any
-	if cid != "" {
-		evtQuery = `SELECT id, tenant_id, time, COALESCE(access_point_id::text,''), COALESCE(door_id::text,''), COALESCE(user_id::text,''), COALESCE(user_name,''), COALESCE(credential_type,''), COALESCE(direction,''), decision, COALESCE(reason,''), metadata
-		 FROM dm3_access.access_events WHERE tenant_id = $1::uuid ORDER BY time DESC LIMIT $2 OFFSET $3`
-		evtArgs = []any{cid, limit, offset}
-	} else {
-		evtQuery = `SELECT id, tenant_id, time, COALESCE(access_point_id::text,''), COALESCE(door_id::text,''), COALESCE(user_id::text,''), COALESCE(user_name,''), COALESCE(credential_type,''), COALESCE(direction,''), decision, COALESCE(reason,''), metadata
-		 FROM dm3_access.access_events ORDER BY time DESC LIMIT $1 OFFSET $2`
-		evtArgs = []any{limit, offset}
-	}
-
-	rows, err := h.db.Pool.Query(r.Context(), evtQuery, evtArgs...)
+	rows, err := h.db.Pool.Query(r.Context(),
+		`SELECT id, tenant_id, device_id, event_type, COALESCE(user_id,''), COALESCE(user_name,''),
+			COALESCE(method,''), COALESCE(door_id,''), COALESCE(direction,''), COALESCE(decision,''),
+			COALESCE(reason,''), confidence, time
+		 FROM dm3_access.access_events
+		 WHERE tenant_id = $1::uuid
+		 ORDER BY time DESC LIMIT $2 OFFSET $3`,
+		cid, limit, (page-1)*limit)
 	if err != nil {
 		slog.Error("ListEvents: query failed", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal server error")
@@ -432,50 +459,64 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	events := []models.AccessEvent{}
+	events := []map[string]any{}
 	for rows.Next() {
-		var e models.AccessEvent
-		var apID, doorID, userID, userName, credType, direction, reason string
-		if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &apID, &doorID, &userID, &userName, &credType, &direction, &e.Decision, &reason, &e.Metadata); err != nil {
-			slog.Error("ListEvents: scan failed", "error", err)
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
-			return
+		var e struct {
+			ID, TenantID, DeviceID, EventType, UserID, UserName string
+			Method, DoorID, Direction, Decision, Reason         string
+			Confidence                                          float64
+			Time                                                interface{}
 		}
-		if apID != "" { e.AccessPointID = &apID }
-		if doorID != "" { e.DoorID = &doorID }
-		if userID != "" { e.UserID = &userID }
-		if userName != "" { e.UserName = &userName }
-		if credType != "" { e.CredentialType = &credType }
-		if direction != "" { e.Direction = &direction }
-		if reason != "" { e.Reason = &reason }
-		events = append(events, e)
+		if err := rows.Scan(&e.ID, &e.TenantID, &e.DeviceID, &e.EventType, &e.UserID, &e.UserName,
+			&e.Method, &e.DoorID, &e.Direction, &e.Decision, &e.Reason, &e.Confidence, &e.Time); err != nil {
+			continue
+		}
+		events = append(events, map[string]any{
+			"id": e.ID, "tenant_id": e.TenantID, "device_id": e.DeviceID,
+			"event_type": e.EventType, "user_id": e.UserID, "user_name": e.UserName,
+			"method": e.Method, "door_id": e.DoorID, "direction": e.Direction,
+			"decision": e.Decision, "reason": e.Reason, "confidence": e.Confidence,
+			"time": e.Time,
+		})
 	}
-	if err := rows.Err(); err != nil {
-		slog.Error("ListEvents: rows error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
-	httputil.Paginated(w, events, total, page, limit)
+	httputil.JSON(w, http.StatusOK, events)
 }
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 func parsePagination(r *http.Request) (int, int) {
 	page := 1
 	limit := 50
 	if p := r.URL.Query().Get("page"); p != "" {
-		if v, err := strconv.Atoi(p); err == nil && v > 0 {
-			page = v
-		}
+		fmt.Sscanf(p, "%d", &page)
 	}
 	if l := r.URL.Query().Get("limit"); l != "" {
-		if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= 200 {
-			limit = v
-		}
+		fmt.Sscanf(l, "%d", &limit)
+	}
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 200 {
+		limit = 50
 	}
 	return page, limit
 }
 
-// isUniqueViolation reports whether err is a PostgreSQL unique-constraint violation (code 23505).
 func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+	return err != nil && (fmt.Sprintf("%v", err) == "ERROR: duplicate key value violates unique constraint" ||
+		len(fmt.Sprintf("%v", err)) > 0 && fmt.Sprintf("%v", err)[:5] == "ERROR" &&
+			contains(fmt.Sprintf("%v", err), "duplicate key"))
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && searchSubstring(s, substr)
+}
+
+func searchSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }

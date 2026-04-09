@@ -26,12 +26,14 @@ import (
 // ─── Device Types ───────────────────────────────────────────────────────────
 
 var validDeviceTypes = []string{
-	"icu300n", "itouch_pop", "desktop_app", "itouch_pop_x",
-	"dq_mini_plus", "it100", "nexpa_lpr", "xstation2",
-	"fv6000", "pm85", "itouch_30a", "dp636x", "df970",
-	"biostation2", "icu300nx", "biostation3", "ebkn_reader",
-	"ba8300", "icu400", "ra08", "dq8500", "dq200",
-	"camera_dc", "tb_vision", "icu970",
+	// Terminal
+	"ra08", "ba8300", "df970", "dq200", "dq8500", "icu970",
+	// Controller
+	"icu300n", "ipopx", "itouch_pop_x", "icu400",
+	// Camera
+	"camera_dc", "cctv",
+	// Sensor
+	"door_sensor", "de960", "de950",
 }
 
 func isValidDeviceType(dt string) bool {

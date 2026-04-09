@@ -59,7 +59,7 @@ When a Company is created:
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
-| company_id | uuid | no | FK→companies | NULL for system_admin |
+| tenant_id | uuid | no | FK→tenants | NULL for system_admin |
 | email | string(255) | yes | - | Unique login email |
 | password_hash | string(255) | yes | - | bcrypt hash |
 | name | string(255) | no | null | Display name |
@@ -73,7 +73,7 @@ When a Company is created:
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
-| company_id | uuid | yes | FK→companies | Company isolation |
+| tenant_id | uuid | yes | FK→tenants | Tenant isolation |
 | name | string(255) | yes | - | e.g. "Tòa nhà Sunrise — Quận 7" |
 | address | text | no | null | Physical address |
 | timezone | string(50) | yes | Asia/Ho_Chi_Minh | Site timezone |
@@ -162,7 +162,7 @@ SiteStatusEnum: active | inactive | maintenance
 **Side effects:**
 1. Creates company record
 2. Creates user with role=primary_manager
-3. MQTT namespace `dm/{company_id}/` ready for devices
+3. MQTT namespace `dm/{tenant_id}/` ready for devices
 
 #### GET /api/v1/system/companies — List Companies
 
@@ -186,14 +186,14 @@ SiteStatusEnum: active | inactive | maintenance
 
 ### Company-Scoped APIs (all other endpoints)
 
-All existing APIs are now **automatically filtered by company_id** from the JWT token:
+All existing APIs are now **automatically filtered by tenant_id** from the JWT token:
 
 ```
-JWT Claims: { sub: "user-uuid", cid: "company-uuid", role: "primary_manager", ... }
+JWT Claims: { sub: "user-uuid", cid: "tenant-uuid", role: "primary_manager", ... }
                                   ↓
 Auth middleware extracts cid → injects into request context
                                   ↓
-All DB queries: WHERE tenant_id = $company_id
+All DB queries: WHERE tenant_id = $tenant_id
 ```
 
 **No API changes needed** — the filtering is transparent to the client.
@@ -208,17 +208,17 @@ All DB queries: WHERE tenant_id = $company_id
 - PostgreSQL Row-Level Security (RLS) as future hardening (not required for v1)
 
 ### MQTT Layer
-- Topic hierarchy: `dm/{company_id}/device/{device_id}/...`
-- EMQX ACL rules: devices can only pub/sub within their company namespace
-- Device JWT contains company_id for broker-side validation
+- Topic hierarchy: `dm/{tenant_id}/device/{device_id}/...`
+- EMQX ACL rules: devices can only pub/sub within their tenant namespace
+- Device JWT contains tenant_id for broker-side validation
 
 ### Storage Layer
 - MinIO: one bucket per company (`dm3-{company_code}/`)
 - Photos, documents, video clips isolated per company
 
 ### API Layer
-- Auth middleware extracts `company_id` from JWT
-- All handlers receive company_id via request context
+- Auth middleware extracts `tenant_id` from JWT
+- All handlers receive tenant_id via request context
 - System admin endpoints (`/system/*`) bypass company filtering
 
 ---
@@ -266,9 +266,9 @@ Current state: all data uses default tenant_id `00000000-...-000000000001`.
 Migration steps:
 1. Create `companies` table
 2. Insert default "Duali Demo" company with the existing UUID
-3. Add `company_id` to users table, link existing users
+3. Add `tenant_id` to users table, link existing users
 4. Create system_admin user
-5. Update JWT to include `cid` (company_id) and `role`
+5. Update JWT to include `cid` (tenant_id) and `role`
 6. Add tenant filtering middleware to all services
 7. All existing data automatically belongs to "Duali Demo" company
 

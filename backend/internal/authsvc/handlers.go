@@ -400,7 +400,8 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	hash := hashToken(req.RefreshToken)
 
-	var tokenID, userID, companyID string
+	var tokenID, userID string
+	var companyID *string
 	var expiresAt time.Time
 	var revoked bool
 	err := h.db.Pool.QueryRow(r.Context(),
@@ -448,18 +449,23 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	refreshCID := companyID
+	// Resolve tenant ID: from refresh token (nullable for system_admin)
+	tenantID := ""
+	if companyID != nil {
+		tenantID = *companyID
+	}
+	refreshTenantID := tenantID
 	if refreshCompanyID != nil {
-		refreshCID = *refreshCompanyID
+		refreshTenantID = *refreshCompanyID
 	}
 
-	accessToken, err := h.generateAccessToken(userID, companyID, email, fullName, roles, refreshCID, refreshUserRole)
+	accessToken, err := h.generateAccessToken(userID, tenantID, email, fullName, roles, refreshTenantID, refreshUserRole)
 	if err != nil {
 		slog.Error("Refresh: failed to generate access token", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
-	refreshToken, err := h.createRefreshToken(r, userID, companyID)
+	refreshToken, err := h.createRefreshToken(r, userID, tenantID)
 	if err != nil {
 		slog.Error("Refresh: failed to create refresh token", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal server error")
@@ -467,7 +473,7 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.audit.Log(audit.Entry{
-		TenantID:   companyID,
+		TenantID:   tenantID,
 		ActorID:    userID,
 		ActorEmail: email,
 		ActorIP:    audit.IPFromRequest(r),

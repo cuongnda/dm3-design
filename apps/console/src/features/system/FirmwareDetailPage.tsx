@@ -10,6 +10,7 @@ import {
   getToken,
   type FirmwareDTO,
 } from '@/lib/api';
+import { ALL_DEVICE_MODELS } from '@/lib/device-models';
 import { Button, Input, Label } from '@dm3/ui';
 
 const statusColors: Record<string, string> = {
@@ -125,7 +126,7 @@ export function FirmwareDetailPage() {
               {firmware.version}
             </h1>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-[12px] text-muted-foreground font-mono">{firmware.device_type}</span>
+              <span className="text-[12px] text-muted-foreground font-mono">{ALL_DEVICE_MODELS.find(m => m.value === firmware.device_type)?.label ?? firmware.device_type}</span>
               <span
                 data-testid="detail-badge-status"
                 className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium border ${
@@ -224,7 +225,7 @@ export function FirmwareDetailPage() {
           </div>
           <div>
             <Label>{t('firmware.form.deviceType')}</Label>
-            <div className="text-[13px] text-muted-foreground py-1.5 font-mono">{firmware.device_type}</div>
+            <div className="text-[13px] text-muted-foreground py-1.5 font-mono">{ALL_DEVICE_MODELS.find(m => m.value === firmware.device_type)?.label ?? firmware.device_type}</div>
           </div>
           <div className="col-span-2">
             <Label>{t('firmware.form.description')}</Label>

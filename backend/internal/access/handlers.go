@@ -438,7 +438,7 @@ func (h *AccessHandlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesTotal)
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='online' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesOnline)
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='offline' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesOffline)
-	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='alarm' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesAlarm)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='warning' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesWarning)
 
 	today := time.Now().Truncate(24 * time.Hour)
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND tenant_id = $2::uuid`, today, cid).Scan(&stats.EventsToday)

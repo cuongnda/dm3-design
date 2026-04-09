@@ -9,11 +9,8 @@ import { ArrowLeft, Unlock, Lock, RotateCcw, Camera, Wifi, WifiOff } from 'lucid
 
 const statusColors: Record<string, string> = {
   online: 'bg-success/10 text-success',
-  active: 'bg-success/10 text-success',
   offline: 'bg-muted text-muted-foreground',
-  provisioning: 'bg-secure/10 text-secure',
-  disabled: 'bg-error/10 text-error',
-  error: 'bg-error/10 text-error',
+  warning: 'bg-warning/10 text-warning',
 };
 
 export function DeviceDetailPage() {

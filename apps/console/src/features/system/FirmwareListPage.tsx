@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Package, Plus, Search } from 'lucide-react';
-import { fetchFirmwares, fetchFirmwareDeviceTypes, type FirmwareDTO } from '@/lib/api';
+import { fetchFirmwares, type FirmwareDTO } from '@/lib/api';
+import { ALL_DEVICE_MODELS } from '@/lib/device-models';
 import { Button, DataTable, Input, Select, SelectOption } from '@dm3/ui';
 
 const statusColors: Record<string, string> = {
@@ -24,14 +25,6 @@ export function FirmwareListPage() {
   const [search, setSearch] = useState('');
   const [deviceTypeFilter, setDeviceTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('active');
-  const [deviceTypes, setDeviceTypes] = useState<string[]>([]);
-
-  useEffect(() => {
-    fetchFirmwareDeviceTypes()
-      .then((r) => setDeviceTypes(r.device_types))
-      .catch(() => {});
-  }, []);
-
   useEffect(() => {
     setLoading(true);
     const params: Record<string, string> = {};
@@ -83,9 +76,9 @@ export function FirmwareListPage() {
           className="w-48"
         >
           <SelectOption value="">{t('firmware.allDeviceTypes')}</SelectOption>
-          {deviceTypes.map((dt) => (
-            <SelectOption key={dt} value={dt}>
-              {dt}
+          {ALL_DEVICE_MODELS.map((m) => (
+            <SelectOption key={m.value} value={m.value}>
+              {m.label}
             </SelectOption>
           ))}
         </Select>
@@ -126,7 +119,10 @@ export function FirmwareListPage() {
               key: 'device_type',
               header: t('firmware.table.deviceType'),
               sortable: true,
-              render: (fw) => <span className="font-mono text-[12px]">{fw.device_type}</span>,
+              render: (fw) => {
+                const model = ALL_DEVICE_MODELS.find(m => m.value === fw.device_type);
+                return <span className="font-mono text-[12px]">{model?.label ?? fw.device_type}</span>;
+              },
             },
             {
               key: 'description',

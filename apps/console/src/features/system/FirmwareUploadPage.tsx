@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Upload, CheckCircle } from 'lucide-react';
-import { uploadFirmware, fetchFirmwareDeviceTypes } from '@/lib/api';
+import { uploadFirmware } from '@/lib/api';
 import { Button, Input, Select, SelectOption, Label } from '@dm3/ui';
+import { ALL_DEVICE_MODELS } from '@/lib/device-models';
 
 export function FirmwareUploadPage() {
   const navigate = useNavigate();
@@ -12,7 +13,6 @@ export function FirmwareUploadPage() {
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<{ id: string; checksum: string; size: number } | null>(null);
-  const [deviceTypes, setDeviceTypes] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -22,12 +22,6 @@ export function FirmwareUploadPage() {
     device_type: '',
     description: '',
   });
-
-  useEffect(() => {
-    fetchFirmwareDeviceTypes()
-      .then((r) => setDeviceTypes(r.device_types))
-      .catch(() => {});
-  }, []);
 
   const setFile = useCallback((file: File | null) => {
     if (file && file.size > 100 * 1024 * 1024) {
@@ -165,9 +159,9 @@ export function FirmwareUploadPage() {
             className="mt-1"
           >
             <SelectOption value="">{t('firmware.selectDeviceType')}</SelectOption>
-            {deviceTypes.map((dt) => (
-              <SelectOption key={dt} value={dt}>
-                {dt}
+            {ALL_DEVICE_MODELS.map((m) => (
+              <SelectOption key={m.value} value={m.value}>
+                {m.label} ({m.type})
               </SelectOption>
             ))}
           </Select>

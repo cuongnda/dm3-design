@@ -183,7 +183,7 @@ type Schedule struct {
 type DashboardStats struct {
 	AccessDevicesOnline  int           `json:"access_devices_online"`
 	AccessDevicesOffline int           `json:"access_devices_offline"`
-	AccessDevicesAlarm   int           `json:"access_devices_alarm"`
+	AccessDevicesWarning int           `json:"access_devices_warning"`
 	AccessDevicesTotal   int           `json:"access_devices_total"`
 	EventsToday          int           `json:"events_today"`
 	GrantedToday         int           `json:"granted_today"`
