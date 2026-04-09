@@ -13,6 +13,7 @@ import {
 } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/lib/toast';
+import { useBreadcrumbStore } from '@/stores/breadcrumbStore';
 import type { AccessGroup, AccessGroupAccessPoint, AccessGroupFormData, AccessTime } from './types';
 import type { User } from '@/features/user-management/types';
 
@@ -50,18 +51,18 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [allAPs, setAllAPs] = useState<AvailableAP[]>([]);
-  const [loadingAPs, setLoadingAPs] = useState(false);
+  const [loadingAPs, setLoadingAPs] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
 
   useEffect(() => {
     if (!open) return;
-    setLoadingAPs(true);
+    let cancelled = false;
     apiFetch<{ data?: AvailableAP[] }>('/api/v1/access/access-points?limit=200')
-      .then((res) => setAllAPs(res.data ?? []))
-      .catch(() => setAllAPs([]))
-      .finally(() => setLoadingAPs(false));
+      .then((res) => { if (!cancelled) { setAllAPs(res.data ?? []); setLoadingAPs(false); } })
+      .catch(() => { if (!cancelled) { setAllAPs([]); setLoadingAPs(false); } });
+    return () => { cancelled = true; };
   }, [open]);
 
   const availableAPs = useMemo(
@@ -75,8 +76,6 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
       ? availableAPs.filter((ap) => ap.name.toLowerCase().includes(q) || ap.description?.toLowerCase().includes(q))
       : availableAPs;
   }, [availableAPs, search]);
-
-  useEffect(() => { setPage(1); }, [search, availableAPs.length]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAPs.length / PAGE_SIZE));
   const pagedAPs = filteredAPs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -263,18 +262,19 @@ function AddUserModal({ open, onOpenChange, linkedUserIds, onSubmit }: AddUserMo
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [allUsers, setAllUsers] = useState<AvailableUser[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(true);
   const [search, setSearch] = useState('');
+  const [deptFilter, setDeptFilter] = useState('');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
 
   useEffect(() => {
     if (!open) return;
-    setLoadingUsers(true);
+    let cancelled = false;
     apiFetch<{ users?: AvailableUser[] }>('/api/v1/identity/users?limit=100&status=active')
-      .then((res) => setAllUsers(res.users ?? []))
-      .catch(() => setAllUsers([]))
-      .finally(() => setLoadingUsers(false));
+      .then((res) => { if (!cancelled) { setAllUsers(res.users ?? []); setLoadingUsers(false); } })
+      .catch(() => { if (!cancelled) { setAllUsers([]); setLoadingUsers(false); } });
+    return () => { cancelled = true; };
   }, [open]);
 
   const availableUsers = useMemo(
@@ -282,19 +282,27 @@ function AddUserModal({ open, onOpenChange, linkedUserIds, onSubmit }: AddUserMo
     [allUsers, linkedUserIds],
   );
 
-  const filteredUsers = useMemo(() => {
-    const q = search.toLowerCase();
-    return q
-      ? availableUsers.filter(
-          (u) =>
-            u.full_name.toLowerCase().includes(q) ||
-            u.email.toLowerCase().includes(q) ||
-            u.position?.toLowerCase().includes(q),
-        )
-      : availableUsers;
-  }, [availableUsers, search]);
+  const departments = useMemo(
+    () => [...new Set(availableUsers.map((u) => u.department_name).filter(Boolean))].sort(),
+    [availableUsers],
+  );
 
-  useEffect(() => { setPage(1); }, [search, availableUsers.length]);
+  const filteredUsers = useMemo(() => {
+    let result = availableUsers;
+    if (deptFilter) {
+      result = result.filter((u) => u.department_name === deptFilter);
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (u) =>
+          u.full_name.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          u.position?.toLowerCase().includes(q),
+      );
+    }
+    return result;
+  }, [availableUsers, search, deptFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
   const pagedUsers = filteredUsers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -326,6 +334,7 @@ function AddUserModal({ open, onOpenChange, linkedUserIds, onSubmit }: AddUserMo
       setSelected(new Set());
       setError('');
       setSearch('');
+      setDeptFilter('');
       setPage(1);
     }
     onOpenChange(v);
@@ -368,13 +377,29 @@ function AddUserModal({ open, onOpenChange, linkedUserIds, onSubmit }: AddUserMo
       }}
     >
       <div className="space-y-3">
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t('searchUsers', 'Search users…')}
-          className="h-8 text-[13px]"
-          disabled={submitting}
-        />
+        <div className="flex gap-2">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('searchUsers', 'Search users…')}
+            className="h-8 text-[13px] flex-1"
+            disabled={submitting}
+          />
+          {departments.length > 0 && (
+            <select
+              value={deptFilter}
+              onChange={(e) => { setDeptFilter(e.target.value); setPage(1); }}
+              className="h-8 px-2 text-[13px] border border-border rounded-md bg-input text-foreground min-w-[140px] appearance-none cursor-pointer"
+              disabled={submitting}
+              data-testid="access-select-deptFilter"
+            >
+              <option value="">{t('allDepartments', 'All departments')}</option>
+              {departments.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          )}
+        </div>
 
         <div className="rounded-md border border-border overflow-hidden">
           {loadingUsers ? (
@@ -406,6 +431,7 @@ function AddUserModal({ open, onOpenChange, linkedUserIds, onSubmit }: AddUserMo
                       />
                     </th>
                     <th className="px-3 py-2 text-left font-medium text-foreground">{t('userColumns.name', 'Name')}</th>
+                    <th className="px-3 py-2 text-left font-medium text-foreground">{t('userColumns.department', 'Department')}</th>
                     <th className="px-3 py-2 text-left font-medium text-foreground">{t('userColumns.position', 'Position')}</th>
                     <th className="px-3 py-2 text-left font-medium text-foreground">{t('userColumns.status', 'Status')}</th>
                   </tr>
@@ -428,6 +454,7 @@ function AddUserModal({ open, onOpenChange, linkedUserIds, onSubmit }: AddUserMo
                         <div className="font-medium text-foreground">{u.full_name}</div>
                         {u.email && <div className="text-[11px] text-muted-foreground">{u.email}</div>}
                       </td>
+                      <td className="px-3 py-2 text-muted-foreground">{u.department_name || '—'}</td>
                       <td className="px-3 py-2 text-muted-foreground">{u.position || '—'}</td>
                       <td className="px-3 py-2">
                         <Badge variant={u.status === 'active' ? 'default' : 'secondary'} className="text-[11px]">
@@ -469,6 +496,8 @@ export function AccessGroupDetailPage() {
   const { t } = useTranslation('accessGroups');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const setLabel = useBreadcrumbStore((s) => s.setLabel);
+  const clearLabel = useBreadcrumbStore((s) => s.clearLabel);
 
   const [group, setGroup] = useState<AccessGroup | null>(null);
   const [loadingGroup, setLoadingGroup] = useState(true);
@@ -504,6 +533,12 @@ export function AccessGroupDetailPage() {
       setLoadingGroup(false);
     }
   }, [id]);
+
+  // Set breadcrumb label to group name instead of UUID
+  useEffect(() => {
+    if (id && group?.name) setLabel(id, group.name);
+    return () => { if (id) clearLabel(id); };
+  }, [id, group?.name, setLabel, clearLabel]);
 
   const fetchAccessPoints = useCallback(async () => {
     if (!id) return;

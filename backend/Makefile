@@ -27,7 +27,11 @@ docker-down:
 
 migrate:
 	@echo "Running migrations..."
-	PGPASSWORD=dm3secret psql -h localhost -p 5433 -U dm3 -d dm3 -f pkg/db/migrations/001_initial.sql
+	@set -e; \
+	for file in $$(find pkg/db/migrations -name '*.up.sql' | sort); do \
+		echo "Applying $$file..."; \
+		PGPASSWORD=dm3secret psql -h localhost -p 5433 -U dm3 -d dm3 -f "$$file"; \
+	done
 
 seed:
 	@echo "Running seed data..."

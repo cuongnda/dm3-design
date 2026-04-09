@@ -2,6 +2,7 @@ import { useLocation } from 'react-router-dom';
 import { Search, Bell, Sun, Moon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
+import { useBreadcrumbStore } from '@/stores/breadcrumbStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useState, useEffect } from 'react';
@@ -16,21 +17,25 @@ import {
 } from '../ui/dropdown-menu';
 import { Button } from '../ui/button';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function getBreadcrumb(
   pathname: string,
   domainMap: Record<string, { label: string; colorClass: string }>,
   segmentMap: Record<string, string>,
   overviewLabel: string,
   dashboardLabel: string,
+  labels: Record<string, string>,
 ): { domain?: string; domainColorClass?: string; segments: string[] } {
   const parts = pathname.split('/').filter(Boolean);
   if (parts.length === 0) return { segments: [overviewLabel, dashboardLabel] };
 
   const domain = domainMap[parts[0]];
-  // Translate known segments, fallback to capitalizing URL slug
-  const toLabel = (p: string) =>
-    segmentMap[p] ?? p.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-
+  // UUIDs → breadcrumb store label; known slugs → segmentMap; else capitalize
+  const toLabel = (p: string) => {
+    if (UUID_RE.test(p)) return labels[p.toLowerCase()] ?? p;
+    return segmentMap[p] ?? p.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  };
   const segments = parts.map(toLabel);
 
   if (domain) {
@@ -91,7 +96,8 @@ export function Topbar() {
     new:            t('breadcrumb.new', 'New'),
   };
 
-  const bc = getBreadcrumb(location.pathname, domainMap, segmentMap, t('breadcrumb.overview'), t('nav.dashboard'));
+  const breadcrumbLabels = useBreadcrumbStore((s) => s.labels);
+  const bc = getBreadcrumb(location.pathname, domainMap, segmentMap, t('breadcrumb.overview'), t('nav.dashboard'), breadcrumbLabels);
 
   // Cmd+K shortcut
   useEffect(() => {

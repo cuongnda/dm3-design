@@ -1,5 +1,34 @@
 stages:
+  - verify
   - deploy
+
+verify:compose:
+  stage: verify
+  script:
+    - echo "=== Validating deploy compose config ==="
+    - cp /home/gitlab-runner/.env.dm3 .env || true
+    - docker compose -f docker-compose.prod.yml config -q
+  only:
+    - develop
+    - /^v\d+\.\d+\.\d+$/
+
+verify:backend:
+  stage: verify
+  script:
+    - echo "=== Verifying backend build ==="
+    - docker build --target builder -f backend/Dockerfile -t dm3-backend-ci ./backend
+  only:
+    - develop
+    - /^v\d+\.\d+\.\d+$/
+
+verify:frontend:
+  stage: verify
+  script:
+    - echo "=== Verifying frontend build ==="
+    - docker build -f apps/console/Dockerfile -t dm3-console-ci .
+  only:
+    - develop
+    - /^v\d+\.\d+\.\d+$/
 
 # ── Deploy: Staging ───────────────────────────────────────────────────────────
 # Auto-deploys when develop branch is pushed.
@@ -7,6 +36,10 @@ stages:
 
 deploy:staging:
   stage: deploy
+  needs:
+    - verify:compose
+    - verify:backend
+    - verify:frontend
   environment:
     name: staging
     url: http://dm3.demasterpro.com
@@ -32,6 +65,10 @@ deploy:staging:
 # ── Deploy: Production ────────────────────────────────────────────────────────
 deploy:production:
   stage: deploy
+  needs:
+    - verify:compose
+    - verify:backend
+    - verify:frontend
   environment:
     name: production
     url: http://dm3.demasterpro.com

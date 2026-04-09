@@ -43,7 +43,7 @@ export function useAccessGroups(): UseAccessGroupsReturn {
     const [error, setError] = useState<string | null>(null);
     const [search, setSearchRaw] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const [sortBy, setSortBy] = useState<string | null>('name');
     const [sortDir, setSortDir] = useState<'asc' | 'desc' | null>('asc');
     const [pagination, setPagination] = useState<AccessGroupPagination>({
