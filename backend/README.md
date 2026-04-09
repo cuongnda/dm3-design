@@ -25,7 +25,7 @@ Quick way to debug any service with breakpoints.
 ### 1. Start infrastructure only
 
 ```bash
-docker compose up -d timescaledb emqx nats valkey minio
+docker compose -f backend/docker-compose.yml up -d timescaledb emqx nats valkey minio
 ```
 
 ### 2. Create the database (first time only)
@@ -33,15 +33,13 @@ docker compose up -d timescaledb emqx nats valkey minio
 The Docker compose creates the DB when running the full stack, but for local debug you need to create it manually:
 
 ```bash
-# If PostgreSQL is running in Docker container:
-docker exec -it postgres-db-timescale psql -U postgres -c "CREATE DATABASE dm3;"
-
-# If PostgreSQL is installed locally:
-psql -h localhost -p 5433 -U postgres -c "CREATE DATABASE dm3;"
+# Only needed if your existing PostgreSQL does not already have the dm3 database:
+PGPASSWORD=dm3secret psql -h localhost -p 5433 -U dm3 -tc "SELECT 1 FROM pg_database WHERE datname = 'dm3'" | grep -q 1 \
+  || PGPASSWORD=dm3secret psql -h localhost -p 5433 -U dm3 -c "CREATE DATABASE dm3;"
 ```
 
-> **Note:** If using the project's Docker TimescaleDB (`docker-compose.yml`), credentials are `dm3`/`dm3secret`.  
-> If connecting to an existing PostgreSQL, adjust `DATABASE_URL` in `.vscode/launch.json`.
+> **Note:** The project's local Docker stack uses `dm3` / `dm3secret` on port `5433`.
+> If you connect to a different PostgreSQL instance, update `DATABASE_URL` in `.vscode/launch.json`.
 
 ### 3. Debug with F5
 
@@ -49,12 +47,12 @@ Open VSCode → **Run & Debug** panel (Ctrl+Shift+D) → pick a service:
 
 | Config | Service | Port |
 |--------|---------|------|
-| Auth Service | auth-svc | 8002 |
-| Identity Service | identity-svc | 8003 |
-| Access Service | access-svc | 8004 |
-| Device Gateway | device-gateway | 8005 |
+| Auth Service | auth-svc | 8005 |
+| Identity Service | identity-svc | 8004 |
+| Access Service | access-svc | 8003 |
+| Device Gateway | device-gateway | 8002 |
 | All Backend Services | all 4 above | — |
-| Frontend (React) | webapp dev server | 5173 |
+| Frontend (React) | webapp dev server | 3000 |
 
 Press **F5** to start debugging. Set breakpoints in any `.go` file.
 
@@ -73,7 +71,7 @@ Debug configs use these defaults (editable in `.vscode/launch.json`):
 
 | Variable | Default |
 |----------|---------|
-| DATABASE_URL | `postgres://postgres:postgres@localhost:5433/dm3?sslmode=disable` |
+| DATABASE_URL | `postgres://dm3:dm3secret@localhost:5433/dm3?sslmode=disable` |
 | NATS_URL | `nats://localhost:4222` |
 | MQTT_BROKER | `tcp://localhost:1884` |
 | JWT_SECRET | `dm3-dev-secret-key` |
@@ -91,7 +89,7 @@ docker compose up -d
 ```
 
 This brings up:
-- **TimescaleDB** (port 5433) — primary database, 7 migrations auto-applied
+- **TimescaleDB** (port 5433) — primary database
 - **EMQX** (port 1884, dashboard 18083) — MQTT broker
 - **NATS** (port 4222, monitor 8222) — event streaming with JetStream
 - **Valkey** (port 6380) — cache / session store
@@ -106,13 +104,12 @@ Wait ~15s for EMQX to be healthy before simulator devices connect.
 ```bash
 make migrate
 # or manually:
-PGPASSWORD=dm3secret psql -h localhost -p 5433 -U dm3 -d dm3 \
-  -f pkg/db/migrations/001_initial.sql \
-  -f pkg/db/migrations/002_access_enhanced.sql \
-  # ... through 007
+for file in $(find pkg/db/migrations -name '*.up.sql' | sort); do
+  PGPASSWORD=dm3secret psql -h localhost -p 5433 -U dm3 -d dm3 -f "$file"
+done
 ```
 
-> Note: The seed-demo container handles `008_seed_demo_data.sql` automatically.
+> Note: the optional `seed-demo` container loads demo data separately.
 
 ### 3. Start Go services
 
@@ -152,7 +149,7 @@ curl http://localhost:8003/api/v1/events?limit=10
 
 ```bash
 cd ../apps/console/
-npm run dev    # http://localhost:5173
+npm run dev    # http://localhost:3000
 ```
 
 Login: `admin@duali.com` / `admin123` (Duali Demo company)

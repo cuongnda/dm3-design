@@ -117,9 +117,14 @@ sudo crontab -e
 cd /home/gitlab-runner/dm3
 git pull origin develop
 cp /home/gitlab-runner/.env.dm3 .env
+docker compose -f docker-compose.prod.yml config -q
+docker build --target builder -f backend/Dockerfile -t dm3-backend-ci ./backend
+docker build -f apps/console/Dockerfile -t dm3-console-ci .
 docker compose -f docker-compose.prod.yml build --no-cache
 docker compose -f docker-compose.prod.yml up -d --remove-orphans
 ```
+
+These same compose, backend, and frontend verification steps now run in `.gitlab-ci.yml` before deploy jobs are allowed to start.
 
 Check logs:
 

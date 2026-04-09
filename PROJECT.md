@@ -65,7 +65,7 @@ Console available at **http://localhost:3000**
 
 ## Stack
 - **Backend:** Go monorepo (5 services: audit-svc:8001, device-gateway:8002, access-svc:8003, identity-svc:8004, auth-svc:8005)
-- **DB:** TimescaleDB port 5433 (dm3/dm3secret), 8 migrations
+- **DB:** TimescaleDB port 5433 (`dm3` / `dm3secret`)
 - **Infra:** EMQX(:1884), NATS(:4222), Valkey(:6380), MinIO(:9002), Simulator(:9090)
 - **Webapp:** Vite + React 18 + TS + Tailwind + shadcn/ui + React Router v7 + Zustand + TanStack Query
 - **Mobile:** Flutter (Admin + Resident apps)
