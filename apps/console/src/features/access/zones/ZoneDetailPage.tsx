@@ -10,6 +10,23 @@ interface ZonesResponse {
   data?: Zone[];
 }
 
+function authenticatedUrl(url: string): string {
+  if (!url) return url;
+
+  const token = localStorage.getItem('dm3-token');
+  if (!token) return url;
+
+  try {
+    const resolved = new URL(url, window.location.origin);
+    if (resolved.origin !== window.location.origin) return resolved.toString();
+    resolved.searchParams.set('token', token);
+    return resolved.toString();
+  } catch {
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}token=${token}`;
+  }
+}
+
 export function ZoneDetailPage() {
   const { t } = useTranslation('zones');
   const { id } = useParams<{ id: string }>();
@@ -23,7 +40,12 @@ export function ZoneDetailPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('list');
+  const [mapImageFailed, setMapImageFailed] = useState(false);
+  const draftPositionsRef = useRef<Record<string, { map_x: number; map_y: number }>>({});
+
+  useEffect(() => { draftPositionsRef.current = draftPositions; }, [draftPositions]);
 
   const fetchData = useCallback(async () => {
     if (!id) return;
@@ -38,6 +60,7 @@ export function ZoneDetailPage() {
       setZone(zoneRes);
       setLayoutData(mapRes);
       setAllZones(zonesRes.data ?? []);
+      setMapImageFailed(false);
       const nextDrafts = Object.fromEntries((mapRes.access_points ?? []).map((point) => [point.id, { map_x: point.map_x ?? 0.5, map_y: point.map_y ?? 0.5 }]));
       setDraftPositions(nextDrafts);
     } catch (err) {
@@ -67,8 +90,9 @@ export function ZoneDetailPage() {
 
   const savePosition = useCallback(async (pointId: string) => {
     if (!id) return;
-    const draft = draftPositions[pointId];
+    const draft = draftPositionsRef.current[pointId];
     if (!draft) return;
+    setSaveError(null);
     setSavingId(pointId);
     try {
       await apiFetch(`/api/v1/access/access-points/${pointId}`, {
@@ -79,20 +103,16 @@ export function ZoneDetailPage() {
       setLayoutData(refreshed);
       setDraftPositions(Object.fromEntries((refreshed.access_points ?? []).map((point) => [point.id, { map_x: point.map_x ?? 0.5, map_y: point.map_y ?? 0.5 }])));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save access point position');
+      setSaveError(err instanceof Error ? err.message : 'Failed to save access point position');
     } finally {
       setSavingId(null);
     }
-  }, [draftPositions, id]);
+  }, [id]);
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => updateDraftFromPointer(event.clientX, event.clientY);
     const handlePointerUp = () => {
-      const pointId = draggingRef.current;
       draggingRef.current = null;
-      if (pointId) {
-        void savePosition(pointId);
-      }
     };
 
     window.addEventListener('pointermove', handlePointerMove);
@@ -101,7 +121,7 @@ export function ZoneDetailPage() {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
     };
-  }, [savePosition, updateDraftFromPointer]);
+  }, [updateDraftFromPointer]);
 
   if (loading) {
     return <div className="flex justify-center py-12"><div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" /></div>;
@@ -192,13 +212,29 @@ export function ZoneDetailPage() {
             </TabsContent>
 
             <TabsContent value="map" className="mt-0 space-y-4">
-              <div ref={mapRef} className="relative h-[420px] overflow-hidden rounded-2xl border border-border/60 bg-muted/20" data-testid="zone-detail-map-canvas">
-                {layoutData.zone.map_image_url ? (
-                  <img src={layoutData.zone.map_image_url} alt={layoutData.zone.name} className="absolute inset-0 h-full w-full object-cover opacity-70" />
+              {saveError ? <p className="text-sm text-destructive">{saveError}</p> : null}
+              <div
+                ref={mapRef}
+                className="relative min-h-[420px] overflow-hidden rounded-2xl border border-border/60 bg-muted/20 lg:min-h-[560px] xl:min-h-[calc(100vh-20rem)]"
+                data-testid="zone-detail-map-canvas"
+              >
+                {layoutData.zone.map_image_url && !mapImageFailed ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.12),transparent_60%)] p-4">
+                    <img
+                      src={authenticatedUrl(layoutData.zone.map_image_url)}
+                      alt={layoutData.zone.name}
+                      className="h-full w-full object-contain opacity-90"
+                      onError={() => setMapImageFailed(true)}
+                    />
+                  </div>
                 ) : (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center text-muted-foreground">
                     <MapPin size={20} />
-                    <p className="text-sm">{t('detail.noMapConfigured', 'No indoor map configured for this zone')}</p>
+                    <p className="text-sm">
+                      {layoutData.zone.map_image_url
+                        ? t('detail.mapUnavailable', 'Zone map is unavailable right now. Check the uploaded asset URL or storage permissions.')
+                        : t('detail.noMapConfigured', 'No indoor map configured for this zone')}
+                    </p>
                   </div>
                 )}
 

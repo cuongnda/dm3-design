@@ -66,6 +66,29 @@ export interface WSConnectionOptions {
   reconnectInterval?: number;
 }
 
+async function isDevGatewayReachable(): Promise<boolean> {
+  const host = window.location.hostname;
+  const isLocalDev = host === 'localhost' || host === '127.0.0.1';
+  if (!isLocalDev) return true;
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 1500);
+
+  try {
+    await fetch('http://localhost:8002/healthz', {
+      method: 'GET',
+      mode: 'no-cors',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 export class WebSocketClient {
   private ws: WebSocket | null = null;
   private _isConnecting = false;
@@ -87,41 +110,43 @@ export class WebSocketClient {
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        resolve();
-        return;
-      }
+      void (async () => {
+        if (this.ws?.readyState === WebSocket.OPEN) {
+          resolve();
+          return;
+        }
 
-      if (this._isConnecting) {
-        reject(new Error('Connection already in progress'));
-        return;
-      }
+        if (this._isConnecting) {
+          reject(new Error('Connection already in progress'));
+          return;
+        }
 
-      this._isConnecting = true;
-      
-      const token = getToken();
-      if (!token) {
-        this._isConnecting = false;
-        reject(new Error('No authentication token available'));
-        return;
-      }
+        this._isConnecting = true;
 
-      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      
-      // TEMPORARY DEV FIX: Try direct connection to backend if proxy fails
-      const isDev = window.location.hostname === 'localhost';
-      let wsUrl: string;
-      
-      if (isDev && this.reconnectAttempts > 0) {
-        // Fallback: direct connection to device-gateway after first failure
-        wsUrl = `ws://localhost:8002/ws/events?token=${encodeURIComponent(token)}`;
-        console.log('[WS] Trying direct connection to backend...');
-      } else {
-        // Normal: use Vite proxy
-        wsUrl = `${proto}//${window.location.host}/ws/events?token=${encodeURIComponent(token)}`;
-      }
+        const token = getToken();
+        if (!token) {
+          this._isConnecting = false;
+          reject(new Error('No authentication token available'));
+          return;
+        }
 
-      try {
+        const gatewayReachable = await isDevGatewayReachable();
+        if (!gatewayReachable) {
+          this._isConnecting = false;
+          reject(new Error('Realtime gateway unavailable'));
+          return;
+        }
+
+        const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const isDev = window.location.hostname === 'localhost';
+        const wsUrl = isDev && this.reconnectAttempts > 0
+          ? `ws://localhost:8002/ws/events?token=${encodeURIComponent(token)}`
+          : `${proto}//${window.location.host}/ws/events?token=${encodeURIComponent(token)}`;
+
+        if (isDev && this.reconnectAttempts > 0) {
+          console.debug('[WS] Trying direct connection to backend...');
+        }
+
         this.ws = new WebSocket(wsUrl);
 
         const onConnect = () => {
@@ -145,7 +170,7 @@ export class WebSocketClient {
           this._isConnecting = false;
           this.stopHeartbeat();
           this.options.onDisconnect?.();
-          
+
           if (this.options.autoReconnect && this.reconnectAttempts < this.options.maxReconnectAttempts!) {
             this.scheduleReconnect();
           }
@@ -159,11 +184,10 @@ export class WebSocketClient {
         this.ws.addEventListener('error', onError);
         this.ws.addEventListener('close', onClose);
         this.ws.addEventListener('message', onMessage);
-
-      } catch (error) {
+      })().catch((error) => {
         this._isConnecting = false;
         reject(error);
-      }
+      });
     });
   }
 
