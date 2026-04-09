@@ -127,8 +127,12 @@ function filterZoneTree(nodes: ZoneTreeNode[], query: string): ZoneTreeNode[] {
     .filter((node): node is ZoneTreeNode => Boolean(node));
 }
 
-function flattenTree(nodes: ZoneTreeNode[]): ZoneTreeNode[] {
-  return nodes.flatMap((node) => [node, ...flattenTree(node.children)]);
+function flattenTree(nodes: ZoneTreeNode[], visited = new Set<string>()): ZoneTreeNode[] {
+  return nodes.flatMap((node) => {
+    if (visited.has(node.zone.id)) return [];
+    visited.add(node.zone.id);
+    return [node, ...flattenTree(node.children, visited)];
+  });
 }
 
 export function ZonesPage() {
@@ -393,7 +397,9 @@ export function ZonesPage() {
     </div>
   );
 
-  const renderNode = (node: ZoneTreeNode) => {
+  const renderNode = (node: ZoneTreeNode, visited = new Set<string>()) => {
+    if (visited.has(node.zone.id)) return null;
+    visited.add(node.zone.id);
     const isExpanded = expanded[node.zone.id] ?? true;
     const hasChildren = node.children.length > 0;
     const parentName = node.zone.parent_id
@@ -500,7 +506,7 @@ export function ZonesPage() {
           </div>
         </div>
 
-        {hasChildren && isExpanded ? node.children.map(renderNode) : null}
+        {hasChildren && isExpanded ? node.children.map((child) => renderNode(child, visited)) : null}
       </div>
     );
   };
@@ -564,7 +570,7 @@ export function ZonesPage() {
               : t("empty", "No zones yet. Add the first one.")}
           </div>
         ) : (
-          <div className="space-y-2">{visibleTree.map(renderNode)}</div>
+          <div className="space-y-2">{visibleTree.map((node) => renderNode(node))}</div>
         )}
       </Card>
 
