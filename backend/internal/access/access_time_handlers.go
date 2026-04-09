@@ -86,6 +86,35 @@ func (h *AccessHandlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.
 		templates = append(templates, t)
 	}
 
+	// Optionally include time slots for each access time
+	if r.URL.Query().Get("include_slots") == "true" && len(templates) > 0 {
+		ids := make([]string, len(templates))
+		for i, t := range templates {
+			ids[i] = t.ID
+		}
+		slotsQuery := `
+			SELECT id, access_time_id, day_of_week, start_time, end_time,
+				   slot_name, is_active, created_at
+			FROM dm3_access.access_time_slots
+			WHERE access_time_id = ANY($1::uuid[])
+			ORDER BY day_of_week, start_time
+		`
+		slotRows, err := h.db.Pool.Query(r.Context(), slotsQuery, ids)
+		if err == nil {
+			defer slotRows.Close()
+			slotMap := map[string][]models.AccessTimeSlot{}
+			for slotRows.Next() {
+				var s models.AccessTimeSlot
+				if err := slotRows.Scan(&s.ID, &s.AccessTimeID, &s.DayOfWeek, &s.StartTime, &s.EndTime, &s.SlotName, &s.IsActive, &s.CreatedAt); err == nil {
+					slotMap[s.AccessTimeID] = append(slotMap[s.AccessTimeID], s)
+				}
+			}
+			for i := range templates {
+				templates[i].Slots = slotMap[templates[i].ID]
+			}
+		}
+	}
+
 	httputil.Paginated(w, templates, total, page, limit)
 }
 

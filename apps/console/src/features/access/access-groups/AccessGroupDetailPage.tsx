@@ -12,6 +12,7 @@ import {
   TablePaginationFooter, Checkbox,
 } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
+import { useBreadcrumbStore } from '@/stores/breadcrumbStore';
 import type { AccessGroup, AccessGroupAccessPoint, AccessGroupFormData, AccessTime } from './types';
 import type { User } from '@/features/user-management/types';
 
@@ -234,6 +235,7 @@ function AddUserModal({ open, onOpenChange, linkedUserIds, onSubmit }: AddUserMo
   const [allUsers, setAllUsers] = useState<AvailableUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [search, setSearch] = useState('');
+  const [deptFilter, setDeptFilter] = useState('');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
 
@@ -251,17 +253,27 @@ function AddUserModal({ open, onOpenChange, linkedUserIds, onSubmit }: AddUserMo
     [allUsers, linkedUserIds],
   );
 
+  const departments = useMemo(
+    () => [...new Set(availableUsers.map((u) => u.department_name).filter(Boolean))].sort(),
+    [availableUsers],
+  );
+
   const filteredUsers = useMemo(() => {
-    const q = search.toLowerCase();
-    return q
-      ? availableUsers.filter(
-          (u) =>
-            u.full_name.toLowerCase().includes(q) ||
-            u.email.toLowerCase().includes(q) ||
-            u.position?.toLowerCase().includes(q),
-        )
-      : availableUsers;
-  }, [availableUsers, search]);
+    let result = availableUsers;
+    if (deptFilter) {
+      result = result.filter((u) => u.department_name === deptFilter);
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (u) =>
+          u.full_name.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          u.position?.toLowerCase().includes(q),
+      );
+    }
+    return result;
+  }, [availableUsers, search, deptFilter]);
 
   useEffect(() => { setPage(1); }, [search, availableUsers.length]);
 
@@ -295,6 +307,7 @@ function AddUserModal({ open, onOpenChange, linkedUserIds, onSubmit }: AddUserMo
       setSelected(new Set());
       setError('');
       setSearch('');
+      setDeptFilter('');
       setPage(1);
     }
     onOpenChange(v);
@@ -337,13 +350,29 @@ function AddUserModal({ open, onOpenChange, linkedUserIds, onSubmit }: AddUserMo
       }}
     >
       <div className="space-y-3">
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t('searchUsers', 'Search users…')}
-          className="h-8 text-[13px]"
-          disabled={submitting}
-        />
+        <div className="flex gap-2">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('searchUsers', 'Search users…')}
+            className="h-8 text-[13px] flex-1"
+            disabled={submitting}
+          />
+          {departments.length > 0 && (
+            <select
+              value={deptFilter}
+              onChange={(e) => { setDeptFilter(e.target.value); setPage(1); }}
+              className="h-8 px-2 text-[13px] border border-border rounded-md bg-input text-foreground min-w-[140px] appearance-none cursor-pointer"
+              disabled={submitting}
+              data-testid="access-select-deptFilter"
+            >
+              <option value="">{t('allDepartments', 'All departments')}</option>
+              {departments.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          )}
+        </div>
 
         <div className="rounded-md border border-border overflow-hidden">
           {loadingUsers ? (
@@ -375,6 +404,7 @@ function AddUserModal({ open, onOpenChange, linkedUserIds, onSubmit }: AddUserMo
                       />
                     </th>
                     <th className="px-3 py-2 text-left font-medium text-foreground">{t('userColumns.name', 'Name')}</th>
+                    <th className="px-3 py-2 text-left font-medium text-foreground">{t('userColumns.department', 'Department')}</th>
                     <th className="px-3 py-2 text-left font-medium text-foreground">{t('userColumns.position', 'Position')}</th>
                     <th className="px-3 py-2 text-left font-medium text-foreground">{t('userColumns.status', 'Status')}</th>
                   </tr>
@@ -397,6 +427,7 @@ function AddUserModal({ open, onOpenChange, linkedUserIds, onSubmit }: AddUserMo
                         <div className="font-medium text-foreground">{u.full_name}</div>
                         {u.email && <div className="text-[11px] text-muted-foreground">{u.email}</div>}
                       </td>
+                      <td className="px-3 py-2 text-muted-foreground">{u.department_name || '—'}</td>
                       <td className="px-3 py-2 text-muted-foreground">{u.position || '—'}</td>
                       <td className="px-3 py-2">
                         <Badge variant={u.status === 'active' ? 'default' : 'secondary'} className="text-[11px]">
@@ -438,6 +469,8 @@ export function AccessGroupDetailPage() {
   const { t } = useTranslation('accessGroups');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const setLabel = useBreadcrumbStore((s) => s.setLabel);
+  const clearLabel = useBreadcrumbStore((s) => s.clearLabel);
 
   const [group, setGroup] = useState<AccessGroup | null>(null);
   const [loadingGroup, setLoadingGroup] = useState(true);
@@ -473,6 +506,12 @@ export function AccessGroupDetailPage() {
       setLoadingGroup(false);
     }
   }, [id]);
+
+  // Set breadcrumb label to group name instead of UUID
+  useEffect(() => {
+    if (id && group?.name) setLabel(id, group.name);
+    return () => { if (id) clearLabel(id); };
+  }, [id, group?.name, setLabel, clearLabel]);
 
   const fetchAccessPoints = useCallback(async () => {
     if (!id) return;

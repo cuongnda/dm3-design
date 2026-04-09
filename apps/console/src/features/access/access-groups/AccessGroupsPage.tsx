@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Shield, Plus, Search, MoreHorizontal, Eye, Edit, Trash2 } from 'lucide-react';
+import { Shield, Plus, Search, MoreHorizontal, Eye, Edit, Trash2, Clock } from 'lucide-react';
 import {
     Button,
     Input,
@@ -15,10 +15,14 @@ import {
     DataTableCard,
     DataTable,
     type Column,
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
 } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
 import { useAccessGroups } from './hooks/useAccessGroups';
-import type { AccessGroup, AccessGroupFormData } from './types';
+import type { AccessGroup, AccessGroupFormData, AccessTime } from './types';
 
 export function AccessGroupsPage() {
     const { t } = useTranslation('accessGroups');
@@ -48,14 +52,19 @@ export function AccessGroupsPage() {
     const [formData, setFormData] = useState<AccessGroupFormData>({ name: '', is_default: false });
     const [formError, setFormError] = useState('');
     const [submitting, setSubmitting] = useState(false);
-    const [accessTimes, setAccessTimes] = useState<{ id: string; name: string }[]>([]);
+    const [accessTimes, setAccessTimes] = useState<AccessTime[]>([]);
 
-    // Fetch reference data for forms
+    // Fetch reference data for forms (with slots for tooltip display)
     useEffect(() => {
-        apiFetch<{ data?: { id: string; name: string }[] }>('/api/v1/access/access-times?limit=100')
+        apiFetch<{ data?: AccessTime[] }>('/api/v1/access/access-times?limit=100&include_slots=true')
             .then((res) => setAccessTimes(res.data ?? []))
             .catch(() => {});
     }, []);
+
+    const accessTimeMap = useMemo(
+        () => Object.fromEntries(accessTimes.map((at) => [at.id, at])),
+        [accessTimes],
+    );
 
     const openCreateModal = () => {
         setFormData({ name: '', is_default: false });
@@ -161,6 +170,45 @@ export function AccessGroupsPage() {
                 render: (g) => <Badge variant="outline">{g.user_count ?? 0}</Badge>,
             },
             {
+                key: 'access_time',
+                header: t('columns.accessTime', 'Access Time'),
+                width: '160px',
+                render: (g) => {
+                    if (!g.access_time_id) return <span className="text-[13px] text-muted-foreground">24/7</span>;
+                    const at = accessTimeMap[g.access_time_id];
+                    if (!at) return <span className="text-[13px] text-muted-foreground">—</span>;
+                    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                    const slots = at.slots?.filter((s) => s.is_active) ?? [];
+                    return (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <span className="inline-flex items-center gap-1.5 text-[13px] cursor-default">
+                                        <Clock size={13} className="text-muted-foreground shrink-0" />
+                                        <span className="truncate max-w-[120px]">{at.name}</span>
+                                    </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="max-w-[280px] p-3">
+                                    <p className="font-medium text-[12px] mb-1.5">{at.name}</p>
+                                    {slots.length === 0 ? (
+                                        <p className="text-[11px] opacity-80">No active time slots</p>
+                                    ) : (
+                                        <div className="space-y-0.5">
+                                            {slots.map((s) => (
+                                                <div key={s.id} className="text-[11px] flex justify-between gap-3">
+                                                    <span className="font-medium">{dayNames[s.day_of_week]}</span>
+                                                    <span className="opacity-80">{s.start_time.slice(0, 5)} – {s.end_time.slice(0, 5)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    );
+                },
+            },
+            {
                 key: 'actions',
                 header: '',
                 width: '48px',
@@ -197,7 +245,7 @@ export function AccessGroupsPage() {
                 ),
             },
         ],
-        [navigate, t],
+        [navigate, t, accessTimeMap],
     );
 
     const GroupFormContent = (

@@ -20,10 +20,21 @@ export interface AccessGroupFormData {
   is_default?: boolean;
 }
 
+export interface AccessTimeSlot {
+  id: string;
+  access_time_id: string;
+  day_of_week: number; // 0=Sunday ... 6=Saturday
+  start_time: string;  // "08:00:00"
+  end_time: string;    // "17:00:00"
+  slot_name?: string;
+  is_active: boolean;
+}
+
 export interface AccessTime {
   id: string;
   name: string;
   description?: string;
+  slots?: AccessTimeSlot[];
 }
 
 export interface AccessGroupAccessPoint {
