@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -20,23 +18,18 @@ import (
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/natsutil"
-)
-
-// Aliases for testability
-var (
-	ensureDir  = func(path string) error { return os.MkdirAll(path, 0755) }
-	createFile = func(path string) (*os.File, error) { return os.Create(path) }
-	copyFile   = func(dst io.Writer, src io.Reader) (int64, error) { return io.Copy(dst, src) }
+	"github.com/duali/dm3-backend/pkg/objectstore"
 )
 
 type IdentityHandlers struct {
-	db    *db.DB
-	nats  *natsutil.Client
-	audit *audit.Logger
+	db      *db.DB
+	nats    *natsutil.Client
+	audit   *audit.Logger
+	objects objectstore.Store
 }
 
-func NewIdentityHandlers(database *db.DB, nats *natsutil.Client, auditLog *audit.Logger) *IdentityHandlers {
-	return &IdentityHandlers{db: database, nats: nats, audit: auditLog}
+func NewIdentityHandlers(database *db.DB, nats *natsutil.Client, auditLog *audit.Logger, objects objectstore.Store) *IdentityHandlers {
+	return &IdentityHandlers{db: database, nats: nats, audit: auditLog, objects: objects}
 }
 
 // publishEvent publishes a NATS event for identity changes.
@@ -59,67 +52,17 @@ func (h *IdentityHandlers) publishEvent(subject string, data any) {
 // ─── Photo Upload ────────────────────────────────────────────────────────────
 
 func (h *IdentityHandlers) UploadPhoto(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-
-	// Verify user exists
-	var exists bool
-	_ = h.db.Pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM dm3_identity.users WHERE id = $1::uuid)`, id).Scan(&exists)
-	if !exists {
-		httputil.Error(w, http.StatusNotFound, "user not found")
+	userID := chi.URLParam(r, "id")
+	companyID := authsvc.CompanyIDFromContext(r.Context())
+	assetURL, uploadErr := h.uploadUserImage(r, userID, companyID, "photo", identityPhotoVariant)
+	if uploadErr != nil {
+		httputil.Error(w, uploadErr.status, uploadErr.message)
 		return
 	}
 
-	// Parse multipart (max 10MB)
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "file too large or invalid multipart")
-		return
-	}
-
-	file, header, err := r.FormFile("photo")
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, "photo field required")
-		return
-	}
-	defer file.Close()
-
-	// Store to local filesystem (would use MinIO in production)
-	photoDir := "data/photos"
-	if err := ensureDir(photoDir); err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to create photo directory")
-		return
-	}
-
-	ext := ".jpg"
-	if ct := header.Header.Get("Content-Type"); ct == "image/png" {
-		ext = ".png"
-	}
-	filename := fmt.Sprintf("%s%s", id, ext)
-	filepath := fmt.Sprintf("%s/%s", photoDir, filename)
-
-	dst, err := createFile(filepath)
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to save photo")
-		return
-	}
-	defer dst.Close()
-
-	if _, err := copyFile(dst, file); err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to write photo")
-		return
-	}
-
-	photoURL := fmt.Sprintf("/photos/%s", filename)
-	_, err = h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_identity.users SET photo_url = $2, updated_at = now() WHERE id = $1::uuid`,
-		id, photoURL)
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	h.publishEvent("dm3.identity.user.updated", map[string]string{"id": id, "photo_url": photoURL})
-	h.audit.LogFromRequest(r, "identity.user.photo_upload", "user", id, id, "success", nil, map[string]any{"photo_url": photoURL})
-	httputil.JSON(w, http.StatusOK, map[string]string{"photo_url": photoURL})
+	h.publishEvent("dm3.identity.user.updated", map[string]string{"id": userID, "photo_url": assetURL})
+	h.audit.LogFromRequest(r, "identity.user.photo_upload", "user", userID, userID, "success", nil, map[string]any{"photo_url": assetURL})
+	httputil.JSON(w, http.StatusOK, map[string]string{"photo_url": assetURL})
 }
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
@@ -337,7 +280,7 @@ func (h *IdentityHandlers) SyncUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := models.SyncResponse{
-		Users:     users,
+		Users:       users,
 		Credentials: creds,
 		Since:       sinceStr,
 		Timestamp:   now.Format(time.RFC3339),
@@ -349,8 +292,8 @@ func (h *IdentityHandlers) SyncUsers(w http.ResponseWriter, r *http.Request) {
 
 func (h *IdentityHandlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	stats := models.IdentityStats{
-		UsersByStatus:  make(map[string]int64),
-		UsersByDept:    make(map[string]int64),
+		UsersByStatus:    make(map[string]int64),
+		UsersByDept:      make(map[string]int64),
 		CredentialCounts: make(map[string]int64),
 	}
 	cid := authsvc.CompanyIDFromContext(r.Context())

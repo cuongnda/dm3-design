@@ -5,9 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -25,70 +23,15 @@ import (
 func (h *IdentityHandlers) UploadUserAvatar(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	companyID := authsvc.CompanyIDFromContext(r.Context())
-
-	// Verify user belongs to this company
-	var exists bool
-	_ = h.db.Pool.QueryRow(r.Context(), `
-		SELECT EXISTS(
-			SELECT 1 FROM dm3_identity.users
-			WHERE id = $1::uuid AND tenant_id = $2::uuid
-			  AND (is_deleted = false OR is_deleted IS NULL)
-		)
-	`, userID, companyID).Scan(&exists)
-	if !exists {
-		httputil.Error(w, http.StatusNotFound, "user not found")
+	assetURL, uploadErr := h.uploadUserImage(r, userID, companyID, "avatar", identityAvatarVariant)
+	if uploadErr != nil {
+		httputil.Error(w, uploadErr.status, uploadErr.message)
 		return
 	}
 
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "file too large or invalid multipart")
-		return
-	}
-
-	file, header, err := r.FormFile("avatar")
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, "avatar field required")
-		return
-	}
-	defer file.Close()
-
-	photoDir := "data/photos"
-	if err := os.MkdirAll(photoDir, 0755); err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to create photo directory")
-		return
-	}
-
-	ext := ".jpg"
-	if ct := header.Header.Get("Content-Type"); ct == "image/png" {
-		ext = ".png"
-	}
-	filename := fmt.Sprintf("user-%s%s", userID, ext)
-	fpath := fmt.Sprintf("%s/%s", photoDir, filename)
-
-	dst, err := os.Create(fpath)
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to save avatar")
-		return
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, file); err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to write avatar")
-		return
-	}
-
-	avatarURL := fmt.Sprintf("/photos/%s", filename)
-	_, err = h.db.Pool.Exec(r.Context(), `
-		UPDATE dm3_identity.users SET avatar = $2, updated_at = NOW()
-		WHERE id = $1::uuid AND tenant_id = $3::uuid
-	`, userID, avatarURL, companyID)
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to update avatar")
-		return
-	}
-
-	h.audit.LogFromRequest(r, "identity.user.photo_upload", "user", userID, userID, "success", nil, map[string]any{"avatar": avatarURL})
-	httputil.JSON(w, http.StatusOK, map[string]string{"avatar": avatarURL})
+	h.publishEvent("dm3.identity.user.updated", map[string]string{"id": userID, "avatar": assetURL})
+	h.audit.LogFromRequest(r, "identity.user.photo_upload", "user", userID, userID, "success", nil, map[string]any{"avatar": assetURL})
+	httputil.JSON(w, http.StatusOK, map[string]string{"avatar": assetURL})
 }
 
 // ─── User CRUD ────────────────────────────────────────────────────────────────
@@ -111,7 +54,7 @@ func (h *IdentityHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	offset := (page - 1) * limit
 
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
-	statuses := r.URL.Query()["status"]       // multi: ?status=active&status=inactive
+	statuses := r.URL.Query()["status"]             // multi: ?status=active&status=inactive
 	departmentIDs := r.URL.Query()["department_id"] // multi: ?department_id=x&department_id=y
 	sortBy := r.URL.Query().Get("sort_by")
 	sortOrder := r.URL.Query().Get("sort_order")
@@ -238,23 +181,23 @@ func (h *IdentityHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		users = append(users, map[string]interface{}{
-			"id":             id,
-			"user_code":      userCode,
-			"emp_number":     empNum,
-			"first_name":     firstName,
-			"last_name":      lastName,
-			"full_name":      fullName,
-			"email":          email,
-			"position":       position,
-			"status":         status,
-			"avatar":         avatar,
-			"phone":          phone,
+			"id":              id,
+			"user_code":       userCode,
+			"emp_number":      empNum,
+			"first_name":      firstName,
+			"last_name":       lastName,
+			"full_name":       fullName,
+			"email":           email,
+			"position":        position,
+			"status":          status,
+			"avatar":          avatar,
+			"phone":           phone,
 			"department_name": deptName,
-			"department_id":  deptID,
-			"account_id":     accountID,
-			"birth_day":      birthDay,
-			"effective_date": effectiveDate,
-			"expired_date":   expiredDate,
+			"department_id":   deptID,
+			"account_id":      accountID,
+			"birth_day":       birthDay,
+			"effective_date":  effectiveDate,
+			"expired_date":    expiredDate,
 		})
 	}
 
@@ -312,23 +255,23 @@ func (h *IdentityHandlers) GetUser(w http.ResponseWriter, r *http.Request) {
 
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{
 		"user": map[string]interface{}{
-			"id":             id,
-			"user_code":      userCode,
-			"emp_number":     empNum,
-			"first_name":     firstName,
-			"last_name":      lastName,
-			"full_name":      fullName,
-			"email":          email,
-			"position":       position,
-			"status":         status,
-			"avatar":         avatar,
-			"phone":          phone,
+			"id":              id,
+			"user_code":       userCode,
+			"emp_number":      empNum,
+			"first_name":      firstName,
+			"last_name":       lastName,
+			"full_name":       fullName,
+			"email":           email,
+			"position":        position,
+			"status":          status,
+			"avatar":          avatar,
+			"phone":           phone,
 			"department_name": deptName,
-			"department_id":  deptID,
-			"account_id":     accountID,
-			"birth_day":      birthDay,
-			"effective_date": effectiveDate,
-			"expired_date":   expiredDate,
+			"department_id":   deptID,
+			"account_id":      accountID,
+			"birth_day":       birthDay,
+			"effective_date":  effectiveDate,
+			"expired_date":    expiredDate,
 		},
 	})
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/i18n"
 	"github.com/duali/dm3-backend/pkg/natsutil"
+	"github.com/duali/dm3-backend/pkg/objectstore"
 )
 
 func main() {
@@ -87,8 +88,21 @@ func main() {
 		CompanyIDFromContext: authsvc.CompanyIDFromContext,
 	})
 
+	objectStore, err := objectstore.NewMinIOStore(ctx, objectstore.Config{
+		Endpoint:         cfg.ObjectStoreEndpoint,
+		AccessKeyID:      cfg.ObjectStoreAccessKeyID,
+		SecretAccessKey:  cfg.ObjectStoreSecretAccessKey,
+		Bucket:           cfg.ObjectStoreBucket,
+		UseSSL:           cfg.ObjectStoreUseSSL,
+		AutoCreateBucket: cfg.ObjectStoreAutoCreateBucket,
+	})
+	if err != nil {
+		slog.Error("failed to initialize object storage", "error", err)
+		os.Exit(1)
+	}
+
 	// HTTP handlers
-	handlers := identity.NewIdentityHandlers(database, natsClient, auditLog)
+	handlers := identity.NewIdentityHandlers(database, natsClient, auditLog, objectStore)
 	umHandlers := tenant.NewUserManagementHandlers(database, auditLog)
 
 	// HTTP routes
@@ -108,8 +122,8 @@ func main() {
 		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
 
-	// Serve uploaded photos/avatars
-	r.Handle("/photos/*", http.StripPrefix("/photos/", http.FileServer(http.Dir("data/photos"))))
+	// Serve uploaded photos/avatars from shared object storage
+	r.Get("/photos/*", handlers.ServeManagedPhoto)
 
 	r.Route("/api/v1/identity", func(r chi.Router) {
 		r.Use(authsvc.AuthMiddleware(cfg.JWTSecret))

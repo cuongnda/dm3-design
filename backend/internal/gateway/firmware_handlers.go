@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -8,7 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
+	pathpkg "path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/i18n"
+	"github.com/duali/dm3-backend/pkg/objectstore"
 )
 
 // ─── Device Types ───────────────────────────────────────────────────────────
@@ -48,27 +50,28 @@ func isValidDeviceType(dt string) bool {
 // ─── Firmware DTO ───────────────────────────────────────────────────────────
 
 type FirmwareDTO struct {
-	ID          string     `json:"id"`
-	Version     string     `json:"version"`
-	DeviceType  string     `json:"device_type"`
-	Description *string    `json:"description"`
-	FilePath    string     `json:"file_path"`
-	FileSize    int64      `json:"file_size"`
-	Checksum    *string    `json:"checksum"`
-	IsActive    bool       `json:"is_active"`
-	UploadedBy  *string    `json:"uploaded_by"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID          string    `json:"id"`
+	Version     string    `json:"version"`
+	DeviceType  string    `json:"device_type"`
+	Description *string   `json:"description"`
+	FilePath    string    `json:"file_path"`
+	FileSize    int64     `json:"file_size"`
+	Checksum    *string   `json:"checksum"`
+	IsActive    bool      `json:"is_active"`
+	UploadedBy  *string   `json:"uploaded_by"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // ─── Firmware Handlers ──────────────────────────────────────────────────────
 
 type FirmwareHandlers struct {
-	db *db.DB
+	db      *db.DB
+	objects objectstore.Store
 }
 
-func NewFirmwareHandlers(database *db.DB) *FirmwareHandlers {
-	return &FirmwareHandlers{db: database}
+func NewFirmwareHandlers(database *db.DB, objects objectstore.Store) *FirmwareHandlers {
+	return &FirmwareHandlers{db: database, objects: objects}
 }
 
 // ListFirmwares handles GET /api/v1/system/firmware
@@ -212,40 +215,33 @@ func (h *FirmwareHandlers) UploadFirmware(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Prepare directory
-	firmwareDir := filepath.Join("data", "firmware", deviceType)
-	if err := os.MkdirAll(firmwareDir, 0755); err != nil {
-		slog.Error("failed to create firmware directory", "error", err)
+	if h.objects == nil {
 		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.filesystem_error")
 		return
 	}
 
-	// Build filename: version_originalname
-	safeVersion := strings.ReplaceAll(version, "/", "_")
-	filename := fmt.Sprintf("%s_%s", safeVersion, header.Filename)
-	destPath := filepath.Join(firmwareDir, filename)
-
-	// Write file and calculate SHA-256 checksum
-	dst, err := os.Create(destPath)
-	if err != nil {
-		slog.Error("failed to create firmware file", "error", err)
-		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.filesystem_error")
-		return
-	}
-	defer dst.Close()
+	safeVersion := sanitizeFirmwarePathSegment(version)
+	filename := fmt.Sprintf("%s_%s", safeVersion, pathpkg.Base(header.Filename))
+	objectKey := buildFirmwareObjectKey(deviceType, filename)
 
 	hasher := sha256.New()
-	writer := io.MultiWriter(dst, hasher)
-
-	written, err := io.Copy(writer, file)
+	data, err := io.ReadAll(io.TeeReader(file, hasher))
 	if err != nil {
-		slog.Error("failed to write firmware file", "error", err)
-		os.Remove(destPath) // cleanup
+		slog.Error("failed to read firmware file", "error", err)
 		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.filesystem_error")
 		return
 	}
-
+	written := int64(len(data))
 	checksum := hex.EncodeToString(hasher.Sum(nil))
+	contentType := strings.TrimSpace(header.Header.Get("Content-Type"))
+	if contentType == "" {
+		contentType = http.DetectContentType(data)
+	}
+	if err := h.objects.PutObject(r.Context(), objectKey, bytes.NewReader(data), written, contentType); err != nil {
+		slog.Error("failed to store firmware object", "error", err, "key", objectKey)
+		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.filesystem_error")
+		return
+	}
 
 	// Get uploader ID
 	var uploadedBy *string
@@ -268,10 +264,10 @@ func (h *FirmwareHandlers) UploadFirmware(w http.ResponseWriter, r *http.Request
 	}
 
 	err = h.db.Pool.QueryRow(r.Context(), insertQuery,
-		version, deviceType, descPtr, destPath, written, checksum, uploadedBy,
+		version, deviceType, descPtr, objectKey, written, checksum, uploadedBy,
 	).Scan(&fwID)
 	if err != nil {
-		os.Remove(destPath) // cleanup on DB error
+		_ = h.objects.DeleteObject(r.Context(), objectKey) // cleanup on DB error
 		if isUniqueViolation(err) {
 			i18n.ErrorResponse(w, r, http.StatusConflict, "firmware.version_exists")
 			return
@@ -397,9 +393,9 @@ func (h *FirmwareHandlers) DeleteFirmware(w http.ResponseWriter, r *http.Request
 		}
 
 		// Remove file from disk
-		if filePath != "" {
-			if err := os.Remove(filePath); err != nil {
-				slog.Warn("failed to remove firmware file", "path", filePath, "error", err)
+		if filePath != "" && h.objects != nil {
+			if err := h.objects.DeleteObject(r.Context(), filePath); err != nil {
+				slog.Warn("failed to remove firmware object", "key", filePath, "error", err)
 			}
 		}
 
@@ -498,10 +494,45 @@ func (h *FirmwareHandlers) DownloadFirmware(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Serve file
+	if h.objects == nil {
+		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.filesystem_error")
+		return
+	}
+
+	reader, info, err := h.objects.GetObject(r.Context(), filePath)
+	if err != nil {
+		slog.Error("failed to fetch firmware object", "error", err, "key", filePath)
+		i18n.ErrorResponse(w, r, http.StatusNotFound, "firmware.not_found")
+		return
+	}
+	defer reader.Close()
+
 	base := filepath.Base(filePath)
+	if info.ContentType != "" {
+		w.Header().Set("Content-Type", info.ContentType)
+	}
+	if info.Size >= 0 {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size))
+	}
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, base))
-	http.ServeFile(w, r, filePath)
+	if _, err := io.Copy(w, reader); err != nil {
+		slog.Warn("failed to stream firmware object", "key", filePath, "error", err)
+	}
+}
+
+func buildFirmwareObjectKey(deviceType, filename string) string {
+	return fmt.Sprintf("system/firmware/%s/%s", sanitizeFirmwarePathSegment(deviceType), sanitizeFirmwarePathSegment(filename))
+}
+
+func sanitizeFirmwarePathSegment(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.ReplaceAll(value, "\\", "_")
+	value = strings.ReplaceAll(value, "/", "_")
+	value = strings.ReplaceAll(value, "..", "_")
+	if value == "" {
+		return "file"
+	}
+	return value
 }
 
 // parseFirmwarePagination reuses the gateway parsePagination for consistency

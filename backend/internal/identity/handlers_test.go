@@ -63,7 +63,7 @@ func TestPersonsCRUD(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewIdentityHandlers(database, nil, nil)
+	h := NewIdentityHandlers(database, nil, nil, nil)
 	router := setupRouter(h)
 
 	// Create
@@ -142,7 +142,7 @@ func TestCredentialsCRUD(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewIdentityHandlers(database, nil, nil)
+	h := NewIdentityHandlers(database, nil, nil, nil)
 	router := setupRouter(h)
 
 	// Create user first
@@ -213,7 +213,7 @@ func TestGroupsCRUD(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewIdentityHandlers(database, nil, nil)
+	h := NewIdentityHandlers(database, nil, nil, nil)
 	router := setupRouter(h)
 
 	// Create group
@@ -291,7 +291,7 @@ func TestSyncEndpoint(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewIdentityHandlers(database, nil, nil)
+	h := NewIdentityHandlers(database, nil, nil, nil)
 	router := setupRouter(h)
 
 	// Sync with epoch gets all
@@ -322,7 +322,7 @@ func TestStatsEndpoint(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewIdentityHandlers(database, nil, nil)
+	h := NewIdentityHandlers(database, nil, nil, nil)
 	router := setupRouter(h)
 
 	req := httptest.NewRequest("GET", "/api/v1/stats", nil)
@@ -344,7 +344,7 @@ func TestValidation(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
 
-	h := NewIdentityHandlers(database, nil, nil)
+	h := NewIdentityHandlers(database, nil, nil, nil)
 	router := setupRouter(h)
 
 	// Missing required fields
@@ -370,5 +370,36 @@ func TestValidation(t *testing.T) {
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("not found: expected 404, got %d", w.Code)
+	}
+}
+
+func TestManagedIdentityAssetObjectKey(t *testing.T) {
+	tests := []struct {
+		name   string
+		raw    string
+		want   string
+		wantOK bool
+	}{
+		{name: "public path", raw: "/photos/tenants/t1/identity/users/u1/photo.png", want: "tenants/t1/identity/users/u1/photo.png", wantOK: true},
+		{name: "bare key", raw: "tenants/t1/identity/users/u1/avatar.jpg", want: "tenants/t1/identity/users/u1/avatar.jpg", wantOK: true},
+		{name: "reject traversal", raw: "/photos/../secret.txt", want: "", wantOK: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := managedIdentityAssetObjectKey(tt.raw)
+			if got != tt.want || ok != tt.wantOK {
+				t.Fatalf("managedIdentityAssetObjectKey(%q) = (%q, %v), want (%q, %v)", tt.raw, got, ok, tt.want, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestIdentityImageExtension(t *testing.T) {
+	ext, contentType, ok := identityImageExtension("", "avatar.jpeg", []byte(""))
+	if !ok || ext != ".jpg" || contentType != "image/jpeg" {
+		t.Fatalf("identityImageExtension by filename = (%q, %q, %v)", ext, contentType, ok)
+	}
+	if _, _, ok := identityImageExtension("application/pdf", "avatar.pdf", []byte("not image")); ok {
+		t.Fatal("expected pdf upload to be rejected")
 	}
 }
