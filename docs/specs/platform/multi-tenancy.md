@@ -213,8 +213,9 @@ All DB queries: WHERE tenant_id = $tenant_id
 - Device JWT contains tenant_id for broker-side validation
 
 ### Storage Layer
-- MinIO: one bucket per company (`dm3-{company_code}/`)
-- Photos, documents, video clips isolated per company
+- Managed assets use the shared objectstore abstraction with a shared MinIO bucket (`dm3`) in local/runtime defaults
+- Isolation is enforced by tenant-prefixed object keys, for example `tenants/{tenant_id}/access/zones/{zone_id}/map.{ext}` and `tenants/{tenant_id}/identity/users/{user_id}/...`
+- Services keep public asset serving behind domain routes where applicable (`/assets/...`, `/photos/...`, firmware download endpoints) instead of exposing raw object URLs
 
 ### API Layer
 - Auth middleware extracts `tenant_id` from JWT

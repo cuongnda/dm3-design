@@ -22,7 +22,7 @@ This document tracks the current implementation status of DM3 features. Updated:
 |-------|--------|---------|
 | Service Topology | ❌ Gap | 5 of ~20 specified services implemented. Evidence: `backend/cmd/` has 5 dirs (auth-svc, identity-svc, access-svc, device-gateway, audit-svc); `docs/architecture/system-architecture.md:281` specifies ~20 |
 | Data Flow / MQTT Pipeline | ✅ Compliant | Topic `dm/{tid}/device/{did}/{cat}` confirmed. Envelope (v, id, ts) confirmed. NATS bridge confirmed. Evidence: `backend/internal/gateway/mqtt_handler.go:48-57, 27-35` |
-| Data Model / ER | ⚠️ Partial | 19 tables exist. Missing: sites, zones, visitors, contractors, rooms, parking, maintenance, keys. `doors` table has dangling `site_id`/`zone_id` FKs. `dm3_audit` schema is active (audit_logs hypertable, populated by audit-svc via NATS). |
+| Data Model / ER | ⚠️ Partial | Core access hierarchy is now implemented through `dm3_access.zones` plus access point spatial placement fields and managed map assets. Remaining major gaps are visitors, contractors, rooms, parking, maintenance, and keys. `dm3_audit` schema is active (audit_logs hypertable, populated by audit-svc via NATS). |
 | Security | ⚠️ Partial | JWT auth, bcrypt, CORS, refresh-token replay detection confirmed. Missing: TLS config in docker-compose for EMQX, no rate limiting middleware found. |
 | Deployment | ✅ Compliant | All 6 infra services present in `backend/docker-compose.yml` with correct ports. Simulator is in a separate `simulator/docker-compose.yml` (minor split). No Traefik gateway config found. |
 
@@ -37,20 +37,20 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Evidence: `handlers.go:824-840` — `generateAccessToken` emits sub, cid, email, name, role, exp, iat (15min TTL ✅); `handlers.go:565-590` — DeviceClaims with sub, cid, did, dtype, permissions (24h ✅); `handlers.go:366-372` — refresh token rotation + replay detection ✅; bcrypt confirmed at `handlers.go:166, 662, 767`
   - Deviation: `GET /api/v1/roles` returns generic `admin/operator/viewer` (handlers.go:797-800) but spec defines 5 roles: `system_admin, primary_manager, manager, operator, viewer`. Roles endpoint is stale.
 
-- **access-svc** (`backend/internal/access/`) — Access Group management, access point management, access rule sync, event processing
-  - Status: ⚠️ Partial | Risk: Medium
-  - Evidence: `backend/pkg/db/migrations/000001_initial.up.sql` — `dm3_access.access_points`, `dm3_access.access_groups`, `dm3_access.access_group_access_points`, `dm3_access.access_group_users` (with `effective_from`/`effective_to`), `dm3_access.access_times`, `dm3_access.access_time_slots`, `dm3_access.access_events` (hypertable) confirmed; NATS consumer in `nats_consumer.go`; `cfg.access_rules` MQTT sync dispatched on AG/AP/user mutations
-  - Implemented: Access Groups CRUD ✅ | AG↔AP assignment ✅ | AG↔User assignment with temporal membership ✅ | Access Time management ✅ | Access rule sync to devices via MQTT ✅ | Passage Time field on access_points (DB) ✅
-  - Deviation: No `sites` or `zones` tables in migration. `access_points` has `site_id`/`zone_id` columns but FKs reference non-existent tables (dangling references). Site/zone hierarchy from spec is unimplemented. Passage Time (`access_time_id` on access_points) is stored in DB but not yet exposed in the Access Point UI.
+- **access-svc** (`backend/internal/access/`) — Access Group management, access point management, spatial zones, managed zone maps, access rule sync, event processing
+  - Status: ✅ Compliant for current access scope | Risk: Low
+  - Evidence: `backend/pkg/db/migrations/000001_initial.up.sql` + `000009_zone_spatial_ap_placement.up.sql` — `dm3_access.access_points`, `dm3_access.zones`, `dm3_access.access_groups`, `dm3_access.access_group_access_points`, `dm3_access.access_group_users` (with `effective_from`/`effective_to`), `dm3_access.access_times`, `dm3_access.access_time_slots`, `dm3_access.access_events` (hypertable) confirmed; `zone_handlers.go` implements zone CRUD, `GET/PUT /zones/{id}/map`, `POST /zones/{id}/map/upload`, and managed asset serving; NATS consumer in `nats_consumer.go`; `cfg.access_rules` MQTT sync dispatched on AG/AP/user mutations
+  - Implemented: Access Groups CRUD ✅ | AG↔AP assignment ✅ | AG↔User assignment with temporal membership ✅ | Access Time management ✅ | Access rule sync to devices via MQTT ✅ | Spatial zone hierarchy ✅ | Zone-owned indoor map upload + serving ✅ | Zone detail list/map workflows reflected in console ✅ | Passage Time field on access_points (DB) ✅
+  - Deviation: Passage Time (`access_time_id` on access_points) is stored in DB but not yet exposed in the Access Point UI. Broader site modeling beyond the current zone hierarchy still needs separate verification if reintroduced.
 
 - **identity-svc** (`backend/internal/identity/`) — User/credential management, identity operations
   - Status: ⚠️ Partial | Risk: Medium
   - Evidence: Migration confirms `dm3_identity.users`, `dm3_identity.credentials`, `dm3_identity.user_groups`, `dm3_identity.departments` ✅
   - Deviation: No `visitors`, `contractors`, `rooms`, `parking`, or `maintenance` tables. These features listed as "Implemented" in prior version of this doc are mock-UI only (no backend tables).
 
-- **device-gateway** (`backend/internal/gateway/`) — MQTT bridge, device provisioning, sync coordination, WebSocket events
+- **device-gateway** (`backend/internal/gateway/`) — MQTT bridge, device provisioning, sync coordination, WebSocket events, managed firmware storage
   - Status: ✅ Compliant | Risk: Low
-  - Evidence: `mqtt_handler.go:47-57` — topic `dm/{cid}/device/{did}/{category}` parsed correctly; `mqtt_handler.go:27-35` — MQTTEnvelope (v, id, ts) ✅; `mqtt_handler.go:119` — NATS bridge publishes to `dm3.devices.{tenantID}.{deviceID}.{category}` ✅; provisioning tables confirmed in migration (provisioning_tokens, pending_registrations, used_nonces)
+  - Evidence: `mqtt_handler.go:47-57` — topic `dm/{cid}/device/{did}/{category}` parsed correctly; `mqtt_handler.go:27-35` — MQTTEnvelope (v, id, ts) ✅; `mqtt_handler.go:119` — NATS bridge publishes to `dm3.devices.{tenantID}.{deviceID}.{category}` ✅; provisioning tables confirmed in migration (provisioning_tokens, pending_registrations, used_nonces); service boots the shared objectstore and uses it for firmware binaries
 
 - **audit-svc** (`backend/internal/auditsvc/`) — Standalone audit trail service, NATS consumer, query API
   - Status: ✅ Compliant | Risk: Low
@@ -352,8 +352,8 @@ High-level features mentioned in vision documents but lacking detailed specifica
 
 ## Summary
 
-- **✅ Compliant** (fully matches spec): auth-svc (v1), device-gateway, audit-svc, MQTT pipeline, Dashboard, Devices, SystemSettings, IdentityManagement, AccessGroups/AccessControl, NATS, Valkey, MinIO, TimescaleDB, shared packages — **~14 items**
-- **⚠️ Partial** (UI shell or missing components): 20+ frontend pages are mock-data-only; access-svc missing site/zone hierarchy + AP passage time UI; EMQX missing TLS; Android terminal unverified; Flutter is placeholder — **~27 items**
+- **✅ Compliant** (fully matches spec): auth-svc (v1), access-svc current scope (including zones + managed map assets), device-gateway, audit-svc, MQTT pipeline, Dashboard, Devices, SystemSettings, IdentityManagement, AccessGroups/AccessControl, NATS, Valkey, MinIO, TimescaleDB, shared packages — **~15 items**
+- **⚠️ Partial** (UI shell or missing components): 20+ frontend pages are mock-data-only; AP passage time UI is still missing; EMQX missing TLS; Android terminal unverified; Flutter is placeholder — **~27 items**
 - **❌ Gap** (claimed implemented, not found): Flutter apps, service topology (15 of ~20 services missing) — **~2 items + systemic**
 - **📋 Specified**: ~15 features with detailed specs ready for development
 - **🔮 Vision Only**: ~20 next-generation features awaiting specification
