@@ -49,6 +49,9 @@ export * from './components/charts/BarChart';
 export * from './components/charts/DonutChart';
 export * from './components/charts/Heatmap';
 
+// Stores
+export * from './stores/breadcrumbStore';
+
 // Layout
 export * from './components/layout/MainLayout';
 export * from './components/layout/PageHeader';

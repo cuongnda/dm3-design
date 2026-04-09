@@ -180,31 +180,29 @@ export function AccessGroupsPage() {
                     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                     const slots = at.slots?.filter((s) => s.is_active) ?? [];
                     return (
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <span className="inline-flex items-center gap-1.5 text-[13px] cursor-default">
-                                        <Clock size={13} className="text-muted-foreground shrink-0" />
-                                        <span className="truncate max-w-[120px]">{at.name}</span>
-                                    </span>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" className="max-w-[280px] p-3">
-                                    <p className="font-medium text-[12px] mb-1.5">{at.name}</p>
-                                    {slots.length === 0 ? (
-                                        <p className="text-[11px] opacity-80">No active time slots</p>
-                                    ) : (
-                                        <div className="space-y-0.5">
-                                            {slots.map((s) => (
-                                                <div key={s.id} className="text-[11px] flex justify-between gap-3">
-                                                    <span className="font-medium">{dayNames[s.day_of_week]}</span>
-                                                    <span className="opacity-80">{s.start_time.slice(0, 5)} – {s.end_time.slice(0, 5)}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="inline-flex items-center gap-1.5 text-[13px] cursor-default">
+                                    <Clock size={13} className="text-muted-foreground shrink-0" />
+                                    <span className="truncate max-w-[120px]">{at.name}</span>
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="max-w-[280px] p-3">
+                                <p className="font-medium text-[12px] mb-1.5">{at.name}</p>
+                                {slots.length === 0 ? (
+                                    <p className="text-[11px] opacity-80">No active time slots</p>
+                                ) : (
+                                    <div className="space-y-0.5">
+                                        {slots.map((s) => (
+                                            <div key={s.id} className="text-[11px] flex justify-between gap-3">
+                                                <span className="font-medium">{dayNames[s.day_of_week] ?? `Day ${s.day_of_week}`}</span>
+                                                <span className="opacity-80">{s.start_time.slice(0, 5)} – {s.end_time.slice(0, 5)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </TooltipContent>
+                        </Tooltip>
                     );
                 },
             },
@@ -308,6 +306,7 @@ export function AccessGroupsPage() {
     );
 
     return (
+        <TooltipProvider>
         <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between shrink-0">
@@ -475,5 +474,6 @@ export function AccessGroupsPage() {
                 </p>
             </AppModal>
         </div>
+        </TooltipProvider>
     );
 }

@@ -2,7 +2,7 @@ import { useLocation } from 'react-router-dom';
 import { Search, Bell, Sun, Moon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
-import { useBreadcrumbStore } from '@/stores/breadcrumbStore';
+import { useBreadcrumbStore } from '../../stores/breadcrumbStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useState, useEffect } from 'react';

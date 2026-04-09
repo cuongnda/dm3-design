@@ -100,18 +100,29 @@ func (h *AccessHandlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.
 			ORDER BY day_of_week, start_time
 		`
 		slotRows, err := h.db.Pool.Query(r.Context(), slotsQuery, ids)
-		if err == nil {
-			defer slotRows.Close()
-			slotMap := map[string][]models.AccessTimeSlot{}
-			for slotRows.Next() {
-				var s models.AccessTimeSlot
-				if err := slotRows.Scan(&s.ID, &s.AccessTimeID, &s.DayOfWeek, &s.StartTime, &s.EndTime, &s.SlotName, &s.IsActive, &s.CreatedAt); err == nil {
-					slotMap[s.AccessTimeID] = append(slotMap[s.AccessTimeID], s)
-				}
+		if err != nil {
+			slog.Error("failed to query access time slots", "error", err)
+			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.database_error")
+			return
+		}
+		defer slotRows.Close()
+		slotMap := map[string][]models.AccessTimeSlot{}
+		for slotRows.Next() {
+			var s models.AccessTimeSlot
+			if err := slotRows.Scan(&s.ID, &s.AccessTimeID, &s.DayOfWeek, &s.StartTime, &s.EndTime, &s.SlotName, &s.IsActive, &s.CreatedAt); err != nil {
+				slog.Error("failed to scan access time slot", "error", err)
+				i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.scan_error")
+				return
 			}
-			for i := range templates {
-				templates[i].Slots = slotMap[templates[i].ID]
-			}
+			slotMap[s.AccessTimeID] = append(slotMap[s.AccessTimeID], s)
+		}
+		if err := slotRows.Err(); err != nil {
+			slog.Error("failed to iterate access time slot rows", "error", err)
+			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.database_error")
+			return
+		}
+		for i := range templates {
+			templates[i].Slots = slotMap[templates[i].ID]
 		}
 	}
 
