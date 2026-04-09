@@ -151,9 +151,16 @@ class TestSpatialZones:
         edit_modal.locator("input").nth(10).fill("2048")
         edit_modal.get_by_role("button", name=re.compile("Save", re.I)).click()
 
-        updated_node = find_zone_node_by_name(page, updated_name)
+        updated_node = page.get_by_test_id(f"zones-tree-node-{created_zone['id']}")
+        updated_node.wait_for(state="visible", timeout=15000)
+        page.wait_for_function(
+            "([testId, expectedName]) => document.querySelector(`[data-testid=\"${testId}\"]`)?.innerText.includes(expectedName) ?? false",
+            arg=[f"zones-tree-node-{created_zone['id']}", updated_name],
+            timeout=15000,
+        )
         body_text = page.locator("body").inner_text()
         assert "Internal Server Error" not in body_text
+        assert updated_name in updated_node.inner_text()
         assert "Tower Beta" in updated_node.inner_text()
         assert "Asia/Tokyo" in updated_node.inner_text()
 
