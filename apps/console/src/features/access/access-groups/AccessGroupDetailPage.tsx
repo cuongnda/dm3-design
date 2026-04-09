@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  ArrowLeft, Shield, Edit, Trash2, Plus, Users, UserCircle,
+  ArrowLeft, Shield, Edit, Trash2, Plus, Users, UserCircle, Clock,
 } from 'lucide-react';
 import {
   Button, Input, Label,
@@ -22,6 +22,8 @@ interface GroupUser {
   email?: string;
   position?: string;
   status: string;
+  effective_from?: string;
+  effective_to?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -128,6 +130,7 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
           placeholder={t('searchAccessPoints', 'Search access points…')}
           className="h-8 text-[13px]"
           disabled={submitting}
+          data-testid="access-input-searchAP"
         />
 
         {/* Access Point table */}
@@ -462,10 +465,9 @@ export function AccessGroupDetailPage() {
     if (!id) return;
     setLoadingGroup(true);
     try {
-      const data = await apiFetch<{ access_group?: AccessGroup }>(`/api/v1/access/access-groups/${id}`);
-      setGroup(data.access_group ?? null);
+      const data = await apiFetch<AccessGroup>(`/api/v1/access/access-groups/${id}`);
+      setGroup(data ?? null);
     } catch (err) {
-      console.error('Failed to fetch access group:', err);
       setError(err instanceof Error ? err.message : 'Failed to load access group');
     } finally {
       setLoadingGroup(false);
@@ -476,10 +478,9 @@ export function AccessGroupDetailPage() {
     if (!id) return;
     setLoadingAPs(true);
     try {
-      const data = await apiFetch<{ access_points?: AccessGroupAccessPoint[] }>(`/api/v1/access/access-groups/${id}/access-points`);
-      setAccessPoints(data.access_points ?? []);
+      const data = await apiFetch<{ data?: AccessGroupAccessPoint[] }>(`/api/v1/access/access-groups/${id}/access-points`);
+      setAccessPoints(data.data ?? []);
     } catch (err) {
-      console.error('Failed to fetch access points:', err);
       setError(err instanceof Error ? err.message : 'Failed to load access points');
     } finally {
       setLoadingAPs(false);
@@ -493,7 +494,6 @@ export function AccessGroupDetailPage() {
       const data = await apiFetch<{ data?: User[] }>(`/api/v1/access/access-groups/${id}/users`);
       setUsers(data.data ?? []);
     } catch (err) {
-      console.error('Failed to fetch users:', err);
       setError(err instanceof Error ? err.message : 'Failed to load users');
     } finally {
       setLoadingUsers(false);
@@ -504,8 +504,8 @@ export function AccessGroupDetailPage() {
     try {
       const data = await apiFetch<{ data?: AccessTime[] }>('/api/v1/access/access-times?limit=100');
       setAccessTimes(data.data ?? []);
-    } catch (err) {
-      console.error('Failed to fetch access times:', err);
+    } catch {
+      // access times are optional; errors are non-fatal
     }
   }, []);
 
@@ -522,6 +522,7 @@ export function AccessGroupDetailPage() {
     if (!group) return;
     setEditForm({
       name: group.name,
+      description: group.description,
       is_default: group.is_default,
       access_time_id: group.access_time_id,
     });
@@ -562,7 +563,6 @@ export function AccessGroupDetailPage() {
       await fetchGroup();
       return true;
     } catch (err) {
-      console.error('Failed to add access point:', err);
       setError(err instanceof Error ? err.message : 'Failed to add access point');
       return false;
     }
@@ -579,7 +579,6 @@ export function AccessGroupDetailPage() {
       await fetchAccessPoints();
       await fetchGroup();
     } catch (err) {
-      console.error('Failed to remove access point:', err);
       setError(err instanceof Error ? err.message : 'Failed to remove access point');
     } finally {
       setRemovingAPId(null);
@@ -591,14 +590,13 @@ export function AccessGroupDetailPage() {
     try {
       await apiFetch(`/api/v1/access/access-groups/${id}/users`, {
         method: 'POST',
-        body: JSON.stringify({ user_ids: userIds }),
+        body: JSON.stringify(userIds.map((uid) => ({ user_id: uid }))),
       });
       setError(null);
       await fetchUsers();
       await fetchGroup();
       return true;
     } catch (err) {
-      console.error('Failed to assign users:', err);
       setError(err instanceof Error ? err.message : 'Failed to assign users');
       return false;
     }
@@ -613,7 +611,6 @@ export function AccessGroupDetailPage() {
       await fetchUsers();
       await fetchGroup();
     } catch (err) {
-      console.error('Failed to remove user:', err);
       setError(err instanceof Error ? err.message : 'Failed to remove user');
     } finally {
       setRemovingUserId(null);
@@ -657,6 +654,26 @@ export function AccessGroupDetailPage() {
       ),
     },
     {
+      key: 'effective_from',
+      header: t('userColumns.effectiveFrom', 'From'),
+      width: '110px',
+      render: (u) => (
+        <span className="text-[12px] text-muted-foreground">
+          {u.effective_from ? new Date(u.effective_from).toLocaleDateString() : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'effective_to',
+      header: t('userColumns.effectiveTo', 'Until'),
+      width: '110px',
+      render: (u) => (
+        <span className="text-[12px] text-muted-foreground">
+          {u.effective_to ? new Date(u.effective_to).toLocaleDateString() : t('permanent', 'Permanent')}
+        </span>
+      ),
+    },
+    {
       key: 'actions',
       header: '',
       width: '80px',
@@ -667,6 +684,7 @@ export function AccessGroupDetailPage() {
           className="h-7 text-[12px] text-destructive hover:text-destructive"
           onClick={() => handleRemoveUser(u.id)}
           disabled={removingUserId === u.id}
+          data-testid="access-button-removeUser"
         >
           <Trash2 size={13} className="mr-1" />
           {removingUserId === u.id ? t('removing') : t('remove')}
@@ -708,6 +726,7 @@ export function AccessGroupDetailPage() {
           className="h-7 text-[12px] text-destructive hover:text-destructive"
           onClick={() => handleRemoveAccessPoint(ap.access_point_id)}
           disabled={removingAPId === ap.access_point_id}
+          data-testid="access-button-removeAP"
         >
           <Trash2 size={13} className="mr-1" />
           {removingAPId === ap.access_point_id ? t('removing', 'Removing…') : t('remove', 'Remove')}
@@ -762,6 +781,9 @@ export function AccessGroupDetailPage() {
                 <h1 className="text-[18px] font-semibold text-foreground">{group.name}</h1>
                 {group.is_default && <Badge variant="secondary">{t('badge.default', 'Default')}</Badge>}
               </div>
+              {group.description && (
+                <p className="text-[12px] text-muted-foreground mt-0.5">{group.description}</p>
+              )}
               <div className="flex items-center gap-3 mt-0.5">
                 <span className="text-[12px] text-muted-foreground flex items-center gap-1">
                   <Shield size={11} />
@@ -771,10 +793,14 @@ export function AccessGroupDetailPage() {
                   <Users size={11} />
                   {group.user_count ?? 0} users
                 </span>
+                <span className="text-[12px] text-muted-foreground flex items-center gap-1">
+                  <Clock size={11} />
+                  {group.access_time?.name ?? t('noRestriction', '24/7 Unrestricted')}
+                </span>
               </div>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={openEditModal}>
+          <Button variant="outline" size="sm" onClick={openEditModal} data-testid="access-button-edit">
             <Edit size={14} className="mr-1.5" />{t('edit', 'Edit')}
           </Button>
         </div>
@@ -788,24 +814,24 @@ export function AccessGroupDetailPage() {
       >
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2">
           <TabsList variant="line">
-            <TabsTrigger value="access-points" className="text-[12px] px-3 whitespace-nowrap">
+            <TabsTrigger value="access-points" className="text-[12px] px-3 whitespace-nowrap" data-testid="access-tab-accessPoints">
               <Shield size={13} className="mr-1.5" />
               {t('tabs.accessPoints', 'Access Points')} ({accessPoints.length})
             </TabsTrigger>
-            <TabsTrigger value="users" className="text-[12px] px-3 whitespace-nowrap">
+            <TabsTrigger value="users" className="text-[12px] px-3 whitespace-nowrap" data-testid="access-tab-users">
               <Users size={13} className="mr-1.5" />
               {t('tabs.users', 'Users')} ({users.length})
             </TabsTrigger>
           </TabsList>
 
           {activeTab === 'access-points' && (
-            <Button size="sm" onClick={() => setShowAddAPModal(true)}>
+            <Button size="sm" onClick={() => setShowAddAPModal(true)} data-testid="access-button-addAccessPoint">
               <Plus size={14} className="mr-1.5" />
               {t('addAccessPoint', 'Add Access Point')}
             </Button>
           )}
           {activeTab === 'users' && (
-            <Button size="sm" onClick={() => setShowAddUserModal(true)}>
+            <Button size="sm" onClick={() => setShowAddUserModal(true)} data-testid="access-button-addUser">
               <Plus size={14} className="mr-1.5" />
               {t('addUser', 'Add User')}
             </Button>
@@ -904,6 +930,16 @@ export function AccessGroupDetailPage() {
               placeholder={t('form.namePlaceholder', 'Group name')}
             />
             {editError && <p className="text-[12px] text-destructive mt-1">{editError}</p>}
+          </div>
+          <div>
+            <Label htmlFor="edit-group-description">{t('form.description', 'Description')}</Label>
+            <Input
+              id="edit-group-description"
+              data-testid="access-input-editDescription"
+              value={editForm.description ?? ''}
+              onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value || undefined }))}
+              placeholder={t('form.descriptionPlaceholder', 'Optional description')}
+            />
           </div>
           <div className="flex items-center gap-2">
             <input

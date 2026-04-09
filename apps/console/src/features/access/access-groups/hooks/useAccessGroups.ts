@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { apiFetch } from '@/lib/api';
 import type { AccessGroup, AccessGroupFormData } from '../types';
 
@@ -21,6 +21,8 @@ interface UseAccessGroupsReturn {
     loading: boolean;
     error: string | null;
     pagination: AccessGroupPagination;
+    search: string;
+    setSearch: (value: string) => void;
     fetchAccessGroups: () => Promise<void>;
     createAccessGroup: (data: AccessGroupFormData) => Promise<boolean>;
     updateAccessGroup: (id: string, data: AccessGroupFormData) => Promise<boolean>;
@@ -33,12 +35,24 @@ export function useAccessGroups(): UseAccessGroupsReturn {
     const [accessGroups, setAccessGroups] = useState<AccessGroup[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [search, setSearchRaw] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const debounceRef = useRef<ReturnType<typeof setTimeout>>();
     const [pagination, setPagination] = useState<AccessGroupPagination>({
         page: 1,
         limit: 20,
         total: 0,
         total_pages: 0,
     });
+
+    const setSearch = useCallback((value: string) => {
+        setSearchRaw(value);
+        clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+            setDebouncedSearch(value);
+            setPagination((prev) => ({ ...prev, page: 1 }));
+        }, 300);
+    }, []);
 
     const fetchAccessGroups = useCallback(async () => {
         setLoading(true);
@@ -48,6 +62,9 @@ export function useAccessGroups(): UseAccessGroupsReturn {
                 page: pagination.page.toString(),
                 limit: pagination.limit.toString(),
             });
+            if (debouncedSearch.trim()) {
+                params.set('search', debouncedSearch.trim());
+            }
             const data = await apiFetch<PaginatedResponse<AccessGroup>>(`/api/v1/access/access-groups?${params}`);
             setAccessGroups(data.data ?? []);
             const total = data.total ?? 0;
@@ -62,7 +79,7 @@ export function useAccessGroups(): UseAccessGroupsReturn {
         } finally {
             setLoading(false);
         }
-    }, [pagination.page, pagination.limit]);
+    }, [pagination.page, pagination.limit, debouncedSearch]);
 
     const createAccessGroup = useCallback(
         async (data: AccessGroupFormData): Promise<boolean> => {
@@ -132,6 +149,8 @@ export function useAccessGroups(): UseAccessGroupsReturn {
         loading,
         error,
         pagination,
+        search,
+        setSearch,
         fetchAccessGroups,
         createAccessGroup,
         updateAccessGroup,

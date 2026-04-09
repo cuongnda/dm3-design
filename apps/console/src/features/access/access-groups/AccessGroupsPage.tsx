@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Shield, Plus, Search, MoreHorizontal, Eye, Edit, Trash2 } from 'lucide-react';
@@ -28,6 +28,8 @@ export function AccessGroupsPage() {
         accessGroups,
         loading,
         pagination,
+        search,
+        setSearch,
         fetchAccessGroups,
         createAccessGroup,
         updateAccessGroup,
@@ -36,7 +38,6 @@ export function AccessGroupsPage() {
         changePageSize,
     } = useAccessGroups();
 
-    const [search, setSearch] = useState('');
     const [selected, setSelected] = useState<string[]>([]);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingGroup, setEditingGroup] = useState<AccessGroup | null>(null);
@@ -47,12 +48,14 @@ export function AccessGroupsPage() {
     const [formData, setFormData] = useState<AccessGroupFormData>({ name: '', is_default: false });
     const [formError, setFormError] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [accessTimes, setAccessTimes] = useState<{ id: string; name: string }[]>([]);
 
-    const filteredGroups = useMemo(() => {
-        if (!search.trim()) return accessGroups;
-        const q = search.toLowerCase();
-        return accessGroups.filter((g) => g.name.toLowerCase().includes(q));
-    }, [accessGroups, search]);
+    // Fetch reference data for forms
+    useEffect(() => {
+        apiFetch<{ data?: { id: string; name: string }[] }>('/api/v1/access/access-times?limit=100')
+            .then((res) => setAccessTimes(res.data ?? []))
+            .catch(() => {});
+    }, []);
 
     const openCreateModal = () => {
         setFormData({ name: '', is_default: false });
@@ -61,7 +64,7 @@ export function AccessGroupsPage() {
     };
 
     const openEditModal = (group: AccessGroup) => {
-        setFormData({ name: group.name, is_default: group.is_default });
+        setFormData({ name: group.name, description: group.description, is_default: group.is_default, access_time_id: group.access_time_id });
         setFormError('');
         setEditingGroup(group);
     };
@@ -205,6 +208,7 @@ export function AccessGroupsPage() {
                 </Label>
                 <Input
                     id="group-name"
+                    data-testid="access-input-name"
                     value={formData.name}
                     onChange={(e) => {
                         setFormData((prev) => ({ ...prev, name: e.target.value }));
@@ -214,9 +218,35 @@ export function AccessGroupsPage() {
                 />
                 {formError && <p className="text-[12px] text-destructive mt-1">{formError}</p>}
             </div>
+            <div>
+                <Label htmlFor="group-description">{t('form.description', 'Description')}</Label>
+                <Input
+                    id="group-description"
+                    data-testid="access-input-description"
+                    value={formData.description ?? ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value || undefined }))}
+                    placeholder={t('form.descriptionPlaceholder', 'Optional description')}
+                />
+            </div>
+            <div>
+                <Label htmlFor="access-time">{t('form.accessTime', 'Access Time')}</Label>
+                <select
+                    id="access-time"
+                    data-testid="access-select-accessTime"
+                    value={formData.access_time_id ?? ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, access_time_id: e.target.value || undefined }))}
+                    className="w-full h-9 px-3 py-1 text-[13px] border border-border rounded-md bg-input text-foreground appearance-none cursor-pointer"
+                >
+                    <option value="">{t('form.noRestriction', 'No time restriction (24/7)')}</option>
+                    {accessTimes.map((at) => (
+                        <option key={at.id} value={at.id}>{at.name}</option>
+                    ))}
+                </select>
+            </div>
             <div className="flex items-center gap-2">
                 <input
                     id="is_default"
+                    data-testid="access-input-isDefault"
                     type="checkbox"
                     className="h-4 w-4 rounded border-border accent-primary"
                     checked={!!formData.is_default}
@@ -237,7 +267,7 @@ export function AccessGroupsPage() {
                     <h1 className="text-[18px] font-semibold text-foreground">{t('title', 'Access Groups')}</h1>
                     <p className="text-[13px] text-muted-foreground">{t('description', 'Manage access groups and their assigned access points')}</p>
                 </div>
-                <Button size="sm" onClick={openCreateModal}>
+                <Button size="sm" onClick={openCreateModal} data-testid="access-button-create">
                     <Plus size={14} className="mr-1.5" />
                     {t('newGroup', 'New Group')}
                 </Button>
@@ -252,6 +282,7 @@ export function AccessGroupsPage() {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="pl-9"
+                        data-testid="access-input-search"
                     />
                 </div>
             </div>
@@ -286,7 +317,7 @@ export function AccessGroupsPage() {
                     <div className="flex justify-center py-12">
                         <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
                     </div>
-                ) : filteredGroups.length === 0 ? (
+                ) : accessGroups.length === 0 ? (
                     <div className="py-12 text-center text-[13px] text-muted-foreground">
                         {search ? t('noResults', 'No access groups match your search') : t('empty', 'No access groups yet. Create the first one.')}
                     </div>
@@ -296,9 +327,10 @@ export function AccessGroupsPage() {
                         stickyHeader
                         paginate={false}
                         columns={columns}
-                        data={filteredGroups}
+                        data={accessGroups}
                         rowKey={(g) => g.id}
                         onRowDoubleClick={(g) => navigate(`/access/access-groups/${g.id}`)}
+                        data-testid="access-table-groups"
                         selection={{
                             selectedIds: selected,
                             onSelectedIdsChange: setSelected,
