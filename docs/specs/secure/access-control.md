@@ -9,27 +9,28 @@ The Access Control System is the foundation of the SECURE domain — controlling
 
 ## Data Models
 
-### Door (Access Point)
+### Access Point
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | - | Tenant isolation |
-| site_id | uuid | yes | - | Site this door belongs to |
+| site_id | uuid | yes | - | Site this access point belongs to |
 | zone_id | uuid | no | null | Zone grouping (floor, area) |
 | name | string(100) | yes | - | Display name, e.g. "Cổng chính — Tòa A" |
 | description | string(500) | no | null | Notes |
-| type | DoorTypeEnum | yes | - | Physical type of access point |
+| type | APTypeEnum | yes | - | Physical type of access point |
 | location | string(200) | yes | - | Human-readable location |
 | floor | string(50) | no | null | Floor identifier |
 | building | string(100) | no | null | Building identifier |
-| status | DoorStatusEnum | yes | offline | Current connection status |
-| state | DoorStateEnum | yes | locked | Current physical state |
-| mode | DoorModeEnum | yes | normal | Operating mode |
+| status | APStatusEnum | yes | offline | Current connection status |
+| state | APStateEnum | yes | locked | Current physical state |
+| mode | APModeEnum | yes | normal | Operating mode |
+| access_time_id | uuid | no | null | Passage Time schedule — when AP is freely open for everyone (overrides all AG rules) |
 | controller_id | uuid | no | null | Associated controller device |
 | device_id | uuid | no | null | Terminal device (if integrated) |
 | reader_in_type | string(50) | no | null | Entry reader model |
 | reader_out_type | string(50) | no | null | Exit reader model |
-| unlock_duration_ms | int | yes | 5000 | How long door stays unlocked |
+| unlock_duration_ms | int | yes | 5000 | How long AP stays unlocked |
 | anti_passback | boolean | yes | false | Anti-passback enabled |
 | interlock_group_id | uuid | no | null | Interlock group (mantrap) |
 | emergency_unlock | boolean | yes | true | Unlock on fire alarm |
@@ -46,43 +47,56 @@ The Access Control System is the foundation of the SECURE domain — controlling
 | created_at | timestamp | yes | now() | Creation time |
 | updated_at | timestamp | yes | now() | Last update |
 
-### AccessRule
+### Access Group
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | - | Tenant isolation |
-| site_id | uuid | yes | - | Site scope |
-| name | string(100) | yes | - | Rule name, e.g. "Nhân viên — Giờ hành chính" |
-| description | string(500) | no | null | Rule description |
-| door_ids | uuid[] | yes | - | Doors this rule applies to |
-| user_group_ids | uuid[] | yes | - | User groups granted access |
-| schedule_id | uuid | no | null | Time schedule reference |
-| schedule_inline | jsonb | no | null | Inline schedule if no schedule_id |
-| anti_passback | boolean | yes | false | Override per-door anti-passback |
-| multi_factor | boolean | yes | false | Require 2+ credentials |
-| multi_factor_methods | string[] | no | null | Which methods required |
-| max_failed_attempts | int | yes | 5 | Lockout threshold |
-| lockout_duration_ms | int | yes | 300000 | Lockout duration (5 min default) |
-| priority | int | yes | 0 | Higher = evaluated first |
-| enabled | boolean | yes | true | Active/inactive toggle |
-| valid_from | timestamp | no | null | Rule effective start |
-| valid_until | timestamp | no | null | Rule effective end |
-| created_by | uuid | yes | - | Creator user |
+| name | string(100) | yes | - | e.g. "IT Team", "Cleaning Crew" |
+| description | string(500) | no | null | Description |
+| is_default | boolean | yes | false | Default group for new users |
+| type | string(50) | no | null | Group classification |
+| access_time_id | uuid | no | null | Access Time schedule — when AG members can use APs in this group (NULL = 24/7) |
 | created_at | timestamp | yes | now() | Creation time |
 | updated_at | timestamp | yes | now() | Last update |
 
-### Schedule
+An Access Group links a set of Access Points and a set of Users. Both are M:N relationships:
+
+**access_group_access_points** — links AGs to APs:
+| Field | Type | Description |
+|-------|------|-------------|
+| access_group_id | uuid | FK, CASCADE delete |
+| access_point_id | uuid | FK, CASCADE delete |
+- UNIQUE constraint: `(access_group_id, access_point_id)`
+- No per-link time override — Access Time is defined at the AG level only
+
+**access_group_users** — links AGs to Users with temporal membership:
+| Field | Type | Description |
+|-------|------|-------------|
+| access_group_id | uuid | FK, CASCADE delete |
+| user_id | uuid | FK, CASCADE delete |
+| effective_from | timestamptz | When membership becomes active (default now) |
+| effective_to | timestamptz | When membership expires (NULL = permanent) |
+- UNIQUE constraint: `(access_group_id, user_id)`
+
+### Access Time
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | - | Tenant isolation |
-| name | string(100) | yes | - | e.g. "Giờ hành chính" |
+| name | string(100) | yes | - | e.g. "Business Hours", "24/7" |
 | timezone | string(50) | yes | Asia/Ho_Chi_Minh | Timezone |
-| periods | jsonb | yes | - | Array of {days: int[], start: "HH:MM", end: "HH:MM"} |
-| holidays_excluded | boolean | yes | true | Skip holidays |
-| holiday_calendar_id | uuid | no | null | Holiday calendar ref |
+| is_active | boolean | yes | true | Active/inactive toggle |
 | created_at | timestamp | yes | now() | Creation time |
 | updated_at | timestamp | yes | now() | Last update |
+
+**access_time_slots** — individual time windows for an Access Time:
+| Field | Type | Description |
+|-------|------|-------------|
+| access_time_id | uuid | FK |
+| day_of_week | int | 0=Sunday … 6=Saturday |
+| start_time | TIME | Start of window |
+| end_time | TIME | End of window |
 
 ### AccessEvent (Hypertable)
 | Field | Type | Required | Default | Description |
@@ -90,7 +104,7 @@ The Access Control System is the foundation of the SECURE domain — controlling
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | - | Tenant isolation |
 | time | timestamptz | yes | - | Event timestamp (device clock) |
-| door_id | uuid | yes | - | Which door |
+| access_point_id | uuid | yes | - | Which access point |
 | user_id | uuid | no | null | Matched user (null if unknown) |
 | user_name | string(100) | no | null | Denormalized name |
 | credential_type | CredentialTypeEnum | yes | - | Method used |
@@ -108,36 +122,22 @@ The Access Control System is the foundation of the SECURE domain — controlling
 | device_id | uuid | no | null | Source device |
 | metadata | jsonb | no | {} | Extra data |
 
-### UserGroup
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| id | uuid | yes | auto | Primary key |
-| tenant_id | uuid | yes | - | Tenant isolation |
-| site_id | uuid | yes | - | Site scope |
-| name | string(100) | yes | - | e.g. "Nhân viên văn phòng", "Ban giám đốc" |
-| description | string(500) | no | null | Description |
-| user_ids | uuid[] | no | [] | Members (or use dynamic rules) |
-| dynamic_filter | jsonb | no | null | Auto-membership rules (department, role) |
-| person_count | int | yes | 0 | Cached member count |
-| created_at | timestamp | yes | now() | Creation time |
-| updated_at | timestamp | yes | now() | Last update |
-
 ### InterlockGroup
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | - | Tenant isolation |
 | name | string(100) | yes | - | e.g. "Mantrap Kho quỹ" |
-| door_ids | uuid[] | yes | - | Doors in group (must be 2+) |
+| access_point_ids | uuid[] | yes | - | Access points in group (must be 2+) |
 | mode | InterlockModeEnum | yes | mutual_exclusive | Interlock logic |
 | created_at | timestamp | yes | now() | Creation time |
 
 ### Enums
 ```
-DoorTypeEnum: door | gate | barrier | turnstile | lift
-DoorStatusEnum: online | offline | alarm | warning
-DoorStateEnum: locked | unlocked | open | closed | forced | held_open | tampered
-DoorModeEnum: normal | locked_down | free_access | card_and_pin | emergency_open
+APTypeEnum: door | gate | barrier | turnstile | lift
+APStatusEnum: online | offline | alarm | warning
+APStateEnum: locked | unlocked | open | closed | forced | held_open | tampered
+APModeEnum: normal | locked_down | free_access | card_and_pin | emergency_open
 CredentialTypeEnum: card | face | fingerprint | pin | qr | mobile_ble | multi_factor
 DirectionEnum: entry | exit
 DecisionEnum: granted | denied | forced
@@ -147,7 +147,7 @@ InterlockModeEnum: mutual_exclusive | sequential
 
 ## API Endpoints
 
-### GET /api/v1/access/doors
+### GET /api/v1/access/access-points
 - **Auth:** Bearer token, role >= viewer
 - **Query params:**
   | Param | Type | Default | Description |
@@ -173,6 +173,7 @@ InterlockModeEnum: mutual_exclusive | sequential
         "status": "online",
         "state": "locked",
         "mode": "normal",
+        "access_time_id": "uuid",
         "last_event_at": "2026-02-19T09:15:00Z",
         "zone": { "id": "uuid", "name": "Sảnh chính" },
         "camera_id": "uuid"
@@ -185,12 +186,12 @@ InterlockModeEnum: mutual_exclusive | sequential
   ```
 - **Errors:** 401, 403, 422
 
-### GET /api/v1/access/doors/{id}
+### GET /api/v1/access/access-points/{id}
 - **Auth:** role >= viewer
-- **Response 200:** Full Door object with nested controller info, linked camera, access rules, recent events (last 10)
+- **Response 200:** Full Access Point object with nested controller info, linked camera, access groups, recent events (last 10)
 - **Errors:** 401, 403, 404
 
-### POST /api/v1/access/doors
+### POST /api/v1/access/access-points
 - **Auth:** role >= admin
 - **Body:**
   ```json
@@ -203,6 +204,7 @@ InterlockModeEnum: mutual_exclusive | sequential
     "floor": "Tầng 3",
     "building": "Tòa A",
     "device_id": "uuid",
+    "access_time_id": "uuid",
     "unlock_duration_ms": 5000,
     "anti_passback": false,
     "emergency_unlock": true,
@@ -210,23 +212,23 @@ InterlockModeEnum: mutual_exclusive | sequential
   }
   ```
 - **Side effects:** Audit log, MQTT `cfg.full` push to device if device_id set
-- **Response 201:** Created door
+- **Response 201:** Created access point
 - **Errors:** 401, 403, 409 (duplicate name), 422
 
-### PUT /api/v1/access/doors/{id}
+### PUT /api/v1/access/access-points/{id}
 - **Auth:** role >= admin
-- **Body:** Partial door fields
-- **Side effects:** Audit log, MQTT `cfg.patch` to device if config changed
-- **Response 200:** Updated door
+- **Body:** Partial access point fields
+- **Side effects:** Audit log, MQTT `cfg.patch` to device if config changed; if `access_time_id` changed, triggers `cfg.access_rules` re-sync to this AP's device
+- **Response 200:** Updated access point
 - **Errors:** 401, 403, 404, 422
 
-### DELETE /api/v1/access/doors/{id}
+### DELETE /api/v1/access/access-points/{id}
 - **Auth:** role >= site_admin
-- **Side effects:** Audit log, remove door from all rules, notify device
+- **Side effects:** Audit log, remove AP from all access groups, notify device
 - **Response 204:** Deleted
-- **Errors:** 401, 403, 404, 409 (door has active alarm)
+- **Errors:** 401, 403, 404, 409 (AP has active alarm)
 
-### POST /api/v1/access/doors/{id}/unlock
+### POST /api/v1/access/access-points/{id}/unlock
 - **Auth:** role >= operator
 - **Body:**
   ```json
@@ -240,27 +242,27 @@ InterlockModeEnum: mutual_exclusive | sequential
   ```json
   {
     "status": "ok",
-    "door_id": "uuid",
+    "access_point_id": "uuid",
     "current_state": "unlocked",
     "executed_at": "2026-02-19T09:15:00.500Z"
   }
   ```
 - **Errors:** 401, 403, 404, 408 (device timeout), 503 (device offline)
 
-### POST /api/v1/access/doors/{id}/lock
+### POST /api/v1/access/access-points/{id}/lock
 - **Auth:** role >= operator
 - **Side effects:** MQTT `cmd.door` (action=lock) → device, audit log
 - **Response 200:** Same as unlock
 - **Errors:** 401, 403, 404, 408, 503
 
-### POST /api/v1/access/doors/{id}/hold-open
+### POST /api/v1/access/access-points/{id}/hold-open
 - **Auth:** role >= admin
 - **Body:** `{ "duration_ms": 60000, "reason": "Sự kiện công ty" }`
 - **Side effects:** MQTT `cmd.door` (action=hold_open), audit log
 - **Response 200:** Confirmation
 - **Errors:** 401, 403, 404, 408, 503
 
-### GET /api/v1/access/doors/{id}/events
+### GET /api/v1/access/access-points/{id}/events
 - **Auth:** role >= viewer
 - **Query params:**
   | Param | Type | Default | Description |
@@ -294,85 +296,19 @@ InterlockModeEnum: mutual_exclusive | sequential
   }
   ```
 
-### GET /api/v1/access/rules
-- **Auth:** role >= viewer
-- **Query params:** site_id (required), door_id, user_group_id, enabled, page, limit
-- **Response 200:** Paginated list of AccessRule with nested schedule and user counts
-
-### POST /api/v1/access/rules
-- **Auth:** role >= admin
-- **Body:**
-  ```json
-  {
-    "name": "Nhân viên — Giờ hành chính",
-    "site_id": "uuid",
-    "door_ids": ["uuid1", "uuid2"],
-    "user_group_ids": ["uuid1"],
-    "schedule_inline": {
-      "timezone": "Asia/Ho_Chi_Minh",
-      "periods": [
-        { "days": [1,2,3,4,5], "start": "07:00", "end": "19:00" }
-      ]
-    },
-    "anti_passback": false,
-    "priority": 10,
-    "enabled": true
-  }
-  ```
-- **Side effects:** Audit log, trigger `cfg.access_rules` sync to all affected devices
-- **Response 201:** Created rule
-- **Errors:** 401, 403, 422
-
-### PUT /api/v1/access/rules/{id}
-- **Auth:** role >= admin
-- **Body:** Partial update
-- **Side effects:** Audit log, re-sync rules to affected devices
-- **Response 200:** Updated rule
-
-### DELETE /api/v1/access/rules/{id}
-- **Auth:** role >= admin
-- **Side effects:** Audit log, re-sync rules to affected devices
-- **Response 204**
-
-### GET /api/v1/access/schedules
-- **Auth:** role >= viewer
-- **Query params:** site_id (required), page, limit
-- **Response 200:** Paginated schedules
-
-### POST /api/v1/access/schedules
-- **Auth:** role >= admin
-- **Body:** Schedule object
-- **Response 201:** Created schedule
-
-### GET /api/v1/access/user-groups
-- **Auth:** role >= viewer
-- **Query params:** site_id (required), search, page, limit
-- **Response 200:** Paginated groups with member counts
-
-### POST /api/v1/access/user-groups
-- **Auth:** role >= admin
-- **Body:** UserGroup object
-- **Response 201:** Created group
-
-### PUT /api/v1/access/user-groups/{id}/members
-- **Auth:** role >= admin
-- **Body:** `{ "add": ["user-uuid1"], "remove": ["user-uuid2"] }`
-- **Side effects:** Triggers person_sync to devices that have rules referencing this group
-- **Response 200:** Updated group
-
-### POST /api/v1/access/doors/{id}/sync
+### POST /api/v1/access/access-points/{id}/sync
 - **Auth:** role >= admin
 - **Description:** Force full user DB + rules sync to a specific device
 - **Side effects:** MQTT `cfg.person_sync` (action=full_sync) + `cfg.access_rules` (action=full_sync)
 - **Response 202:** Sync initiated
 - **Errors:** 401, 403, 404, 503 (device offline)
 
-### GET /api/v1/access/doors/{id}/sync-status
+### GET /api/v1/access/access-points/{id}/sync-status
 - **Auth:** role >= operator
 - **Response 200:**
   ```json
   {
-    "door_id": "uuid",
+    "access_point_id": "uuid",
     "device_online": true,
     "config_version": 42,
     "person_db_version": 38,
@@ -384,6 +320,92 @@ InterlockModeEnum: mutual_exclusive | sequential
     "sync_health": "healthy"
   }
   ```
+
+### GET /api/v1/access/access-groups
+- **Auth:** role >= viewer
+- **Query params:** search, page, limit
+- **Response 200:** Paginated list of Access Groups with nested access time, AP count, user count
+
+### POST /api/v1/access/access-groups
+- **Auth:** role >= admin
+- **Body:**
+  ```json
+  {
+    "name": "IT Team",
+    "description": "Full-time IT staff",
+    "access_time_id": "uuid"
+  }
+  ```
+- **Side effects:** Audit log
+- **Response 201:** Created access group
+- **Errors:** 401, 403, 409 (duplicate name), 422
+
+### GET /api/v1/access/access-groups/{id}
+- **Auth:** role >= viewer
+- **Response 200:** Full Access Group with access points, users (with temporal membership), and access time
+- **Errors:** 401, 403, 404
+
+### PUT /api/v1/access/access-groups/{id}
+- **Auth:** role >= admin
+- **Body:** Partial access group fields (name, description, access_time_id)
+- **Side effects:** Audit log, triggers `cfg.access_rules` re-sync to all APs in this AG
+- **Response 200:** Updated access group
+- **Errors:** 401, 403, 404, 422
+
+### DELETE /api/v1/access/access-groups/{id}
+- **Auth:** role >= admin
+- **Side effects:** Audit log, cascades to remove all AP and user links, triggers re-sync
+- **Response 204**
+- **Errors:** 401, 403, 404
+
+### GET /api/v1/access/access-groups/{id}/access-points
+- **Auth:** role >= viewer
+- **Response 200:** List of Access Points assigned to this AG
+
+### POST /api/v1/access/access-groups/{id}/access-points
+- **Auth:** role >= admin
+- **Body:** `{ "access_point_id": "uuid" }`
+- **Side effects:** Audit log, triggers `cfg.access_rules` re-sync to the added AP's device
+- **Response 201:** AP added to AG
+- **Errors:** 401, 403, 404, 409 (already assigned)
+
+### DELETE /api/v1/access/access-groups/{id}/access-points/{apId}
+- **Auth:** role >= admin
+- **Side effects:** Audit log, triggers `cfg.access_rules` re-sync to the removed AP's device
+- **Response 204**
+- **Errors:** 401, 403, 404
+
+### GET /api/v1/access/access-groups/{id}/users
+- **Auth:** role >= viewer
+- **Response 200:** List of users in this AG with their `effective_from` / `effective_to` membership bounds
+
+### POST /api/v1/access/access-groups/{id}/users
+- **Auth:** role >= admin
+- **Body:**
+  ```json
+  {
+    "user_id": "uuid",
+    "effective_from": "2026-04-09T00:00:00Z",
+    "effective_to": null
+  }
+  ```
+- **Side effects:** Audit log, triggers `cfg.access_rules` re-sync to all APs in this AG
+- **Response 201:** User added to AG
+- **Errors:** 401, 403, 404, 409 (already a member)
+
+### PUT /api/v1/access/access-groups/{id}/users/{userId}
+- **Auth:** role >= admin
+- **Body:** `{ "effective_from": "...", "effective_to": "..." }`
+- **Description:** Update temporal membership bounds for a user in this AG
+- **Side effects:** Audit log, triggers `cfg.access_rules` re-sync to all APs in this AG
+- **Response 200:** Updated membership
+- **Errors:** 401, 403, 404
+
+### DELETE /api/v1/access/access-groups/{id}/users/{userId}
+- **Auth:** role >= admin
+- **Side effects:** Audit log, triggers `cfg.access_rules` re-sync to all APs in this AG
+- **Response 204**
+- **Errors:** 401, 403, 404
 
 ### GET /api/v1/access/interlock-groups
 - **Auth:** role >= viewer
@@ -400,11 +422,11 @@ InterlockModeEnum: mutual_exclusive | sequential
 | Topic | Direction | QoS | Payload Schema | Description |
 |-------|-----------|-----|----------------|-------------|
 | `dm/{tid}/device/{did}/evt` (type: access.log) | device→server | 1 | See mqtt-protocol.md §4.1 | Access event log — decision already made locally |
-| `dm/{tid}/device/{did}/evt` (type: door.state) | device→server | 1 | See mqtt-protocol.md §4.2 | Door physical state change |
-| `dm/{tid}/device/{did}/cmd` (type: cmd.door) | server→device | 2 | `{action, door_id, duration_ms, reason, operator_id}` | Remote door control |
-| `dm/{tid}/device/{did}/cmd/resp` (type: cmd.door.resp) | device→server | 2 | `{door_id, current_state, executed_at}` | Door command response |
+| `dm/{tid}/device/{did}/evt` (type: door.state) | device→server | 1 | See mqtt-protocol.md §4.2 | AP physical state change |
+| `dm/{tid}/device/{did}/cmd` (type: cmd.door) | server→device | 2 | `{action, access_point_id, duration_ms, reason, operator_id}` | Remote AP control |
+| `dm/{tid}/device/{did}/cmd/resp` (type: cmd.door.resp) | device→server | 2 | `{access_point_id, current_state, executed_at}` | AP command response |
 | `dm/{tid}/device/{did}/cfg` (type: cfg.person_sync) | server→device | 2 | See mqtt-protocol.md §7.3 | User DB sync to device |
-| `dm/{tid}/device/{did}/cfg` (type: cfg.access_rules) | server→device | 2 | See mqtt-protocol.md §7.5 | Access rules sync to device |
+| `dm/{tid}/device/{did}/cfg` (type: cfg.access_rules) | server→device | 2 | See mqtt-protocol.md §7.5 | Access rules sync — passage_time + per-user schedules from AGs |
 | `dm/{tid}/device/{did}/cfg` (type: cfg.blacklist) | server→device | 2 | See mqtt-protocol.md §7.4 | Blacklist push (priority) |
 | `dm/{tid}/device/{did}/cfg/ack` | device→server | 2 | Ack with local versions and counts | Sync confirmation |
 | `dm/{tid}/device/{did}/sta` (type: status.heartbeat) | device→server | 0 | See mqtt-protocol.md §5.1 | Device health + sync status |
@@ -413,35 +435,38 @@ InterlockModeEnum: mutual_exclusive | sequential
 ## Business Rules
 
 1. **BR-AC-001 — Local Decision Engine:** All access decisions MUST be made on-device within 50ms using synced user DB and access rules. Server NEVER participates in real-time access decisions.
-2. **BR-AC-002 — Deny by Default:** If a credential does not match any user in the local DB, or the user has no applicable rule for the current door + time, access is DENIED.
-3. **BR-AC-003 — Blacklist Priority:** Blacklist entries override ALL access rules. A blacklisted user is denied regardless of any rule granting access. Blacklist sync has QoS 2 and must be processed before the next access decision.
-4. **BR-AC-004 — Anti-Passback:** If enabled on a rule or door, a user who entered (direction=entry) cannot enter again until they exit. Violation → deny with reason `denied_anti_passback`. Anti-passback state is maintained locally on the device.
-5. **BR-AC-005 — Interlock / Mantrap:** In an interlock group, only one door may be unlocked at a time. A door in the group cannot unlock until all other doors in the group are in `locked` state. Enforced locally by the controller.
-6. **BR-AC-006 — Failed Attempt Lockout:** After `max_failed_attempts` consecutive denials for the same credential within 10 minutes, the credential is locked out for `lockout_duration_ms`. Enforced locally.
-7. **BR-AC-007 — Emergency Override:** When emergency mode is activated via `dm/{tid}/emergency/broadcast`, doors with `emergency_unlock=true` must unlock immediately regardless of rules. Doors with `emergency_unlock=false` (e.g., server rooms) lock down.
-8. **BR-AC-008 — Rule Priority Evaluation:** Rules are evaluated in descending priority order. First matching rule determines the decision. If no rule matches, access is denied.
-9. **BR-AC-009 — Schedule Enforcement:** Access rules with schedules are only active during the defined periods. Schedule evaluation uses the device's local clock (synced via NTP). Timezone is always explicit.
-10. **BR-AC-010 — Door Held Open Alert:** If a door remains in `open` state longer than `unlock_duration_ms + 30 seconds`, the device emits an `alarm.triggered` event with type `door_held`. Monitored locally.
-11. **BR-AC-011 — Forced Door Alert:** If a door is opened without a valid unlock command or access grant, the device emits `alarm.triggered` with type `door_forced`. Immediate critical alert.
-12. **BR-AC-012 — Incremental Sync:** User DB sync uses cursor-based incremental sync (`sync_token`). Only changed records are sent. Full sync only on first provision or admin request.
-13. **BR-AC-013 — Multi-Factor Access:** When `multi_factor=true` on a rule, user must present 2+ credentials (e.g., card + face) within a 30-second window. Both must match the same user.
-14. **BR-AC-014 — Credential Validity Window:** Each user credential has `valid_from` and `valid_until`. Device rejects expired credentials locally without server involvement.
-15. **BR-AC-015 — Event Queue Ordering:** When device reconnects, queued events are uploaded in chronological order (oldest first), throttled at 100 events/second.
+2. **BR-AC-002 — Deny by Default:** If a credential does not match any user in the local DB, or the user has no applicable Access Group for the current access point + time, access is DENIED.
+3. **BR-AC-003 — Blacklist Priority:** Blacklist entries override ALL access rules. A blacklisted user is denied regardless of any AG granting access. Blacklist sync has QoS 2 and must be processed before the next access decision.
+4. **BR-AC-004 — Passage Time Priority (Highest):** When an Access Point's Passage Time schedule is active, the AP is freely open for everyone — no credential check is performed. The device enforces this autonomously. Passage Time overrides all Access Group rules.
+5. **BR-AC-005 — Access Time Union (OR) Logic:** A user's access at a given AP is determined by the union of all matching Access Groups. An Access Group matches when: (a) the AP is assigned to the AG, (b) the user is a member of the AG with an active temporal membership, and (c) the AG's Access Time covers the current time (or the AG has no Access Time, meaning 24/7). If ANY matching AG grants access, the result is GRANT. Rules are not evaluated in priority order — all AGs are checked and any grant wins.
+6. **BR-AC-006 — Temporal Membership:** A user's AG membership is only active when `effective_from <= current_time` AND (`effective_to IS NULL` OR `effective_to > current_time`). Expired or future memberships are treated as non-existent during rule evaluation.
+7. **BR-AC-007 — Anti-Passback:** If enabled on an access point, a user who entered (direction=entry) cannot enter again until they exit. Violation → deny with reason `denied_anti_passback`. Anti-passback state is maintained locally on the device.
+8. **BR-AC-008 — Interlock / Mantrap:** In an interlock group, only one access point may be unlocked at a time. An AP in the group cannot unlock until all other APs in the group are in `locked` state. Enforced locally by the controller.
+9. **BR-AC-009 — Failed Attempt Lockout:** After `max_failed_attempts` consecutive denials for the same credential within 10 minutes, the credential is locked out for `lockout_duration_ms`. Enforced locally.
+10. **BR-AC-010 — Emergency Override:** When emergency mode is activated via `dm/{tid}/emergency/broadcast`, APs with `emergency_unlock=true` must unlock immediately regardless of rules. APs with `emergency_unlock=false` (e.g., server rooms) lock down.
+11. **BR-AC-011 — Access Time Enforcement:** Access Times use the device's local clock (synced via NTP). Timezone is always explicit in the schedule. Devices evaluate day-of-week and time-of-day locally.
+12. **BR-AC-012 — AP Held Open Alert:** If an AP remains in `open` state longer than `unlock_duration_ms + 30 seconds`, the device emits an `alarm.triggered` event with type `door_held`. Monitored locally.
+13. **BR-AC-013 — Forced AP Alert:** If an AP is opened without a valid unlock command or access grant, the device emits `alarm.triggered` with type `door_forced`. Immediate critical alert.
+14. **BR-AC-014 — Incremental Sync:** User DB sync uses cursor-based incremental sync (`sync_token`). Only changed records are sent. Full sync only on first provision or admin request.
+15. **BR-AC-015 — Multi-Factor Access:** Devices configured with `multi_factor=true` require users to present 2+ credentials (e.g., card + face) within a 30-second window. Both must match the same user.
+16. **BR-AC-016 — Credential Validity Window:** Each user credential has `valid_from` and `valid_until`. Device rejects expired credentials locally without server involvement.
+17. **BR-AC-017 — Event Queue Ordering:** When device reconnects, queued events are uploaded in chronological order (oldest first), throttled at 100 events/second.
 
 ## Permissions Matrix
 
 | Action | viewer | operator | admin | site_admin | super_admin |
 |--------|--------|----------|-------|------------|-------------|
-| List doors | ✅ | ✅ | ✅ | ✅ | ✅ |
-| View door detail | ✅ | ✅ | ✅ | ✅ | ✅ |
+| List access points | ✅ | ✅ | ✅ | ✅ | ✅ |
+| View access point detail | ✅ | ✅ | ✅ | ✅ | ✅ |
 | View events | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Remote unlock/lock | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Hold open | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Create/edit doors | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Delete doors | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Create/edit rules | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Delete rules | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Manage user groups | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Create/edit access points | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Delete access points | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Create/edit access groups | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Delete access groups | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Manage AG members (users) | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Manage AG access points | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Force device sync | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Create interlock groups | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Emergency lockdown | ❌ | ✅ | ✅ | ✅ | ✅ |
@@ -461,31 +486,36 @@ InterlockModeEnum: mutual_exclusive | sequential
 
 | Route | Page | Key Components |
 |-------|------|----------------|
-| /secure/access-control | Door List | DataTable with status tabs (All/Online/Offline/Alarm/Warning), filters, stat cards |
-| /secure/access-control/:id | Door Detail | Door info, state controls (unlock/lock/hold), live event timeline, linked camera, access rules tab, schedule heatmap, device health |
-| /secure/access-control/rules | Access Rules | DataTable of rules, create/edit dialog with door picker, group picker, schedule builder, day selector |
+| /secure/access-control | Access Point List | DataTable with status tabs (All/Online/Offline/Alarm/Warning), filters, stat cards |
+| /secure/access-control/:id | Access Point Detail | AP info, state controls (unlock/lock/hold), live event timeline, linked camera, access groups tab, device health |
+| /secure/access-groups | Access Groups | DataTable of AGs, create/edit dialog with access time picker |
+| /secure/access-groups/:id | Access Group Detail | AG info, access points tab, users tab (with effective_from/effective_to), access time assignment |
 
 ## Events & Audit Log
 
 | Event Type | Trigger | Payload | Retention |
 |------------|---------|---------|-----------|
-| access.door.created | POST create | full door resource | 1 year |
-| access.door.updated | PUT update | diff only | 1 year |
-| access.door.deleted | DELETE | id + actor | permanent |
-| access.door.unlocked | POST unlock command | door_id, actor, reason, duration | 1 year |
-| access.door.locked | POST lock command | door_id, actor | 1 year |
-| access.door.held_open | POST hold-open | door_id, actor, duration | 1 year |
-| access.event.granted | Device access.log | user, door, credential, time | 2 years |
-| access.event.denied | Device access.log | user/unknown, door, reason, time | 2 years |
-| access.event.forced | Device door.state forced | door, time, photo | permanent |
-| access.rule.created | POST rule | full rule | 1 year |
-| access.rule.updated | PUT rule | diff | 1 year |
-| access.rule.deleted | DELETE rule | id + actor | permanent |
-| access.group.members_changed | PUT group members | added/removed user IDs | 1 year |
-| access.sync.initiated | POST sync | door_id, sync_type, actor | 90 days |
-| access.sync.completed | cfg/ack received | door_id, versions, counts | 90 days |
-| access.alarm.door_forced | Device alarm event | door_id, time, photo | permanent |
-| access.alarm.door_held | Device alarm event | door_id, duration | 1 year |
+| access.ap.created | POST create | full access point resource | 1 year |
+| access.ap.updated | PUT update | diff only | 1 year |
+| access.ap.deleted | DELETE | id + actor | permanent |
+| access.ap.unlocked | POST unlock command | access_point_id, actor, reason, duration | 1 year |
+| access.ap.locked | POST lock command | access_point_id, actor | 1 year |
+| access.ap.held_open | POST hold-open | access_point_id, actor, duration | 1 year |
+| access.event.granted | Device access.log | user, access_point, credential, time | 2 years |
+| access.event.denied | Device access.log | user/unknown, access_point, reason, time | 2 years |
+| access.event.forced | Device door.state forced | access_point, time, photo | permanent |
+| access.group.created | POST access group | full AG resource | 1 year |
+| access.group.updated | PUT access group | diff | 1 year |
+| access.group.deleted | DELETE access group | id + actor | permanent |
+| access.group.ap_added | POST AG access point | ag_id, access_point_id, actor | 1 year |
+| access.group.ap_removed | DELETE AG access point | ag_id, access_point_id, actor | 1 year |
+| access.group.user_added | POST AG user | ag_id, user_id, effective_from, effective_to, actor | 1 year |
+| access.group.user_updated | PUT AG user | ag_id, user_id, membership bounds diff, actor | 1 year |
+| access.group.user_removed | DELETE AG user | ag_id, user_id, actor | 1 year |
+| access.sync.initiated | POST sync | access_point_id, sync_type, actor | 90 days |
+| access.sync.completed | cfg/ack received | access_point_id, versions, counts | 90 days |
+| access.alarm.door_forced | Device alarm event | access_point_id, time, photo | permanent |
+| access.alarm.door_held | Device alarm event | access_point_id, duration | 1 year |
 | access.lockdown.activated | Emergency broadcast | actor, level, zones | permanent |
 | access.lockdown.deactivated | Emergency deactivate | actor, override_code_hash | permanent |
 
@@ -510,8 +540,9 @@ InterlockModeEnum: mutual_exclusive | sequential
 
 ## Notes
 
-- The access-svc is NOT a real-time decision engine. It is a rule management + sync orchestration + event aggregation service.
+- The access-svc is NOT a real-time decision engine. It is an Access Group management + sync orchestration + event aggregation service.
 - Face templates are ArcFace v3 format (~2KB each). Card UIDs are 4-10 byte hex. Fingerprint templates are ISO/IEC 19794-2 format (~500B each).
-- Interlock groups are limited to 4 doors maximum per group due to controller hardware constraints.
+- Interlock groups are limited to 4 access points maximum per group due to controller hardware constraints.
 - Anti-passback state resets daily at midnight (configurable) to handle edge cases like tailgating that can desync state.
-- Photo snapshots in access events are optional and configurable per door. When enabled, photos are stored in MinIO with 90-day retention, then thumbnails only.
+- Photo snapshots in access events are optional and configurable per access point. When enabled, photos are stored in MinIO with 90-day retention, then thumbnails only.
+- Passage Time is stored as `access_time_id` on the `access_points` table. Access Time is stored as `access_time_id` on the `access_groups` table. Both reference the same `access_times` / `access_time_slots` tables but serve different purposes. See [access-model-design.md](../architecture/access-model-design.md) for the full rule resolution algorithm.

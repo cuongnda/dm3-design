@@ -1,9 +1,9 @@
 export interface AccessGroup {
   id: string;
   tenant_id: string;
-  parent_id?: string;
   access_time_id?: string;
   name: string;
+  description?: string;
   is_default: boolean;
   type: number;
   access_point_count: number;
@@ -15,7 +15,7 @@ export interface AccessGroup {
 
 export interface AccessGroupFormData {
   name: string;
-  parent_id?: string;
+  description?: string;
   access_time_id?: string;
   is_default?: boolean;
 }

@@ -18,15 +18,17 @@ import (
 	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
+	"github.com/duali/dm3-backend/pkg/natsutil"
 )
 
 type AccessHandlers struct {
 	db    *db.DB
 	audit *audit.Logger
+	nats  *natsutil.Client
 }
 
-func NewAccessHandlers(database *db.DB, auditLog *audit.Logger) *AccessHandlers {
-	return &AccessHandlers{db: database, audit: auditLog}
+func NewAccessHandlers(database *db.DB, auditLog *audit.Logger, natsClient *natsutil.Client) *AccessHandlers {
+	return &AccessHandlers{db: database, audit: auditLog, nats: natsClient}
 }
 
 // ─── Access Devices ──────────────────────────────────────────────────────────

@@ -10,9 +10,9 @@ import (
 type AccessGroup struct {
 	ID               string      `json:"id"`
 	TenantID         string      `json:"tenant_id"`
-	ParentID         *string     `json:"parent_id,omitempty"`
 	AccessTimeID     *string     `json:"access_time_id,omitempty"`
 	Name             string      `json:"name"`
+	Description      *string     `json:"description,omitempty"`
 	IsDefault        bool        `json:"is_default"`
 	Type             int         `json:"type"`
 	AccessPointCount int         `json:"access_point_count,omitempty"`
@@ -124,9 +124,7 @@ type AccessGroupAccessPoint struct {
 	TenantID      string       `json:"tenant_id"`
 	AccessGroupID string       `json:"access_group_id"`
 	AccessPointID string       `json:"access_point_id"`
-	AccessTimeID  *string      `json:"access_time_id,omitempty"`
 	AccessPoint   *AccessPoint `json:"access_point,omitempty"`
-	AccessTime    *AccessTime  `json:"access_time,omitempty"`
 	CreatedAt     time.Time    `json:"created_at"`
 }
 

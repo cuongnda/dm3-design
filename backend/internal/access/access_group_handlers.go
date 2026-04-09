@@ -1,12 +1,14 @@
 package access
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -44,7 +46,7 @@ func (h *AccessHandlers) ListAccessGroups(w http.ResponseWriter, r *http.Request
 		"SELECT COUNT(*) FROM dm3_access.access_groups ag "+where, countArgs...).Scan(&total)
 
 	query := fmt.Sprintf(`
-		SELECT ag.id, ag.tenant_id, ag.parent_id, ag.access_time_id, ag.name, ag.is_default, ag.type,
+		SELECT ag.id, ag.tenant_id, ag.access_time_id, ag.name, ag.description, ag.is_default, ag.type,
 		       COUNT(DISTINCT agap.access_point_id) AS access_point_count,
 		       COUNT(DISTINCT agu.user_id) AS user_count,
 		       ag.created_at, ag.updated_at
@@ -69,7 +71,7 @@ func (h *AccessHandlers) ListAccessGroups(w http.ResponseWriter, r *http.Request
 	groups := []models.AccessGroup{}
 	for rows.Next() {
 		var g models.AccessGroup
-		if err := rows.Scan(&g.ID, &g.TenantID, &g.ParentID, &g.AccessTimeID, &g.Name, &g.IsDefault, &g.Type,
+		if err := rows.Scan(&g.ID, &g.TenantID, &g.AccessTimeID, &g.Name, &g.Description, &g.IsDefault, &g.Type,
 			&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt); err != nil {
 			slog.Error("list access groups scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
@@ -99,7 +101,7 @@ func (h *AccessHandlers) GetAccessGroup(w http.ResponseWriter, r *http.Request) 
 	var atID, atName, atTz *string
 
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT ag.id, ag.tenant_id, ag.parent_id, ag.access_time_id, ag.name, ag.is_default, ag.type,
+		`SELECT ag.id, ag.tenant_id, ag.access_time_id, ag.name, ag.description, ag.is_default, ag.type,
 		        COUNT(DISTINCT agap.access_point_id) AS access_point_count,
 		        COUNT(DISTINCT agu.user_id) AS user_count,
 		        ag.created_at, ag.updated_at,
@@ -114,7 +116,7 @@ func (h *AccessHandlers) GetAccessGroup(w http.ResponseWriter, r *http.Request) 
 		   AND ag.is_deleted = false
 		 GROUP BY ag.id, agt.id`,
 		id, cid,
-	).Scan(&g.ID, &g.TenantID, &g.ParentID, &g.AccessTimeID, &g.Name, &g.IsDefault, &g.Type,
+	).Scan(&g.ID, &g.TenantID, &g.AccessTimeID, &g.Name, &g.Description, &g.IsDefault, &g.Type,
 		&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt,
 		&atID, &atName, &atTz)
 	if err != nil {
@@ -139,7 +141,7 @@ func (h *AccessHandlers) GetAccessGroup(w http.ResponseWriter, r *http.Request) 
 
 type createAccessGroupRequest struct {
 	Name         string  `json:"name"`
-	ParentID     *string `json:"parent_id"`
+	Description  *string `json:"description"`
 	AccessTimeID *string `json:"access_time_id"`
 	IsDefault    bool    `json:"is_default"`
 	Type         int     `json:"type"`
@@ -162,11 +164,11 @@ func (h *AccessHandlers) CreateAccessGroup(w http.ResponseWriter, r *http.Reques
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	var g models.AccessGroup
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_access.access_groups (tenant_id, parent_id, access_time_id, name, is_default, type)
-		 VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6)
-		 RETURNING id, tenant_id, parent_id, access_time_id, name, is_default, type, 0, 0, created_at, updated_at`,
-		cid, req.ParentID, req.AccessTimeID, req.Name, req.IsDefault, req.Type,
-	).Scan(&g.ID, &g.TenantID, &g.ParentID, &g.AccessTimeID, &g.Name, &g.IsDefault, &g.Type,
+		`INSERT INTO dm3_access.access_groups (tenant_id, access_time_id, name, description, is_default, type)
+		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6)
+		 RETURNING id, tenant_id, access_time_id, name, description, is_default, type, 0, 0, created_at, updated_at`,
+		cid, req.AccessTimeID, req.Name, req.Description, req.IsDefault, req.Type,
+	).Scan(&g.ID, &g.TenantID, &g.AccessTimeID, &g.Name, &g.Description, &g.IsDefault, &g.Type,
 		&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		slog.Error("create access group error", "error", err)
@@ -174,12 +176,13 @@ func (h *AccessHandlers) CreateAccessGroup(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	h.audit.LogFromRequest(r, "access.group.create", "access_group", g.ID, g.Name, "success", nil, g)
+	h.publishAGEvent(r.Context(), cid, g.ID, "created")
 	httputil.JSON(w, http.StatusCreated, g)
 }
 
 type updateAccessGroupRequest struct {
 	Name         *string `json:"name"`
-	ParentID     *string `json:"parent_id"`
+	Description  *string `json:"description"`
 	AccessTimeID *string `json:"access_time_id"`
 	IsDefault    *bool   `json:"is_default"`
 }
@@ -203,22 +206,23 @@ func (h *AccessHandlers) UpdateAccessGroup(w http.ResponseWriter, r *http.Reques
 	err := h.db.Pool.QueryRow(r.Context(),
 		`UPDATE dm3_access.access_groups
 		 SET name           = COALESCE($2, name),
-		     parent_id      = COALESCE($3::uuid, parent_id),
+		     description    = COALESCE($3, description),
 		     access_time_id = CASE WHEN $4::text = 'null' THEN NULL ELSE COALESCE($4::uuid, access_time_id) END,
 		     is_default     = COALESCE($5, is_default),
 		     updated_at     = now()
 		 WHERE id = $1::uuid
 		   AND tenant_id = $6::uuid
 		   AND is_deleted = false
-		 RETURNING id, tenant_id, parent_id, access_time_id, name, is_default, type, 0, 0, created_at, updated_at`,
-		id, req.Name, req.ParentID, req.AccessTimeID, req.IsDefault, cid,
-	).Scan(&g.ID, &g.TenantID, &g.ParentID, &g.AccessTimeID, &g.Name, &g.IsDefault, &g.Type,
+		 RETURNING id, tenant_id, access_time_id, name, description, is_default, type, 0, 0, created_at, updated_at`,
+		id, req.Name, req.Description, req.AccessTimeID, req.IsDefault, cid,
+	).Scan(&g.ID, &g.TenantID, &g.AccessTimeID, &g.Name, &g.Description, &g.IsDefault, &g.Type,
 		&g.AccessPointCount, &g.UserCount, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "access group not found")
 		return
 	}
 	h.audit.LogFromRequest(r, "access.group.update", "access_group", g.ID, g.Name, "success", nil, g)
+	h.publishAGEvent(r.Context(), cid, g.ID, "updated")
 	httputil.JSON(w, http.StatusOK, g)
 }
 
@@ -244,6 +248,7 @@ func (h *AccessHandlers) DeleteAccessGroup(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	h.audit.LogFromRequest(r, "access.group.delete", "access_group", id, "", "success", nil, nil)
+	h.publishAGEvent(r.Context(), cid, id, "deleted")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -273,6 +278,9 @@ func (h *AccessHandlers) BulkDeleteAccessGroups(w http.ResponseWriter, r *http.R
 		return
 	}
 	h.audit.LogFromRequest(r, "access.group.bulk_delete", "access_group", "", "", "success", nil, map[string]any{"ids": req.IDs})
+	for _, id := range req.IDs {
+		h.publishAGEvent(r.Context(), cid, id, "deleted")
+	}
 	httputil.JSON(w, http.StatusOK, map[string]any{"deleted": tag.RowsAffected()})
 }
 
@@ -301,12 +309,10 @@ func (h *AccessHandlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *h
 
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT agap.id, agap.tenant_id, agap.access_group_id, agap.access_point_id,
-		        agap.access_time_id, agap.created_at,
-		        ap.name, ap.description,
-		        at.id, at.name, at.timezone
+		        agap.created_at,
+		        ap.name, ap.description
 		 FROM dm3_access.access_group_access_points agap
 		 JOIN dm3_access.access_points ap ON ap.id = agap.access_point_id
-		 LEFT JOIN dm3_access.access_times at ON at.id = agap.access_time_id
 		 WHERE agap.access_group_id = $1::uuid AND agap.tenant_id = $2::uuid
 		 ORDER BY ap.name ASC`,
 		groupID, cid,
@@ -322,14 +328,11 @@ func (h *AccessHandlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *h
 	for rows.Next() {
 		var item models.AccessGroupAccessPoint
 		var ap models.AccessPoint
-		var at models.AccessTime
-		var atID, atName, atTz *string
 
 		if err := rows.Scan(
 			&item.ID, &item.TenantID, &item.AccessGroupID, &item.AccessPointID,
-			&item.AccessTimeID, &item.CreatedAt,
+			&item.CreatedAt,
 			&ap.Name, &ap.Description,
-			&atID, &atName, &atTz,
 		); err != nil {
 			slog.Error("list access group access points scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
@@ -337,18 +340,6 @@ func (h *AccessHandlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *h
 		}
 		ap.ID = item.AccessPointID
 		item.AccessPoint = &ap
-
-		if atID != nil {
-			at.ID = *atID
-			at.TenantID = item.TenantID
-			if atName != nil {
-				at.Name = *atName
-			}
-			if atTz != nil {
-				at.Timezone = *atTz
-			}
-			item.AccessTime = &at
-		}
 		result = append(result, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -365,8 +356,7 @@ func (h *AccessHandlers) AddAccessGroupAccessPoint(w http.ResponseWriter, r *htt
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
 	var req struct {
-		AccessPointID string  `json:"access_point_id"`
-		AccessTimeID  *string `json:"access_time_id,omitempty"`
+		AccessPointID string `json:"access_point_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -380,14 +370,13 @@ func (h *AccessHandlers) AddAccessGroupAccessPoint(w http.ResponseWriter, r *htt
 	var id string
 	err := h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO dm3_access.access_group_access_points
-		    (tenant_id, access_group_id, access_point_id, access_time_id)
-		 SELECT $1::uuid, $2::uuid, ap.id, $4::uuid
+		    (tenant_id, access_group_id, access_point_id)
+		 SELECT $1::uuid, $2::uuid, ap.id
 		 FROM dm3_access.access_points ap
 		 WHERE ap.id = $3::uuid AND ap.tenant_id = $1::uuid
-		 ON CONFLICT (access_group_id, access_point_id) DO UPDATE
-		   SET access_time_id = EXCLUDED.access_time_id
+		 ON CONFLICT (access_group_id, access_point_id) DO NOTHING
 		 RETURNING id`,
-		cid, groupID, req.AccessPointID, req.AccessTimeID,
+		cid, groupID, req.AccessPointID,
 	).Scan(&id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -399,6 +388,7 @@ func (h *AccessHandlers) AddAccessGroupAccessPoint(w http.ResponseWriter, r *htt
 		return
 	}
 	h.audit.LogFromRequest(r, "access.group.add_access_point", "access_group", groupID, "", "success", nil, map[string]any{"access_point_id": req.AccessPointID})
+	h.publishAGEvent(r.Context(), cid, groupID, "ap_added")
 	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id})
 }
 
@@ -480,11 +470,14 @@ func (h *AccessHandlers) AssignUsersToGroup(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var req struct {
-		UserIDs []string `json:"user_ids"`
+	type userAssignment struct {
+		UserID        string     `json:"user_id"`
+		EffectiveFrom *time.Time `json:"effective_from"`
+		EffectiveTo   *time.Time `json:"effective_to"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.UserIDs) == 0 {
-		httputil.Error(w, http.StatusBadRequest, "user_ids required")
+	var assignments []userAssignment
+	if err := json.NewDecoder(r.Body).Decode(&assignments); err != nil || len(assignments) == 0 {
+		httputil.Error(w, http.StatusBadRequest, "array of user assignments required")
 		return
 	}
 
@@ -499,23 +492,84 @@ func (h *AccessHandlers) AssignUsersToGroup(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	now := time.Now()
+	var assigned int64
+	for _, a := range assignments {
+		if a.UserID == "" {
+			continue
+		}
+		effectiveFrom := now
+		if a.EffectiveFrom != nil {
+			effectiveFrom = *a.EffectiveFrom
+		}
+		tag, err := h.db.Pool.Exec(r.Context(),
+			`INSERT INTO dm3_access.access_group_users (tenant_id, access_group_id, user_id, effective_from, effective_to)
+			 SELECT u.tenant_id, $1::uuid, u.id, $3, $4
+			 FROM dm3_identity.users u
+			 WHERE u.id = $2::uuid
+			   AND u.tenant_id = $5::uuid
+			   AND (u.is_deleted = false OR u.is_deleted IS NULL)
+			 ON CONFLICT (access_group_id, user_id) DO UPDATE
+			   SET effective_from = EXCLUDED.effective_from,
+			       effective_to   = EXCLUDED.effective_to`,
+			groupID, a.UserID, effectiveFrom, a.EffectiveTo, cid,
+		)
+		if err != nil {
+			slog.Error("assign user to group error", "error", err, "user_id", a.UserID)
+			continue
+		}
+		assigned += tag.RowsAffected()
+	}
+
+	userIDs := make([]string, len(assignments))
+	for i, a := range assignments {
+		userIDs[i] = a.UserID
+	}
+	h.audit.LogFromRequest(r, "access.group.assign_users", "access_group", groupID, "", "success", nil, map[string]any{"user_ids": userIDs})
+	h.publishAGEvent(r.Context(), cid, groupID, "user_added")
+	httputil.JSON(w, http.StatusOK, map[string]any{"assigned": assigned})
+}
+
+// PUT /access-groups/:id/users/:userId — update membership dates
+func (h *AccessHandlers) UpdateUserMembership(w http.ResponseWriter, r *http.Request) {
+	groupID := chi.URLParam(r, "id")
+	userID := chi.URLParam(r, "userId")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+
+	var req struct {
+		EffectiveFrom *time.Time `json:"effective_from"`
+		EffectiveTo   *time.Time `json:"effective_to"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
 	tag, err := h.db.Pool.Exec(r.Context(),
-		`INSERT INTO dm3_access.access_group_users (tenant_id, access_group_id, user_id)
-		 SELECT u.tenant_id, $1::uuid, u.id
-		 FROM dm3_identity.users u
-		 WHERE u.id = ANY($2::uuid[])
-		   AND u.tenant_id = $3::uuid
-		   AND (u.is_deleted = false OR u.is_deleted IS NULL)
-		 ON CONFLICT (access_group_id, user_id) DO NOTHING`,
-		groupID, req.UserIDs, cid,
+		`UPDATE dm3_access.access_group_users
+		 SET effective_from = COALESCE($3, effective_from),
+		     effective_to   = $4
+		 WHERE access_group_id = $1::uuid
+		   AND user_id = $2::uuid
+		   AND tenant_id = $5::uuid`,
+		groupID, userID, req.EffectiveFrom, req.EffectiveTo, cid,
 	)
 	if err != nil {
-		slog.Error("assign users to group error", "error", err)
+		slog.Error("update user membership error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	h.audit.LogFromRequest(r, "access.group.assign_users", "access_group", groupID, "", "success", nil, map[string]any{"user_ids": req.UserIDs})
-	httputil.JSON(w, http.StatusOK, map[string]any{"assigned": tag.RowsAffected()})
+	if tag.RowsAffected() == 0 {
+		httputil.Error(w, http.StatusNotFound, "user not in this group")
+		return
+	}
+	h.audit.LogFromRequest(r, "access.group.update_user_membership", "access_group", groupID, "", "success", nil, map[string]any{"user_id": userID})
+	h.publishAGEvent(r.Context(), cid, groupID, "user_added")
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // DELETE /access-groups/:id/users/:userId — remove user from group
@@ -542,6 +596,7 @@ func (h *AccessHandlers) RemoveUserFromGroup(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	h.audit.LogFromRequest(r, "access.group.remove_user", "access_group", groupID, "", "success", nil, map[string]any{"user_id": userID})
+	h.publishAGEvent(r.Context(), cid, groupID, "user_removed")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -569,5 +624,30 @@ func (h *AccessHandlers) RemoveAccessGroupAccessPoint(w http.ResponseWriter, r *
 		return
 	}
 	h.audit.LogFromRequest(r, "access.group.remove_access_point", "access_group", groupID, "", "success", nil, map[string]any{"access_point_id": apID})
+	h.publishAGEvent(r.Context(), cid, groupID, "ap_removed")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ─── NATS event publishing ────────────────────────────────────────────────────
+
+// publishAGEvent fires a NATS notification for access group mutations.
+// Subject: dm3.access.{tenant_id}.access_group.{action}
+// Failures are logged but do not affect the HTTP response.
+func (h *AccessHandlers) publishAGEvent(ctx context.Context, tenantID, accessGroupID, action string) {
+	if h.nats == nil {
+		return
+	}
+	subject := fmt.Sprintf("dm3.access.%s.access_group.%s", tenantID, action)
+	payload, err := json.Marshal(map[string]string{
+		"tenant_id":       tenantID,
+		"access_group_id": accessGroupID,
+		"action":          action,
+	})
+	if err != nil {
+		slog.Warn("publishAGEvent: failed to marshal payload", "error", err)
+		return
+	}
+	if err := h.nats.Publish(ctx, subject, payload); err != nil {
+		slog.Warn("publishAGEvent: failed to publish", "subject", subject, "error", err)
+	}
 }

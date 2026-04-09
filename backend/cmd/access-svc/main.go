@@ -94,7 +94,7 @@ func main() {
 	})
 
 	// HTTP handlers
-	handlers := access.NewAccessHandlers(database, auditLog)
+	handlers := access.NewAccessHandlers(database, auditLog, natsClient)
 
 	// HTTP routes
 	r := httputil.NewRouter()
@@ -172,6 +172,7 @@ func main() {
 			agr.Delete("/access-groups/{id}/access-points/{apId}", handlers.RemoveAccessGroupAccessPoint)
 			agr.Get("/access-groups/{id}/users", handlers.ListAccessGroupUsers)
 			agr.Post("/access-groups/{id}/users", handlers.AssignUsersToGroup)
+			agr.Put("/access-groups/{id}/users/{userId}", handlers.UpdateUserMembership)
 			agr.Delete("/access-groups/{id}/users/{userId}", handlers.RemoveUserFromGroup)
 		})
 

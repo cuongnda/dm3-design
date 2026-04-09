@@ -37,10 +37,11 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Evidence: `handlers.go:824-840` — `generateAccessToken` emits sub, cid, email, name, role, exp, iat (15min TTL ✅); `handlers.go:565-590` — DeviceClaims with sub, cid, did, dtype, permissions (24h ✅); `handlers.go:366-372` — refresh token rotation + replay detection ✅; bcrypt confirmed at `handlers.go:166, 662, 767`
   - Deviation: `GET /api/v1/roles` returns generic `admin/operator/viewer` (handlers.go:797-800) but spec defines 5 roles: `system_admin, primary_manager, manager, operator, viewer`. Roles endpoint is stale.
 
-- **access-svc** (`backend/internal/access/`) — Access event processing, door management, access rules engine
-  - Status: ⚠️ Partial | Risk: High
-  - Evidence: `backend/pkg/db/migrations/000001_initial.up.sql` — `dm3_access.doors`, `dm3_access.access_rules`, `dm3_access.access_events` (hypertable) confirmed; NATS consumer in `nats_consumer.go`
-  - Deviation: No `sites` or `zones` tables in migration. `doors` has `site_id`/`zone_id` columns but FKs reference non-existent tables (dangling references). Site/zone hierarchy from spec is unimplemented.
+- **access-svc** (`backend/internal/access/`) — Access Group management, access point management, access rule sync, event processing
+  - Status: ⚠️ Partial | Risk: Medium
+  - Evidence: `backend/pkg/db/migrations/000001_initial.up.sql` — `dm3_access.access_points`, `dm3_access.access_groups`, `dm3_access.access_group_access_points`, `dm3_access.access_group_users` (with `effective_from`/`effective_to`), `dm3_access.access_times`, `dm3_access.access_time_slots`, `dm3_access.access_events` (hypertable) confirmed; NATS consumer in `nats_consumer.go`; `cfg.access_rules` MQTT sync dispatched on AG/AP/user mutations
+  - Implemented: Access Groups CRUD ✅ | AG↔AP assignment ✅ | AG↔User assignment with temporal membership ✅ | Access Time management ✅ | Access rule sync to devices via MQTT ✅ | Passage Time field on access_points (DB) ✅
+  - Deviation: No `sites` or `zones` tables in migration. `access_points` has `site_id`/`zone_id` columns but FKs reference non-existent tables (dangling references). Site/zone hierarchy from spec is unimplemented. Passage Time (`access_time_id` on access_points) is stored in DB but not yet exposed in the Access Point UI.
 
 - **identity-svc** (`backend/internal/identity/`) — User/credential management, identity operations
   - Status: ⚠️ Partial | Risk: Medium
@@ -94,10 +95,11 @@ This document tracks the current implementation status of DM3 features. Updated:
 
 #### SECURE Domain
 
-- **Access Control** (`AccessControlPage`)
-  - Status: ⚠️ Partial (mock-only UI shell) | Risk: High
-  - Evidence: `apps/console/src/features/secure/access-control/AccessControlPage.tsx:14-47` — inline `mockDoors` array, zero API calls despite 229 lines
-  - Deviation: Backend `access-svc` has real doors and access_rules tables. Frontend is disconnected — no API integration.
+- **Access Control / Access Groups** (`AccessControlPage`, `AccessGroupsPage`)
+  - Status: ✅ Real (backend + frontend working) | Risk: Low
+  - Evidence: Access Groups CRUD backed by `access-svc` AG endpoints; AG↔AP assignment via `/api/v1/access/access-groups/{id}/access-points`; AG↔User assignment with `effective_from`/`effective_to` via `/api/v1/access/access-groups/{id}/users`; Access Time management via `/api/v1/access/access-times`; `cfg.access_rules` MQTT sync dispatched on mutations
+  - Implemented: Access Groups CRUD ✅ | AG↔AP assignment ✅ | AG↔User assignment with temporal membership ✅ | Access Time management ✅ | Access rule sync to devices via MQTT ✅
+  - Partial: Passage Time on Access Points stored in DB but not yet exposed in the AP UI (field present, UI control pending)
 
 - **AI Detection** (`AIDetectionPage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: Medium
@@ -151,10 +153,10 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Evidence: `apps/console/src/features/manage/deliveries/DeliveriesPage.tsx` — imports mock-data
   - Deviation: No deliveries table or backend service found.
 
-- **Access Provisioning** (`ProvisioningPage`, `AccessRulesPage`)
-  - Status: ⚠️ Partial | Risk: High
-  - Evidence: `ProvisioningPage.tsx` — imports mock-data; `dm3_access.access_rules` table confirmed in migration
-  - Deviation: Frontend is disconnected from `access-svc` access rules API. Access rules are in the DB but not exposed through a working UI.
+- **Access Provisioning** (`ProvisioningPage`)
+  - Status: ⚠️ Partial | Risk: Medium
+  - Evidence: `ProvisioningPage.tsx` — imports mock-data for device provisioning flow; backend provisioning flow is fully implemented (`gateway/provisioning.go`)
+  - Deviation: Frontend device provisioning UI is a mock-data shell. Access Group-based rule provisioning is handled via the Access Groups UI (see above), not this page.
 
 #### OPERATE Domain — ⚠️ ALL PAGES ARE MOCK-DATA SHELLS
 
@@ -350,8 +352,8 @@ High-level features mentioned in vision documents but lacking detailed specifica
 
 ## Summary
 
-- **✅ Compliant** (fully matches spec): auth-svc (v1), device-gateway, audit-svc, MQTT pipeline, Dashboard, Devices, SystemSettings, IdentityManagement, NATS, Valkey, MinIO, TimescaleDB, shared packages — **~13 items**
-- **⚠️ Partial** (UI shell or missing components): 21+ frontend pages are mock-data-only; access-svc missing site/zone hierarchy; EMQX missing TLS; Android terminal unverified; Flutter is placeholder — **~28 items**
+- **✅ Compliant** (fully matches spec): auth-svc (v1), device-gateway, audit-svc, MQTT pipeline, Dashboard, Devices, SystemSettings, IdentityManagement, AccessGroups/AccessControl, NATS, Valkey, MinIO, TimescaleDB, shared packages — **~14 items**
+- **⚠️ Partial** (UI shell or missing components): 20+ frontend pages are mock-data-only; access-svc missing site/zone hierarchy + AP passage time UI; EMQX missing TLS; Android terminal unverified; Flutter is placeholder — **~27 items**
 - **❌ Gap** (claimed implemented, not found): Flutter apps, service topology (15 of ~20 services missing) — **~2 items + systemic**
 - **📋 Specified**: ~15 features with detailed specs ready for development
 - **🔮 Vision Only**: ~20 next-generation features awaiting specification

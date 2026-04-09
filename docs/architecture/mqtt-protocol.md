@@ -546,35 +546,55 @@ Real-time blacklist updates pushed to devices with highest priority. Device must
 
 ### 7.5 Access Rules Sync
 
-Push zone/schedule/group-based access rules to devices for local decision-making.
+Push access rules to devices for local decision-making. The payload encodes:
+- **`passage_time`**: when the AP is freely open for everyone (no credential check). Highest priority — device enforces autonomously.
+- **`access_rules`**: per-user list of schedules derived from their active Access Group memberships for this AP. Device grants access if ANY schedule covers the current time (union/OR logic).
 
 ```json
 {
   "type": "cfg.access_rules",
   "data": {
     "action": "full_sync|delta",
-    "rules_version": 28,
-    "rules": [
+    "version": 42,
+    "passage_time": {
+      "timezone": "Asia/Ho_Chi_Minh",
+      "slots": [
+        { "day": 1, "start": "08:00", "end": "18:00" },
+        { "day": 2, "start": "08:00", "end": "18:00" },
+        { "day": 3, "start": "08:00", "end": "18:00" },
+        { "day": 4, "start": "08:00", "end": "18:00" },
+        { "day": 5, "start": "08:00", "end": "18:00" }
+      ]
+    },
+    "access_rules": [
       {
-        "rule_id": "rule-uuid",
-        "name": "Office Hours",
-        "door_ids": ["door-001", "door-002"],
-        "user_group_ids": ["group-all-staff"],
-        "schedule": {
-          "timezone": "Asia/Ho_Chi_Minh",
-          "periods": [
-            {"days": [1,2,3,4,5], "start": "07:00", "end": "19:00"}
-          ]
-        },
-        "anti_passback": false,
-        "priority": 10,
-        "enabled": true
+        "user_id": "uuid",
+        "credential": "card-A1B2C3",
+        "schedules": [
+          {
+            "source": "IT Team",
+            "timezone": "Asia/Ho_Chi_Minh",
+            "slots": [
+              { "day": 0, "start": "00:00", "end": "23:59" },
+              { "day": 1, "start": "00:00", "end": "23:59" }
+            ]
+          },
+          {
+            "source": "Cleaning Crew",
+            "timezone": "Asia/Ho_Chi_Minh",
+            "slots": [
+              { "day": 1, "start": "18:00", "end": "20:00" }
+            ]
+          }
+        ]
       }
     ],
     "sync_token": "cursor-for-incremental"
   }
 }
 ```
+
+Device logic: if `passage_time` is active for the current time → open for all (no credential check). Otherwise → for each user presenting a credential, grant if ANY of their `schedules` covers the current time. A user with no entry in `access_rules` for this device is denied.
 
 **Ack** (`dm/{tid}/device/{did}/cfg/ack`):
 ```json
@@ -583,8 +603,8 @@ Push zone/schedule/group-based access rules to devices for local decision-making
   "ref": "original-msg-id",
   "status": "ok",
   "data": {
-    "rules_version": 28,
-    "rules_count": 15
+    "rules_version": 42,
+    "rules_count": 150
   }
 }
 ```
