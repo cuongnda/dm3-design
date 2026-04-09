@@ -1,0 +1,76 @@
+{
+  "title": "Phương tiện",
+  "description": "Quản lý biển số phương tiện liên kết với người dùng",
+  "addVehicle": "Thêm phương tiện",
+
+  "stat.total": "Tổng",
+  "stat.cars": "Ô tô",
+  "stat.motorbikes": "Xe máy",
+  "stat.blacklisted": "Cấm",
+
+  "searchPlaceholder": "Tìm biển số, hãng, chủ sở hữu…",
+
+  "col.plate": "Biển số",
+  "col.type": "Loại",
+  "col.brandModel": "Hãng / Mẫu",
+  "col.color": "Màu",
+  "col.owner": "Chủ sở hữu",
+  "col.status": "Trạng thái",
+
+  "sort.plate": "Biển số",
+  "sort.type": "Loại",
+  "sort.brand": "Hãng",
+  "sort.owner": "Chủ sở hữu",
+  "sort.status": "Trạng thái",
+
+  "empty.search": "Không tìm thấy phương tiện phù hợp",
+  "empty.default": "Chưa có phương tiện nào được đăng ký",
+
+  "modal.addTitle": "Thêm phương tiện",
+  "modal.editTitle": "Sửa phương tiện",
+  "modal.plateNumber": "Biển số",
+  "modal.vehicleType": "Loại phương tiện",
+  "modal.color": "Màu",
+  "modal.brand": "Hãng",
+  "modal.model": "Mẫu",
+  "modal.owner": "Chủ sở hữu",
+  "modal.ownerNone": "— Không có —",
+  "modal.description": "Mô tả",
+  "modal.status": "Trạng thái",
+  "modal.cancel": "Hủy",
+  "modal.save": "Lưu",
+  "modal.saving": "Đang lưu…",
+
+  "type.car": "Ô tô",
+  "type.motorbike": "Xe máy",
+  "type.bicycle": "Xe đạp",
+  "type.truck": "Xe tải",
+  "type.other": "Khác",
+
+  "status.active": "Hoạt động",
+  "status.inactive": "Không hoạt động",
+  "status.blacklisted": "Cấm",
+
+  "delete.title": "Xóa phương tiện",
+  "delete.confirm": "Xóa phương tiện",
+  "delete.confirmSuffix": "? Hành động này không thể hoàn tác.",
+  "delete.cancel": "Hủy",
+  "delete.submit": "Xóa",
+  "delete.deleting": "Đang xóa…",
+  "delete.bulkTitle": "Xóa phương tiện",
+  "delete.bulkConfirm": "Xóa",
+  "delete.bulkSuffix": "phương tiện? Hành động này không thể hoàn tác.",
+
+  "toast.created": "Đã tạo phương tiện",
+  "toast.updated": "Đã cập nhật phương tiện",
+  "toast.deleted": "Đã xóa phương tiện",
+  "toast.createFailed": "Tạo thất bại",
+  "toast.updateFailed": "Cập nhật thất bại",
+  "toast.deleteFailed": "Xóa thất bại",
+  "toast.bulkDeleted": "Đã xóa {{count}} phương tiện",
+  "toast.bulkDeleteFailed": "Xóa hàng loạt thất bại",
+  "toast.plateRequired": "Biển số không được để trống",
+
+  "action.edit": "Sửa",
+  "action.delete": "Xóa"
+}

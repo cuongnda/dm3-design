@@ -274,8 +274,11 @@ func (h *IdentityHandlers) GetUser(w http.ResponseWriter, r *http.Request) {
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 
 	var id, userCode, empNum, firstName, lastName, fullName string
-	var email, position, status, avatar, phone, deptName string
-	var deptID, accountID, birthDay, effectiveDate, expiredDate *string
+	var email, position, status, avatar, phone, address, deptName string
+	var deptID, accountID, birthDay, effectiveDate, expiredDate, accessGroupID, accessGroupName *string
+	var sex *bool
+	var isMasterCard bool
+	var createdAt, updatedAt time.Time
 
 	err := h.db.Pool.QueryRow(r.Context(), `
 		SELECT
@@ -290,20 +293,32 @@ func (h *IdentityHandlers) GetUser(w http.ResponseWriter, r *http.Request) {
 			COALESCE(u.status, 'active') AS user_status,
 			COALESCE(u.avatar, '') AS avatar,
 			COALESCE(u.phone, '') AS phone,
+			COALESCE(u.address, '') AS address,
 			COALESCE(d.name, '') AS department_name,
 			u.department_id::text,
 			u.account_id::text,
 			u.birth_day::text,
 			u.effective_date::text,
-			u.expired_date::text
+			u.expired_date::text,
+			u.sex,
+			COALESCE(u.is_master_card, false) AS is_master_card,
+			agu.access_group_id::text,
+			ag.name,
+			u.created_at,
+			u.updated_at
 		FROM dm3_identity.users u
 		LEFT JOIN dm3_identity.departments d ON u.department_id = d.id
+		LEFT JOIN dm3_access.access_group_users agu ON agu.user_id = u.id
+			AND (agu.effective_to IS NULL OR agu.effective_to > now())
+		LEFT JOIN dm3_access.access_groups ag ON ag.id = agu.access_group_id
 		WHERE u.id = $1::uuid AND u.tenant_id = $2::uuid
 		  AND (u.is_deleted = false OR u.is_deleted IS NULL)
 	`, userID, companyID).Scan(
 		&id, &userCode, &empNum, &firstName, &lastName, &fullName,
-		&email, &position, &status, &avatar, &phone, &deptName,
+		&email, &position, &status, &avatar, &phone, &address, &deptName,
 		&deptID, &accountID, &birthDay, &effectiveDate, &expiredDate,
+		&sex, &isMasterCard, &accessGroupID, &accessGroupName,
+		&createdAt, &updatedAt,
 	)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "user not found")
@@ -312,23 +327,30 @@ func (h *IdentityHandlers) GetUser(w http.ResponseWriter, r *http.Request) {
 
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{
 		"user": map[string]interface{}{
-			"id":             id,
-			"user_code":      userCode,
-			"emp_number":     empNum,
-			"first_name":     firstName,
-			"last_name":      lastName,
-			"full_name":      fullName,
-			"email":          email,
-			"position":       position,
-			"status":         status,
-			"avatar":         avatar,
-			"phone":          phone,
-			"department_name": deptName,
-			"department_id":  deptID,
-			"account_id":     accountID,
-			"birth_day":      birthDay,
-			"effective_date": effectiveDate,
-			"expired_date":   expiredDate,
+			"id":               id,
+			"user_code":        userCode,
+			"emp_number":       empNum,
+			"first_name":       firstName,
+			"last_name":        lastName,
+			"full_name":        fullName,
+			"email":            email,
+			"position":         position,
+			"status":           status,
+			"avatar":           avatar,
+			"phone":            phone,
+			"address":          address,
+			"department_name":  deptName,
+			"department_id":    deptID,
+			"account_id":       accountID,
+			"birth_day":        birthDay,
+			"effective_date":   effectiveDate,
+			"expired_date":     expiredDate,
+			"sex":              sex,
+			"is_master_card":   isMasterCard,
+			"access_group_id":  accessGroupID,
+			"access_group_name": accessGroupName,
+			"created_on":       createdAt,
+			"updated_on":       updatedAt,
 		},
 	})
 }

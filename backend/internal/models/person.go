@@ -47,6 +47,23 @@ type UserGroupMember struct {
 	AddedAt time.Time `json:"added_at"`
 }
 
+// Vehicle represents a registered vehicle linked to a user.
+type Vehicle struct {
+	ID          string    `json:"id"`
+	TenantID    string    `json:"tenant_id"`
+	UserID      *string   `json:"user_id,omitempty"`
+	PlateNumber string    `json:"plate_number"`
+	VehicleType string    `json:"vehicle_type"`
+	Brand       string    `json:"brand,omitempty"`
+	Model       string    `json:"model,omitempty"`
+	Color       string    `json:"color,omitempty"`
+	Description string    `json:"description,omitempty"`
+	Status      string    `json:"status"`
+	OwnerName   string    `json:"owner_name,omitempty"` // joined from users
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 // SyncResponse is returned by the sync endpoint for offline-first device sync.
 type SyncResponse struct {
 	Users       []User       `json:"users"`

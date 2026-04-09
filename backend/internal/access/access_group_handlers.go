@@ -316,9 +316,11 @@ func (h *AccessHandlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *h
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT agap.id, agap.tenant_id, agap.access_group_id, agap.access_point_id,
 		        agap.created_at,
-		        ap.name, ap.description
+		        ap.name, ap.description,
+		        z.id, z.name
 		 FROM dm3_access.access_group_access_points agap
 		 JOIN dm3_access.access_points ap ON ap.id = agap.access_point_id
+		 LEFT JOIN dm3_access.zones z ON z.id = ap.zone_id
 		 WHERE agap.access_group_id = $1::uuid AND agap.tenant_id = $2::uuid
 		 ORDER BY ap.name ASC`,
 		groupID, cid,
@@ -334,17 +336,23 @@ func (h *AccessHandlers) ListAccessGroupAccessPoints(w http.ResponseWriter, r *h
 	for rows.Next() {
 		var item models.AccessGroupAccessPoint
 		var ap models.AccessPoint
+		var zoneID, zoneName *string
 
 		if err := rows.Scan(
 			&item.ID, &item.TenantID, &item.AccessGroupID, &item.AccessPointID,
 			&item.CreatedAt,
 			&ap.Name, &ap.Description,
+			&zoneID, &zoneName,
 		); err != nil {
 			slog.Error("list access group access points scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		ap.ID = item.AccessPointID
+		if zoneID != nil {
+			ap.ZoneID = zoneID
+			ap.Zone = &models.Zone{ID: *zoneID, Name: *zoneName}
+		}
 		item.AccessPoint = &ap
 		result = append(result, item)
 	}

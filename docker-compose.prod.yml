@@ -141,6 +141,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       NATS_URL: nats://nats:4222
       MQTT_BROKER: tcp://emqx:1883
+    volumes:
+      - identity_photos:/app/data/photos
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -362,6 +364,7 @@ volumes:
   minio_data:
   certbot_webroot:
   automation_data:
+  identity_photos:
 
 networks:
   dm3-internal:

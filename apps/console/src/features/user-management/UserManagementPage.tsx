@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Edit, Trash2, Trash, Users } from 'lucide-react';
 import { Button, Input, Multiselect, Badge, AppModal, DataTable, type Column, Card, TablePaginationFooter } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
@@ -29,6 +30,7 @@ function statusVariantForUser(status: string): 'default' | 'secondary' | 'destru
 
 export function UserManagementPage() {
     const { t } = useTranslation('users');
+    const navigate = useNavigate();
 
     const [users, setUsers] = useState<User[]>([]);
     const [total, setTotal] = useState(0);
@@ -44,7 +46,6 @@ export function UserManagementPage() {
     const [departments, setDepartments] = useState<Department[]>([]);
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [showCreateModal, setShowCreateModal] = useState(false);
-    const [editingUser, setEditingUser] = useState<User | null>(null);
     const [deletingUser, setDeletingUser] = useState<User | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
@@ -101,21 +102,6 @@ export function UserManagementPage() {
             return result;
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to create user';
-            toast(message, 'error');
-            throw err;
-        }
-    };
-
-    const handleEdit = async (data: Partial<User>) => {
-        if (!editingUser) return;
-        try {
-            await apiFetch(`/api/v1/identity/users/${editingUser.id}`, { method: 'PUT', body: JSON.stringify(data) });
-            setEditingUser(null);
-            fetchUsers();
-            toast(t('toast.updated'), 'success');
-            return editingUser;
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to update user';
             toast(message, 'error');
             throw err;
         }
@@ -202,7 +188,7 @@ export function UserManagementPage() {
                 width: '88px',
                 render: (u) => (
                     <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="sm" onClick={() => setEditingUser(u)} title={t('modal.editTitle')}>
+                        <Button variant="ghost" size="sm" onClick={() => navigate(`/manage/users/${u.id}`)} title={t('modal.editTitle')}>
                             <Edit size={14} />
                         </Button>
                         <Button
@@ -309,7 +295,7 @@ export function UserManagementPage() {
                         rowKey={(u) => u.id}
                         sortState={{ col: sortBy, dir: sortDir }}
                         onSortChange={handleSortChange}
-                        onRowDoubleClick={(u) => setEditingUser(u)}
+                        onRowDoubleClick={(u) => navigate(`/manage/users/${u.id}`)}
                         emptyMessage={search ? t('table.empty.search') : t('table.empty.default')}
                         emptyIcon={<Users size={32} strokeWidth={1.2} />}
                         selection={{
@@ -354,9 +340,6 @@ export function UserManagementPage() {
 
             {/* Create Modal */}
             <UserModal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} onSave={handleCreate} />
-
-            {/* Edit Modal */}
-            <UserModal isOpen={!!editingUser} onClose={() => setEditingUser(null)} onSave={handleEdit} user={editingUser} />
 
             {/* Single Delete Dialog */}
             <AppModal

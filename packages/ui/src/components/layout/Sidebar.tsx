@@ -137,6 +137,7 @@ export function Sidebar() {
         <SidebarNavItem to={ROUTES.contractors} icon={<Wrench size={iconSize} />} label={t('nav.contractors')} collapsed={c} />
         <SidebarNavItem to={ROUTES.attendance} icon={<Clock size={iconSize} />} label={t('nav.attendance')} collapsed={c} />
         <SidebarNavItem to={ROUTES.deliveries} icon={<Package size={iconSize} />} label={t('nav.deliveries')} collapsed={c} />
+        <SidebarNavItem to={ROUTES.vehicles} icon={<Car size={iconSize} />} label={t('nav.vehicles') + ' *'} collapsed={c} />
 
         <SectionLabel label={t('nav.access')} color="#F59E0B" collapsed={c} />
         <SidebarNavItem to={ROUTES.zones} icon={<MapPin size={iconSize} />} label={t('nav.zones') + ' *'} collapsed={c} />

@@ -1,4 +1,4 @@
--- 000009: Add spatial fields to zones and map placement to access points
+-- 000010: Add spatial fields to zones and map placement to access points
 -- Zone becomes a spatial container with location, timezone, and optional indoor map.
 -- Access Points can store normalized placement coordinates on their zone's map.
 

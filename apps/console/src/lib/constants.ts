@@ -43,6 +43,7 @@ export const ROUTES = {
   contractors: '/manage/contractors',
   attendance: '/manage/attendance',
   deliveries: '/manage/deliveries',
+  vehicles: '/manage/vehicles',
   // ACCESS
   zones: '/access/zones',
   accessPoints: '/access/access-points',

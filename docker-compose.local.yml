@@ -154,6 +154,8 @@ services:
       JWT_SECRET: dm3-local-jwt-secret-change-me
       NATS_URL: nats://nats:4222
       MQTT_BROKER: tcp://emqx:1883
+    volumes:
+      - identity_photos:/app/data/photos
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -378,6 +380,7 @@ volumes:
   dm3_local_valkey:
   dm3_local_minio:
   dm3_local_automation:
+  identity_photos:
 
 networks:
   dm3-local:

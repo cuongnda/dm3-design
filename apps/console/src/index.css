@@ -183,6 +183,13 @@
   background: #475569;
 }
 
+/* Tab active state */
+[data-slot="tabs-trigger"][data-state="active"] {
+  background: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+  border-color: var(--primary) !important;
+}
+
 /* Live pulse animation */
 @keyframes pulse-live {
   0%, 100% { opacity: 1; }

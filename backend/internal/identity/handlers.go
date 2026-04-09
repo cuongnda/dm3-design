@@ -167,9 +167,10 @@ type createCredentialRequest struct {
 
 func (h *IdentityHandlers) CreateCredential(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
+	tenantID := authsvc.CompanyIDFromContext(r.Context())
 
 	var exists bool
-	_ = h.db.Pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM dm3_identity.users WHERE id = $1::uuid)`, userID).Scan(&exists)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM dm3_identity.users WHERE id = $1::uuid AND tenant_id = $2::uuid)`, userID, tenantID).Scan(&exists)
 	if !exists {
 		httputil.Error(w, http.StatusNotFound, "user not found")
 		return
@@ -195,10 +196,10 @@ func (h *IdentityHandlers) CreateCredential(w http.ResponseWriter, r *http.Reque
 
 	var c models.Credential
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_identity.credentials (user_id, type, value, status, valid_from, valid_until, updated_at)
-		 VALUES ($1::uuid,$2,$3,$4,$5,$6, now())
+		`INSERT INTO dm3_identity.credentials (tenant_id, user_id, type, value, status, valid_from, valid_until, updated_at)
+		 VALUES ($1::uuid,$2::uuid,$3,$4,$5,$6,$7, now())
 		 RETURNING id, tenant_id, user_id, type, value, status, valid_from, valid_until, created_at, updated_at`,
-		userID, req.Type, req.Value, req.Status, req.ValidFrom, req.ValidUntil,
+		tenantID, userID, req.Type, req.Value, req.Status, req.ValidFrom, req.ValidUntil,
 	).Scan(&c.ID, &c.TenantID, &c.UserID, &c.Type, &c.Value, &c.Status,
 		&c.ValidFrom, &c.ValidUntil, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {

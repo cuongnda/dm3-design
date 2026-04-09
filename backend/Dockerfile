@@ -32,6 +32,9 @@ COPY --from=builder /go/bin/migrate /usr/local/bin/migrate
 # Copy migrations (used by migrate service)
 COPY pkg/db/migrations/ /app/migrations/
 
+# Create data directory for uploaded photos/avatars
+RUN mkdir -p /app/data/photos
+
 # Copy i18n locale files
 COPY pkg/i18n/locales/ /app/pkg/i18n/locales/
 
