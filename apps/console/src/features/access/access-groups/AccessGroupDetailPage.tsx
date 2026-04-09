@@ -108,6 +108,8 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
       setError('');
       setSearch('');
       setPage(1);
+      setAllAPs([]);
+      setLoadingAPs(true);
     }
     onOpenChange(v);
   };
@@ -336,6 +338,8 @@ function AddUserModal({ open, onOpenChange, linkedUserIds, onSubmit }: AddUserMo
       setSearch('');
       setDeptFilter('');
       setPage(1);
+      setAllUsers([]);
+      setLoadingUsers(true);
     }
     onOpenChange(v);
   };

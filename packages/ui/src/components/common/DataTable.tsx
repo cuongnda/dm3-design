@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUpDown, Inbox } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
@@ -141,7 +141,8 @@ export function DataTable<T>({
   }, [data, sortCol, sortDir, columns, isServerSort])
 
   const totalPages = Math.ceil(sorted.length / pageSize) || 1
-  const paged = paginate ? sorted.slice((page - 1) * pageSize, page * pageSize) : sorted
+  const safePage = paginate ? Math.min(Math.max(1, page), totalPages) : 1
+  const paged = paginate ? sorted.slice((safePage - 1) * pageSize, safePage * pageSize) : sorted
 
   const selectScope = selection?.selectAllScope ?? "page"
   const scopeRows = selectScope === "all" ? sorted : paged
@@ -151,11 +152,6 @@ export function DataTable<T>({
     () => new Set(selection?.selectedIds ?? []),
     [selection?.selectedIds]
   )
-
-  useEffect(() => {
-    if (!paginate) return
-    if (page > totalPages) setPage(Math.max(1, totalPages))
-  }, [paginate, page, totalPages])
 
   const toggleSort = (key: string) => {
     if (isServerSort) {
@@ -359,8 +355,8 @@ export function DataTable<T>({
         <div className="mt-2 flex items-center justify-between px-1 py-1">
           <span className="px-2 text-[12px] text-muted-foreground">
             {t('table.pagination', {
-              from: (page - 1) * pageSize + 1,
-              to: Math.min(page * pageSize, sorted.length),
+              from: (safePage - 1) * pageSize + 1,
+              to: Math.min(safePage * pageSize, sorted.length),
               total: sorted.length,
             })}
           </span>
@@ -369,8 +365,8 @@ export function DataTable<T>({
               type="button"
               variant="outline"
               size="icon-sm"
-              onClick={() => setPage(Math.max(1, page - 1))}
-              disabled={page === 1}
+              onClick={() => setPage(Math.max(1, safePage - 1))}
+              disabled={safePage === 1}
               aria-label={t('table.prevPage')}
             >
               <ChevronLeft className="size-3.5" />
@@ -380,7 +376,7 @@ export function DataTable<T>({
               <Button
                 key={p}
                 type="button"
-                variant={p === page ? "default" : "ghost"}
+                variant={p === safePage ? "default" : "ghost"}
                 size="xs"
                 className="min-w-7"
                 onClick={() => setPage(p)}
@@ -393,8 +389,8 @@ export function DataTable<T>({
               type="button"
               variant="outline"
               size="icon-sm"
-              onClick={() => setPage(Math.min(totalPages, page + 1))}
-              disabled={page === totalPages}
+              onClick={() => setPage(Math.min(totalPages, safePage + 1))}
+              disabled={safePage === totalPages}
               aria-label={t('table.nextPage')}
             >
               <ChevronRight className="size-3.5" />
