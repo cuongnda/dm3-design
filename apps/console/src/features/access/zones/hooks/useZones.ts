@@ -43,7 +43,7 @@ export function useZones(): UseZonesReturn {
     const [sortDir, setSortDir] = useState<'asc' | 'desc' | null>('asc');
     const [pagination, setPagination] = useState<ZonesPagination>({
         page: 1,
-        limit: 20,
+        limit: 200,
         total: 0,
         total_pages: 0,
     });
