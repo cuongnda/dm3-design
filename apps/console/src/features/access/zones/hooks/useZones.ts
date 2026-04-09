@@ -116,18 +116,10 @@ export function useZones(): UseZonesReturn {
       try {
         const formData = new FormData();
         formData.append("map", file);
-        const response = await fetch(`/api/v1/access/zones/${id}/map/upload`, {
+        const zone = (await apiFetch(`/api/v1/access/zones/${id}/map/upload`, {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("dm3-token") ?? ""}`,
-          },
           body: formData,
-        });
-        if (!response.ok) {
-          const message = await response.text().catch(() => "");
-          throw new Error(`API ${response.status}: ${message}`);
-        }
-        const zone = (await response.json()) as Zone;
+        })) as Zone;
         await fetchZones();
         return zone;
       } catch (err) {

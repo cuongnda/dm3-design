@@ -76,7 +76,7 @@ func (h *IdentityHandlers) uploadUserImage(r *http.Request, userID, companyID, f
 		return "", &uploadError{status: http.StatusInternalServerError, message: "failed to save uploaded file"}
 	}
 
-	column := "photo_url"
+	column := "avatar"
 	if variant == identityAvatarVariant {
 		column = "avatar"
 	}

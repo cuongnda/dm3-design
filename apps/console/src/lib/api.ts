@@ -1207,3 +1207,33 @@ export async function fetchFirmwareDeviceTypes(): Promise<{ device_types: string
 export function getFirmwareDownloadUrl(id: string): string {
     return `${FIRMWARE_URL}/${id}/download`;
 }
+
+export async function downloadFirmware(id: string): Promise<void> {
+    const token = getToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await fetch(getFirmwareDownloadUrl(id), {
+        method: 'GET',
+        headers,
+    });
+    if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`Download failed: ${response.status} ${text}`.trim());
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get('content-disposition') || '';
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    const filename = match?.[1] || `firmware-${id}.bin`;
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(url);
+}

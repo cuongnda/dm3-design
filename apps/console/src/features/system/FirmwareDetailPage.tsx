@@ -6,8 +6,7 @@ import {
   fetchFirmware,
   updateFirmware,
   deleteFirmware,
-  getFirmwareDownloadUrl,
-  getToken,
+  downloadFirmware,
   type FirmwareDTO,
 } from '@/lib/api';
 import { ALL_DEVICE_MODELS } from '@/lib/device-models';
@@ -77,15 +76,9 @@ export function FirmwareDetailPage() {
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!id) return;
-    const url = getFirmwareDownloadUrl(id);
-    const token = getToken();
-    // Open download with auth
-    const a = document.createElement('a');
-    a.href = `${url}?token=${token}`;
-    a.download = '';
-    a.click();
+    await downloadFirmware(id);
   };
 
   const handleDeploy = () => {

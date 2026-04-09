@@ -30,6 +30,10 @@ const zoneSelectCols = `z.id, z.tenant_id, z.parent_id, z.name, z.description,
 	z.timezone, z.latitude, z.longitude, z.address, z.floor, z.building,
 	z.map_image_url, z.map_width, z.map_height`
 
+const zoneReturningCols = `id, tenant_id, parent_id, name, description,
+	timezone, latitude, longitude, address, floor, building,
+	map_image_url, map_width, map_height`
+
 // scanZone scans all zone columns (including spatial fields) from a row.
 func scanZone(row interface{ Scan(dest ...any) error }, z *models.Zone) error {
 	return row.Scan(
@@ -440,7 +444,7 @@ func (h *AccessHandlers) UpdateZoneMap(w http.ResponseWriter, r *http.Request) {
 		     map_height    = COALESCE($4, map_height),
 		     updated_at    = now()
 		 WHERE id = $1::uuid AND tenant_id = $5::uuid
-		 RETURNING `+zoneSelectCols+`, 0, created_at, updated_at`,
+		 RETURNING `+zoneReturningCols+`, 0, created_at, updated_at`,
 		id, req.MapImageURL, req.MapWidth, req.MapHeight, cid,
 	), &zone)
 	if err != nil {
@@ -542,7 +546,7 @@ func (h *AccessHandlers) UploadZoneMap(w http.ResponseWriter, r *http.Request) {
 		     map_height    = $4,
 		     updated_at    = now()
 		 WHERE id = $1::uuid AND tenant_id = $5::uuid
-		 RETURNING `+zoneSelectCols+`, 0, created_at, updated_at`,
+		 RETURNING `+zoneReturningCols+`, 0, created_at, updated_at`,
 		zoneID, publicPath, cfg.Width, cfg.Height, cid,
 	), &zone)
 	if err != nil {
