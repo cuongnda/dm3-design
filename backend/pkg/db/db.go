@@ -2,19 +2,24 @@ package db
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
 // dm3MigrationLockID is a unique advisory lock ID used to serialize migrations across services.
 const dm3MigrationLockID = 0x444D3300 // "DM3\0"
@@ -135,7 +140,7 @@ func (d *DB) Close() {
 // (ErrNoChange) once the lock is released.
 // If the database is in a dirty state (failed migration), it automatically
 // rolls back to the last clean version so migration can resume on restart.
-func (d *DB) RunMigrations(dir string) error {
+func (d *DB) RunMigrations() error {
 	ctx := context.Background()
 
 	// Acquire advisory lock — blocks until the lock is available.
@@ -152,7 +157,15 @@ func (d *DB) RunMigrations(dir string) error {
 		_, _ = conn.Exec(ctx, "SELECT pg_advisory_unlock($1)", dm3MigrationLockID)
 	}()
 
-	m, err := migrate.New("file://"+dir, d.dsn)
+	sub, err := fs.Sub(migrationsFS, "migrations")
+	if err != nil {
+		return fmt.Errorf("migrate fs: %w", err)
+	}
+	src, err := iofs.New(sub, ".")
+	if err != nil {
+		return fmt.Errorf("migrate iofs: %w", err)
+	}
+	m, err := migrate.NewWithSourceInstance("iofs", src, d.dsn)
 	if err != nil {
 		return fmt.Errorf("migrate init: %w", err)
 	}
