@@ -9,23 +9,21 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const (
-	bufferSize    = 10000
-	batchSize     = 50
-	flushInterval = 100 * time.Millisecond
-)
+const bufferSize = 10000
+
+// Publisher is the interface for publishing audit events to NATS.
+// *natsutil.Client satisfies this interface.
+type Publisher interface {
+	Publish(ctx context.Context, subject string, data []byte) error
+}
 
 // ContextExtractor extracts actor and tenant information from a request context.
 // Register one at startup via SetContextExtractor to avoid an import cycle
 // between pkg/audit and internal/authsvc.
 type ContextExtractor struct {
-	// ActorFromContext returns the actor_id and actor_email for the current user.
-	ActorFromContext func(ctx context.Context) (actorID, actorEmail string)
-	// CompanyIDFromContext returns the tenant_id for the current user.
+	ActorFromContext     func(ctx context.Context) (actorID, actorEmail string)
 	CompanyIDFromContext func(ctx context.Context) string
 }
 
@@ -62,23 +60,25 @@ type Entry struct {
 	Metadata   map[string]any `json:"metadata,omitempty"`
 }
 
-// Logger writes audit entries asynchronously via a buffered channel.
+// Logger publishes audit entries to NATS via a buffered channel.
 type Logger struct {
-	pool    *pgxpool.Pool
+	pub     Publisher
 	service string
-	ch      chan Entry
+	subject string
+	ch      chan []byte
 	wg      sync.WaitGroup
 	done    chan struct{}
 }
 
-// New creates an audit logger for the given service.
-// It starts a background goroutine that batch-inserts entries.
+// New creates an audit logger that publishes entries to NATS.
+// It starts a background goroutine for non-blocking publishing.
 // Call Close() during shutdown to flush remaining entries.
-func New(pool *pgxpool.Pool, serviceName string) *Logger {
+func New(pub Publisher, serviceName string) *Logger {
 	l := &Logger{
-		pool:    pool,
+		pub:     pub,
 		service: serviceName,
-		ch:      make(chan Entry, bufferSize),
+		subject: "dm3.audit." + serviceName,
+		ch:      make(chan []byte, bufferSize),
 		done:    make(chan struct{}),
 	}
 	l.wg.Add(1)
@@ -86,7 +86,7 @@ func New(pool *pgxpool.Pool, serviceName string) *Logger {
 	return l
 }
 
-// Log enqueues an audit entry for async write.
+// Log enqueues an audit entry for async publishing to NATS.
 // Non-blocking: drops the entry if the buffer is full.
 func (l *Logger) Log(e Entry) {
 	if l == nil {
@@ -98,8 +98,13 @@ func (l *Logger) Log(e Entry) {
 	if e.Status == "" {
 		e.Status = "success"
 	}
+	data, err := json.Marshal(e)
+	if err != nil {
+		slog.Warn("audit: marshal failed", "error", err, "action", e.Action)
+		return
+	}
 	select {
-	case l.ch <- e:
+	case l.ch <- data:
 	default:
 		slog.Warn("audit: buffer full, dropping entry", "action", e.Action, "entity", e.EntityType)
 	}
@@ -141,46 +146,26 @@ func (l *Logger) Close() {
 	l.wg.Wait()
 }
 
-// run is the background goroutine that batches and flushes entries.
+// run is the background goroutine that publishes entries to NATS.
 func (l *Logger) run() {
 	defer l.wg.Done()
-	ticker := time.NewTicker(flushInterval)
-	defer ticker.Stop()
-
-	batch := make([]Entry, 0, batchSize)
-
-	flush := func() {
-		if len(batch) == 0 {
-			return
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := l.insertBatch(ctx, batch); err != nil {
-			slog.Error("audit: batch insert failed", "error", err, "count", len(batch))
-		}
-		batch = batch[:0]
-	}
-
 	for {
 		select {
-		case e := <-l.ch:
-			batch = append(batch, e)
-			if len(batch) >= batchSize {
-				flush()
+		case data := <-l.ch:
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			if err := l.pub.Publish(ctx, l.subject, data); err != nil {
+				slog.Warn("audit: publish failed", "error", err)
 			}
-		case <-ticker.C:
-			flush()
+			cancel()
 		case <-l.done:
 			// Drain remaining entries
 			for {
 				select {
-				case e := <-l.ch:
-					batch = append(batch, e)
-					if len(batch) >= batchSize {
-						flush()
-					}
+				case data := <-l.ch:
+					ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+					_ = l.pub.Publish(ctx, l.subject, data)
+					cancel()
 				default:
-					flush()
 					return
 				}
 			}
@@ -188,51 +173,7 @@ func (l *Logger) run() {
 	}
 }
 
-func (l *Logger) insertBatch(ctx context.Context, batch []Entry) error {
-	query := `INSERT INTO dm3_audit.audit_logs
-		(tenant_id, actor_id, actor_email, actor_ip, user_agent, service, action,
-		 entity_type, entity_id, entity_name, status, old_values, new_values, metadata)
-		VALUES `
-
-	args := make([]any, 0, len(batch)*14)
-	for i, e := range batch {
-		if i > 0 {
-			query += ", "
-		}
-		base := i * 14
-		query += "("
-		for j := 0; j < 14; j++ {
-			if j > 0 {
-				query += ", "
-			}
-			query += "$" + itoa(base+j+1)
-		}
-		query += ")"
-
-		args = append(args,
-			nilIfEmpty(e.TenantID),
-			nilIfEmpty(e.ActorID),
-			nilIfEmpty(e.ActorEmail),
-			nilIP(e.ActorIP),
-			nilIfEmpty(e.UserAgent),
-			e.Service,
-			e.Action,
-			e.EntityType,
-			nilIfEmpty(e.EntityID),
-			nilIfEmpty(e.EntityName),
-			e.Status,
-			toJSONB(e.OldValues),
-			toJSONB(e.NewValues),
-			toJSONB(e.Metadata),
-		)
-	}
-
-	_, err := l.pool.Exec(ctx, query, args...)
-	return err
-}
-
-// ActorFromContext extracts actor_id and actor_email from the request context
-// using the registered ContextExtractor. Returns empty strings if none is registered.
+// ActorFromContext extracts actor_id and actor_email from the request context.
 func ActorFromContext(ctx context.Context) (actorID, actorEmail string) {
 	if globalExtractor.ActorFromContext == nil {
 		return "", ""
@@ -298,35 +239,6 @@ func Diff(old, new any) (oldVals, newVals map[string]any) {
 
 // --- helpers ---
 
-func nilIfEmpty(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
-}
-
-func nilIP(s string) any {
-	if s == "" {
-		return nil
-	}
-	// Validate it's a real IP before inserting into INET column
-	if net.ParseIP(s) == nil {
-		return nil
-	}
-	return s
-}
-
-func toJSONB(v any) any {
-	if v == nil {
-		return nil
-	}
-	b, err := json.Marshal(v)
-	if err != nil || string(b) == "null" || string(b) == "{}" {
-		return nil
-	}
-	return b
-}
-
 func toMap(v any) map[string]any {
 	if v == nil {
 		return nil
@@ -349,21 +261,4 @@ func jsonEqual(a, b any) bool {
 	aj, _ := json.Marshal(a)
 	bj, _ := json.Marshal(b)
 	return string(aj) == string(bj)
-}
-
-func itoa(i int) string {
-	// Simple int to ASCII for parameter placeholders
-	if i < 10 {
-		return string(rune('0' + i))
-	}
-	if i < 100 {
-		return string([]byte{byte('0' + i/10), byte('0' + i%10)})
-	}
-	// Fallback for 100+
-	s := ""
-	for i > 0 {
-		s = string(rune('0'+i%10)) + s
-		i /= 10
-	}
-	return s
 }

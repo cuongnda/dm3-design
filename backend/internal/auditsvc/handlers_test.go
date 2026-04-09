@@ -1,4 +1,4 @@
-package audit
+package auditsvc
 
 import (
 	"context"
@@ -7,19 +7,16 @@ import (
 	"testing"
 )
 
-// newTestHandlers returns AuditHandlers wired with stub claims for unit tests.
-// db is nil — tests that don't hit the database are safe to run without one.
 func newTestHandlers(isAdmin bool, companyID string) *AuditHandlers {
 	return &AuditHandlers{
 		db: nil,
 		claims: ClaimsReader{
-			IsAdmin: func(_ context.Context) bool { return isAdmin },
+			IsAdmin:   func(_ context.Context) bool { return isAdmin },
 			CompanyID: func(_ context.Context) string { return companyID },
 		},
 	}
 }
 
-// TestParseAuditPagination verifies defaults and caps.
 func TestParseAuditPagination(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -49,7 +46,6 @@ func TestParseAuditPagination(t *testing.T) {
 	}
 }
 
-// TestNewAuditHandlers verifies the constructor wires claims correctly.
 func TestNewAuditHandlers(t *testing.T) {
 	h := newTestHandlers(true, "tenant-123")
 	if h == nil {
@@ -63,14 +59,9 @@ func TestNewAuditHandlers(t *testing.T) {
 	}
 }
 
-// TestGetAuditLogNoCompanyForbidden verifies that a non-admin without a
-// company context receives 403.
 func TestGetAuditLogNoCompanyForbidden(t *testing.T) {
-	h := newTestHandlers(false, "") // non-admin, no company
+	h := newTestHandlers(false, "")
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/audit/logs/some-id", nil)
-
-	// Simulate chi URL param by adding it via context (chi's approach).
-	// We test just the guard logic — companyID empty → 403.
 	w := httptest.NewRecorder()
 
 	defer func() {
@@ -85,7 +76,6 @@ func TestGetAuditLogNoCompanyForbidden(t *testing.T) {
 	}
 }
 
-// TestBuildAuditWhereAdminNoFilter verifies the WHERE clause for admins with no filters.
 func TestBuildAuditWhereAdminNoFilter(t *testing.T) {
 	h := newTestHandlers(true, "")
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -101,7 +91,6 @@ func TestBuildAuditWhereAdminNoFilter(t *testing.T) {
 	}
 }
 
-// TestBuildAuditWhereTenantScoped verifies tenant scoping for non-admin.
 func TestBuildAuditWhereTenantScoped(t *testing.T) {
 	const testTenant = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 	h := newTestHandlers(false, testTenant)
@@ -116,7 +105,6 @@ func TestBuildAuditWhereTenantScoped(t *testing.T) {
 	_ = where
 }
 
-// TestJsonString verifies CSV helper.
 func TestJsonString(t *testing.T) {
 	if got := jsonString(nil); got != "" {
 		t.Errorf("expected empty for nil, got %q", got)

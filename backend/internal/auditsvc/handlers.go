@@ -1,4 +1,4 @@
-package audit
+package auditsvc
 
 import (
 	"context"
@@ -17,11 +17,8 @@ import (
 )
 
 // ClaimsReader extracts JWT claims fields from a request context.
-// Injected at construction to avoid an import cycle with internal/authsvc.
 type ClaimsReader struct {
-	// IsAdmin returns true when the authenticated user has the system_admin role.
-	IsAdmin func(ctx context.Context) bool
-	// CompanyID returns the tenant_id from the request context (empty for system admins without scope).
+	IsAdmin   func(ctx context.Context) bool
 	CompanyID func(ctx context.Context) string
 }
 
@@ -32,13 +29,10 @@ type AuditHandlers struct {
 }
 
 // NewAuditHandlers returns a new AuditHandlers.
-// claims provides context extractors to avoid an import cycle between
-// internal/audit and internal/authsvc (which imports pkg/audit).
 func NewAuditHandlers(database *db.DB, claims ClaimsReader) *AuditHandlers {
 	return &AuditHandlers{db: database, claims: claims}
 }
 
-// auditLogRow is the response shape for a single audit log entry.
 type auditLogRow struct {
 	ID         string         `json:"id"`
 	Time       time.Time      `json:"time"`
@@ -58,14 +52,12 @@ type auditLogRow struct {
 	Metadata   map[string]any `json:"metadata,omitempty"`
 }
 
-// statRow is the response shape for a single stats entry.
 type statRow struct {
 	Action  string `json:"action"`
 	Service string `json:"service"`
 	Count   int64  `json:"count"`
 }
 
-// statsResponse is returned by GetAuditStats.
 type statsResponse struct {
 	Stats   []statRow `json:"stats"`
 	Total   int64     `json:"total"`
@@ -78,7 +70,6 @@ const (
 	maxExportRows     = 10000
 )
 
-// parseAuditPagination parses page/limit with audit-specific defaults and caps.
 func parseAuditPagination(r *http.Request) (page, limit int) {
 	page = 1
 	limit = defaultAuditLimit
@@ -98,14 +89,11 @@ func parseAuditPagination(r *http.Request) (page, limit int) {
 	return page, limit
 }
 
-// buildAuditWhere builds the WHERE clause and args from common query params.
-// isAdmin controls whether tenant scoping is applied or overridden by the caller.
 func (h *AuditHandlers) buildAuditWhere(r *http.Request, isAdmin bool) (string, []any, int) {
 	where := "WHERE 1=1"
 	args := []any{}
 	idx := 1
 
-	// Tenant scoping: non-admin is auto-scoped; admin may pass ?tenant_id=
 	if !isAdmin {
 		cid := h.claims.CompanyID(r.Context())
 		if cid != "" {
@@ -172,10 +160,7 @@ func (h *AuditHandlers) buildAuditWhere(r *http.Request, isAdmin bool) (string, 
 	return where, args, idx
 }
 
-// scanAuditRow scans a single audit log row from the query result.
-func scanAuditRow(rows interface {
-	Scan(dest ...any) error
-}) (auditLogRow, error) {
+func scanAuditRow(rows interface{ Scan(dest ...any) error }) (auditLogRow, error) {
 	var row auditLogRow
 	var tenantID, actorID, actorEmail, actorIP, userAgent, entityID, entityName *string
 	err := rows.Scan(
@@ -216,7 +201,7 @@ const auditSelectCols = `id, time, tenant_id, actor_id, actor_email, actor_ip::t
 	service, action, entity_type, entity_id, entity_name,
 	status, old_values, new_values, metadata`
 
-// ListAuditLogs — GET /api/v1/audit/logs or /api/v1/audit/tenant/logs
+// ListAuditLogs handles GET /api/v1/audit/logs or /api/v1/audit/tenant/logs.
 func (h *AuditHandlers) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	page, limit := parseAuditPagination(r)
 	offset := (page - 1) * limit
@@ -264,7 +249,7 @@ func (h *AuditHandlers) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	httputil.Paginated(w, entries, total, page, limit)
 }
 
-// GetAuditLog — GET /api/v1/audit/logs/{id}
+// GetAuditLog handles GET /api/v1/audit/logs/{id}.
 func (h *AuditHandlers) GetAuditLog(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	admin := h.claims.IsAdmin(r.Context())
@@ -294,8 +279,7 @@ func (h *AuditHandlers) GetAuditLog(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, entry)
 }
 
-// ExportAuditLogs — GET /api/v1/audit/export or /api/v1/audit/tenant/export
-// Streams up to 10000 rows as CSV.
+// ExportAuditLogs handles GET /api/v1/audit/export or /api/v1/audit/tenant/export.
 func (h *AuditHandlers) ExportAuditLogs(w http.ResponseWriter, r *http.Request) {
 	where, args, idx := h.buildAuditWhere(r, h.claims.IsAdmin(r.Context()))
 
@@ -350,7 +334,7 @@ func (h *AuditHandlers) ExportAuditLogs(w http.ResponseWriter, r *http.Request) 
 	cw.Flush()
 }
 
-// GetAuditStats — GET /api/v1/audit/stats
+// GetAuditStats handles GET /api/v1/audit/stats.
 func (h *AuditHandlers) GetAuditStats(w http.ResponseWriter, r *http.Request) {
 	where := "WHERE 1=1"
 	args := []any{}
@@ -384,7 +368,7 @@ func (h *AuditHandlers) GetAuditStats(w http.ResponseWriter, r *http.Request) {
 			idx++
 		}
 	}
-	_ = idx // suppress unused warning; idx used only during filter building
+	_ = idx
 
 	var total int64
 	countArgs := make([]any, len(args))
@@ -425,7 +409,6 @@ func (h *AuditHandlers) GetAuditStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// jsonString marshals a map to a JSON string for CSV output; returns empty on nil.
 func jsonString(v map[string]any) string {
 	if v == nil {
 		return ""

@@ -26,10 +26,11 @@ Required services:
 Open project in VSCode → Run & Debug → select **"All Backend Services"** → F5
 
 Or run individual services:
-- Auth Service (`:8005`)
-- Identity Service (`:8004`)
-- Access Service (`:8003`)
+- Audit Service (`:8001`)
 - Device Gateway (`:8002`)
+- Access Service (`:8003`)
+- Identity Service (`:8004`)
+- Auth Service (`:8005`)
 
 ### 3. Start Frontend
 ```bash
@@ -63,7 +64,7 @@ Console available at **http://localhost:3000**
 - **Device Provisioning:** QR flow (pre-authorized) + Bootstrap flow (self-register)
 
 ## Stack
-- **Backend:** Go monorepo (4 services: device-gateway:8002, access-svc:8003, identity-svc:8004, auth-svc:8005)
+- **Backend:** Go monorepo (5 services: audit-svc:8001, device-gateway:8002, access-svc:8003, identity-svc:8004, auth-svc:8005)
 - **DB:** TimescaleDB port 5433 (dm3/dm3secret), 8 migrations
 - **Infra:** EMQX(:1884), NATS(:4222), Valkey(:6380), MinIO(:9002), Simulator(:9090)
 - **Webapp:** Vite + React 18 + TS + Tailwind + shadcn/ui + React Router v7 + Zustand + TanStack Query
@@ -76,6 +77,7 @@ Console available at **http://localhost:3000**
 ### Backend Services
 | Service | Port | Description |
 |---------|------|-------------|
+| audit-svc | 8001 | Immutable audit trail, event consumer |
 | device-gateway | 8002 | MQTT bridge, device provisioning |
 | access-svc | 8003 | Access rules, schedules, logs |
 | identity-svc | 8004 | Users, companies, profiles |

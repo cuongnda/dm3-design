@@ -32,7 +32,7 @@ npm run test:e2e:ui   # interactive UI mode
 ### Backend (Go — run from `backend/`)
 
 ```bash
-make build            # build all 4 binaries → bin/
+make build            # build all 5 binaries → bin/
 make test             # go test ./... -v -race
 make lint             # golangci-lint run ./...
 make migrate          # apply DB migrations (TimescaleDB :5433)
@@ -45,6 +45,7 @@ go run ./cmd/auth-svc/
 go run ./cmd/identity-svc/
 go run ./cmd/access-svc/
 go run ./cmd/device-gateway/
+go run ./cmd/audit-svc/
 ```
 
 Run a single test file:
@@ -72,7 +73,7 @@ pytest tests/web/          # Playwright UI tests
 
 ### Backend — Go monorepo (`backend/`)
 
-Four services, all in one Go module (`github.com/duali/dm3-backend`):
+Five services, all in one Go module (`github.com/duali/dm3-backend`):
 
 | Service | Port | Entry point | Responsibility |
 |---|---|---|---|
@@ -80,16 +81,17 @@ Four services, all in one Go module (`github.com/duali/dm3-backend`):
 | `identity-svc` | 8004 | `cmd/identity-svc/` | Users, companies, profiles |
 | `access-svc` | 8003 | `cmd/access-svc/` | Access rules, schedules, event logs |
 | `device-gateway` | 8002 | `cmd/device-gateway/` | MQTT bridge, device provisioning, WebSocket |
+| `audit-svc` | 8001 | `cmd/audit-svc/` | Immutable audit log (NATS consumer + query API) |
 
 **Key internal packages:**
 - `internal/config/` — shared `Config` struct, loaded from env vars (defaults to dev values)
 - `internal/models/` — shared domain structs: `access.go`, `device.go`, `event.go`, `person.go`
 - `internal/middleware/` — JWT auth middleware (`auth.go`), CORS, logging
 - `internal/authsvc/`, `internal/access/`, `internal/identity/`, `internal/gateway/` — per-service handlers
+- `internal/auditsvc/` — audit-svc internals: NATS consumer (batch writer) + query API handlers
 - `pkg/db/` — pgx connection pool, migrations
-- `pkg/audit/` — async audit logger (buffered channel → batch INSERT into `dm3_audit.audit_logs`)
+- `pkg/audit/` — audit client library (publishes entries to NATS for audit-svc to consume)
 - `pkg/natsutil/`, `pkg/mqtt/` — NATS JetStream and MQTT helpers
-- `internal/audit/` — audit log query API (list, filter, export CSV, stats)
 
 **Event flow:** Simulator → EMQX (MQTT :1884) → `device-gateway` → NATS JetStream → `access-svc` → TimescaleDB
 
@@ -98,7 +100,7 @@ Four services, all in one Go module (`github.com/duali/dm3-backend`):
 - **Multi-tenancy**: company = tenant; `tenant_id` on all tenant-scoped tables; two-step login (company code → credentials)
 - NATS subjects carry `tenant_id` — extract it from subject, not just payload (see `internal/access/nats_consumer.go`)
 - 7-day grace period for expired JWT refresh tokens (to support offline devices)
-- **Audit trail**: every CREATE/UPDATE/DELETE and auth event is logged to `dm3_audit.audit_logs` (TimescaleDB hypertable). Async writes via `pkg/audit.Logger` (buffered channel, batch INSERT). The table is INSERT+SELECT only (no UPDATE/DELETE by application user). Retention: 2 years, compression after 30 days. Query API at `/api/v1/audit/` (system admin) and `/api/v1/audit/tenant/` (tenant-scoped).
+- **Audit trail**: every CREATE/UPDATE/DELETE and auth event is logged to `dm3_audit.audit_logs` (TimescaleDB hypertable). Services publish audit entries to NATS (`dm3.audit.{service}`) via `pkg/audit.Logger`; standalone `audit-svc` consumes from NATS and batch-INSERTs into DB. The table is INSERT+SELECT only (no UPDATE/DELETE by application user). Retention: 2 years, compression after 30 days. Query API at `/api/v1/audit/` (system admin) and `/api/v1/audit/tenant/` (tenant-scoped), served by audit-svc on port 8001.
 
 ### Frontend — Turborepo (`apps/` + `packages/`)
 

@@ -172,6 +172,7 @@ curl http://localhost:8005/healthz                           # auth-svc  (direct
 curl http://localhost:8004/healthz                           # identity-svc
 curl http://localhost:8003/healthz                           # access-svc
 curl http://localhost:8002/healthz                           # device-gateway
+curl http://localhost:8001/healthz                           # audit-svc
 ```
 
 ---
@@ -198,7 +199,8 @@ nginx (port 80/443)
   │     ├── /api/v1/rules           → access-svc:8003
   │     ├── /api/v1/events          → access-svc:8003
   │     ├── /api/v1/schedules       → access-svc:8003
-  │     └── /api/v1/stats           → access-svc:8003
+  │     ├── /api/v1/stats           → access-svc:8003
+  │     └── /api/v1/audit           → audit-svc:8001
   ├── dm3-mqtt.demasterpro.com/mqtt → emqx:8083 (WS)
   └── dm3-minio.demasterpro.com     → minio:9001 (console)
 

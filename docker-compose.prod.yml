@@ -180,6 +180,31 @@ services:
       timeout: 5s
       retries: 5
 
+  audit-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-audit-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: audit-svc
+      HTTP_PORT: "8001"
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
+      NATS_URL: nats://nats:4222
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+    networks:
+      - dm3-internal
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8001/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   device-gateway:
     build:
       context: ./backend
@@ -253,6 +278,8 @@ services:
       access-svc:
         condition: service_healthy
       device-gateway:
+        condition: service_healthy
+      audit-svc:
         condition: service_healthy
     networks:
       - dm3-internal

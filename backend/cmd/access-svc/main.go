@@ -73,8 +73,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Audit logger
-	auditLog := audit.New(database.Pool, "access-svc")
+	// Ensure AUDIT stream for audit event publishing
+	if err := natsClient.EnsureStream(ctx, "AUDIT", []string{"dm3.audit.>"}); err != nil {
+		slog.Error("failed to ensure AUDIT stream", "error", err)
+		os.Exit(1)
+	}
+
+	// Audit logger (publishes to NATS → audit-svc)
+	auditLog := audit.New(natsClient, "access-svc")
 	defer auditLog.Close()
 	audit.SetContextExtractor(audit.ContextExtractor{
 		ActorFromContext: func(ctx context.Context) (string, string) {

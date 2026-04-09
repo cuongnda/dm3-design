@@ -12,7 +12,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	auditpkg "github.com/duali/dm3-backend/internal/audit"
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/config"
 	"github.com/duali/dm3-backend/internal/tenant"
@@ -21,6 +20,7 @@ import (
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/i18n"
+	"github.com/duali/dm3-backend/pkg/natsutil"
 )
 
 func main() {
@@ -51,7 +51,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	auditLog := audit.New(database.Pool, "auth-svc")
+	// Connect to NATS (for audit event publishing)
+	natsClient, err := natsutil.Connect(ctx, cfg.NATSURL)
+	if err != nil {
+		slog.Error("failed to connect to nats", "error", err)
+		os.Exit(1)
+	}
+	defer natsClient.Close()
+
+	if err := natsClient.EnsureStream(ctx, "AUDIT", []string{"dm3.audit.>"}); err != nil {
+		slog.Error("failed to ensure AUDIT stream", "error", err)
+		os.Exit(1)
+	}
+
+	auditLog := audit.New(natsClient, "auth-svc")
 	defer auditLog.Close()
 	audit.SetContextExtractor(audit.ContextExtractor{
 		ActorFromContext: func(ctx context.Context) (string, string) {
@@ -65,13 +78,6 @@ func main() {
 	})
 
 	h := authsvc.NewAuthHandlers(database, cfg.JWTSecret, auditLog)
-	auditHandlers := auditpkg.NewAuditHandlers(database, auditpkg.ClaimsReader{
-		IsAdmin: func(ctx context.Context) bool {
-			c := authsvc.ClaimsFromContext(ctx)
-			return c != nil && c.Role == "system_admin"
-		},
-		CompanyID: authsvc.CompanyIDFromContext,
-	})
 	r := httputil.NewRouter()
 
 	// Bug reporter middleware (auto-reports 5xx to DV Tasks)
@@ -112,13 +118,6 @@ func main() {
 		pr.Post("/api/v1/auth/device-token", h.DeviceToken)
 		pr.Get("/api/v1/auth/roles", h.ListRoles)
 
-		// Tenant-scoped audit logs (any authenticated user with company)
-		pr.Group(func(ar chi.Router) {
-			ar.Use(authsvc.RequireCompany())
-			ar.Get("/api/v1/audit/tenant/logs", auditHandlers.ListAuditLogs)
-			ar.Get("/api/v1/audit/tenant/export", auditHandlers.ExportAuditLogs)
-		})
-
 		// System admin only: company management + stats
 		pr.Group(func(sr chi.Router) {
 			sr.Use(authsvc.RequireRole("system_admin"))
@@ -137,12 +136,6 @@ func main() {
 			sr.Delete("/api/v1/auth/system/accounts/{id}", h.DeleteUserAccount)
 			sr.Post("/api/v1/auth/system/accounts/{id}/reset-password", h.ResetUserPassword)
 			sr.Put("/api/v1/auth/system/accounts/{id}/change-password", h.ChangeUserPassword)
-
-			// Audit logs (system admin)
-			sr.Get("/api/v1/audit/logs", auditHandlers.ListAuditLogs)
-			sr.Get("/api/v1/audit/logs/{id}", auditHandlers.GetAuditLog)
-			sr.Get("/api/v1/audit/export", auditHandlers.ExportAuditLogs)
-			sr.Get("/api/v1/audit/stats", auditHandlers.GetAuditStats)
 		})
 	})
 

@@ -8,7 +8,7 @@ This document tracks the current implementation status of DM3 features. Updated:
 
 > **Two systemic gaps found that cannot be buried in per-item detail:**
 >
-> 1. **Service topology is 20% implemented.** The architecture doc (`docs/architecture/system-architecture.md:281`) specifies ~20 microservices. Only 4 exist in `backend/cmd/` (auth-svc, access-svc, identity-svc, device-gateway). All domain services (visitor-svc, booking-svc, parking-svc, guard-tour-svc, analytics-svc, etc.) are absent.
+> 1. **Service topology is 25% implemented.** The architecture doc (`docs/architecture/system-architecture.md:281`) specifies ~20 microservices. 5 exist in `backend/cmd/` (auth-svc, access-svc, identity-svc, device-gateway, audit-svc). All domain services (visitor-svc, booking-svc, parking-svc, guard-tour-svc, analytics-svc, etc.) are absent.
 >
 > 2. **The majority of frontend pages are mock-data-only UI shells.** 21 of ~30 feature pages import from `mock-data` files or define inline hardcoded arrays with zero API client usage. ALL OPERATE, ALL SMART, and most SECURE/MANAGE pages are visual prototypes, not working features. Only DashboardPage, DeviceDetailPage, IdentitiesPage/PersonDetailPage/GroupsPage, and SystemSettingsPage integrate with real backend APIs.
 >
@@ -20,9 +20,9 @@ This document tracks the current implementation status of DM3 features. Updated:
 
 | Layer | Status | Details |
 |-------|--------|---------|
-| Service Topology | ❌ Gap | 4 of ~20 specified services implemented. Evidence: `backend/cmd/` has 4 dirs; `docs/architecture/system-architecture.md:281` specifies ~20 |
+| Service Topology | ❌ Gap | 5 of ~20 specified services implemented. Evidence: `backend/cmd/` has 5 dirs (auth-svc, identity-svc, access-svc, device-gateway, audit-svc); `docs/architecture/system-architecture.md:281` specifies ~20 |
 | Data Flow / MQTT Pipeline | ✅ Compliant | Topic `dm/{tid}/device/{did}/{cat}` confirmed. Envelope (v, id, ts) confirmed. NATS bridge confirmed. Evidence: `backend/internal/gateway/mqtt_handler.go:48-57, 27-35` |
-| Data Model / ER | ⚠️ Partial | 19 tables exist. Missing: sites, zones, visitors, contractors, rooms, parking, maintenance, keys. `doors` table has dangling `site_id`/`zone_id` FKs. `dm3_audit` schema is empty. |
+| Data Model / ER | ⚠️ Partial | 19 tables exist. Missing: sites, zones, visitors, contractors, rooms, parking, maintenance, keys. `doors` table has dangling `site_id`/`zone_id` FKs. `dm3_audit` schema is active (audit_logs hypertable, populated by audit-svc via NATS). |
 | Security | ⚠️ Partial | JWT auth, bcrypt, CORS, refresh-token replay detection confirmed. Missing: TLS config in docker-compose for EMQX, no rate limiting middleware found. |
 | Deployment | ✅ Compliant | All 6 infra services present in `backend/docker-compose.yml` with correct ports. Simulator is in a separate `simulator/docker-compose.yml` (minor split). No Traefik gateway config found. |
 
@@ -50,6 +50,11 @@ This document tracks the current implementation status of DM3 features. Updated:
 - **device-gateway** (`backend/internal/gateway/`) — MQTT bridge, device provisioning, sync coordination, WebSocket events
   - Status: ✅ Compliant | Risk: Low
   - Evidence: `mqtt_handler.go:47-57` — topic `dm/{cid}/device/{did}/{category}` parsed correctly; `mqtt_handler.go:27-35` — MQTTEnvelope (v, id, ts) ✅; `mqtt_handler.go:119` — NATS bridge publishes to `dm3.devices.{tenantID}.{deviceID}.{category}` ✅; provisioning tables confirmed in migration (provisioning_tokens, pending_registrations, used_nonces)
+
+- **audit-svc** (`backend/internal/auditsvc/`) — Standalone audit trail service, NATS consumer, query API
+  - Status: ✅ Compliant | Risk: Low
+  - Evidence: `cmd/audit-svc/main.go` — standalone service on port 8001; `internal/auditsvc/consumer.go` — NATS JetStream consumer with batch INSERT (50 entries / 100ms flush) to `dm3_audit.audit_logs` hypertable; `internal/auditsvc/handlers.go` — query API with pagination, filtering, CSV export, stats; all 4 other services publish audit events via `pkg/audit.Logger` → NATS `dm3.audit.>` subjects
+  - Architecture: Events published asynchronously from all services via buffered channel → NATS JetStream → audit-svc consumer → TimescaleDB. Table is INSERT+SELECT only (tamper-proof). 2-year retention, 30-day compression.
 
 ### Frontend Features (React/TypeScript)
 
@@ -301,7 +306,7 @@ Features with detailed specifications in `docs/specs/` but not yet implemented:
 ### PLATFORM Domain
 - **Advanced Reporting Engine** — Custom report builder with templates
 - **API Rate Limiting** — Advanced API protection and quotas
-- **Audit Trail Enhancement** — Detailed compliance and forensic logging
+- ~~**Audit Trail Enhancement** — Detailed compliance and forensic logging~~ → **Implemented** as standalone `audit-svc` (port 8001). Consumes audit events via NATS JetStream, batch-inserts to `dm3_audit.audit_logs` hypertable. Query API at `/api/v1/audit/`.
 - **Mobile-responsive UI** — Full mobile optimization across all features
 
 ### DEVICES Domain
@@ -345,9 +350,9 @@ High-level features mentioned in vision documents but lacking detailed specifica
 
 ## Summary
 
-- **✅ Compliant** (fully matches spec): auth-svc (v1), device-gateway, MQTT pipeline, Dashboard, Devices, SystemSettings, IdentityManagement, NATS, Valkey, MinIO, TimescaleDB, shared packages — **~12 items**
+- **✅ Compliant** (fully matches spec): auth-svc (v1), device-gateway, audit-svc, MQTT pipeline, Dashboard, Devices, SystemSettings, IdentityManagement, NATS, Valkey, MinIO, TimescaleDB, shared packages — **~13 items**
 - **⚠️ Partial** (UI shell or missing components): 21+ frontend pages are mock-data-only; access-svc missing site/zone hierarchy; EMQX missing TLS; Android terminal unverified; Flutter is placeholder — **~28 items**
-- **❌ Gap** (claimed implemented, not found): Flutter apps, service topology (16 of ~20 services missing) — **~2 items + systemic**
+- **❌ Gap** (claimed implemented, not found): Flutter apps, service topology (15 of ~20 services missing) — **~2 items + systemic**
 - **📋 Specified**: ~15 features with detailed specs ready for development
 - **🔮 Vision Only**: ~20 next-generation features awaiting specification
 

@@ -1725,7 +1725,7 @@ Critical path (access control decision):
   device-gw       │ 8007      │ 9007      │
   tenant-svc      │ 8008      │ 9008      │
   notif-svc       │ 8009      │ 9009      │
-  audit-svc       │ 8010      │ 9010      │
+  audit-svc       │ 8001      │ 9001      │
   attend-svc      │ 8011      │ 9011      │
   parking-svc     │ 8012      │ 9012      │
   booking-svc     │ 8013      │ 9013      │

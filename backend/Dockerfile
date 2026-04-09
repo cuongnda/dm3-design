@@ -1,4 +1,4 @@
-# Stage 1: Build all 4 Go service binaries
+# Stage 1: Build all 5 Go service binaries
 FROM golang:1.23-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
@@ -15,7 +15,8 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o bin/device-gateway ./cmd/device-gateway/ && \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o bin/access-svc     ./cmd/access-svc/  && \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o bin/identity-svc   ./cmd/identity-svc/ && \
-    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o bin/auth-svc       ./cmd/auth-svc/
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o bin/auth-svc       ./cmd/auth-svc/ && \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o bin/audit-svc      ./cmd/audit-svc/
 
 # Stage 2: Minimal runtime image
 FROM alpine:3.19

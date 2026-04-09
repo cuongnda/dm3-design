@@ -14,11 +14,14 @@ case "${SERVICE_NAME}" in
   auth-svc)
     exec /app/bin/auth-svc "$@"
     ;;
+  audit-svc)
+    exec /app/bin/audit-svc "$@"
+    ;;
   migrate)
     exec /app/scripts/migrate.sh "$@"
     ;;
   *)
-    echo "ERROR: SERVICE_NAME must be one of: device-gateway, access-svc, identity-svc, auth-svc, migrate" >&2
+    echo "ERROR: SERVICE_NAME must be one of: device-gateway, access-svc, identity-svc, auth-svc, audit-svc, migrate" >&2
     exit 1
     ;;
 esac
