@@ -42,18 +42,18 @@ python -m dm3_simulator run --broker mqtt://localhost:1884 --devices 0
 4. Device publishes registration to `dm/bootstrap/register`
 5. Backend validates HMAC, creates pending record
 6. Device status → `pending_approval`
-7. Click "✅ Approve" on dashboard (calls backend `/api/v1/devices/pending/{id}/approve`)
+7. Click "✅ Approve" on dashboard (calls backend `/api/v1/gateway/devices/pending/{id}/approve`)
 8. Backend publishes credentials to `dm/bootstrap/{RID}/response`
 9. Device receives credentials, disconnects bootstrap, reconnects as provisioned device
 10. Device status → `provisioned` → `ready`
 
 ### QR Activation Flow
 
-1. Pre-create device on backend: `POST http://localhost:8002/api/v1/devices/provision`
+1. Pre-create device on backend: `POST http://localhost:8002/api/v1/gateway/devices/provision`
 2. Copy the `qr_token` from response
 3. Create unprovisioned device in simulator dashboard
 4. Click "📱 QR Activate", paste token
-5. Simulator calls backend `/api/v1/devices/activate` with token + hardware fingerprint
+5. Simulator calls backend `/api/v1/gateway/devices/activate` with token + hardware fingerprint
 6. Backend validates token, returns MQTT credentials
 7. Device connects and begins normal operation
 

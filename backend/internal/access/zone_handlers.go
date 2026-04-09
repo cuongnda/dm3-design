@@ -16,6 +16,21 @@ import (
 
 // ─── Zones ───────────────────────────────────────────────────────────────────
 
+// zoneSelectCols is the column list used across all zone queries.
+const zoneSelectCols = `z.id, z.tenant_id, z.parent_id, z.name, z.description,
+	z.timezone, z.latitude, z.longitude, z.address, z.floor, z.building,
+	z.map_image_url, z.map_width, z.map_height`
+
+// scanZone scans all zone columns (including spatial fields) from a row.
+func scanZone(row interface{ Scan(dest ...any) error }, z *models.Zone) error {
+	return row.Scan(
+		&z.ID, &z.TenantID, &z.ParentID, &z.Name, &z.Description,
+		&z.Timezone, &z.Latitude, &z.Longitude, &z.Address, &z.Floor, &z.Building,
+		&z.MapImageURL, &z.MapWidth, &z.MapHeight,
+		&z.AccessPointCount, &z.CreatedAt, &z.UpdatedAt,
+	)
+}
+
 func (h *AccessHandlers) ListZones(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
@@ -54,7 +69,7 @@ func (h *AccessHandlers) ListZones(w http.ResponseWriter, r *http.Request) {
 		"created_at":         "z.created_at",
 	}, "z.name")
 	query := fmt.Sprintf(`
-		SELECT z.id, z.tenant_id, z.parent_id, z.name, z.description,
+		SELECT %s,
 		       COUNT(ap.id) AS access_point_count,
 		       z.created_at, z.updated_at
 		FROM dm3_access.zones z
@@ -62,7 +77,7 @@ func (h *AccessHandlers) ListZones(w http.ResponseWriter, r *http.Request) {
 		%s
 		GROUP BY z.id
 		ORDER BY %s %s
-		LIMIT $%d OFFSET $%d`, where, sortCol, sortDir, idx, idx+1)
+		LIMIT $%d OFFSET $%d`, zoneSelectCols, where, sortCol, sortDir, idx, idx+1)
 	args = append(args, limit, offset)
 
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)
@@ -76,20 +91,32 @@ func (h *AccessHandlers) ListZones(w http.ResponseWriter, r *http.Request) {
 	zones := []models.Zone{}
 	for rows.Next() {
 		var z models.Zone
-		if err := rows.Scan(&z.ID, &z.TenantID, &z.ParentID, &z.Name, &z.Description,
-			&z.AccessPointCount, &z.CreatedAt, &z.UpdatedAt); err != nil {
+		if err := scanZone(rows, &z); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		zones = append(zones, z)
 	}
+	if err := rows.Err(); err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 	httputil.Paginated(w, zones, total, page, limit)
 }
 
 type createZoneRequest struct {
-	Name        string  `json:"name"`
-	Description *string `json:"description"`
-	ParentID    *string `json:"parent_id"`
+	Name        string   `json:"name"`
+	Description *string  `json:"description"`
+	ParentID    *string  `json:"parent_id"`
+	Timezone    *string  `json:"timezone"`
+	Latitude    *float64 `json:"latitude"`
+	Longitude   *float64 `json:"longitude"`
+	Address     *string  `json:"address"`
+	Floor       *string  `json:"floor"`
+	Building    *string  `json:"building"`
+	MapImageURL *string  `json:"map_image_url"`
+	MapWidth    *int     `json:"map_width"`
+	MapHeight   *int     `json:"map_height"`
 }
 
 func (h *AccessHandlers) CreateZone(w http.ResponseWriter, r *http.Request) {
@@ -105,13 +132,20 @@ func (h *AccessHandlers) CreateZone(w http.ResponseWriter, r *http.Request) {
 
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	var z models.Zone
-	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_access.zones (tenant_id, parent_id, name, description)
-		 VALUES ($1::uuid, $2::uuid, $3, $4)
-		 RETURNING id, tenant_id, parent_id, name, description, 0, created_at, updated_at`,
+	err := scanZone(h.db.Pool.QueryRow(r.Context(),
+		`INSERT INTO dm3_access.zones
+		   (tenant_id, parent_id, name, description, timezone, latitude, longitude,
+		    address, floor, building, map_image_url, map_width, map_height)
+		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		 RETURNING id, tenant_id, parent_id, name, description,
+		           timezone, latitude, longitude, address, floor, building,
+		           map_image_url, map_width, map_height,
+		           0, created_at, updated_at`,
 		cid, req.ParentID, req.Name, req.Description,
-	).Scan(&z.ID, &z.TenantID, &z.ParentID, &z.Name, &z.Description,
-		&z.AccessPointCount, &z.CreatedAt, &z.UpdatedAt)
+		req.Timezone, req.Latitude, req.Longitude,
+		req.Address, req.Floor, req.Building,
+		req.MapImageURL, req.MapWidth, req.MapHeight,
+	), &z)
 	if err != nil {
 		slog.Error("create zone error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
@@ -126,16 +160,15 @@ func (h *AccessHandlers) GetZone(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
 	var z models.Zone
-	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT z.id, z.tenant_id, z.parent_id, z.name, z.description,
+	err := scanZone(h.db.Pool.QueryRow(r.Context(),
+		fmt.Sprintf(`SELECT %s,
 		        COUNT(ap.id) AS access_point_count, z.created_at, z.updated_at
 		 FROM dm3_access.zones z
 		 LEFT JOIN dm3_access.access_points ap ON ap.zone_id = z.id
 		 WHERE z.id = $1::uuid AND ($2::uuid IS NULL OR z.tenant_id = $2::uuid)
-		 GROUP BY z.id`,
+		 GROUP BY z.id`, zoneSelectCols),
 		id, nilIfEmpty(cid),
-	).Scan(&z.ID, &z.TenantID, &z.ParentID, &z.Name, &z.Description,
-		&z.AccessPointCount, &z.CreatedAt, &z.UpdatedAt)
+	), &z)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "zone not found")
 		return
@@ -144,9 +177,18 @@ func (h *AccessHandlers) GetZone(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateZoneRequest struct {
-	Name        *string `json:"name"`
-	Description *string `json:"description"`
-	ParentID    *string `json:"parent_id"`
+	Name        *string  `json:"name"`
+	Description *string  `json:"description"`
+	ParentID    *string  `json:"parent_id"`
+	Timezone    *string  `json:"timezone"`
+	Latitude    *float64 `json:"latitude"`
+	Longitude   *float64 `json:"longitude"`
+	Address     *string  `json:"address"`
+	Floor       *string  `json:"floor"`
+	Building    *string  `json:"building"`
+	MapImageURL *string  `json:"map_image_url"`
+	MapWidth    *int     `json:"map_width"`
+	MapHeight   *int     `json:"map_height"`
 }
 
 func (h *AccessHandlers) UpdateZone(w http.ResponseWriter, r *http.Request) {
@@ -160,17 +202,32 @@ func (h *AccessHandlers) UpdateZone(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var z models.Zone
-	err := h.db.Pool.QueryRow(r.Context(),
+	err := scanZone(h.db.Pool.QueryRow(r.Context(),
 		`UPDATE dm3_access.zones
-		 SET name        = COALESCE($2, name),
-		     description = COALESCE($3, description),
-		     parent_id   = COALESCE($4::uuid, parent_id),
-		     updated_at  = now()
-		 WHERE id = $1::uuid AND ($5::uuid IS NULL OR tenant_id = $5::uuid)
-		 RETURNING id, tenant_id, parent_id, name, description, 0, created_at, updated_at`,
-		id, req.Name, req.Description, req.ParentID, nilIfEmpty(cid),
-	).Scan(&z.ID, &z.TenantID, &z.ParentID, &z.Name, &z.Description,
-		&z.AccessPointCount, &z.CreatedAt, &z.UpdatedAt)
+		 SET name          = COALESCE($2, name),
+		     description   = COALESCE($3, description),
+		     parent_id     = COALESCE($4::uuid, parent_id),
+		     timezone      = COALESCE($5, timezone),
+		     latitude      = COALESCE($6, latitude),
+		     longitude     = COALESCE($7, longitude),
+		     address       = COALESCE($8, address),
+		     floor         = COALESCE($9, floor),
+		     building      = COALESCE($10, building),
+		     map_image_url = COALESCE($11, map_image_url),
+		     map_width     = COALESCE($12, map_width),
+		     map_height    = COALESCE($13, map_height),
+		     updated_at    = now()
+		 WHERE id = $1::uuid AND ($14::uuid IS NULL OR tenant_id = $14::uuid)
+		 RETURNING id, tenant_id, parent_id, name, description,
+		           timezone, latitude, longitude, address, floor, building,
+		           map_image_url, map_width, map_height,
+		           0, created_at, updated_at`,
+		id, req.Name, req.Description, req.ParentID,
+		req.Timezone, req.Latitude, req.Longitude,
+		req.Address, req.Floor, req.Building,
+		req.MapImageURL, req.MapWidth, req.MapHeight,
+		nilIfEmpty(cid),
+	), &z)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "zone not found")
 		return
@@ -233,7 +290,7 @@ func (h *AccessHandlers) BulkDeleteZones(w http.ResponseWriter, r *http.Request)
 	httputil.JSON(w, http.StatusOK, map[string]any{"deleted": tag.RowsAffected()})
 }
 
-// GET /zones/:id/doors — list access points in a zone
+// GET /zones/:id/doors — list access points in a zone (includes map placement)
 func (h *AccessHandlers) ListZoneDoors(w http.ResponseWriter, r *http.Request) {
 	zoneID := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
@@ -261,7 +318,9 @@ func (h *AccessHandlers) ListZoneDoors(w http.ResponseWriter, r *http.Request) {
 		"SELECT COUNT(*) FROM dm3_access.access_points "+where, countArgs...).Scan(&total)
 
 	query := fmt.Sprintf(`
-		SELECT id, tenant_id, zone_id, access_time_id, name, description, created_at, updated_at
+		SELECT id, tenant_id, zone_id, access_time_id, name, description,
+		       map_x, map_y, map_rotation,
+		       created_at, updated_at
 		FROM dm3_access.access_points %s
 		ORDER BY name ASC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
 	args = append(args, limit, offset)
@@ -278,7 +337,9 @@ func (h *AccessHandlers) ListZoneDoors(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var ap models.AccessPoint
 		if err := rows.Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
-			&ap.Name, &ap.Description, &ap.CreatedAt, &ap.UpdatedAt); err != nil {
+			&ap.Name, &ap.Description,
+			&ap.MapX, &ap.MapY, &ap.MapRotation,
+			&ap.CreatedAt, &ap.UpdatedAt); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
@@ -287,3 +348,98 @@ func (h *AccessHandlers) ListZoneDoors(w http.ResponseWriter, r *http.Request) {
 	httputil.Paginated(w, accessPoints, total, page, limit)
 }
 
+func nilIfEmptyJSON(raw json.RawMessage) any {
+	if len(raw) == 0 {
+		return nil
+	}
+	return raw
+}
+
+func (h *AccessHandlers) GetZoneMap(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+
+	var zone models.Zone
+	err := scanZone(h.db.Pool.QueryRow(r.Context(),
+		`SELECT `+zoneSelectCols+`, COUNT(ap.id) AS access_point_count, z.created_at, z.updated_at
+		 FROM dm3_access.zones z
+		 LEFT JOIN dm3_access.access_points ap ON ap.zone_id = z.id
+		 WHERE z.id = $1::uuid AND z.tenant_id = $2::uuid
+		 GROUP BY z.id`,
+		id, cid,
+	), &zone)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "zone not found")
+		return
+	}
+
+	rows, err := h.db.Pool.Query(r.Context(),
+		`SELECT id, tenant_id, zone_id, access_time_id, name, description, map_x, map_y, map_rotation, created_at, updated_at
+		 FROM dm3_access.access_points
+		 WHERE zone_id = $1::uuid AND tenant_id = $2::uuid
+		 ORDER BY name ASC`,
+		id, cid,
+	)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	points := []models.AccessPoint{}
+	for rows.Next() {
+		var ap models.AccessPoint
+		if err := rows.Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID, &ap.Name, &ap.Description,
+			&ap.MapX, &ap.MapY, &ap.MapRotation, &ap.CreatedAt, &ap.UpdatedAt); err != nil {
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		points = append(points, ap)
+	}
+
+	httputil.JSON(w, http.StatusOK, map[string]any{"zone": zone, "access_points": points})
+}
+
+type updateZoneMapRequest struct {
+	MapImageURL *string `json:"map_image_url"`
+	MapWidth    *int    `json:"map_width"`
+	MapHeight   *int    `json:"map_height"`
+}
+
+func (h *AccessHandlers) UpdateZoneMap(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+
+	var req updateZoneMapRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	var zone models.Zone
+	err := scanZone(h.db.Pool.QueryRow(r.Context(),
+		`UPDATE dm3_access.zones
+		 SET map_image_url = COALESCE($2, map_image_url),
+		     map_width     = COALESCE($3, map_width),
+		     map_height    = COALESCE($4, map_height),
+		     updated_at    = now()
+		 WHERE id = $1::uuid AND tenant_id = $5::uuid
+		 RETURNING `+zoneSelectCols+`, 0, created_at, updated_at`,
+		id, req.MapImageURL, req.MapWidth, req.MapHeight, cid,
+	), &zone)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "zone not found")
+		return
+	}
+
+	h.audit.LogFromRequest(r, "access.zone.map.update", "zone", zone.ID, zone.Name, "success", nil, zone)
+	httputil.JSON(w, http.StatusOK, zone)
+}

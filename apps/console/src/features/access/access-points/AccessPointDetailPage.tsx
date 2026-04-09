@@ -359,7 +359,7 @@ export function AccessPointDetailPage() {
 
     // Edit modal
     const [showEditModal, setShowEditModal] = useState(false);
-    const [editForm, setEditForm] = useState({ name: '', description: '', zone_id: '' });
+    const [editForm, setEditForm] = useState({ name: '', description: '', zone_id: '', map_x: '', map_y: '', map_rotation: '', map_label: '' });
     const [editNameError, setEditNameError] = useState('');
     const [submittingEdit, setSubmittingEdit] = useState(false);
     const [zones, setZones] = useState<{ id: string; name: string }[]>([]);
@@ -477,6 +477,10 @@ export function AccessPointDetailPage() {
             name: ap.name,
             description: ap.description ?? '',
             zone_id: ap.zone_id ?? '',
+            map_x: ap.map_x?.toString() ?? '',
+            map_y: ap.map_y?.toString() ?? '',
+            map_rotation: ap.map_rotation?.toString() ?? '',
+            map_label: ap.map_label ?? '',
         });
         setEditNameError('');
         // load zones lazily
@@ -496,10 +500,14 @@ export function AccessPointDetailPage() {
         }
         setSubmittingEdit(true);
         try {
-            const payload: Record<string, string | undefined> = {
+            const payload: Record<string, string | number | undefined> = {
                 name: editForm.name.trim(),
                 description: editForm.description.trim() || undefined,
                 zone_id: editForm.zone_id || undefined,
+                map_x: editForm.map_x === '' ? undefined : Number(editForm.map_x),
+                map_y: editForm.map_y === '' ? undefined : Number(editForm.map_y),
+                map_rotation: editForm.map_rotation === '' ? undefined : Number(editForm.map_rotation),
+                map_label: editForm.map_label.trim() || undefined,
             };
             await apiFetch(`/api/v1/access/access-points/${id}`, {
                 method: 'PUT',
@@ -728,6 +736,26 @@ export function AccessPointDetailPage() {
                                 </SelectOption>
                             ))}
                         </Select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <Label htmlFor="edit-ap-map-x">Map X</Label>
+                            <Input id="edit-ap-map-x" value={editForm.map_x} onChange={(e) => setEditForm((p) => ({ ...p, map_x: e.target.value }))} disabled={submittingEdit} />
+                        </div>
+                        <div>
+                            <Label htmlFor="edit-ap-map-y">Map Y</Label>
+                            <Input id="edit-ap-map-y" value={editForm.map_y} onChange={(e) => setEditForm((p) => ({ ...p, map_y: e.target.value }))} disabled={submittingEdit} />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <Label htmlFor="edit-ap-map-rotation">Rotation</Label>
+                            <Input id="edit-ap-map-rotation" value={editForm.map_rotation} onChange={(e) => setEditForm((p) => ({ ...p, map_rotation: e.target.value }))} disabled={submittingEdit} />
+                        </div>
+                        <div>
+                            <Label htmlFor="edit-ap-map-label">Map Label</Label>
+                            <Input id="edit-ap-map-label" value={editForm.map_label} onChange={(e) => setEditForm((p) => ({ ...p, map_label: e.target.value }))} disabled={submittingEdit} />
+                        </div>
                     </div>
                 </div>
             </AppModal>

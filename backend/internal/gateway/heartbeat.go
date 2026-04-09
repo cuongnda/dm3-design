@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/db"
 )
 
@@ -29,8 +30,8 @@ func StartHeartbeatChecker(ctx context.Context, database *db.DB, hub *EventHub) 
 		case <-ticker.C:
 			threshold := time.Now().Add(-OfflineThreshold)
 			tag, err := database.Pool.Exec(ctx,
-				`UPDATE dm3_devices.devices SET status = 'offline', updated_at = now()
-				 WHERE status = 'online' AND last_seen < $1`, threshold)
+				`UPDATE dm3_devices.devices SET status = $2, updated_at = now()
+				 WHERE status = $3 AND last_seen < $1`, threshold, models.DeviceStatusOffline, models.DeviceStatusOnline)
 			if err != nil {
 				slog.Error("heartbeat checker: failed to update offline devices", "error", err)
 				continue

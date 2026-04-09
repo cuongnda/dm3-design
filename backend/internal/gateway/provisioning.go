@@ -17,6 +17,7 @@ import (
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/config"
+	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
@@ -38,12 +39,11 @@ func NewProvisioningHandlers(database *db.DB, mqttClient *mqtt.Client, cfg *conf
 // ─── QR Flow ─────────────────────────────────────────────────────────────────
 
 type provisionRequest struct {
-	DeviceID  string `json:"device_id"`
-	Name      string `json:"name"`
-	Type      string `json:"type"`
+	DeviceID string `json:"device_id"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
 	TenantID string `json:"tenant_id"`
-	SiteID    string `json:"site_id"`
-	Location  string `json:"location"`
+	Location string `json:"location"`
 }
 
 type qrTokenClaims struct {
@@ -65,6 +65,10 @@ func (h *ProvisioningHandlers) ProvisionDevice(w http.ResponseWriter, r *http.Re
 		httputil.Error(w, http.StatusBadRequest, "device_id and type are required")
 		return
 	}
+	if !models.IsValidDeviceType(req.Type) {
+		httputil.Error(w, http.StatusBadRequest, "invalid device type: must be terminal, controller, camera, or sensor")
+		return
+	}
 
 	companyID := req.TenantID
 	if companyID == "" {
@@ -81,13 +85,13 @@ func (h *ProvisioningHandlers) ProvisionDevice(w http.ResponseWriter, r *http.Re
 		createdBy = &claims.Sub
 	}
 
-	// Create device with status=provisioning
+	// Create device with status=offline (not yet connected)
 	var deviceDBID string
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_devices.devices (device_id, name, type, site_id, location, tenant_id, status, status_detail)
-		 VALUES ($1, $2, $3, $4, $5, $6::uuid, 'provisioning', 'awaiting_activation')
+		`INSERT INTO dm3_devices.devices (device_id, name, type, location, tenant_id, status)
+		 VALUES ($1, $2, $3, $4, $5::uuid, 'offline')
 		 RETURNING id`,
-		req.DeviceID, req.Name, req.Type, req.SiteID, req.Location, companyID,
+		req.DeviceID, req.Name, req.Type, req.Location, companyID,
 	).Scan(&deviceDBID)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -124,7 +128,7 @@ func (h *ProvisioningHandlers) ProvisionDevice(w http.ResponseWriter, r *http.Re
 			"device_id": req.DeviceID,
 			"name":      req.Name,
 			"type":      req.Type,
-			"status":    "provisioning",
+			"status":    "offline",
 			"tenant_id": companyID,
 		},
 		"provisioning": map[string]any{
@@ -149,8 +153,8 @@ func (h *ProvisioningHandlers) RegenerateQR(w http.ResponseWriter, r *http.Reque
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
 	}
-	if status != "provisioning" {
-		httputil.Error(w, http.StatusBadRequest, "device is not in provisioning state")
+	if status != "offline" {
+		httputil.Error(w, http.StatusBadRequest, "device is not in offline state for provisioning")
 		return
 	}
 
@@ -240,7 +244,7 @@ func (h *ProvisioningHandlers) ActivateDevice(w http.ResponseWriter, r *http.Req
 	// Store hardware fingerprint and update device status
 	fpJSON, _ := json.Marshal(req.HardwareFingerprint)
 	_, err = h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_devices.devices SET status = 'online', status_detail = 'activated',
+		`UPDATE dm3_devices.devices SET status = 'online',
 		 hardware_fingerprint = $1, provisioned_at = now(), updated_at = now()
 		 WHERE id = $2::uuid`,
 		fpJSON, qrClaims.DID,
@@ -348,9 +352,8 @@ func (h *ProvisioningHandlers) ListPending(w http.ResponseWriter, r *http.Reques
 
 type approveRequest struct {
 	TenantID string `json:"tenant_id"`
-	SiteID    string `json:"site_id"`
-	Name      string `json:"name"`
-	Location  string `json:"location"`
+	Name     string `json:"name"`
+	Location string `json:"location"`
 }
 
 // ApprovePending handles POST /api/v1/devices/pending/{id}/approve
@@ -404,11 +407,11 @@ func (h *ProvisioningHandlers) ApprovePending(w http.ResponseWriter, r *http.Req
 	}
 	var deviceDBID string
 	err = h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_devices.devices (device_id, name, type, site_id, location, tenant_id, status, status_detail, firmware_version, hardware_fingerprint, provisioned_at, provisioned_by)
-		 VALUES ($1, $2, $3, $4, $5, $6::uuid, 'online', 'bootstrap_approved', $7, $8, now(), $9)
-		 ON CONFLICT (device_id) DO UPDATE SET status = 'online', name = $2, type = $3, site_id = $4, location = $5, tenant_id = $6::uuid, firmware_version = $7, hardware_fingerprint = $8, provisioned_at = now(), provisioned_by = $9, status_detail = 'bootstrap_approved', updated_at = now()
+		`INSERT INTO dm3_devices.devices (device_id, name, type, location, tenant_id, status, firmware_version, hardware_fingerprint, provisioned_at, provisioned_by)
+		 VALUES ($1, $2, $3, $4, $5::uuid, 'online', $6, $7, now(), $8)
+		 ON CONFLICT (device_id) DO UPDATE SET status = 'online', name = $2, type = $3, location = $4, tenant_id = $5::uuid, firmware_version = $6, hardware_fingerprint = $7, provisioned_at = now(), provisioned_by = $8, updated_at = now()
 		 RETURNING id`,
-		rid, name, deviceType, req.SiteID, req.Location, req.TenantID, firmwareVersion, fp, assignedBy,
+		rid, name, deviceType, req.Location, req.TenantID, firmwareVersion, fp, assignedBy,
 	).Scan(&deviceDBID)
 	if err != nil {
 		slog.Error("ApprovePending: insert device failed", "error", err)

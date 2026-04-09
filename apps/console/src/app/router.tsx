@@ -9,6 +9,7 @@ import { CompanyListPage } from '@/features/system/CompanyListPage';
 import { CreateCompanyPage } from '@/features/system/CreateCompanyPage';
 import { CompanyDetailPage } from '@/features/system/CompanyDetailPage';
 import { SystemDevicesPage } from '@/features/system/SystemDevicesPage';
+import { CreateDevicePage } from '@/features/system/CreateDevicePage';
 import { FirmwareListPage } from '@/features/system/FirmwareListPage';
 import { FirmwareUploadPage } from '@/features/system/FirmwareUploadPage';
 import { FirmwareDetailPage } from '@/features/system/FirmwareDetailPage';
@@ -216,6 +217,7 @@ export const Router = createBrowserRouter([
           { path: 'accounts/:id', element: <UserAccountDetailPage /> },
           { path: 'devices/pending', element: <LazyWrap><PendingDevicesPage isSystemAdmin={true} /></LazyWrap> },
           { path: 'devices', element: <SystemDevicesPage /> },
+          { path: 'devices/new', element: <CreateDevicePage /> },
           { path: 'firmware', element: <FirmwareListPage /> },
           { path: 'firmware/upload', element: <FirmwareUploadPage /> },
           { path: 'firmware/:id', element: <FirmwareDetailPage /> },

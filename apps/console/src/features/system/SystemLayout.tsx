@@ -38,7 +38,7 @@ export function SystemLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="h-screen bg-background flex">
       {/* Sidebar */}
       <aside className="w-[220px] border-r border-sidebar-border flex flex-col bg-sidebar">
         <div className="h-14 flex items-center px-4 border-b border-sidebar-border">

@@ -16,6 +16,12 @@ import (
 
 // ─── Access Points ────────────────────────────────────────────────────────────
 
+func scanAccessPoint(row interface{ Scan(dest ...any) error }, ap *models.AccessPoint) error {
+	return row.Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
+		&ap.Name, &ap.Description, &ap.MapX, &ap.MapY, &ap.MapRotation,
+		&ap.AccessDeviceCount, &ap.CreatedAt, &ap.UpdatedAt)
+}
+
 func (h *AccessHandlers) ListAccessPoints(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
@@ -51,7 +57,7 @@ func (h *AccessHandlers) ListAccessPoints(w http.ResponseWriter, r *http.Request
 	}, "ap.name")
 	query := fmt.Sprintf(`
 		SELECT ap.id, ap.tenant_id, ap.zone_id, ap.access_time_id,
-		       ap.name, ap.description,
+		       ap.name, ap.description, ap.map_x, ap.map_y, ap.map_rotation,
 		       COUNT(DISTINCT apd.access_device_id) AS access_device_count,
 		       ap.created_at, ap.updated_at
 		FROM dm3_access.access_points ap
@@ -73,9 +79,7 @@ func (h *AccessHandlers) ListAccessPoints(w http.ResponseWriter, r *http.Request
 	aps := []models.AccessPoint{}
 	for rows.Next() {
 		var ap models.AccessPoint
-		if err := rows.Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
-			&ap.Name, &ap.Description, &ap.AccessDeviceCount,
-			&ap.CreatedAt, &ap.UpdatedAt); err != nil {
+		if err := scanAccessPoint(rows, &ap); err != nil {
 			slog.Error("list access points scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -95,9 +99,9 @@ func (h *AccessHandlers) GetAccessPoint(w http.ResponseWriter, r *http.Request) 
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
 	var ap models.AccessPoint
-	err := h.db.Pool.QueryRow(r.Context(),
+	err := scanAccessPoint(h.db.Pool.QueryRow(r.Context(),
 		`SELECT ap.id, ap.tenant_id, ap.zone_id, ap.access_time_id,
-		        ap.name, ap.description,
+		        ap.name, ap.description, ap.map_x, ap.map_y, ap.map_rotation,
 		        COUNT(DISTINCT apd.access_device_id) AS access_device_count,
 		        ap.created_at, ap.updated_at
 		 FROM dm3_access.access_points ap
@@ -105,9 +109,7 @@ func (h *AccessHandlers) GetAccessPoint(w http.ResponseWriter, r *http.Request) 
 		 WHERE ap.id = $1::uuid AND ap.tenant_id = $2::uuid
 		 GROUP BY ap.id`,
 		id, cid,
-	).Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
-		&ap.Name, &ap.Description, &ap.AccessDeviceCount,
-		&ap.CreatedAt, &ap.UpdatedAt)
+	), &ap)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "access point not found")
 		return
@@ -116,10 +118,13 @@ func (h *AccessHandlers) GetAccessPoint(w http.ResponseWriter, r *http.Request) 
 }
 
 type createAccessPointRequest struct {
-	Name         string  `json:"name"`
-	Description  *string `json:"description"`
-	ZoneID       *string `json:"zone_id"`
-	AccessTimeID *string `json:"access_time_id"`
+	Name         string   `json:"name"`
+	Description  *string  `json:"description"`
+	ZoneID       *string  `json:"zone_id"`
+	AccessTimeID *string  `json:"access_time_id"`
+	MapX         *float64 `json:"map_x"`
+	MapY         *float64 `json:"map_y"`
+	MapRotation  *float64 `json:"map_rotation"`
 }
 
 func (h *AccessHandlers) CreateAccessPoint(w http.ResponseWriter, r *http.Request) {
@@ -135,14 +140,12 @@ func (h *AccessHandlers) CreateAccessPoint(w http.ResponseWriter, r *http.Reques
 
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	var ap models.AccessPoint
-	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_access.access_points (tenant_id, zone_id, access_time_id, name, description)
-		 VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5)
-		 RETURNING id, tenant_id, zone_id, access_time_id, name, description, 0, created_at, updated_at`,
-		cid, req.ZoneID, req.AccessTimeID, req.Name, req.Description,
-	).Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
-		&ap.Name, &ap.Description, &ap.AccessDeviceCount,
-		&ap.CreatedAt, &ap.UpdatedAt)
+	err := scanAccessPoint(h.db.Pool.QueryRow(r.Context(),
+		`INSERT INTO dm3_access.access_points (tenant_id, zone_id, access_time_id, name, description, map_x, map_y, map_rotation)
+		 VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8)
+		 RETURNING id, tenant_id, zone_id, access_time_id, name, description, map_x, map_y, map_rotation, 0, created_at, updated_at`,
+		cid, req.ZoneID, req.AccessTimeID, req.Name, req.Description, req.MapX, req.MapY, req.MapRotation,
+	), &ap)
 	if err != nil {
 		slog.Error("create access point error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
@@ -153,10 +156,13 @@ func (h *AccessHandlers) CreateAccessPoint(w http.ResponseWriter, r *http.Reques
 }
 
 type updateAccessPointRequest struct {
-	Name         *string `json:"name"`
-	Description  *string `json:"description"`
-	ZoneID       *string `json:"zone_id"`
-	AccessTimeID *string `json:"access_time_id"`
+	Name         *string  `json:"name"`
+	Description  *string  `json:"description"`
+	ZoneID       *string  `json:"zone_id"`
+	AccessTimeID *string  `json:"access_time_id"`
+	MapX         *float64 `json:"map_x"`
+	MapY         *float64 `json:"map_y"`
+	MapRotation  *float64 `json:"map_rotation"`
 }
 
 func (h *AccessHandlers) UpdateAccessPoint(w http.ResponseWriter, r *http.Request) {
@@ -170,19 +176,20 @@ func (h *AccessHandlers) UpdateAccessPoint(w http.ResponseWriter, r *http.Reques
 	}
 
 	var ap models.AccessPoint
-	err := h.db.Pool.QueryRow(r.Context(),
+	err := scanAccessPoint(h.db.Pool.QueryRow(r.Context(),
 		`UPDATE dm3_access.access_points
 		 SET name           = COALESCE($2, name),
 		     description    = COALESCE($3, description),
 		     zone_id        = COALESCE($4::uuid, zone_id),
 		     access_time_id = COALESCE($5::uuid, access_time_id),
+		     map_x          = COALESCE($6, map_x),
+		     map_y          = COALESCE($7, map_y),
+		     map_rotation   = COALESCE($8, map_rotation),
 		     updated_at     = now()
-		 WHERE id = $1::uuid AND tenant_id = $6::uuid
-		 RETURNING id, tenant_id, zone_id, access_time_id, name, description, 0, created_at, updated_at`,
-		id, req.Name, req.Description, req.ZoneID, req.AccessTimeID, cid,
-	).Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
-		&ap.Name, &ap.Description, &ap.AccessDeviceCount,
-		&ap.CreatedAt, &ap.UpdatedAt)
+		 WHERE id = $1::uuid AND tenant_id = $9::uuid
+		 RETURNING id, tenant_id, zone_id, access_time_id, name, description, map_x, map_y, map_rotation, 0, created_at, updated_at`,
+		id, req.Name, req.Description, req.ZoneID, req.AccessTimeID, req.MapX, req.MapY, req.MapRotation, cid,
+	), &ap)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "access point not found")
 		return
@@ -412,8 +419,7 @@ func (h *AccessHandlers) AddAccessPointGroup(w http.ResponseWriter, r *http.Requ
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
 	var req struct {
-		AccessGroupID string  `json:"access_group_id"`
-		AccessTimeID  *string `json:"access_time_id"`
+		AccessGroupID string `json:"access_group_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -426,12 +432,11 @@ func (h *AccessHandlers) AddAccessPointGroup(w http.ResponseWriter, r *http.Requ
 
 	var id string
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_access.access_group_access_points (tenant_id, access_group_id, access_point_id, access_time_id)
-		 VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid)
-		 ON CONFLICT (access_group_id, access_point_id, access_time_id) DO UPDATE
-		   SET access_time_id = EXCLUDED.access_time_id
+		`INSERT INTO dm3_access.access_group_access_points (tenant_id, access_group_id, access_point_id)
+		 VALUES ($1::uuid, $2::uuid, $3::uuid)
+		 ON CONFLICT (access_group_id, access_point_id) DO NOTHING
 		 RETURNING id`,
-		cid, req.AccessGroupID, apID, req.AccessTimeID,
+		cid, req.AccessGroupID, apID,
 	).Scan(&id)
 	if err != nil {
 		slog.Error("add access point group error", "error", err)

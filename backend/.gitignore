@@ -8,3 +8,4 @@ auth-svc
 device-gateway
 access-svc
 identity-svc
+audit-svc

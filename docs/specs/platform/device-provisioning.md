@@ -42,7 +42,7 @@ Both flows result in the same end state: device is registered, assigned to a com
 
 ### Step 1: Admin Creates Device
 
-**API:** `POST /api/v1/devices/provision`
+**API:** `POST /api/v1/gateway/devices/provision`
 **Auth:** Bearer token, role = system_admin OR primary_manager
 
 **Request:**
@@ -51,7 +51,7 @@ Both flows result in the same end state: device is registered, assigned to a com
   "device_id": "000001",
   "name": "Lobby A — Gate 1",
   "type": "terminal",
-  "company_id": "uuid-of-company",
+  "tenant_id": "uuid-of-tenant",
   "site_id": "uuid-of-site",
   "location": "Building A, Floor 1, Main Entrance"
 }
@@ -66,7 +66,7 @@ Both flows result in the same end state: device is registered, assigned to a com
     "name": "Lobby A — Gate 1",
     "type": "terminal",
     "status": "provisioning",
-    "company_id": "uuid"
+    "tenant_id": "uuid"
   },
   "provisioning": {
     "qr_token": "dm3_qr_v1.eyJhbGci...",
@@ -98,7 +98,7 @@ Device scans QR code using camera → extracts QR token.
 
 ### Step 3: Device Activates
 
-**API:** `POST /api/v1/devices/activate`  
+**API:** `POST /api/v1/gateway/devices/activate`  
 **Auth:** None (the QR token IS the auth)
 
 **Request:**
@@ -130,12 +130,12 @@ Device scans QR code using camera → extracts QR token.
     "username": "device:000001",
     "token": "eyJhbG...",
     "token_expires_at": "2026-02-20T21:09:00Z",
-    "refresh_url": "https://dm3.duali.vn/api/v1/devices/refresh-token"
+    "refresh_url": "https://dm3.duali.vn/api/v1/gateway/devices/refresh-token"
   },
   "config": {
     "heartbeat_interval_sec": 30,
     "sync_url": "https://dm3.duali.vn/api/v1",
-    "tenant_id": "company-uuid"
+    "tenant_id": "tenant-uuid"
   }
 }
 ```
@@ -254,13 +254,13 @@ System Admin or Company Manager sees pending device in UI:
 └─────────────────────────────────────────────────────────┘
 ```
 
-**API:** `POST /api/v1/devices/pending/{id}/approve`
+**API:** `POST /api/v1/gateway/devices/pending/{id}/approve`
 **Auth:** Bearer token, system_admin or primary_manager
 
 **Request:**
 ```json
 {
-  "company_id": "uuid",
+  "tenant_id": "uuid",
   "site_id": "uuid",
   "name": "Lobby A — Gate 1",
   "location": "Building A, Floor 1"
@@ -281,7 +281,7 @@ Topic: `dm/bootstrap/{RID}/response`
     "mqtt_username": "device:000001",
     "mqtt_token": "eyJhbG...",
     "token_expires_at": "2026-02-20T21:39:00Z",
-    "refresh_url": "https://dm3.duali.vn/api/v1/devices/refresh-token"
+    "refresh_url": "https://dm3.duali.vn/api/v1/gateway/devices/refresh-token"
   },
   "company": {
     "id": "uuid",
@@ -290,7 +290,7 @@ Topic: `dm/bootstrap/{RID}/response`
   "config": {
     "heartbeat_interval_sec": 30,
     "sync_url": "https://dm3.duali.vn/api/v1",
-    "tenant_id": "company-uuid"
+    "tenant_id": "tenant-uuid"
   }
 }
 ```
@@ -331,7 +331,7 @@ Device:
 
 **Token refresh:** Device calls HTTPS endpoint 1 hour before expiry:
 ```
-POST /api/v1/devices/refresh-token
+POST /api/v1/gateway/devices/refresh-token
 Authorization: Bearer {current-device-jwt}
 → Returns new JWT
 ```
@@ -369,13 +369,13 @@ username: "device:*"
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/api/v1/devices/provision` | Bearer (admin/manager) | Pre-create device + generate QR |
-| GET | `/api/v1/devices/provision/{id}/qr` | Bearer | Regenerate QR (if expired) |
-| POST | `/api/v1/devices/activate` | QR token | Device activates via QR token |
-| GET | `/api/v1/devices/pending` | Bearer (admin/manager) | List pending registrations |
-| POST | `/api/v1/devices/pending/{id}/approve` | Bearer (admin/manager) | Approve + assign to company |
-| POST | `/api/v1/devices/pending/{id}/reject` | Bearer (admin/manager) | Reject registration |
-| POST | `/api/v1/devices/refresh-token` | Device JWT | Refresh device MQTT token |
+| POST | `/api/v1/gateway/devices/provision` | Bearer (admin/manager) | Pre-create device + generate QR |
+| GET | `/api/v1/gateway/devices/provision/{id}/qr` | Bearer | Regenerate QR (if expired) |
+| POST | `/api/v1/gateway/devices/activate` | QR token | Device activates via QR token |
+| GET | `/api/v1/gateway/devices/pending` | Bearer (admin/manager) | List pending registrations |
+| POST | `/api/v1/gateway/devices/pending/{id}/approve` | Bearer (admin/manager) | Approve + assign to tenant |
+| POST | `/api/v1/gateway/devices/pending/{id}/reject` | Bearer (admin/manager) | Reject registration |
+| POST | `/api/v1/gateway/devices/refresh-token` | Device JWT | Refresh device MQTT token |
 
 ---
 
@@ -403,7 +403,7 @@ Device MQTT JWTs expire after 24 hours. Devices must refresh before expiry.
 ```
 Device checks JWT expiry every 5 minutes
   → If < 1 hour remaining:
-    POST /api/v1/devices/refresh-token
+    POST /api/v1/gateway/devices/refresh-token
     Auth: Bearer {current-jwt}
     → Returns new 24h JWT
     → Device reconnects to MQTT with new token
@@ -414,7 +414,7 @@ Device checks JWT expiry every 5 minutes
 Device boots up / reconnects after outage
   → JWT expired → MQTT connection rejected
   → Call refresh endpoint with expired JWT:
-    POST /api/v1/devices/refresh-token
+    POST /api/v1/gateway/devices/refresh-token
     Auth: Bearer {expired-jwt}
   → Server checks:
     - Is the device still active? (not decommissioned)
@@ -471,14 +471,14 @@ When a device cannot reach the server (no network, server down):
 
 ### Refresh Token Endpoint (Updated)
 
-**`POST /api/v1/devices/refresh-token`**
+**`POST /api/v1/gateway/devices/refresh-token`**
 
 **Auth:** Device JWT (valid OR expired within grace period)
 
 **Server logic:**
 ```
 1. Parse JWT (skip expiry validation)
-2. Extract device_id, company_id from claims
+2. Extract device_id, tenant_id from claims
 3. Verify device exists and status != decommissioned
 4. Check JWT issued_at:
    - If expired > DEVICE_REFRESH_GRACE_DAYS → 401 "Token expired beyond grace period"
@@ -522,7 +522,7 @@ curl -X POST http://localhost:9090/api/simulate/bootstrap \
 ### QR Activation Screen
 - New screen accessible from Settings: "Activate Device"
 - Opens camera → scans QR code
-- Shows "Activating..." → calls `/api/v1/devices/activate` via HTTPS
+- Shows "Activating..." → calls `/api/v1/gateway/devices/activate` via HTTPS
 - On success: stores credentials, shows company name, returns to idle
 
 ### Bootstrap Registration

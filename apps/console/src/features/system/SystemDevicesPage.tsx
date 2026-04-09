@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { PageHeader, Button, Select, SelectOption, DataTable, type Column } from '@dm3/ui';
-import { fetchSystemDevices, fetchCompanies, type CompanyDTO } from '@/lib/api';
-import { RefreshCw } from 'lucide-react';
+import { PageHeader, Button, Select, SelectOption, DataTable, type Column, AppModal } from '@dm3/ui';
+import { fetchSystemDevices, fetchCompanies, apiFetch, type CompanyDTO } from '@/lib/api';
+import { RefreshCw, Plus, Trash2, Monitor, Wifi, WifiOff, AlertTriangle, Terminal, Cpu, Camera, Gauge } from 'lucide-react';
 
 interface SystemDevice {
   id: string;
@@ -21,16 +22,42 @@ interface SystemDevice {
 
 const statusColors: Record<string, string> = {
   online: 'bg-success/10 text-success',
-  active: 'bg-success/10 text-success',
   offline: 'bg-muted text-muted-foreground',
-  provisioning: 'bg-secure/10 text-secure',
-  disabled: 'bg-error/10 text-error',
-  decommissioned: 'bg-error/10 text-error',
+  warning: 'bg-warning/10 text-warning',
 };
 
+// --- Stat Card ---
+
+function StatCard({ icon: Icon, iconBg, iconColor, value, label, sub }: {
+  icon: React.ElementType; iconBg: string; iconColor: string;
+  value: number; label: string; sub?: string;
+}) {
+  return (
+    <div className="bg-card border border-border/70 rounded-xl p-4 shadow-xs hover:shadow-sm transition-shadow">
+      <div className="flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${iconBg}`}>
+          <Icon size={20} className={iconColor} />
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-foreground">{value}</div>
+          <div className="text-[12px] text-muted-foreground">{label}</div>
+        </div>
+      </div>
+      {sub && <div className="text-[11px] text-muted-foreground mt-2">{sub}</div>}
+    </div>
+  );
+}
+
+// --- Main ---
+
 export function SystemDevicesPage() {
+  const navigate = useNavigate();
   const { t: tSystem } = useTranslation('system');
   const { t: tDevices } = useTranslation('devices');
+
+  // All devices (unfiltered) for stats
+  const [allDevices, setAllDevices] = useState<SystemDevice[]>([]);
+  // Filtered devices for table
   const [devices, setDevices] = useState<SystemDevice[]>([]);
   const [companies, setCompanies] = useState<CompanyDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,18 +65,29 @@ export function SystemDevicesPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterType, setFilterType] = useState('');
 
+  // Delete modal
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingDevice, setDeletingDevice] = useState<SystemDevice | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const params: Record<string, string> = {};
-      if (filterCompany) params.company_id = filterCompany;
-      if (filterStatus) params.status = filterStatus;
-      if (filterType) params.type = filterType;
-      const [devs, comps] = await Promise.all([
-        fetchSystemDevices(params),
+      const filterParams: Record<string, string> = {};
+      if (filterCompany) filterParams.company_id = filterCompany;
+      if (filterStatus) filterParams.status = filterStatus;
+      if (filterType) filterParams.type = filterType;
+
+      const hasFilters = filterCompany || filterStatus || filterType;
+
+      const [filteredDevs, allDevs, comps] = await Promise.all([
+        fetchSystemDevices(filterParams),
+        hasFilters ? fetchSystemDevices({}) : Promise.resolve(null),
         companies.length ? Promise.resolve(companies) : fetchCompanies(),
       ]);
-      setDevices(devs);
+
+      setDevices(filteredDevs);
+      setAllDevices(allDevs ?? filteredDevs);
       if (!companies.length) setCompanies(comps);
     } catch {
       // ignore
@@ -59,6 +97,38 @@ export function SystemDevicesPage() {
   };
 
   useEffect(() => { loadData(); }, [filterCompany, filterStatus, filterType]);
+
+  // Stats from allDevices (unfiltered)
+  const stats = useMemo(() => {
+    const total = allDevices.length;
+    const online = allDevices.filter(d => d.status === 'online').length;
+    const offline = allDevices.filter(d => d.status === 'offline').length;
+    const warning = allDevices.filter(d => d.status === 'warning').length;
+    const terminals = allDevices.filter(d => d.type === 'terminal').length;
+    const controllers = allDevices.filter(d => d.type === 'controller').length;
+    const cameras = allDevices.filter(d => d.type === 'camera').length;
+    const sensors = allDevices.filter(d => d.type === 'sensor').length;
+    return { total, online, offline, warning, terminals, controllers, cameras, sensors };
+  }, [allDevices]);
+
+  const handleDeleteOpen = (device: SystemDevice) => {
+    setDeletingDevice(device);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteDevice = async () => {
+    if (!deletingDevice) return;
+    setDeleting(true);
+    try {
+      await apiFetch(`/api/v1/gateway/devices/${deletingDevice.id}`, { method: 'DELETE' });
+      setShowDeleteModal(false);
+      await loadData();
+    } catch {
+      // ignore
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const columns = useMemo<Column<SystemDevice>[]>(() => [
     {
@@ -100,15 +170,44 @@ export function SystemDevicesPage() {
       header: tSystem('systemDevices.table.lastSeen'),
       render: (d) => d.last_seen ? new Date(d.last_seen).toLocaleString() : '—',
     },
+    {
+      key: 'actions' as keyof SystemDevice,
+      header: '',
+      render: (d) => (
+        <Button variant="ghost" size="sm" title="Delete" onClick={() => handleDeleteOpen(d)} data-testid={`sysdevice-button-delete-${d.device_id}`}>
+          <Trash2 size={14} className="text-destructive" />
+        </Button>
+      ),
+    },
   ], [tSystem, tDevices]);
 
   return (
     <div className="p-6">
-      <PageHeader title={tSystem('systemDevices.title')} description={`${devices.length} devices across all companies`}>
-        <Button data-testid="sysdevice-button-refresh" variant="outline" size="sm" onClick={loadData} className="gap-1">
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
-        </Button>
+      <PageHeader title={tSystem('systemDevices.title')} description={tSystem('systemDevices.description')}>
+        <div className="flex gap-2">
+          <Button data-testid="sysdevice-button-create" size="sm" onClick={() => navigate('/system/devices/new')} className="gap-1">
+            <Plus size={13} /> {tSystem('createDevice.title')}
+          </Button>
+          <Button data-testid="sysdevice-button-refresh" variant="outline" size="sm" onClick={loadData} className="gap-1">
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
+          </Button>
+        </div>
       </PageHeader>
+
+      {/* Stats Dashboard */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <StatCard icon={Monitor} iconBg="bg-operate/10" iconColor="text-operate" value={stats.total} label={tSystem('systemDevices.stats.total')} />
+        <StatCard icon={Wifi} iconBg="bg-success/10" iconColor="text-success" value={stats.online} label={tSystem('systemDevices.stats.online')} />
+        <StatCard icon={WifiOff} iconBg="bg-muted" iconColor="text-muted-foreground" value={stats.offline} label={tSystem('systemDevices.stats.offline')} />
+        <StatCard icon={AlertTriangle} iconBg="bg-warning/10" iconColor="text-warning" value={stats.warning} label={tSystem('systemDevices.stats.warning')} />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <StatCard icon={Terminal} iconBg="bg-cyan-500/10" iconColor="text-cyan-500" value={stats.terminals} label={tSystem('systemDevices.type.terminal')} />
+        <StatCard icon={Cpu} iconBg="bg-purple-500/10" iconColor="text-purple-500" value={stats.controllers} label={tSystem('systemDevices.type.controller')} />
+        <StatCard icon={Camera} iconBg="bg-blue-500/10" iconColor="text-blue-500" value={stats.cameras} label={tSystem('systemDevices.type.camera')} />
+        <StatCard icon={Gauge} iconBg="bg-orange-500/10" iconColor="text-orange-500" value={stats.sensors} label={tSystem('systemDevices.type.sensor')} />
+      </div>
 
       {/* Filters */}
       <div className="flex gap-3 mb-4">
@@ -120,9 +219,7 @@ export function SystemDevicesPage() {
           <SelectOption value="">{tSystem('systemDevices.filter.allStatus')}</SelectOption>
           <SelectOption value="online">{tSystem('systemDevices.status.online')}</SelectOption>
           <SelectOption value="offline">{tSystem('systemDevices.status.offline')}</SelectOption>
-          <SelectOption value="provisioning">{tSystem('systemDevices.status.provisioning')}</SelectOption>
-          <SelectOption value="disabled">{tSystem('systemDevices.status.disabled')}</SelectOption>
-          <SelectOption value="decommissioned">{tSystem('systemDevices.status.decommissioned')}</SelectOption>
+          <SelectOption value="warning">{tSystem('systemDevices.status.warning')}</SelectOption>
         </Select>
         <Select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="w-36 h-8 text-[12px]">
           <SelectOption value="">{tSystem('systemDevices.filter.allTypes')}</SelectOption>
@@ -141,6 +238,30 @@ export function SystemDevicesPage() {
         rowTestId={(d) => `sysdevice-row-${d.id}`}
         paginate={false}
       />
+
+      {/* Delete Device Modal */}
+      <AppModal
+        open={showDeleteModal}
+        onOpenChange={setShowDeleteModal}
+        title={tSystem('createDevice.delete.title')}
+        size="sm"
+        showCancelButton
+        cancelLabel="Cancel"
+        primaryAction={{
+          label: deleting ? 'Deleting...' : 'Delete',
+          onClick: handleDeleteDevice,
+          disabled: deleting,
+          loading: deleting,
+          variant: 'destructive',
+        }}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {tSystem('createDevice.delete.confirm')} <span className="font-semibold">{deletingDevice?.name || deletingDevice?.device_id || ''}</span>?
+          </p>
+          <p className="text-xs text-muted-foreground">{tSystem('createDevice.delete.warning')}</p>
+        </div>
+      </AppModal>
     </div>
   );
 }

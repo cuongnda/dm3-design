@@ -5,6 +5,10 @@ export interface AccessPoint {
   access_time_id?: string;
   name: string;
   description?: string;
+  map_x?: number;
+  map_y?: number;
+  map_rotation?: number;
+  map_label?: string;
   access_device_count: number;
   created_at: string;
   updated_at: string;
@@ -15,6 +19,10 @@ export interface AccessPointFormData {
   description?: string;
   zone_id?: string;
   access_time_id?: string;
+  map_x?: number;
+  map_y?: number;
+  map_rotation?: number;
+  map_label?: string;
 }
 
 export interface AccessPointDevice {
@@ -35,6 +43,8 @@ export interface AccessPointDevice {
 export interface Zone {
   id: string;
   name: string;
+  timezone?: string;
+  map_image_url?: string;
 }
 
 export interface AccessTime {

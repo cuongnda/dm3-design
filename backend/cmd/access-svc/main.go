@@ -127,6 +127,8 @@ func main() {
 			zr.Put("/zones/{id}", handlers.UpdateZone)
 			zr.Delete("/zones/{id}", handlers.DeleteZone)
 			zr.Get("/zones/{id}/access-points", handlers.ListZoneDoors)
+			zr.Get("/zones/{id}/map", handlers.GetZoneMap)
+			zr.Put("/zones/{id}/map", handlers.UpdateZoneMap)
 		})
 
 		// Access Points

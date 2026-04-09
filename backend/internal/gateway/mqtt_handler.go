@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/sync/singleflight"
 
+	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/natsutil"
 )
@@ -203,9 +204,9 @@ func (h *MQTTHandler) handleStatus(ctx context.Context, pt ParsedTopic, env MQTT
 			slog.Warn("mqtt: bad heartbeat data", "error", err)
 			return
 		}
-		status := "online"
+		status := models.DeviceStatusOnline
 		if !data.Online {
-			status = "offline"
+			status = models.DeviceStatusOffline
 		}
 		tag, err := h.db.Pool.Exec(ctx,
 			`UPDATE dm3_devices.devices SET status = $1, last_seen = $2, firmware_version = COALESCE(NULLIF($3,''), firmware_version), updated_at = $2 WHERE device_id = $4`,
@@ -249,8 +250,8 @@ func (h *MQTTHandler) handleStatus(ctx context.Context, pt ParsedTopic, env MQTT
 
 	case "status.offline":
 		_, err := h.db.Pool.Exec(ctx,
-			`UPDATE dm3_devices.devices SET status = 'offline', updated_at = $1 WHERE device_id = $2`,
-			now, pt.DeviceID)
+			`UPDATE dm3_devices.devices SET status = $3, updated_at = $1 WHERE device_id = $2`,
+			now, pt.DeviceID, models.DeviceStatusOffline)
 		if err != nil {
 			slog.Error("failed to mark device offline", "error", err, "device", pt.DeviceID)
 		}

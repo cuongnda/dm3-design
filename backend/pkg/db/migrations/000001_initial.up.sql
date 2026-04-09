@@ -368,10 +368,10 @@ CREATE TABLE IF NOT EXISTS dm3_devices.firmwares (
     updated_at  TIMESTAMPTZ DEFAULT now(),
     UNIQUE (version, device_type),
     CONSTRAINT chk_firmware_device_type CHECK (device_type IN (
-        'icu300n','itouch_pop','desktop_app','itouch_pop_x','dq_mini_plus','it100',
-        'nexpa_lpr','xstation2','fv6000','pm85','itouch_30a','dp636x','df970',
-        'biostation2','icu300nx','biostation3','ebkn_reader','ba8300','icu400',
-        'ra08','dq8500','dq200','camera_dc','tb_vision','icu970'
+        'ra08','ba8300','df970','dq200','dq8500','icu970',
+        'icu300n','ipopx','itouch_pop_x','icu400',
+        'camera_dc','cctv',
+        'door_sensor','de960','de950'
     ))
 );
 

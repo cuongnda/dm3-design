@@ -3,12 +3,12 @@
 -- Default tenant (implicit via DEFAULT values)
 
 -- Sample devices (matching simulator device IDs)
-INSERT INTO dm3_devices.devices (device_id, name, type, status, firmware_version, site_id, location) VALUES
-    ('100001', 'Main Entrance Terminal', 'terminal', 'online', '2.1.0', 'HQ', 'Building A - Main Lobby'),
-    ('100002', 'Side Door Controller', 'controller', 'online', '2.1.0', 'HQ', 'Building A - Side Entrance'),
-    ('100003', 'Parking Gate Sensor', 'sensor', 'online', '1.5.3', 'HQ', 'Parking Level B1'),
-    ('100004', 'Server Room Camera', 'camera', 'offline', '3.0.1', 'HQ', 'Building A - Floor 3'),
-    ('100005', 'Warehouse Terminal', 'terminal', 'online', '2.1.0', 'WH', 'Warehouse Main')
+INSERT INTO dm3_devices.devices (device_id, name, type, status, model, firmware_version, location) VALUES
+    ('100001', 'Main Entrance Terminal', 'terminal', 'online', 'df970', '2.1.0', 'Building A - Main Lobby'),
+    ('100002', 'Side Door Controller', 'controller', 'online', 'icu300n', '2.1.0', 'Building A - Side Entrance'),
+    ('100003', 'Parking Gate Sensor', 'sensor', 'online', 'door_sensor', '1.5.3', 'Parking Level B1'),
+    ('100004', 'Server Room Camera', 'camera', 'offline', 'camera_dc', '3.0.1', 'Building A - Floor 3'),
+    ('100005', 'Warehouse Terminal', 'terminal', 'online', 'ba8300', '2.1.0', 'Warehouse Main')
 ON CONFLICT (device_id) DO NOTHING;
 
 -- Sample persons
