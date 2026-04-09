@@ -102,6 +102,9 @@ func main() {
 	// Add i18n middleware to all routes
 	r.Use(i18n.LocaleMiddleware)
 
+	// Serve managed zone map assets from the local object-store fallback.
+	r.Handle("/assets/*", http.StripPrefix("/assets/", http.FileServer(http.Dir("data"))))
+
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "access-svc"})
 	})
@@ -129,6 +132,7 @@ func main() {
 			zr.Get("/zones/{id}/access-points", handlers.ListZoneDoors)
 			zr.Get("/zones/{id}/map", handlers.GetZoneMap)
 			zr.Put("/zones/{id}/map", handlers.UpdateZoneMap)
+			zr.Post("/zones/{id}/map/upload", handlers.UploadZoneMap)
 		})
 
 		// Access Points

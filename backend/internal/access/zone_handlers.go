@@ -1,10 +1,18 @@
 package access
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -188,6 +196,11 @@ type updateZoneRequest struct {
 func (h *AccessHandlers) UpdateZone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
+
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
 
 	var req updateZoneRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -436,4 +449,134 @@ func (h *AccessHandlers) UpdateZoneMap(w http.ResponseWriter, r *http.Request) {
 
 	h.audit.LogFromRequest(r, "access.zone.map.update", "zone", zone.ID, zone.Name, "success", nil, zone)
 	httputil.JSON(w, http.StatusOK, zone)
+}
+
+func (h *AccessHandlers) UploadZoneMap(w http.ResponseWriter, r *http.Request) {
+	zoneID := chi.URLParam(r, "id")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+
+	var zone models.Zone
+	err := scanZone(h.db.Pool.QueryRow(r.Context(),
+		`SELECT `+zoneSelectCols+`, COUNT(ap.id) AS access_point_count, z.created_at, z.updated_at
+		 FROM dm3_access.zones z
+		 LEFT JOIN dm3_access.access_points ap ON ap.zone_id = z.id
+		 WHERE z.id = $1::uuid AND z.tenant_id = $2::uuid
+		 GROUP BY z.id`,
+		zoneID, cid,
+	), &zone)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "zone not found")
+		return
+	}
+
+	if err := r.ParseMultipartForm(20 << 20); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "file too large or invalid multipart")
+		return
+	}
+
+	file, header, err := r.FormFile("map")
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, "map field required")
+		return
+	}
+	defer file.Close()
+
+	contentType := header.Header.Get("Content-Type")
+	ext, ok := zoneMapExtension(contentType, header.Filename)
+	if !ok {
+		httputil.Error(w, http.StatusBadRequest, "map must be a PNG, JPEG, or GIF image")
+		return
+	}
+
+	data, err := io.ReadAll(io.LimitReader(file, 20<<20+1))
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to read uploaded file")
+		return
+	}
+	if len(data) == 0 {
+		httputil.Error(w, http.StatusBadRequest, "uploaded file is empty")
+		return
+	}
+	if len(data) > 20<<20 {
+		httputil.Error(w, http.StatusBadRequest, "file too large or invalid multipart")
+		return
+	}
+
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid image file")
+		return
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 {
+		httputil.Error(w, http.StatusBadRequest, "image dimensions are invalid")
+		return
+	}
+	if format == "jpeg" {
+		ext = ".jpg"
+	}
+
+	objectKey := buildZoneMapObjectKey(cid, zoneID, ext)
+	filePath := filepath.Join("data", filepath.FromSlash(objectKey))
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to prepare storage")
+		return
+	}
+	if err := os.WriteFile(filePath, data, 0o644); err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "failed to save uploaded file")
+		return
+	}
+
+	publicPath := "/assets/" + objectKey
+	err = scanZone(h.db.Pool.QueryRow(r.Context(),
+		`UPDATE dm3_access.zones
+		 SET map_image_url = $2,
+		     map_width     = $3,
+		     map_height    = $4,
+		     updated_at    = now()
+		 WHERE id = $1::uuid AND tenant_id = $5::uuid
+		 RETURNING `+zoneSelectCols+`, 0, created_at, updated_at`,
+		zoneID, publicPath, cfg.Width, cfg.Height, cid,
+	), &zone)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "zone not found")
+		return
+	}
+
+	h.audit.LogFromRequest(r, "access.zone.map.upload", "zone", zone.ID, zone.Name, "success", nil, map[string]any{
+		"map_image_url": publicPath,
+		"map_width":     cfg.Width,
+		"map_height":    cfg.Height,
+		"content_type":  contentType,
+	})
+	httputil.JSON(w, http.StatusOK, zone)
+}
+
+func buildZoneMapObjectKey(companyID, zoneID, ext string) string {
+	return fmt.Sprintf("tenants/%s/access/zones/%s/map%s", companyID, zoneID, ext)
+}
+
+func zoneMapExtension(contentType, filename string) (string, bool) {
+	switch strings.ToLower(contentType) {
+	case "image/png":
+		return ".png", true
+	case "image/jpeg", "image/jpg":
+		return ".jpg", true
+	case "image/gif":
+		return ".gif", true
+	}
+
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".png", ".jpg", ".jpeg", ".gif":
+		ext := strings.ToLower(filepath.Ext(filename))
+		if ext == ".jpeg" {
+			ext = ".jpg"
+		}
+		return ext, true
+	default:
+		return "", false
+	}
 }
