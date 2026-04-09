@@ -2,12 +2,14 @@ package gateway
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/models"
@@ -415,7 +417,9 @@ func (h *GatewayHandlers) GetDeviceEvents(w http.ResponseWriter, r *http.Request
 		}
 		if err := rows.Scan(&e.ID, &e.TenantID, &e.DeviceID, &e.EventType, &e.UserID, &e.UserName,
 			&e.Method, &e.DoorID, &e.Direction, &e.Decision, &e.Reason, &e.Confidence, &e.Time); err != nil {
-			continue
+			slog.Error("GetDeviceEvents: scan failed", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "internal server error")
+			return
 		}
 		events = append(events, map[string]any{
 			"id":         e.ID,
@@ -469,7 +473,9 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := rows.Scan(&e.ID, &e.TenantID, &e.DeviceID, &e.EventType, &e.UserID, &e.UserName,
 			&e.Method, &e.DoorID, &e.Direction, &e.Decision, &e.Reason, &e.Confidence, &e.Time); err != nil {
-			continue
+			slog.Error("ListEvents: scan failed", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "internal server error")
+			return
 		}
 		events = append(events, map[string]any{
 			"id": e.ID, "tenant_id": e.TenantID, "device_id": e.DeviceID,
@@ -503,20 +509,6 @@ func parsePagination(r *http.Request) (int, int) {
 }
 
 func isUniqueViolation(err error) bool {
-	return err != nil && (fmt.Sprintf("%v", err) == "ERROR: duplicate key value violates unique constraint" ||
-		len(fmt.Sprintf("%v", err)) > 0 && fmt.Sprintf("%v", err)[:5] == "ERROR" &&
-			contains(fmt.Sprintf("%v", err), "duplicate key"))
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchSubstring(s, substr)
-}
-
-func searchSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }

@@ -172,15 +172,20 @@ func (h *AccessHandlers) GetZone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+
 	var z models.Zone
 	err := scanZone(h.db.Pool.QueryRow(r.Context(),
 		fmt.Sprintf(`SELECT %s,
 		        COUNT(ap.id) AS access_point_count, z.created_at, z.updated_at
 		 FROM dm3_access.zones z
 		 LEFT JOIN dm3_access.access_points ap ON ap.zone_id = z.id
-		 WHERE z.id = $1::uuid AND ($2::uuid IS NULL OR z.tenant_id = $2::uuid)
+		 WHERE z.id = $1::uuid AND z.tenant_id = $2::uuid
 		 GROUP BY z.id`, zoneSelectCols),
-		id, nilIfEmpty(cid),
+		id, cid,
 	), &z)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "zone not found")
@@ -526,8 +531,26 @@ func (h *AccessHandlers) UploadZoneMap(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusBadRequest, "image dimensions are invalid")
 		return
 	}
-	if format == "jpeg" {
+	if cfg.Width > 20000 || cfg.Height > 20000 {
+		httputil.Error(w, http.StatusBadRequest, "image dimensions exceed maximum (20000x20000)")
+		return
+	}
+
+	// Derive content-type and extension strictly from decoded image format, not client header
+	var safeContentType string
+	switch format {
+	case "png":
+		ext = ".png"
+		safeContentType = "image/png"
+	case "jpeg":
 		ext = ".jpg"
+		safeContentType = "image/jpeg"
+	case "gif":
+		ext = ".gif"
+		safeContentType = "image/gif"
+	default:
+		httputil.Error(w, http.StatusBadRequest, "unsupported image format")
+		return
 	}
 
 	objectKey := buildZoneMapObjectKey(cid, zoneID, ext)
@@ -535,7 +558,7 @@ func (h *AccessHandlers) UploadZoneMap(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusInternalServerError, "object storage is not configured")
 		return
 	}
-	if err := h.objects.PutObject(r.Context(), objectKey, bytes.NewReader(data), int64(len(data)), contentTypeForExt(ext, contentType)); err != nil {
+	if err := h.objects.PutObject(r.Context(), objectKey, bytes.NewReader(data), int64(len(data)), safeContentType); err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to save uploaded file")
 		return
 	}
@@ -556,8 +579,10 @@ func (h *AccessHandlers) UploadZoneMap(w http.ResponseWriter, r *http.Request) {
 		zoneID, publicPath, cfg.Width, cfg.Height, cid,
 	), &zone)
 	if err != nil {
-		_ = h.objects.DeleteObject(r.Context(), objectKey)
-		httputil.Error(w, http.StatusNotFound, "zone not found")
+		if derr := h.objects.DeleteObject(r.Context(), objectKey); derr != nil {
+			slog.Warn("failed to delete orphaned zone map after DB error", "key", objectKey, "error", derr)
+		}
+		httputil.Error(w, http.StatusInternalServerError, "failed to update zone")
 		return
 	}
 	if hasPreviousObject && previousObjectKey != objectKey {
@@ -576,9 +601,15 @@ func (h *AccessHandlers) UploadZoneMap(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AccessHandlers) ServeManagedAsset(w http.ResponseWriter, r *http.Request) {
+	cid := authsvc.CompanyIDFromContext(r.Context())
 	objectKey, ok := managedAssetObjectKey(chi.URLParam(r, "*"))
 	if !ok || h.objects == nil {
 		httputil.Error(w, http.StatusNotFound, "asset not found")
+		return
+	}
+	// Enforce tenant isolation: asset must belong to the caller's tenant
+	if cid != "" && !strings.HasPrefix(objectKey, "tenants/"+cid+"/") {
+		httputil.Error(w, http.StatusForbidden, "access denied")
 		return
 	}
 
@@ -600,7 +631,7 @@ func (h *AccessHandlers) ServeManagedAsset(w http.ResponseWriter, r *http.Reques
 		w.Header().Set("ETag", info.ETag)
 	}
 	w.Header().Set("Cache-Control", "private, max-age=300")
-	if info.Size >= 0 {
+	if info.Size > 0 {
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size))
 	}
 	if _, err := io.Copy(w, reader); err != nil {

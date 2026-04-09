@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	pathpkg "path"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/duali/dm3-backend/internal/authsvc"
 )
 
 const identityImageMaxBytes = 10 << 20
@@ -41,7 +44,10 @@ func (h *IdentityHandlers) uploadUserImage(r *http.Request, userID, companyID, f
 			  AND (is_deleted = false OR is_deleted IS NULL)
 		)
 	`, userID, companyID).Scan(&exists)
-	if err != nil || !exists {
+	if err != nil {
+		return "", &uploadError{status: http.StatusInternalServerError, message: "database error"}
+	}
+	if !exists {
 		return "", &uploadError{status: http.StatusNotFound, message: "user not found"}
 	}
 
@@ -85,7 +91,9 @@ func (h *IdentityHandlers) uploadUserImage(r *http.Request, userID, companyID, f
 	var previous *string
 	query := fmt.Sprintf(`UPDATE dm3_identity.users SET %s = $2, updated_at = now() WHERE id = $1::uuid AND tenant_id = $3::uuid RETURNING %s`, column, column)
 	if err := h.db.Pool.QueryRow(r.Context(), query, userID, assetURL, companyID).Scan(&previous); err != nil {
-		_ = h.objects.DeleteObject(r.Context(), objectKey)
+		if derr := h.objects.DeleteObject(r.Context(), objectKey); derr != nil {
+			slog.Warn("failed to delete orphaned identity image after DB error", "key", objectKey, "error", derr)
+		}
 		if err == pgx.ErrNoRows {
 			return "", &uploadError{status: http.StatusNotFound, message: "user not found"}
 		}
@@ -93,16 +101,24 @@ func (h *IdentityHandlers) uploadUserImage(r *http.Request, userID, companyID, f
 	}
 
 	if previousKey, ok := managedIdentityAssetObjectKey(derefString(previous)); ok && previousKey != objectKey {
-		_ = h.objects.DeleteObject(r.Context(), previousKey)
+		if derr := h.objects.DeleteObject(r.Context(), previousKey); derr != nil {
+			slog.Warn("failed to delete superseded identity image", "key", previousKey, "error", derr)
+		}
 	}
 
 	return assetURL, nil
 }
 
 func (h *IdentityHandlers) ServeManagedPhoto(w http.ResponseWriter, r *http.Request) {
+	cid := authsvc.CompanyIDFromContext(r.Context())
 	objectKey, ok := managedIdentityAssetObjectKey(r.URL.Path)
 	if !ok || h.objects == nil {
 		http.NotFound(w, r)
+		return
+	}
+	// Enforce tenant isolation
+	if cid != "" && !strings.HasPrefix(objectKey, "tenants/"+cid+"/") {
+		http.Error(w, "access denied", http.StatusForbidden)
 		return
 	}
 
@@ -120,7 +136,7 @@ func (h *IdentityHandlers) ServeManagedPhoto(w http.ResponseWriter, r *http.Requ
 		w.Header().Set("ETag", info.ETag)
 	}
 	w.Header().Set("Cache-Control", "private, max-age=300")
-	if info.Size >= 0 {
+	if info.Size > 0 {
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size))
 	}
 	_, _ = io.Copy(w, reader)
@@ -150,7 +166,11 @@ func managedIdentityAssetObjectKey(raw string) (string, bool) {
 	if cleaned == "/" || cleaned == "." {
 		return "", false
 	}
-	return strings.TrimPrefix(cleaned, "/"), true
+	key := strings.TrimPrefix(cleaned, "/")
+	if !strings.HasPrefix(key, "tenants/") {
+		return "", false
+	}
+	return key, true
 }
 
 func identityImageExtension(contentType, filename string, data []byte) (string, string, bool) {

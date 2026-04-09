@@ -70,7 +70,7 @@ func Load() *Config {
 		ObjectStoreSecretAccessKey:  env("OBJECT_STORE_SECRET_KEY", env("MINIO_ROOT_PASSWORD", "dm3secret123")),
 		ObjectStoreBucket:           env("OBJECT_STORE_BUCKET", "dm3"),
 		ObjectStoreUseSSL:           env("OBJECT_STORE_USE_SSL", "") == "true",
-		ObjectStoreAutoCreateBucket: env("OBJECT_STORE_AUTO_CREATE_BUCKET", "true") != "false",
+		ObjectStoreAutoCreateBucket: env("OBJECT_STORE_AUTO_CREATE_BUCKET", "false") == "true",
 
 		BugReporterEnabled:   env("BUG_REPORTER_ENABLED", "") == "true",
 		BugReporterURL:       env("BUG_REPORTER_URL", "https://tasks.duali.vn/api"),
@@ -93,6 +93,12 @@ func (c *Config) Validate() error {
 	}
 	if strings.Contains(c.DatabaseURL, "dm3secret") {
 		insecure = append(insecure, "DATABASE_URL is using the insecure development default password")
+	}
+	if c.ObjectStoreAccessKeyID == "dm3admin" {
+		insecure = append(insecure, "OBJECT_STORE_ACCESS_KEY is using the insecure development default")
+	}
+	if c.ObjectStoreSecretAccessKey == "dm3secret123" {
+		insecure = append(insecure, "OBJECT_STORE_SECRET_KEY is using the insecure development default")
 	}
 	for _, msg := range insecure {
 		slog.Warn("[SECURITY] " + msg + "; set a strong value via environment variable before deploying to production")

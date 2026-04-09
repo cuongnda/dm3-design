@@ -69,10 +69,11 @@ func (h *IdentityHandlers) UploadPhoto(w http.ResponseWriter, r *http.Request) {
 
 func (h *IdentityHandlers) ListCredentials(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
+	cid := authsvc.CompanyIDFromContext(r.Context())
 
-	// Verify user exists
+	// Verify user exists and belongs to caller's tenant
 	var exists bool
-	_ = h.db.Pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM dm3_identity.users WHERE id = $1::uuid)`, userID).Scan(&exists)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM dm3_identity.users WHERE id = $1::uuid AND tenant_id = $2::uuid)`, userID, cid).Scan(&exists)
 	if !exists {
 		httputil.Error(w, http.StatusNotFound, "user not found")
 		return
@@ -110,9 +111,10 @@ type createCredentialRequest struct {
 
 func (h *IdentityHandlers) CreateCredential(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
+	cid := authsvc.CompanyIDFromContext(r.Context())
 
 	var exists bool
-	_ = h.db.Pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM dm3_identity.users WHERE id = $1::uuid)`, userID).Scan(&exists)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM dm3_identity.users WHERE id = $1::uuid AND tenant_id = $2::uuid)`, userID, cid).Scan(&exists)
 	if !exists {
 		httputil.Error(w, http.StatusNotFound, "user not found")
 		return
@@ -138,10 +140,10 @@ func (h *IdentityHandlers) CreateCredential(w http.ResponseWriter, r *http.Reque
 
 	var c models.Credential
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_identity.credentials (user_id, type, value, status, valid_from, valid_until, updated_at)
-		 VALUES ($1::uuid,$2,$3,$4,$5,$6, now())
+		`INSERT INTO dm3_identity.credentials (tenant_id, user_id, type, value, status, valid_from, valid_until, updated_at)
+		 VALUES ($1::uuid,$2::uuid,$3,$4,$5,$6,$7, now())
 		 RETURNING id, tenant_id, user_id, type, value, status, valid_from, valid_until, created_at, updated_at`,
-		userID, req.Type, req.Value, req.Status, req.ValidFrom, req.ValidUntil,
+		cid, userID, req.Type, req.Value, req.Status, req.ValidFrom, req.ValidUntil,
 	).Scan(&c.ID, &c.TenantID, &c.UserID, &c.Type, &c.Value, &c.Status,
 		&c.ValidFrom, &c.ValidUntil, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
@@ -236,10 +238,12 @@ func (h *IdentityHandlers) SyncUsers(w http.ResponseWriter, r *http.Request) {
 
 	// Get users changed since timestamp
 	personRows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, tenant_id, first_name, last_name, COALESCE(email,''), COALESCE(phone,''),
-		 COALESCE(department,''), COALESCE(role,''), COALESCE(employee_id,''), status, COALESCE(photo_url,''),
-		 created_at, updated_at
-		 FROM dm3_identity.users WHERE updated_at > $1 ORDER BY updated_at ASC`, since)
+		`SELECT u.id, u.tenant_id, u.first_name, u.last_name, COALESCE(u.email,''), COALESCE(u.phone,''),
+		 COALESCE(d.name,''), COALESCE(u.position,''), COALESCE(u.emp_number,''), u.status, COALESCE(u.avatar,''),
+		 u.created_at, u.updated_at
+		 FROM dm3_identity.users u
+		 LEFT JOIN dm3_identity.departments d ON u.department_id = d.id
+		 WHERE u.updated_at > $1 ORDER BY u.updated_at ASC`, since)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -424,6 +428,11 @@ type createGroupRequest struct {
 }
 
 func (h *IdentityHandlers) CreateGroup(w http.ResponseWriter, r *http.Request) {
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusBadRequest, "company context required")
+		return
+	}
 	var req createGroupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
 		httputil.Error(w, http.StatusBadRequest, "name required")
@@ -431,9 +440,9 @@ func (h *IdentityHandlers) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	}
 	var g models.UserGroup
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_identity.user_groups (name, description) VALUES ($1,$2)
+		`INSERT INTO dm3_identity.user_groups (tenant_id, name, description) VALUES ($1::uuid,$2,$3)
 		 RETURNING id, tenant_id, name, COALESCE(description,''), 0, created_at, updated_at`,
-		req.Name, nilIfEmpty(req.Description),
+		cid, req.Name, nilIfEmpty(req.Description),
 	).Scan(&g.ID, &g.TenantID, &g.Name, &g.Description, &g.MemberCount, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -497,10 +506,11 @@ func (h *IdentityHandlers) ListGroupMembers(w http.ResponseWriter, r *http.Reque
 	groupID := chi.URLParam(r, "id")
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT p.id, p.tenant_id, p.first_name, p.last_name, COALESCE(p.email,''), COALESCE(p.phone,''),
-		 COALESCE(p.department,''), COALESCE(p.role,''), COALESCE(p.employee_id,''), p.status, COALESCE(p.photo_url,''),
+		 COALESCE(d.name,''), COALESCE(p.position,''), COALESCE(p.emp_number,''), p.status, COALESCE(p.avatar,''),
 		 p.created_at, p.updated_at
 		 FROM dm3_identity.users p
 		 JOIN dm3_identity.user_group_members m ON m.user_id = p.id
+		 LEFT JOIN dm3_identity.departments d ON p.department_id = d.id
 		 WHERE m.group_id = $1::uuid ORDER BY p.last_name, p.first_name`, groupID)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())

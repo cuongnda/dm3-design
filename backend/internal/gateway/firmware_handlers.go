@@ -526,13 +526,20 @@ func buildFirmwareObjectKey(deviceType, filename string) string {
 
 func sanitizeFirmwarePathSegment(value string) string {
 	value = strings.TrimSpace(value)
-	value = strings.ReplaceAll(value, "\\", "_")
-	value = strings.ReplaceAll(value, "/", "_")
-	value = strings.ReplaceAll(value, "..", "_")
-	if value == "" {
+	var result []byte
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-' {
+			result = append(result, c)
+		} else {
+			result = append(result, '_')
+		}
+	}
+	s := strings.Trim(string(result), ".")
+	if s == "" {
 		return "file"
 	}
-	return value
+	return s
 }
 
 // parseFirmwarePagination reuses the gateway parsePagination for consistency

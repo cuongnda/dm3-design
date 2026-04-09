@@ -116,8 +116,12 @@ func main() {
 	// Add i18n middleware to all routes
 	r.Use(i18n.LocaleMiddleware)
 
-	// Serve managed zone map assets from MinIO-backed object storage.
-	r.Get("/assets/*", handlers.ServeManagedAsset)
+	// Serve managed zone map assets (requires authentication via header or ?token= query param)
+	r.Group(func(ar chi.Router) {
+		ar.Use(authsvc.AssetAuthMiddleware(cfg.JWTSecret))
+		ar.Use(authsvc.RequireCompany())
+		ar.Get("/assets/*", handlers.ServeManagedAsset)
+	})
 
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "access-svc"})

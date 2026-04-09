@@ -408,10 +408,10 @@ func (h *ProvisioningHandlers) ApprovePending(w http.ResponseWriter, r *http.Req
 	var deviceDBID string
 	err = h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO dm3_devices.devices (device_id, name, type, location, tenant_id, status, firmware_version, hardware_fingerprint, provisioned_at, provisioned_by)
-		 VALUES ($1, $2, $3, $4, $5::uuid, 'online', $6, $7, now(), $8)
-		 ON CONFLICT (device_id) DO UPDATE SET status = 'online', name = $2, type = $3, location = $4, tenant_id = $5::uuid, firmware_version = $6, hardware_fingerprint = $7, provisioned_at = now(), provisioned_by = $8, updated_at = now()
+		 VALUES ($1, $2, $3, $4, $5::uuid, $9, $6, $7, now(), $8)
+		 ON CONFLICT (device_id) DO UPDATE SET status = $9, name = $2, type = $3, location = $4, tenant_id = $5::uuid, firmware_version = $6, hardware_fingerprint = $7, provisioned_at = now(), provisioned_by = $8, updated_at = now()
 		 RETURNING id`,
-		rid, name, deviceType, req.Location, req.TenantID, firmwareVersion, fp, assignedBy,
+		rid, name, deviceType, req.Location, req.TenantID, firmwareVersion, fp, assignedBy, models.DeviceStatusOnline,
 	).Scan(&deviceDBID)
 	if err != nil {
 		slog.Error("ApprovePending: insert device failed", "error", err)

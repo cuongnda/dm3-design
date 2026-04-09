@@ -122,8 +122,12 @@ func main() {
 		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
 
-	// Serve uploaded photos/avatars from shared object storage
-	r.Get("/photos/*", handlers.ServeManagedPhoto)
+	// Serve uploaded photos/avatars (requires authentication via header or ?token= query param)
+	r.Group(func(ar chi.Router) {
+		ar.Use(authsvc.AssetAuthMiddleware(cfg.JWTSecret))
+		ar.Use(authsvc.RequireCompany())
+		ar.Get("/photos/*", handlers.ServeManagedPhoto)
+	})
 
 	r.Route("/api/v1/identity", func(r chi.Router) {
 		r.Use(authsvc.AuthMiddleware(cfg.JWTSecret))

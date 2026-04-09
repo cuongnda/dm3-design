@@ -11,7 +11,7 @@ func TestBuildFirmwareObjectKey(t *testing.T) {
 }
 
 func TestSanitizeFirmwarePathSegment(t *testing.T) {
-	if got := sanitizeFirmwarePathSegment(" ../weird/name.bin "); got != "__weird_name.bin" {
+	if got := sanitizeFirmwarePathSegment(" ../weird/name.bin "); got != "_weird_name.bin" {
 		t.Fatalf("sanitizeFirmwarePathSegment() = %q", got)
 	}
 }

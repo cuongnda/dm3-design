@@ -12,9 +12,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
+
+const testTenantID = "00000000-0000-0000-0000-000000000001"
 
 func setupTestDB(t *testing.T) *db.DB {
 	t.Helper()
@@ -31,6 +34,22 @@ func setupTestDB(t *testing.T) *db.DB {
 
 func setupRouter(h *IdentityHandlers) http.Handler {
 	r := httputil.NewRouter()
+
+	// Inject test auth context so handlers see a valid tenant
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := authsvc.WithClaims(r.Context(), &authsvc.AccessClaims{
+				Sub:   "test-user",
+				CID:   testTenantID,
+				Email: "test@example.com",
+				Role:  "primary_manager",
+				Roles: []string{"primary_manager"},
+			})
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	})
+	r.Use(authsvc.RequireCompany())
+
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/users", h.ListUsers)
 		r.Post("/users", h.CreateUser)
@@ -100,12 +119,13 @@ func TestPersonsCRUD(t *testing.T) {
 
 	var listResp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &listResp)
-	if listResp["total"].(float64) < 1 {
+	pagination, _ := listResp["pagination"].(map[string]any)
+	if pagination == nil || pagination["total"].(float64) < 1 {
 		t.Fatal("expected at least 1 user in search results")
 	}
 
 	// Update
-	body = `{"department":"Sales"}`
+	body = `{"position":"Sales Manager"}`
 	req = httptest.NewRequest("PUT", "/api/v1/users/"+userID, bytes.NewBufferString(body))
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -114,10 +134,15 @@ func TestPersonsCRUD(t *testing.T) {
 		t.Fatalf("update user: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var updated map[string]any
-	json.Unmarshal(w.Body.Bytes(), &updated)
-	if updated["department"] != "Sales" {
-		t.Fatalf("expected department Sales, got %v", updated["department"])
+	// Verify update by fetching the user
+	req = httptest.NewRequest("GET", "/api/v1/users/"+userID, nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	var getResp map[string]any
+	json.Unmarshal(w.Body.Bytes(), &getResp)
+	updated, _ := getResp["user"].(map[string]any)
+	if updated == nil || updated["position"] != "Sales Manager" {
+		t.Fatalf("expected position Sales Manager, got %v", updated["position"])
 	}
 
 	// Delete
@@ -125,8 +150,8 @@ func TestPersonsCRUD(t *testing.T) {
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("delete user: expected 204, got %d", w.Code)
+	if w.Code != http.StatusOK {
+		t.Fatalf("delete user: expected 200, got %d", w.Code)
 	}
 
 	// Verify deleted
@@ -231,7 +256,7 @@ func TestGroupsCRUD(t *testing.T) {
 	groupID := group["id"].(string)
 
 	// Create a user to add as member
-	body = `{"first_name":"Member","last_name":"One"}`
+	body = `{"first_name":"Member","last_name":"One","email":"member@test.com"}`
 	req = httptest.NewRequest("POST", "/api/v1/users", bytes.NewBufferString(body))
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -240,7 +265,7 @@ func TestGroupsCRUD(t *testing.T) {
 	userID := user["id"].(string)
 
 	// Add member
-	body = fmt.Sprintf(`{"person_id":"%s"}`, userID)
+	body = fmt.Sprintf(`{"user_id":"%s"}`, userID)
 	req = httptest.NewRequest("POST", fmt.Sprintf("/api/v1/groups/%s/members", groupID), bytes.NewBufferString(body))
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
