@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"net/http"
@@ -81,6 +82,8 @@ type createParkingSessionRequest struct {
 	VehicleType   string         `json:"vehicle_type"`
 	EntryDeviceID *string        `json:"entry_device_id"`
 	PlateImageRef *string        `json:"plate_image_ref"`
+	MatchedBy     string         `json:"matched_by"`
+	Confidence    *float64       `json:"confidence"`
 	Metadata      map[string]any `json:"metadata"`
 }
 
@@ -88,6 +91,39 @@ type parkingExitRequest struct {
 	ExitDeviceID  *string `json:"exit_device_id"`
 	PlateImageRef *string `json:"plate_image_ref"`
 	PlateNumber   *string `json:"plate_number"`
+}
+
+type parkingRecognitionRequest struct {
+	LotID        string   `json:"lot_id"`
+	ZoneID       string   `json:"zone_id"`
+	Direction    string   `json:"direction"`
+	PlateNumber  string   `json:"plate_number"`
+	VehicleType  string   `json:"vehicle_type"`
+	DeviceID     *string  `json:"device_id"`
+	ImageRef     *string  `json:"image_ref"`
+	Confidence   *float64 `json:"confidence"`
+	OperatorNote *string  `json:"operator_note"`
+}
+
+type parkingPaymentRequest struct {
+	Method    string  `json:"method"`
+	Amount    float64 `json:"amount"`
+	Reference *string `json:"reference"`
+}
+
+type createParkingPassRequest struct {
+	SiteID     *string        `json:"site_id"`
+	LotID      *string        `json:"lot_id"`
+	ZoneID     string         `json:"zone_id"`
+	VehicleID  string         `json:"vehicle_id"`
+	UserID     *string        `json:"user_id"`
+	PassType   string         `json:"pass_type"`
+	ValidFrom  string         `json:"valid_from"`
+	ValidUntil string         `json:"valid_until"`
+	FeeAmount  float64        `json:"fee_amount"`
+	Status     string         `json:"status"`
+	AutoRenew  bool           `json:"auto_renew"`
+	Metadata   map[string]any `json:"metadata"`
 }
 
 type barrierCommand struct {
@@ -421,7 +457,7 @@ func (h *AccessHandlers) ListParkingVehicles(w http.ResponseWriter, r *http.Requ
 	var total int64
 	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_operate.parking_vehicles "+where, args...).Scan(&total)
 	query := fmt.Sprintf(`SELECT id, tenant_id, COALESCE(owner_user_id::text,''), plate_number, normalized_plate,
-			plate_image_ref, type, category, brand, color, registration_status, COALESCE(monthly_pass_id::text,''), metadata,
+			plate_image_ref, type, category, brand, color, registration_status, COALESCE(monthly_pass_id::text,''), COALESCE(active_pass_id::text,''), metadata,
 			created_at, updated_at
 		FROM dm3_operate.parking_vehicles %s
 		ORDER BY updated_at DESC
@@ -436,15 +472,16 @@ func (h *AccessHandlers) ListParkingVehicles(w http.ResponseWriter, r *http.Requ
 	vehicles := []models.ParkingVehicle{}
 	for rows.Next() {
 		var v models.ParkingVehicle
-		var ownerID, monthlyPassID string
+		var ownerID, monthlyPassID, activePassID string
 		if err := rows.Scan(&v.ID, &v.TenantID, &ownerID, &v.PlateNumber, &v.NormalizedPlate,
-			&v.PlateImageRef, &v.Type, &v.Category, &v.Brand, &v.Color, &v.RegistrationStatus, &monthlyPassID,
+			&v.PlateImageRef, &v.Type, &v.Category, &v.Brand, &v.Color, &v.RegistrationStatus, &monthlyPassID, &activePassID,
 			&v.Metadata, &v.CreatedAt, &v.UpdatedAt); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		v.OwnerUserID = nilIfEmpty(ownerID)
 		v.MonthlyPassID = nilIfEmpty(monthlyPassID)
+		v.ActivePassID = nilIfEmpty(activePassID)
 		vehicles = append(vehicles, v)
 	}
 	if vehicles == nil {
@@ -489,15 +526,15 @@ func (h *AccessHandlers) CreateParkingVehicle(w http.ResponseWriter, r *http.Req
 	}
 	metadata, _ := json.Marshal(defaultMap(req.Metadata))
 	var vehicle models.ParkingVehicle
-	var ownerID, monthlyPassID string
+	var ownerID, monthlyPassID, activePassID string
 	err := h.db.Pool.QueryRow(r.Context(), `INSERT INTO dm3_operate.parking_vehicles
-			(tenant_id, owner_user_id, plate_number, normalized_plate, plate_image_ref, type, category, brand, color, registration_status, monthly_pass_id, metadata)
-			VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11::uuid, $12::jsonb)
-			RETURNING id, tenant_id, COALESCE(owner_user_id::text,''), plate_number, normalized_plate, plate_image_ref, type, category, brand, color, registration_status, COALESCE(monthly_pass_id::text,''), metadata, created_at, updated_at`,
+			(tenant_id, owner_user_id, plate_number, normalized_plate, plate_image_ref, type, category, brand, color, registration_status, monthly_pass_id, active_pass_id, metadata)
+			VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11::uuid, $12::uuid, $13::jsonb)
+			RETURNING id, tenant_id, COALESCE(owner_user_id::text,''), plate_number, normalized_plate, plate_image_ref, type, category, brand, color, registration_status, COALESCE(monthly_pass_id::text,''), COALESCE(active_pass_id::text,''), metadata, created_at, updated_at`,
 		cid, req.OwnerUserID, strings.TrimSpace(req.PlateNumber), normalized, req.PlateImageRef, req.Type, req.Category,
-		req.Brand, req.Color, req.RegistrationStatus, req.MonthlyPassID, metadata,
+		req.Brand, req.Color, req.RegistrationStatus, req.MonthlyPassID, req.MonthlyPassID, metadata,
 	).Scan(&vehicle.ID, &vehicle.TenantID, &ownerID, &vehicle.PlateNumber, &vehicle.NormalizedPlate, &vehicle.PlateImageRef,
-		&vehicle.Type, &vehicle.Category, &vehicle.Brand, &vehicle.Color, &vehicle.RegistrationStatus, &monthlyPassID,
+		&vehicle.Type, &vehicle.Category, &vehicle.Brand, &vehicle.Color, &vehicle.RegistrationStatus, &monthlyPassID, &activePassID,
 		&vehicle.Metadata, &vehicle.CreatedAt, &vehicle.UpdatedAt)
 	if err != nil {
 		slog.Error("create parking vehicle error", "error", err)
@@ -506,6 +543,7 @@ func (h *AccessHandlers) CreateParkingVehicle(w http.ResponseWriter, r *http.Req
 	}
 	vehicle.OwnerUserID = nilIfEmpty(ownerID)
 	vehicle.MonthlyPassID = nilIfEmpty(monthlyPassID)
+	vehicle.ActivePassID = nilIfEmpty(activePassID)
 	h.audit.LogFromRequest(r, "parking.vehicle.create", "parking_vehicle", vehicle.ID, vehicle.PlateNumber, "success", nil, vehicle)
 	httputil.JSON(w, http.StatusCreated, vehicle)
 }
@@ -518,21 +556,22 @@ func (h *AccessHandlers) GetParkingVehicle(w http.ResponseWriter, r *http.Reques
 	}
 	id := chi.URLParam(r, "id")
 	var vehicle models.ParkingVehicle
-	var ownerID, monthlyPassID string
+	var ownerID, monthlyPassID, activePassID string
 	err := h.db.Pool.QueryRow(r.Context(), `SELECT id, tenant_id, COALESCE(owner_user_id::text,''), plate_number, normalized_plate,
-			plate_image_ref, type, category, brand, color, registration_status, COALESCE(monthly_pass_id::text,''), metadata,
+			plate_image_ref, type, category, brand, color, registration_status, COALESCE(monthly_pass_id::text,''), COALESCE(active_pass_id::text,''), metadata,
 			created_at, updated_at
 		FROM dm3_operate.parking_vehicles
 		WHERE id = $1::uuid AND tenant_id = $2::uuid`, id, cid,
 	).Scan(&vehicle.ID, &vehicle.TenantID, &ownerID, &vehicle.PlateNumber, &vehicle.NormalizedPlate,
 		&vehicle.PlateImageRef, &vehicle.Type, &vehicle.Category, &vehicle.Brand, &vehicle.Color, &vehicle.RegistrationStatus,
-		&monthlyPassID, &vehicle.Metadata, &vehicle.CreatedAt, &vehicle.UpdatedAt)
+		&monthlyPassID, &activePassID, &vehicle.Metadata, &vehicle.CreatedAt, &vehicle.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "parking vehicle not found")
 		return
 	}
 	vehicle.OwnerUserID = nilIfEmpty(ownerID)
 	vehicle.MonthlyPassID = nilIfEmpty(monthlyPassID)
+	vehicle.ActivePassID = nilIfEmpty(activePassID)
 	httputil.JSON(w, http.StatusOK, vehicle)
 }
 
@@ -750,19 +789,41 @@ func (h *AccessHandlers) CreateParkingSession(w http.ResponseWriter, r *http.Req
 		httputil.Error(w, http.StatusBadRequest, "invalid plate_number")
 		return
 	}
-	metadata, _ := json.Marshal(defaultMap(req.Metadata))
+	metadataMap := defaultMap(req.Metadata)
+	metadata, _ := json.Marshal(metadataMap)
 	vehicle, _ := h.lookupVehicleByPlate(r.Context(), cid, normalized)
-	integrationState, _ := json.Marshal(map[string]any{"barrier_command_sent": false, "plate_source": "manual_or_api"})
+	if vehicle.RegistrationStatus == "blacklisted" {
+		httputil.Error(w, http.StatusForbidden, "blacklisted vehicle cannot enter")
+		return
+	}
+	zoneHasCapacity, _ := h.zoneHasCapacity(r.Context(), cid, req.ZoneID)
+	if !zoneHasCapacity {
+		httputil.Error(w, http.StatusConflict, "parking zone is full")
+		return
+	}
+	pass, _ := h.lookupActiveParkingPass(r.Context(), cid, vehicle.ID, req.ZoneID, time.Now().UTC())
+	matchedBy := req.MatchedBy
+	if matchedBy == "" {
+		matchedBy = "manual"
+	}
+	decisionCode := "manual_review"
+	decisionReason := "operator_created_session"
+	if matchedBy == "anpr_auto" {
+		decisionCode = "auto_allow"
+		decisionReason = "recognized_plate_matched"
+	}
+	if pass.ID != "" {
+		decisionCode = "resident_pass_allow"
+		decisionReason = "active_pass_found"
+	}
+	integrationState, _ := json.Marshal(map[string]any{"barrier_command_sent": false, "plate_source": matchedBy, "decision_code": decisionCode, "decision_reason": decisionReason, "vehicle_matched": vehicle.ID != "", "pass_matched": pass.ID != ""})
 
 	row := h.db.Pool.QueryRow(r.Context(), `INSERT INTO dm3_operate.parking_sessions
-			(tenant_id, lot_id, zone_id, vehicle_id, plate_number, normalized_plate, vehicle_type, vehicle_category, entry_device_id, entry_plate_image, status, fee_currency, integration_state, metadata)
-			VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9::uuid, $10, 'active', 'VND', $11::jsonb, $12::jsonb)
-			RETURNING id, tenant_id, lot_id, zone_id, COALESCE(vehicle_id::text,''), plate_number, normalized_plate, vehicle_type,
-			COALESCE(vehicle_category,''), entry_time, exit_time, COALESCE(entry_device_id::text,''), COALESCE(exit_device_id::text,''),
-			entry_plate_image, exit_plate_image, status, fee_amount, fee_currency, COALESCE(fee_rule_id::text,''),
-			COALESCE(payment_status,''), payment_method, payment_ref, COALESCE(monthly_pass_id::text,''), integration_state, metadata, created_at, updated_at`,
+			(tenant_id, lot_id, zone_id, vehicle_id, plate_number, normalized_plate, vehicle_type, vehicle_category, entry_device_id, entry_plate_image, status, fee_currency, monthly_pass_id, matched_by, recognition_confidence, decision_code, decision_reason, integration_state, metadata)
+			VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9::uuid, $10, 'active', 'VND', $11::uuid, $12, $13, $14, $15, $16::jsonb, $17::jsonb)
+			RETURNING `+sessionSelectColumns,
 		cid, req.LotID, req.ZoneID, emptyToNil(vehicle.ID), strings.TrimSpace(req.PlateNumber), normalized, req.VehicleType,
-		emptyToNil(vehicle.Category), req.EntryDeviceID, req.PlateImageRef, integrationState, metadata)
+		emptyToNil(vehicle.Category), req.EntryDeviceID, req.PlateImageRef, emptyToNil(pass.ID), matchedBy, req.Confidence, decisionCode, decisionReason, integrationState, metadata)
 	session, err := scanParkingSession(row)
 	if err != nil {
 		if strings.Contains(err.Error(), "uq_parking_active_session_per_plate") {
@@ -775,8 +836,8 @@ func (h *AccessHandlers) CreateParkingSession(w http.ResponseWriter, r *http.Req
 	}
 
 	if req.EntryDeviceID != nil {
-		if err := h.publishBarrierCommand(r.Context(), req.ZoneID, *req.EntryDeviceID, barrierCommand{Action: "open", SessionID: session.ID, Reason: "entry_granted"}); err == nil {
-			session.IntegrationState = rawJSON(map[string]any{"barrier_command_sent": true, "entry_device_id": *req.EntryDeviceID})
+		if err := h.publishBarrierCommand(r.Context(), req.ZoneID, *req.EntryDeviceID, barrierCommand{Action: "open", SessionID: session.ID, Reason: decisionCode}); err == nil {
+			session.IntegrationState = rawJSON(map[string]any{"barrier_command_sent": true, "entry_device_id": *req.EntryDeviceID, "decision_code": decisionCode, "decision_reason": decisionReason})
 			_, _ = h.db.Pool.Exec(r.Context(), `UPDATE dm3_operate.parking_sessions SET integration_state = $2::jsonb WHERE id = $1::uuid`, session.ID, session.IntegrationState)
 		}
 	}
@@ -826,6 +887,15 @@ func (h *AccessHandlers) ExitParkingSession(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	integrationState, _ := json.Marshal(integration)
+	decisionCode := "exit_pending_payment"
+	decisionReason := "payment_required_before_barrier_open"
+	if status == models.ParkingSessionStatusDisputed {
+		decisionCode = "plate_mismatch"
+		decisionReason = "exit_plate_does_not_match_entry"
+	} else if shouldOpenBarrier {
+		decisionCode = "exit_allow"
+		decisionReason = "fee_settled_or_waived"
+	}
 	row := h.db.Pool.QueryRow(r.Context(), `UPDATE dm3_operate.parking_sessions SET
 			exit_time = $2,
 			exit_device_id = $3::uuid,
@@ -834,13 +904,12 @@ func (h *AccessHandlers) ExitParkingSession(w http.ResponseWriter, r *http.Reque
 			fee_amount = $6,
 			fee_rule_id = $7::uuid,
 			payment_status = $8,
-			integration_state = $9::jsonb
-		WHERE id = $1::uuid AND tenant_id = $10::uuid
-		RETURNING id, tenant_id, lot_id, zone_id, COALESCE(vehicle_id::text,''), plate_number, normalized_plate, vehicle_type,
-			COALESCE(vehicle_category,''), entry_time, exit_time, COALESCE(entry_device_id::text,''), COALESCE(exit_device_id::text,''),
-			entry_plate_image, exit_plate_image, status, fee_amount, fee_currency, COALESCE(fee_rule_id::text,''),
-			COALESCE(payment_status,''), payment_method, payment_ref, COALESCE(monthly_pass_id::text,''), integration_state, metadata, created_at, updated_at`,
-		id, now, req.ExitDeviceID, req.PlateImageRef, status, feeAmount, emptyToNil(feeRuleID), paymentStatus, integrationState, cid)
+			decision_code = $9,
+			decision_reason = $10,
+			integration_state = $11::jsonb
+		WHERE id = $1::uuid AND tenant_id = $12::uuid
+		RETURNING `+sessionSelectColumns,
+		id, now, req.ExitDeviceID, req.PlateImageRef, status, feeAmount, emptyToNil(feeRuleID), paymentStatus, decisionCode, decisionReason, integrationState, cid)
 	updated, err := scanParkingSession(row)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
@@ -855,19 +924,246 @@ func (h *AccessHandlers) ExitParkingSession(w http.ResponseWriter, r *http.Reque
 	httputil.JSON(w, http.StatusOK, updated)
 }
 
-const sessionSelect = `SELECT id, tenant_id, lot_id, zone_id, COALESCE(vehicle_id::text,''), plate_number, normalized_plate, vehicle_type,
+func (h *AccessHandlers) ProcessParkingPayment(w http.ResponseWriter, r *http.Request) {
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+	id := chi.URLParam(r, "id")
+	var req parkingPaymentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(req.Method) == "" {
+		httputil.Error(w, http.StatusBadRequest, "payment method is required")
+		return
+	}
+	current, err := h.getParkingSession(r.Context(), cid, id)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "parking session not found")
+		return
+	}
+	if current.FeeAmount == nil {
+		httputil.Error(w, http.StatusConflict, "parking fee has not been calculated yet")
+		return
+	}
+	if req.Amount+0.1 < *current.FeeAmount {
+		httputil.Error(w, http.StatusBadRequest, "payment amount is below required fee")
+		return
+	}
+	integrationState := rawJSON(map[string]any{"payment_received": true, "barrier_command_sent": false, "payment_method": req.Method})
+	var updated models.ParkingSession
+	row := h.db.Pool.QueryRow(r.Context(), `UPDATE dm3_operate.parking_sessions SET
+			payment_status = $2,
+			payment_method = $3,
+			payment_ref = $4,
+			payment_time = $5,
+			status = CASE WHEN status = 'active' THEN 'completed' ELSE status END,
+			decision_code = 'payment_confirmed',
+			decision_reason = 'payment_cleared_for_exit',
+			integration_state = $6::jsonb
+		WHERE id = $1::uuid AND tenant_id = $7::uuid
+		RETURNING `+sessionSelectColumns,
+		id, models.ParkingPaymentStatusPaid, req.Method, req.Reference, time.Now().UTC(), integrationState, cid)
+	updated, err = scanParkingSession(row)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if updated.ExitDeviceID != nil {
+		if err := h.publishBarrierCommand(r.Context(), updated.ZoneID, *updated.ExitDeviceID, barrierCommand{Action: "open", SessionID: updated.ID, Reason: "payment_confirmed"}); err == nil {
+			updated.IntegrationState = rawJSON(map[string]any{"payment_received": true, "barrier_command_sent": true, "payment_method": req.Method, "exit_device_id": *updated.ExitDeviceID})
+			_, _ = h.db.Pool.Exec(r.Context(), `UPDATE dm3_operate.parking_sessions SET integration_state = $2::jsonb WHERE id = $1::uuid`, updated.ID, updated.IntegrationState)
+		}
+	}
+	h.publishParkingEvent(r.Context(), "parking.session.payment", map[string]any{"session_id": updated.ID, "amount": req.Amount, "method": req.Method})
+	h.audit.LogFromRequest(r, "parking.session.payment", "parking_session", updated.ID, updated.PlateNumber, "success", current, updated)
+	httputil.JSON(w, http.StatusOK, updated)
+}
+
+func (h *AccessHandlers) RecognizeParkingPlate(w http.ResponseWriter, r *http.Request) {
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+	var req parkingRecognitionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Direction != "entry" && req.Direction != "exit" {
+		httputil.Error(w, http.StatusBadRequest, "direction must be entry or exit")
+		return
+	}
+	normalized := normalizePlate(req.PlateNumber)
+	if req.LotID == "" || req.ZoneID == "" || !looksLikePlate(normalized) || !validParkingVehicleType(req.VehicleType) {
+		httputil.Error(w, http.StatusBadRequest, "lot_id, zone_id, valid plate_number and valid vehicle_type are required")
+		return
+	}
+	vehicle, _ := h.lookupVehicleByPlate(r.Context(), cid, normalized)
+	if vehicle.RegistrationStatus == "blacklisted" {
+		httputil.JSON(w, http.StatusOK, map[string]any{"decision": "deny", "reason": "blacklisted_vehicle", "vehicle_matched": true, "barrier_open": false})
+		return
+	}
+	confidence := 0.0
+	if req.Confidence != nil {
+		confidence = *req.Confidence
+	}
+	matchedBy := recognitionMatchMode(confidence)
+	if req.Direction == "entry" {
+		meta := map[string]any{"recognition_direction": req.Direction}
+		if req.OperatorNote != nil {
+			meta["operator_note"] = *req.OperatorNote
+		}
+		body := createParkingSessionRequest{LotID: req.LotID, ZoneID: req.ZoneID, PlateNumber: req.PlateNumber, VehicleType: req.VehicleType, EntryDeviceID: req.DeviceID, PlateImageRef: req.ImageRef, MatchedBy: matchedBy, Confidence: req.Confidence, Metadata: meta}
+		payload, _ := json.Marshal(body)
+		r.Body = io.NopCloser(strings.NewReader(string(payload)))
+		h.CreateParkingSession(w, r)
+		return
+	}
+	current, err := h.findActiveParkingSessionByPlate(r.Context(), cid, normalized)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "active parking session not found for this plate")
+		return
+	}
+	body := parkingExitRequest{ExitDeviceID: req.DeviceID, PlateImageRef: req.ImageRef, PlateNumber: &req.PlateNumber}
+	payload, _ := json.Marshal(body)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", current.ID)
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	r.Body = io.NopCloser(strings.NewReader(string(payload)))
+	h.ExitParkingSession(w, r)
+}
+
+func (h *AccessHandlers) ListParkingPasses(w http.ResponseWriter, r *http.Request) {
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+	page, limit := parsePagination(r)
+	offset := (page - 1) * limit
+	where := "WHERE tenant_id = $1::uuid"
+	args := []any{cid}
+	idx := 2
+	if v := r.URL.Query().Get("zone_id"); v != "" {
+		where += fmt.Sprintf(" AND zone_id = $%d::uuid", idx)
+		args = append(args, v)
+		idx++
+	}
+	if v := r.URL.Query().Get("vehicle_id"); v != "" {
+		where += fmt.Sprintf(" AND vehicle_id = $%d::uuid", idx)
+		args = append(args, v)
+		idx++
+	}
+	if v := r.URL.Query().Get("status"); v != "" {
+		where += fmt.Sprintf(" AND status = $%d", idx)
+		args = append(args, v)
+		idx++
+	}
+	var total int64
+	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_operate.parking_passes "+where, args...).Scan(&total)
+	query := fmt.Sprintf(`SELECT id, tenant_id, COALESCE(site_id::text,''), COALESCE(lot_id::text,''), zone_id, vehicle_id, COALESCE(user_id::text,''), pass_type, valid_from, valid_until, fee_amount, status, auto_renew, metadata, created_at, updated_at FROM dm3_operate.parking_passes %s ORDER BY valid_until DESC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
+	args = append(args, limit, offset)
+	rows, err := h.db.Pool.Query(r.Context(), query, args...)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+	passes := []models.ParkingPass{}
+	for rows.Next() {
+		p, err := scanParkingPass(rows)
+		if err != nil {
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		passes = append(passes, p)
+	}
+	if passes == nil {
+		passes = []models.ParkingPass{}
+	}
+	httputil.Paginated(w, passes, total, page, limit)
+}
+
+func (h *AccessHandlers) CreateParkingPass(w http.ResponseWriter, r *http.Request) {
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+	var req createParkingPassRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.ZoneID == "" || req.VehicleID == "" || req.ValidFrom == "" || req.ValidUntil == "" {
+		httputil.Error(w, http.StatusBadRequest, "zone_id, vehicle_id, valid_from and valid_until are required")
+		return
+	}
+	if req.PassType == "" {
+		req.PassType = "standard"
+	}
+	if req.Status == "" {
+		req.Status = "active"
+	}
+	validFrom, err := time.Parse("2006-01-02", req.ValidFrom)
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, "valid_from must be YYYY-MM-DD")
+		return
+	}
+	validUntil, err := time.Parse("2006-01-02", req.ValidUntil)
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, "valid_until must be YYYY-MM-DD")
+		return
+	}
+	metadata, _ := json.Marshal(defaultMap(req.Metadata))
+	row := h.db.Pool.QueryRow(r.Context(), `INSERT INTO dm3_operate.parking_passes (tenant_id, site_id, lot_id, zone_id, vehicle_id, user_id, pass_type, valid_from, valid_until, fee_amount, status, auto_renew, metadata)
+		VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6::uuid, $7, $8, $9, $10, $11, $12, $13::jsonb)
+		RETURNING id, tenant_id, COALESCE(site_id::text,''), COALESCE(lot_id::text,''), zone_id, vehicle_id, COALESCE(user_id::text,''), pass_type, valid_from, valid_until, fee_amount, status, auto_renew, metadata, created_at, updated_at`, cid, req.SiteID, req.LotID, req.ZoneID, req.VehicleID, req.UserID, req.PassType, validFrom, validUntil, req.FeeAmount, req.Status, req.AutoRenew, metadata)
+	pass, err := scanParkingPass(row)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	_, _ = h.db.Pool.Exec(r.Context(), `UPDATE dm3_operate.parking_vehicles SET monthly_pass_id = $2::uuid, active_pass_id = $2::uuid WHERE id = $1::uuid AND tenant_id = $3::uuid`, req.VehicleID, pass.ID, cid)
+	h.publishParkingEvent(r.Context(), "parking.pass.created", map[string]any{"pass_id": pass.ID, "vehicle_id": pass.VehicleID})
+	h.audit.LogFromRequest(r, "parking.pass.created", "parking_pass", pass.ID, pass.VehicleID, "success", nil, pass)
+	httputil.JSON(w, http.StatusCreated, pass)
+}
+
+func scanParkingPass(row interface{ Scan(dest ...any) error }) (models.ParkingPass, error) {
+	var p models.ParkingPass
+	var siteID, lotID, userID string
+	err := row.Scan(&p.ID, &p.TenantID, &siteID, &lotID, &p.ZoneID, &p.VehicleID, &userID, &p.PassType, &p.ValidFrom, &p.ValidUntil, &p.FeeAmount, &p.Status, &p.AutoRenew, &p.Metadata, &p.CreatedAt, &p.UpdatedAt)
+	if err != nil {
+		return p, err
+	}
+	p.SiteID = nilIfEmpty(siteID)
+	p.LotID = nilIfEmpty(lotID)
+	p.UserID = nilIfEmpty(userID)
+	return p, nil
+}
+
+const sessionSelectColumns = `id, tenant_id, lot_id, zone_id, COALESCE(vehicle_id::text,''), plate_number, normalized_plate, vehicle_type,
 	COALESCE(vehicle_category,''), entry_time, exit_time, COALESCE(entry_device_id::text,''), COALESCE(exit_device_id::text,''),
 	entry_plate_image, exit_plate_image, status, fee_amount, fee_currency, COALESCE(fee_rule_id::text,''),
-	COALESCE(payment_status,''), payment_method, payment_ref, COALESCE(monthly_pass_id::text,''), integration_state, metadata, created_at, updated_at
+	COALESCE(payment_status,''), payment_method, payment_ref, payment_time, COALESCE(monthly_pass_id::text,''), matched_by, recognition_confidence,
+	COALESCE(decision_code,''), COALESCE(decision_reason,''), integration_state, metadata, created_at, updated_at`
+
+const sessionSelect = `SELECT ` + sessionSelectColumns + `
 	FROM dm3_operate.parking_sessions`
 
 func scanParkingSession(row interface{ Scan(dest ...any) error }) (models.ParkingSession, error) {
 	var s models.ParkingSession
-	var vehicleID, category, entryDeviceID, exitDeviceID, feeRuleID, paymentStatus, monthlyPassID string
+	var vehicleID, category, entryDeviceID, exitDeviceID, feeRuleID, paymentStatus, monthlyPassID, decisionCode, decisionReason string
 	err := row.Scan(&s.ID, &s.TenantID, &s.LotID, &s.ZoneID, &vehicleID, &s.PlateNumber, &s.NormalizedPlate, &s.VehicleType,
 		&category, &s.EntryTime, &s.ExitTime, &entryDeviceID, &exitDeviceID, &s.EntryPlateImage, &s.ExitPlateImage,
-		&s.Status, &s.FeeAmount, &s.FeeCurrency, &feeRuleID, &paymentStatus, &s.PaymentMethod, &s.PaymentRef,
-		&monthlyPassID, &s.IntegrationState, &s.Metadata, &s.CreatedAt, &s.UpdatedAt)
+		&s.Status, &s.FeeAmount, &s.FeeCurrency, &feeRuleID, &paymentStatus, &s.PaymentMethod, &s.PaymentRef, &s.PaymentTime,
+		&monthlyPassID, &s.MatchedBy, &s.RecognitionConfidence, &decisionCode, &decisionReason, &s.IntegrationState, &s.Metadata, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		return s, err
 	}
@@ -878,6 +1174,8 @@ func scanParkingSession(row interface{ Scan(dest ...any) error }) (models.Parkin
 	s.FeeRuleID = nilIfEmpty(feeRuleID)
 	s.PaymentStatus = nilIfEmpty(paymentStatus)
 	s.MonthlyPassID = nilIfEmpty(monthlyPassID)
+	s.DecisionCode = nilIfEmpty(decisionCode)
+	s.DecisionReason = nilIfEmpty(decisionReason)
 	if s.ExitTime != nil {
 		duration := int64(s.ExitTime.Sub(s.EntryTime).Minutes())
 		if duration < 0 {
@@ -895,12 +1193,12 @@ func (h *AccessHandlers) getParkingSession(ctx context.Context, cid, id string) 
 
 func (h *AccessHandlers) lookupVehicleByPlate(ctx context.Context, cid, normalizedPlate string) (models.ParkingVehicle, error) {
 	var v models.ParkingVehicle
-	var ownerID, monthlyPassID string
+	var ownerID, monthlyPassID, activePassID string
 	err := h.db.Pool.QueryRow(ctx, `SELECT id, tenant_id, COALESCE(owner_user_id::text,''), plate_number, normalized_plate,
-			plate_image_ref, type, category, brand, color, registration_status, COALESCE(monthly_pass_id::text,''), metadata, created_at, updated_at
+			plate_image_ref, type, category, brand, color, registration_status, COALESCE(monthly_pass_id::text,''), COALESCE(active_pass_id::text,''), metadata, created_at, updated_at
 		FROM dm3_operate.parking_vehicles WHERE tenant_id = $1::uuid AND normalized_plate = $2`, cid, normalizedPlate,
 	).Scan(&v.ID, &v.TenantID, &ownerID, &v.PlateNumber, &v.NormalizedPlate, &v.PlateImageRef, &v.Type, &v.Category,
-		&v.Brand, &v.Color, &v.RegistrationStatus, &monthlyPassID, &v.Metadata, &v.CreatedAt, &v.UpdatedAt)
+		&v.Brand, &v.Color, &v.RegistrationStatus, &monthlyPassID, &activePassID, &v.Metadata, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return models.ParkingVehicle{}, nil
@@ -909,7 +1207,47 @@ func (h *AccessHandlers) lookupVehicleByPlate(ctx context.Context, cid, normaliz
 	}
 	v.OwnerUserID = nilIfEmpty(ownerID)
 	v.MonthlyPassID = nilIfEmpty(monthlyPassID)
+	v.ActivePassID = nilIfEmpty(activePassID)
 	return v, nil
+}
+
+func (h *AccessHandlers) lookupActiveParkingPass(ctx context.Context, cid, vehicleID, zoneID string, now time.Time) (models.ParkingPass, error) {
+	if vehicleID == "" {
+		return models.ParkingPass{}, nil
+	}
+	row := h.db.Pool.QueryRow(ctx, `SELECT id, tenant_id, COALESCE(site_id::text,''), COALESCE(lot_id::text,''), zone_id, vehicle_id, COALESCE(user_id::text,''), pass_type, valid_from, valid_until, fee_amount, status, auto_renew, metadata, created_at, updated_at
+		FROM dm3_operate.parking_passes
+		WHERE tenant_id = $1::uuid AND vehicle_id = $2::uuid AND zone_id = $3::uuid AND status = 'active' AND valid_from <= $4::date AND valid_until >= $4::date
+		ORDER BY valid_until DESC LIMIT 1`, cid, vehicleID, zoneID, now)
+	pass, err := scanParkingPass(row)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return models.ParkingPass{}, nil
+		}
+		return models.ParkingPass{}, err
+	}
+	return pass, nil
+}
+
+func (h *AccessHandlers) findActiveParkingSessionByPlate(ctx context.Context, cid, normalizedPlate string) (models.ParkingSession, error) {
+	row := h.db.Pool.QueryRow(ctx, sessionSelect+` WHERE tenant_id = $1::uuid AND normalized_plate = $2 AND status = 'active' ORDER BY entry_time DESC LIMIT 1`, cid, normalizedPlate)
+	return scanParkingSession(row)
+}
+
+func (h *AccessHandlers) zoneHasCapacity(ctx context.Context, cid, zoneID string) (bool, error) {
+	var totalSpaces, activeSessions int
+	err := h.db.Pool.QueryRow(ctx, `SELECT z.total_spaces, COUNT(s.id) FILTER (WHERE s.status = 'active')
+		FROM dm3_operate.parking_zones z
+		LEFT JOIN dm3_operate.parking_sessions s ON s.zone_id = z.id
+		WHERE z.tenant_id = $1::uuid AND z.id = $2::uuid
+		GROUP BY z.id`, cid, zoneID).Scan(&totalSpaces, &activeSessions)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return true, nil
+		}
+		return false, err
+	}
+	return activeSessions < totalSpaces || totalSpaces == 0, nil
 }
 
 func (h *AccessHandlers) calculateParkingFee(ctx context.Context, cid string, session models.ParkingSession, exitAt time.Time) (float64, string, string) {
@@ -1127,6 +1465,32 @@ func validAppliesTo(v string) bool {
 	default:
 		return false
 	}
+}
+
+func recognitionMatchMode(confidence float64) string {
+	if confidence >= 0.85 {
+		return "anpr_auto"
+	}
+	if confidence >= 0.70 {
+		return "anpr_review"
+	}
+	return "manual_override"
+}
+
+func barrierDecisionCode(zoneHasCapacity, vehicleMatched, isBlacklisted, hasPass bool) (string, string) {
+	if !zoneHasCapacity {
+		return "entry_denied_capacity", "zone_full_or_no_capacity"
+	}
+	if isBlacklisted {
+		return "entry_denied_blacklist", "vehicle_blacklisted"
+	}
+	if hasPass {
+		return "resident_pass_allow", "active_pass_found"
+	}
+	if vehicleMatched {
+		return "auto_allow", "registered_vehicle_matched"
+	}
+	return "visitor_allow", "visitor_ticket_required"
 }
 
 func defaultRegistrationStatus(category string) string {

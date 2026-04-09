@@ -116,15 +116,19 @@ func TestParkingRouteSetup(t *testing.T) {
 	r.Post("/api/v1/parking/fee-rules", h.CreateParkingFeeRule)
 	r.Get("/api/v1/parking/sessions", h.ListParkingSessions)
 	r.Post("/api/v1/parking/sessions", h.CreateParkingSession)
+	r.Post("/api/v1/parking/sessions/recognitions", h.RecognizeParkingPlate)
 	r.Get("/api/v1/parking/sessions/{id}", h.GetParkingSession)
 	r.Put("/api/v1/parking/sessions/{id}/exit", h.ExitParkingSession)
+	r.Post("/api/v1/parking/sessions/{id}/payment", h.ProcessParkingPayment)
+	r.Get("/api/v1/parking/passes", h.ListParkingPasses)
+	r.Post("/api/v1/parking/passes", h.CreateParkingPass)
 
 	count := 0
 	chi.Walk(r, func(method, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
 		count++
 		return nil
 	})
-	if count != 15 {
+	if count != 19 {
 		t.Fatalf("route count = %d", count)
 	}
 }
@@ -133,6 +137,30 @@ func TestRoundFeeToNearestThousand(t *testing.T) {
 	rule := models.ParkingFeeRule{RateType: "flat", Rates: mustJSON(map[string]any{"amount": 15499.0})}
 	if got := calculateFee(rule, 1); math.Abs(got-15000) > 0.1 {
 		t.Fatalf("rounded fee = %v", got)
+	}
+}
+
+func TestRecognitionMatchMode(t *testing.T) {
+	if got := recognitionMatchMode(0.9); got != "anpr_auto" {
+		t.Fatalf("recognitionMatchMode high confidence = %s", got)
+	}
+	if got := recognitionMatchMode(0.75); got != "anpr_review" {
+		t.Fatalf("recognitionMatchMode medium confidence = %s", got)
+	}
+	if got := recognitionMatchMode(0.5); got != "manual_override" {
+		t.Fatalf("recognitionMatchMode low confidence = %s", got)
+	}
+}
+
+func TestBarrierDecisionCode(t *testing.T) {
+	if code, reason := barrierDecisionCode(false, false, false, false); code != "entry_denied_capacity" || reason == "" {
+		t.Fatalf("unexpected denied capacity decision: %s %s", code, reason)
+	}
+	if code, _ := barrierDecisionCode(true, true, false, true); code != "resident_pass_allow" {
+		t.Fatalf("unexpected resident pass decision: %s", code)
+	}
+	if code, _ := barrierDecisionCode(true, true, false, false); code != "auto_allow" {
+		t.Fatalf("unexpected auto allow decision: %s", code)
 	}
 }
 

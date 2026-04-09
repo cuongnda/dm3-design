@@ -229,8 +229,11 @@ func main() {
 			pr.Get("/vehicles/{id}", handlers.GetParkingVehicle)
 			pr.Get("/sessions", handlers.ListParkingSessions)
 			pr.Post("/sessions", handlers.CreateParkingSession)
+			pr.Post("/sessions/recognitions", handlers.RecognizeParkingPlate)
 			pr.Get("/sessions/{id}", handlers.GetParkingSession)
 			pr.Put("/sessions/{id}/exit", handlers.ExitParkingSession)
+			pr.Post("/sessions/{id}/payment", handlers.ProcessParkingPayment)
+			pr.Get("/passes", handlers.ListParkingPasses)
 		})
 
 		r.Group(func(pr chi.Router) {
@@ -243,6 +246,7 @@ func main() {
 			pr.Get("/zones/{id}", handlers.GetParkingZone)
 			pr.Get("/fee-rules", handlers.ListParkingFeeRules)
 			pr.Post("/fee-rules", handlers.CreateParkingFeeRule)
+			pr.Post("/passes", handlers.CreateParkingPass)
 		})
 	})
 

@@ -1,7 +1,7 @@
-import { apiFetch } from './client';
-import type { Paginated } from './types/api';
+import { apiFetch } from "./client";
+import type { Paginated } from "./types/api";
 
-const BASE = '/api/v1/parking';
+const BASE = "/api/v1/parking";
 
 export interface ParkingLotDTO {
   id: string;
@@ -47,6 +47,25 @@ export interface ParkingVehicleDTO {
   color?: string;
   registration_status: string;
   monthly_pass_id?: string;
+  active_pass_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ParkingPassDTO {
+  id: string;
+  tenant_id: string;
+  site_id?: string;
+  lot_id?: string;
+  zone_id: string;
+  vehicle_id: string;
+  user_id?: string;
+  pass_type: string;
+  valid_from: string;
+  valid_until: string;
+  fee_amount: number;
+  status: string;
+  auto_renew: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -74,7 +93,12 @@ export interface ParkingSessionDTO {
   payment_status?: string;
   payment_method?: string;
   payment_ref?: string;
+  payment_time?: string;
   monthly_pass_id?: string;
+  matched_by: string;
+  recognition_confidence?: number;
+  decision_code?: string;
+  decision_reason?: string;
   duration_minutes?: number;
   created_at: string;
   updated_at: string;
@@ -136,7 +160,42 @@ export interface CreateParkingSessionRequest {
   vehicle_type: string;
   entry_device_id?: string;
   plate_image_ref?: string;
+  matched_by?: string;
+  confidence?: number;
   metadata?: Record<string, unknown>;
+}
+
+export interface CreateParkingPassRequest {
+  site_id?: string;
+  lot_id?: string;
+  zone_id: string;
+  vehicle_id: string;
+  user_id?: string;
+  pass_type?: string;
+  valid_from: string;
+  valid_until: string;
+  fee_amount: number;
+  status?: string;
+  auto_renew?: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ParkingRecognitionRequest {
+  lot_id: string;
+  zone_id: string;
+  direction: "entry" | "exit";
+  plate_number: string;
+  vehicle_type: string;
+  device_id?: string;
+  image_ref?: string;
+  confidence?: number;
+  operator_note?: string;
+}
+
+export interface ParkingPaymentRequest {
+  method: string;
+  amount: number;
+  reference?: string;
 }
 
 export interface ExitParkingSessionRequest {
@@ -145,24 +204,38 @@ export interface ExitParkingSessionRequest {
   plate_image_ref?: string;
 }
 
+export interface ListParkingPassesParams {
+  page?: number;
+  limit?: number;
+  zone_id?: string;
+  vehicle_id?: string;
+  status?: string;
+}
+
 function withQuery<T extends object>(path: string, params?: T) {
   const qs = new URLSearchParams();
   Object.entries(params ?? {}).forEach(([key, value]) => {
-    if (value !== undefined && value !== '') qs.set(key, String(value));
+    if (value !== undefined && value !== "") qs.set(key, String(value));
   });
   const query = qs.toString();
-  return `${path}${query ? `?${query}` : ''}`;
+  return `${path}${query ? `?${query}` : ""}`;
 }
 
-export function listParkingLots(params?: ListParkingLotsParams): Promise<Paginated<ParkingLotDTO>> {
+export function listParkingLots(
+  params?: ListParkingLotsParams,
+): Promise<Paginated<ParkingLotDTO>> {
   return apiFetch(withQuery(`${BASE}/lots`, params));
 }
 
-export function listParkingZones(params?: ListParkingZonesParams): Promise<Paginated<ParkingZoneDTO>> {
+export function listParkingZones(
+  params?: ListParkingZonesParams,
+): Promise<Paginated<ParkingZoneDTO>> {
   return apiFetch(withQuery(`${BASE}/zones`, params));
 }
 
-export function listParkingVehicles(params?: ListParkingVehiclesParams): Promise<Paginated<ParkingVehicleDTO>> {
+export function listParkingVehicles(
+  params?: ListParkingVehiclesParams,
+): Promise<Paginated<ParkingVehicleDTO>> {
   return apiFetch(withQuery(`${BASE}/vehicles`, params));
 }
 
@@ -170,18 +243,70 @@ export function getParkingVehicle(id: string): Promise<ParkingVehicleDTO> {
   return apiFetch(`${BASE}/vehicles/${id}`);
 }
 
-export function createParkingVehicle(data: CreateParkingVehicleRequest): Promise<ParkingVehicleDTO> {
-  return apiFetch(`${BASE}/vehicles`, { method: 'POST', body: JSON.stringify(data) });
+export function createParkingVehicle(
+  data: CreateParkingVehicleRequest,
+): Promise<ParkingVehicleDTO> {
+  return apiFetch(`${BASE}/vehicles`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
-export function listParkingSessions(params?: ListParkingSessionsParams): Promise<Paginated<ParkingSessionDTO>> {
+export function listParkingSessions(
+  params?: ListParkingSessionsParams,
+): Promise<Paginated<ParkingSessionDTO>> {
   return apiFetch(withQuery(`${BASE}/sessions`, params));
 }
 
-export function createParkingSession(data: CreateParkingSessionRequest): Promise<ParkingSessionDTO> {
-  return apiFetch(`${BASE}/sessions`, { method: 'POST', body: JSON.stringify(data) });
+export function createParkingSession(
+  data: CreateParkingSessionRequest,
+): Promise<ParkingSessionDTO> {
+  return apiFetch(`${BASE}/sessions`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
-export function exitParkingSession(id: string, data: ExitParkingSessionRequest): Promise<ParkingSessionDTO> {
-  return apiFetch(`${BASE}/sessions/${id}/exit`, { method: 'PUT', body: JSON.stringify(data) });
+export function recognizeParkingPlate(
+  data: ParkingRecognitionRequest,
+): Promise<ParkingSessionDTO | Record<string, unknown>> {
+  return apiFetch(`${BASE}/sessions/recognitions`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function exitParkingSession(
+  id: string,
+  data: ExitParkingSessionRequest,
+): Promise<ParkingSessionDTO> {
+  return apiFetch(`${BASE}/sessions/${id}/exit`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function processParkingPayment(
+  id: string,
+  data: ParkingPaymentRequest,
+): Promise<ParkingSessionDTO> {
+  return apiFetch(`${BASE}/sessions/${id}/payment`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function listParkingPasses(
+  params?: ListParkingPassesParams,
+): Promise<Paginated<ParkingPassDTO>> {
+  return apiFetch(withQuery(`${BASE}/passes`, params));
+}
+
+export function createParkingPass(
+  data: CreateParkingPassRequest,
+): Promise<ParkingPassDTO> {
+  return apiFetch(`${BASE}/passes`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }

@@ -83,6 +83,7 @@ type ParkingVehicle struct {
 	Color              *string         `json:"color,omitempty"`
 	RegistrationStatus string          `json:"registration_status"`
 	MonthlyPassID      *string         `json:"monthly_pass_id,omitempty"`
+	ActivePassID       *string         `json:"active_pass_id,omitempty"`
 	Metadata           json.RawMessage `json:"metadata,omitempty"`
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`
@@ -108,34 +109,59 @@ type ParkingFeeRule struct {
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
+// ParkingPass stores resident/subscriber entitlement for auto entry and waived exit fees.
+type ParkingPass struct {
+	ID         string          `json:"id"`
+	TenantID   string          `json:"tenant_id"`
+	SiteID     *string         `json:"site_id,omitempty"`
+	LotID      *string         `json:"lot_id,omitempty"`
+	ZoneID     string          `json:"zone_id"`
+	VehicleID  string          `json:"vehicle_id"`
+	UserID     *string         `json:"user_id,omitempty"`
+	PassType   string          `json:"pass_type"`
+	ValidFrom  time.Time       `json:"valid_from"`
+	ValidUntil time.Time       `json:"valid_until"`
+	FeeAmount  float64         `json:"fee_amount"`
+	Status     string          `json:"status"`
+	AutoRenew  bool            `json:"auto_renew"`
+	Metadata   json.RawMessage `json:"metadata,omitempty"`
+	CreatedAt  time.Time       `json:"created_at"`
+	UpdatedAt  time.Time       `json:"updated_at"`
+}
+
 // ParkingSession captures one entry/exit lifecycle.
 type ParkingSession struct {
-	ID               string          `json:"id"`
-	TenantID         string          `json:"tenant_id"`
-	LotID            string          `json:"lot_id"`
-	ZoneID           string          `json:"zone_id"`
-	VehicleID        *string         `json:"vehicle_id,omitempty"`
-	PlateNumber      string          `json:"plate_number"`
-	NormalizedPlate  string          `json:"normalized_plate_number"`
-	VehicleType      string          `json:"vehicle_type"`
-	VehicleCategory  *string         `json:"vehicle_category,omitempty"`
-	EntryTime        time.Time       `json:"entry_time"`
-	ExitTime         *time.Time      `json:"exit_time,omitempty"`
-	EntryDeviceID    *string         `json:"entry_device_id,omitempty"`
-	ExitDeviceID     *string         `json:"exit_device_id,omitempty"`
-	EntryPlateImage  *string         `json:"entry_plate_image,omitempty"`
-	ExitPlateImage   *string         `json:"exit_plate_image,omitempty"`
-	Status           string          `json:"status"`
-	FeeAmount        *float64        `json:"fee_amount,omitempty"`
-	FeeCurrency      string          `json:"fee_currency"`
-	FeeRuleID        *string         `json:"fee_rule_id,omitempty"`
-	PaymentStatus    *string         `json:"payment_status,omitempty"`
-	PaymentMethod    *string         `json:"payment_method,omitempty"`
-	PaymentRef       *string         `json:"payment_ref,omitempty"`
-	MonthlyPassID    *string         `json:"monthly_pass_id,omitempty"`
-	DurationMinutes  *int64          `json:"duration_minutes,omitempty"`
-	IntegrationState json.RawMessage `json:"integration_state,omitempty"`
-	Metadata         json.RawMessage `json:"metadata,omitempty"`
-	CreatedAt        time.Time       `json:"created_at"`
-	UpdatedAt        time.Time       `json:"updated_at"`
+	ID                    string          `json:"id"`
+	TenantID              string          `json:"tenant_id"`
+	LotID                 string          `json:"lot_id"`
+	ZoneID                string          `json:"zone_id"`
+	VehicleID             *string         `json:"vehicle_id,omitempty"`
+	PlateNumber           string          `json:"plate_number"`
+	NormalizedPlate       string          `json:"normalized_plate_number"`
+	VehicleType           string          `json:"vehicle_type"`
+	VehicleCategory       *string         `json:"vehicle_category,omitempty"`
+	EntryTime             time.Time       `json:"entry_time"`
+	ExitTime              *time.Time      `json:"exit_time,omitempty"`
+	EntryDeviceID         *string         `json:"entry_device_id,omitempty"`
+	ExitDeviceID          *string         `json:"exit_device_id,omitempty"`
+	EntryPlateImage       *string         `json:"entry_plate_image,omitempty"`
+	ExitPlateImage        *string         `json:"exit_plate_image,omitempty"`
+	Status                string          `json:"status"`
+	FeeAmount             *float64        `json:"fee_amount,omitempty"`
+	FeeCurrency           string          `json:"fee_currency"`
+	FeeRuleID             *string         `json:"fee_rule_id,omitempty"`
+	PaymentStatus         *string         `json:"payment_status,omitempty"`
+	PaymentMethod         *string         `json:"payment_method,omitempty"`
+	PaymentRef            *string         `json:"payment_ref,omitempty"`
+	PaymentTime           *time.Time      `json:"payment_time,omitempty"`
+	MonthlyPassID         *string         `json:"monthly_pass_id,omitempty"`
+	MatchedBy             string          `json:"matched_by"`
+	RecognitionConfidence *float64        `json:"recognition_confidence,omitempty"`
+	DecisionCode          *string         `json:"decision_code,omitempty"`
+	DecisionReason        *string         `json:"decision_reason,omitempty"`
+	DurationMinutes       *int64          `json:"duration_minutes,omitempty"`
+	IntegrationState      json.RawMessage `json:"integration_state,omitempty"`
+	Metadata              json.RawMessage `json:"metadata,omitempty"`
+	CreatedAt             time.Time       `json:"created_at"`
+	UpdatedAt             time.Time       `json:"updated_at"`
 }
