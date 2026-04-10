@@ -1,0 +1,3 @@
+-- 000016: No-op down migration.
+-- This migration only ensures the table exists (idempotent).
+-- Dropping the table is handled by 000006 down migration.
