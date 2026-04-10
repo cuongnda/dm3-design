@@ -16,7 +16,6 @@ import (
 	"github.com/duali/dm3-backend/internal/config"
 	"github.com/duali/dm3-backend/internal/identity"
 	"github.com/duali/dm3-backend/internal/tenant"
-	"github.com/duali/dm3-backend/internal/visitor"
 	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
@@ -105,7 +104,6 @@ func main() {
 	// HTTP handlers
 	handlers := identity.NewIdentityHandlers(database, natsClient, auditLog, objectStore)
 	umHandlers := tenant.NewUserManagementHandlers(database, auditLog)
-	visitorHandlers := visitor.NewVisitorHandlers(database, auditLog)
 
 	// HTTP routes
 	r := httputil.NewRouter()
@@ -194,48 +192,6 @@ func main() {
 		pr.Use(authsvc.RequireCompany())
 		tenant.AddDepartmentRoutes(pr, umHandlers)
 	})
-
-	// Visitor management routes
-	r.Route("/api/v1/visitors", func(vr chi.Router) {
-		// Public: QR code lookup (no auth required)
-		vr.Get("/qr/{qr_token}", visitorHandlers.GetVisitByQR)
-
-		// Authenticated routes
-		vr.Group(func(ar chi.Router) {
-			ar.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
-			ar.Use(authsvc.RequireCompany())
-
-			// Dashboard
-			ar.Get("/today/summary", visitorHandlers.GetTodaySummary)
-
-			// Walk-in registration
-			ar.Post("/walkin", visitorHandlers.WalkinVisit)
-
-			// Visit CRUD & lifecycle (keep legacy /visits aliases for compatibility)
-			ar.Get("/", visitorHandlers.ListVisits)
-			ar.Post("/", visitorHandlers.CreateVisit)
-			ar.Get("/{id}", visitorHandlers.GetVisit)
-			ar.Put("/{id}", visitorHandlers.UpdateVisit)
-			ar.Post("/{id}/approve", visitorHandlers.ApproveVisit)
-			ar.Post("/{id}/checkin", visitorHandlers.CheckinVisit)
-			ar.Post("/{id}/checkout", visitorHandlers.CheckoutVisit)
-			ar.Get("/visits", visitorHandlers.ListVisits)
-			ar.Post("/visits", visitorHandlers.CreateVisit)
-			ar.Get("/visits/{id}", visitorHandlers.GetVisit)
-			ar.Put("/visits/{id}", visitorHandlers.UpdateVisit)
-			ar.Post("/visits/{id}/approve", visitorHandlers.ApproveVisit)
-			ar.Post("/visits/{id}/checkin", visitorHandlers.CheckinVisit)
-			ar.Post("/visits/{id}/checkout", visitorHandlers.CheckoutVisit)
-
-			// Watchlist
-			ar.Get("/watchlist", visitorHandlers.ListWatchlist)
-			ar.Post("/watchlist", visitorHandlers.CreateWatchlistEntry)
-			ar.Delete("/watchlist/{id}", visitorHandlers.DeleteWatchlistEntry)
-		})
-	})
-
-	// Start visitor background jobs (auto-checkout, no-show marking)
-	visitorHandlers.StartBackgroundJobs(ctx)
 
 	// Start server
 	addr := fmt.Sprintf(":%d", cfg.HTTPPort)
