@@ -5,8 +5,15 @@ import {
   Bot, AlertTriangle, Users, UserPlus, Wrench, Clock, Package,
   Building2, Car, Hammer, Shield, Key, Zap, Brain,
   Settings, ChevronLeft, ChevronRight, LogOut, UserCheck, MapPin,
-  Users2, Cpu,
+  Users2, Cpu, User,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
 import { useTranslation } from 'react-i18next';
 import { useThemeStore } from '@/stores/themeStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -33,22 +40,22 @@ function SidebarNavItem({ to, icon, label, badge, collapsed }: NavItemProps) {
             to={to}
             className={({ isActive }) =>
               cn(
-                'flex items-center justify-center w-10 h-8 mx-auto rounded-md transition-colors relative',
+                ' flex items-center justify-center h-5 w-5 mx-auto rounded-md transition-colors relative overflow-visible',
                 isActive
-                  ? 'bg-[#1E3A5F] text-[#3B82F6]'
-                  : 'text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1E293B]'
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
               )
             }
           >
             {icon}
             {badge ? (
-              <span className="absolute -top-1 -right-1 bg-[#EF4444] text-white text-[9px] font-semibold px-1 rounded-full min-w-[14px] text-center">
+              <span className=" absolute bottom-0 right-0 translate-x-1/2 translate-y-1/2 bg-destructive text-white text-[9px] font-semibold px-1 rounded-full min-w-[14px] text-center">
                 {badge}
               </span>
             ) : null}
           </NavLink>
         </TooltipTrigger>
-        <TooltipContent side="right" className="bg-[#1E293B] text-[#F8FAFC] border-[#334155]">
+        <TooltipContent side="right" className="bg-popover text-popover-foreground border-border">
           {label}
         </TooltipContent>
       </Tooltip>
@@ -62,15 +69,15 @@ function SidebarNavItem({ to, icon, label, badge, collapsed }: NavItemProps) {
         cn(
           'flex items-center gap-2.5 px-3 py-1.5 mx-2 rounded-md text-[13px] transition-colors',
           isActive
-            ? 'bg-[#1E3A5F] text-[#3B82F6] border-l-2 border-[#3B82F6]'
-            : 'text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1E293B]'
+            ? 'bg-sidebar-accent text-sidebar-accent-foreground border-l-2 border-sidebar-primary'
+            : 'text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
         )
       }
     >
       {icon}
       <span className="truncate">{label}</span>
       {badge ? (
-        <span className="ml-auto bg-[#EF4444] text-white text-[10px] font-semibold px-1.5 py-0 rounded-full">
+        <span className="ml-auto bg-destructive text-white text-[10px] font-semibold px-1.5 py-0 rounded-full">
           {badge}
         </span>
       ) : null}
@@ -79,7 +86,7 @@ function SidebarNavItem({ to, icon, label, badge, collapsed }: NavItemProps) {
 }
 
 function SectionLabel({ label, color, collapsed }: { label: string; color: string; collapsed: boolean }) {
-  if (collapsed) return <div className="h-4" />;
+  if (collapsed) return <div className="h-2" />;
   return (
     <div
       className="px-3 mx-2 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-[0.05em]"
@@ -98,25 +105,32 @@ export function Sidebar() {
   const handleLogout = () => { logout(); navigate('/login'); };
   const user = useAuthStore((s) => s.user);
   const unreadCount = useNotificationStore((s) => s.unreadCount);
-  const iconSize = 18;
   const c = sidebarCollapsed;
+  const iconSize = c ? 20 : 18;
 
   return (
     <aside
       className={cn(
-        'bg-[#111827] border-r border-[#1E293B] transition-all duration-300 flex-shrink-0 overflow-y-auto',
-        c ? 'w-14' : 'w-60'
+        'bg-sidebar border-r border-sidebar-border transition-all duration-300 shrink-0 h-screen flex flex-col',
+        c ? 'w-16' : 'w-60'
       )}
-      style={{ height: '100vh' }}
     >
       {/* Logo */}
-      <div className={cn('flex items-center border-b border-[#1E293B] h-12 sticky top-0 z-10 bg-[#111827]', c ? 'justify-center px-2' : 'px-4 gap-2')}>
-        <img src="/logo.png" alt="Duall Master" className="w-6 h-6 flex-shrink-0" />
-        {!c && <span className="text-[14px] font-semibold text-[#F8FAFC]">DUALL MASTER</span>}
-      </div>
+      <NavLink to={ROUTES.dashboard} className={cn(
+        'flex items-center border-b border-sidebar-border h-12 shrink-0 bg-sidebar cursor-pointer',
+        c ? 'justify-center' : 'px-4 gap-2'
+      )}>
+        <img src="/logo.png" alt="Duall Master" className="w-6 h-6 shrink-0" />
+        {!c && <span className="text-[14px] font-semibold text-sidebar-foreground">DUALL MASTER</span>}
+      </NavLink>
 
-      {/* Nav items */}
-      <div className="py-2 space-y-0.5">
+      {/* Nav items — scrollable */}
+      <nav className={cn(
+        'flex-1 overflow-y-auto py-1',
+        c ? 'px-2 space-y-2' : 'space-y-0.5',
+        // hide scrollbar
+        '[&::-webkit-scrollbar]:w-0 [scrollbar-width:none]'
+      )}>
         <SectionLabel label={t('nav.overview')} color="#64748B" collapsed={c} />
         <SidebarNavItem to={ROUTES.dashboard} icon={<LayoutDashboard size={iconSize} />} label={t('nav.dashboard')} collapsed={c} />
         <SidebarNavItem to={ROUTES.alerts} icon={<Bell size={iconSize} />} label={t('nav.alerts')} badge={unreadCount} collapsed={c} />
@@ -142,7 +156,7 @@ export function Sidebar() {
         <SectionLabel label={t('nav.access')} color="#F59E0B" collapsed={c} />
         <SidebarNavItem to={ROUTES.zones} icon={<MapPin size={iconSize} />} label={t('nav.zones') + ' *'} collapsed={c} />
         <SidebarNavItem to={ROUTES.accessPoints} icon={<Shield size={iconSize} />} label={t('nav.accessPoints') + ' *'} collapsed={c} />
-<SidebarNavItem to={ROUTES.accessGroups} icon={<Users2 size={iconSize} />} label={t('nav.accessGroups') + ' *'} collapsed={c} />
+        <SidebarNavItem to={ROUTES.accessGroups} icon={<Users2 size={iconSize} />} label={t('nav.accessGroups') + ' *'} collapsed={c} />
         <SidebarNavItem to={ROUTES.accessTimes} icon={<Clock size={iconSize} />} label={t('nav.accessTimes') + ' *'} collapsed={c} />
         <SidebarNavItem to={ROUTES.devices} icon={<Cpu size={iconSize} />} label={t('nav.devices') + ' *'} collapsed={c} />
 
@@ -153,45 +167,62 @@ export function Sidebar() {
         <SidebarNavItem to={ROUTES.guardTour} icon={<Shield size={iconSize} />} label={t('nav.guardTour')} collapsed={c} />
         <SidebarNavItem to={ROUTES.keys} icon={<Key size={iconSize} />} label={t('nav.keys')} collapsed={c} />
         <SidebarNavItem to={ROUTES.iotEnergy} icon={<Zap size={iconSize} />} label={t('nav.iotEnergy')} collapsed={c} />
-      </div>
+      </nav>
 
-      {/* Bottom */}
-      <div className="flex-shrink-0">
-        <Separator className="bg-[#1E293B]" />
-        <div className="py-2 space-y-0.5">
-          <SidebarNavItem to={ROUTES.aiAssistant} icon={<Brain size={iconSize} className="text-[#06B6D4]" />} label={t('nav.aiAssistant')} collapsed={c} />
+      {/* Bottom — pinned */}
+      <div className="shrink-0 bg-sidebar">
+        <Separator className="bg-sidebar-border" />
+        <div className={cn('py-1', c ? 'px-2 space-y-2' : 'space-y-0.5')}>
+          <SidebarNavItem to={ROUTES.aiAssistant} icon={<Brain size={iconSize} className="text-smart" />} label={t('nav.aiAssistant')} collapsed={c} />
           <SidebarNavItem to={ROUTES.settings} icon={<Settings size={iconSize} />} label={t('nav.settings')} collapsed={c} />
         </div>
 
         {/* User */}
-        <div className={cn('border-t border-[#1E293B] py-2', c ? 'px-2' : 'px-3')}>
-          {c ? (
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-7 h-7 bg-[#3B82F6] rounded-full flex items-center justify-center text-[11px] font-semibold text-white">
-                {user?.initials}
+        <div className={cn('border-t border-sidebar-border py-2', c ? 'flex justify-center' : 'px-3')}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              {c ? (
+                <button className="flex items-center justify-center cursor-pointer group">
+                  <div className="w-8 h-8 bg-sidebar-primary rounded-full flex items-center justify-center text-[11px] font-semibold text-sidebar-primary-foreground ring-2 ring-transparent group-hover:ring-sidebar-primary/40 transition-all">
+                    {user?.initials}
+                  </div>
+                </button>
+              ) : (
+                <button className="flex items-center gap-2 py-1 w-full cursor-pointer hover:bg-sidebar-accent/50 rounded-md px-1 transition-colors group">
+                  <div className="w-7 h-7 bg-sidebar-primary rounded-full flex items-center justify-center text-[11px] font-semibold text-sidebar-primary-foreground shrink-0 ring-2 ring-transparent group-hover:ring-sidebar-primary/40 transition-all">
+                    {user?.initials}
+                  </div>
+                  <span className="text-[12px] font-medium text-sidebar-foreground truncate">{user?.name}</span>
+                </button>
+              )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="start" className="w-52">
+              <div className="px-2 py-2">
+                <p className="text-sm font-semibold truncate">{user?.name}</p>
+                <p className="text-xs text-muted-foreground truncate mt-0.5">{user?.email}</p>
               </div>
-              <button onClick={handleLogout} className="text-[#64748B] hover:text-[#F87171] transition-colors" title={t('actions.signOut')}>
-                <LogOut size={14} />
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 py-1">
-              <div className="w-7 h-7 bg-[#3B82F6] rounded-full flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0">
-                {user?.initials}
-              </div>
-              <span className="text-[12px] font-medium text-[#F8FAFC] truncate">{user?.name}</span>
-              <button onClick={handleLogout} className="ml-auto text-[#64748B] hover:text-[#F87171] transition-colors" title={t('actions.signOut')}>
-                <LogOut size={14} />
-              </button>
-            </div>
-          )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer gap-2 rounded-md py-2 px-2.5 hover:bg-accent focus:bg-accent">
+                <User className="h-4 w-4 text-muted-foreground" />
+                {t('nav.profile', 'Profile')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer gap-2 rounded-md py-2 px-2.5 text-destructive focus:text-destructive hover:bg-destructive/10 focus:bg-destructive/10">
+                <LogOut className="h-4 w-4" />
+                {t('actions.signOut', 'Sign Out')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Collapse toggle */}
-        <div className={cn('border-t border-[#1E293B] py-1', c ? 'px-2' : 'px-3')}>
+        <div className={cn('border-t border-sidebar-border py-1', c ? 'flex justify-center' : 'px-3')}>
           <button
             onClick={toggleSidebar}
-            className="flex items-center justify-center w-full h-7 rounded-md text-[#64748B] hover:text-[#F8FAFC] hover:bg-[#1E293B] transition-colors"
+            className={cn(
+              'flex items-center justify-center h-7 rounded-md text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors',
+              c ? 'w-8' : 'w-full'
+            )}
           >
             {c ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>

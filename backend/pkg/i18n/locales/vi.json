@@ -13,8 +13,12 @@
   "auth.refresh_token_expired": "Refresh token đã hết hạn",
   "auth.invalid_refresh_token": "Refresh token không hợp lệ",
   "auth.password_hashing_failed": "Mã hóa mật khẩu thất bại",
+  "auth.current_password_incorrect": "Mật khẩu hiện tại không đúng",
 
   "validation.invalid_request_body": "Nội dung yêu cầu không hợp lệ",
+  "validation.all_fields_required": "Vui lòng điền đầy đủ các trường",
+  "validation.password_too_short": "Mật khẩu phải có ít nhất 6 ký tự",
+  "validation.password_mismatch": "Mật khẩu xác nhận không khớp",
   "validation.email_password_required": "Email và mật khẩu là bắt buộc",
   "validation.temp_token_company_required": "Token tạm thời và ID công ty là bắt buộc",
   "validation.device_id_required": "ID thiết bị là bắt buộc",

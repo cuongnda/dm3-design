@@ -13,8 +13,12 @@
   "auth.refresh_token_expired": "Refresh token expired",
   "auth.invalid_refresh_token": "Invalid refresh token",
   "auth.password_hashing_failed": "Password hashing failed",
+  "auth.current_password_incorrect": "Current password is incorrect",
 
   "validation.invalid_request_body": "Invalid request body",
+  "validation.all_fields_required": "All fields are required",
+  "validation.password_too_short": "Password must be at least 6 characters",
+  "validation.password_mismatch": "Passwords do not match",
   "validation.email_password_required": "Email and password are required",
   "validation.temp_token_company_required": "Temporary token and company ID are required",
   "validation.device_id_required": "Device ID is required",

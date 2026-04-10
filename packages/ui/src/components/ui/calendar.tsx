@@ -9,11 +9,13 @@ import {
   isBefore,
   isSameDay,
   isSameMonth,
+  setMonth as setDateMonth,
+  setYear as setDateYear,
   startOfMonth,
   startOfWeek,
   subMonths,
 } from "date-fns"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
 
 import { cn } from "../../lib/utils"
 import { Button } from "./button"
@@ -50,6 +52,87 @@ function isDisabled(d: Date, minDate?: Date, maxDate?: Date) {
   if (minDate && isBefore(d, minDate)) return true
   if (maxDate && isAfter(d, maxDate)) return true
   return false
+}
+
+const MONTH_NAMES = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+]
+
+/* ── Tiny inline dropdown (no portal, no search) ── */
+interface MiniSelectProps {
+  value: number
+  options: { value: number; label: string }[]
+  onChange: (v: number) => void
+  disabled?: boolean
+  className?: string
+}
+
+function MiniSelect({ value, options, onChange, disabled, className }: MiniSelectProps) {
+  const [open, setOpen] = React.useState(false)
+  const ref = React.useRef<HTMLDivElement>(null)
+  const listRef = React.useRef<HTMLDivElement>(null)
+  const selected = options.find((o) => o.value === value)
+
+  React.useEffect(() => {
+    if (!open) return
+    const handle = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handle)
+    return () => document.removeEventListener("mousedown", handle)
+  }, [open])
+
+  // scroll to selected when opened
+  React.useEffect(() => {
+    if (!open || !listRef.current) return
+    const el = listRef.current.querySelector("[data-active]")
+    if (el) el.scrollIntoView({ block: "center" })
+  }, [open])
+
+  return (
+    <div ref={ref} className={cn("relative", className)}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "flex items-center gap-0.5 text-sm font-medium text-foreground rounded px-1.5 py-0.5 transition-colors",
+          "hover:bg-muted",
+          disabled && "opacity-50 cursor-not-allowed"
+        )}
+      >
+        {selected?.label ?? value}
+        <ChevronDown className="size-3 text-muted-foreground" />
+      </button>
+
+      {open && (
+        <div
+          ref={listRef}
+          className="absolute top-full left-0 mt-1 z-50 max-h-48 min-w-[5rem] overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-lg py-1"
+        >
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              data-active={o.value === value ? "" : undefined}
+              onClick={() => {
+                onChange(o.value)
+                setOpen(false)
+              }}
+              className={cn(
+                "w-full px-3 py-1 text-sm text-left transition-colors",
+                "hover:bg-muted",
+                o.value === value && "bg-primary/10 text-primary font-medium"
+              )}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function Calendar({
@@ -94,6 +177,23 @@ export function Calendar({
     if (!controlledMonth) setInternalMonth(clamped)
   }
 
+  const currentYear = activeMonth.getFullYear()
+  const currentMonthIdx = activeMonth.getMonth()
+
+  const monthOptions = React.useMemo(
+    () => MONTH_NAMES.map((name, i) => ({ value: i, label: name })),
+    []
+  )
+
+  const yearOptions = React.useMemo(() => {
+    const now = new Date().getFullYear()
+    const from = minDate ? minDate.getFullYear() : now - 10
+    const to = maxDate ? maxDate.getFullYear() : now + 10
+    const years: { value: number; label: string }[] = []
+    for (let y = from; y <= to; y++) years.push({ value: y, label: String(y) })
+    return years
+  }, [minDate, maxDate])
+
   const start = startOfWeek(startOfMonth(activeMonth), { weekStartsOn })
   const end = endOfWeek(endOfMonth(activeMonth), { weekStartsOn })
 
@@ -131,13 +231,11 @@ export function Calendar({
 
     const { start: s, end: e } = selectedRange
 
-    // If no start, start a range
     if (!s || (s && e)) {
       onSelectRange?.({ start: d, end: null })
       return
     }
 
-    // We have start but no end: choose end (normalize order)
     if (isBefore(d, s)) onSelectRange?.({ start: d, end: s })
     else onSelectRange?.({ start: s, end: d })
   }
@@ -156,8 +254,19 @@ export function Calendar({
           <ChevronLeft className="size-4" />
         </Button>
 
-        <div className="text-sm font-medium">
-          {format(activeMonth, "MMMM yyyy")}
+        <div className="flex items-center gap-0.5">
+          <MiniSelect
+            value={currentMonthIdx}
+            options={monthOptions}
+            onChange={(m) => setMonth(setDateMonth(activeMonth, m))}
+            disabled={disabled}
+          />
+          <MiniSelect
+            value={currentYear}
+            options={yearOptions}
+            onChange={(y) => setMonth(setDateYear(activeMonth, y))}
+            disabled={disabled}
+          />
         </div>
 
         <Button
@@ -173,9 +282,9 @@ export function Calendar({
       </div>
 
       <div className="grid grid-cols-7 gap-1 pb-1">
-        {weekdayLabels.map((w) => (
+        {weekdayLabels.map((w, i) => (
           <div
-            key={w}
+            key={i}
             className="text-muted-foreground flex h-7 items-center justify-center text-[11px] font-medium"
           >
             {w}
@@ -201,7 +310,7 @@ export function Calendar({
               onClick={() => (mode === "single" ? handlePickSingle(d) : handlePickRange(d))}
               className={cn(
                 "relative flex h-9 w-9 items-center justify-center rounded-md text-sm transition-colors outline-none",
-                "focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                "focus-visible:ring-2 focus-visible:ring-ring/30",
                 outMonth && "text-muted-foreground/60",
                 dayDisabled && "opacity-40 cursor-not-allowed",
                 !dayDisabled && "hover:bg-muted",
@@ -221,4 +330,3 @@ export function Calendar({
     </div>
   )
 }
-

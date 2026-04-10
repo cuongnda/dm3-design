@@ -839,6 +839,70 @@ func (h *AuthHandlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type changeMyPasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+	ConfirmPassword string `json:"confirm_password"`
+}
+
+// ChangeMyPassword lets the authenticated user change their own password.
+func (h *AuthHandlers) ChangeMyPassword(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFromContext(r.Context())
+	if claims == nil || claims.Sub == "" {
+		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.unauthorized")
+		return
+	}
+
+	var req changeMyPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_request_body")
+		return
+	}
+	if req.CurrentPassword == "" || req.NewPassword == "" || req.ConfirmPassword == "" {
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.all_fields_required")
+		return
+	}
+	if len(req.NewPassword) < 6 {
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.password_too_short")
+		return
+	}
+	if req.NewPassword != req.ConfirmPassword {
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.password_mismatch")
+		return
+	}
+
+	// Verify current password
+	var currentHash string
+	err := h.db.Pool.QueryRow(r.Context(),
+		`SELECT password_hash FROM dm3_auth.accounts WHERE id = $1::uuid AND status != 'deleted'`,
+		claims.Sub).Scan(&currentHash)
+	if err != nil {
+		i18n.ErrorResponse(w, r, http.StatusNotFound, "user.not_found")
+		return
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(req.CurrentPassword)); err != nil {
+		i18n.ErrorResponse(w, r, http.StatusBadRequest, "auth.current_password_incorrect")
+		return
+	}
+
+	// Hash and update new password
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.password_hashing_failed")
+		return
+	}
+
+	tag, err := h.db.Pool.Exec(r.Context(),
+		`UPDATE dm3_auth.accounts SET password_hash = $2, updated_at = now() WHERE id = $1::uuid AND status != 'deleted'`,
+		claims.Sub, string(hash))
+	if err != nil || tag.RowsAffected() == 0 {
+		i18n.ErrorResponse(w, r, http.StatusNotFound, "user.not_found")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 type changePasswordRequest struct {
 	Password string `json:"password"`
 }

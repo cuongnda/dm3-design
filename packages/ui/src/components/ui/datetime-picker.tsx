@@ -1,12 +1,15 @@
 import * as React from "react"
-import { format, isValid, parse } from "date-fns"
-import { CalendarIcon, Clock, X } from "lucide-react"
+import { format, isValid, parseISO } from "date-fns"
+import { CalendarIcon, ChevronDown, X } from "lucide-react"
 
 import { cn } from "../../lib/utils"
-import { Button } from "./button"
 import { Calendar } from "./calendar"
-import { Input } from "./input"
 import { Popover, PopoverContent, PopoverTrigger } from "./popover"
+
+export interface DatetimePreset {
+  label: string
+  value: Date
+}
 
 export interface DatetimePickerProps {
   value: string | null
@@ -16,6 +19,97 @@ export interface DatetimePickerProps {
   max?: string
   className?: string
   placeholder?: string
+  presets?: DatetimePreset[]
+}
+
+/* ── Tiny inline dropdown for hour / minute ── */
+interface TimeMiniSelectProps {
+  value: number
+  options: number[]
+  onChange: (v: number) => void
+  disabled?: boolean
+}
+
+function TimeMiniSelect({ value, options, onChange, disabled }: TimeMiniSelectProps) {
+  const [open, setOpen] = React.useState(false)
+  const ref = React.useRef<HTMLDivElement>(null)
+  const listRef = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    if (!open) return
+    const handle = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handle)
+    return () => document.removeEventListener("mousedown", handle)
+  }, [open])
+
+  React.useEffect(() => {
+    if (!open || !listRef.current) return
+    const el = listRef.current.querySelector("[data-active]")
+    if (el) el.scrollIntoView({ block: "center" })
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "flex items-center gap-0.5 rounded px-2 py-1 text-sm font-medium text-foreground transition-colors",
+          "hover:bg-muted",
+          disabled && "opacity-50 cursor-not-allowed"
+        )}
+      >
+        {String(value).padStart(2, "0")}
+        <ChevronDown className="size-3 text-muted-foreground" />
+      </button>
+
+      {open && (
+        <div
+          ref={listRef}
+          className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 max-h-48 min-w-12 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-lg py-1"
+        >
+          {options.map((o) => (
+            <button
+              key={o}
+              type="button"
+              data-active={o === value ? "" : undefined}
+              onClick={() => {
+                onChange(o)
+                setOpen(false)
+              }}
+              className={cn(
+                "w-full px-3 py-1 text-sm text-center transition-colors",
+                "hover:bg-muted",
+                o === value && "bg-primary/10 text-primary font-medium"
+              )}
+            >
+              {String(o).padStart(2, "0")}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const HOURS = Array.from({ length: 24 }, (_, i) => i)
+const MINUTES = Array.from({ length: 60 }, (_, i) => i)
+
+/** Parse value string: accepts ISO 8601 (with tz) or datetime-local (no tz, treated as local). */
+function parseValue(v: string | null): Date | null {
+  if (!v) return null
+  // Try ISO / RFC3339 first (has timezone info)
+  const iso = parseISO(v)
+  if (isValid(iso)) return iso
+  return null
+}
+
+/** Format a Date to UTC ISO 8601 string (e.g. 2026-04-08T17:00:00Z). */
+function toUTC(d: Date): string {
+  return d.toISOString()
 }
 
 export function DatetimePicker({
@@ -26,51 +120,41 @@ export function DatetimePicker({
   max,
   className,
   placeholder = "Select date & time",
+  presets,
 }: DatetimePickerProps) {
-  const selected = React.useMemo(() => {
-    if (!value) return null
-    const d = parse(value, "yyyy-MM-dd'T'HH:mm", new Date())
-    return isValid(d) ? d : null
-  }, [value])
+  const selected = React.useMemo(() => parseValue(value), [value])
+  const minDate = React.useMemo(() => (min ? parseValue(min) ?? undefined : undefined), [min])
+  const maxDate = React.useMemo(() => (max ? parseValue(max) ?? undefined : undefined), [max])
 
-  const minDate = React.useMemo(() => {
-    if (!min) return undefined
-    const d = parse(min, "yyyy-MM-dd'T'HH:mm", new Date())
-    return isValid(d) ? d : undefined
-  }, [min])
+  const currentHour = selected ? selected.getHours() : 0
+  const currentMinute = selected ? selected.getMinutes() : 0
 
-  const maxDate = React.useMemo(() => {
-    if (!max) return undefined
-    const d = parse(max, "yyyy-MM-dd'T'HH:mm", new Date())
-    return isValid(d) ? d : undefined
-  }, [max])
+  const label = selected ? format(selected, "MMM dd, yyyy  HH:mm") : placeholder
 
-  const datePart = selected ? format(selected, "yyyy-MM-dd") : null
-  const timePart = selected ? format(selected, "HH:mm") : ""
-
-  const label = selected ? format(selected, "yyyy-MM-dd HH:mm") : placeholder
+  const emit = (d: Date) => onChange(toUTC(d))
 
   const setDate = (d: Date) => {
-    const time = selected ? format(selected, "HH:mm") : "00:00"
-    const next = parse(`${format(d, "yyyy-MM-dd")}T${time}`, "yyyy-MM-dd'T'HH:mm", new Date())
-    if (!isValid(next)) return
-    onChange(format(next, "yyyy-MM-dd'T'HH:mm"))
+    const h = selected ? selected.getHours() : 0
+    const m = selected ? selected.getMinutes() : 0
+    const next = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m)
+    emit(next)
   }
 
-  const setTime = (t: string) => {
-    if (!t) {
-      // keep date, clear time -> default 00:00
-      if (!datePart) return
-      const next = parse(`${datePart}T00:00`, "yyyy-MM-dd'T'HH:mm", new Date())
-      if (!isValid(next)) return
-      onChange(format(next, "yyyy-MM-dd'T'HH:mm"))
-      return
-    }
-    if (!datePart) return
-    const next = parse(`${datePart}T${t}`, "yyyy-MM-dd'T'HH:mm", new Date())
-    if (!isValid(next)) return
-    onChange(format(next, "yyyy-MM-dd'T'HH:mm"))
+  const setHour = (h: number) => {
+    const base = selected ?? new Date()
+    const next = new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, currentMinute)
+    emit(next)
   }
+
+  const setMinute = (m: number) => {
+    const base = selected ?? new Date()
+    const next = new Date(base.getFullYear(), base.getMonth(), base.getDate(), currentHour, m)
+    emit(next)
+  }
+
+  const handlePreset = (d: Date) => emit(d)
+
+  const hasPresets = presets && presets.length > 0
 
   return (
     <Popover>
@@ -90,29 +174,34 @@ export function DatetimePicker({
           </span>
           <span className="flex items-center gap-1">
             {selected ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                disabled={disabled}
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label="Clear datetime"
                 onClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
                   onChange(null)
                 }}
-                aria-label="Clear datetime"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    onChange(null)
+                  }
+                }}
+                className="inline-flex items-center justify-center size-5 rounded-sm hover:bg-muted transition-colors cursor-pointer"
               >
                 <X className="size-3" />
-              </Button>
+              </span>
             ) : null}
             <CalendarIcon className="size-4 text-muted-foreground" />
-            <Clock className="size-4 text-muted-foreground" />
           </span>
         </button>
       </PopoverTrigger>
 
-      <PopoverContent align="start" className="p-2">
-        <div className="flex gap-2">
+      <PopoverContent align="start" className="p-0 w-auto">
+        <div className="p-2">
           <Calendar
             mode="single"
             value={selected}
@@ -121,24 +210,38 @@ export function DatetimePicker({
             maxDate={maxDate}
             disabled={disabled}
           />
-          <div className="w-36">
-            <div className="text-muted-foreground px-1 pb-2 text-xs font-medium">
-              Time
+        </div>
+
+        {/* Footer: presets + time */}
+        <div className="border-t border-border px-3 py-2 flex items-center gap-2">
+          {hasPresets && (
+            <div className="flex gap-1">
+              {presets.map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => handlePreset(p.value)}
+                  className={cn(
+                    "px-2 py-1 text-[11px] rounded border border-border transition-colors",
+                    "hover:bg-muted text-foreground",
+                    selected && format(selected, "yyyy-MM-dd HH:mm") === format(p.value, "yyyy-MM-dd HH:mm")
+                      && "bg-primary/10 text-primary border-primary/30 font-medium",
+                    disabled && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
-            <Input
-              type="time"
-              value={timePart}
-              disabled={disabled}
-              onChange={(e) => setTime(e.target.value)}
-              className="h-9"
-            />
-            <div className="text-muted-foreground px-1 pt-2 text-xs">
-              {datePart ? datePart : "Pick a date"}
-            </div>
+          )}
+          <div className="flex items-center gap-1 ml-auto">
+            <TimeMiniSelect value={currentHour} options={HOURS} onChange={setHour} disabled={disabled} />
+            <span className="text-sm text-muted-foreground font-medium">:</span>
+            <TimeMiniSelect value={currentMinute} options={MINUTES} onChange={setMinute} disabled={disabled} />
           </div>
         </div>
       </PopoverContent>
     </Popover>
   )
 }
-

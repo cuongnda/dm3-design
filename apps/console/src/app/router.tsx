@@ -165,6 +165,11 @@ const PendingDevicesPage = lazy(() =>
   import('@/features/devices/PendingDevicesPage').then((m) => ({ default: m.PendingDevicesPage }))
 );
 
+// PROFILE
+const ProfilePage = lazy(() =>
+  import('@/features/profile/ProfilePage').then((m) => ({ default: m.ProfilePage }))
+);
+
 // SETTINGS
 const SettingsPage = lazy(() =>
   import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage }))
@@ -306,6 +311,9 @@ export const Router = createBrowserRouter([
               { path: 'smart/ai-assistant', element: <LazyWrap><AIAssistantPage /></LazyWrap> },
               { path: 'smart/analytics', element: <LazyWrap><AnalyticsPage /></LazyWrap> },
               { path: 'smart/automation', element: <LazyWrap><AutomationPage /></LazyWrap> },
+
+              // PROFILE
+              { path: 'profile', element: <LazyWrap><ProfilePage /></LazyWrap> },
 
               // SETTINGS
               { path: 'settings', element: <LazyWrap><SettingsPage /></LazyWrap> },

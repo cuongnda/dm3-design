@@ -115,6 +115,7 @@ func main() {
 		pr.Post("/api/v1/auth/logout", h.Logout)
 		pr.Get("/api/v1/auth/me", h.Me)
 		pr.Patch("/api/v1/auth/me", h.UpdateMe)
+		pr.Put("/api/v1/auth/me/password", h.ChangeMyPassword)
 		pr.Post("/api/v1/auth/device-token", h.DeviceToken)
 		pr.Get("/api/v1/auth/roles", h.ListRoles)
 

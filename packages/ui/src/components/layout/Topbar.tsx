@@ -1,5 +1,5 @@
-import { useLocation, Link } from 'react-router-dom';
-import { Search, Bell, Sun, Moon } from 'lucide-react';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { Search, Bell, Sun, Moon, User, LogOut } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 import { useBreadcrumbStore } from '../../stores/breadcrumbStore';
@@ -13,6 +13,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { Button } from '../ui/button';
@@ -50,7 +51,9 @@ function getBreadcrumb(
 export function Topbar() {
   const { t } = useTranslation('common');
   const location = useLocation();
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const unreadCount = useNotificationStore((s) => s.unreadCount);
   const { theme, setTheme } = useThemeStore();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -208,10 +211,30 @@ export function Topbar() {
             {notifOpen && <NotificationPanel onClose={() => setNotifOpen(false)} />}
           </div>
 
-          {/* User */}
-          <div className="w-7 h-7 bg-sidebar-primary rounded-full flex items-center justify-center text-[11px] font-semibold text-sidebar-primary-foreground cursor-pointer">
-            {user?.initials}
-          </div>
+          {/* User menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="group w-8 h-8 bg-[#3B82F6] rounded-full flex items-center justify-center text-[11px] font-semibold text-white cursor-pointer ring-2 ring-transparent hover:ring-[#3B82F6]/50 transition-all duration-200">
+                {user?.initials}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 p-1.5">
+              <div className="px-2 py-2 mb-1">
+                <p className="text-sm font-semibold truncate">{user?.name}</p>
+                <p className="text-xs text-muted-foreground truncate mt-0.5">{user?.email}</p>
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer rounded-md py-2 px-2.5 gap-2.5 focus:bg-[#3B82F6]/10">
+                <User className="h-4 w-4 text-muted-foreground" />
+                {t('nav.profile', 'Profile')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => { logout(); navigate('/login'); }} className="cursor-pointer rounded-md py-2 px-2.5 gap-2.5 text-[#F87171] focus:text-[#F87171] focus:bg-[#F87171]/10">
+                <LogOut className="h-4 w-4" />
+                {t('actions.signOut', 'Sign Out')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 

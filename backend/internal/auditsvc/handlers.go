@@ -89,6 +89,14 @@ func parseAuditPagination(r *http.Request) (page, limit int) {
 	return page, limit
 }
 
+// parseFlexibleTime parses time in RFC3339 or datetime-local (2006-01-02T15:04) format.
+func parseFlexibleTime(v string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339, v); err == nil {
+		return t, nil
+	}
+	return time.Parse("2006-01-02T15:04", v)
+}
+
 func (h *AuditHandlers) buildAuditWhere(r *http.Request, isAdmin bool) (string, []any, int) {
 	where := "WHERE 1=1"
 	args := []any{}
@@ -113,8 +121,8 @@ func (h *AuditHandlers) buildAuditWhere(r *http.Request, isAdmin bool) (string, 
 		idx++
 	}
 	if v := r.URL.Query().Get("action"); v != "" {
-		where += fmt.Sprintf(" AND action = $%d", idx)
-		args = append(args, v)
+		where += fmt.Sprintf(" AND action ILIKE $%d", idx)
+		args = append(args, "%"+v+"%")
 		idx++
 	}
 	if v := r.URL.Query().Get("entity_type"); v != "" {
@@ -138,14 +146,14 @@ func (h *AuditHandlers) buildAuditWhere(r *http.Request, isAdmin bool) (string, 
 		idx++
 	}
 	if v := r.URL.Query().Get("from"); v != "" {
-		if t, err := time.Parse(time.RFC3339, v); err == nil {
+		if t, err := parseFlexibleTime(v); err == nil {
 			where += fmt.Sprintf(" AND time >= $%d", idx)
 			args = append(args, t)
 			idx++
 		}
 	}
 	if v := r.URL.Query().Get("to"); v != "" {
-		if t, err := time.Parse(time.RFC3339, v); err == nil {
+		if t, err := parseFlexibleTime(v); err == nil {
 			where += fmt.Sprintf(" AND time <= $%d", idx)
 			args = append(args, t)
 			idx++
@@ -355,14 +363,14 @@ func (h *AuditHandlers) GetAuditStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if v := r.URL.Query().Get("from"); v != "" {
-		if t, err := time.Parse(time.RFC3339, v); err == nil {
+		if t, err := parseFlexibleTime(v); err == nil {
 			where += fmt.Sprintf(" AND time >= $%d", idx)
 			args = append(args, t)
 			idx++
 		}
 	}
 	if v := r.URL.Query().Get("to"); v != "" {
-		if t, err := time.Parse(time.RFC3339, v); err == nil {
+		if t, err := parseFlexibleTime(v); err == nil {
 			where += fmt.Sprintf(" AND time <= $%d", idx)
 			args = append(args, t)
 			idx++

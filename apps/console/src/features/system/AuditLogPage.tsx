@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, Download } from 'lucide-react';
+import { startOfDay } from 'date-fns';
+import { ChevronDown, ChevronRight, Download, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   Button,
@@ -14,6 +15,7 @@ import {
   TableRow,
   TableHead,
   TableCell,
+  DatetimePicker,
 } from '@dm3/ui';
 import {
   fetchAuditLogs,
@@ -136,7 +138,19 @@ export function AuditLogPage() {
     setPage(1);
   };
 
+  const clearFilters = () => {
+    setDraftFilters({});
+    setFilters({});
+    setPage(1);
+  };
+
+  const hasFilters = Object.values(draftFilters).some((v) => v !== undefined && v !== '');
+
   const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  const datePresets = [
+    { label: t('audit.presets.today'), value: startOfDay(new Date()) },
+  ];
 
   return (
     <div className="p-6 space-y-4 h-full overflow-auto">
@@ -214,24 +228,24 @@ export function AuditLogPage() {
           {/* From */}
           <div className="flex flex-col gap-1">
             <Label className="text-[11px]">{t('audit.filters.from')}</Label>
-            <Input
-              type="datetime-local"
-              value={draftFilters.from ?? ''}
-              onChange={(e) => setDraftFilters((prev) => ({ ...prev, from: e.target.value || undefined }))}
-              className="h-9"
-              data-testid="sys-input-auditFrom"
+            <DatetimePicker
+              value={draftFilters.from ?? null}
+              onChange={(v) => setDraftFilters((prev) => ({ ...prev, from: v || undefined }))}
+              placeholder={t('audit.filters.from')}
+              className="w-[200px]"
+              presets={datePresets}
             />
           </div>
 
           {/* To */}
           <div className="flex flex-col gap-1">
             <Label className="text-[11px]">{t('audit.filters.to')}</Label>
-            <Input
-              type="datetime-local"
-              value={draftFilters.to ?? ''}
-              onChange={(e) => setDraftFilters((prev) => ({ ...prev, to: e.target.value || undefined }))}
-              className="h-9"
-              data-testid="sys-input-auditTo"
+            <DatetimePicker
+              value={draftFilters.to ?? null}
+              onChange={(v) => setDraftFilters((prev) => ({ ...prev, to: v || undefined }))}
+              placeholder={t('audit.filters.to')}
+              className="w-[200px]"
+              presets={datePresets}
             />
           </div>
 
@@ -247,14 +261,27 @@ export function AuditLogPage() {
             />
           </div>
 
-          <Button
-            size="sm"
-            onClick={applyFilters}
-            className="self-end"
-            data-testid="sys-button-auditApply"
-          >
-            {t('audit.filters.apply')}
-          </Button>
+          <div className="flex gap-1 self-end">
+            {hasFilters && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={clearFilters}
+                data-testid="sys-button-auditClear"
+              >
+                <X size={14} />
+                {t('audit.filters.clear')}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              onClick={applyFilters}
+              className=""
+              data-testid="sys-button-auditApply"
+            >
+              {t('audit.filters.apply')}
+            </Button>
+          </div>
         </div>
       </div>
 

@@ -35,6 +35,7 @@
   "nav.iotEnergy": "IoT & Energy",
   "nav.aiAssistant": "AI Assistant",
   "nav.settings": "Settings",
+  "nav.profile": "Profile",
   "actions.signOut": "Sign Out",
   "actions.signIn": "Sign In",
   "actions.search": "Search...",

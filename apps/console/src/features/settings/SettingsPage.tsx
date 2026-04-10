@@ -1,25 +1,16 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { User, Shield, Bell, Palette, Save, FileText } from 'lucide-react';
+import { Shield, Bell, FileText, Save } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Select, SelectOption, Checkbox } from '@dm3/ui';
+import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Checkbox } from '@dm3/ui';
 
-type Tab = 'profile' | 'security' | 'notifications' | 'appearance';
+type Tab = 'security' | 'notifications';
 
 export function SettingsPage() {
   const { t } = useTranslation('settings');
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<Tab>('profile');
-  const [profile, setProfile] = useState({
-    name: 'John Smith',
-    email: 'john.smith@company.com',
-    phone: '+1234567890',
-    position: 'Security Manager'
-  });
+  const [activeTab, setActiveTab] = useState<Tab>('security');
   const [security, setSecurity] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
     twoFactorEnabled: false
   });
   const [notifications, setNotifications] = useState({
@@ -28,16 +19,10 @@ export function SettingsPage() {
     pushNotifications: true,
     weeklyReports: true
   });
-  const [appearance, setAppearance] = useState({
-    theme: 'dark',
-    language: 'en'
-  });
 
   const tabs = [
-    { id: 'profile' as Tab, label: t('settings.tabs.profile'), icon: User },
     { id: 'security' as Tab, label: t('settings.tabs.security'), icon: Shield },
     { id: 'notifications' as Tab, label: t('settings.tabs.notifications'), icon: Bell },
-    { id: 'appearance' as Tab, label: t('settings.tabs.appearance'), icon: Palette }
   ];
 
   const handleSave = () => {
@@ -97,7 +82,7 @@ export function SettingsPage() {
               <CardTitle className="flex items-center gap-2">
                 {(() => {
                   const tab = tabs.find(tb => tb.id === activeTab);
-                  const Icon = tab?.icon || User;
+                  const Icon = tab?.icon || Shield;
                   return (
                     <>
                       <Icon size={20} />
@@ -108,82 +93,9 @@ export function SettingsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Profile Tab */}
-              {activeTab === 'profile' && (
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="name">{t('profile.firstName')}</Label>
-                    <Input
-                      id="name"
-                      value={profile.name}
-                      onChange={(e) => setProfile(prev => ({ ...prev, name: e.target.value }))}
-                      data-testid="settings-input-name"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="email">{t('profile.email')}</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={profile.email}
-                      onChange={(e) => setProfile(prev => ({ ...prev, email: e.target.value }))}
-                      data-testid="settings-input-email"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="phone">{t('profile.phone')}</Label>
-                    <Input
-                      id="phone"
-                      value={profile.phone}
-                      onChange={(e) => setProfile(prev => ({ ...prev, phone: e.target.value }))}
-                      data-testid="settings-input-phone"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="position">{t('profile.jobTitle')}</Label>
-                    <Input
-                      id="position"
-                      value={profile.position}
-                      onChange={(e) => setProfile(prev => ({ ...prev, position: e.target.value }))}
-                      data-testid="settings-input-position"
-                    />
-                  </div>
-                </div>
-              )}
-
               {/* Security Tab */}
               {activeTab === 'security' && (
                 <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="currentPassword">{t('security.currentPassword')}</Label>
-                    <Input
-                      id="currentPassword"
-                      type="password"
-                      value={security.currentPassword}
-                      onChange={(e) => setSecurity(prev => ({ ...prev, currentPassword: e.target.value }))}
-                      data-testid="settings-input-currentPassword"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="newPassword">{t('security.newPassword')}</Label>
-                    <Input
-                      id="newPassword"
-                      type="password"
-                      value={security.newPassword}
-                      onChange={(e) => setSecurity(prev => ({ ...prev, newPassword: e.target.value }))}
-                      data-testid="settings-input-newPassword"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="confirmPassword">{t('security.confirmPassword')}</Label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      value={security.confirmPassword}
-                      onChange={(e) => setSecurity(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                      data-testid="settings-input-confirmPassword"
-                    />
-                  </div>
                   <div className="flex items-center gap-3">
                     <Checkbox
                       id="twoFactor"
@@ -193,6 +105,9 @@ export function SettingsPage() {
                     />
                     <Label htmlFor="twoFactor">{t('security.twoFactor')}</Label>
                   </div>
+                  <p className="text-sm text-muted-foreground">
+                    {security.twoFactorEnabled ? t('security.twoFactorEnabled') : t('security.twoFactorDisabled')}
+                  </p>
                 </div>
               )}
 
@@ -234,35 +149,6 @@ export function SettingsPage() {
                       data-testid="settings-input-weeklyReports"
                     />
                     <Label htmlFor="weeklyReports">{t('notifications.frequency.weekly')}</Label>
-                  </div>
-                </div>
-              )}
-
-              {/* Appearance Tab */}
-              {activeTab === 'appearance' && (
-                <div className="space-y-4">
-                  <div>
-                    <Label>{t('appearance.theme')}</Label>
-                    <Select
-                      value={appearance.theme}
-                      onValueChange={(v) => setAppearance(prev => ({ ...prev, theme: v }))}
-                      data-testid="settings-select-theme"
-                    >
-                      <SelectOption value="light">{t('appearance.theme.light')}</SelectOption>
-                      <SelectOption value="dark">{t('appearance.theme.dark')}</SelectOption>
-                      <SelectOption value="auto">{t('appearance.theme.auto')}</SelectOption>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>{t('appearance.language')}</Label>
-                    <Select
-                      value={appearance.language}
-                      onValueChange={(v) => setAppearance(prev => ({ ...prev, language: v }))}
-                      data-testid="settings-select-language"
-                    >
-                      <SelectOption value="en">{t('appearance.language.en')}</SelectOption>
-                      <SelectOption value="vi">{t('appearance.language.vi')}</SelectOption>
-                    </Select>
                   </div>
                 </div>
               )}
