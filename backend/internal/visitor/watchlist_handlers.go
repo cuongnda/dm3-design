@@ -31,11 +31,6 @@ func (h *VisitorHandlers) ListWatchlist(w http.ResponseWriter, r *http.Request) 
 	args := []any{cid}
 	idx := 2
 
-	if siteID := r.URL.Query().Get("site_id"); siteID != "" {
-		where += fmt.Sprintf(" AND site_id = $%d::uuid", idx)
-		args = append(args, siteID)
-		idx++
-	}
 	if et := r.URL.Query().Get("entry_type"); et != "" {
 		where += fmt.Sprintf(" AND entry_type = $%d", idx)
 		args = append(args, et)
@@ -47,7 +42,7 @@ func (h *VisitorHandlers) ListWatchlist(w http.ResponseWriter, r *http.Request) 
 	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_identity.watchlist "+where, countArgs...).Scan(&total)
 
 	query := fmt.Sprintf(`
-		SELECT id, tenant_id, site_id, entry_type, match_field, match_value,
+		SELECT id, tenant_id, entry_type, match_field, match_value,
 		       face_template_ref, reason, added_by, expires_at, created_at
 		FROM dm3_identity.watchlist %s
 		ORDER BY created_at DESC
@@ -65,7 +60,7 @@ func (h *VisitorHandlers) ListWatchlist(w http.ResponseWriter, r *http.Request) 
 	entries := []models.WatchlistEntry{}
 	for rows.Next() {
 		var e models.WatchlistEntry
-		if err := rows.Scan(&e.ID, &e.TenantID, &e.SiteID, &e.EntryType, &e.MatchField, &e.MatchValue, &e.FaceTemplateRef, &e.Reason, &e.AddedBy, &e.ExpiresAt, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.TenantID, &e.EntryType, &e.MatchField, &e.MatchValue, &e.FaceTemplateRef, &e.Reason, &e.AddedBy, &e.ExpiresAt, &e.CreatedAt); err != nil {
 			slog.Error("list watchlist scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -80,7 +75,6 @@ func (h *VisitorHandlers) ListWatchlist(w http.ResponseWriter, r *http.Request) 
 }
 
 type createWatchlistRequest struct {
-	SiteID          *string    `json:"site_id"`
 	EntryType       string     `json:"entry_type"`
 	MatchField      string     `json:"match_field"`
 	MatchValue      string     `json:"match_value"`
@@ -122,11 +116,11 @@ func (h *VisitorHandlers) CreateWatchlistEntry(w http.ResponseWriter, r *http.Re
 	var entry models.WatchlistEntry
 	err := h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.watchlist
-		  (tenant_id, site_id, entry_type, match_field, match_value, face_template_ref, reason, added_by, expires_at)
-		VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8::uuid, $9)
-		RETURNING id, tenant_id, site_id, entry_type, match_field, match_value, face_template_ref, reason, added_by, expires_at, created_at`,
-		cid, req.SiteID, req.EntryType, req.MatchField, req.MatchValue, req.FaceTemplateRef, req.Reason, addedBy, req.ExpiresAt,
-	).Scan(&entry.ID, &entry.TenantID, &entry.SiteID, &entry.EntryType, &entry.MatchField, &entry.MatchValue, &entry.FaceTemplateRef, &entry.Reason, &entry.AddedBy, &entry.ExpiresAt, &entry.CreatedAt)
+		  (tenant_id, entry_type, match_field, match_value, face_template_ref, reason, added_by, expires_at)
+		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::uuid, $8)
+		RETURNING id, tenant_id, entry_type, match_field, match_value, face_template_ref, reason, added_by, expires_at, created_at`,
+		cid, req.EntryType, req.MatchField, req.MatchValue, req.FaceTemplateRef, req.Reason, addedBy, req.ExpiresAt,
+	).Scan(&entry.ID, &entry.TenantID, &entry.EntryType, &entry.MatchField, &entry.MatchValue, &entry.FaceTemplateRef, &entry.Reason, &entry.AddedBy, &entry.ExpiresAt, &entry.CreatedAt)
 	if err != nil {
 		slog.Error("create watchlist entry error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal error")

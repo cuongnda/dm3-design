@@ -29,8 +29,19 @@ func NewLocalStore(baseDir string) (*LocalStore, error) {
 	return &LocalStore{baseDir: baseDir}, nil
 }
 
-func (s *LocalStore) PutObject(_ context.Context, key string, body io.Reader, _ int64, contentType string) error {
+func (s *LocalStore) safePath(key string) (string, error) {
 	fullPath := filepath.Join(s.baseDir, filepath.FromSlash(key))
+	if !strings.HasPrefix(filepath.Clean(fullPath)+string(os.PathSeparator), filepath.Clean(s.baseDir)+string(os.PathSeparator)) {
+		return "", fmt.Errorf("invalid key %q: path escapes storage root", key)
+	}
+	return fullPath, nil
+}
+
+func (s *LocalStore) PutObject(_ context.Context, key string, body io.Reader, _ int64, contentType string) error {
+	fullPath, err := s.safePath(key)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 		return fmt.Errorf("create directories for %s: %w", key, err)
 	}
@@ -48,7 +59,10 @@ func (s *LocalStore) PutObject(_ context.Context, key string, body io.Reader, _ 
 }
 
 func (s *LocalStore) GetObject(_ context.Context, key string) (io.ReadCloser, ObjectInfo, error) {
-	fullPath := filepath.Join(s.baseDir, filepath.FromSlash(key))
+	fullPath, err := s.safePath(key)
+	if err != nil {
+		return nil, ObjectInfo{}, err
+	}
 
 	f, err := os.Open(fullPath)
 	if err != nil {
@@ -83,8 +97,11 @@ func (s *LocalStore) DeleteObject(_ context.Context, key string) error {
 	if strings.TrimSpace(key) == "" {
 		return nil
 	}
-	fullPath := filepath.Join(s.baseDir, filepath.FromSlash(key))
-	err := os.Remove(fullPath)
+	fullPath, err := s.safePath(key)
+	if err != nil {
+		return err
+	}
+	err = os.Remove(fullPath)
 	if os.IsNotExist(err) {
 		return nil
 	}

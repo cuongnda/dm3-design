@@ -32,6 +32,7 @@ export const MODEL_CAPABILITIES: Record<string, VerifyMethodValue[]> = {
   ipopx:         ['face', 'nfc', 'qr', 'pin'],
   itouch_pop_x:  ['face', 'nfc', 'qr', 'pin'],
   icu400:        ['face', 'nfc', 'qr', 'pin'],
+  dqmini_plus:   ['face', 'nfc', 'qr', 'pin'],
   // Camera — face only
   camera_dc:     ['face'],
   cctv:          ['face'],
@@ -63,6 +64,7 @@ export const DEVICE_TYPE_MODELS: Record<string, { value: string; label: string }
     { value: 'ipopx', label: 'iPopX' },
     { value: 'itouch_pop_x', label: 'iTouch Pop X' },
     { value: 'icu400', label: 'ICU-400N' },
+    { value: 'dqmini_plus', label: 'DQMini+' },
   ],
   camera: [
     { value: 'camera_dc', label: 'DC-300' },

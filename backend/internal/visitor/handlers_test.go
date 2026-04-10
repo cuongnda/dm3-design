@@ -99,8 +99,8 @@ func TestCreateVisitValidation(t *testing.T) {
 		body string
 	}{
 		{"invalid JSON", "{bad"},
-		{"missing site", `{"visitor":{"first_name":"John","last_name":"Doe"},"host_user_id":"abc","purpose":"meeting"}`},
-		{"missing host", `{"site_id":"s","visitor":{"first_name":"John","last_name":"Doe"},"host_user_id":"","purpose":"meeting"}`},
+		{"missing arrival", `{"visitor":{"first_name":"John","last_name":"Doe"},"host_user_id":"abc","purpose":"meeting"}`},
+		{"missing host", `{"visitor":{"first_name":"John","last_name":"Doe"},"host_user_id":"","purpose":"meeting"}`},
 	}
 	for _, tt := range tests {
 		r := httptest.NewRequest("POST", "/api/v1/visitors", bytes.NewBufferString(tt.body))
@@ -114,7 +114,7 @@ func TestCreateVisitValidation(t *testing.T) {
 
 func TestWalkinVisitValidation(t *testing.T) {
 	h := &VisitorHandlers{db: nil}
-	r := httptest.NewRequest("POST", "/api/v1/visitors/walkin", bytes.NewBufferString(`{"site_id":"s","visitor":{"first_name":"Jane","last_name":"Doe"},"purpose":"bad"}`))
+	r := httptest.NewRequest("POST", "/api/v1/visitors/walkin", bytes.NewBufferString(`{"visitor":{"first_name":"Jane","last_name":"Doe"},"purpose":"bad"}`))
 	w := httptest.NewRecorder()
 	h.WalkinVisit(w, r)
 	if w.Code != http.StatusForbidden && w.Code != http.StatusBadRequest {

@@ -75,7 +75,7 @@ type ParkingVehicle struct {
 	TenantID           string          `json:"tenant_id"`
 	OwnerUserID        *string         `json:"owner_id,omitempty"`
 	PlateNumber        string          `json:"plate_number"`
-	NormalizedPlate    string          `json:"normalized_plate_number"`
+	NormalizedPlate    string          `json:"normalized_plate"`
 	PlateImageRef      *string         `json:"plate_image_ref,omitempty"`
 	Type               string          `json:"type"`
 	Category           string          `json:"category"`
@@ -137,7 +137,7 @@ type ParkingSession struct {
 	ZoneID                string          `json:"zone_id"`
 	VehicleID             *string         `json:"vehicle_id,omitempty"`
 	PlateNumber           string          `json:"plate_number"`
-	NormalizedPlate       string          `json:"normalized_plate_number"`
+	NormalizedPlate       string          `json:"normalized_plate"`
 	VehicleType           string          `json:"vehicle_type"`
 	VehicleCategory       *string         `json:"vehicle_category,omitempty"`
 	EntryTime             time.Time       `json:"entry_time"`

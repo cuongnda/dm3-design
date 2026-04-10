@@ -41,14 +41,14 @@ dm3/
 ├── packages/           # Shared frontend packages
 │   ├── ui/             # @dm3/ui — shadcn/ui components + custom
 │   └── api-client/     # @dm3/api-client — OpenAPI client + WebSocket + Zustand store
-├── backend/            # 🔧 Go monorepo — 4 services (auth, identity, access, device-gateway)
+├── backend/            # 🔧 Go monorepo — 5 services (auth, identity, access, device-gateway, audit)
 └── diagrams/           # 📊 Architecture diagrams (draw.io)
 ```
 
 ## Tech Stack
 - **Frontend**: Vite + React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui + React Router v7 + Zustand 5 + TanStack Query 5 + i18next
-- **Backend**: Go 1.22 — 4 services (auth-svc :8005, identity-svc :8004, access-svc :8003, device-gateway :8002)
-- **Database**: TimescaleDB :5433 (`dm3` db, schemas: dm3_auth, dm3_devices, dm3_access, dm3_identity)
+- **Backend**: Go 1.22 — 5 services (auth-svc :8005, identity-svc :8004, access-svc :8003, device-gateway :8002, audit-svc :8001)
+- **Database**: TimescaleDB :5433 (`dm3` db, schemas: dm3_auth, dm3_devices, dm3_access, dm3_identity, dm3_audit, dm3_operate)
 - **Messaging**: NATS JetStream :4222, EMQX MQTT :1884
 - **Mobile** (planned): Flutter
 - **IoT Protocol**: MQTT 5.0 via EMQX (offline-first, see docs/architecture/mqtt-protocol.md)
@@ -56,7 +56,7 @@ dm3/
 
 ## Implementation Reality (read before coding)
 Most frontend features are **mock-data-only UI shells**. Only these pages connect to real backend APIs:
-- DashboardPage, DeviceDetailPage, IdentitiesPage, PersonDetailPage, GroupsPage, SystemSettingsPage
+- DashboardPage, DeviceDetailPage, IdentitiesPage, PersonDetailPage, GroupsPage, SystemSettingsPage, VisitorsPage
 
 All OPERATE, SMART, and most SECURE/MANAGE pages import from `mock-data` files.
 See `docs/IMPLEMENTATION_STATUS.md` for the full compliance table.

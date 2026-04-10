@@ -30,19 +30,31 @@ func (h *VisitorHandlers) autoCheckout(ctx context.Context) {
 			if now.Hour() < 22 {
 				continue
 			}
-			tag, err := h.db.Pool.Exec(ctx, `
-				UPDATE dm3_identity.visits
-				SET status          = 'checked_out',
-				    actual_checkout = now(),
-				    updated_at      = now()
+			rows, err := h.db.Pool.Query(ctx, `
+				SELECT id::text, tenant_id::text
+				FROM dm3_identity.visits
 				WHERE status = 'checked_in'
 				  AND expected_arrival::date = CURRENT_DATE`)
 			if err != nil {
-				slog.Error("auto checkout error", "error", err)
+				slog.Error("auto checkout query error", "error", err)
 				continue
 			}
-			if tag.RowsAffected() > 0 {
-				slog.Info("auto checkout completed", "count", tag.RowsAffected())
+			count := int64(0)
+			for rows.Next() {
+				var visitID, tenantID string
+				if err := rows.Scan(&visitID, &tenantID); err != nil {
+					slog.Error("auto checkout scan error", "error", err)
+					continue
+				}
+				if _, err := h.autoCheckoutVisit(ctx, tenantID, visitID); err != nil {
+					slog.Error("auto checkout error", "visit_id", visitID, "tenant_id", tenantID, "error", err)
+					continue
+				}
+				count++
+			}
+			rows.Close()
+			if count > 0 {
+				slog.Info("auto checkout completed", "count", count)
 			}
 		}
 	}
@@ -60,19 +72,27 @@ func (h *VisitorHandlers) markNoShows(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			tag, err := h.db.Pool.Exec(ctx, `
-				UPDATE dm3_identity.visits
-				SET status     = 'no_show',
-				    updated_at = now()
-				WHERE status IN ('pre_registered', 'approved', 'waiting')
-				  AND expected_arrival < now() - INTERVAL '2 hours'`)
+			count, err := h.markNoShowCandidates(ctx)
 			if err != nil {
 				slog.Error("mark no shows error", "error", err)
 				continue
 			}
-			if tag.RowsAffected() > 0 {
-				slog.Info("marked no shows", "count", tag.RowsAffected())
+			if count > 0 {
+				slog.Info("marked no shows", "count", count)
 			}
 		}
 	}
+}
+
+func (h *VisitorHandlers) markNoShowCandidates(ctx context.Context) (int64, error) {
+	tag, err := h.db.Pool.Exec(ctx, `
+		UPDATE dm3_identity.visits
+		SET status     = 'no_show',
+		    updated_at = now()
+		WHERE status IN ('pre_registered', 'approved', 'waiting')
+		  AND expected_arrival < now() - INTERVAL '2 hours'`)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }

@@ -13,7 +13,7 @@ Visitor Management handles the full lifecycle of building visitors — from pre-
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | — | Tenant isolation |
-| site_id | uuid | yes | — | Site where visit occurs |
+| access_areas | uuid[] | no | — | Allowed zone/access-point scope for the visit |
 | visitor_id | uuid | yes | — | FK to Visitor |
 | host_user_id | uuid | yes | — | FK to User (host/employee) |
 | purpose | VisitPurposeEnum | yes | — | Reason for visit |
@@ -31,7 +31,6 @@ Visitor Management handles the full lifecycle of building visitors — from pre-
 | qr_expires_at | timestamp | yes | auto | QR validity window |
 | badge_number | string(20) | no | — | Physical badge number if issued |
 | temp_credential_id | uuid | no | — | FK to Credential (temp card/face) |
-| access_areas | uuid[] | no | — | Allowed door/zone IDs during visit |
 | escort_required | boolean | no | false | Visitor must be escorted |
 | vehicle_plate | string(20) | no | — | Vehicle license plate if driving |
 | items_carried | text | no | — | Items brought in (laptop, tools) |
@@ -79,7 +78,6 @@ Visitor Management handles the full lifecycle of building visitors — from pre-
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | — | Tenant isolation |
-| site_id | uuid | yes | — | Site scope |
 | entry_type | WatchlistEnum | yes | — | vip or blacklisted |
 | match_field | string(50) | yes | — | Field to match: name, national_id, email, phone, face |
 | match_value | string(500) | yes | — | Value to match against |
@@ -107,7 +105,6 @@ WatchlistEnum: none | vip | blacklisted
   |-------|------|---------|-------------|
   | page | int | 1 | Page number |
   | limit | int | 20 | Items per page (max 100) |
-  | site_id | uuid | required | Filter by site |
   | status | string | — | Filter by visit status |
   | date | date | today | Filter by expected arrival date |
   | host_id | uuid | — | Filter by host user |
@@ -137,7 +134,6 @@ WatchlistEnum: none | vip | blacklisted
 - **Body:**
   ```json
   {
-    "site_id": "uuid",
     "visitor": {
       "first_name": "Quang Hải",
       "last_name": "Lê",
@@ -234,13 +230,13 @@ WatchlistEnum: none | vip | blacklisted
 
 ## Business Rules
 
-1. **BR-VIS-001: QR token validity window.** QR tokens are valid from 1 hour before `expected_arrival` to 4 hours after (configurable per site). Expired tokens return HTTP 410.
+1. **BR-VIS-001: QR token validity window.** QR tokens are valid from 1 hour before `expected_arrival` to 4 hours after (configurable per tenant or zone policy). Expired tokens return HTTP 410.
 
 2. **BR-VIS-002: Blacklist check on check-in.** Every check-in (QR, manual, walk-in) triggers a watchlist check against name, national_id, phone, and face (if photo captured). Blacklisted visitors are blocked with an alert to security. VIP visitors trigger a welcome notification.
 
 3. **BR-VIS-003: Host approval for walk-ins.** Walk-in visitors (no pre-registration) require host approval before check-in. Host receives push notification + SMS. If host doesn't respond within 15 minutes, security is notified to follow up.
 
-4. **BR-VIS-004: Auto-checkout at end of day.** All visitors still checked-in at site closing time (default 22:00, configurable) are auto-checked-out. An alert is sent to security for any visitor checked-in past closing time without checkout.
+4. **BR-VIS-004: Auto-checkout at end of day.** All visitors still checked-in at tenant closing time (default 22:00, configurable) are auto-checked-out. An alert is sent to security for any visitor checked-in past closing time without checkout.
 
 5. **BR-VIS-005: Temporary credential auto-expiry.** Visitor credentials are created with `valid_until` matching `expected_departure` (or end-of-day if not specified). Devices enforce expiry locally. Server also sends explicit revocation at expiry as a backup.
 
@@ -254,7 +250,7 @@ WatchlistEnum: none | vip | blacklisted
 
 10. **BR-VIS-010: No-show marking.** Visitors who don't check in within 2 hours of expected arrival are auto-marked as `no_show`. Host is notified.
 
-11. **BR-VIS-011: Concurrent visit limit.** A visitor can have at most one active visit (status = `checked_in`) per site at a time.
+11. **BR-VIS-011: Concurrent visit limit.** A visitor can have at most one active visit (status = `checked_in`) per tenant at a time unless future zone policy says otherwise.
 
 12. **BR-VIS-012: Invitation re-send.** Pre-registered visitors can have their invitation (email/SMS with QR) re-sent up to 3 times. Each re-send generates a new QR token (old one is invalidated).
 
@@ -284,7 +280,7 @@ WatchlistEnum: none | vip | blacklisted
 - **Conflict resolution:** Server-wins. If a visitor's credential was supposed to be revoked (checkout/expiry) but the device was offline, the `valid_until` on the device ensures access is denied after expiry. When the device reconnects, the explicit delete is also processed.
 - **Local storage:** Visitor credentials consume the same device storage as employee credentials. Sites typically have <50 active visitors at a time, so impact is minimal.
 - **Terminal offline:** Self-service check-in terminals that lose server connectivity fall back to "manual mode" — security guard handles check-in. The terminal queues the check-in request and processes it when connectivity returns.
-- **QR validation offline:** QR tokens include a cryptographic signature (HMAC-SHA256 with site-specific key). Terminals can validate QR authenticity offline by verifying the signature and checking the embedded expiry timestamp. Full visit details are fetched when online.
+- **QR validation offline:** QR tokens include a cryptographic signature (HMAC-SHA256 with tenant-scoped key, with room for future zone-specific policy). Terminals can validate QR authenticity offline by verifying the signature and checking the embedded expiry timestamp. Full visit details are fetched when online.
 
 ## UI Pages
 

@@ -1,6 +1,6 @@
 # Implementation Status
 
-This document tracks the current implementation status of DM3 features. Updated: 2026-04-07 (Architecture Compliance Audit).
+This document tracks the current implementation status of DM3 features. Updated: 2026-04-10 (visitor management, parking schema, migration consolidation).
 
 ---
 
@@ -22,7 +22,7 @@ This document tracks the current implementation status of DM3 features. Updated:
 |-------|--------|---------|
 | Service Topology | ❌ Gap | 5 of ~20 specified services implemented. Evidence: `backend/cmd/` has 5 dirs (auth-svc, identity-svc, access-svc, device-gateway, audit-svc); `docs/architecture/system-architecture.md:281` specifies ~20 |
 | Data Flow / MQTT Pipeline | ✅ Compliant | Topic `dm/{tid}/device/{did}/{cat}` confirmed. Envelope (v, id, ts) confirmed. NATS bridge confirmed. Evidence: `backend/internal/gateway/mqtt_handler.go:48-57, 27-35` |
-| Data Model / ER | ⚠️ Partial | Core access hierarchy is now implemented through `dm3_access.zones` plus access point spatial placement fields and managed map assets. Remaining major gaps are visitors, contractors, rooms, parking, maintenance, and keys. `dm3_audit` schema is active (audit_logs hypertable, populated by audit-svc via NATS). |
+| Data Model / ER | ⚠️ Partial | Core access hierarchy implemented (`dm3_access`). Visitor tables implemented (`dm3_identity.visitors`, `visits`, `visitor_badges`, `watchlist`). Parking Phase 1 tables implemented (`dm3_operate.parking_lots`, `parking_zones`, `parking_vehicles`, `parking_fee_rules`, `parking_passes`, `parking_sessions`). Vehicle registry in `dm3_identity.vehicles`. `dm3_audit` schema active (audit_logs hypertable). Remaining gaps: contractors, rooms, maintenance, keys. |
 | Security | ⚠️ Partial | JWT auth, bcrypt, CORS, refresh-token replay detection confirmed. Missing: TLS config in docker-compose for EMQX, no rate limiting middleware found. |
 | Deployment | ✅ Compliant | All 6 infra services present in `backend/docker-compose.yml` with correct ports. Simulator is in a separate `simulator/docker-compose.yml` (minor split). No Traefik gateway config found. |
 
@@ -43,10 +43,11 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Implemented: Access Groups CRUD ✅ | AG↔AP assignment ✅ | AG↔User assignment with temporal membership ✅ | Access Time management ✅ | Access rule sync to devices via MQTT ✅ | Spatial zone hierarchy ✅ | Zone-owned indoor map upload + serving ✅ | Zone detail list/map workflows reflected in console ✅ | Passage Time field on access_points (DB) ✅
   - Deviation: Passage Time (`access_time_id` on access_points) is stored in DB but not yet exposed in the Access Point UI. Broader site modeling beyond the current zone hierarchy still needs separate verification if reintroduced.
 
-- **identity-svc** (`backend/internal/identity/`) — User/credential management, identity operations
+- **identity-svc** (`backend/internal/identity/`, `backend/internal/visitor/`) — User/credential management, identity operations, visitor management
   - Status: ⚠️ Partial | Risk: Medium
-  - Evidence: Migration confirms `dm3_identity.users`, `dm3_identity.credentials`, `dm3_identity.user_groups`, `dm3_identity.departments` ✅
-  - Deviation: No `visitors`, `contractors`, `rooms`, `parking`, or `maintenance` tables. These features listed as "Implemented" in prior version of this doc are mock-UI only (no backend tables).
+  - Evidence: Migration confirms `dm3_identity.users`, `dm3_identity.credentials`, `dm3_identity.user_groups`, `dm3_identity.departments`, `dm3_identity.visitors`, `dm3_identity.visits`, `dm3_identity.visitor_badges`, `dm3_identity.watchlist`, `dm3_identity.vehicles` ✅
+  - Implemented: User CRUD ✅ | Credentials ✅ | Groups ✅ | Departments ✅ | Visitor management (full CRUD + walk-in + watchlist + QR + cron) ✅ | Vehicle registry ✅
+  - Deviation: No `contractors`, `rooms`, or `maintenance` tables. These features are mock-UI only.
 
 - **device-gateway** (`backend/internal/gateway/`) — MQTT bridge, device provisioning, sync coordination, WebSocket events, managed firmware storage
   - Status: ✅ Compliant | Risk: Low
@@ -134,9 +135,10 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Deviation: None significant at UI level. Backend identity tables confirmed in migration.
 
 - **Visitor Management** (`VisitorsPage`)
-  - Status: ⚠️ Partial (mock-only UI shell) | Risk: Medium
-  - Evidence: `apps/console/src/features/manage/visitors/VisitorsPage.tsx` — imports mock-data
-  - Deviation: No `visitors` table in migration. Both frontend and backend incomplete.
+  - Status: ✅ Real (backend + frontend working) | Risk: Low
+  - Evidence: `backend/internal/visitor/` — 7 handler files (visitors CRUD, visits CRUD, walk-in flow, watchlist, QR check-in, auto-checkout cron); `backend/internal/models/visitor.go` — domain models; `packages/api-client/src/visitors.ts` — 13 API functions; `apps/console/src/features/manage/visitors/hooks/useVisitors.ts` — 12 TanStack Query hooks; `VisitorsPage.tsx` rewritten from mock to real API
+  - Implemented: Visitor CRUD ✅ | Visit scheduling & check-in/out ✅ | Walk-in registration ✅ | Watchlist management ✅ | QR code check-in ✅ | Badge printing ✅ | Auto-checkout cron ✅ | Frontend with real API hooks ✅
+  - DB tables: `dm3_identity.visitors`, `dm3_identity.visits`, `dm3_identity.visitor_badges`, `dm3_identity.watchlist` — all in consolidated migration
 
 - **Contractor Management** (`ContractorsPage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: Medium
@@ -158,7 +160,7 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Evidence: `ProvisioningPage.tsx` — imports mock-data for device provisioning flow; backend provisioning flow is fully implemented (`gateway/provisioning.go`)
   - Deviation: Frontend device provisioning UI is a mock-data shell. Access Group-based rule provisioning is handled via the Access Groups UI (see above), not this page.
 
-#### OPERATE Domain — ⚠️ ALL PAGES ARE MOCK-DATA SHELLS
+#### OPERATE Domain — ⚠️ ALL FRONTEND PAGES ARE MOCK-DATA SHELLS (parking has backend DB schema)
 
 - **Room Booking** (`RoomBookingPage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: Medium
@@ -166,9 +168,10 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Deviation: No backend implementation. Frontend and backend both incomplete.
 
 - **Parking** (`ParkingPage`)
-  - Status: ⚠️ Partial (mock-only UI shell) | Risk: Medium
-  - Evidence: `apps/console/src/features/operate/parking/ParkingPage.tsx:7` — `import ... from './mock-data'`; no parking table in migration
-  - Deviation: No backend implementation.
+  - Status: ⚠️ Partial (backend DB tables exist, frontend still mock-only) | Risk: Medium
+  - Evidence: `apps/console/src/features/operate/parking/ParkingPage.tsx:7` — `import ... from './mock-data'`; DB tables exist in `dm3_operate` schema
+  - Backend progress: Phase 1 DB tables implemented — `dm3_operate.parking_lots`, `parking_zones`, `parking_vehicles`, `parking_fee_rules`, `parking_passes`, `parking_sessions` with indexes and triggers. Go models in `backend/internal/models/parking.go`. No API handlers yet.
+  - Deviation: Frontend is still mock-data shell. Backend has DB schema and models but no HTTP handlers or NATS consumers.
 
 - **Maintenance** (`MaintenancePage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: Low
@@ -292,7 +295,7 @@ Features with detailed specifications in `docs/specs/` but not yet implemented:
 - **HR System Integration** — Auto-sync employee data from HRIS
 - **Mobile Credentials** — Smartphone-based access credentials
 - **Self-service Portal** — Employee self-management interface
-- **Advanced Visitor Workflows** — Complex approval and escort processes
+- ~~**Advanced Visitor Workflows** — Complex approval and escort processes~~ → **Implemented** (Phase 1). Visitor CRUD, visit scheduling, walk-in registration, watchlist, QR check-in, badge printing, auto-checkout cron. Advanced workflows (multi-level approval, escort tracking) remain as Phase 2.
 
 ### OPERATE Domain
 - **Advanced Booking Features** — Recurring bookings, resource conflicts, calendar sync
@@ -352,10 +355,10 @@ High-level features mentioned in vision documents but lacking detailed specifica
 
 ## Summary
 
-- **✅ Compliant** (fully matches spec): auth-svc (v1), access-svc current scope (including zones + managed map assets), device-gateway, audit-svc, MQTT pipeline, Dashboard, Devices, SystemSettings, IdentityManagement, AccessGroups/AccessControl, NATS, Valkey, MinIO, TimescaleDB, shared packages — **~15 items**
-- **⚠️ Partial** (UI shell or missing components): 20+ frontend pages are mock-data-only; AP passage time UI is still missing; EMQX missing TLS; Android terminal unverified; Flutter is placeholder — **~27 items**
+- **✅ Compliant** (fully matches spec): auth-svc (v1), access-svc current scope (including zones + managed map assets), device-gateway, audit-svc, MQTT pipeline, Dashboard, Devices, SystemSettings, IdentityManagement, AccessGroups/AccessControl, VisitorManagement, NATS, Valkey, MinIO, TimescaleDB, shared packages — **~16 items**
+- **⚠️ Partial** (UI shell or missing components): 19+ frontend pages are mock-data-only; parking has DB schema but no API handlers; AP passage time UI is still missing; EMQX missing TLS; Android terminal unverified; Flutter is placeholder — **~26 items**
 - **❌ Gap** (claimed implemented, not found): Flutter apps, service topology (15 of ~20 services missing) — **~2 items + systemic**
 - **📋 Specified**: ~15 features with detailed specs ready for development
 - **🔮 Vision Only**: ~20 next-generation features awaiting specification
 
-> **Audit note:** The prior "~40 major features Implemented" claim overstates completeness. The core platform (auth, devices, identity, real-time pipeline) is genuinely implemented end-to-end. The domain feature layer (OPERATE, SMART, most of SECURE/MANAGE) exists as frontend UI prototypes backed by mock data, with no corresponding backend services.
+> **Audit note:** The prior "~40 major features Implemented" claim overstates completeness. The core platform (auth, devices, identity, real-time pipeline, audit trail) is genuinely implemented end-to-end. Visitor management is now fully implemented (backend + frontend). Parking has Phase 1 DB schema and Go models but no API handlers yet. The remaining domain feature layer (OPERATE excluding parking schema, SMART, most of SECURE) exists as frontend UI prototypes backed by mock data.

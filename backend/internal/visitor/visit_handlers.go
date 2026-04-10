@@ -1,6 +1,7 @@
 package visitor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -9,9 +10,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/models"
+	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
@@ -33,11 +36,6 @@ func (h *VisitorHandlers) ListVisits(w http.ResponseWriter, r *http.Request) {
 	args := []any{cid}
 	idx := 2
 
-	if siteID := r.URL.Query().Get("site_id"); siteID != "" {
-		where += fmt.Sprintf(" AND v.site_id = $%d::uuid", idx)
-		args = append(args, siteID)
-		idx++
-	}
 	if s := r.URL.Query().Get("status"); s != "" {
 		where += fmt.Sprintf(" AND v.status = $%d", idx)
 		args = append(args, s)
@@ -64,7 +62,7 @@ func (h *VisitorHandlers) ListVisits(w http.ResponseWriter, r *http.Request) {
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_identity.visits v JOIN dm3_identity.visitors vis ON vis.id = v.visitor_id `+where, countArgs...).Scan(&total)
 
 	query := fmt.Sprintf(`
-		SELECT v.id, v.tenant_id, v.site_id, v.visitor_id, v.host_user_id, v.purpose, v.purpose_note,
+		SELECT v.id, v.tenant_id, v.visitor_id, v.host_user_id, v.purpose, v.purpose_note,
 		       v.status, v.expected_arrival, v.expected_departure,
 		       v.actual_checkin, v.actual_checkout,
 		       v.checkin_method, v.checkin_device_id, v.checkin_photo_ref, v.checkout_by,
@@ -124,7 +122,7 @@ func (h *VisitorHandlers) GetVisit(w http.ResponseWriter, r *http.Request) {
 	id := visitIDParam(r)
 
 	row := h.db.Pool.QueryRow(r.Context(), `
-		SELECT v.id, v.tenant_id, v.site_id, v.visitor_id, v.host_user_id, v.purpose, v.purpose_note,
+		SELECT v.id, v.tenant_id, v.visitor_id, v.host_user_id, v.purpose, v.purpose_note,
 		       v.status, v.expected_arrival, v.expected_departure,
 		       v.actual_checkin, v.actual_checkout,
 		       v.checkin_method, v.checkin_device_id, v.checkin_photo_ref, v.checkout_by,
@@ -152,7 +150,6 @@ func (h *VisitorHandlers) GetVisit(w http.ResponseWriter, r *http.Request) {
 }
 
 type createVisitRequest struct {
-	SiteID  string `json:"site_id"`
 	Visitor struct {
 		FirstName string  `json:"first_name"`
 		LastName  string  `json:"last_name"`
@@ -186,8 +183,8 @@ func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.SiteID == "" || req.Visitor.FirstName == "" || req.Visitor.LastName == "" {
-		httputil.Error(w, http.StatusBadRequest, "site_id, visitor first_name and last_name are required")
+	if req.Visitor.FirstName == "" || req.Visitor.LastName == "" {
+		httputil.Error(w, http.StatusBadRequest, "visitor first_name and last_name are required")
 		return
 	}
 	if req.HostUserID == "" || req.Purpose == "" || req.ExpectedArrival.IsZero() {
@@ -221,14 +218,14 @@ func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 	var visit models.Visit
 	err = h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.visits
-		  (tenant_id, site_id, visitor_id, host_user_id, purpose, purpose_note,
+		  (tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		   status, expected_arrival, expected_departure,
 		   qr_token, qr_expires_at, access_areas, escort_required, vehicle_plate)
 		VALUES
-		  ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6,
-		   'pre_registered', $7, $8,
-		   $9, $10, $11::uuid[], $12, $13)
-		RETURNING id, tenant_id, site_id, visitor_id, host_user_id, purpose, purpose_note,
+		  ($1::uuid, $2::uuid, $3::uuid, $4, $5,
+		   'pre_registered', $6, $7,
+		   $8, $9, $10::uuid[], $11, $12)
+		RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		          status, expected_arrival, expected_departure,
 		          actual_checkin, actual_checkout,
 		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
@@ -236,11 +233,11 @@ func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 		          access_areas, escort_required, vehicle_plate, items_carried,
 		          nda_signed, host_approved, host_approved_at, notes,
 		          created_at, updated_at`,
-		cid, req.SiteID, visitorID, req.HostUserID, req.Purpose, req.PurposeNote,
+		cid, visitorID, req.HostUserID, req.Purpose, req.PurposeNote,
 		req.ExpectedArrival, req.ExpectedDeparture,
 		qrToken, qrExpiresAt, req.AccessAreas, req.EscortRequired, req.VehiclePlate,
 	).Scan(
-		&visit.ID, &visit.TenantID, &visit.SiteID, &visit.VisitorID, &visit.HostUserID,
+		&visit.ID, &visit.TenantID, &visit.VisitorID, &visit.HostUserID,
 		&visit.Purpose, &visit.PurposeNote, &visit.Status,
 		&visit.ExpectedArrival, &visit.ExpectedDeparture,
 		&visit.ActualCheckin, &visit.ActualCheckout,
@@ -295,13 +292,13 @@ func (h *VisitorHandlers) UpdateVisit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var oldVisit models.Visit
-	_ = h.db.Pool.QueryRow(r.Context(), `SELECT id, tenant_id, site_id, visitor_id, host_user_id, purpose, purpose_note,
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		status, expected_arrival, expected_departure, actual_checkin, actual_checkout,
 		checkin_method, checkin_device_id, checkin_photo_ref, checkout_by, qr_token, qr_expires_at,
 		badge_number, temp_credential_id, access_areas, escort_required, vehicle_plate, items_carried,
 		nda_signed, host_approved, host_approved_at, notes, created_at, updated_at
 		FROM dm3_identity.visits WHERE id = $1::uuid AND tenant_id = $2::uuid`, id, cid).Scan(
-		&oldVisit.ID, &oldVisit.TenantID, &oldVisit.SiteID, &oldVisit.VisitorID, &oldVisit.HostUserID,
+		&oldVisit.ID, &oldVisit.TenantID, &oldVisit.VisitorID, &oldVisit.HostUserID,
 		&oldVisit.Purpose, &oldVisit.PurposeNote, &oldVisit.Status,
 		&oldVisit.ExpectedArrival, &oldVisit.ExpectedDeparture, &oldVisit.ActualCheckin, &oldVisit.ActualCheckout,
 		&oldVisit.CheckinMethod, &oldVisit.CheckinDeviceID, &oldVisit.CheckinPhotoRef, &oldVisit.CheckoutBy, &oldVisit.QRToken, &oldVisit.QRExpiresAt,
@@ -323,7 +320,7 @@ func (h *VisitorHandlers) UpdateVisit(w http.ResponseWriter, r *http.Request) {
 		    updated_at         = now()
 		WHERE id = $1::uuid AND tenant_id = $2::uuid
 		  AND status IN ('pre_registered','approved','waiting')
-		RETURNING id, tenant_id, site_id, visitor_id, host_user_id, purpose, purpose_note,
+		RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		          status, expected_arrival, expected_departure,
 		          actual_checkin, actual_checkout,
 		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
@@ -335,7 +332,7 @@ func (h *VisitorHandlers) UpdateVisit(w http.ResponseWriter, r *http.Request) {
 		req.ExpectedArrival, req.ExpectedDeparture,
 		nilIfEmptyUUIDArray(req.AccessAreas), req.EscortRequired, req.VehiclePlate, req.Notes,
 	).Scan(
-		&visit.ID, &visit.TenantID, &visit.SiteID, &visit.VisitorID, &visit.HostUserID,
+		&visit.ID, &visit.TenantID, &visit.VisitorID, &visit.HostUserID,
 		&visit.Purpose, &visit.PurposeNote, &visit.Status,
 		&visit.ExpectedArrival, &visit.ExpectedDeparture,
 		&visit.ActualCheckin, &visit.ActualCheckout,
@@ -396,7 +393,7 @@ func (h *VisitorHandlers) ApproveVisit(w http.ResponseWriter, r *http.Request) {
 		    notes            = COALESCE($5, notes),
 		    updated_at       = now()
 		WHERE id = $1::uuid AND tenant_id = $2::uuid AND status IN ('pre_registered','waiting')
-		RETURNING id, tenant_id, site_id, visitor_id, host_user_id, purpose, purpose_note,
+		RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		          status, expected_arrival, expected_departure,
 		          actual_checkin, actual_checkout,
 		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
@@ -406,7 +403,7 @@ func (h *VisitorHandlers) ApproveVisit(w http.ResponseWriter, r *http.Request) {
 		          created_at, updated_at`,
 		id, cid, status, req.Approved, req.Note,
 	).Scan(
-		&visit.ID, &visit.TenantID, &visit.SiteID, &visit.VisitorID, &visit.HostUserID,
+		&visit.ID, &visit.TenantID, &visit.VisitorID, &visit.HostUserID,
 		&visit.Purpose, &visit.PurposeNote, &visit.Status,
 		&visit.ExpectedArrival, &visit.ExpectedDeparture,
 		&visit.ActualCheckin, &visit.ActualCheckout,
@@ -464,13 +461,11 @@ func (h *VisitorHandlers) CheckinVisit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var visitorID, qrToken string
-	var expectedDeparture *time.Time
-	var currentStatus string
 	err := h.db.Pool.QueryRow(r.Context(), `
-		SELECT visitor_id, status, qr_token, expected_departure
+		SELECT visitor_id, qr_token
 		FROM dm3_identity.visits
 		WHERE id = $1::uuid AND tenant_id = $2::uuid`, id, cid,
-	).Scan(&visitorID, &currentStatus, &qrToken, &expectedDeparture)
+	).Scan(&visitorID, &qrToken)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "visit not found")
 		return
@@ -479,13 +474,17 @@ func (h *VisitorHandlers) CheckinVisit(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusForbidden, "invalid qr token")
 		return
 	}
-	if currentStatus != models.VisitStatusPreRegistered && currentStatus != models.VisitStatusApproved && currentStatus != models.VisitStatusWaiting {
-		httputil.Error(w, http.StatusConflict, "visit cannot be checked in from current status")
+
+	tx, err := h.db.Pool.BeginTx(r.Context(), pgx.TxOptions{})
+	if err != nil {
+		slog.Error("begin visitor checkin tx error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
 
 	if req.NationalID != nil {
-		_, _ = h.db.Pool.Exec(r.Context(), `UPDATE dm3_identity.visitors SET national_id = COALESCE($2, national_id), updated_at = now() WHERE id = $1::uuid`, visitorID, req.NationalID)
+		_, _ = tx.Exec(r.Context(), `UPDATE dm3_identity.visitors SET national_id = COALESCE($2, national_id), updated_at = now() WHERE id = $1::uuid`, visitorID, req.NationalID)
 	}
 	if blocked, reason := h.checkWatchlist(r, cid, visitorID); blocked {
 		if h.audit != nil {
@@ -495,89 +494,37 @@ func (h *VisitorHandlers) CheckinVisit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var tempUserID string
-	var visFirstName, visLastName string
-	_ = h.db.Pool.QueryRow(r.Context(), `SELECT first_name, last_name FROM dm3_identity.visitors WHERE id = $1::uuid`, visitorID).Scan(&visFirstName, &visLastName)
-
-	err = h.db.Pool.QueryRow(r.Context(), `
-		INSERT INTO dm3_identity.users (tenant_id, first_name, last_name, status)
-		VALUES ($1::uuid, $2, $3, 'visitor')
-		RETURNING id`, cid, visFirstName, visLastName,
-	).Scan(&tempUserID)
+	visit, tempCredID, alreadyCheckedIn, visitorName, err := h.checkinVisitTx(r.Context(), tx, cid, id, req)
 	if err != nil {
-		slog.Error("create temp user error", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	credValidUntil := endOfDay(time.Now())
-	if expectedDeparture != nil {
-		credValidUntil = *expectedDeparture
-	}
-	var tempCredID string
-	err = h.db.Pool.QueryRow(r.Context(), `
-		INSERT INTO dm3_identity.credentials
-		  (tenant_id, user_id, type, value, status, valid_from, valid_until)
-		VALUES ($1::uuid, $2::uuid, 'qr', $3, 'active', now(), $4)
-		RETURNING id`, cid, tempUserID, qrToken, credValidUntil,
-	).Scan(&tempCredID)
-	if err != nil {
-		slog.Error("create temp credential error", "error", err)
+		if err == errVisitCheckinConflict {
+			httputil.Error(w, http.StatusConflict, "visit cannot be checked in from current status")
+			return
+		}
+		slog.Error("checkin visit error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	if req.BadgeNumber != nil && *req.BadgeNumber != "" {
-		_, _ = h.db.Pool.Exec(r.Context(), `
+		_, _ = tx.Exec(r.Context(), `
 			INSERT INTO dm3_identity.visitor_badges (tenant_id, visit_id, badge_number)
 			VALUES ($1::uuid, $2::uuid, $3)
 			ON CONFLICT DO NOTHING`, cid, id, req.BadgeNumber)
 	}
 
-	var visit models.Visit
-	err = h.db.Pool.QueryRow(r.Context(), `
-		UPDATE dm3_identity.visits
-		SET status             = 'checked_in',
-		    actual_checkin     = now(),
-		    checkin_method     = $3,
-		    checkin_device_id  = COALESCE($4, checkin_device_id),
-		    checkin_photo_ref  = COALESCE($5, checkin_photo_ref),
-		    items_carried      = COALESCE($6, items_carried),
-		    nda_signed         = $7,
-		    badge_number       = COALESCE($8, badge_number),
-		    temp_credential_id = $9::uuid,
-		    updated_at         = now()
-		WHERE id = $1::uuid AND tenant_id = $2::uuid
-		RETURNING id, tenant_id, site_id, visitor_id, host_user_id, purpose, purpose_note,
-		          status, expected_arrival, expected_departure,
-		          actual_checkin, actual_checkout,
-		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
-		          qr_token, qr_expires_at, badge_number, temp_credential_id,
-		          access_areas, escort_required, vehicle_plate, items_carried,
-		          nda_signed, host_approved, host_approved_at, notes,
-		          created_at, updated_at`,
-		id, cid, req.CheckinMethod, req.CheckinDeviceID, req.PhotoRef,
-		req.ItemsCarried, req.NDASigned, req.BadgeNumber, tempCredID,
-	).Scan(
-		&visit.ID, &visit.TenantID, &visit.SiteID, &visit.VisitorID, &visit.HostUserID,
-		&visit.Purpose, &visit.PurposeNote, &visit.Status,
-		&visit.ExpectedArrival, &visit.ExpectedDeparture,
-		&visit.ActualCheckin, &visit.ActualCheckout,
-		&visit.CheckinMethod, &visit.CheckinDeviceID, &visit.CheckinPhotoRef, &visit.CheckoutBy,
-		&visit.QRToken, &visit.QRExpiresAt, &visit.BadgeNumber, &visit.TempCredentialID,
-		&visit.AccessAreas, &visit.EscortRequired, &visit.VehiclePlate, &visit.ItemsCarried,
-		&visit.NDASigned, &visit.HostApproved, &visit.HostApprovedAt, &visit.Notes,
-		&visit.CreatedAt, &visit.UpdatedAt,
-	)
-	if err != nil {
-		slog.Error("checkin visit update error", "error", err)
+	if err := tx.Commit(r.Context()); err != nil {
+		slog.Error("commit visitor checkin tx error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if h.audit != nil {
-		h.audit.LogFromRequest(r, "visit.checked_in", "visit", visit.ID, auditEntityName(visFirstName, visLastName), "success", nil, map[string]any{
+		action := "visit.checked_in"
+		if alreadyCheckedIn {
+			action = "visit.checkin_retried"
+		}
+		h.audit.LogFromRequest(r, action, "visit", visit.ID, visitorName, "success", nil, map[string]any{
 			"visit":            visit,
-			"temporary_access": map[string]any{"credential_id": tempCredID, "sync_status": "pending_device_sync"},
+			"temporary_access": map[string]any{"credential_id": tempCredID, "sync_status": "pending_device_sync", "idempotent": alreadyCheckedIn},
 		})
 	}
 	httputil.JSON(w, http.StatusOK, visit)
@@ -605,66 +552,43 @@ func (h *VisitorHandlers) CheckoutVisit(w http.ResponseWriter, r *http.Request) 
 	}
 
 	claims := authsvc.ClaimsFromContext(r.Context())
-	actorID := ""
-	if claims != nil {
-		actorID = claims.Sub
+	var checkoutBy any
+	if claims != nil && claims.Sub != "" {
+		checkoutBy = claims.Sub
 	}
 
-	var tempCredID, badgeNumber *string
-	err := h.db.Pool.QueryRow(r.Context(), `SELECT temp_credential_id, badge_number FROM dm3_identity.visits WHERE id = $1::uuid AND tenant_id = $2::uuid`, id, cid).Scan(&tempCredID, &badgeNumber)
+	tx, err := h.db.Pool.BeginTx(r.Context(), pgx.TxOptions{})
 	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "visit not found")
+		slog.Error("begin visitor checkout tx error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
 
-	if tempCredID != nil {
-		_, _ = h.db.Pool.Exec(r.Context(), `UPDATE dm3_identity.credentials SET status = 'revoked', valid_until = now(), updated_at = now() WHERE id = $1::uuid`, *tempCredID)
-	}
-	if req.BadgeReturned && badgeNumber != nil {
-		_, _ = h.db.Pool.Exec(r.Context(), `UPDATE dm3_identity.visitor_badges SET returned_at = now() WHERE visit_id = $1::uuid AND badge_number = $2`, id, *badgeNumber)
-	}
-
-	var checkoutBy any
-	if actorID != "" {
-		checkoutBy = actorID
-	}
-
-	var visit models.Visit
-	err = h.db.Pool.QueryRow(r.Context(), `
-		UPDATE dm3_identity.visits
-		SET status          = 'checked_out',
-		    actual_checkout = now(),
-		    checkout_by     = COALESCE($3::uuid, checkout_by),
-		    updated_at      = now()
-		WHERE id = $1::uuid AND tenant_id = $2::uuid AND status = 'checked_in'
-		RETURNING id, tenant_id, site_id, visitor_id, host_user_id, purpose, purpose_note,
-		          status, expected_arrival, expected_departure,
-		          actual_checkin, actual_checkout,
-		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
-		          qr_token, qr_expires_at, badge_number, temp_credential_id,
-		          access_areas, escort_required, vehicle_plate, items_carried,
-		          nda_signed, host_approved, host_approved_at, notes,
-		          created_at, updated_at`,
-		id, cid, checkoutBy,
-	).Scan(
-		&visit.ID, &visit.TenantID, &visit.SiteID, &visit.VisitorID, &visit.HostUserID,
-		&visit.Purpose, &visit.PurposeNote, &visit.Status,
-		&visit.ExpectedArrival, &visit.ExpectedDeparture,
-		&visit.ActualCheckin, &visit.ActualCheckout,
-		&visit.CheckinMethod, &visit.CheckinDeviceID, &visit.CheckinPhotoRef, &visit.CheckoutBy,
-		&visit.QRToken, &visit.QRExpiresAt, &visit.BadgeNumber, &visit.TempCredentialID,
-		&visit.AccessAreas, &visit.EscortRequired, &visit.VehiclePlate, &visit.ItemsCarried,
-		&visit.NDASigned, &visit.HostApproved, &visit.HostApprovedAt, &visit.Notes,
-		&visit.CreatedAt, &visit.UpdatedAt,
-	)
+	visit, cleanup, err := h.checkoutVisitTx(r.Context(), tx, cid, id, checkoutOptions{CheckoutBy: checkoutBy, BadgeReturned: req.BadgeReturned})
 	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "visit not found")
+		switch err {
+		case errVisitNotFound:
+			httputil.Error(w, http.StatusNotFound, "visit not found")
+		case errVisitCheckoutConflict:
+			httputil.Error(w, http.StatusConflict, "visit cannot be checked out from current status")
+		default:
+			slog.Error("checkout visit error", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		slog.Error("commit visitor checkout tx error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if h.audit != nil {
 		h.audit.LogFromRequest(r, "visit.checked_out", "visit", visit.ID, "", "success", nil, map[string]any{
 			"visit":            visit,
-			"temporary_access": map[string]any{"credential_id": tempCredID, "sync_status": "pending_revoke_sync"},
+			"temporary_access": map[string]any{"credential_id": cleanup.TempCredentialID, "sync_status": "pending_revoke_sync", "user_deactivated": cleanup.TempUserDeactivated},
+			"badge":            map[string]any{"returned": req.BadgeReturned, "closed": cleanup.BadgeClosed},
+			"idempotent":       cleanup.AlreadyCheckedOut,
 		})
 	}
 	httputil.JSON(w, http.StatusOK, visit)
@@ -738,7 +662,7 @@ func scanVisitWithJoins(row rowScanner) (models.Visit, error) {
 	vis := &models.Visitor{}
 	host := &models.VisitHost{}
 	err := row.Scan(
-		&v.ID, &v.TenantID, &v.SiteID, &v.VisitorID, &v.HostUserID,
+		&v.ID, &v.TenantID, &v.VisitorID, &v.HostUserID,
 		&v.Purpose, &v.PurposeNote, &v.Status,
 		&v.ExpectedArrival, &v.ExpectedDeparture,
 		&v.ActualCheckin, &v.ActualCheckout,
@@ -822,6 +746,291 @@ func (h *VisitorHandlers) checkWatchlist(r *http.Request, cid, visitorID string)
 		return false, ""
 	}
 	return true, reason
+}
+
+var (
+	errVisitNotFound         = fmt.Errorf("visit not found")
+	errVisitCheckinConflict  = fmt.Errorf("visit checkin conflict")
+	errVisitCheckoutConflict = fmt.Errorf("visit checkout conflict")
+)
+
+type visitRow struct {
+	models.Visit
+	VisitorFirstName string
+	VisitorLastName  string
+}
+
+type checkoutOptions struct {
+	CheckoutBy    any
+	BadgeReturned bool
+}
+
+type checkoutCleanup struct {
+	TempCredentialID    *string
+	TempUserDeactivated bool
+	BadgeClosed         bool
+	AlreadyCheckedOut   bool
+}
+
+func (h *VisitorHandlers) checkinVisitTx(ctx context.Context, tx pgx.Tx, tenantID, visitID string, req checkinRequest) (models.Visit, string, bool, string, error) {
+	lockedVisit, tempUserID, tempCredID, err := loadVisitForLifecycle(ctx, tx, tenantID, visitID)
+	if err != nil {
+		return models.Visit{}, "", false, "", err
+	}
+	visitorName := auditEntityName(lockedVisit.VisitorFirstName, lockedVisit.VisitorLastName)
+
+	if lockedVisit.Status == models.VisitStatusCheckedIn {
+		if tempCredID == nil {
+			credID, _, ensureErr := ensureTemporaryAccess(ctx, tx, tenantID, lockedVisit, tempUserID)
+			if ensureErr != nil {
+				return models.Visit{}, "", false, visitorName, ensureErr
+			}
+			tempCredID = &credID
+		}
+		visit, getErr := getVisitByIDTx(ctx, tx, tenantID, visitID)
+		return visit, derefString(tempCredID), true, visitorName, getErr
+	}
+	if lockedVisit.Status != models.VisitStatusPreRegistered && lockedVisit.Status != models.VisitStatusApproved && lockedVisit.Status != models.VisitStatusWaiting {
+		return models.Visit{}, "", false, visitorName, errVisitCheckinConflict
+	}
+
+	credID, _, err := ensureTemporaryAccess(ctx, tx, tenantID, lockedVisit, tempUserID)
+	if err != nil {
+		return models.Visit{}, "", false, visitorName, err
+	}
+	_, err = tx.Exec(ctx, `
+		UPDATE dm3_identity.visits
+		SET status             = 'checked_in',
+		    actual_checkin     = COALESCE(actual_checkin, now()),
+		    checkin_method     = COALESCE($3, checkin_method),
+		    checkin_device_id  = COALESCE($4, checkin_device_id),
+		    checkin_photo_ref  = COALESCE($5, checkin_photo_ref),
+		    items_carried      = COALESCE($6, items_carried),
+		    nda_signed         = $7,
+		    badge_number       = COALESCE($8, badge_number),
+		    temp_credential_id = $9::uuid,
+		    updated_at         = now()
+		WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+		visitID, tenantID, req.CheckinMethod, req.CheckinDeviceID, req.PhotoRef, req.ItemsCarried, req.NDASigned, req.BadgeNumber, credID,
+	)
+	if err != nil {
+		return models.Visit{}, "", false, visitorName, err
+	}
+	visit, err := getVisitByIDTx(ctx, tx, tenantID, visitID)
+	return visit, credID, false, visitorName, err
+}
+
+func (h *VisitorHandlers) checkoutVisitTx(ctx context.Context, tx pgx.Tx, tenantID, visitID string, opts checkoutOptions) (models.Visit, checkoutCleanup, error) {
+	lockedVisit, tempUserID, tempCredID, err := loadVisitForLifecycle(ctx, tx, tenantID, visitID)
+	if err != nil {
+		return models.Visit{}, checkoutCleanup{}, err
+	}
+	cleanup := checkoutCleanup{TempCredentialID: tempCredID}
+	if lockedVisit.Status != models.VisitStatusCheckedIn && lockedVisit.Status != models.VisitStatusCheckedOut {
+		return models.Visit{}, cleanup, errVisitCheckoutConflict
+	}
+	cleanup.AlreadyCheckedOut = lockedVisit.Status == models.VisitStatusCheckedOut
+
+	if tempCredID != nil {
+		if _, err := tx.Exec(ctx, `UPDATE dm3_identity.credentials SET status = 'revoked', valid_until = now(), updated_at = now() WHERE id = $1::uuid AND status <> 'revoked'`, *tempCredID); err != nil {
+			return models.Visit{}, cleanup, err
+		}
+	}
+	if tempUserID != nil {
+		cmd, err := tx.Exec(ctx, `UPDATE dm3_identity.users SET status = 'inactive', expired_date = COALESCE(expired_date, CURRENT_DATE), updated_at = now() WHERE id = $1::uuid AND tenant_id = $2::uuid AND status <> 'inactive'`, *tempUserID, tenantID)
+		if err != nil {
+			return models.Visit{}, cleanup, err
+		}
+		cleanup.TempUserDeactivated = cmd.RowsAffected() > 0
+	}
+	badgeCmd, err := tx.Exec(ctx, `UPDATE dm3_identity.visitor_badges SET returned_at = COALESCE(returned_at, now()) WHERE visit_id = $1::uuid AND tenant_id = $2::uuid AND returned_at IS NULL`, visitID, tenantID)
+	if err != nil {
+		return models.Visit{}, cleanup, err
+	}
+	cleanup.BadgeClosed = badgeCmd.RowsAffected() > 0
+
+	if !cleanup.AlreadyCheckedOut {
+		if _, err := tx.Exec(ctx, `
+			UPDATE dm3_identity.visits
+			SET status          = 'checked_out',
+			    actual_checkout = COALESCE(actual_checkout, now()),
+			    checkout_by     = COALESCE($3::uuid, checkout_by),
+			    updated_at      = now()
+			WHERE id = $1::uuid AND tenant_id = $2::uuid`, visitID, tenantID, opts.CheckoutBy); err != nil {
+			return models.Visit{}, cleanup, err
+		}
+	}
+	visit, err := getVisitByIDTx(ctx, tx, tenantID, visitID)
+	return visit, cleanup, err
+}
+
+func (h *VisitorHandlers) autoCheckoutVisit(ctx context.Context, tenantID, visitID string) (*checkoutCleanup, error) {
+	tx, err := h.db.Pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	visit, cleanup, err := h.checkoutVisitTx(ctx, tx, tenantID, visitID, checkoutOptions{})
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	if h.audit != nil {
+		h.audit.Log(audit.Entry{
+			TenantID:   tenantID,
+			Action:     "visit.auto_checked_out",
+			EntityType: "visit",
+			EntityID:   visit.ID,
+			Status:     "success",
+			NewValues: map[string]any{
+				"visit":            visit,
+				"temporary_access": map[string]any{"credential_id": cleanup.TempCredentialID, "sync_status": "pending_revoke_sync", "user_deactivated": cleanup.TempUserDeactivated},
+				"badge":            map[string]any{"closed": cleanup.BadgeClosed},
+				"idempotent":       cleanup.AlreadyCheckedOut,
+			},
+		})
+	}
+	return &cleanup, nil
+}
+
+func loadVisitForLifecycle(ctx context.Context, tx pgx.Tx, tenantID, visitID string) (visitRow, *string, *string, error) {
+	var visit visitRow
+	var tempUserID *string
+	var tempCredID *string
+	err := tx.QueryRow(ctx, `
+		SELECT v.id, v.tenant_id, v.visitor_id, v.host_user_id, v.purpose, v.purpose_note,
+		       v.status, v.expected_arrival, v.expected_departure,
+		       v.actual_checkin, v.actual_checkout,
+		       v.checkin_method, v.checkin_device_id, v.checkin_photo_ref, v.checkout_by,
+		       v.qr_token, v.qr_expires_at, v.badge_number, v.temp_credential_id,
+		       v.access_areas, v.escort_required, v.vehicle_plate, v.items_carried,
+		       v.nda_signed, v.host_approved, v.host_approved_at, v.notes,
+		       v.created_at, v.updated_at,
+		       vis.first_name, vis.last_name,
+		       (SELECT c.user_id FROM dm3_identity.credentials c WHERE c.id = v.temp_credential_id) AS temp_user_id
+		FROM dm3_identity.visits v
+		JOIN dm3_identity.visitors vis ON vis.id = v.visitor_id
+		WHERE v.id = $1::uuid AND v.tenant_id = $2::uuid
+		FOR UPDATE`, visitID, tenantID,
+	).Scan(
+		&visit.ID, &visit.TenantID, &visit.VisitorID, &visit.HostUserID, &visit.Purpose, &visit.PurposeNote,
+		&visit.Status, &visit.ExpectedArrival, &visit.ExpectedDeparture,
+		&visit.ActualCheckin, &visit.ActualCheckout,
+		&visit.CheckinMethod, &visit.CheckinDeviceID, &visit.CheckinPhotoRef, &visit.CheckoutBy,
+		&visit.QRToken, &visit.QRExpiresAt, &visit.BadgeNumber, &tempCredID,
+		&visit.AccessAreas, &visit.EscortRequired, &visit.VehiclePlate, &visit.ItemsCarried,
+		&visit.NDASigned, &visit.HostApproved, &visit.HostApprovedAt, &visit.Notes,
+		&visit.CreatedAt, &visit.UpdatedAt,
+		&visit.VisitorFirstName, &visit.VisitorLastName,
+		&tempUserID,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return visitRow{}, nil, nil, errVisitNotFound
+		}
+		return visitRow{}, nil, nil, err
+	}
+	visit.TempCredentialID = tempCredID
+	return visit, tempUserID, tempCredID, nil
+}
+
+func ensureTemporaryAccess(ctx context.Context, tx pgx.Tx, tenantID string, visit visitRow, existingUserID *string) (string, *string, error) {
+	if visit.TempCredentialID != nil {
+		return *visit.TempCredentialID, existingUserID, nil
+	}
+
+	var credID string
+	var userID *string
+	err := tx.QueryRow(ctx, `
+		SELECT c.id, c.user_id
+		FROM dm3_identity.credentials c
+		WHERE c.tenant_id = $1::uuid AND c.type = 'qr' AND c.value = $2
+		ORDER BY c.created_at DESC
+		LIMIT 1`, tenantID, visit.QRToken,
+	).Scan(&credID, &userID)
+	if err == nil {
+		if userID != nil {
+			_, _ = tx.Exec(ctx, `UPDATE dm3_identity.users SET status = 'active', is_deleted = false, updated_at = now() WHERE id = $1::uuid`, *userID)
+		}
+		_, _ = tx.Exec(ctx, `UPDATE dm3_identity.credentials SET status = 'active', valid_from = COALESCE(valid_from, now()), valid_until = $2, updated_at = now() WHERE id = $1::uuid`, credID, visitCredentialExpiry(visit.ExpectedDeparture))
+		_, err = tx.Exec(ctx, `UPDATE dm3_identity.visits SET temp_credential_id = $3::uuid, updated_at = now() WHERE id = $1::uuid AND tenant_id = $2::uuid`, visit.ID, tenantID, credID)
+		return credID, userID, err
+	}
+	if err != pgx.ErrNoRows {
+		return "", nil, err
+	}
+
+	if existingUserID == nil {
+		var createdUserID string
+		err = tx.QueryRow(ctx, `
+			INSERT INTO dm3_identity.users (tenant_id, first_name, last_name, status, is_deleted)
+			VALUES ($1::uuid, $2, $3, 'active', false)
+			RETURNING id`, tenantID, visit.VisitorFirstName, visit.VisitorLastName,
+		).Scan(&createdUserID)
+		if err != nil {
+			return "", nil, err
+		}
+		existingUserID = &createdUserID
+	}
+
+	err = tx.QueryRow(ctx, `
+		INSERT INTO dm3_identity.credentials
+		  (tenant_id, user_id, type, value, status, valid_from, valid_until)
+		VALUES ($1::uuid, $2::uuid, 'qr', $3, 'active', now(), $4)
+		RETURNING id`, tenantID, *existingUserID, visit.QRToken, visitCredentialExpiry(visit.ExpectedDeparture),
+	).Scan(&credID)
+	if err != nil {
+		return "", nil, err
+	}
+	_, err = tx.Exec(ctx, `UPDATE dm3_identity.visits SET temp_credential_id = $3::uuid, updated_at = now() WHERE id = $1::uuid AND tenant_id = $2::uuid`, visit.ID, tenantID, credID)
+	return credID, existingUserID, err
+}
+
+func getVisitByIDTx(ctx context.Context, tx pgx.Tx, tenantID, visitID string) (models.Visit, error) {
+	var visit models.Visit
+	err := tx.QueryRow(ctx, `
+		SELECT id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
+		       status, expected_arrival, expected_departure,
+		       actual_checkin, actual_checkout,
+		       checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
+		       qr_token, qr_expires_at, badge_number, temp_credential_id,
+		       access_areas, escort_required, vehicle_plate, items_carried,
+		       nda_signed, host_approved, host_approved_at, notes,
+		       created_at, updated_at
+		FROM dm3_identity.visits
+		WHERE id = $1::uuid AND tenant_id = $2::uuid`, visitID, tenantID,
+	).Scan(
+		&visit.ID, &visit.TenantID, &visit.VisitorID, &visit.HostUserID,
+		&visit.Purpose, &visit.PurposeNote, &visit.Status,
+		&visit.ExpectedArrival, &visit.ExpectedDeparture,
+		&visit.ActualCheckin, &visit.ActualCheckout,
+		&visit.CheckinMethod, &visit.CheckinDeviceID, &visit.CheckinPhotoRef, &visit.CheckoutBy,
+		&visit.QRToken, &visit.QRExpiresAt, &visit.BadgeNumber, &visit.TempCredentialID,
+		&visit.AccessAreas, &visit.EscortRequired, &visit.VehiclePlate, &visit.ItemsCarried,
+		&visit.NDASigned, &visit.HostApproved, &visit.HostApprovedAt, &visit.Notes,
+		&visit.CreatedAt, &visit.UpdatedAt,
+	)
+	if err != nil && err == pgx.ErrNoRows {
+		return visit, errVisitNotFound
+	}
+	return visit, err
+}
+
+func visitCredentialExpiry(expectedDeparture *time.Time) time.Time {
+	if expectedDeparture != nil {
+		return *expectedDeparture
+	}
+	return endOfDay(time.Now())
+}
+
+func derefString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
 }
 
 func endOfDay(t time.Time) time.Time {
