@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,21 +36,29 @@ func setupVisitorTestDB(t *testing.T) *db.DB {
 }
 
 func setupVisitorRouter(h *VisitorHandlers) http.Handler {
+	return setupVisitorRouterWithClaims(h, &authsvc.AccessClaims{
+		Sub:   "00000000-0000-0000-0000-0000000000aa",
+		CID:   visitorTestTenantID,
+		Email: "visitor-test@example.com",
+		Role:  "primary_manager",
+		Roles: []string{"primary_manager"},
+	})
+}
+
+func setupVisitorRouterWithClaims(h *VisitorHandlers, claims *authsvc.AccessClaims) http.Handler {
 	r := httputil.NewRouter()
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := authsvc.WithClaims(r.Context(), &authsvc.AccessClaims{
-				Sub:   "00000000-0000-0000-0000-0000000000aa",
-				CID:   visitorTestTenantID,
-				Email: "visitor-test@example.com",
-				Role:  "primary_manager",
-				Roles: []string{"primary_manager"},
-			})
+			ctx := authsvc.WithClaims(r.Context(), claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	})
 	r.Use(authsvc.RequireCompany())
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Post("/visitors", h.CreateVisit)
+		r.Post("/visitors/walkin", h.WalkinVisit)
+		r.Post("/visitors/watchlist", h.CreateWatchlistEntry)
+		r.Post("/visitors/{id}/approve", h.ApproveVisit)
 		r.Post("/visitors/{id}/checkin", h.CheckinVisit)
 		r.Post("/visitors/{id}/checkout", h.CheckoutVisit)
 	})
@@ -59,30 +68,13 @@ func setupVisitorRouter(h *VisitorHandlers) http.Handler {
 func createVisitorFixture(t *testing.T, database *db.DB, status string) (visitID string, qrToken string, badgeNumber string) {
 	t.Helper()
 	ctx := context.Background()
-	visitorID := ""
-	err := database.Pool.QueryRow(ctx, `
-		INSERT INTO dm3_identity.visitors (tenant_id, first_name, last_name, watchlist_status, visit_count)
-		VALUES ($1::uuid, 'Retry', 'Visitor', 'none', 0)
-		RETURNING id`, visitorTestTenantID,
-	).Scan(&visitorID)
-	if err != nil {
-		t.Fatalf("create visitor: %v", err)
-	}
-
-	hostID := ""
-	err = database.Pool.QueryRow(ctx, `
-		INSERT INTO dm3_identity.users (tenant_id, first_name, last_name, status, is_deleted)
-		VALUES ($1::uuid, 'Host', 'User', 'active', false)
-		RETURNING id`, visitorTestTenantID,
-	).Scan(&hostID)
-	if err != nil {
-		t.Fatalf("create host: %v", err)
-	}
-
 	seed := time.Now().UnixNano()
+	visitorID := createVisitorRecord(t, database, fmt.Sprintf("Retry%d", seed), "Visitor", nil, nil, nil, nil)
+	hostID := createHostRecord(t, database, "Host", "User")
+
 	qrToken = fmt.Sprintf("qr-%x", seed)
 	badgeNumber = fmt.Sprintf("B%016x", seed)
-	err = database.Pool.QueryRow(ctx, `
+	err := database.Pool.QueryRow(ctx, `
 		INSERT INTO dm3_identity.visits (
 			tenant_id, visitor_id, host_user_id, purpose, status,
 			expected_arrival, expected_departure, qr_token, qr_expires_at, badge_number
@@ -97,6 +89,301 @@ func createVisitorFixture(t *testing.T, database *db.DB, status string) (visitID
 		t.Fatalf("create visit: %v", err)
 	}
 	return visitID, qrToken, badgeNumber
+}
+
+func createHostRecord(t *testing.T, database *db.DB, firstName, lastName string) string {
+	t.Helper()
+	ctx := context.Background()
+	var hostID string
+	err := database.Pool.QueryRow(ctx, `
+		INSERT INTO dm3_identity.users (tenant_id, first_name, last_name, status, is_deleted)
+		VALUES ($1::uuid, $2, $3, 'active', false)
+		RETURNING id`, visitorTestTenantID, firstName, lastName,
+	).Scan(&hostID)
+	if err != nil {
+		t.Fatalf("create host: %v", err)
+	}
+	return hostID
+}
+
+func createVisitorRecord(t *testing.T, database *db.DB, firstName, lastName string, email, phone, company, nationalID *string) string {
+	t.Helper()
+	ctx := context.Background()
+	var visitorID string
+	err := database.Pool.QueryRow(ctx, `
+		INSERT INTO dm3_identity.visitors (tenant_id, first_name, last_name, email, phone, company, national_id, watchlist_status, visit_count)
+		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, 'none', 0)
+		RETURNING id`, visitorTestTenantID, firstName, lastName, email, phone, company, nationalID,
+	).Scan(&visitorID)
+	if err != nil {
+		t.Fatalf("create visitor: %v", err)
+	}
+	return visitorID
+}
+
+func mustJSONBody(t *testing.T, payload any) *bytes.Buffer {
+	t.Helper()
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	return bytes.NewBuffer(body)
+}
+
+func decodeVisitResponse(t *testing.T, w *httptest.ResponseRecorder) models.Visit {
+	t.Helper()
+	var visit models.Visit
+	if err := json.Unmarshal(w.Body.Bytes(), &visit); err != nil {
+		t.Fatalf("decode visit response: %v, body=%s", err, w.Body.String())
+	}
+	return visit
+}
+
+func TestVisitorLifecycleCreateApproveCheckinCheckout(t *testing.T) {
+	database := setupVisitorTestDB(t)
+	defer database.Close()
+
+	h := NewVisitorHandlers(database, nil)
+	hostID := createHostRecord(t, database, "Flow", "Host")
+	hostClaims := &authsvc.AccessClaims{
+		Sub:   hostID,
+		CID:   visitorTestTenantID,
+		Email: "host@example.com",
+		Role:  "viewer",
+		Roles: []string{"viewer"},
+	}
+	hostRouter := setupVisitorRouterWithClaims(h, hostClaims)
+	managerRouter := setupVisitorRouter(h)
+
+	seed := time.Now().UnixNano()
+	expectedArrival := time.Now().Add(45 * time.Minute).UTC().Truncate(time.Second)
+	expectedDeparture := expectedArrival.Add(2 * time.Hour)
+	createReq := map[string]any{
+		"visitor": map[string]any{
+			"first_name": "Ava",
+			"last_name":  "Nguyen",
+			"email":      fmt.Sprintf("ava.integration+%d@example.com", seed),
+			"phone":      fmt.Sprintf("+84901%06d", seed%1000000),
+			"company":    "Duali QA",
+		},
+		"host_user_id":       hostID,
+		"purpose":            models.VisitPurposeMeeting,
+		"expected_arrival":   expectedArrival.Format(time.RFC3339),
+		"expected_departure": expectedDeparture.Format(time.RFC3339),
+		"escort_required":    true,
+		"vehicle_plate":      "51A-12345",
+	}
+	createW := httptest.NewRecorder()
+	managerRouter.ServeHTTP(createW, httptest.NewRequest(http.MethodPost, "/api/v1/visitors", mustJSONBody(t, createReq)))
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("create visit: expected 201, got %d: %s", createW.Code, createW.Body.String())
+	}
+	createdVisit := decodeVisitResponse(t, createW)
+	if createdVisit.Status != models.VisitStatusPreRegistered || createdVisit.HostUserID != hostID {
+		t.Fatalf("unexpected created visit: %+v", createdVisit)
+	}
+
+	approveW := httptest.NewRecorder()
+	hostRouter.ServeHTTP(approveW, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+createdVisit.ID+"/approve", mustJSONBody(t, map[string]any{"approved": true, "note": "approved by host"})))
+	if approveW.Code != http.StatusOK {
+		t.Fatalf("approve visit: expected 200, got %d: %s", approveW.Code, approveW.Body.String())
+	}
+	approvedVisit := decodeVisitResponse(t, approveW)
+	if approvedVisit.Status != models.VisitStatusApproved || !approvedVisit.HostApproved || approvedVisit.HostApprovedAt == nil {
+		t.Fatalf("unexpected approved visit: %+v", approvedVisit)
+	}
+
+	checkinReq := map[string]any{
+		"checkin_method": "reception",
+		"qr_token":       approvedVisit.QRToken,
+		"national_id":    "079123456789",
+		"items_carried":  "laptop bag",
+		"nda_signed":     true,
+		"badge_number":   "FLOW-BADGE-01",
+	}
+	checkinW := httptest.NewRecorder()
+	managerRouter.ServeHTTP(checkinW, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+createdVisit.ID+"/checkin", mustJSONBody(t, checkinReq)))
+	if checkinW.Code != http.StatusOK {
+		t.Fatalf("checkin visit: expected 200, got %d: %s", checkinW.Code, checkinW.Body.String())
+	}
+	checkedInVisit := decodeVisitResponse(t, checkinW)
+	if checkedInVisit.Status != models.VisitStatusCheckedIn || checkedInVisit.TempCredentialID == nil || checkedInVisit.ActualCheckin == nil {
+		t.Fatalf("unexpected checked in visit: %+v", checkedInVisit)
+	}
+
+	checkoutW := httptest.NewRecorder()
+	managerRouter.ServeHTTP(checkoutW, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+createdVisit.ID+"/checkout", mustJSONBody(t, map[string]any{"badge_returned": true, "items_returned": true})))
+	if checkoutW.Code != http.StatusOK {
+		t.Fatalf("checkout visit: expected 200, got %d: %s", checkoutW.Code, checkoutW.Body.String())
+	}
+	checkedOutVisit := decodeVisitResponse(t, checkoutW)
+	if checkedOutVisit.Status != models.VisitStatusCheckedOut || checkedOutVisit.ActualCheckout == nil || checkedOutVisit.CheckoutBy == nil || *checkedOutVisit.CheckoutBy != "00000000-0000-0000-0000-0000000000aa" {
+		t.Fatalf("unexpected checked out visit: %+v", checkedOutVisit)
+	}
+
+	ctx := context.Background()
+	var credentialStatus, tempUserStatus string
+	var visitorNationalID, visitItemsCarried string
+	var badgeReturnedAt *time.Time
+	err := database.Pool.QueryRow(ctx, `
+		SELECT c.status, u.status, v.items_carried, vis.national_id,
+		       (SELECT returned_at FROM dm3_identity.visitor_badges WHERE visit_id = $1::uuid AND badge_number = 'FLOW-BADGE-01' LIMIT 1)
+		FROM dm3_identity.visits v
+		JOIN dm3_identity.visitors vis ON vis.id = v.visitor_id
+		JOIN dm3_identity.credentials c ON c.id = v.temp_credential_id
+		JOIN dm3_identity.users u ON u.id = c.user_id
+		WHERE v.id = $1::uuid`, createdVisit.ID,
+	).Scan(&credentialStatus, &tempUserStatus, &visitItemsCarried, &visitorNationalID, &badgeReturnedAt)
+	if err != nil {
+		t.Fatalf("load lifecycle side effects: %v", err)
+	}
+	if credentialStatus != "revoked" || tempUserStatus != "inactive" || visitItemsCarried != "laptop bag" || visitorNationalID != "079123456789" || badgeReturnedAt == nil {
+		t.Fatalf("unexpected lifecycle side effects: credential=%s temp_user=%s items=%s national_id=%s badge_closed=%t", credentialStatus, tempUserStatus, visitItemsCarried, visitorNationalID, badgeReturnedAt != nil)
+	}
+	var visitorVisitCount int
+	err = database.Pool.QueryRow(ctx, `SELECT visit_count FROM dm3_identity.visitors WHERE id = $1::uuid`, createdVisit.VisitorID).Scan(&visitorVisitCount)
+	if err != nil {
+		t.Fatalf("load visitor visit_count: %v", err)
+	}
+	if visitorVisitCount != 1 {
+		t.Fatalf("expected visitor visit_count=1, got %d", visitorVisitCount)
+	}
+}
+
+func TestWalkinVisitCreatesWaitingVisitAndStoresNationalID(t *testing.T) {
+	database := setupVisitorTestDB(t)
+	defer database.Close()
+
+	h := NewVisitorHandlers(database, nil)
+	router := setupVisitorRouter(h)
+	hostID := createHostRecord(t, database, "Lobby", "Host")
+	departure := time.Now().Add(90 * time.Minute).UTC().Truncate(time.Second)
+
+	walkinReq := map[string]any{
+		"visitor": map[string]any{
+			"first_name":  "Walk",
+			"last_name":   "In",
+			"phone":       "+84907654321",
+			"company":     "Lobby Co",
+			"national_id": "WALKIN-999",
+		},
+		"host_user_id":       hostID,
+		"purpose":            models.VisitPurposeDelivery,
+		"expected_departure": departure.Format(time.RFC3339),
+		"escort_required":    false,
+	}
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/walkin", mustJSONBody(t, walkinReq)))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("walkin visit: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	visit := decodeVisitResponse(t, w)
+	if visit.Status != models.VisitStatusWaiting || visit.ExpectedDeparture == nil || visit.QRToken == "" {
+		t.Fatalf("unexpected walkin visit: %+v", visit)
+	}
+
+	ctx := context.Background()
+	var nationalID string
+	err := database.Pool.QueryRow(ctx, `SELECT national_id FROM dm3_identity.visitors WHERE id = $1::uuid`, visit.VisitorID).Scan(&nationalID)
+	if err != nil {
+		t.Fatalf("load walkin visitor: %v", err)
+	}
+	if nationalID != "WALKIN-999" {
+		t.Fatalf("expected national id to persist, got %q", nationalID)
+	}
+}
+
+func TestVisitorCheckinBlockedByWatchlist(t *testing.T) {
+	database := setupVisitorTestDB(t)
+	defer database.Close()
+
+	h := NewVisitorHandlers(database, nil)
+	router := setupVisitorRouter(h)
+	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusApproved)
+	ctx := context.Background()
+	var fullName string
+	err := database.Pool.QueryRow(ctx, `SELECT first_name || ' ' || last_name FROM dm3_identity.visitors WHERE id = (SELECT visitor_id FROM dm3_identity.visits WHERE id = $1::uuid)`, visitID).Scan(&fullName)
+	if err != nil {
+		t.Fatalf("load visitor name: %v", err)
+	}
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO dm3_identity.watchlist (tenant_id, entry_type, match_field, match_value, reason, added_by)
+		VALUES ($1::uuid, $2, 'name', $3, 'security block', '00000000-0000-0000-0000-0000000000aa'::uuid)`,
+		visitorTestTenantID, models.WatchlistBlacklisted, fullName,
+	)
+	if err != nil {
+		t.Fatalf("seed watchlist entry: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/checkin", mustJSONBody(t, map[string]any{"checkin_method": models.CheckinMethodReception})))
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("watchlist block: expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "visitor is on watchlist") {
+		t.Fatalf("expected watchlist reason, got %s", w.Body.String())
+	}
+
+	var visitStatus string
+	var tempCredCount int
+	err = database.Pool.QueryRow(ctx, `SELECT status FROM dm3_identity.visits WHERE id = $1::uuid`, visitID).Scan(&visitStatus)
+	if err != nil {
+		t.Fatalf("load visit status: %v", err)
+	}
+	err = database.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM dm3_identity.credentials WHERE tenant_id = $1::uuid AND value = (SELECT qr_token FROM dm3_identity.visits WHERE id = $2::uuid)`, visitorTestTenantID, visitID).Scan(&tempCredCount)
+	if err != nil {
+		t.Fatalf("count temp credentials: %v", err)
+	}
+	if visitStatus != models.VisitStatusApproved || tempCredCount != 0 {
+		t.Fatalf("watchlist block should leave visit untouched, status=%s temp_creds=%d", visitStatus, tempCredCount)
+	}
+}
+
+func TestMarkNoShowCandidatesMarksOnlyOverdueOpenVisits(t *testing.T) {
+	database := setupVisitorTestDB(t)
+	defer database.Close()
+
+	h := NewVisitorHandlers(database, nil)
+	ctx := context.Background()
+	preRegID, _, _ := createVisitorFixture(t, database, models.VisitStatusPreRegistered)
+	approvedID, _, _ := createVisitorFixture(t, database, models.VisitStatusApproved)
+	waitingID, _, _ := createVisitorFixture(t, database, models.VisitStatusWaiting)
+	checkedInID, _, _ := createVisitorFixture(t, database, models.VisitStatusCheckedIn)
+
+	for _, id := range []string{preRegID, approvedID, waitingID, checkedInID} {
+		_, err := database.Pool.Exec(ctx, `UPDATE dm3_identity.visits SET expected_arrival = now() - interval '3 hours' WHERE id = $1::uuid`, id)
+		if err != nil {
+			t.Fatalf("age visit %s: %v", id, err)
+		}
+	}
+
+	rowsUpdated, err := h.markNoShowCandidates(ctx)
+	if err != nil {
+		t.Fatalf("markNoShowCandidates: %v", err)
+	}
+	if rowsUpdated != 3 {
+		t.Fatalf("expected 3 no-shows, got %d", rowsUpdated)
+	}
+
+	statuses := map[string]string{}
+	rows, err := database.Pool.Query(ctx, `SELECT id::text, status FROM dm3_identity.visits WHERE id = ANY($1::uuid[])`, []string{preRegID, approvedID, waitingID, checkedInID})
+	if err != nil {
+		t.Fatalf("query statuses: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, status string
+		if err := rows.Scan(&id, &status); err != nil {
+			t.Fatalf("scan status: %v", err)
+		}
+		statuses[id] = status
+	}
+	if statuses[preRegID] != models.VisitStatusNoShow || statuses[approvedID] != models.VisitStatusNoShow || statuses[waitingID] != models.VisitStatusNoShow {
+		t.Fatalf("expected overdue open visits to be no_show, got %+v", statuses)
+	}
+	if statuses[checkedInID] != models.VisitStatusCheckedIn {
+		t.Fatalf("checked-in visit should stay checked_in, got %+v", statuses)
+	}
 }
 
 func TestVisitorCheckinReusesExistingTempAccessOnRetry(t *testing.T) {

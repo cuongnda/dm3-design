@@ -72,19 +72,27 @@ func (h *VisitorHandlers) markNoShows(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			tag, err := h.db.Pool.Exec(ctx, `
-				UPDATE dm3_identity.visits
-				SET status     = 'no_show',
-				    updated_at = now()
-				WHERE status IN ('pre_registered', 'approved', 'waiting')
-				  AND expected_arrival < now() - INTERVAL '2 hours'`)
+			count, err := h.markNoShowCandidates(ctx)
 			if err != nil {
 				slog.Error("mark no shows error", "error", err)
 				continue
 			}
-			if tag.RowsAffected() > 0 {
-				slog.Info("marked no shows", "count", tag.RowsAffected())
+			if count > 0 {
+				slog.Info("marked no shows", "count", count)
 			}
 		}
 	}
+}
+
+func (h *VisitorHandlers) markNoShowCandidates(ctx context.Context) (int64, error) {
+	tag, err := h.db.Pool.Exec(ctx, `
+		UPDATE dm3_identity.visits
+		SET status     = 'no_show',
+		    updated_at = now()
+		WHERE status IN ('pre_registered', 'approved', 'waiting')
+		  AND expected_arrival < now() - INTERVAL '2 hours'`)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }
