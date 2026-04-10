@@ -227,8 +227,10 @@ func main() {
 
 	// WebSocket endpoint — requires valid user JWT to prevent unauthenticated
 	// clients from receiving the real-time event stream.
+	// Uses AssetAuthMiddleware because browsers cannot set Authorization headers
+	// on WebSocket connections; the token is passed as ?token= query parameter.
 	r.Group(func(r chi.Router) {
-		r.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
+		r.Use(authsvc.AssetAuthMiddleware(cfg.JWTSecret))
 		r.Get("/ws/events", hub.ServeHTTP)
 	})
 
