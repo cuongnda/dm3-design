@@ -168,8 +168,8 @@ export interface ListWatchlistParams {
 
 export function listVisits(params?: ListVisitsParams): Promise<Paginated<VisitDTO>> {
   const qs = new URLSearchParams();
-  if (params?.page) qs.set('page', String(params.page));
-  if (params?.limit) qs.set('limit', String(params.limit));
+  if (params?.page != null) qs.set('page', String(params.page));
+  if (params?.limit != null) qs.set('limit', String(params.limit));
   if (params?.status) qs.set('status', params.status);
   if (params?.date) qs.set('date', params.date);
   if (params?.host_id) qs.set('host_id', params.host_id);
@@ -190,8 +190,8 @@ export function updateVisit(id: string, data: UpdateVisitRequest): Promise<Visit
   return apiFetch<VisitDTO>(`${BASE}/visits/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 
-export function approveVisit(id: string): Promise<VisitDTO> {
-  return apiFetch<VisitDTO>(`${BASE}/visits/${id}/approve`, { method: 'POST' });
+export function approveVisit(id: string, approved = true): Promise<VisitDTO> {
+  return apiFetch<VisitDTO>(`${BASE}/visits/${id}/approve`, { method: 'POST', body: JSON.stringify({ approved }) });
 }
 
 export function checkinVisit(id: string, data?: CheckinRequest): Promise<VisitDTO> {
@@ -199,7 +199,7 @@ export function checkinVisit(id: string, data?: CheckinRequest): Promise<VisitDT
 }
 
 export function checkoutVisit(id: string): Promise<VisitDTO> {
-  return apiFetch<VisitDTO>(`${BASE}/visits/${id}/checkout`, { method: 'POST' });
+  return apiFetch<VisitDTO>(`${BASE}/visits/${id}/checkout`, { method: 'POST', body: JSON.stringify({ badge_returned: true, items_returned: true }) });
 }
 
 export function walkinVisit(data: WalkinVisitRequest): Promise<VisitDTO> {
@@ -231,8 +231,8 @@ export function getVisitByQR(token: string): Promise<QRVisitResponse> {
 
 export function listWatchlist(params?: ListWatchlistParams): Promise<Paginated<WatchlistEntryDTO>> {
   const qs = new URLSearchParams();
-  if (params?.page) qs.set('page', String(params.page));
-  if (params?.limit) qs.set('limit', String(params.limit));
+  if (params?.page != null) qs.set('page', String(params.page));
+  if (params?.limit != null) qs.set('limit', String(params.limit));
   if (params?.entry_type) qs.set('entry_type', params.entry_type);
   const q = qs.toString();
   return apiFetch<Paginated<WatchlistEntryDTO>>(`${BASE}/watchlist${q ? '?' + q : ''}`);

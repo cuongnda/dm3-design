@@ -42,7 +42,7 @@ func parsePagination(r *http.Request) (int, int) {
 }
 
 // nilIfEmpty returns nil if s is empty, otherwise returns a pointer to s.
-func nilIfEmpty(s string) any {
+func nilIfEmpty(s string) *string {
 	if s == "" {
 		return nil
 	}

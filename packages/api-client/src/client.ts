@@ -61,7 +61,11 @@ export async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<
       const retry = await fetch(url, { ...opts, headers });
       if (retry.ok) {
         if (retry.status === 204) return undefined as T;
-        return retry.json();
+        try {
+          return await retry.json();
+        } catch {
+          throw new Error(`API ${retry.status}: invalid JSON response`);
+        }
       }
     }
 
@@ -78,5 +82,9 @@ export async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<
   }
 
   if (res.status === 204) return undefined as T;
-  return res.json();
+  try {
+    return await res.json();
+  } catch {
+    throw new Error(`API ${res.status}: invalid JSON response`);
+  }
 }

@@ -37,6 +37,9 @@ seed:
 	@echo "Running seed data..."
 	PGPASSWORD=dm3secret psql -h localhost -p 5433 -U dm3 -d dm3 -f scripts/seed.sql
 
+seed-visitors:
+	@./scripts/seed_visitors.sh
+
 dev: docker-up migrate
 	@sleep 2
 	go run ./cmd/device-gateway/

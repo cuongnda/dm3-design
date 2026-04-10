@@ -65,7 +65,9 @@ func (h *VisitorHandlers) WalkinVisit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Visitor.NationalID != nil {
-		_, _ = h.db.Pool.Exec(r.Context(), `UPDATE dm3_identity.visitors SET national_id = $2, updated_at = now() WHERE id = $1::uuid`, visitorID, req.Visitor.NationalID)
+		if _, err := h.db.Pool.Exec(r.Context(), `UPDATE dm3_identity.visitors SET national_id = $2, updated_at = now() WHERE id = $1::uuid`, visitorID, req.Visitor.NationalID); err != nil {
+			slog.Error("walkin update national_id error", "error", err)
+		}
 	}
 
 	qrToken, err := generateQRToken()

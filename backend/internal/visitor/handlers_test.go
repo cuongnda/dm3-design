@@ -40,8 +40,9 @@ func TestNilIfEmpty(t *testing.T) {
 	if nilIfEmpty("") != nil {
 		t.Fatal("expected nil")
 	}
-	if v, ok := nilIfEmpty("hello").(*string); !ok || *v != "hello" {
-		t.Fatal("expected pointer")
+	v := nilIfEmpty("hello")
+	if v == nil || *v != "hello" {
+		t.Fatal("expected pointer to 'hello'")
 	}
 }
 

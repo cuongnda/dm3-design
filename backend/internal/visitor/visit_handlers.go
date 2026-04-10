@@ -3,6 +3,7 @@ package visitor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -292,7 +293,7 @@ func (h *VisitorHandlers) UpdateVisit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var oldVisit models.Visit
-	_ = h.db.Pool.QueryRow(r.Context(), `SELECT id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
+	if err := h.db.Pool.QueryRow(r.Context(), `SELECT id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		status, expected_arrival, expected_departure, actual_checkin, actual_checkout,
 		checkin_method, checkin_device_id, checkin_photo_ref, checkout_by, qr_token, qr_expires_at,
 		badge_number, temp_credential_id, access_areas, escort_required, vehicle_plate, items_carried,
@@ -304,7 +305,10 @@ func (h *VisitorHandlers) UpdateVisit(w http.ResponseWriter, r *http.Request) {
 		&oldVisit.CheckinMethod, &oldVisit.CheckinDeviceID, &oldVisit.CheckinPhotoRef, &oldVisit.CheckoutBy, &oldVisit.QRToken, &oldVisit.QRExpiresAt,
 		&oldVisit.BadgeNumber, &oldVisit.TempCredentialID, &oldVisit.AccessAreas, &oldVisit.EscortRequired, &oldVisit.VehiclePlate, &oldVisit.ItemsCarried,
 		&oldVisit.NDASigned, &oldVisit.HostApproved, &oldVisit.HostApprovedAt, &oldVisit.Notes, &oldVisit.CreatedAt, &oldVisit.UpdatedAt,
-	)
+	); err != nil {
+		httputil.Error(w, http.StatusNotFound, "visit not found")
+		return
+	}
 
 	var visit models.Visit
 	err := h.db.Pool.QueryRow(r.Context(), `
@@ -364,9 +368,12 @@ func (h *VisitorHandlers) ApproveVisit(w http.ResponseWriter, r *http.Request) {
 		Approved bool    `json:"approved"`
 		Note     *string `json:"note"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request body")
-		return
+	req.Approved = true // default to approve when body is empty
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
+			httputil.Error(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
 	}
 
 	var hostUserID string
@@ -414,7 +421,7 @@ func (h *VisitorHandlers) ApproveVisit(w http.ResponseWriter, r *http.Request) {
 		&visit.CreatedAt, &visit.UpdatedAt,
 	)
 	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "visit not found")
+		httputil.Error(w, http.StatusBadRequest, "visit not found or already processed")
 		return
 	}
 	if h.audit != nil {
@@ -484,7 +491,9 @@ func (h *VisitorHandlers) CheckinVisit(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = tx.Rollback(r.Context()) }()
 
 	if req.NationalID != nil {
-		_, _ = tx.Exec(r.Context(), `UPDATE dm3_identity.visitors SET national_id = COALESCE($2, national_id), updated_at = now() WHERE id = $1::uuid`, visitorID, req.NationalID)
+		if _, err := tx.Exec(r.Context(), `UPDATE dm3_identity.visitors SET national_id = COALESCE($2, national_id), updated_at = now() WHERE id = $1::uuid`, visitorID, req.NationalID); err != nil {
+			slog.Error("checkin update national_id error", "error", err)
+		}
 	}
 	if blocked, reason := h.checkWatchlist(r, cid, visitorID); blocked {
 		if h.audit != nil {
@@ -496,7 +505,7 @@ func (h *VisitorHandlers) CheckinVisit(w http.ResponseWriter, r *http.Request) {
 
 	visit, tempCredID, alreadyCheckedIn, visitorName, err := h.checkinVisitTx(r.Context(), tx, cid, id, req)
 	if err != nil {
-		if err == errVisitCheckinConflict {
+		if errors.Is(err, errVisitCheckinConflict) {
 			httputil.Error(w, http.StatusConflict, "visit cannot be checked in from current status")
 			return
 		}
@@ -506,10 +515,12 @@ func (h *VisitorHandlers) CheckinVisit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.BadgeNumber != nil && *req.BadgeNumber != "" {
-		_, _ = tx.Exec(r.Context(), `
+		if _, err := tx.Exec(r.Context(), `
 			INSERT INTO dm3_identity.visitor_badges (tenant_id, visit_id, badge_number)
 			VALUES ($1::uuid, $2::uuid, $3)
-			ON CONFLICT DO NOTHING`, cid, id, req.BadgeNumber)
+			ON CONFLICT DO NOTHING`, cid, id, req.BadgeNumber); err != nil {
+			slog.Error("checkin badge insert error", "error", err)
+		}
 	}
 
 	if err := tx.Commit(r.Context()); err != nil {
@@ -546,9 +557,11 @@ func (h *VisitorHandlers) CheckoutVisit(w http.ResponseWriter, r *http.Request) 
 		BadgeReturned bool `json:"badge_returned"`
 		ItemsReturned bool `json:"items_returned"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request body")
-		return
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
+			httputil.Error(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
 	}
 
 	claims := authsvc.ClaimsFromContext(r.Context())
@@ -567,10 +580,10 @@ func (h *VisitorHandlers) CheckoutVisit(w http.ResponseWriter, r *http.Request) 
 
 	visit, cleanup, err := h.checkoutVisitTx(r.Context(), tx, cid, id, checkoutOptions{CheckoutBy: checkoutBy, BadgeReturned: req.BadgeReturned})
 	if err != nil {
-		switch err {
-		case errVisitNotFound:
+		switch {
+		case errors.Is(err, errVisitNotFound):
 			httputil.Error(w, http.StatusNotFound, "visit not found")
-		case errVisitCheckoutConflict:
+		case errors.Is(err, errVisitCheckoutConflict):
 			httputil.Error(w, http.StatusConflict, "visit cannot be checked out from current status")
 		default:
 			slog.Error("checkout visit error", "error", err)
@@ -607,13 +620,27 @@ func (h *VisitorHandlers) GetVisitByQR(w http.ResponseWriter, r *http.Request) {
 
 	var resp qrResponse
 	var qrExpiresAt time.Time
-	err := h.db.Pool.QueryRow(r.Context(), `
-		SELECT v.id, vis.first_name || ' ' || vis.last_name, vis.company,
-		       v.purpose, v.expected_arrival, v.status, v.qr_expires_at
-		FROM dm3_identity.visits v
-		JOIN dm3_identity.visitors vis ON vis.id = v.visitor_id
-		WHERE v.qr_token = $1`, token,
-	).Scan(&resp.VisitID, &resp.VisitorName, &resp.VisitorCompany, &resp.Purpose, &resp.ExpectedArrival, &resp.Status, &qrExpiresAt)
+	// Use tenant_id when auth context is available (defense in depth);
+	// for unauthenticated kiosk use, the QR token uniqueness is the security boundary.
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	var err error
+	if cid != "" {
+		err = h.db.Pool.QueryRow(r.Context(), `
+			SELECT v.id, vis.first_name || ' ' || vis.last_name, vis.company,
+			       v.purpose, v.expected_arrival, v.status, v.qr_expires_at
+			FROM dm3_identity.visits v
+			JOIN dm3_identity.visitors vis ON vis.id = v.visitor_id
+			WHERE v.qr_token = $1 AND v.tenant_id = $2::uuid`, token, cid,
+		).Scan(&resp.VisitID, &resp.VisitorName, &resp.VisitorCompany, &resp.Purpose, &resp.ExpectedArrival, &resp.Status, &qrExpiresAt)
+	} else {
+		err = h.db.Pool.QueryRow(r.Context(), `
+			SELECT v.id, vis.first_name || ' ' || vis.last_name, vis.company,
+			       v.purpose, v.expected_arrival, v.status, v.qr_expires_at
+			FROM dm3_identity.visits v
+			JOIN dm3_identity.visitors vis ON vis.id = v.visitor_id
+			WHERE v.qr_token = $1`, token,
+		).Scan(&resp.VisitID, &resp.VisitorName, &resp.VisitorCompany, &resp.Purpose, &resp.ExpectedArrival, &resp.Status, &qrExpiresAt)
+	}
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "visit not found")
 		return
@@ -688,20 +715,47 @@ func scanVisitWithJoins(row rowScanner) (models.Visit, error) {
 }
 
 func (h *VisitorHandlers) upsertVisitor(r *http.Request, cid, firstName, lastName string, email, phone, company *string) (string, string, error) {
-	var existingID string
-	if email != nil && *email != "" {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT id FROM dm3_identity.visitors WHERE tenant_id = $1::uuid AND email = $2 LIMIT 1`, cid, *email).Scan(&existingID)
-	}
-	if existingID == "" && phone != nil && *phone != "" {
-		_ = h.db.Pool.QueryRow(r.Context(), `SELECT id FROM dm3_identity.visitors WHERE tenant_id = $1::uuid AND phone = $2 LIMIT 1`, cid, *phone).Scan(&existingID)
-	}
-
 	name := auditEntityName(firstName, lastName)
-	if existingID != "" {
-		_, _ = h.db.Pool.Exec(r.Context(), `UPDATE dm3_identity.visitors SET first_name = $2, last_name = $3, company = COALESCE($4, company), visit_count = visit_count + 1, last_visit_at = now(), updated_at = now() WHERE id = $1::uuid`, existingID, firstName, lastName, company)
-		return existingID, name, nil
+
+	// Atomic upsert: try to find existing visitor by email or phone, then update or insert.
+	// Uses INSERT ... ON CONFLICT to avoid TOCTOU race conditions.
+	if email != nil && *email != "" {
+		var id string
+		err := h.db.Pool.QueryRow(r.Context(), `
+			INSERT INTO dm3_identity.visitors
+			  (tenant_id, first_name, last_name, email, phone, company, watchlist_status, visit_count, last_visit_at)
+			VALUES ($1::uuid, $2, $3, $4, $5, $6, 'none', 1, now())
+			ON CONFLICT (tenant_id, email) WHERE email IS NOT NULL
+			DO UPDATE SET first_name = $2, last_name = $3, company = COALESCE($6, dm3_identity.visitors.company),
+			             visit_count = dm3_identity.visitors.visit_count + 1, last_visit_at = now(), updated_at = now()
+			RETURNING id`,
+			cid, firstName, lastName, email, phone, company,
+		).Scan(&id)
+		if err != nil {
+			return "", name, fmt.Errorf("upsert visitor by email: %w", err)
+		}
+		return id, name, nil
 	}
 
+	if phone != nil && *phone != "" {
+		var id string
+		err := h.db.Pool.QueryRow(r.Context(), `
+			INSERT INTO dm3_identity.visitors
+			  (tenant_id, first_name, last_name, email, phone, company, watchlist_status, visit_count, last_visit_at)
+			VALUES ($1::uuid, $2, $3, $4, $5, $6, 'none', 1, now())
+			ON CONFLICT (tenant_id, phone) WHERE phone IS NOT NULL
+			DO UPDATE SET first_name = $2, last_name = $3, company = COALESCE($6, dm3_identity.visitors.company),
+			             visit_count = dm3_identity.visitors.visit_count + 1, last_visit_at = now(), updated_at = now()
+			RETURNING id`,
+			cid, firstName, lastName, email, phone, company,
+		).Scan(&id)
+		if err != nil {
+			return "", name, fmt.Errorf("upsert visitor by phone: %w", err)
+		}
+		return id, name, nil
+	}
+
+	// No email or phone — always insert a new visitor
 	var newID string
 	err := h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.visitors
@@ -710,7 +764,10 @@ func (h *VisitorHandlers) upsertVisitor(r *http.Request, cid, firstName, lastNam
 		RETURNING id`,
 		cid, firstName, lastName, email, phone, company,
 	).Scan(&newID)
-	return newID, name, err
+	if err != nil {
+		return "", name, fmt.Errorf("insert visitor: %w", err)
+	}
+	return newID, name, nil
 }
 
 func (h *VisitorHandlers) checkWatchlist(r *http.Request, cid, visitorID string) (bool, string) {
@@ -928,7 +985,7 @@ func loadVisitForLifecycle(ctx context.Context, tx pgx.Tx, tenantID, visitID str
 		&tempUserID,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return visitRow{}, nil, nil, errVisitNotFound
 		}
 		return visitRow{}, nil, nil, err
@@ -953,13 +1010,17 @@ func ensureTemporaryAccess(ctx context.Context, tx pgx.Tx, tenantID string, visi
 	).Scan(&credID, &userID)
 	if err == nil {
 		if userID != nil {
-			_, _ = tx.Exec(ctx, `UPDATE dm3_identity.users SET status = 'active', is_deleted = false, updated_at = now() WHERE id = $1::uuid`, *userID)
+			if _, err := tx.Exec(ctx, `UPDATE dm3_identity.users SET status = 'active', is_deleted = false, updated_at = now() WHERE id = $1::uuid`, *userID); err != nil {
+				return "", nil, fmt.Errorf("reactivate temp user: %w", err)
+			}
 		}
-		_, _ = tx.Exec(ctx, `UPDATE dm3_identity.credentials SET status = 'active', valid_from = COALESCE(valid_from, now()), valid_until = $2, updated_at = now() WHERE id = $1::uuid`, credID, visitCredentialExpiry(visit.ExpectedDeparture))
+		if _, err := tx.Exec(ctx, `UPDATE dm3_identity.credentials SET status = 'active', valid_from = COALESCE(valid_from, now()), valid_until = $2, updated_at = now() WHERE id = $1::uuid`, credID, visitCredentialExpiry(visit.ExpectedDeparture)); err != nil {
+			return "", nil, fmt.Errorf("reactivate temp credential: %w", err)
+		}
 		_, err = tx.Exec(ctx, `UPDATE dm3_identity.visits SET temp_credential_id = $3::uuid, updated_at = now() WHERE id = $1::uuid AND tenant_id = $2::uuid`, visit.ID, tenantID, credID)
 		return credID, userID, err
 	}
-	if err != pgx.ErrNoRows {
+	if !errors.Is(err, pgx.ErrNoRows) {
 		return "", nil, err
 	}
 
@@ -1013,7 +1074,7 @@ func getVisitByIDTx(ctx context.Context, tx pgx.Tx, tenantID, visitID string) (m
 		&visit.NDASigned, &visit.HostApproved, &visit.HostApprovedAt, &visit.Notes,
 		&visit.CreatedAt, &visit.UpdatedAt,
 	)
-	if err != nil && err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return visit, errVisitNotFound
 	}
 	return visit, err

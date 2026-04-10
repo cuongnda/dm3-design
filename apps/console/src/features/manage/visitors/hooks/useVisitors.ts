@@ -20,19 +20,25 @@ import {
   type CreateWatchlistRequest,
   type ListWatchlistParams,
 } from '@dm3/api-client';
+import { toast } from '@/lib/toast';
+
+function mutationErrorHandler(error: Error) {
+  const message = error.message?.replace(/^API \d+: /, '') || 'Operation failed';
+  toast(message, 'error');
+}
 
 // ─── Visit queries ───────────────────────────────────────────────────────────
 
 export function useVisitsList(params?: ListVisitsParams) {
   return useQuery({
-    queryKey: ['visits', params],
+    queryKey: ['visits', 'list', params],
     queryFn: () => listVisits(params),
   });
 }
 
 export function useVisitDetail(id: string) {
   return useQuery({
-    queryKey: ['visits', id],
+    queryKey: ['visits', 'detail', id],
     queryFn: () => getVisit(id),
     enabled: !!id,
   });
@@ -55,6 +61,7 @@ export function useCreateVisit() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['visits'] });
     },
+    onError: mutationErrorHandler,
   });
 }
 
@@ -65,6 +72,7 @@ export function useUpdateVisit() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['visits'] });
     },
+    onError: mutationErrorHandler,
   });
 }
 
@@ -75,6 +83,7 @@ export function useApproveVisit() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['visits'] });
     },
+    onError: mutationErrorHandler,
   });
 }
 
@@ -85,6 +94,7 @@ export function useCheckinVisit() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['visits'] });
     },
+    onError: mutationErrorHandler,
   });
 }
 
@@ -95,6 +105,7 @@ export function useCheckoutVisit() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['visits'] });
     },
+    onError: mutationErrorHandler,
   });
 }
 
@@ -105,6 +116,7 @@ export function useWalkinVisit() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['visits'] });
     },
+    onError: mutationErrorHandler,
   });
 }
 
@@ -124,6 +136,7 @@ export function useCreateWatchlistEntry() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['watchlist'] });
     },
+    onError: mutationErrorHandler,
   });
 }
 
@@ -134,5 +147,6 @@ export function useDeleteWatchlistEntry() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['watchlist'] });
     },
+    onError: mutationErrorHandler,
   });
 }

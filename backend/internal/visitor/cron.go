@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"time"
+
+	"github.com/duali/dm3-backend/pkg/audit"
 )
 
 // StartBackgroundJobs launches background goroutines for visitor lifecycle management.
@@ -53,6 +55,9 @@ func (h *VisitorHandlers) autoCheckout(ctx context.Context) {
 				count++
 			}
 			rows.Close()
+			if err := rows.Err(); err != nil {
+				slog.Error("auto checkout rows error", "error", err)
+			}
 			if count > 0 {
 				slog.Info("auto checkout completed", "count", count)
 			}
@@ -85,14 +90,37 @@ func (h *VisitorHandlers) markNoShows(ctx context.Context) {
 }
 
 func (h *VisitorHandlers) markNoShowCandidates(ctx context.Context) (int64, error) {
-	tag, err := h.db.Pool.Exec(ctx, `
+	rows, err := h.db.Pool.Query(ctx, `
 		UPDATE dm3_identity.visits
 		SET status     = 'no_show',
 		    updated_at = now()
 		WHERE status IN ('pre_registered', 'approved', 'waiting')
-		  AND expected_arrival < now() - INTERVAL '2 hours'`)
+		  AND expected_arrival < now() - INTERVAL '2 hours'
+		RETURNING id::text, tenant_id::text`)
 	if err != nil {
 		return 0, err
 	}
-	return tag.RowsAffected(), nil
+	defer rows.Close()
+
+	var count int64
+	for rows.Next() {
+		var visitID, tenantID string
+		if err := rows.Scan(&visitID, &tenantID); err != nil {
+			slog.Error("mark no show scan error", "error", err)
+			continue
+		}
+		count++
+		if h.audit != nil {
+			h.audit.Log(audit.Entry{
+				TenantID:   tenantID,
+				Service:    "identity-svc",
+				Action:     "visit.no_show",
+				EntityType: "visit",
+				EntityID:   visitID,
+				Status:     "success",
+				NewValues:  map[string]any{"reason": "auto: expected_arrival > 2 hours ago"},
+			})
+		}
+	}
+	return count, rows.Err()
 }
