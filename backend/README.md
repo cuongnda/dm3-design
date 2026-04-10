@@ -6,9 +6,10 @@ Go monorepo for the Duall Master 3.0 platform.
 
 | Service | Port | Description |
 |---------|------|-------------|
+| audit-svc | 8001 | Immutable audit log (NATS consumer + query API) |
 | device-gateway | 8002 | MQTT ↔ NATS bridge, device lifecycle |
 | access-svc | 8003 | Access control rules + event processing |
-| identity-svc | 8004 | Users, credentials, groups |
+| identity-svc | 8004 | Users, credentials, groups, visitors |
 | auth-svc | 8005 | JWT auth, two-step company login |
 
 ## VSCode Debug (Recommended for Development)
@@ -47,11 +48,12 @@ Open VSCode → **Run & Debug** panel (Ctrl+Shift+D) → pick a service:
 
 | Config | Service | Port |
 |--------|---------|------|
+| Audit Service | audit-svc | 8001 |
 | Auth Service | auth-svc | 8005 |
 | Identity Service | identity-svc | 8004 |
 | Access Service | access-svc | 8003 |
 | Device Gateway | device-gateway | 8002 |
-| All Backend Services | all 4 above | — |
+| All Backend Services | all 5 above | — |
 | Frontend (React) | webapp dev server | 3000 |
 
 Press **F5** to start debugging. Set breakpoints in any `.go` file.
@@ -126,9 +128,9 @@ make build
 
 Or run one at a time for development:
 ```bash
-OBJECT_STORE_ENDPOINT=localhost:9002 OBJECT_STORE_ACCESS_KEY=dm3admin OBJECT_STORE_SECRET_KEY=dm3secret123 OBJECT_STORE_BUCKET=dm3 go run ./cmd/device-gateway/
-OBJECT_STORE_ENDPOINT=localhost:9002 OBJECT_STORE_ACCESS_KEY=dm3admin OBJECT_STORE_SECRET_KEY=dm3secret123 OBJECT_STORE_BUCKET=dm3 go run ./cmd/access-svc/
-OBJECT_STORE_ENDPOINT=localhost:9002 OBJECT_STORE_ACCESS_KEY=dm3admin OBJECT_STORE_SECRET_KEY=dm3secret123 OBJECT_STORE_BUCKET=dm3 go run ./cmd/identity-svc/
+OBJECT_STORE_ENDPOINT=localhost:9002 OBJECT_STORE_ACCESS_KEY=$MINIO_USER OBJECT_STORE_SECRET_KEY=$MINIO_PASSWORD OBJECT_STORE_BUCKET=dm3 go run ./cmd/device-gateway/
+OBJECT_STORE_ENDPOINT=localhost:9002 OBJECT_STORE_ACCESS_KEY=$MINIO_USER OBJECT_STORE_SECRET_KEY=$MINIO_PASSWORD OBJECT_STORE_BUCKET=dm3 go run ./cmd/access-svc/
+OBJECT_STORE_ENDPOINT=localhost:9002 OBJECT_STORE_ACCESS_KEY=$MINIO_USER OBJECT_STORE_SECRET_KEY=$MINIO_PASSWORD OBJECT_STORE_BUCKET=dm3 go run ./cmd/identity-svc/
 go run ./cmd/auth-svc/
 ```
 
