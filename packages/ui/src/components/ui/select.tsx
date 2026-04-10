@@ -210,7 +210,7 @@ function Select({
         onClick={() => !disabled && setOpen(v => !v)}
         aria-expanded={open}
         className={cn(
-          "h-9 w-full min-w-0 rounded-md border px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none",
+          "h-9 w-full min-w-0 rounded-md border px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none cursor-pointer",
           "bg-input border-border text-foreground",
           "focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/20",
           "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",

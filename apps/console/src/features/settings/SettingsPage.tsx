@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User, Shield, Bell, Palette, Save, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '@dm3/ui';
+import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Select, SelectOption, Checkbox } from '@dm3/ui';
 
 type Tab = 'profile' | 'security' | 'notifications' | 'appearance';
 
 export function SettingsPage() {
-  const { t } = useTranslation();
+  const { t } = useTranslation('settings');
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [profile, setProfile] = useState({
@@ -29,15 +29,15 @@ export function SettingsPage() {
     weeklyReports: true
   });
   const [appearance, setAppearance] = useState({
-    theme: 'light',
+    theme: 'dark',
     language: 'en'
   });
 
   const tabs = [
-    { id: 'profile' as Tab, label: 'Profile', icon: User },
-    { id: 'security' as Tab, label: 'Security', icon: Shield },
-    { id: 'notifications' as Tab, label: 'Notifications', icon: Bell },
-    { id: 'appearance' as Tab, label: 'Appearance', icon: Palette }
+    { id: 'profile' as Tab, label: t('settings.tabs.profile'), icon: User },
+    { id: 'security' as Tab, label: t('settings.tabs.security'), icon: Shield },
+    { id: 'notifications' as Tab, label: t('settings.tabs.notifications'), icon: Bell },
+    { id: 'appearance' as Tab, label: t('settings.tabs.appearance'), icon: Palette }
   ];
 
   const handleSave = () => {
@@ -45,16 +45,16 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6 h-full overflow-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Settings</h1>
-          <p className="text-muted-foreground">Manage your account and application preferences</p>
+          <h1 className="text-2xl font-semibold">{t('settings.title')}</h1>
+          <p className="text-muted-foreground">{t('settings.description')}</p>
         </div>
         <Button onClick={handleSave}>
           <Save size={16} className="mr-2" />
-          Save Changes
+          {t('profile.save')}
         </Button>
       </div>
 
@@ -96,7 +96,7 @@ export function SettingsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 {(() => {
-                  const tab = tabs.find(t => t.id === activeTab);
+                  const tab = tabs.find(tb => tb.id === activeTab);
                   const Icon = tab?.icon || User;
                   return (
                     <>
@@ -112,40 +112,40 @@ export function SettingsPage() {
               {activeTab === 'profile' && (
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="name">Full Name</Label>
+                    <Label htmlFor="name">{t('profile.firstName')}</Label>
                     <Input
                       id="name"
                       value={profile.name}
                       onChange={(e) => setProfile(prev => ({ ...prev, name: e.target.value }))}
-                      placeholder="Enter your full name"
+                      data-testid="settings-input-name"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">{t('profile.email')}</Label>
                     <Input
                       id="email"
                       type="email"
                       value={profile.email}
                       onChange={(e) => setProfile(prev => ({ ...prev, email: e.target.value }))}
-                      placeholder="Enter your email"
+                      data-testid="settings-input-email"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="phone">Phone</Label>
+                    <Label htmlFor="phone">{t('profile.phone')}</Label>
                     <Input
                       id="phone"
                       value={profile.phone}
                       onChange={(e) => setProfile(prev => ({ ...prev, phone: e.target.value }))}
-                      placeholder="Enter your phone number"
+                      data-testid="settings-input-phone"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="position">Position</Label>
+                    <Label htmlFor="position">{t('profile.jobTitle')}</Label>
                     <Input
                       id="position"
                       value={profile.position}
                       onChange={(e) => setProfile(prev => ({ ...prev, position: e.target.value }))}
-                      placeholder="Enter your position"
+                      data-testid="settings-input-position"
                     />
                   </div>
                 </div>
@@ -155,44 +155,43 @@ export function SettingsPage() {
               {activeTab === 'security' && (
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="currentPassword">Current Password</Label>
+                    <Label htmlFor="currentPassword">{t('security.currentPassword')}</Label>
                     <Input
                       id="currentPassword"
                       type="password"
                       value={security.currentPassword}
                       onChange={(e) => setSecurity(prev => ({ ...prev, currentPassword: e.target.value }))}
-                      placeholder="Enter current password"
+                      data-testid="settings-input-currentPassword"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="newPassword">New Password</Label>
+                    <Label htmlFor="newPassword">{t('security.newPassword')}</Label>
                     <Input
                       id="newPassword"
                       type="password"
                       value={security.newPassword}
                       onChange={(e) => setSecurity(prev => ({ ...prev, newPassword: e.target.value }))}
-                      placeholder="Enter new password"
+                      data-testid="settings-input-newPassword"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                    <Label htmlFor="confirmPassword">{t('security.confirmPassword')}</Label>
                     <Input
                       id="confirmPassword"
                       type="password"
                       value={security.confirmPassword}
                       onChange={(e) => setSecurity(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                      placeholder="Confirm new password"
+                      data-testid="settings-input-confirmPassword"
                     />
                   </div>
                   <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       id="twoFactor"
                       checked={security.twoFactorEnabled}
-                      onChange={(e) => setSecurity(prev => ({ ...prev, twoFactorEnabled: e.target.checked }))}
-                      className="w-4 h-4"
+                      onCheckedChange={(checked) => setSecurity(prev => ({ ...prev, twoFactorEnabled: !!checked }))}
+                      data-testid="settings-input-twoFactor"
                     />
-                    <Label htmlFor="twoFactor">Enable Two-Factor Authentication</Label>
+                    <Label htmlFor="twoFactor">{t('security.twoFactor')}</Label>
                   </div>
                 </div>
               )}
@@ -201,44 +200,40 @@ export function SettingsPage() {
               {activeTab === 'notifications' && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       id="emailAlerts"
                       checked={notifications.emailAlerts}
-                      onChange={(e) => setNotifications(prev => ({ ...prev, emailAlerts: e.target.checked }))}
-                      className="w-4 h-4"
+                      onCheckedChange={(checked) => setNotifications(prev => ({ ...prev, emailAlerts: !!checked }))}
+                      data-testid="settings-input-emailAlerts"
                     />
-                    <Label htmlFor="emailAlerts">Email Alerts</Label>
+                    <Label htmlFor="emailAlerts">{t('notifications.email')}</Label>
                   </div>
                   <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       id="smsAlerts"
                       checked={notifications.smsAlerts}
-                      onChange={(e) => setNotifications(prev => ({ ...prev, smsAlerts: e.target.checked }))}
-                      className="w-4 h-4"
+                      onCheckedChange={(checked) => setNotifications(prev => ({ ...prev, smsAlerts: !!checked }))}
+                      data-testid="settings-input-smsAlerts"
                     />
-                    <Label htmlFor="smsAlerts">SMS Alerts</Label>
+                    <Label htmlFor="smsAlerts">{t('notifications.types.security')}</Label>
                   </div>
                   <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       id="pushNotifications"
                       checked={notifications.pushNotifications}
-                      onChange={(e) => setNotifications(prev => ({ ...prev, pushNotifications: e.target.checked }))}
-                      className="w-4 h-4"
+                      onCheckedChange={(checked) => setNotifications(prev => ({ ...prev, pushNotifications: !!checked }))}
+                      data-testid="settings-input-pushNotifications"
                     />
-                    <Label htmlFor="pushNotifications">Push Notifications</Label>
+                    <Label htmlFor="pushNotifications">{t('notifications.push')}</Label>
                   </div>
                   <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       id="weeklyReports"
                       checked={notifications.weeklyReports}
-                      onChange={(e) => setNotifications(prev => ({ ...prev, weeklyReports: e.target.checked }))}
-                      className="w-4 h-4"
+                      onCheckedChange={(checked) => setNotifications(prev => ({ ...prev, weeklyReports: !!checked }))}
+                      data-testid="settings-input-weeklyReports"
                     />
-                    <Label htmlFor="weeklyReports">Weekly Reports</Label>
+                    <Label htmlFor="weeklyReports">{t('notifications.frequency.weekly')}</Label>
                   </div>
                 </div>
               )}
@@ -247,29 +242,27 @@ export function SettingsPage() {
               {activeTab === 'appearance' && (
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="theme">Theme</Label>
-                    <select
-                      id="theme"
+                    <Label>{t('appearance.theme')}</Label>
+                    <Select
                       value={appearance.theme}
-                      onChange={(e) => setAppearance(prev => ({ ...prev, theme: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      onValueChange={(v) => setAppearance(prev => ({ ...prev, theme: v }))}
+                      data-testid="settings-select-theme"
                     >
-                      <option value="light">Light</option>
-                      <option value="dark">Dark</option>
-                      <option value="auto">Auto</option>
-                    </select>
+                      <SelectOption value="light">{t('appearance.theme.light')}</SelectOption>
+                      <SelectOption value="dark">{t('appearance.theme.dark')}</SelectOption>
+                      <SelectOption value="auto">{t('appearance.theme.auto')}</SelectOption>
+                    </Select>
                   </div>
                   <div>
-                    <Label htmlFor="language">Language</Label>
-                    <select
-                      id="language"
+                    <Label>{t('appearance.language')}</Label>
+                    <Select
                       value={appearance.language}
-                      onChange={(e) => setAppearance(prev => ({ ...prev, language: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      onValueChange={(v) => setAppearance(prev => ({ ...prev, language: v }))}
+                      data-testid="settings-select-language"
                     >
-                      <option value="en">English</option>
-                      <option value="vi">Tiếng Việt</option>
-                    </select>
+                      <SelectOption value="en">{t('appearance.language.en')}</SelectOption>
+                      <SelectOption value="vi">{t('appearance.language.vi')}</SelectOption>
+                    </Select>
                   </div>
                 </div>
               )}

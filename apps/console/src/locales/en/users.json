@@ -9,6 +9,7 @@
   "status.active": "Active",
   "status.inactive": "Inactive",
   "status.suspended": "Suspended",
+  "status.pending": "Pending",
   "table.title": "Users ({{count}})",
   "table.empty.search": "No users match your search",
   "table.empty.default": "No users yet. Add the first one.",
@@ -89,6 +90,7 @@
   "credential.description": "Cards, PINs, QR codes and biometric credentials",
   "credential.addCard": "Add Card",
   "credential.addTitle": "Add Credential",
+  "credential.editTitle": "Edit Credential",
   "credential.type": "Type",
   "credential.value": "Value",
   "credential.expires": "Expires",
@@ -105,6 +107,8 @@
   "toast.credentialBulkRemoved": "{{count}} credential(s) removed",
   "toast.valueRequired": "Value is required",
   "toast.credentialAddFailed": "Failed to add credential",
+  "toast.credentialUpdated": "Credential updated",
+  "toast.credentialUpdateFailed": "Failed to update credential",
 
   "accessGroup.title": "Access Group",
   "accessGroup.none": "— None —",
@@ -113,6 +117,8 @@
   "accessGroup.loadingAPs": "Loading access points…",
   "accessGroup.noAPs": "No access points assigned to this group",
   "accessGroup.selectHint": "Select an access group to view access points",
+  "accessGroup.zone": "Zone",
+  "accessGroup.description": "Description",
   "toast.accessGroupUpdated": "Access group updated",
   "toast.accessGroupFailed": "Failed to update access group",
 
@@ -148,8 +154,12 @@
   "actions.deleting": "Deleting…",
   "actions.add": "Add",
   "actions.adding": "Adding…",
+  "actions.edit": "Edit",
   "actions.assign": "Assign",
   "actions.assigning": "Assigning…",
+  "actions.revoke": "Revoke",
+  "actions.removing": "Removing…",
+  "actions.actions": "Actions",
 
   "toast.saveFailed": "Failed to save",
   "toast.deleteFailed2": "Failed to delete"

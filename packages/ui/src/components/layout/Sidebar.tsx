@@ -111,7 +111,7 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className={cn('flex items-center border-b border-[#1E293B] h-12 sticky top-0 z-10 bg-[#111827]', c ? 'justify-center px-2' : 'px-4 gap-2')}>
-        <div className="w-5 h-5 bg-[#3B82F6] rotate-45 rounded-[4px] flex-shrink-0" />
+        <img src="/logo.png" alt="Duall Master" className="w-6 h-6 flex-shrink-0" />
         {!c && <span className="text-[14px] font-semibold text-[#F8FAFC]">DUALL MASTER</span>}
       </div>
 

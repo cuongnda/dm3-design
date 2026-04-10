@@ -112,8 +112,8 @@ export function LoginPage() {
       <div className="w-full max-w-[400px]">
         {/* Logo */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 bg-secure rotate-45 rounded-[6px]" />
+          <div className="inline-flex items-center justify-center mb-3">
+            <img src="/logo.png" alt="Duall Master" className="w-16 h-16" />
           </div>
           <h1 className="text-[20px] font-semibold text-foreground tracking-tight">DUALL MASTER 3.0</h1>
           <p className="text-[13px] text-muted-foreground mt-1">{t('buildingOperatingSystem')}</p>

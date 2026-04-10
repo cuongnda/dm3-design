@@ -34,7 +34,11 @@ type Config struct {
 	BootstrapSecret    string
 	KnownAppSignatures []string
 
-	// Object Storage (MinIO / S3-compatible)
+	// Photo/file storage
+	PhotoStorage string // "local" or "minio" (default: "minio")
+	PhotoLocalDir string // local directory when PhotoStorage = "local"
+
+	// Object Storage (MinIO / S3-compatible) — used when PhotoStorage = "minio"
 	ObjectStoreEndpoint         string
 	ObjectStoreAccessKeyID      string
 	ObjectStoreSecretAccessKey  string
@@ -64,6 +68,9 @@ func Load() *Config {
 		ValkeyURL:          env("VALKEY_URL", "localhost:6380"),
 		BootstrapSecret:    env("BOOTSTRAP_SECRET", "dm3-bootstrap-v1-dev-secret"),
 		KnownAppSignatures: envSlice("KNOWN_APP_SIGNATURES"),
+
+		PhotoStorage:  env("PHOTO_STORAGE", "minio"),
+		PhotoLocalDir: env("PHOTO_LOCAL_DIR", "./data/photos"),
 
 		ObjectStoreEndpoint:         env("OBJECT_STORE_ENDPOINT", "localhost:9002"),
 		ObjectStoreAccessKeyID:      env("OBJECT_STORE_ACCESS_KEY", env("MINIO_ROOT_USER", "dm3admin")),
