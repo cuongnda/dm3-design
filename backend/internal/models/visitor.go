@@ -28,7 +28,6 @@ type Visitor struct {
 type Visit struct {
 	ID                string     `json:"id"`
 	TenantID          string     `json:"tenant_id"`
-	SiteID            *string    `json:"site_id,omitempty"`
 	VisitorID         string     `json:"visitor_id"`
 	HostUserID        string     `json:"host_user_id"`
 	Purpose           string     `json:"purpose"`
@@ -87,7 +86,6 @@ type VisitorBadge struct {
 type WatchlistEntry struct {
 	ID              string     `json:"id"`
 	TenantID        string     `json:"tenant_id"`
-	SiteID          *string    `json:"site_id,omitempty"`
 	EntryType       string     `json:"entry_type"`
 	MatchField      string     `json:"match_field"`
 	MatchValue      string     `json:"match_value"`

@@ -33,11 +33,6 @@ func (h *VisitorHandlers) ListVisits(w http.ResponseWriter, r *http.Request) {
 	args := []any{cid}
 	idx := 2
 
-	if siteID := r.URL.Query().Get("site_id"); siteID != "" {
-		where += fmt.Sprintf(" AND v.site_id = $%d::uuid", idx)
-		args = append(args, siteID)
-		idx++
-	}
 	if s := r.URL.Query().Get("status"); s != "" {
 		where += fmt.Sprintf(" AND v.status = $%d", idx)
 		args = append(args, s)
@@ -64,7 +59,7 @@ func (h *VisitorHandlers) ListVisits(w http.ResponseWriter, r *http.Request) {
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_identity.visits v JOIN dm3_identity.visitors vis ON vis.id = v.visitor_id `+where, countArgs...).Scan(&total)
 
 	query := fmt.Sprintf(`
-		SELECT v.id, v.tenant_id, v.site_id, v.visitor_id, v.host_user_id, v.purpose, v.purpose_note,
+		SELECT v.id, v.tenant_id, v.visitor_id, v.host_user_id, v.purpose, v.purpose_note,
 		       v.status, v.expected_arrival, v.expected_departure,
 		       v.actual_checkin, v.actual_checkout,
 		       v.checkin_method, v.checkin_device_id, v.checkin_photo_ref, v.checkout_by,
@@ -124,7 +119,7 @@ func (h *VisitorHandlers) GetVisit(w http.ResponseWriter, r *http.Request) {
 	id := visitIDParam(r)
 
 	row := h.db.Pool.QueryRow(r.Context(), `
-		SELECT v.id, v.tenant_id, v.site_id, v.visitor_id, v.host_user_id, v.purpose, v.purpose_note,
+		SELECT v.id, v.tenant_id, v.visitor_id, v.host_user_id, v.purpose, v.purpose_note,
 		       v.status, v.expected_arrival, v.expected_departure,
 		       v.actual_checkin, v.actual_checkout,
 		       v.checkin_method, v.checkin_device_id, v.checkin_photo_ref, v.checkout_by,
@@ -152,7 +147,6 @@ func (h *VisitorHandlers) GetVisit(w http.ResponseWriter, r *http.Request) {
 }
 
 type createVisitRequest struct {
-	SiteID  string `json:"site_id"`
 	Visitor struct {
 		FirstName string  `json:"first_name"`
 		LastName  string  `json:"last_name"`
@@ -186,8 +180,8 @@ func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.SiteID == "" || req.Visitor.FirstName == "" || req.Visitor.LastName == "" {
-		httputil.Error(w, http.StatusBadRequest, "site_id, visitor first_name and last_name are required")
+	if req.Visitor.FirstName == "" || req.Visitor.LastName == "" {
+		httputil.Error(w, http.StatusBadRequest, "visitor first_name and last_name are required")
 		return
 	}
 	if req.HostUserID == "" || req.Purpose == "" || req.ExpectedArrival.IsZero() {
@@ -221,14 +215,14 @@ func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 	var visit models.Visit
 	err = h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.visits
-		  (tenant_id, site_id, visitor_id, host_user_id, purpose, purpose_note,
+		  (tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		   status, expected_arrival, expected_departure,
 		   qr_token, qr_expires_at, access_areas, escort_required, vehicle_plate)
 		VALUES
-		  ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6,
-		   'pre_registered', $7, $8,
-		   $9, $10, $11::uuid[], $12, $13)
-		RETURNING id, tenant_id, site_id, visitor_id, host_user_id, purpose, purpose_note,
+		  ($1::uuid, $2::uuid, $3::uuid, $4, $5,
+		   'pre_registered', $6, $7,
+		   $8, $9, $10::uuid[], $11, $12)
+		RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		          status, expected_arrival, expected_departure,
 		          actual_checkin, actual_checkout,
 		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
@@ -236,11 +230,11 @@ func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 		          access_areas, escort_required, vehicle_plate, items_carried,
 		          nda_signed, host_approved, host_approved_at, notes,
 		          created_at, updated_at`,
-		cid, req.SiteID, visitorID, req.HostUserID, req.Purpose, req.PurposeNote,
+		cid, visitorID, req.HostUserID, req.Purpose, req.PurposeNote,
 		req.ExpectedArrival, req.ExpectedDeparture,
 		qrToken, qrExpiresAt, req.AccessAreas, req.EscortRequired, req.VehiclePlate,
 	).Scan(
-		&visit.ID, &visit.TenantID, &visit.SiteID, &visit.VisitorID, &visit.HostUserID,
+		&visit.ID, &visit.TenantID, &visit.VisitorID, &visit.HostUserID,
 		&visit.Purpose, &visit.PurposeNote, &visit.Status,
 		&visit.ExpectedArrival, &visit.ExpectedDeparture,
 		&visit.ActualCheckin, &visit.ActualCheckout,
@@ -295,13 +289,13 @@ func (h *VisitorHandlers) UpdateVisit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var oldVisit models.Visit
-	_ = h.db.Pool.QueryRow(r.Context(), `SELECT id, tenant_id, site_id, visitor_id, host_user_id, purpose, purpose_note,
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		status, expected_arrival, expected_departure, actual_checkin, actual_checkout,
 		checkin_method, checkin_device_id, checkin_photo_ref, checkout_by, qr_token, qr_expires_at,
 		badge_number, temp_credential_id, access_areas, escort_required, vehicle_plate, items_carried,
 		nda_signed, host_approved, host_approved_at, notes, created_at, updated_at
 		FROM dm3_identity.visits WHERE id = $1::uuid AND tenant_id = $2::uuid`, id, cid).Scan(
-		&oldVisit.ID, &oldVisit.TenantID, &oldVisit.SiteID, &oldVisit.VisitorID, &oldVisit.HostUserID,
+		&oldVisit.ID, &oldVisit.TenantID, &oldVisit.VisitorID, &oldVisit.HostUserID,
 		&oldVisit.Purpose, &oldVisit.PurposeNote, &oldVisit.Status,
 		&oldVisit.ExpectedArrival, &oldVisit.ExpectedDeparture, &oldVisit.ActualCheckin, &oldVisit.ActualCheckout,
 		&oldVisit.CheckinMethod, &oldVisit.CheckinDeviceID, &oldVisit.CheckinPhotoRef, &oldVisit.CheckoutBy, &oldVisit.QRToken, &oldVisit.QRExpiresAt,
@@ -323,7 +317,7 @@ func (h *VisitorHandlers) UpdateVisit(w http.ResponseWriter, r *http.Request) {
 		    updated_at         = now()
 		WHERE id = $1::uuid AND tenant_id = $2::uuid
 		  AND status IN ('pre_registered','approved','waiting')
-		RETURNING id, tenant_id, site_id, visitor_id, host_user_id, purpose, purpose_note,
+		RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		          status, expected_arrival, expected_departure,
 		          actual_checkin, actual_checkout,
 		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
@@ -335,7 +329,7 @@ func (h *VisitorHandlers) UpdateVisit(w http.ResponseWriter, r *http.Request) {
 		req.ExpectedArrival, req.ExpectedDeparture,
 		nilIfEmptyUUIDArray(req.AccessAreas), req.EscortRequired, req.VehiclePlate, req.Notes,
 	).Scan(
-		&visit.ID, &visit.TenantID, &visit.SiteID, &visit.VisitorID, &visit.HostUserID,
+		&visit.ID, &visit.TenantID, &visit.VisitorID, &visit.HostUserID,
 		&visit.Purpose, &visit.PurposeNote, &visit.Status,
 		&visit.ExpectedArrival, &visit.ExpectedDeparture,
 		&visit.ActualCheckin, &visit.ActualCheckout,
@@ -396,7 +390,7 @@ func (h *VisitorHandlers) ApproveVisit(w http.ResponseWriter, r *http.Request) {
 		    notes            = COALESCE($5, notes),
 		    updated_at       = now()
 		WHERE id = $1::uuid AND tenant_id = $2::uuid AND status IN ('pre_registered','waiting')
-		RETURNING id, tenant_id, site_id, visitor_id, host_user_id, purpose, purpose_note,
+		RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		          status, expected_arrival, expected_departure,
 		          actual_checkin, actual_checkout,
 		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
@@ -406,7 +400,7 @@ func (h *VisitorHandlers) ApproveVisit(w http.ResponseWriter, r *http.Request) {
 		          created_at, updated_at`,
 		id, cid, status, req.Approved, req.Note,
 	).Scan(
-		&visit.ID, &visit.TenantID, &visit.SiteID, &visit.VisitorID, &visit.HostUserID,
+		&visit.ID, &visit.TenantID, &visit.VisitorID, &visit.HostUserID,
 		&visit.Purpose, &visit.PurposeNote, &visit.Status,
 		&visit.ExpectedArrival, &visit.ExpectedDeparture,
 		&visit.ActualCheckin, &visit.ActualCheckout,
@@ -548,7 +542,7 @@ func (h *VisitorHandlers) CheckinVisit(w http.ResponseWriter, r *http.Request) {
 		    temp_credential_id = $9::uuid,
 		    updated_at         = now()
 		WHERE id = $1::uuid AND tenant_id = $2::uuid
-		RETURNING id, tenant_id, site_id, visitor_id, host_user_id, purpose, purpose_note,
+		RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		          status, expected_arrival, expected_departure,
 		          actual_checkin, actual_checkout,
 		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
@@ -559,7 +553,7 @@ func (h *VisitorHandlers) CheckinVisit(w http.ResponseWriter, r *http.Request) {
 		id, cid, req.CheckinMethod, req.CheckinDeviceID, req.PhotoRef,
 		req.ItemsCarried, req.NDASigned, req.BadgeNumber, tempCredID,
 	).Scan(
-		&visit.ID, &visit.TenantID, &visit.SiteID, &visit.VisitorID, &visit.HostUserID,
+		&visit.ID, &visit.TenantID, &visit.VisitorID, &visit.HostUserID,
 		&visit.Purpose, &visit.PurposeNote, &visit.Status,
 		&visit.ExpectedArrival, &visit.ExpectedDeparture,
 		&visit.ActualCheckin, &visit.ActualCheckout,
@@ -637,7 +631,7 @@ func (h *VisitorHandlers) CheckoutVisit(w http.ResponseWriter, r *http.Request) 
 		    checkout_by     = COALESCE($3::uuid, checkout_by),
 		    updated_at      = now()
 		WHERE id = $1::uuid AND tenant_id = $2::uuid AND status = 'checked_in'
-		RETURNING id, tenant_id, site_id, visitor_id, host_user_id, purpose, purpose_note,
+		RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		          status, expected_arrival, expected_departure,
 		          actual_checkin, actual_checkout,
 		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
@@ -647,7 +641,7 @@ func (h *VisitorHandlers) CheckoutVisit(w http.ResponseWriter, r *http.Request) 
 		          created_at, updated_at`,
 		id, cid, checkoutBy,
 	).Scan(
-		&visit.ID, &visit.TenantID, &visit.SiteID, &visit.VisitorID, &visit.HostUserID,
+		&visit.ID, &visit.TenantID, &visit.VisitorID, &visit.HostUserID,
 		&visit.Purpose, &visit.PurposeNote, &visit.Status,
 		&visit.ExpectedArrival, &visit.ExpectedDeparture,
 		&visit.ActualCheckin, &visit.ActualCheckout,
@@ -738,7 +732,7 @@ func scanVisitWithJoins(row rowScanner) (models.Visit, error) {
 	vis := &models.Visitor{}
 	host := &models.VisitHost{}
 	err := row.Scan(
-		&v.ID, &v.TenantID, &v.SiteID, &v.VisitorID, &v.HostUserID,
+		&v.ID, &v.TenantID, &v.VisitorID, &v.HostUserID,
 		&v.Purpose, &v.PurposeNote, &v.Status,
 		&v.ExpectedArrival, &v.ExpectedDeparture,
 		&v.ActualCheckin, &v.ActualCheckout,

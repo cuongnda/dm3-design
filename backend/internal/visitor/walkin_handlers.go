@@ -12,7 +12,6 @@ import (
 )
 
 type walkinRequest struct {
-	SiteID  string `json:"site_id"`
 	Visitor struct {
 		FirstName  string  `json:"first_name"`
 		LastName   string  `json:"last_name"`
@@ -46,8 +45,8 @@ func (h *VisitorHandlers) WalkinVisit(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.SiteID == "" || req.Visitor.FirstName == "" || req.Visitor.LastName == "" {
-		httputil.Error(w, http.StatusBadRequest, "site_id, visitor first_name and last_name are required")
+	if req.Visitor.FirstName == "" || req.Visitor.LastName == "" {
+		httputil.Error(w, http.StatusBadRequest, "visitor first_name and last_name are required")
 		return
 	}
 	if req.Purpose == "" || !isValidVisitPurpose(req.Purpose) {
@@ -81,13 +80,13 @@ func (h *VisitorHandlers) WalkinVisit(w http.ResponseWriter, r *http.Request) {
 	var visit models.Visit
 	err = h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.visits
-		  (tenant_id, site_id, visitor_id, host_user_id, purpose, purpose_note,
+		  (tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		   status, expected_arrival, expected_departure, qr_token, qr_expires_at,
 		   access_areas, escort_required, vehicle_plate)
 		VALUES
-		  ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6,
-		   'waiting', now(), $7, $8, $9, $10::uuid[], $11, $12)
-		RETURNING id, tenant_id, site_id, visitor_id, host_user_id, purpose, purpose_note,
+		  ($1::uuid, $2::uuid, $3::uuid, $4, $5,
+		   'waiting', now(), $6, $7, $8, $9::uuid[], $10, $11)
+		RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		          status, expected_arrival, expected_departure,
 		          actual_checkin, actual_checkout,
 		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
@@ -95,10 +94,10 @@ func (h *VisitorHandlers) WalkinVisit(w http.ResponseWriter, r *http.Request) {
 		          access_areas, escort_required, vehicle_plate, items_carried,
 		          nda_signed, host_approved, host_approved_at, notes,
 		          created_at, updated_at`,
-		cid, req.SiteID, visitorID, req.HostUserID, req.Purpose, req.PurposeNote,
+		cid, visitorID, req.HostUserID, req.Purpose, req.PurposeNote,
 		req.ExpectedDeparture, qrToken, qrExpiresAt, req.AccessAreas, req.EscortRequired, req.VehiclePlate,
 	).Scan(
-		&visit.ID, &visit.TenantID, &visit.SiteID, &visit.VisitorID, &visit.HostUserID,
+		&visit.ID, &visit.TenantID, &visit.VisitorID, &visit.HostUserID,
 		&visit.Purpose, &visit.PurposeNote, &visit.Status,
 		&visit.ExpectedArrival, &visit.ExpectedDeparture,
 		&visit.ActualCheckin, &visit.ActualCheckout,
