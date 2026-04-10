@@ -199,6 +199,8 @@
   "visitors.form.phone": "Phone",
   "visitors.form.phonePlaceholder": "+84...",
   "visitors.form.hostPlaceholder": "Select host",
+  "visitors.form.hostEmpty": "No matching hosts found",
+  "visitors.form.walkinHostHint": "Select a host when the visitor is here for someone specific",
   "visitors.form.purposeSelect": "Purpose",
   "visitors.form.expectedArrival": "Expected Arrival",
   "visitors.form.expectedDeparture": "Expected Departure",

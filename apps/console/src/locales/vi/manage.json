@@ -199,6 +199,8 @@
   "visitors.form.phone": "Điện thoại",
   "visitors.form.phonePlaceholder": "+84...",
   "visitors.form.hostPlaceholder": "Chọn người tiếp đón",
+  "visitors.form.hostEmpty": "Không tìm thấy người tiếp đón phù hợp",
+  "visitors.form.walkinHostHint": "Chọn người tiếp đón nếu khách đến gặp một người cụ thể",
   "visitors.form.purposeSelect": "Mục đích",
   "visitors.form.expectedArrival": "Giờ đến dự kiến",
   "visitors.form.expectedDeparture": "Giờ rời dự kiến",
