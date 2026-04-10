@@ -36,7 +36,9 @@ func (h *VisitorHandlers) autoCheckout(ctx context.Context) {
 				SELECT id::text, tenant_id::text
 				FROM dm3_identity.visits
 				WHERE status = 'checked_in'
-				  AND expected_arrival::date = CURRENT_DATE`)
+				  AND actual_checkout IS NULL
+				  AND expected_arrival::date = CURRENT_DATE
+				LIMIT 500`)
 			if err != nil {
 				slog.Error("auto checkout query error", "error", err)
 				continue

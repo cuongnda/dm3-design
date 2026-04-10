@@ -3,10 +3,13 @@ package access
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/natsutil"
@@ -105,7 +108,7 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 	var accessPointID *string
 	if deviceID != "" {
 		lookupCtx, lookupCancel := context.WithTimeout(ctx, 2*time.Second)
-		_ = c.db.Pool.QueryRow(lookupCtx,
+		err := c.db.Pool.QueryRow(lookupCtx,
 			`SELECT ap.id::text FROM dm3_access.access_points ap
 			 JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
 			 WHERE apd.access_device_id = $1 AND ap.tenant_id = $2::uuid
@@ -113,6 +116,9 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 			deviceID, tenantID,
 		).Scan(&accessPointID)
 		lookupCancel()
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			slog.Error("nats: failed to resolve access_point_id", "error", err, "device_id", deviceID, "tenant_id", tenantID)
+		}
 	}
 
 	// Use a bounded context for DB operations so they cannot hang indefinitely.
@@ -134,8 +140,9 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 		return err
 	}
 
-	// Update access device's last_event_at
-	if deviceUUID := toUUIDPtr(ald.DoorID); deviceUUID != nil {
+	// Update access device's last_event_at using the actual device ID (from subject/src),
+	// not ald.DoorID which is the door/access-point identifier.
+	if deviceUUID := toUUIDPtr(deviceID); deviceUUID != nil {
 		updateCtx, updateCancel := context.WithTimeout(ctx, 5*time.Second)
 		if _, err := c.db.Pool.Exec(updateCtx,
 			`UPDATE dm3_access.access_devices SET last_event_at = $1 WHERE id = $2::uuid`, evtTime, *deviceUUID); err != nil {

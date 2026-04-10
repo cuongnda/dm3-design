@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -369,8 +370,8 @@ func (h *VisitorHandlers) ApproveVisit(w http.ResponseWriter, r *http.Request) {
 		Note     *string `json:"note"`
 	}
 	req.Approved = true // default to approve when body is empty
-	if r.Body != nil {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
+	if r.Body != nil && r.ContentLength != 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
 			httputil.Error(w, http.StatusBadRequest, "invalid request body")
 			return
 		}
@@ -493,6 +494,8 @@ func (h *VisitorHandlers) CheckinVisit(w http.ResponseWriter, r *http.Request) {
 	if req.NationalID != nil {
 		if _, err := tx.Exec(r.Context(), `UPDATE dm3_identity.visitors SET national_id = COALESCE($2, national_id), updated_at = now() WHERE id = $1::uuid`, visitorID, req.NationalID); err != nil {
 			slog.Error("checkin update national_id error", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "failed to update visitor national ID")
+			return
 		}
 	}
 	if blocked, reason := h.checkWatchlist(r, cid, visitorID); blocked {
@@ -557,8 +560,8 @@ func (h *VisitorHandlers) CheckoutVisit(w http.ResponseWriter, r *http.Request) 
 		BadgeReturned bool `json:"badge_returned"`
 		ItemsReturned bool `json:"items_returned"`
 	}
-	if r.Body != nil {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
+	if r.Body != nil && r.ContentLength != 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
 			httputil.Error(w, http.StatusBadRequest, "invalid request body")
 			return
 		}
@@ -795,6 +798,7 @@ func (h *VisitorHandlers) checkWatchlist(r *http.Request, cid, visitorID string)
 	if nationalID != nil {
 		orClauses += fmt.Sprintf(" OR (match_field = 'national_id' AND match_value = $%d)", idx)
 		args = append(args, *nationalID)
+		idx++
 	}
 
 	query := fmt.Sprintf(`SELECT reason FROM dm3_identity.watchlist WHERE tenant_id = $1::uuid AND entry_type = 'blacklisted' AND (expires_at IS NULL OR expires_at > now()) AND (%s) LIMIT 1`, orClauses)
@@ -806,9 +810,9 @@ func (h *VisitorHandlers) checkWatchlist(r *http.Request, cid, visitorID string)
 }
 
 var (
-	errVisitNotFound         = fmt.Errorf("visit not found")
-	errVisitCheckinConflict  = fmt.Errorf("visit checkin conflict")
-	errVisitCheckoutConflict = fmt.Errorf("visit checkout conflict")
+	errVisitNotFound         = errors.New("visit not found")
+	errVisitCheckinConflict  = errors.New("visit checkin conflict")
+	errVisitCheckoutConflict = errors.New("visit checkout conflict")
 )
 
 type visitRow struct {

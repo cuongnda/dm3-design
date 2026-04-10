@@ -229,8 +229,10 @@ func main() {
 	// clients from receiving the real-time event stream.
 	// Uses AssetAuthMiddleware because browsers cannot set Authorization headers
 	// on WebSocket connections; the token is passed as ?token= query parameter.
+	// RequireCompany ensures events are scoped to the user's tenant.
 	r.Group(func(r chi.Router) {
 		r.Use(authsvc.AssetAuthMiddleware(cfg.JWTSecret))
+		r.Use(authsvc.RequireCompany())
 		r.Get("/ws/events", hub.ServeHTTP)
 	})
 
