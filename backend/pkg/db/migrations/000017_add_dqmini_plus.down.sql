@@ -9,8 +9,8 @@ ALTER TABLE dm3_devices.devices
         'door_sensor','de960','de950'
     ));
 
-ALTER TABLE dm3_devices.firmware DROP CONSTRAINT IF EXISTS chk_firmware_device_type;
-ALTER TABLE dm3_devices.firmware
+ALTER TABLE dm3_devices.firmwares DROP CONSTRAINT IF EXISTS chk_firmware_device_type;
+ALTER TABLE dm3_devices.firmwares
     ADD CONSTRAINT chk_firmware_device_type CHECK (device_type IN (
         'ra08','ba8300','df970','dq200','dq8500','icu970',
         'icu300n','ipopx','itouch_pop_x','icu400',
