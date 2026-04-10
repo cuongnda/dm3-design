@@ -124,6 +124,7 @@ export interface LoginUser {
     name: string;
     email: string;
     role?: string;
+    tenant_id?: string;
     company_id?: string;
 }
 
@@ -154,7 +155,7 @@ export async function login(email: string, password: string): Promise<LoginRespo
 export async function loginStep2(temporaryToken: string, companyId: string): Promise<LoginResponse> {
     return apiFetch<LoginResponse>(`${AUTH_URL}/login-step2`, {
         method: 'POST',
-        body: JSON.stringify({ temporary_token: temporaryToken, company_id: companyId }),
+        body: JSON.stringify({ temporary_token: temporaryToken, tenant_id: companyId }),
     });
 }
 
