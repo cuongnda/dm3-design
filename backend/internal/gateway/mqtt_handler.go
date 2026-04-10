@@ -156,15 +156,23 @@ func (h *MQTTHandler) handleEvent(ctx context.Context, pt ParsedTopic, env MQTTE
 }
 
 type accessLogData struct {
-	Method         string  `json:"method"`
-	DoorID         string  `json:"door_id"`
-	Direction      string  `json:"direction"`
-	Decision       string  `json:"decision"`
-	UserID         string  `json:"user_id"`
-	UserName       string  `json:"user_name"`
-	Confidence     float64 `json:"confidence"`
-	Reason         string  `json:"reason"`
-	CredentialType string  `json:"credential_type"`
+	Method           string   `json:"method"`
+	DoorID           string   `json:"door_id"`
+	Direction        string   `json:"direction"`
+	Decision         string   `json:"decision"`
+	DecidedLocally   bool     `json:"decided_locally"`
+	DecisionTimeMS   int      `json:"decision_time_ms"`
+	UserID           string   `json:"user_id"`
+	UserName         string   `json:"user_name"`
+	Confidence       *float64 `json:"confidence"`
+	Reason           string   `json:"reason"`
+	CredentialType   string   `json:"credential_type"`
+	PersonDetected   bool     `json:"person_detected"`
+	Temperature      *float64 `json:"temperature"`
+	MaskDetected     *bool    `json:"mask_detected"`
+	Photo            string   `json:"photo"`
+	LocalDBVersion   int      `json:"local_db_version"`
+	LocalPersonCount int      `json:"local_person_count"`
 }
 
 func (h *MQTTHandler) handleAccessEvent(ctx context.Context, pt ParsedTopic, env MQTTEnvelope) {
@@ -181,17 +189,34 @@ func (h *MQTTHandler) handleAlarm(ctx context.Context, pt ParsedTopic, env MQTTE
 	slog.Warn("alarm event", "device", pt.DeviceID, "type", env.Type)
 }
 
+type heartbeatNetwork struct {
+	Type      string `json:"type"`
+	SignalDBM int    `json:"signal_dbm"`
+	LatencyMS int    `json:"latency_ms"`
+}
+
+type heartbeatPeripherals struct {
+	Camera  string `json:"camera"`
+	Reader  string `json:"reader"`
+	Lock    string `json:"lock"`
+	Printer string `json:"printer"`
+}
+
 type heartbeatData struct {
-	Online         bool   `json:"online"`
-	Firmware       string `json:"firmware"`
-	IP             string `json:"ip"`
-	CPUPct         int    `json:"cpu_pct"`
-	MemPct         int    `json:"mem_pct"`
-	DiskPct        int    `json:"disk_pct"`
-	UptimeS        int64  `json:"uptime_s"`
-	QueueDepth     int    `json:"queue_depth"`
-	LocalDBVersion int    `json:"local_db_version"`
-	LocalUserCount int    `json:"local_user_count"`
+	Online         bool                  `json:"online"`
+	Firmware       string                `json:"firmware"`
+	IP             string                `json:"ip"`
+	CPUPct         int                   `json:"cpu_pct"`
+	MemPct         int                   `json:"mem_pct"`
+	DiskPct        int                   `json:"disk_pct"`
+	TemperatureC   *float64              `json:"temperature_c"`
+	UptimeS        int64                 `json:"uptime_s"`
+	QueueDepth     int                   `json:"queue_depth"`
+	LocalDBVersion int                   `json:"local_db_version"`
+	LocalUserCount int                   `json:"local_user_count"`
+	LastAccessTS   *int64                `json:"last_access_ts"`
+	Network        *heartbeatNetwork     `json:"network"`
+	Peripherals    *heartbeatPeripherals `json:"peripherals"`
 }
 
 func (h *MQTTHandler) handleStatus(ctx context.Context, pt ParsedTopic, env MQTTEnvelope) {

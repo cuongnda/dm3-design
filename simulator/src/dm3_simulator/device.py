@@ -203,35 +203,37 @@ class VirtualDevice:
             # Start listening for responses
             asyncio.create_task(self._bootstrap_mqtt.listen())
 
-            # Compute HMAC over the payload (excluding the hmac field itself)
+            # Build payload — server validates HMAC by removing "hmac" key
+            # from received JSON and re-marshalling with Go's json.Marshal
+            # (which sorts keys alphabetically, no spaces).
             nonce = str(uuid_mod.uuid4())
             ts = int(time.time())
-            payload_for_hmac = {
-                "type": "device.register",
-                "rid": rid,
+            payload_dict = {
                 "device_type": self.config.device_type,
                 "firmware_version": "sim-0.1.0",
                 "hardware_fingerprint": {
                     "android_id": hashlib.md5(rid.encode()).hexdigest()[:12],
+                    "firmware_version": "sim-0.1.0",
                     "mac_address": ":".join(f"{b:02X}" for b in hashlib.md5(rid.encode()).digest()[:6]),
                     "model": "DM3-SIM",
-                    "firmware_version": "sim-0.1.0",
                 },
-                "timestamp": ts,
                 "nonce": nonce,
+                "rid": rid,
+                "timestamp": ts,
+                "type": "device.register",
             }
-            canonical = json.dumps(payload_for_hmac, sort_keys=True, separators=(',', ':'))
+            # Compute HMAC same way Go does: sorted keys, compact separators
+            canonical = json.dumps(payload_dict, sort_keys=True, separators=(",", ":"))
             payload_hmac = hmac_mod.new(
                 bootstrap_secret.encode(), canonical.encode(), hashlib.sha256
             ).hexdigest()
 
-            # Add hmac to payload
-            payload_for_hmac["hmac"] = payload_hmac
+            # Add hmac and publish the full payload (also sorted to match)
+            payload_dict["hmac"] = payload_hmac
 
-            # Publish registration
             await self._bootstrap_mqtt.publish(
                 "dm/bootstrap/register",
-                json.dumps(payload_for_hmac),
+                json.dumps(payload_dict, sort_keys=True, separators=(",", ":")),
                 qos=1,
             )
 
@@ -258,6 +260,14 @@ class VirtualDevice:
             self.provisioning_status = ProvisioningStatus.APPROVED
             creds = payload.get("credentials", {})
             self.mqtt_token = creds.get("mqtt_token")
+
+            # Update tenant_id from server response
+            company = payload.get("company", {})
+            real_tenant_id = company.get("id") or payload.get("config", {}).get("tenant_id")
+            if real_tenant_id:
+                self.tenant_id = real_tenant_id
+                self.mqtt.tenant_id = real_tenant_id
+                logger.info("tenant_id_updated", device_id=self.device_id, tenant_id=real_tenant_id)
 
             # Disconnect bootstrap
             if self._bootstrap_mqtt:
@@ -396,11 +406,12 @@ class VirtualDevice:
             "decision": result,
             "decided_locally": True,
             "decision_time_ms": decision.decision_time_ms,
-            "person_id": decision.person_id,
-            "person_name": decision.person_name,
+            "user_id": decision.person_id or "",
+            "user_name": decision.person_name or "",
             "confidence": round(random.uniform(0.75, 0.99), 2) if decision.granted else None,
             "reason": decision.reason,
             "credential_type": credential_type,
+            "person_detected": True,
             "local_db_version": int(await self.db.get_sync_state("person_db_version") or "0"),
             "local_person_count": await self.db.get_person_count(),
         }
@@ -518,7 +529,18 @@ class VirtualDevice:
                     "queue_depth": queue_depth,
                     "last_access_ts": int(time.time() * 1000),
                     "local_db_version": db_version,
-                    "local_person_count": person_count,
+                    "local_user_count": person_count,
+                    "network": {
+                        "type": "ethernet",
+                        "signal_dbm": 0,
+                        "latency_ms": random.randint(5, 50),
+                    },
+                    "peripherals": {
+                        "camera": "ok",
+                        "reader": "ok",
+                        "lock": "ok",
+                        "printer": "na",
+                    },
                 }
                 await self.mqtt.publish_status(data)
                 metrics.queue_depth.labels(device_id=self.device_id).set(queue_depth)

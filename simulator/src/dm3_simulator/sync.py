@@ -100,10 +100,19 @@ class SyncHandler:
         return {"config_version": config_version, "persons": person_count, "credentials": cred_count, "rules": rule_count}
 
     async def handle_person_sync(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Handle cfg.person_sync message — person database sync."""
+        """Handle cfg.person_sync message — person database sync.
+
+        Server payload (§7.3):
+        {
+          "action": "full_sync|upsert|delete",
+          "users": [{ "user_id", "name", "credentials": [{type, uid/template/code}],
+                       "access_zones", "schedule_id", "valid_from", "valid_until", "active" }],
+          "sync_token": "...", "total_count": N, "batch": 1, "batch_total": 1
+        }
+        """
         data = payload.get("data", {})
         action = data.get("action", "upsert")
-        persons = data.get("persons", [])
+        users = data.get("users", [])
         sync_token = data.get("sync_token")
 
         if action == "full_sync":
@@ -113,25 +122,26 @@ class SyncHandler:
 
         synced = 0
         failed = 0
-        for p in persons:
+        for u in users:
             try:
-                person_id = p["person_id"]
+                user_id = u["user_id"]
                 if action == "delete":
-                    await self.db.delete_person(person_id)
+                    await self.db.delete_person(user_id)
                 else:
                     await self.db.upsert_person(
-                        person_id, p["name"],
-                        "active" if p.get("active", True) else "suspended",
-                        p.get("valid_from"), p.get("valid_until"),
+                        user_id, u["name"],
+                        "active" if u.get("active", True) else "suspended",
+                        u.get("valid_from"), u.get("valid_until"),
                     )
-                    for cred in p.get("credentials", []):
+                    for cred in u.get("credentials", []):
                         cred_type = cred.get("type", "card")
-                        cred_value = cred.get("uid") or cred.get("template") or cred.get("value", "")
-                        cred_id = f"{person_id}-{cred_type}"
-                        await self.db.upsert_credential(cred_id, person_id, cred_type, cred_value)
+                        # Server sends uid (card), template (face/fp), or code (qr/pin)
+                        cred_value = cred.get("uid") or cred.get("template") or cred.get("code") or ""
+                        cred_id = f"{user_id}-{cred_type}"
+                        await self.db.upsert_credential(cred_id, user_id, cred_type, cred_value)
                 synced += 1
             except Exception as e:
-                logger.error("sync_person_error", error=str(e), person=p.get("person_id"))
+                logger.error("sync_person_error", error=str(e), user=u.get("user_id"))
                 failed += 1
 
         if sync_token:
@@ -151,51 +161,89 @@ class SyncHandler:
         }
 
     async def handle_access_rules(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Handle cfg.access_rules message — access rules sync."""
-        data = payload.get("data", {})
-        rules = data.get("rules", [])
-        rules_version = data.get("rules_version", 0)
+        """Handle cfg.access_rules message — access rules sync.
 
+        Server payload (§7.5):
+        {
+          "action": "full_sync|delta",
+          "version": 42,
+          "passage_time": { "timezone": "...", "slots": [{ "day", "start", "end" }] },
+          "access_rules": [
+            { "user_id": "uuid", "credential": "card-A1B2C3",
+              "schedules": [{ "source": "IT Team", "timezone": "...",
+                              "slots": [{ "day", "start", "end" }] }]
+            }
+          ]
+        }
+        """
+        data = payload.get("data", {})
+        version = data.get("version", 0)
+        passage_time = data.get("passage_time", {})
+        access_rules = data.get("access_rules", [])
+
+        # Store passage_time as a config entry (AP-level unrestricted schedule)
+        await self.db.set_config("passage_time", passage_time)
+
+        # Store per-user access rules: each user gets a rule entry with their schedules
         count = 0
-        for rule in rules:
-            # Normalize schedule format
-            schedule = rule.get("schedule")
+        for rule in access_rules:
+            user_id = rule.get("user_id", "")
+            schedules = rule.get("schedules", [])
+            # Build a combined schedule_json from all schedule sources (union/OR logic)
+            all_slots = []
+            timezone = ""
+            for sched in schedules:
+                timezone = sched.get("timezone", timezone)
+                for slot in sched.get("slots", []):
+                    all_slots.append(slot)
+
             await self.db.upsert_access_rule({
-                "rule_id": rule["rule_id"],
-                "name": rule.get("name", ""),
-                "door_ids": rule.get("door_ids", []),
-                "person_group_ids": rule.get("person_group_ids", []),
-                "schedule_json": schedule,
-                "anti_passback": rule.get("anti_passback", False),
-                "multi_factor": rule.get("multi_factor", False),
-                "priority": rule.get("priority", 0),
-                "enabled": rule.get("enabled", True),
-                "valid_from": rule.get("valid_from"),
-                "valid_until": rule.get("valid_until"),
+                "rule_id": f"ar-{user_id}",
+                "name": ", ".join(s.get("source", "") for s in schedules),
+                "door_ids": [],
+                "person_group_ids": [user_id],
+                "schedule_json": {"timezone": timezone, "slots": all_slots} if all_slots else None,
+                "anti_passback": False,
+                "multi_factor": False,
+                "priority": 0,
+                "enabled": True,
+                "valid_from": None,
+                "valid_until": None,
             })
             count += 1
 
-        await self.db.set_sync_state("rules_version", str(rules_version))
+        await self.db.set_sync_state("rules_version", str(version))
         logger.info(
             "sync_rules_applied", device_id=self.device_id,
-            version=rules_version, count=count,
+            version=version, users=count,
+            passage_time_slots=len(passage_time.get("slots", [])),
         )
-        return {"rules_version": rules_version, "rules_count": count}
+        return {"rules_version": version, "rules_count": count}
 
     async def handle_blacklist(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Handle cfg.blacklist message — blacklist sync (priority)."""
+        """Handle cfg.blacklist message — blacklist sync (priority).
+
+        Server payload (§7.4):
+        {
+          "action": "add|remove|full_sync",
+          "entries": [{ "user_id", "name", "credentials", "reason",
+                        "effective_from", "effective_until" }],
+          "blacklist_version": 15
+        }
+        """
         data = payload.get("data", {})
         action = data.get("action", "add")
         entries = data.get("entries", [])
         version = data.get("blacklist_version", 0)
 
         for entry in entries:
-            person_id = entry["person_id"]
+            # Server sends user_id (not person_id)
+            user_id = entry.get("user_id") or entry.get("person_id", "")
             if action == "remove":
-                await self.db.remove_from_blacklist(person_id)
+                await self.db.remove_from_blacklist(user_id)
             else:
                 await self.db.add_to_blacklist(
-                    person_id, entry.get("name"), entry.get("reason"),
+                    user_id, entry.get("name"), entry.get("reason"),
                     entry.get("effective_from"), entry.get("effective_until"),
                 )
 

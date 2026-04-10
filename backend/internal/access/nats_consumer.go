@@ -31,7 +31,7 @@ func NewNATSConsumer(database *db.DB, natsClient *natsutil.Client) *NATSConsumer
 }
 
 type deviceEvent struct {
-	Version int             `json:"version"`
+	Version int             `json:"v"`
 	ID      string          `json:"id"`
 	TS      int64           `json:"ts"`
 	Src     string          `json:"src"`
@@ -40,17 +40,18 @@ type deviceEvent struct {
 }
 
 type accessLogData struct {
-	DoorID         string         `json:"door_id"` // legacy field, may still arrive from older firmware
-	UserID         string         `json:"user_id"`
-	UserName       string         `json:"user_name"`
-	CredentialType string         `json:"credential_type"`
-	Direction      string         `json:"direction"`
-	Decision       string         `json:"decision"`
-	Reason         string         `json:"reason"`
-	Confidence     *float64       `json:"confidence"`
-	PhotoRef       string         `json:"photo_ref"`
-	Temperature    *float64       `json:"temperature"`
-	Metadata       map[string]any `json:"metadata"`
+	DoorID          string         `json:"door_id"` // legacy field, may still arrive from older firmware
+	UserID          string         `json:"user_id"`
+	UserName        string         `json:"user_name"`
+	CredentialType  string         `json:"credential_type"`
+	Direction       string         `json:"direction"`
+	Decision        string         `json:"decision"`
+	Reason          string         `json:"reason"`
+	Confidence      *float64       `json:"confidence"`
+	PhotoRef        string         `json:"photo_ref"`
+	Temperature     *float64       `json:"temperature"`
+	DecidedLocally  *bool          `json:"decided_locally"`
+	Metadata        map[string]any `json:"metadata"`
 }
 
 // Start subscribes to NATS device events and ingests access events into the DB.
@@ -100,14 +101,14 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 		deviceID = parts[3]
 	}
 
-	// Resolve access_point_id from device_id via devices table
+	// Resolve access_point_id from device_id via access_point_devices junction table
 	var accessPointID *string
 	if deviceID != "" {
 		lookupCtx, lookupCancel := context.WithTimeout(ctx, 2*time.Second)
 		_ = c.db.Pool.QueryRow(lookupCtx,
 			`SELECT ap.id::text FROM dm3_access.access_points ap
-			 JOIN dm3_devices.devices dev ON dev.id = ap.device_id
-			 WHERE dev.device_id = $1 AND ap.tenant_id = $2::uuid
+			 JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
+			 WHERE apd.access_device_id = $1 AND ap.tenant_id = $2::uuid
 			 LIMIT 1`,
 			deviceID, tenantID,
 		).Scan(&accessPointID)
@@ -118,11 +119,16 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 	dbCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
+	decidedLocally := true
+	if ald.DecidedLocally != nil {
+		decidedLocally = *ald.DecidedLocally
+	}
+
 	_, err := c.db.Pool.Exec(dbCtx,
-		`INSERT INTO dm3_access.access_events (time, tenant_id, access_point_id, user_id, user_name, credential_type, direction, decision, reason, confidence, photo_ref, temperature, metadata)
-		 VALUES ($1, $2::uuid, $3::uuid, $4::uuid, NULLIF($5,''), NULLIF($6,''), NULLIF($7,''), $8, NULLIF($9,''), $10, NULLIF($11,''), $12, $13)`,
-		evtTime, tenantID, accessPointID, toUUIDPtr(ald.UserID), ald.UserName, ald.CredentialType,
-		ald.Direction, ald.Decision, ald.Reason, ald.Confidence, ald.PhotoRef, ald.Temperature, metadataJSON)
+		`INSERT INTO dm3_access.access_events (time, tenant_id, access_point_id, door_id, user_id, user_name, credential_type, direction, decision, reason, confidence, photo_ref, temperature, decided_locally, metadata)
+		 VALUES ($1, $2::uuid, $3::uuid, $4::uuid, $5::uuid, NULLIF($6,''), NULLIF($7,''), NULLIF($8,''), $9, NULLIF($10,''), $11, NULLIF($12,''), $13, $14, $15)`,
+		evtTime, tenantID, accessPointID, toUUIDPtr(ald.DoorID), toUUIDPtr(ald.UserID), ald.UserName, ald.CredentialType,
+		ald.Direction, ald.Decision, ald.Reason, ald.Confidence, ald.PhotoRef, ald.Temperature, decidedLocally, metadataJSON)
 	if err != nil {
 		slog.Error("nats: failed to insert access event", "error", err)
 		return err

@@ -48,12 +48,13 @@ type accessRuleUser struct {
 	Schedules  []userSchedule `json:"schedules"`
 }
 
-// accessRulesPayload matches MQTT spec cfg.access_rules.
+// accessRulesPayload matches MQTT spec §7.5 cfg.access_rules.
 type accessRulesPayload struct {
-	Type        string             `json:"type"`
+	Action      string             `json:"action"`
 	Version     int                `json:"version"`
 	PassageTime passageTimePayload `json:"passage_time"`
 	AccessRules []accessRuleUser   `json:"access_rules"`
+	SyncToken   string             `json:"sync_token,omitempty"`
 }
 
 // PushAccessRules derives access rules from the access_groups → access_points
@@ -85,7 +86,7 @@ func (s *AccessRulesSyncer) PushAccessRules(ctx context.Context, tenantID, devic
 	}
 
 	payload := accessRulesPayload{
-		Type:        "cfg.access_rules",
+		Action:      "full_sync",
 		Version:     int(time.Now().Unix()),
 		PassageTime: passageTime,
 		AccessRules: accessRules,

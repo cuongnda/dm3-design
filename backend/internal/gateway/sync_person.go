@@ -202,13 +202,13 @@ func (s *PersonSyncer) PushPersonSync(ctx context.Context, tenantID, deviceID st
 		return fmt.Errorf("person_sync: iterate zones: %w", err)
 	}
 
-	// 4. Fetch schedule_id per access_group (prefer group-specific, fall back to AP default)
+	// 4. Fetch schedule_id per access_group (from group-level access_time_id)
 	schedRows, err := s.db.Pool.Query(ctx, `
-		SELECT DISTINCT agap.access_group_id, COALESCE(agap.access_time_id, ap.access_time_id)::text
-		FROM dm3_access.access_group_access_points agap
-		JOIN dm3_access.access_points ap ON ap.id = agap.access_point_id
-		WHERE agap.tenant_id = $1::uuid
-		  AND COALESCE(agap.access_time_id, ap.access_time_id) IS NOT NULL
+		SELECT ag.id::text, ag.access_time_id::text
+		FROM dm3_access.access_groups ag
+		WHERE ag.tenant_id = $1::uuid
+		  AND ag.access_time_id IS NOT NULL
+		  AND (ag.is_deleted = false OR ag.is_deleted IS NULL)
 	`, tenantID)
 	if err != nil {
 		return fmt.Errorf("person_sync: query schedules: %w", err)
