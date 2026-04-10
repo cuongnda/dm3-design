@@ -42,7 +42,7 @@ export function SystemLayout() {
       {/* Sidebar */}
       <aside className="w-[220px] border-r border-sidebar-border flex flex-col bg-sidebar">
         <div className="h-14 flex items-center px-4 border-b border-sidebar-border">
-          <div className="w-6 h-6 bg-operate rotate-45 rounded-[4px] mr-2 shrink-0" />
+          <img src="/logo.png" alt="Duall Master" className="w-7 h-7 mr-2 shrink-0" />
           <div className="min-w-0">
             <div className="text-[13px] font-semibold text-foreground truncate">DUALL MASTER</div>
             <div className="text-[10px] text-operate font-medium">{t('systemAdmin.role')}</div>

@@ -89,17 +89,28 @@ func main() {
 		CompanyIDFromContext: authsvc.CompanyIDFromContext,
 	})
 
-	objectStore, err := objectstore.NewMinIOStore(ctx, objectstore.Config{
-		Endpoint:         cfg.ObjectStoreEndpoint,
-		AccessKeyID:      cfg.ObjectStoreAccessKeyID,
-		SecretAccessKey:  cfg.ObjectStoreSecretAccessKey,
-		Bucket:           cfg.ObjectStoreBucket,
-		UseSSL:           cfg.ObjectStoreUseSSL,
-		AutoCreateBucket: cfg.ObjectStoreAutoCreateBucket,
-	})
-	if err != nil {
-		slog.Error("failed to initialize object storage", "error", err)
-		os.Exit(1)
+	var objectStore objectstore.Store
+	if cfg.PhotoStorage == "local" {
+		objectStore, err = objectstore.NewLocalStore(cfg.PhotoLocalDir)
+		if err != nil {
+			slog.Error("failed to initialize local file storage", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("using local file storage", "dir", cfg.PhotoLocalDir)
+	} else {
+		objectStore, err = objectstore.NewMinIOStore(ctx, objectstore.Config{
+			Endpoint:         cfg.ObjectStoreEndpoint,
+			AccessKeyID:      cfg.ObjectStoreAccessKeyID,
+			SecretAccessKey:  cfg.ObjectStoreSecretAccessKey,
+			Bucket:           cfg.ObjectStoreBucket,
+			UseSSL:           cfg.ObjectStoreUseSSL,
+			AutoCreateBucket: cfg.ObjectStoreAutoCreateBucket,
+		})
+		if err != nil {
+			slog.Error("failed to initialize object storage", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("using MinIO object storage", "endpoint", cfg.ObjectStoreEndpoint)
 	}
 
 	// HTTP handlers

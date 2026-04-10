@@ -9,6 +9,7 @@
   "status.active": "Hoạt động",
   "status.inactive": "Không hoạt động",
   "status.suspended": "Tạm khóa",
+  "status.pending": "Chờ duyệt",
   "table.title": "Người dùng ({{count}})",
   "table.empty.search": "Không tìm thấy người dùng nào",
   "table.empty.default": "Chưa có người dùng. Thêm người đầu tiên.",
@@ -89,6 +90,7 @@
   "credential.description": "Thẻ, mã PIN, QR và sinh trắc học",
   "credential.addCard": "Thêm thẻ",
   "credential.addTitle": "Thêm chứng chỉ",
+  "credential.editTitle": "Sửa chứng chỉ",
   "credential.type": "Loại",
   "credential.value": "Giá trị",
   "credential.expires": "Hết hạn",
@@ -105,6 +107,8 @@
   "toast.credentialBulkRemoved": "Đã xóa {{count}} chứng chỉ",
   "toast.valueRequired": "Giá trị không được để trống",
   "toast.credentialAddFailed": "Thêm chứng chỉ thất bại",
+  "toast.credentialUpdated": "Đã cập nhật chứng chỉ",
+  "toast.credentialUpdateFailed": "Cập nhật chứng chỉ thất bại",
 
   "accessGroup.title": "Nhóm truy cập",
   "accessGroup.none": "— Không có —",
@@ -113,6 +117,8 @@
   "accessGroup.loadingAPs": "Đang tải điểm ra vào…",
   "accessGroup.noAPs": "Không có điểm ra vào nào trong nhóm này",
   "accessGroup.selectHint": "Chọn nhóm truy cập để xem điểm ra vào",
+  "accessGroup.zone": "Khu vực",
+  "accessGroup.description": "Mô tả",
   "toast.accessGroupUpdated": "Đã cập nhật nhóm truy cập",
   "toast.accessGroupFailed": "Cập nhật nhóm truy cập thất bại",
 
@@ -148,8 +154,12 @@
   "actions.deleting": "Đang xóa…",
   "actions.add": "Thêm",
   "actions.adding": "Đang thêm…",
+  "actions.edit": "Sửa",
   "actions.assign": "Gán",
   "actions.assigning": "Đang gán…",
+  "actions.revoke": "Thu hồi",
+  "actions.removing": "Đang xóa…",
+  "actions.actions": "Thao tác",
 
   "toast.saveFailed": "Lưu thất bại",
   "toast.deleteFailed2": "Xóa thất bại"

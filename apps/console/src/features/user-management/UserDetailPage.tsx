@@ -4,11 +4,12 @@ import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft, Trash2, User, Camera, CreditCard, Plus, ShieldCheck,
   KeyRound, Fingerprint, QrCode, Save, X, Info, DoorOpen, Car,
-  ScanLine, Search, Unlink,
+  ScanLine, Search, Unlink, Mail, Phone, Hash, Pencil,
+  Building2, Calendar, Shield, Clock, Briefcase, MapPin,
 } from 'lucide-react';
 import {
   Button, Input, Label, Badge, AppModal, Select, SelectOption,
-  Tabs, TabsContent, TabsList, TabsTrigger, Card, Checkbox,
+  Tabs, TabsContent, TabsList, TabsTrigger, Checkbox,
 } from '@dm3/ui';
 import { useBreadcrumbStore } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
@@ -66,21 +67,12 @@ interface Department {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
-  switch (status) {
-    case 'active': return 'default';
-    case 'inactive': return 'secondary';
-    case 'suspended': return 'destructive';
-    default: return 'outline';
-  }
-}
-
 const CREDENTIAL_ICON_MAP: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
-  card:        { icon: <CreditCard size={22} />,  color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/20' },
-  pin:         { icon: <KeyRound size={22} />,     color: 'text-amber-400',  bg: 'bg-amber-500/10 border-amber-500/20' },
-  qr:          { icon: <QrCode size={22} />,       color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/20' },
-  fingerprint: { icon: <Fingerprint size={22} />,  color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20' },
-  face:        { icon: <ScanLine size={22} />,     color: 'text-cyan-400',   bg: 'bg-cyan-500/10 border-cyan-500/20' },
+  card:        { icon: <CreditCard size={18} />,  color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/20' },
+  pin:         { icon: <KeyRound size={18} />,     color: 'text-amber-400',  bg: 'bg-amber-500/10 border-amber-500/20' },
+  qr:          { icon: <QrCode size={18} />,       color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/20' },
+  fingerprint: { icon: <Fingerprint size={18} />,  color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20' },
+  face:        { icon: <ScanLine size={18} />,     color: 'text-cyan-400',   bg: 'bg-cyan-500/10 border-cyan-500/20' },
 };
 
 // ─── Add Credential Modal ─────────────────────────────────────────────────────
@@ -89,10 +81,12 @@ interface AddCredentialModalProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onSubmit: (type: string, value: string, validUntil: string) => Promise<void>;
+  editData?: { type: string; value: string; valid_until?: string } | null;
 }
 
-function AddCredentialModal({ open, onOpenChange, onSubmit }: AddCredentialModalProps) {
+function AddCredentialModal({ open, onOpenChange, onSubmit, editData }: AddCredentialModalProps) {
   const { t } = useTranslation('users');
+  const isEdit = !!editData;
   const [type, setType] = useState<string>('card');
   const [value, setValue] = useState('');
   const [validUntil, setValidUntil] = useState('3000-01-01');
@@ -101,6 +95,15 @@ function AddCredentialModal({ open, onOpenChange, onSubmit }: AddCredentialModal
 
   const reset = () => { setType('card'); setValue(''); setValidUntil('3000-01-01'); setError(''); };
   const handleOpenChange = (v: boolean) => { if (!v) reset(); onOpenChange(v); };
+
+  useEffect(() => {
+    if (editData && open) {
+      setType(editData.type);
+      setValue(editData.value);
+      const vu = editData.valid_until;
+      setValidUntil(vu && !vu.startsWith('3000') ? vu.slice(0, 10) : '3000-01-01');
+    }
+  }, [editData, open]);
 
   const handleSubmit = async () => {
     if (!value.trim()) { setError(t('toast.valueRequired')); return; }
@@ -119,15 +122,14 @@ function AddCredentialModal({ open, onOpenChange, onSubmit }: AddCredentialModal
     <AppModal
       open={open}
       onOpenChange={handleOpenChange}
-      title={<span className="flex items-center gap-2"><CreditCard size={16} /> {t('credential.addTitle')}</span>}
+      title={<span className="flex items-center gap-2"><CreditCard size={16} /> {isEdit ? t('credential.editTitle', 'Edit Credential') : t('credential.addTitle')}</span>}
       size="sm"
       showCancelButton
       cancelLabel={t('actions.cancel')}
       cancelDisabled={loading}
-      primaryAction={{ label: loading ? t('actions.adding') : t('actions.add'), onClick: handleSubmit, loading, disabled: loading }}
+      primaryAction={{ label: loading ? t('actions.saving', 'Saving…') : isEdit ? t('actions.save') : t('actions.add'), onClick: handleSubmit, loading, disabled: loading }}
     >
       <div className="space-y-3">
-        {/* Type selector — visual grid */}
         <div className="space-y-1">
           <Label>{t('credential.type')}</Label>
           <div className="grid grid-cols-5 gap-2">
@@ -289,13 +291,13 @@ function AssignVehicleModal({ open, onOpenChange, userId, alreadyAssignedIds, on
             </div>
           ) : (
             <table className="w-full text-[13px]">
-              <thead className="bg-muted/40 border-b border-border sticky top-0">
+              <thead className="bg-muted/60 border-b border-border sticky top-0">
                 <tr>
                   <th className="w-10 px-3 py-2" />
-                  <th className="px-3 py-2 text-left font-medium text-muted-foreground text-[11px] uppercase">{t('vehicle.col.plate')}</th>
-                  <th className="px-3 py-2 text-left font-medium text-muted-foreground text-[11px] uppercase">{t('vehicle.col.type')}</th>
-                  <th className="px-3 py-2 text-left font-medium text-muted-foreground text-[11px] uppercase">{t('vehicle.col.brandModel')}</th>
-                  <th className="px-3 py-2 text-left font-medium text-muted-foreground text-[11px] uppercase">{t('vehicle.col.color')}</th>
+                  <th className="px-3 py-2 text-left font-medium text-foreground">{t('vehicle.col.plate')}</th>
+                  <th className="px-3 py-2 text-left font-medium text-foreground">{t('vehicle.col.type')}</th>
+                  <th className="px-3 py-2 text-left font-medium text-foreground">{t('vehicle.col.brandModel')}</th>
+                  <th className="px-3 py-2 text-left font-medium text-foreground">{t('vehicle.col.color')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -303,15 +305,10 @@ function AssignVehicleModal({ open, onOpenChange, userId, alreadyAssignedIds, on
                   <tr
                     key={v.id}
                     onClick={() => toggleSelect(v.id)}
-                    className={`cursor-pointer border-b border-border/30 transition-colors ${
-                      selectedIds.has(v.id) ? 'bg-primary/5' : 'hover:bg-muted/20'
-                    }`}
+                    className="border-b border-border last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
                   >
                     <td className="px-3 py-2 text-center">
-                      <Checkbox
-                        checked={selectedIds.has(v.id)}
-                        onCheckedChange={() => toggleSelect(v.id)}
-                      />
+                      <Checkbox checked={selectedIds.has(v.id)} onCheckedChange={() => toggleSelect(v.id)} />
                     </td>
                     <td className="px-3 py-2 font-mono font-semibold tracking-wider">{v.plate_number}</td>
                     <td className="px-3 py-2 capitalize">{v.vehicle_type}</td>
@@ -324,76 +321,9 @@ function AssignVehicleModal({ open, onOpenChange, userId, alreadyAssignedIds, on
           )}
         </div>
 
-        <p className="text-[11px] text-muted-foreground">
-          {t('vehicle.assignHint')}
-        </p>
+        <p className="text-[11px] text-muted-foreground">{t('vehicle.assignHint')}</p>
       </div>
     </AppModal>
-  );
-}
-
-// ─── Visual Card Component ────────────────────────────────────────────────────
-
-function CredentialCard({
-  cred, selected, onSelect, onDelete, deleting,
-}: {
-  cred: Credential;
-  selected: boolean;
-  onSelect: () => void;
-  onDelete: () => void;
-  deleting: boolean;
-}) {
-  const { t } = useTranslation('users');
-  const info = CREDENTIAL_ICON_MAP[cred.type] ?? CREDENTIAL_ICON_MAP.card;
-  const hasExpiry = cred.valid_until && !cred.valid_until.startsWith('3000');
-  return (
-    <div
-      className={`relative flex w-[170px] shrink-0 flex-col items-center gap-2 rounded-lg border p-4 transition-all ${
-        selected ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border bg-card hover:border-ring/40'
-      }`}
-    >
-      {/* Checkbox */}
-      <div className="absolute top-2 left-2">
-        <Checkbox
-          checked={selected}
-          onCheckedChange={onSelect}
-          aria-label={t('credential.selectLabel')}
-        />
-      </div>
-      {/* Delete */}
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onDelete(); }}
-        disabled={deleting}
-        className="absolute top-2 right-2 rounded p-0.5 text-muted-foreground/40 hover:text-destructive transition-colors cursor-pointer"
-        title={t('actions.delete')}
-      >
-        {deleting
-          ? <div className="h-3 w-3 animate-spin rounded-full border-2 border-destructive/30 border-t-destructive" />
-          : <Trash2 size={12} />}
-      </button>
-
-      {/* Icon */}
-      <div className={`flex h-12 w-12 items-center justify-center rounded-full ${info.bg} ${info.color}`}>
-        {info.icon}
-      </div>
-      {/* Type */}
-      <span className="text-[12px] font-semibold capitalize text-foreground">{cred.type}</span>
-      {/* Value */}
-      <span className="w-full truncate text-center font-mono text-[11px] text-muted-foreground" title={cred.value}>
-        {cred.value}
-      </span>
-      {/* Status */}
-      <Badge variant={cred.status === 'active' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
-        {cred.status}
-      </Badge>
-      {/* Expiry */}
-      {hasExpiry && (
-        <span className="text-[10px] text-muted-foreground">
-          {t('credential.expires')}: {new Date(cred.valid_until!).toLocaleDateString()}
-        </span>
-      )}
-    </div>
   );
 }
 
@@ -408,12 +338,11 @@ export function UserDetailPage() {
   const setLabel = useBreadcrumbStore((s) => s.setLabel);
   const clearLabel = useBreadcrumbStore((s) => s.clearLabel);
 
-  // ─── User state ──────────────────────────────────────────────────────────
+  // ─── State ───────────────────────────────────────────────────────────────
   const [user, setUser] = useState<UserType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ─── Reference data ──────────────────────────────────────────────────────
   const [departments, setDepartments] = useState<Department[]>([]);
   const [accessGroupOptions, setAccessGroupOptions] = useState<AccessGroupOption[]>([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
@@ -423,32 +352,29 @@ export function UserDetailPage() {
   const [userVehicles, setUserVehicles] = useState<Vehicle[]>([]);
   const [loadingVehicles, setLoadingVehicles] = useState(true);
 
-  // ─── Profile edit ────────────────────────────────────────────────────────
   const [editForm, setEditForm] = useState<Record<string, string | boolean>>({});
   const [saveLoading, setSaveLoading] = useState(false);
 
-  // ─── Avatar ──────────────────────────────────────────────────────────────
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
-  // ─── Delete ──────────────────────────────────────────────────────────────
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // ─── Credentials ─────────────────────────────────────────────────────────
   const [showAddCred, setShowAddCred] = useState(false);
+  const [editingCred, setEditingCred] = useState<{ id: string; type: string; value: string; valid_until?: string } | null>(null);
   const [deletingCredId, setDeletingCredId] = useState<string | null>(null);
   const [selectedCreds, setSelectedCreds] = useState<Set<string>>(new Set());
   const [bulkDeleteCredLoading, setBulkDeleteCredLoading] = useState(false);
 
-  // ─── Access Group ────────────────────────────────────────────────────────
   const [selectedAccessGroup, setSelectedAccessGroup] = useState<string>('');
   const [savingAccessGroup, setSavingAccessGroup] = useState(false);
 
-  // ─── Vehicle Assign ────────────────────────────────────────────────────
   const [showAssignVehicle, setShowAssignVehicle] = useState(false);
   const [unassigningVehicleId, setUnassigningVehicleId] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<string>('profile');
 
   // ─── Breadcrumb ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -467,7 +393,6 @@ export function UserDetailPage() {
       setUser(u);
       setAvatarPreview(u?.avatar || null);
       setSelectedAccessGroup(u?.access_group_id || '');
-      // Auto-fill edit form since page starts in edit mode
       if (u) {
         setEditForm({
           first_name: u.first_name || '',
@@ -499,11 +424,8 @@ export function UserDetailPage() {
     try {
       const data = await apiFetch<Credential[]>(`/api/v1/identity/users/${id}/credentials`);
       setCredentials(Array.isArray(data) ? data : []);
-    } catch {
-      setCredentials([]);
-    } finally {
-      setLoadingCreds(false);
-    }
+    } catch { setCredentials([]); }
+    finally { setLoadingCreds(false); }
   }, [id]);
 
   const fetchUserVehicles = useCallback(async () => {
@@ -512,27 +434,18 @@ export function UserDetailPage() {
     try {
       const data = await apiFetch<{ vehicles: Vehicle[] }>(`/api/v1/identity/users/${id}/vehicles`);
       setUserVehicles(data.vehicles || []);
-    } catch {
-      setUserVehicles([]);
-    } finally {
-      setLoadingVehicles(false);
-    }
+    } catch { setUserVehicles([]); }
+    finally { setLoadingVehicles(false); }
   }, [id]);
 
   const handleUnassignVehicle = useCallback(async (vehicleId: string) => {
     setUnassigningVehicleId(vehicleId);
     try {
-      await apiFetch(`/api/v1/identity/vehicles/${vehicleId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ user_id: '' }),
-      });
+      await apiFetch(`/api/v1/identity/vehicles/${vehicleId}`, { method: 'PUT', body: JSON.stringify({ user_id: '' }) });
       toast(t('toast.vehicleUnassigned'), 'success');
       fetchUserVehicles();
-    } catch {
-      toast(t('toast.vehicleUnassignFailed'), 'error');
-    } finally {
-      setUnassigningVehicleId(null);
-    }
+    } catch { toast(t('toast.vehicleUnassignFailed'), 'error'); }
+    finally { setUnassigningVehicleId(null); }
   }, [fetchUserVehicles]);
 
   const fetchAccessGroupAPs = useCallback(async (groupId: string) => {
@@ -541,11 +454,8 @@ export function UserDetailPage() {
     try {
       const data = await apiFetch<{ data?: AccessGroupAccessPoint[] }>(`/api/v1/access/access-groups/${groupId}/access-points`);
       setAccessPoints(data.data ?? []);
-    } catch {
-      setAccessPoints([]);
-    } finally {
-      setLoadingAPs(false);
-    }
+    } catch { setAccessPoints([]); }
+    finally { setLoadingAPs(false); }
   }, []);
 
   useEffect(() => {
@@ -560,13 +470,12 @@ export function UserDetailPage() {
       .catch(() => {});
   }, [fetchUser, fetchCredentials, fetchUserVehicles]);
 
-  // Fetch access points when selected access group changes
   useEffect(() => {
     if (selectedAccessGroup) fetchAccessGroupAPs(selectedAccessGroup);
     else setAccessPoints([]);
   }, [selectedAccessGroup, fetchAccessGroupAPs]);
 
-  // ─── Edit handlers ───────────────────────────────────────────────────────
+  // ─── Handlers ────────────────────────────────────────────────────────────
 
   const handleSave = async () => {
     if (!id) return;
@@ -580,10 +489,7 @@ export function UserDetailPage() {
       if (payload.sex === '') delete payload.sex;
       else payload.sex = payload.sex === 'true';
 
-      await apiFetch(`/api/v1/identity/users/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      });
+      await apiFetch(`/api/v1/identity/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
 
       if (avatarFile) {
         const form = new FormData();
@@ -595,12 +501,11 @@ export function UserDetailPage() {
         });
       }
 
-      await fetchUser();
       setAvatarFile(null);
       toast(t('toast.updated'), 'success');
+      setTimeout(() => navigate('/manage/users'), 800);
     } catch (err) {
       toast(err instanceof Error ? err.message : t('toast.saveFailed'), 'error');
-    } finally {
       setSaveLoading(false);
     }
   };
@@ -614,10 +519,7 @@ export function UserDetailPage() {
       navigate('/manage/users');
     } catch (err) {
       toast(err instanceof Error ? err.message : t('toast.deleteFailed2'), 'error');
-    } finally {
-      setDeleteLoading(false);
-      setShowDeleteDialog(false);
-    }
+    } finally { setDeleteLoading(false); setShowDeleteDialog(false); }
   };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -627,18 +529,23 @@ export function UserDetailPage() {
     setAvatarPreview(URL.createObjectURL(file));
   };
 
-  // ─── Credential handlers ─────────────────────────────────────────────────
-
   const handleAddCredential = async (type: string, value: string, validUntil: string) => {
     if (!id) return;
     const payload: Record<string, unknown> = { type, value, status: 'active' };
     if (validUntil && validUntil !== '3000-01-01') payload.valid_until = new Date(validUntil).toISOString();
-    await apiFetch(`/api/v1/identity/users/${id}/credentials`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+    await apiFetch(`/api/v1/identity/users/${id}/credentials`, { method: 'POST', body: JSON.stringify(payload) });
     await fetchCredentials();
     toast(t('toast.credentialAdded'), 'success');
+  };
+
+  const handleUpdateCredential = async (type: string, value: string, validUntil: string) => {
+    if (!id || !editingCred) return;
+    const payload: Record<string, unknown> = { type, value, status: 'active' };
+    if (validUntil && validUntil !== '3000-01-01') payload.valid_until = new Date(validUntil).toISOString();
+    await apiFetch(`/api/v1/identity/users/${id}/credentials/${editingCred.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+    await fetchCredentials();
+    setEditingCred(null);
+    toast(t('toast.credentialUpdated', 'Credential updated'), 'success');
   };
 
   const handleDeleteCredential = async (credId: string) => {
@@ -651,9 +558,7 @@ export function UserDetailPage() {
       toast(t('toast.credentialRemoved'), 'success');
     } catch (err) {
       toast(err instanceof Error ? err.message : t('toast.credentialRemoveFailed'), 'error');
-    } finally {
-      setDeletingCredId(null);
-    }
+    } finally { setDeletingCredId(null); }
   };
 
   const handleBulkDeleteCredentials = async () => {
@@ -668,9 +573,7 @@ export function UserDetailPage() {
       toast(t('toast.credentialBulkRemoved', { count: selectedCreds.size }), 'success');
     } catch (err) {
       toast(err instanceof Error ? err.message : t('toast.credentialRemoveFailed'), 'error');
-    } finally {
-      setBulkDeleteCredLoading(false);
-    }
+    } finally { setBulkDeleteCredLoading(false); }
   };
 
   const toggleCredSelect = (credId: string) => {
@@ -681,32 +584,23 @@ export function UserDetailPage() {
     });
   };
 
-  // ─── Access Group handler ────────────────────────────────────────────────
-
   const handleSaveAccessGroup = async () => {
     if (!id) return;
     setSavingAccessGroup(true);
     try {
-      // If the user currently belongs to a different access group, remove them first
       if (user?.access_group_id && user.access_group_id !== selectedAccessGroup) {
-        try {
-          await apiFetch(`/api/v1/access/access-groups/${user.access_group_id}/users/${id}`, { method: 'DELETE' });
-        } catch { /* may not exist, ignore */ }
+        try { await apiFetch(`/api/v1/access/access-groups/${user.access_group_id}/users/${id}`, { method: 'DELETE' }); } catch { /* ignore */ }
       }
-      // Assign to new access group
       if (selectedAccessGroup) {
         await apiFetch(`/api/v1/access/access-groups/${selectedAccessGroup}/users`, {
-          method: 'POST',
-          body: JSON.stringify([{ user_id: id }]),
+          method: 'POST', body: JSON.stringify([{ user_id: id }]),
         });
       }
       await fetchUser();
       toast(t('toast.accessGroupUpdated'), 'success');
     } catch (err) {
       toast(err instanceof Error ? err.message : t('toast.accessGroupFailed'), 'error');
-    } finally {
-      setSavingAccessGroup(false);
-    }
+    } finally { setSavingAccessGroup(false); }
   };
 
   const accessGroupChanged = selectedAccessGroup !== (user?.access_group_id || '');
@@ -718,7 +612,7 @@ export function UserDetailPage() {
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setEditForm((prev) => ({ ...prev, [field]: e.target.value }));
 
-  // ─── Render ──────────────────────────────────────────────────────────────
+  // ─── Loading / Error states ──────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -730,10 +624,10 @@ export function UserDetailPage() {
 
   if (error || !user) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-        <User size={40} strokeWidth={1.2} />
-        <p className="text-[14px]">{error ?? t('detail.userNotFound')}</p>
-        <Button variant="ghost" size="sm" onClick={() => navigate('/manage/users')}>
+      <div className="flex h-full flex-col items-center justify-center gap-3">
+        <User size={32} className="text-muted-foreground/40" />
+        <p className="text-[13px] text-muted-foreground">{error ?? t('detail.userNotFound')}</p>
+        <Button variant="outline" size="sm" onClick={() => navigate('/manage/users')}>
           <ArrowLeft size={14} className="mr-1.5" /> {t('detail.backToList')}
         </Button>
       </div>
@@ -746,46 +640,91 @@ export function UserDetailPage() {
     : displayName[0]?.toUpperCase() ?? '?';
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden" data-testid="user-detail-page">
-      {/* ── Header ───────────────────────────────────────────────────────── */}
+    <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden" data-testid="user-detail-page">
+      {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="shrink-0">
-        <div className="mb-3">
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground" onClick={() => navigate('/manage/users')}>
-            <ArrowLeft size={14} className="mr-1" />
-            {t('detail.backToList')}
-          </Button>
-        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate('/manage/users')}
+          className="flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground mb-3 px-0 h-auto"
+        >
+          <ArrowLeft size={13} />
+          {t('detail.backToList')}
+        </Button>
 
-        <div className="flex items-center gap-4">
-          {/* Avatar */}
-          <div className="relative">
-            <button type="button" onClick={() => avatarInputRef.current?.click()} className="group relative cursor-pointer">
-              <div className="h-14 w-14 overflow-hidden rounded-full border-2 border-border bg-muted flex items-center justify-center">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            {/* Avatar */}
+            <button
+              type="button"
+              onClick={() => avatarInputRef.current?.click()}
+              className="group relative shrink-0 cursor-pointer"
+            >
+              <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-border bg-muted flex items-center justify-center">
                 {avatarPreview
                   ? <img src={avatarPreview} alt="avatar" className="h-full w-full object-cover" />
-                  : <span className="text-lg font-semibold text-muted-foreground">{initials}</span>}
+                  : <span className="text-xl font-semibold text-muted-foreground">{initials}</span>}
               </div>
               <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                 <Camera size={16} className="text-white" />
               </div>
             </button>
             <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleAvatarChange} data-testid="user-input-avatar" />
+
+            {/* Name + meta */}
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-[18px] font-semibold text-foreground">{displayName}</h1>
+                <Badge variant={user.status === 'active' ? 'default' : user.status === 'suspended' ? 'destructive' : 'secondary'} className="text-[11px]">
+                  {t(`status.${user.status}`, user.status)}
+                </Badge>
+                {user.is_master_card && (
+                  <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-400">
+                    {t('detail.masterBadge')}
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                {user.department_name && (
+                  <span className="text-[12px] text-muted-foreground flex items-center gap-1">
+                    <Building2 size={11} />
+                    {user.department_name}
+                  </span>
+                )}
+                {user.position && (
+                  <span className="text-[12px] text-muted-foreground flex items-center gap-1">
+                    <Briefcase size={11} />
+                    {user.position}
+                  </span>
+                )}
+                {user.email && (
+                  <span className="text-[12px] text-muted-foreground flex items-center gap-1">
+                    <Mail size={11} />
+                    {user.email}
+                  </span>
+                )}
+                {user.phone && (
+                  <span className="text-[12px] text-muted-foreground flex items-center gap-1">
+                    <Phone size={11} />
+                    {user.phone}
+                  </span>
+                )}
+                <span className="text-[12px] text-muted-foreground flex items-center gap-1 font-mono">
+                  <Hash size={11} />
+                  {user.user_code}
+                </span>
+                {user.access_group_name && (
+                  <span className="text-[12px] text-muted-foreground flex items-center gap-1">
+                    <Shield size={11} />
+                    {user.access_group_name}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="text-[18px] font-semibold text-foreground truncate">{displayName}</h1>
-              <Badge variant={statusVariant(user.status)}>{t(`status.${user.status}`, user.status)}</Badge>
-              {user.is_master_card && <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">{t('detail.masterBadge')}</Badge>}
-            </div>
-            <div className="flex items-center gap-3 text-[12px] text-muted-foreground">
-              <span className="font-mono">{user.user_code}</span>
-              {user.position && <span>· {user.position}</span>}
-              {user.department_name && <span>· {user.department_name}</span>}
-              {user.email && <span>· {user.email}</span>}
-            </div>
-          </div>
-
+          {/* Actions */}
           <div className="flex items-center gap-2 shrink-0">
             <Button variant="ghost" size="sm" onClick={() => navigate('/manage/users')} disabled={saveLoading}>
               <X size={14} className="mr-1.5" /> {t('actions.cancel')}
@@ -795,444 +734,477 @@ export function UserDetailPage() {
               {saveLoading ? t('actions.saving') : t('actions.save')}
             </Button>
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className="border-destructive/30 text-destructive hover:bg-destructive/10"
+              className="h-7 text-[12px] text-destructive hover:text-destructive"
               onClick={() => setShowDeleteDialog(true)}
               data-testid="user-button-delete"
             >
-              <Trash2 size={14} className="mr-1.5" /> {t('actions.delete')}
+              <Trash2 size={14} />
             </Button>
           </div>
         </div>
       </div>
 
-      {/* ── Tabs ─────────────────────────────────────────────────────────── */}
-      <div className="min-h-0 flex-1 overflow-hidden">
-        <Tabs defaultValue="user-info" className="flex h-full flex-col">
-          <TabsList className="shrink-0">
-            <TabsTrigger value="user-info" data-testid="user-button-tab-user-info">
-              <User size={14} className="mr-1.5" />
+      {/* ── Tabs (card container — same pattern as AccessGroupDetailPage) ── */}
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="flex flex-col flex-1 min-h-0 overflow-hidden"
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-1 py-1">
+          <TabsList variant="line">
+            <TabsTrigger value="profile" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-user-info">
+              <User size={13} className="mr-1.5" />
               {t('tab.userInfo')}
             </TabsTrigger>
-            <TabsTrigger value="detail" data-testid="user-button-tab-detail">
-              <Info size={14} className="mr-1.5" />
+            <TabsTrigger value="detail" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-detail">
+              <Info size={13} className="mr-1.5" />
               {t('tab.detail')}
             </TabsTrigger>
-            <TabsTrigger value="cards" data-testid="user-button-tab-card-list">
-              <CreditCard size={14} className="mr-1.5" />
-              {t('tab.cardList')}
-              {credentials.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px]">{credentials.length}</span>
-              )}
+            <TabsTrigger value="credentials" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-card-list">
+              <CreditCard size={13} className="mr-1.5" />
+              {t('tab.cardList')} ({credentials.length})
             </TabsTrigger>
-            <TabsTrigger value="access-group" data-testid="user-button-tab-access-group">
-              <DoorOpen size={14} className="mr-1.5" />
-              {t('tab.accessGroup')}
+            <TabsTrigger value="access" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-access-group">
+              <DoorOpen size={13} className="mr-1.5" />
+              {t('tab.accessGroup')} ({accessPoints.length})
             </TabsTrigger>
-            <TabsTrigger value="vehicles" data-testid="user-button-tab-vehicle">
-              <Car size={14} className="mr-1.5" />
-              {t('tab.vehicles')}
-              {userVehicles.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px]">{userVehicles.length}</span>
-              )}
+            <TabsTrigger value="vehicles" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-vehicle">
+              <Car size={13} className="mr-1.5" />
+              {t('tab.vehicles')} ({userVehicles.length})
             </TabsTrigger>
           </TabsList>
 
-          {/* ╔══ Tab 1: User Information ════════════════════════════════════ */}
-          <TabsContent value="user-info" className="mt-3 flex-1 overflow-auto pr-1">
-            <div className="space-y-4">
-              {/* Gender */}
+          {/* Context actions per tab */}
+          {activeTab === 'credentials' && (
+            <div className="flex items-center gap-2">
+              {selectedCreds.size > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-[12px] text-destructive hover:text-destructive"
+                  onClick={handleBulkDeleteCredentials}
+                  disabled={bulkDeleteCredLoading}
+                  data-testid="user-button-delete-cards"
+                >
+                  <Trash2 size={13} className="mr-1" />
+                  {t('actions.delete')} ({selectedCreds.size})
+                </Button>
+              )}
+              <Button size="sm" onClick={() => setShowAddCred(true)} data-testid="user-modal-add-card-trigger">
+                <Plus size={14} className="mr-1.5" /> {t('credential.addCard')}
+              </Button>
+            </div>
+          )}
+          {activeTab === 'vehicles' && (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => navigate('/manage/vehicles')}>
+                {t('vehicle.manageAll')}
+              </Button>
+              <Button size="sm" onClick={() => setShowAssignVehicle(true)} data-testid="user-button-add-vehicle">
+                <Plus size={14} className="mr-1.5" /> {t('vehicle.assign')}
+              </Button>
+            </div>
+          )}
+          {activeTab === 'access' && selectedAccessGroup && (
+            <Button variant="outline" size="sm" onClick={() => navigate(`/access/access-groups/${selectedAccessGroup}`)}>
+              {t('accessGroup.viewGroup')}
+            </Button>
+          )}
+        </div>
+
+        {/* ╔══ Credentials Tab ════════════════════════════════════════════ */}
+        <TabsContent value="credentials" className="min-h-0 flex-1 overflow-auto">
+          {loadingCreds ? (
+            <div className="flex justify-center py-12">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+            </div>
+          ) : credentials.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <CreditCard size={36} className="mb-3 text-muted-foreground/40" />
+              <p className="text-[13px] font-medium text-foreground">{t('credential.empty')}</p>
+              <p className="mt-1 text-[12px] text-muted-foreground">{t('credential.description')}</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => setShowAddCred(true)}>
+                <Plus size={14} className="mr-1.5" /> {t('credential.addCard')}
+              </Button>
+            </div>
+          ) : (
+            <div className="p-4">
+              <div className="rounded-md border border-border overflow-hidden">
+                <table className="w-full text-[13px]">
+                  <thead className="bg-muted/60 border-b border-border">
+                    <tr>
+                      <th className="w-10 px-3 py-2" />
+                      <th className="px-3 py-2 text-left font-medium text-foreground">{t('credential.type')}</th>
+                      <th className="px-3 py-2 text-left font-medium text-foreground">{t('credential.value')}</th>
+                      <th className="px-3 py-2 text-left font-medium text-foreground">{t('modal.status', 'Status')}</th>
+                      <th className="px-3 py-2 text-left font-medium text-foreground">{t('credential.expires')}</th>
+                      <th className="px-3 py-2 text-left font-medium text-foreground">{t('modal.created')}</th>
+                      <th className="px-3 py-2 text-right font-medium text-foreground">{t('actions.actions', 'Actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {credentials.map((cred) => {
+                      const info = CREDENTIAL_ICON_MAP[cred.type] ?? CREDENTIAL_ICON_MAP.card;
+                      const hasExpiry = cred.valid_until && !cred.valid_until.startsWith('3000');
+                      return (
+                        <tr
+                          key={cred.id}
+                          className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors"
+                        >
+                          <td className="w-10 px-3 py-2">
+                            <Checkbox
+                              checked={selectedCreds.has(cred.id)}
+                              onCheckedChange={() => toggleCredSelect(cred.id)}
+                              aria-label={t('credential.selectLabel')}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className={info.color}>{info.icon}</span>
+                              <span className="font-medium capitalize">{cred.type}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 font-mono text-[12px] text-muted-foreground">{cred.value}</td>
+                          <td className="px-3 py-2">
+                            <Badge variant={cred.status === 'active' ? 'default' : 'secondary'} className="text-[11px]">
+                              {cred.status}
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2 text-[12px] text-muted-foreground">
+                            {hasExpiry ? new Date(cred.valid_until!).toLocaleDateString() : '—'}
+                          </td>
+                          <td className="px-3 py-2 text-[12px] text-muted-foreground">
+                            {new Date(cred.created_at).toLocaleDateString()}
+                          </td>
+                          <td className="px-3 py-2 text-right space-x-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-[12px]"
+                              onClick={() => setEditingCred({ id: cred.id, type: cred.type, value: cred.value, valid_until: cred.valid_until })}
+                            >
+                              <Pencil size={13} className="mr-1" />
+                              {t('actions.edit')}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-[12px] text-destructive hover:text-destructive"
+                              onClick={() => handleDeleteCredential(cred.id)}
+                              disabled={deletingCredId === cred.id}
+                            >
+                              <Trash2 size={13} className="mr-1" />
+                              {deletingCredId === cred.id ? t('actions.removing', 'Removing…') : t('actions.revoke', 'Revoke')}
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ╔══ Access Group Tab ═══════════════════════════════════════════ */}
+        <TabsContent value="access" className="min-h-0 flex-1 overflow-auto p-4">
+          <div className="space-y-4">
+            <div className="flex items-end gap-3">
+              <div className="flex-1 space-y-1">
+                <Label>{t('accessGroup.title')}</Label>
+                <Select
+                  value={selectedAccessGroup}
+                  onValueChange={setSelectedAccessGroup}
+                  data-testid="user-select-access-group-id"
+                >
+                  <SelectOption value="">{t('accessGroup.none')}</SelectOption>
+                  {accessGroupOptions.map((ag) => (
+                    <SelectOption key={ag.id} value={ag.id}>{ag.name}</SelectOption>
+                  ))}
+                </Select>
+              </div>
+              {accessGroupChanged && (
+                <Button size="sm" onClick={handleSaveAccessGroup} disabled={savingAccessGroup} data-testid="user-button-save-access-group">
+                  <Save size={14} className="mr-1.5" />
+                  {savingAccessGroup ? t('actions.saving') : t('actions.save')}
+                </Button>
+              )}
+            </div>
+
+            {selectedAccessGroup ? (
+              <div className="space-y-2">
+                <h4 className="text-[13px] font-medium text-foreground flex items-center gap-1.5">
+                  <Shield size={13} className="text-primary" />
+                  {t('accessGroup.accessPoints')}
+                  {currentAGName && <span className="text-muted-foreground font-normal">— {currentAGName}</span>}
+                </h4>
+
+                {loadingAPs ? (
+                  <div className="flex justify-center py-8">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                  </div>
+                ) : accessPoints.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <DoorOpen size={28} className="mb-2 text-muted-foreground/40" />
+                    <p className="text-[13px] text-muted-foreground">{t('accessGroup.noAPs')}</p>
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-border overflow-hidden">
+                    <table className="w-full text-[13px]">
+                      <thead className="bg-muted/60 border-b border-border">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.accessPoints')}</th>
+                          <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.zone', 'Zone')}</th>
+                          <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.description', 'Description')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {accessPoints.map((ap) => (
+                          <tr key={ap.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors">
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <DoorOpen size={14} className="text-primary shrink-0" />
+                                <span className="font-medium">{ap.access_point?.name ?? ap.access_point_id}</span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-muted-foreground">{ap.access_point?.zone?.name ?? '—'}</td>
+                            <td className="px-3 py-2 text-muted-foreground">{ap.access_point?.description ?? '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <ShieldCheck size={36} className="mb-3 text-muted-foreground/40" />
+                <p className="text-[13px] font-medium text-foreground">{t('accessGroup.selectHint')}</p>
+                <p className="mt-1 text-[12px] text-muted-foreground">{t('accessGroup.title')}</p>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* ╔══ Vehicles Tab ══════════════════════════════════════════════ */}
+        <TabsContent value="vehicles" className="min-h-0 flex-1 overflow-auto">
+          {loadingVehicles ? (
+            <div className="flex justify-center py-12">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+            </div>
+          ) : userVehicles.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Car size={36} className="mb-3 text-muted-foreground/40" />
+              <p className="text-[13px] font-medium text-foreground">{t('vehicle.empty')}</p>
+              <p className="mt-1 text-[12px] text-muted-foreground">{t('vehicle.description')}</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => setShowAssignVehicle(true)}>
+                <Plus size={14} className="mr-1.5" /> {t('vehicle.assign')}
+              </Button>
+            </div>
+          ) : (
+            <div className="p-4">
+              <div className="rounded-md border border-border overflow-hidden">
+                <table className="w-full text-[13px]">
+                  <thead className="bg-muted/60 border-b border-border">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium text-foreground">{t('vehicle.col.plate')}</th>
+                      <th className="px-3 py-2 text-left font-medium text-foreground">{t('vehicle.col.type')}</th>
+                      <th className="px-3 py-2 text-left font-medium text-foreground">{t('vehicle.col.brandModel')}</th>
+                      <th className="px-3 py-2 text-left font-medium text-foreground">{t('vehicle.col.color')}</th>
+                      <th className="px-3 py-2 text-left font-medium text-foreground">{t('vehicle.col.status')}</th>
+                      <th className="px-3 py-2 text-right font-medium text-foreground" style={{ width: 100 }}>{t('vehicle.col.action')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {userVehicles.map((v) => (
+                      <tr key={v.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors">
+                        <td className="px-3 py-2 font-mono font-semibold tracking-wider">{v.plate_number}</td>
+                        <td className="px-3 py-2 capitalize">{v.vehicle_type}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{[v.brand, v.model].filter(Boolean).join(' ') || '—'}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{v.color || '—'}</td>
+                        <td className="px-3 py-2">
+                          <Badge variant={v.status === 'active' ? 'default' : v.status === 'blacklisted' ? 'destructive' : 'secondary'} className="text-[11px]">
+                            {v.status}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-[12px] text-destructive hover:text-destructive"
+                            onClick={() => handleUnassignVehicle(v.id)}
+                            disabled={unassigningVehicleId === v.id}
+                            data-testid={`user-button-unassign-vehicle-${v.id}`}
+                          >
+                            <Unlink size={13} className="mr-1" />
+                            {unassigningVehicleId === v.id ? t('actions.removing', 'Removing…') : t('vehicle.unassign')}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ╔══ Profile Edit Tab ══════════════════════════════════════════ */}
+        <TabsContent value="profile" className="min-h-0 flex-1 overflow-auto p-4">
+          <div className="max-w-3xl space-y-5">
+            {/* Gender */}
+            <div className="space-y-1">
+              <Label>{t('modal.gender', 'Gender')}</Label>
+              <div className="flex items-center gap-4">
+                {[
+                  { value: 'true', label: t('modal.genderMale', 'Male') },
+                  { value: 'false', label: t('modal.genderFemale', 'Female') },
+                  { value: '', label: t('modal.genderNotSpecified', 'Not specified') },
+                ].map((opt) => (
+                  <label key={opt.value} className="flex items-center gap-1.5 text-[13px] cursor-pointer" data-testid="user-radio-group-gender">
+                    <input
+                      type="radio" name="sex"
+                      checked={String(editForm.sex ?? '') === opt.value}
+                      onChange={() => setEditForm((p) => ({ ...p, sex: opt.value }))}
+                      className="accent-primary"                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <Label>{t('modal.gender', 'Gender')}</Label>
-                <div className="flex items-center gap-4">
-                  {[
-                    { value: 'true', label: t('modal.genderMale', 'Male') },
-                    { value: 'false', label: t('modal.genderFemale', 'Female') },
-                    { value: '', label: t('modal.genderNotSpecified', 'Not specified') },
-                  ].map((opt) => (
-                    <label key={opt.value} className="flex items-center gap-1.5 text-[13px] cursor-pointer" data-testid={`user-radio-group-gender`}>
+                <Label>{t('modal.firstName', 'First Name')} <span className="text-destructive">*</span></Label>
+                <Input value={String(editForm.first_name ?? '')} onChange={set('first_name')} data-testid="user-input-first-name" />
+              </div>
+              <div className="space-y-1">
+                <Label>{t('modal.lastName', 'Last Name')} <span className="text-destructive">*</span></Label>
+                <Input value={String(editForm.last_name ?? '')} onChange={set('last_name')} data-testid="user-input-last-name" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label>{t('modal.email', 'Email')} <span className="text-destructive">*</span></Label>
+                <Input type="email" value={String(editForm.email ?? '')} onChange={set('email')} data-testid="user-input-email" />
+              </div>
+              <div className="space-y-1">
+                <Label>{t('modal.dateOfBirth', 'Date of Birth')}</Label>
+                <Input type="date" value={String(editForm.birth_day ?? '')} onChange={set('birth_day')} data-testid="user-datetime-birth-day" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label>{t('modal.department', 'Department')}</Label>
+                <Select value={String(editForm.department_id ?? '')} onValueChange={(v) => setEditForm((p) => ({ ...p, department_id: v }))} data-testid="user-select-department-id">
+                  <SelectOption value="">{t('modal.departmentNone', 'None')}</SelectOption>
+                  {departments.map((d) => <SelectOption key={d.id} value={d.id}>{d.name}</SelectOption>)}
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>{t('modal.position', 'Position')}</Label>
+                <Input value={String(editForm.position ?? '')} onChange={set('position')} data-testid="user-input-position-form" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label>{t('modal.effectiveDate', 'Effective Date')}</Label>
+                <Input type="date" value={String(editForm.effective_date ?? '')} onChange={set('effective_date')} />
+              </div>
+              <div className="space-y-1">
+                <Label>{t('modal.expiredDate', 'Expiry Date')}</Label>
+                <Input type="date" value={String(editForm.expired_date ?? '')} onChange={set('expired_date')} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label>{t('modal.userCode', 'User Code')}</Label>
+                <p className="text-[13px] py-1 font-mono text-muted-foreground">{user.user_code || '—'}</p>
+              </div>
+              <div className="space-y-1">
+                <Label>{t('modal.masterCard')}</Label>
+                <div className="flex items-center gap-4 py-1">
+                  {[{ value: true, label: t('modal.masterYes') }, { value: false, label: t('modal.masterNo') }].map((opt) => (
+                    <label key={String(opt.value)} className="flex items-center gap-1.5 text-[13px] cursor-pointer">
                       <input
-                        type="radio"
-                        name="sex"
-                        checked={String(editForm.sex ?? '') === opt.value}
-                        onChange={() => setEditForm((p) => ({ ...p, sex: opt.value }))}
-                        className="accent-primary"
-                      />
+                        type="radio" name="is_master_card"
+                        checked={editForm.is_master_card === opt.value}
+                        onChange={() => setEditForm((p) => ({ ...p, is_master_card: opt.value }))}
+                        className="accent-primary"                      />
                       {opt.label}
                     </label>
                   ))}
                 </div>
               </div>
+            </div>
 
-              {/* First Name + Last Name */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>{t('modal.firstName', 'First Name')} <span className="text-destructive">*</span></Label>
-                  <Input value={String(editForm.first_name ?? '')} onChange={set('first_name')} placeholder="John" data-testid="user-input-first-name" />
-                </div>
-                <div className="space-y-1">
-                  <Label>{t('modal.lastName', 'Last Name')} <span className="text-destructive">*</span></Label>
-                  <Input value={String(editForm.last_name ?? '')} onChange={set('last_name')} placeholder="Doe" data-testid="user-input-last-name" />
-                </div>
-              </div>
+            <div className="space-y-1">
+              <Label>{t('modal.status', 'Status')}</Label>
+              <Select value={String(editForm.status ?? 'active')} onValueChange={(v) => setEditForm((p) => ({ ...p, status: v }))} data-testid="user-input-status">
+                <SelectOption value="active">{t('status.active', 'Active')}</SelectOption>
+                <SelectOption value="inactive">{t('status.inactive', 'Inactive')}</SelectOption>
+                <SelectOption value="suspended">{t('status.suspended', 'Suspended')}</SelectOption>
+              </Select>
+            </div>
+          </div>
+        </TabsContent>
 
-              {/* Email + DOB */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>{t('modal.email', 'Email')} <span className="text-destructive">*</span></Label>
-                  <Input type="email" value={String(editForm.email ?? '')} onChange={set('email')} disabled data-testid="user-input-email" />
-                </div>
-                <div className="space-y-1">
-                  <Label>{t('modal.dateOfBirth', 'Date of Birth')}</Label>
-                  <Input type="date" value={String(editForm.birth_day ?? '')} onChange={set('birth_day')} data-testid="user-datetime-birth-day" />
-                </div>
-              </div>
+        {/* ╔══ Detail Tab ════════════════════════════════════════════════ */}
+        <TabsContent value="detail" className="min-h-0 flex-1 overflow-auto p-4">
+          <div className="max-w-3xl space-y-5">
+            <div className="space-y-1">
+              <Label>{t('modal.address', 'Address')}</Label>
+              <Input value={String(editForm.address ?? '')} onChange={set('address')} data-testid="user-input-address" />
+            </div>
 
-              {/* Department + Position */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>{t('modal.department', 'Department')}</Label>
-                  <Select value={String(editForm.department_id ?? '')} onValueChange={(v) => setEditForm((p) => ({ ...p, department_id: v }))} data-testid="user-select-department-id">
-                    <SelectOption value="">{t('modal.departmentNone', 'None')}</SelectOption>
-                    {departments.map((d) => <SelectOption key={d.id} value={d.id}>{d.name}</SelectOption>)}
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label>{t('modal.position', 'Position')}</Label>
-                  <Input value={String(editForm.position ?? '')} onChange={set('position')} placeholder="Developer" data-testid="user-input-position-form" />
-                </div>
-              </div>
+            <div className="space-y-1">
+              <Label>{t('modal.phone', 'Phone')}</Label>
+              <Input value={String(editForm.phone ?? '')} onChange={set('phone')} data-testid="user-input-phone" />
+            </div>
 
-              {/* Effective + Expired */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>{t('modal.effectiveDate', 'Effective Date')}</Label>
-                  <Input type="date" value={String(editForm.effective_date ?? '')} onChange={set('effective_date')} />
-                </div>
-                <div className="space-y-1">
-                  <Label>{t('modal.expiredDate', 'Expiry Date')}</Label>
-                  <Input type="date" value={String(editForm.expired_date ?? '')} onChange={set('expired_date')} />
-                </div>
-              </div>
-
-              {/* User Code + Master Card */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>{t('modal.userCode', 'User Code')}</Label>
-                  <p className="text-[13px] py-1 font-mono">{user.user_code || '—'}</p>
-                </div>
-                <div className="space-y-1">
-                  <Label>{t('modal.masterCard')}</Label>
-                  <div className="flex items-center gap-4 py-1">
-                    {[{ value: true, label: t('modal.masterYes') }, { value: false, label: t('modal.masterNo') }].map((opt) => (
-                      <label key={String(opt.value)} className="flex items-center gap-1.5 text-[13px] cursor-pointer">
-                        <input
-                          type="radio"
-                          name="is_master_card"
-                          checked={editForm.is_master_card === opt.value}
-                          onChange={() => setEditForm((p) => ({ ...p, is_master_card: opt.value }))}
-                          className="accent-primary"
-                        />
-                        {opt.label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Status */}
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <Label>{t('modal.status', 'Status')}</Label>
-                <Select value={String(editForm.status ?? 'active')} onValueChange={(v) => setEditForm((p) => ({ ...p, status: v }))} data-testid="user-input-status">
-                  <SelectOption value="active">{t('status.active', 'Active')}</SelectOption>
-                  <SelectOption value="inactive">{t('status.inactive', 'Inactive')}</SelectOption>
-                  <SelectOption value="suspended">{t('status.suspended', 'Suspended')}</SelectOption>
-                </Select>
+                <Label>{t('modal.created')}</Label>
+                <p className="text-[13px] py-1 text-muted-foreground flex items-center gap-1.5">
+                  <Clock size={12} />
+                  {user.created_on ? new Date(user.created_on).toLocaleString() : '—'}
+                </p>
               </div>
-            </div>
-          </TabsContent>
-
-          {/* ╔══ Tab 2: Detail Information ══════════════════════════════════ */}
-          <TabsContent value="detail" className="mt-3 flex-1 overflow-auto pr-1">
-            <div className="space-y-4">
-              {/* Address */}
               <div className="space-y-1">
-                <Label>{t('modal.address', 'Address')}</Label>
-                <Input value={String(editForm.address ?? '')} onChange={set('address')} placeholder="123 Main St…" data-testid="user-input-address" />
+                <Label>{t('modal.updated')}</Label>
+                <p className="text-[13px] py-1 text-muted-foreground flex items-center gap-1.5">
+                  <Clock size={12} />
+                  {user.updated_on ? new Date(user.updated_on).toLocaleString() : '—'}
+                </p>
               </div>
+            </div>
 
-              {/* Phone */}
+            {user.account_id && (
               <div className="space-y-1">
-                <Label>{t('modal.phone', 'Phone')}</Label>
-                <Input value={String(editForm.phone ?? '')} onChange={set('phone')} placeholder="+84…" data-testid="user-input-phone" />
+                <Label>{t('modal.accountId')}</Label>
+                <p className="font-mono text-[12px] py-1 text-muted-foreground">{user.account_id}</p>
               </div>
-
-              {/* Created / Updated timestamps (read-only) */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>{t('modal.created')}</Label>
-                  <p className="text-[13px] py-1 text-muted-foreground">
-                    {user.created_on ? new Date(user.created_on).toLocaleString() : '—'}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <Label>{t('modal.updated')}</Label>
-                  <p className="text-[13px] py-1 text-muted-foreground">
-                    {user.updated_on ? new Date(user.updated_on).toLocaleString() : '—'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Account ID info */}
-              {user.account_id && (
-                <div className="space-y-1">
-                  <Label>{t('modal.accountId')}</Label>
-                  <p className="font-mono text-[12px] py-1 text-muted-foreground">{user.account_id}</p>
-                </div>
-              )}
-            </div>
-          </TabsContent>
-
-          {/* ╔══ Tab 3: Card List ═══════════════════════════════════════════ */}
-          <TabsContent value="cards" className="mt-3 flex-1 overflow-auto pr-1">
-            <div className="space-y-3">
-              {/* Toolbar */}
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-[14px] font-medium">{t('credential.title')}</h3>
-                  <p className="text-[12px] text-muted-foreground">
-                    {t('credential.description')}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {selectedCreds.size > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-destructive/30 text-destructive hover:bg-destructive/10"
-                      onClick={handleBulkDeleteCredentials}
-                      disabled={bulkDeleteCredLoading}
-                      data-testid="user-button-delete-cards"
-                    >
-                      <Trash2 size={13} className="mr-1" />
-                      {t('actions.delete')} ({selectedCreds.size})
-                    </Button>
-                  )}
-                  <Button size="sm" onClick={() => setShowAddCred(true)} data-testid="user-modal-add-card-trigger">
-                    <Plus size={14} className="mr-1.5" /> {t('credential.addCard')}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Card grid */}
-              {loadingCreds ? (
-                <div className="flex items-center gap-2 py-10 text-[13px] text-muted-foreground">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                  {t('credential.loading')}
-                </div>
-              ) : credentials.length === 0 ? (
-                <Card className="flex flex-col items-center gap-2 py-12 text-muted-foreground/50">
-                  <CreditCard size={36} strokeWidth={1.1} />
-                  <p className="text-[13px]">{t('credential.empty')}</p>
-                </Card>
-              ) : (
-                <div className="flex flex-wrap gap-3">
-                  {credentials.map((cred) => (
-                    <CredentialCard
-                      key={cred.id}
-                      cred={cred}
-                      selected={selectedCreds.has(cred.id)}
-                      onSelect={() => toggleCredSelect(cred.id)}
-                      onDelete={() => handleDeleteCredential(cred.id)}
-                      deleting={deletingCredId === cred.id}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </TabsContent>
-
-          {/* ╔══ Tab 4: Access Group ════════════════════════════════════════ */}
-          <TabsContent value="access-group" className="mt-3 flex-1 overflow-auto pr-1">
-            <div className="space-y-4">
-              {/* Access group selector */}
-              <div className="flex items-end gap-3">
-                <div className="flex-1 space-y-1">
-                  <Label>{t('accessGroup.title')}</Label>
-                  <Select
-                    value={selectedAccessGroup}
-                    onValueChange={setSelectedAccessGroup}
-                    data-testid="user-select-access-group-id"
-                  >
-                    <SelectOption value="">{t('accessGroup.none')}</SelectOption>
-                    {accessGroupOptions.map((ag) => (
-                      <SelectOption key={ag.id} value={ag.id}>{ag.name}</SelectOption>
-                    ))}
-                  </Select>
-                </div>
-                {accessGroupChanged && (
-                  <Button
-                    size="sm"
-                    onClick={handleSaveAccessGroup}
-                    disabled={savingAccessGroup}
-                    data-testid="user-button-save-access-group"
-                  >
-                    <Save size={14} className="mr-1.5" />
-                    {savingAccessGroup ? t('actions.saving') : t('actions.save')}
-                  </Button>
-                )}
-                {selectedAccessGroup && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => navigate(`/access/access-groups/${selectedAccessGroup}`)}
-                  >
-                    {t('accessGroup.viewGroup')}
-                  </Button>
-                )}
-              </div>
-
-              {/* Assigned doors / access points list */}
-              {selectedAccessGroup ? (
-                <div className="space-y-2">
-                  <h4 className="text-[13px] font-medium text-foreground">
-                    {t('accessGroup.accessPoints')}
-                    {currentAGName && <span className="ml-1 text-muted-foreground font-normal">— {currentAGName}</span>}
-                  </h4>
-
-                  {loadingAPs ? (
-                    <div className="flex items-center gap-2 py-6 text-[13px] text-muted-foreground">
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                      {t('accessGroup.loadingAPs')}
-                    </div>
-                  ) : accessPoints.length === 0 ? (
-                    <Card className="flex flex-col items-center gap-2 py-8 text-muted-foreground/50">
-                      <DoorOpen size={28} strokeWidth={1.2} />
-                      <p className="text-[13px]">{t('accessGroup.noAPs')}</p>
-                    </Card>
-                  ) : (
-                    <div className="rounded-md border border-border overflow-hidden">
-                      {accessPoints.map((ap, i) => (
-                        <div
-                          key={ap.id}
-                          className={`flex items-center gap-3 px-4 py-2.5 ${i < accessPoints.length - 1 ? 'border-b border-border/50' : ''}`}
-                        >
-                          <DoorOpen size={15} className="text-muted-foreground shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[13px] font-medium">{ap.access_point?.name ?? ap.access_point_id}</div>
-                            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                              {ap.access_point?.zone && <span>{ap.access_point.zone.name}</span>}
-                              {ap.access_point?.description && <span>{ap.access_point.description}</span>}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <Card className="flex flex-col items-center gap-2 py-10 text-muted-foreground/50">
-                  <ShieldCheck size={32} strokeWidth={1.1} />
-                  <p className="text-[13px]">{t('accessGroup.selectHint')}</p>
-                </Card>
-              )}
-            </div>
-          </TabsContent>
-
-          {/* ╔══ Tab 5: Vehicles ════════════════════════════════════════════ */}
-          <TabsContent value="vehicles" className="mt-3 flex-1 overflow-auto pr-1">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-[14px] font-medium">{t('vehicle.title')}</h3>
-                  <p className="text-[12px] text-muted-foreground">{t('vehicle.description')}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => navigate('/manage/vehicles')}
-                  >
-                    {t('vehicle.manageAll')}
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => setShowAssignVehicle(true)}
-                    data-testid="user-button-add-vehicle"
-                  >
-                    <Plus size={14} className="mr-1.5" /> {t('vehicle.assign')}
-                  </Button>
-                </div>
-              </div>
-
-              {loadingVehicles ? (
-                <div className="flex items-center gap-2 py-8 text-[13px] text-muted-foreground">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                  {t('vehicle.loading')}
-                </div>
-              ) : userVehicles.length === 0 ? (
-                <Card className="flex flex-col items-center gap-2 py-10 text-muted-foreground/50">
-                  <Car size={32} strokeWidth={1.1} />
-                  <p className="text-[13px]">{t('vehicle.empty')}</p>
-                </Card>
-              ) : (
-                <div className="rounded-md border border-border overflow-hidden">
-                  <table className="w-full text-[13px]">
-                    <thead className="bg-muted/40 border-b border-border">
-                      <tr>
-                        <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-[11px] uppercase tracking-wider">{t('vehicle.col.plate')}</th>
-                        <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-[11px] uppercase tracking-wider">{t('vehicle.col.type')}</th>
-                        <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-[11px] uppercase tracking-wider">{t('vehicle.col.brandModel')}</th>
-                        <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-[11px] uppercase tracking-wider">{t('vehicle.col.color')}</th>
-                        <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-[11px] uppercase tracking-wider">{t('vehicle.col.status')}</th>
-                        <th className="px-4 py-2.5 text-right font-medium text-muted-foreground text-[11px] uppercase tracking-wider">{t('vehicle.col.action')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {userVehicles.map((v, i) => (
-                        <tr key={v.id} className={`${i < userVehicles.length - 1 ? 'border-b border-border/50' : ''} hover:bg-muted/20 transition-colors`}>
-                          <td className="px-4 py-2.5 font-mono font-semibold tracking-wider">{v.plate_number}</td>
-                          <td className="px-4 py-2.5 capitalize">{v.vehicle_type}</td>
-                          <td className="px-4 py-2.5 text-muted-foreground">{[v.brand, v.model].filter(Boolean).join(' ') || '—'}</td>
-                          <td className="px-4 py-2.5 text-muted-foreground">{v.color || '—'}</td>
-                          <td className="px-4 py-2.5">
-                            <Badge variant={v.status === 'active' ? 'default' : v.status === 'blacklisted' ? 'destructive' : 'secondary'}>
-                              {v.status}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-2.5 text-right">
-                            <button
-                              type="button"
-                              onClick={() => handleUnassignVehicle(v.id)}
-                              disabled={unassigningVehicleId === v.id}
-                              className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50 cursor-pointer"
-                              title={t('vehicle.unassignTitle')}
-                              data-testid={`user-button-unassign-vehicle-${v.id}`}
-                            >
-                              {unassigningVehicleId === v.id
-                                ? <div className="h-3 w-3 animate-spin rounded-full border-2 border-destructive/30 border-t-destructive" />
-                                : <Unlink size={13} />}
-                              {t('vehicle.unassign')}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
-      </div>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {/* ── Modals ───────────────────────────────────────────────────────── */}
 
+      <AddCredentialModal open={showAddCred} onOpenChange={setShowAddCred} onSubmit={handleAddCredential} />
+
       <AddCredentialModal
-        open={showAddCred}
-        onOpenChange={setShowAddCred}
-        onSubmit={handleAddCredential}
+        open={!!editingCred}
+        onOpenChange={(v) => { if (!v) setEditingCred(null); }}
+        onSubmit={handleUpdateCredential}
+        editData={editingCred}
       />
 
       {id && (

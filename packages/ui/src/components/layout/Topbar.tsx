@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { Search, Bell, Sun, Moon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
@@ -26,9 +26,9 @@ function getBreadcrumb(
   overviewLabel: string,
   dashboardLabel: string,
   labels: Record<string, string>,
-): { domain?: string; domainColorClass?: string; segments: string[] } {
+): { domain?: string; domainColorClass?: string; domainPath?: string; segments: { label: string; path: string }[] } {
   const parts = pathname.split('/').filter(Boolean);
-  if (parts.length === 0) return { segments: [overviewLabel, dashboardLabel] };
+  if (parts.length === 0) return { segments: [{ label: overviewLabel, path: '/' }, { label: dashboardLabel, path: '/' }] };
 
   const domain = domainMap[parts[0]];
   // UUIDs → breadcrumb store label; known slugs → segmentMap; else capitalize
@@ -36,10 +36,13 @@ function getBreadcrumb(
     if (UUID_RE.test(p)) return labels[p.toLowerCase()] ?? p;
     return segmentMap[p] ?? p.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   };
-  const segments = parts.map(toLabel);
+  const segments = parts.map((p, i) => ({
+    label: toLabel(p),
+    path: '/' + parts.slice(0, i + 1).join('/'),
+  }));
 
   if (domain) {
-    return { domain: domain.label, domainColorClass: domain.colorClass, segments: segments.slice(1) };
+    return { domain: domain.label, domainColorClass: domain.colorClass, domainPath: '/' + parts[0], segments: segments.slice(1) };
   }
   return { segments };
 }
@@ -119,16 +122,27 @@ export function Topbar() {
         <div className="text-[13px] text-muted-foreground flex items-center gap-1">
           {bc.domain && (
             <>
-              <span className={bc.domainColorClass}>{bc.domain}</span>
+              {bc.domainPath ? (
+                <Link to={bc.domainPath} className={`${bc.domainColorClass} hover:underline`}>{bc.domain}</Link>
+              ) : (
+                <span className={bc.domainColorClass}>{bc.domain}</span>
+              )}
               {bc.segments.length > 0 && <span className="mx-1">/</span>}
             </>
           )}
-          {bc.segments.map((s, i) => (
-            <span key={i}>
-              {i > 0 && <span className="mx-1 text-muted-foreground">/</span>}
-              <span className={i === bc.segments.length - 1 ? 'text-foreground' : ''}>{s}</span>
-            </span>
-          ))}
+          {bc.segments.map((seg, i) => {
+            const isLast = i === bc.segments.length - 1;
+            return (
+              <span key={i}>
+                {i > 0 && <span className="mx-1 text-muted-foreground">/</span>}
+                {isLast ? (
+                  <span className="text-foreground">{seg.label}</span>
+                ) : (
+                  <Link to={seg.path} className="hover:underline hover:text-foreground transition-colors">{seg.label}</Link>
+                )}
+              </span>
+            );
+          })}
         </div>
 
         {/* Right side */}
