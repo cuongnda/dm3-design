@@ -1,4 +1,4 @@
--- 000011: Visitor Management tables
+-- 000014: Visitor Management tables
 -- Adds visitor directory, visit lifecycle, badge pool, and watchlist.
 
 -- ─── Visitor directory (persistent across visits) ────────────────────────────

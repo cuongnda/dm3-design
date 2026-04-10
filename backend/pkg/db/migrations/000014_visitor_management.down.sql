@@ -1,4 +1,4 @@
--- 000011: Revert visitor management tables
+-- 000014: Revert visitor management tables
 
 DROP TRIGGER IF EXISTS trg_visits_updated_at ON dm3_identity.visits;
 DROP TRIGGER IF EXISTS trg_visitors_updated_at ON dm3_identity.visitors;
