@@ -1,4 +1,4 @@
-import { Shield, Users, Building2, Brain, Settings } from 'lucide-react';
+import { Shield, Users, Building2, Brain, Settings, UserCheck, Car } from 'lucide-react';
 import { DOMAIN_COLORS } from '@/lib/constants';
 import type { DomainKey } from '@/lib/constants';
 
@@ -7,9 +7,11 @@ interface DomainIconProps {
   size?: number;
 }
 
-const iconMap = {
+const iconMap: Record<DomainKey, React.ComponentType<{ size?: number; style?: React.CSSProperties }>> = {
   secure: Shield,
   manage: Users,
+  visitors: UserCheck,
+  parking: Car,
   operate: Building2,
   smart: Brain,
   platform: Settings,

@@ -149,8 +149,29 @@ const ProvisioningPage = lazy(() =>
 const RoomBookingPage = lazy(() =>
   import('@/features/operate/room-booking/RoomBookingPage').then((m) => ({ default: m.RoomBookingPage }))
 );
-const ParkingPage = lazy(() =>
-  import('@/features/operate/parking/ParkingPage').then((m) => ({ default: m.ParkingPage }))
+const ParkingDashboardPage = lazy(() =>
+  import('@/features/parking/ParkingDashboardPage').then((m) => ({ default: m.ParkingDashboardPage }))
+);
+const ParkingSessionsPage = lazy(() =>
+  import('@/features/parking/ParkingSessionsPage').then((m) => ({ default: m.ParkingSessionsPage }))
+);
+const ParkingVehiclesPage = lazy(() =>
+  import('@/features/parking/ParkingVehiclesPage').then((m) => ({ default: m.ParkingVehiclesPage }))
+);
+const ParkingZonesPage = lazy(() =>
+  import('@/features/parking/ParkingZonesPage').then((m) => ({ default: m.ParkingZonesPage }))
+);
+const ParkingPassesPage = lazy(() =>
+  import('@/features/parking/ParkingPassesPage').then((m) => ({ default: m.ParkingPassesPage }))
+);
+const ParkingFeeRulesPage = lazy(() =>
+  import('@/features/parking/ParkingFeeRulesPage').then((m) => ({ default: m.ParkingFeeRulesPage }))
+);
+const ParkingAnalyticsPage2 = lazy(() =>
+  import('@/features/parking/ParkingAnalyticsPage').then((m) => ({ default: m.ParkingAnalyticsPage }))
+);
+const ParkingSettingsPage = lazy(() =>
+  import('@/features/parking/ParkingSettingsPage').then((m) => ({ default: m.ParkingSettingsPage }))
 );
 const MaintenancePage = lazy(() =>
   import('@/features/operate/maintenance/MaintenancePage').then((m) => ({ default: m.MaintenancePage }))
@@ -334,15 +355,18 @@ export const Router = createBrowserRouter([
               { path: 'devices/provision', element: <LazyWrap><ProvisionDevicePage /></LazyWrap> },
               { path: 'devices/:id', element: <LazyWrap><DeviceDetailPage /></LazyWrap> },
 
+              // PARKING
+              { path: 'parking', element: <PluginGuard plugin="parking"><LazyWrap><ParkingDashboardPage /></LazyWrap></PluginGuard> },
+              { path: 'parking/sessions', element: <PluginGuard plugin="parking"><LazyWrap><ParkingSessionsPage /></LazyWrap></PluginGuard> },
+              { path: 'parking/vehicles', element: <PluginGuard plugin="parking"><LazyWrap><ParkingVehiclesPage /></LazyWrap></PluginGuard> },
+              { path: 'parking/zones', element: <PluginGuard plugin="parking"><LazyWrap><ParkingZonesPage /></LazyWrap></PluginGuard> },
+              { path: 'parking/passes', element: <PluginGuard plugin="parking"><LazyWrap><ParkingPassesPage /></LazyWrap></PluginGuard> },
+              { path: 'parking/fee-rules', element: <PluginGuard plugin="parking"><LazyWrap><ParkingFeeRulesPage /></LazyWrap></PluginGuard> },
+              { path: 'parking/analytics', element: <PluginGuard plugin="parking"><LazyWrap><ParkingAnalyticsPage2 /></LazyWrap></PluginGuard> },
+              { path: 'parking/settings', element: <PluginGuard plugin="parking"><LazyWrap><ParkingSettingsPage /></LazyWrap></PluginGuard> },
+
               // OPERATE
               { path: 'operate/room-booking', element: <LazyWrap><RoomBookingPage /></LazyWrap> },
-              { path: 'operate/parking', element: <PluginGuard plugin="parking"><LazyWrap><ParkingPage /></LazyWrap></PluginGuard> },
-              { path: 'operate/parking/sessions', element: <PluginGuard plugin="parking"><LazyWrap><ParkingPage /></LazyWrap></PluginGuard> },
-              { path: 'operate/parking/vehicles', element: <PluginGuard plugin="parking"><LazyWrap><ParkingPage /></LazyWrap></PluginGuard> },
-              { path: 'operate/parking/zones', element: <PluginGuard plugin="parking"><LazyWrap><ParkingPage /></LazyWrap></PluginGuard> },
-              { path: 'operate/parking/passes', element: <PluginGuard plugin="parking"><LazyWrap><ParkingPage /></LazyWrap></PluginGuard> },
-              { path: 'operate/parking/fee-rules', element: <PluginGuard plugin="parking"><LazyWrap><ParkingPage /></LazyWrap></PluginGuard> },
-              { path: 'operate/parking/reports', element: <PluginGuard plugin="parking"><LazyWrap><ParkingPage /></LazyWrap></PluginGuard> },
               { path: 'operate/maintenance', element: <LazyWrap><MaintenancePage /></LazyWrap> },
               { path: 'operate/guard-tour', element: <LazyWrap><GuardTourPage /></LazyWrap> },
               { path: 'operate/keys', element: <LazyWrap><KeyManagementPage /></LazyWrap> },

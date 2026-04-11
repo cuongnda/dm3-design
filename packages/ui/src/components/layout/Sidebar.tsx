@@ -6,7 +6,7 @@ import {
   Building2, Car, Hammer, Shield, Key, Zap, Brain,
   Settings, ChevronLeft, ChevronRight, LogOut, UserCheck, MapPin,
   Users2, Cpu, User, ClipboardList, Eye, FileText, BarChart3,
-  CalendarClock, SlidersHorizontal,
+  CalendarClock, SlidersHorizontal, CircleDollarSign, Ticket, ParkingSquare,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -171,6 +171,20 @@ export function Sidebar() {
           </>
         )}
 
+        {hasParking && (
+          <>
+            <SectionLabel label={t('nav.parkingSection')} color="#F59E0B" collapsed={c} />
+            <SidebarNavItem to={ROUTES.parking} icon={<LayoutDashboard size={iconSize} />} label={t('nav.parkingDashboard')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.parkingSessions} icon={<ClipboardList size={iconSize} />} label={t('nav.parkingSessions')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.parkingVehicles} icon={<Car size={iconSize} />} label={t('nav.parkingVehicles')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.parkingZones} icon={<ParkingSquare size={iconSize} />} label={t('nav.parkingZones')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.parkingPasses} icon={<Ticket size={iconSize} />} label={t('nav.parkingPasses')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.parkingFeeRules} icon={<CircleDollarSign size={iconSize} />} label={t('nav.parkingFeeRules')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.parkingAnalytics} icon={<BarChart3 size={iconSize} />} label={t('nav.parkingAnalytics')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.parkingSettings} icon={<SlidersHorizontal size={iconSize} />} label={t('nav.parkingSettings')} collapsed={c} />
+          </>
+        )}
+
         <SectionLabel label={t('nav.access')} color="#F59E0B" collapsed={c} />
         <SidebarNavItem to={ROUTES.zones} icon={<MapPin size={iconSize} />} label={t('nav.zones') + ' *'} collapsed={c} />
         <SidebarNavItem to={ROUTES.accessPoints} icon={<Shield size={iconSize} />} label={t('nav.accessPoints') + ' *'} collapsed={c} />
@@ -180,9 +194,6 @@ export function Sidebar() {
 
         <SectionLabel label={t('nav.operate')} color="#F59E0B" collapsed={c} />
         <SidebarNavItem to={ROUTES.roomBooking} icon={<Building2 size={iconSize} />} label={t('nav.roomBooking')} collapsed={c} />
-        {hasParking && (
-          <SidebarNavItem to={ROUTES.parking} icon={<Car size={iconSize} />} label={t('nav.parking')} collapsed={c} />
-        )}
         <SidebarNavItem to={ROUTES.maintenance} icon={<Hammer size={iconSize} />} label={t('nav.maintenance')} collapsed={c} />
         <SidebarNavItem to={ROUTES.guardTour} icon={<Shield size={iconSize} />} label={t('nav.guardTour')} collapsed={c} />
         <SidebarNavItem to={ROUTES.keys} icon={<Key size={iconSize} />} label={t('nav.keys')} collapsed={c} />

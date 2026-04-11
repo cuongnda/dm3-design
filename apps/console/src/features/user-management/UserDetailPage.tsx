@@ -883,7 +883,7 @@ export function UserDetailPage() {
                               variant="ghost"
                               size="sm"
                               className="h-7 text-[12px]"
-                              onClick={() => setEditingCred({ id: cred.id, type: cred.type, value: cred.value, valid_until: cred.valid_until })}
+                              onClick={() => setEditingCred({ id: cred.id, type: cred.type, value: cred.value, valid_until: cred.valid_until ?? undefined })}
                             >
                               <Pencil size={13} className="mr-1" />
                               {t('actions.edit')}
