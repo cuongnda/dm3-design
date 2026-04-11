@@ -3,6 +3,8 @@ package authsvc
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -252,32 +254,36 @@ func TestIsValidPlugin(t *testing.T) {
 func TestRequirePluginMiddleware(t *testing.T) {
 	tests := []struct {
 		name       string
+		role       string
 		plugins    []string
 		required   string
 		wantStatus int
 	}{
-		{"visitor enabled", []string{"core", "visitor"}, "visitor", 200},
-		{"visitor not enabled", []string{"core"}, "visitor", 403},
-		{"core always present", []string{"core"}, "core", 200},
+		{"visitor enabled", "", []string{"core", "visitor"}, "visitor", 200},
+		{"visitor not enabled", "", []string{"core"}, "visitor", 403},
+		{"core always present", "", []string{"core"}, "core", 200},
+		{"system_admin without plugins is blocked", "system_admin", nil, "visitor", 403},
 	}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			claims := &AccessClaims{
 				Sub:            "user-1",
+				Role:           tt.role,
 				EnabledPlugins: tt.plugins,
 			}
-			allowed := false
-			for _, p := range claims.EnabledPlugins {
-				if p == tt.required {
-					allowed = true
-				}
-			}
-			if allowed && tt.wantStatus != 200 {
-				t.Errorf("expected blocked but was allowed")
-			}
-			if !allowed && tt.wantStatus != 403 {
-				t.Errorf("expected allowed but was blocked")
+			ctx := WithClaims(context.Background(), claims)
+			req := httptest.NewRequest("GET", "/test", nil).WithContext(ctx)
+			rec := httptest.NewRecorder()
+
+			RequirePlugin(tt.required)(handler).ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
 			}
 		})
 	}
