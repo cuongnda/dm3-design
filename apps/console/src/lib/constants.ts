@@ -1,6 +1,7 @@
 export const DOMAIN_COLORS = {
   secure: '#3B82F6',
   manage: '#8B5CF6',
+  visitors: '#10B981',
   operate: '#F59E0B',
   smart: '#06B6D4',
   platform: '#6B7280',
@@ -9,6 +10,7 @@ export const DOMAIN_COLORS = {
 export const DOMAIN_LABELS = {
   secure: 'SECURE',
   manage: 'MANAGE',
+  visitors: 'VISITORS',
   operate: 'OPERATE',
   smart: 'SMART',
 } as const;
@@ -39,11 +41,20 @@ export const ROUTES = {
   users: '/manage/users',
   departments: '/manage/departments',
   identities: '/manage/identities',
-  visitors: '/manage/visitors',
   contractors: '/manage/contractors',
   attendance: '/manage/attendance',
   deliveries: '/manage/deliveries',
   vehicles: '/manage/vehicles',
+  // VISITORS
+  visitors: '/visitors',
+  visitorsRegister: '/visitors/register',
+  visitorsGroups: '/visitors/groups',
+  visitorsWatchlist: '/visitors/watchlist',
+  visitorsAgreements: '/visitors/agreements',
+  visitorsAccessHistory: '/visitors/access-history',
+  visitorsAnalytics: '/visitors/analytics',
+  visitorsRecurring: '/visitors/recurring',
+  visitorsSettings: '/visitors/settings',
   // ACCESS
   zones: '/access/zones',
   accessPoints: '/access/access-points',

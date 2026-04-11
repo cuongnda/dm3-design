@@ -202,11 +202,66 @@ func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Load tenant visitor settings for validation and auto-approve rules
+	settings, err := h.getOrCreateSettings(r.Context(), cid)
+	if err != nil {
+		slog.Error("load visitor settings error", "error", err, "tenant_id", cid)
+		httputil.Error(w, http.StatusInternalServerError, "failed to load visitor settings")
+		return
+	}
+
+	// Validate required fields from settings
+	if settings.RequireEmail && (req.Visitor.Email == nil || *req.Visitor.Email == "") {
+		httputil.Error(w, http.StatusBadRequest, "visitor email is required by tenant settings")
+		return
+	}
+	if settings.RequirePhone && (req.Visitor.Phone == nil || *req.Visitor.Phone == "") {
+		httputil.Error(w, http.StatusBadRequest, "visitor phone is required by tenant settings")
+		return
+	}
+	if settings.RequireCompany && (req.Visitor.Company == nil || *req.Visitor.Company == "") {
+		httputil.Error(w, http.StatusBadRequest, "visitor company is required by tenant settings")
+		return
+	}
+
+	// Validate purpose against allowed list
+	if len(settings.AllowedPurposes) > 0 {
+		purposeAllowed := false
+		for _, p := range settings.AllowedPurposes {
+			if p == req.Purpose {
+				purposeAllowed = true
+				break
+			}
+		}
+		if !purposeAllowed {
+			httputil.Error(w, http.StatusBadRequest, "purpose not allowed by tenant settings")
+			return
+		}
+	}
+
 	visitorID, visitorName, err := h.upsertVisitor(r, cid, req.Visitor.FirstName, req.Visitor.LastName, req.Visitor.Email, req.Visitor.Phone, req.Visitor.Company)
 	if err != nil {
 		slog.Error("upsert visitor error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+
+	// Determine initial visit status based on approval settings
+	initialStatus := models.VisitStatusPreRegistered
+	if !settings.ApprovalRequired {
+		initialStatus = models.VisitStatusApproved
+	} else {
+		var watchlistStatus string
+		var visitCount int
+		if err := h.db.Pool.QueryRow(r.Context(),
+			`SELECT watchlist_status, visit_count FROM dm3_identity.visitors WHERE id = $1::uuid`,
+			visitorID).Scan(&watchlistStatus, &visitCount); err == nil {
+			if settings.AutoApproveVIP && watchlistStatus == models.WatchlistVIP {
+				initialStatus = models.VisitStatusApproved
+			} else if settings.AutoApproveReturning && visitCount > 1 {
+				initialStatus = models.VisitStatusApproved
+			}
+		}
 	}
 
 	qrToken, err := generateQRToken()
@@ -215,18 +270,22 @@ func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	qrExpiresAt := req.ExpectedArrival.Add(4 * time.Hour)
+	qrExpiresAt := req.ExpectedArrival.Add(time.Duration(settings.QRValidityAfterHours) * time.Hour)
+
+	isAutoApproved := initialStatus == models.VisitStatusApproved
 
 	var visit models.Visit
 	err = h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.visits
 		  (tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		   status, expected_arrival, expected_departure,
-		   qr_token, qr_expires_at, access_areas, escort_required, vehicle_plate)
+		   qr_token, qr_expires_at, access_areas, escort_required, vehicle_plate,
+		   host_approved, host_approved_at)
 		VALUES
 		  ($1::uuid, $2::uuid, $3::uuid, $4, $5,
-		   'pre_registered', $6, $7,
-		   $8, $9, $10::uuid[], $11, $12)
+		   $6, $7, $8,
+		   $9, $10, $11::uuid[], $12, $13,
+		   $14, CASE WHEN $14 THEN now() ELSE NULL END)
 		RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		          status, expected_arrival, expected_departure,
 		          actual_checkin, actual_checkout,
@@ -236,8 +295,9 @@ func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 		          nda_signed, host_approved, host_approved_at, notes,
 		          created_at, updated_at`,
 		cid, visitorID, req.HostUserID, req.Purpose, req.PurposeNote,
-		req.ExpectedArrival, req.ExpectedDeparture,
+		initialStatus, req.ExpectedArrival, req.ExpectedDeparture,
 		qrToken, qrExpiresAt, req.AccessAreas, req.EscortRequired, req.VehiclePlate,
+		isAutoApproved,
 	).Scan(
 		&visit.ID, &visit.TenantID, &visit.VisitorID, &visit.HostUserID,
 		&visit.Purpose, &visit.PurposeNote, &visit.Status,
@@ -255,8 +315,16 @@ func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.audit != nil {
-		h.audit.LogFromRequest(r, "visit.pre_registered", "visit", visit.ID, visitorName, "success", nil, visit)
+		auditAction := "visit.pre_registered"
+		if initialStatus == models.VisitStatusApproved {
+			auditAction = "visit.auto_approved"
+		}
+		h.audit.LogFromRequest(r, auditAction, "visit", visit.ID, visitorName, "success", nil, visit)
 	}
+	h.publishEvent(r.Context(), cid, EventVisitCreated, map[string]any{
+		"visit_id": visit.ID, "visitor_id": visit.VisitorID, "host_user_id": visit.HostUserID,
+		"status": visit.Status, "expected_arrival": visit.ExpectedArrival,
+	})
 	httputil.JSON(w, http.StatusCreated, visit)
 }
 
@@ -432,6 +500,109 @@ func (h *VisitorHandlers) ApproveVisit(w http.ResponseWriter, r *http.Request) {
 		}
 		h.audit.LogFromRequest(r, action, "visit", visit.ID, "", "success", nil, visit)
 	}
+	if req.Approved {
+		h.publishEvent(r.Context(), cid, EventVisitApproved, map[string]any{
+			"visit_id": visit.ID, "visitor_id": visit.VisitorID, "host_user_id": visit.HostUserID,
+		})
+	} else {
+		h.publishEvent(r.Context(), cid, EventVisitRejected, map[string]any{
+			"visit_id": visit.ID, "visitor_id": visit.VisitorID,
+		})
+	}
+	httputil.JSON(w, http.StatusOK, visit)
+}
+
+// ReinviteVisit regenerates the QR token for a visit and increments the reinvite counter.
+// Maximum 3 reinvitations per visit (BR-VIS-012).
+func (h *VisitorHandlers) ReinviteVisit(w http.ResponseWriter, r *http.Request) {
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+	if !requireVisitorWrite(r) {
+		httputil.Error(w, http.StatusForbidden, "insufficient permissions")
+		return
+	}
+	id := visitIDParam(r)
+
+	settings, err := h.getOrCreateSettings(r.Context(), cid)
+	if err != nil {
+		slog.Error("load visitor settings error", "error", err, "tenant_id", cid)
+		httputil.Error(w, http.StatusInternalServerError, "failed to load visitor settings")
+		return
+	}
+
+	newQRToken, err := generateQRToken()
+	if err != nil {
+		slog.Error("generate qr token error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Atomic reinvite: UPDATE with WHERE guard prevents TOCTOU race on reinvite_count
+	var expectedArrival time.Time
+	err = h.db.Pool.QueryRow(r.Context(), `
+		SELECT expected_arrival FROM dm3_identity.visits
+		WHERE id = $1::uuid AND tenant_id = $2::uuid
+		  AND status IN ('pre_registered', 'approved')
+		  AND COALESCE(reinvite_count, 0) < 3`,
+		id, cid).Scan(&expectedArrival)
+	if err != nil {
+		// Distinguish: visit doesn't exist / wrong status vs max reinvites reached
+		var exists bool
+		_ = h.db.Pool.QueryRow(r.Context(), `
+			SELECT EXISTS(SELECT 1 FROM dm3_identity.visits WHERE id = $1::uuid AND tenant_id = $2::uuid
+			  AND status IN ('pre_registered', 'approved'))`, id, cid).Scan(&exists)
+		if exists {
+			httputil.Error(w, http.StatusConflict, "maximum reinvitations (3) reached")
+		} else {
+			httputil.Error(w, http.StatusNotFound, "visit not found or not in reinvitable status")
+		}
+		return
+	}
+
+	newQRExpiry := expectedArrival.Add(time.Duration(settings.QRValidityAfterHours) * time.Hour)
+
+	var visit models.Visit
+	err = h.db.Pool.QueryRow(r.Context(), `
+		UPDATE dm3_identity.visits
+		SET qr_token       = $3,
+		    qr_expires_at  = $4,
+		    reinvite_count = COALESCE(reinvite_count, 0) + 1,
+		    updated_at     = now()
+		WHERE id = $1::uuid AND tenant_id = $2::uuid
+		  AND status IN ('pre_registered', 'approved')
+		RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
+		          status, expected_arrival, expected_departure,
+		          actual_checkin, actual_checkout,
+		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
+		          qr_token, qr_expires_at, badge_number, temp_credential_id,
+		          access_areas, escort_required, vehicle_plate, items_carried,
+		          nda_signed, host_approved, host_approved_at, notes,
+		          created_at, updated_at`,
+		id, cid, newQRToken, newQRExpiry,
+	).Scan(
+		&visit.ID, &visit.TenantID, &visit.VisitorID, &visit.HostUserID,
+		&visit.Purpose, &visit.PurposeNote, &visit.Status,
+		&visit.ExpectedArrival, &visit.ExpectedDeparture,
+		&visit.ActualCheckin, &visit.ActualCheckout,
+		&visit.CheckinMethod, &visit.CheckinDeviceID, &visit.CheckinPhotoRef, &visit.CheckoutBy,
+		&visit.QRToken, &visit.QRExpiresAt, &visit.BadgeNumber, &visit.TempCredentialID,
+		&visit.AccessAreas, &visit.EscortRequired, &visit.VehiclePlate, &visit.ItemsCarried,
+		&visit.NDASigned, &visit.HostApproved, &visit.HostApprovedAt, &visit.Notes,
+		&visit.CreatedAt, &visit.UpdatedAt,
+	)
+	if err != nil {
+		slog.Error("reinvite visit error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "failed to reinvite")
+		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogFromRequest(r, "visit.reinvited", "visit", visit.ID, "", "success", nil,
+			map[string]any{"new_qr_token": newQRToken})
+	}
 	httputil.JSON(w, http.StatusOK, visit)
 }
 
@@ -517,12 +688,28 @@ func (h *VisitorHandlers) CheckinVisit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Badge assignment: manual or auto-assign from pool
 	if req.BadgeNumber != nil && *req.BadgeNumber != "" {
 		if _, err := tx.Exec(r.Context(), `
 			INSERT INTO dm3_identity.visitor_badges (tenant_id, visit_id, badge_number)
 			VALUES ($1::uuid, $2::uuid, $3)
 			ON CONFLICT DO NOTHING`, cid, id, req.BadgeNumber); err != nil {
 			slog.Error("checkin badge insert error", "error", err)
+		}
+	} else if badgeSettings, settingsErr := h.getOrCreateSettings(r.Context(), cid); settingsErr == nil && badgeSettings.BadgeEnabled && badgeSettings.BadgeAutoAssign {
+		if badgeNum, badgeErr := h.nextBadgeNumber(r.Context(), tx, cid, badgeSettings.BadgePrefix, badgeSettings.BadgePoolSize); badgeErr != nil {
+			slog.Warn("auto badge assign failed", "error", badgeErr, "tenant_id", cid)
+		} else {
+			if _, err := tx.Exec(r.Context(), `
+				INSERT INTO dm3_identity.visitor_badges (tenant_id, visit_id, badge_number)
+				VALUES ($1::uuid, $2::uuid, $3)
+				ON CONFLICT DO NOTHING`, cid, id, badgeNum); err != nil {
+				slog.Error("auto badge insert error", "error", err)
+			} else if _, err := tx.Exec(r.Context(), `
+				UPDATE dm3_identity.visits SET badge_number = $2, updated_at = now()
+				WHERE id = $1::uuid`, id, badgeNum); err != nil {
+				slog.Error("update visit badge_number error", "error", err)
+			}
 		}
 	}
 
@@ -539,6 +726,11 @@ func (h *VisitorHandlers) CheckinVisit(w http.ResponseWriter, r *http.Request) {
 		h.audit.LogFromRequest(r, action, "visit", visit.ID, visitorName, "success", nil, map[string]any{
 			"visit":            visit,
 			"temporary_access": map[string]any{"credential_id": tempCredID, "sync_status": "pending_device_sync", "idempotent": alreadyCheckedIn},
+		})
+	}
+	if !alreadyCheckedIn {
+		h.publishEvent(r.Context(), cid, EventVisitCheckedIn, map[string]any{
+			"visit_id": visit.ID, "visitor_id": visitorID, "host_user_id": visit.HostUserID,
 		})
 	}
 	httputil.JSON(w, http.StatusOK, visit)
@@ -771,6 +963,25 @@ func (h *VisitorHandlers) upsertVisitor(r *http.Request, cid, firstName, lastNam
 		return "", name, fmt.Errorf("insert visitor: %w", err)
 	}
 	return newID, name, nil
+}
+
+// nextBadgeNumber finds the first available badge number from the pool (prefix+"001" .. prefix+poolSize).
+// A badge is available if it is not currently assigned to an active (unreturned) visit.
+func (h *VisitorHandlers) nextBadgeNumber(ctx context.Context, tx pgx.Tx, tenantID, prefix string, poolSize int) (string, error) {
+	var badgeNum string
+	err := tx.QueryRow(ctx, `
+		SELECT $2 || LPAD(num::text, 3, '0')
+		FROM generate_series(1, $3) AS num
+		WHERE ($2 || LPAD(num::text, 3, '0')) NOT IN (
+			SELECT badge_number FROM dm3_identity.visitor_badges
+			WHERE tenant_id = $1::uuid AND returned_at IS NULL
+		)
+		ORDER BY num
+		LIMIT 1`, tenantID, prefix, poolSize).Scan(&badgeNum)
+	if err != nil {
+		return "", fmt.Errorf("badge pool exhausted or query error: %w", err)
+	}
+	return badgeNum, nil
 }
 
 func (h *VisitorHandlers) checkWatchlist(r *http.Request, cid, visitorID string) (bool, string) {

@@ -16,7 +16,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o bin/device-gateway ./c
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o bin/access-svc     ./cmd/access-svc/  && \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o bin/identity-svc   ./cmd/identity-svc/ && \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o bin/auth-svc       ./cmd/auth-svc/ && \
-    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o bin/audit-svc      ./cmd/audit-svc/
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o bin/audit-svc      ./cmd/audit-svc/ && \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o bin/visitor-svc    ./cmd/visitor-svc/
 
 # Stage 2: Minimal runtime image
 FROM alpine:3.19

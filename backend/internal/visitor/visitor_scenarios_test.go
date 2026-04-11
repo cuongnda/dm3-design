@@ -697,7 +697,7 @@ func TestCreateVisitAllPurposes(t *testing.T) {
 		t.Run(purpose, func(t *testing.T) {
 			seed := time.Now().UnixNano()
 			req := map[string]any{
-				"visitor":          map[string]any{"first_name": "Test", "last_name": purpose, "email": fmt.Sprintf("p+%d@example.com", seed)},
+				"visitor":          map[string]any{"first_name": "Test", "last_name": purpose, "email": fmt.Sprintf("p+%d@example.com", seed), "phone": fmt.Sprintf("+8490%07d", seed%10000000)},
 				"host_user_id":     hostID,
 				"purpose":          purpose,
 				"expected_arrival": time.Now().Add(1 * time.Hour).Format(time.RFC3339),
@@ -983,7 +983,7 @@ func TestVisitorUpsertDeduplicatesByEmail(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		req := map[string]any{
-			"visitor":          map[string]any{"first_name": "Same", "last_name": "Person", "email": email},
+			"visitor":          map[string]any{"first_name": "Same", "last_name": "Person", "email": email, "phone": fmt.Sprintf("+8491%07d", seed%10000000)},
 			"host_user_id":     hostID,
 			"purpose":          models.VisitPurposeMeeting,
 			"expected_arrival": time.Now().Add(time.Duration(i+1) * time.Hour).Format(time.RFC3339),

@@ -10,17 +10,24 @@ import (
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
+	"github.com/duali/dm3-backend/pkg/natsutil"
 )
 
 // VisitorHandlers holds the database dependency for all visitor routes.
 type VisitorHandlers struct {
 	db    *db.DB
 	audit *audit.Logger
+	nats  *natsutil.Client
 }
 
 // NewVisitorHandlers constructs a VisitorHandlers with the given database pool.
-func NewVisitorHandlers(database *db.DB, auditLog *audit.Logger) *VisitorHandlers {
-	return &VisitorHandlers{db: database, audit: auditLog}
+// natsClient is optional — pass nil to disable event publishing.
+func NewVisitorHandlers(database *db.DB, auditLog *audit.Logger, natsClient ...*natsutil.Client) *VisitorHandlers {
+	h := &VisitorHandlers{db: database, audit: auditLog}
+	if len(natsClient) > 0 {
+		h.nats = natsClient[0]
+	}
+	return h
 }
 
 // parsePagination extracts page and limit from query params.

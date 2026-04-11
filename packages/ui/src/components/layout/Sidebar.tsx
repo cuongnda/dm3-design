@@ -5,7 +5,8 @@ import {
   Bot, AlertTriangle, Users, UserPlus, Wrench, Clock, Package,
   Building2, Car, Hammer, Shield, Key, Zap, Brain,
   Settings, ChevronLeft, ChevronRight, LogOut, UserCheck, MapPin,
-  Users2, Cpu, User,
+  Users2, Cpu, User, ClipboardList, Eye, FileText, BarChart3,
+  CalendarClock, SlidersHorizontal,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -147,11 +148,21 @@ export function Sidebar() {
         <SidebarNavItem to={ROUTES.users} icon={<UserCheck size={iconSize} />} label={t('nav.users') + ' *'} collapsed={c} />
         <SidebarNavItem to={ROUTES.departments} icon={<Building2 size={iconSize} />} label={t('nav.departments') + ' *'} collapsed={c} />
         <SidebarNavItem to={ROUTES.identities} icon={<Users size={iconSize} />} label={t('nav.identities')} collapsed={c} />
-        <SidebarNavItem to={ROUTES.visitors} icon={<UserPlus size={iconSize} />} label={t('nav.visitors')} collapsed={c} />
         <SidebarNavItem to={ROUTES.contractors} icon={<Wrench size={iconSize} />} label={t('nav.contractors')} collapsed={c} />
         <SidebarNavItem to={ROUTES.attendance} icon={<Clock size={iconSize} />} label={t('nav.attendance')} collapsed={c} />
         <SidebarNavItem to={ROUTES.deliveries} icon={<Package size={iconSize} />} label={t('nav.deliveries')} collapsed={c} />
         <SidebarNavItem to={ROUTES.vehicles} icon={<Car size={iconSize} />} label={t('nav.vehicles') + ' *'} collapsed={c} />
+
+        <SectionLabel label={t('nav.visitorsSection')} color="#10B981" collapsed={c} />
+        <SidebarNavItem to={ROUTES.visitors} icon={<LayoutDashboard size={iconSize} />} label={t('nav.visitorsDashboard')} collapsed={c} />
+        <SidebarNavItem to={ROUTES.visitorsRegister} icon={<UserPlus size={iconSize} />} label={t('nav.visitorsRegister')} collapsed={c} />
+        <SidebarNavItem to={ROUTES.visitorsGroups} icon={<Users2 size={iconSize} />} label={t('nav.visitorsGroups')} collapsed={c} />
+        <SidebarNavItem to={ROUTES.visitorsWatchlist} icon={<Eye size={iconSize} />} label={t('nav.visitorsWatchlist')} collapsed={c} />
+        <SidebarNavItem to={ROUTES.visitorsAgreements} icon={<FileText size={iconSize} />} label={t('nav.visitorsAgreements')} collapsed={c} />
+        <SidebarNavItem to={ROUTES.visitorsAccessHistory} icon={<ClipboardList size={iconSize} />} label={t('nav.visitorsAccessHistory')} collapsed={c} />
+        <SidebarNavItem to={ROUTES.visitorsAnalytics} icon={<BarChart3 size={iconSize} />} label={t('nav.visitorsAnalytics')} collapsed={c} />
+        <SidebarNavItem to={ROUTES.visitorsRecurring} icon={<CalendarClock size={iconSize} />} label={t('nav.visitorsRecurring')} collapsed={c} />
+        <SidebarNavItem to={ROUTES.visitorsSettings} icon={<SlidersHorizontal size={iconSize} />} label={t('nav.visitorsSettings')} collapsed={c} />
 
         <SectionLabel label={t('nav.access')} color="#F59E0B" collapsed={c} />
         <SidebarNavItem to={ROUTES.zones} icon={<MapPin size={iconSize} />} label={t('nav.zones') + ' *'} collapsed={c} />

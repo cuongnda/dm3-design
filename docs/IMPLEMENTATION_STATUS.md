@@ -1,6 +1,6 @@
 # Implementation Status
 
-This document tracks the current implementation status of DM3 features. Updated: 2026-04-10 (visitor management, parking schema, migration consolidation).
+This document tracks the current implementation status of DM3 features. Updated: 2026-04-11 (visitor v2 tables, visitor-svc standalone service, ER diagram update).
 
 ---
 
@@ -20,9 +20,9 @@ This document tracks the current implementation status of DM3 features. Updated:
 
 | Layer | Status | Details |
 |-------|--------|---------|
-| Service Topology | ❌ Gap | 5 of ~20 specified services implemented. Evidence: `backend/cmd/` has 5 dirs (auth-svc, identity-svc, access-svc, device-gateway, audit-svc); `docs/architecture/system-architecture.md:281` specifies ~20 |
+| Service Topology | ❌ Gap | 6 of ~20 specified services implemented. Evidence: `backend/cmd/` has 6 dirs (auth-svc, identity-svc, access-svc, device-gateway, audit-svc, visitor-svc); `docs/architecture/system-architecture.md:281` specifies ~20 |
 | Data Flow / MQTT Pipeline | ✅ Compliant | Topic `dm/{tid}/device/{did}/{cat}` confirmed. Envelope (v, id, ts) confirmed. NATS bridge confirmed. Evidence: `backend/internal/gateway/mqtt_handler.go:48-57, 27-35` |
-| Data Model / ER | ⚠️ Partial | Core access hierarchy implemented (`dm3_access`). Visitor tables implemented (`dm3_identity.visitors`, `visits`, `visitor_badges`, `watchlist`). Parking Phase 1 tables implemented (`dm3_operate.parking_lots`, `parking_zones`, `parking_vehicles`, `parking_fee_rules`, `parking_passes`, `parking_sessions`). Vehicle registry in `dm3_identity.vehicles`. `dm3_audit` schema active (audit_logs hypertable). Remaining gaps: contractors, rooms, maintenance, keys. |
+| Data Model / ER | ⚠️ Partial | Core access hierarchy implemented (`dm3_access`). Visitor v1+v2 tables implemented (`dm3_identity.visitors`, `visits`, `visitor_badges`, `watchlist`, `visitor_settings`, `visit_groups`, `visitor_access_log`, `recurring_visit_templates`, `visitor_agreements`, `visitor_agreement_signatures`). Parking Phase 1 tables implemented (`dm3_operate`). Vehicle registry in `dm3_identity.vehicles`. `dm3_audit` schema active (audit_logs hypertable). Remaining gaps: contractors, rooms, maintenance, keys. |
 | Security | ⚠️ Partial | JWT auth, bcrypt, CORS, refresh-token replay detection confirmed. Missing: TLS config in docker-compose for EMQX, no rate limiting middleware found. |
 | Deployment | ✅ Compliant | All 6 infra services present in `backend/docker-compose.yml` with correct ports. Simulator is in a separate `simulator/docker-compose.yml` (minor split). No Traefik gateway config found. |
 
@@ -43,11 +43,21 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Implemented: Access Groups CRUD ✅ | AG↔AP assignment ✅ | AG↔User assignment with temporal membership ✅ | Access Time management ✅ | Access rule sync to devices via MQTT ✅ | Spatial zone hierarchy ✅ | Zone-owned indoor map upload + serving ✅ | Zone detail list/map workflows reflected in console ✅ | Passage Time field on access_points (DB) ✅
   - Deviation: Passage Time (`access_time_id` on access_points) is stored in DB but not yet exposed in the Access Point UI. Broader site modeling beyond the current zone hierarchy still needs separate verification if reintroduced.
 
-- **identity-svc** (`backend/internal/identity/`, `backend/internal/visitor/`) — User/credential management, identity operations, visitor management
-  - Status: ⚠️ Partial | Risk: Medium
-  - Evidence: Migration confirms `dm3_identity.users`, `dm3_identity.credentials`, `dm3_identity.user_groups`, `dm3_identity.departments`, `dm3_identity.visitors`, `dm3_identity.visits`, `dm3_identity.visitor_badges`, `dm3_identity.watchlist`, `dm3_identity.vehicles` ✅
-  - Implemented: User CRUD ✅ | Credentials ✅ | Groups ✅ | Departments ✅ | Visitor management (full CRUD + walk-in + watchlist + QR + cron) ✅ | Vehicle registry ✅
+- **identity-svc** (`backend/internal/identity/`) — User/credential management, identity operations
+  - Status: ✅ Compliant | Risk: Low
+  - Evidence: Migration confirms `dm3_identity.users`, `dm3_identity.credentials`, `dm3_identity.user_groups`, `dm3_identity.departments`, `dm3_identity.vehicles` ✅
+  - Implemented: User CRUD ✅ | Credentials ✅ | Groups ✅ | Departments ✅ | Vehicle registry ✅
   - Deviation: No `contractors`, `rooms`, or `maintenance` tables. These features are mock-UI only.
+
+- **visitor-svc** (`backend/cmd/visitor-svc/`, `backend/internal/visitor/`) — Standalone visitor management service
+  - Status: ✅ Compliant (v2) | Risk: Low
+  - Evidence: `backend/cmd/visitor-svc/main.go` — standalone service with PostgreSQL, NATS streaming, i18n, audit logging, health checks, graceful shutdown. Migration 000001 (core tables) + 000003 (v2 tables) confirmed.
+  - DB tables (migration 001): `dm3_identity.visitors`, `dm3_identity.visits`, `dm3_identity.visitor_badges`, `dm3_identity.watchlist`
+  - DB tables (migration 003 — v2): `dm3_identity.visitor_settings`, `dm3_identity.visit_groups`, `dm3_identity.visitor_access_log`, `dm3_identity.recurring_visit_templates`, `dm3_identity.visitor_agreements`, `dm3_identity.visitor_agreement_signatures`
+  - visits table v2 columns: `group_id`, `recurring_template_id`, `cancelled_reason`, `rejection_reason`, `approved_by`, `checkout_reason`, `reinvite_count`
+  - Implemented: Visitor CRUD ✅ | Visit scheduling & check-in/out ✅ | Walk-in registration ✅ | Watchlist management ✅ | QR code check-in ✅ | Badge printing ✅ | Auto-checkout cron ✅ | Visit Groups (batch/conference) ✅ | Recurring visit templates ✅ | Visitor access log ✅ | Visitor agreements & signatures ✅ | Analytics (top visitors, stats) ✅ | Per-tenant settings ✅ | Evacuation list ✅ | Reinvite flow ✅
+  - API: 40+ endpoints under `/api/v1/visitors/` — visits CRUD, lifecycle (approve/checkin/checkout/reinvite), walk-in, batch, groups, watchlist, agreements, analytics, recurring, settings, access-log, evacuation, QR lookup
+  - Frontend: `apps/console/src/features/visitors/` (8 pages) + `apps/console/src/features/manage/visitors/` (main VisitorsPage with hooks). API client: `packages/api-client/src/visitors.ts` (35+ functions)
 
 - **device-gateway** (`backend/internal/gateway/`) — MQTT bridge, device provisioning, sync coordination, WebSocket events, managed firmware storage
   - Status: ✅ Compliant | Risk: Low
@@ -134,11 +144,14 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Evidence: `PersonDetailPage.tsx:11-12` — uses `usePerson`, `useCredentials`, `useCreateCredential`, `useDeleteCredential`, `useUploadPhoto`, `useEvents` (real API hooks); `IdentitiesPage.tsx` and `GroupsPage.tsx` confirmed to exist in `manage/identities/` with real hook usage
   - Deviation: None significant at UI level. Backend identity tables confirmed in migration.
 
-- **Visitor Management** (`VisitorsPage`)
-  - Status: ✅ Real (backend + frontend working) | Risk: Low
-  - Evidence: `backend/internal/visitor/` — 7 handler files (visitors CRUD, visits CRUD, walk-in flow, watchlist, QR check-in, auto-checkout cron); `backend/internal/models/visitor.go` — domain models; `packages/api-client/src/visitors.ts` — 13 API functions; `apps/console/src/features/manage/visitors/hooks/useVisitors.ts` — 12 TanStack Query hooks; `VisitorsPage.tsx` rewritten from mock to real API
-  - Implemented: Visitor CRUD ✅ | Visit scheduling & check-in/out ✅ | Walk-in registration ✅ | Watchlist management ✅ | QR code check-in ✅ | Badge printing ✅ | Auto-checkout cron ✅ | Frontend with real API hooks ✅
-  - DB tables: `dm3_identity.visitors`, `dm3_identity.visits`, `dm3_identity.visitor_badges`, `dm3_identity.watchlist` — all in consolidated migration
+- **Visitor Management** (`VisitorsPage` + 8 sub-pages)
+  - Status: ✅ Real (backend v2 + frontend working) | Risk: Low
+  - Evidence: `backend/internal/visitor/` — 16 handler files; `backend/cmd/visitor-svc/main.go` — standalone service; `packages/api-client/src/visitors.ts` — 35+ API functions; `apps/console/src/features/manage/visitors/` + `apps/console/src/features/visitors/` — real API hooks
+  - Implemented (v1): Visitor CRUD ✅ | Visit scheduling & check-in/out ✅ | Walk-in registration ✅ | Watchlist management ✅ | QR code check-in ✅ | Badge printing ✅ | Auto-checkout cron ✅
+  - Implemented (v2 — migration 003): Visit Groups (batch/conference) ✅ | Recurring visit templates ✅ | Visitor access log ✅ | Visitor agreements & NDA signatures ✅ | Per-tenant visitor settings ✅ | Analytics (top visitors, stats) ✅ | Evacuation list ✅ | Reinvite flow ✅ | Batch create ✅
+  - DB tables (v1): `dm3_identity.visitors`, `visits`, `visitor_badges`, `watchlist`
+  - DB tables (v2): `visitor_settings`, `visit_groups`, `visitor_access_log`, `recurring_visit_templates`, `visitor_agreements`, `visitor_agreement_signatures`
+  - Frontend pages: VisitorsPage, VisitorSettingsPage, VisitorWatchlistPage, VisitorGroupsPage, VisitorAccessHistoryPage, VisitorAnalyticsPage, VisitorPreRegisterPage, VisitorAgreementsPage, VisitorRecurringPage
 
 - **Contractor Management** (`ContractorsPage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: Medium
@@ -295,7 +308,7 @@ Features with detailed specifications in `docs/specs/` but not yet implemented:
 - **HR System Integration** — Auto-sync employee data from HRIS
 - **Mobile Credentials** — Smartphone-based access credentials
 - **Self-service Portal** — Employee self-management interface
-- ~~**Advanced Visitor Workflows** — Complex approval and escort processes~~ → **Implemented** (Phase 1). Visitor CRUD, visit scheduling, walk-in registration, watchlist, QR check-in, badge printing, auto-checkout cron. Advanced workflows (multi-level approval, escort tracking) remain as Phase 2.
+- ~~**Advanced Visitor Workflows** — Complex approval and escort processes~~ → **Implemented** (Phase 1 + v2). Phase 1: Visitor CRUD, visit scheduling, walk-in, watchlist, QR, badge, auto-checkout. V2 (migration 003): visit groups, recurring templates, access log, agreements/NDA, per-tenant settings, analytics, evacuation list, reinvite, batch create. Remaining Phase 3: multi-level approval chains, escort GPS tracking, contractor badge integration.
 
 ### OPERATE Domain
 - **Advanced Booking Features** — Recurring bookings, resource conflicts, calendar sync

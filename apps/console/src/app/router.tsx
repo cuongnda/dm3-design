@@ -104,6 +104,30 @@ const DepartmentManagementPage = lazy(() =>
 const VisitorsPage = lazy(() =>
   import('@/features/manage/visitors/VisitorsPage').then((m) => ({ default: m.VisitorsPage }))
 );
+const VisitorPreRegisterPage = lazy(() =>
+  import('@/features/visitors/VisitorPreRegisterPage').then((m) => ({ default: m.VisitorPreRegisterPage }))
+);
+const VisitorGroupsPage = lazy(() =>
+  import('@/features/visitors/VisitorGroupsPage').then((m) => ({ default: m.VisitorGroupsPage }))
+);
+const VisitorWatchlistPage = lazy(() =>
+  import('@/features/visitors/VisitorWatchlistPage').then((m) => ({ default: m.VisitorWatchlistPage }))
+);
+const VisitorAgreementsPage = lazy(() =>
+  import('@/features/visitors/VisitorAgreementsPage').then((m) => ({ default: m.VisitorAgreementsPage }))
+);
+const VisitorAccessHistoryPage = lazy(() =>
+  import('@/features/visitors/VisitorAccessHistoryPage').then((m) => ({ default: m.VisitorAccessHistoryPage }))
+);
+const VisitorAnalyticsPage = lazy(() =>
+  import('@/features/visitors/VisitorAnalyticsPage').then((m) => ({ default: m.VisitorAnalyticsPage }))
+);
+const VisitorRecurringPage = lazy(() =>
+  import('@/features/visitors/VisitorRecurringPage').then((m) => ({ default: m.VisitorRecurringPage }))
+);
+const VisitorSettingsPage = lazy(() =>
+  import('@/features/visitors/VisitorSettingsPage').then((m) => ({ default: m.VisitorSettingsPage }))
+);
 const ContractorsPage = lazy(() =>
   import('@/features/manage/contractors/ContractorsPage').then((m) => ({ default: m.ContractorsPage }))
 );
@@ -282,8 +306,18 @@ export const Router = createBrowserRouter([
               { path: 'manage/identities', element: <LazyWrap><IdentitiesPage /></LazyWrap> },
               { path: 'manage/identities/:id', element: <LazyWrap><PersonDetailPage /></LazyWrap> },
               { path: 'manage/identities/groups', element: <LazyWrap><GroupsPage /></LazyWrap> },
-              { path: 'manage/visitors', element: <LazyWrap><VisitorsPage /></LazyWrap> },
               { path: 'manage/contractors', element: <LazyWrap><ContractorsPage /></LazyWrap> },
+
+              // VISITORS
+              { path: 'visitors', element: <LazyWrap><VisitorsPage /></LazyWrap> },
+              { path: 'visitors/register', element: <LazyWrap><VisitorPreRegisterPage /></LazyWrap> },
+              { path: 'visitors/groups', element: <LazyWrap><VisitorGroupsPage /></LazyWrap> },
+              { path: 'visitors/watchlist', element: <LazyWrap><VisitorWatchlistPage /></LazyWrap> },
+              { path: 'visitors/agreements', element: <LazyWrap><VisitorAgreementsPage /></LazyWrap> },
+              { path: 'visitors/access-history', element: <LazyWrap><VisitorAccessHistoryPage /></LazyWrap> },
+              { path: 'visitors/analytics', element: <LazyWrap><VisitorAnalyticsPage /></LazyWrap> },
+              { path: 'visitors/recurring', element: <LazyWrap><VisitorRecurringPage /></LazyWrap> },
+              { path: 'visitors/settings', element: <LazyWrap><VisitorSettingsPage /></LazyWrap> },
               { path: 'manage/attendance', element: <LazyWrap><AttendancePage /></LazyWrap> },
               { path: 'manage/deliveries', element: <LazyWrap><DeliveriesPage /></LazyWrap> },
               { path: 'manage/provisioning', element: <LazyWrap><ProvisioningPage /></LazyWrap> },
