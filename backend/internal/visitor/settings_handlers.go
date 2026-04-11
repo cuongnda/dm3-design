@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
-	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
@@ -49,7 +48,7 @@ func (h *VisitorHandlers) UpdateSettings(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var req models.VisitorSettings
+	var req VisitorSettings
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -181,11 +180,11 @@ func (h *VisitorHandlers) UpdateSettings(w http.ResponseWriter, r *http.Request)
 }
 
 // getOrCreateSettings retrieves visitor settings for a tenant, creating defaults if none exist.
-func (h *VisitorHandlers) getOrCreateSettings(ctx context.Context, tenantID string) (*models.VisitorSettings, error) {
+func (h *VisitorHandlers) getOrCreateSettings(ctx context.Context, tenantID string) (*VisitorSettings, error) {
 	dbCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	var s models.VisitorSettings
+	var s VisitorSettings
 	err := h.db.Pool.QueryRow(dbCtx, `
 		INSERT INTO dm3_identity.visitor_settings (tenant_id)
 		VALUES ($1)

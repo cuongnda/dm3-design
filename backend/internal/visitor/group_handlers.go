@@ -10,7 +10,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
-	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
@@ -64,9 +63,9 @@ func (h *VisitorHandlers) ListVisitGroups(w http.ResponseWriter, r *http.Request
 	}
 	defer rows.Close()
 
-	groups := []models.VisitGroup{}
+	groups := []VisitGroup{}
 	for rows.Next() {
-		var g models.VisitGroup
+		var g VisitGroup
 		if err := rows.Scan(
 			&g.ID, &g.TenantID, &g.Name, &g.Description, &g.HostUserID,
 			&g.Purpose, &g.ExpectedArrival, &g.ExpectedDeparture,
@@ -100,7 +99,7 @@ func (h *VisitorHandlers) GetVisitGroup(w http.ResponseWriter, r *http.Request) 
 
 	groupID := chi.URLParam(r, "group_id")
 
-	var g models.VisitGroup
+	var g VisitGroup
 	err := h.db.Pool.QueryRow(r.Context(), `
 		SELECT g.id, g.tenant_id, g.name, g.description, g.host_user_id,
 		       g.purpose, g.expected_arrival, g.expected_departure,
@@ -149,7 +148,7 @@ func (h *VisitorHandlers) CreateVisitGroup(w http.ResponseWriter, r *http.Reques
 		createdBy = claims.Sub
 	}
 
-	var g models.VisitGroup
+	var g VisitGroup
 	err := h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.visit_groups
 		  (tenant_id, name, description, host_user_id, purpose,
@@ -232,7 +231,7 @@ type batchCreateRequest struct {
 type batchCreateResult struct {
 	Created int            `json:"created"`
 	Failed  int            `json:"failed"`
-	Visits  []models.Visit `json:"visits"`
+	Visits  []Visit `json:"visits"`
 	Errors  []string       `json:"errors,omitempty"`
 }
 
@@ -268,7 +267,7 @@ func (h *VisitorHandlers) BatchCreateVisits(w http.ResponseWriter, r *http.Reque
 		httputil.Error(w, http.StatusBadRequest, "group_id is required for batch creation")
 		return
 	}
-	var group models.VisitGroup
+	var group VisitGroup
 	err := h.db.Pool.QueryRow(r.Context(), `
 		SELECT id, tenant_id, host_user_id, purpose, expected_arrival, expected_departure,
 		       access_areas, escort_required
@@ -290,14 +289,14 @@ func (h *VisitorHandlers) BatchCreateVisits(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	initialStatus := models.VisitStatusPreRegistered
+	initialStatus := VisitStatusPreRegistered
 	if !settings.ApprovalRequired {
-		initialStatus = models.VisitStatusApproved
+		initialStatus = VisitStatusApproved
 	}
-	isAutoApproved := initialStatus == models.VisitStatusApproved
+	isAutoApproved := initialStatus == VisitStatusApproved
 	qrValidityDuration := time.Duration(settings.QRValidityAfterHours) * time.Hour
 
-	result := batchCreateResult{Visits: []models.Visit{}}
+	result := batchCreateResult{Visits: []Visit{}}
 
 	for _, v := range req.Visitors {
 		if v.FirstName == "" || v.LastName == "" {
@@ -321,14 +320,14 @@ func (h *VisitorHandlers) BatchCreateVisits(w http.ResponseWriter, r *http.Reque
 			if err := h.db.Pool.QueryRow(r.Context(),
 				`SELECT watchlist_status, visit_count FROM dm3_identity.visitors WHERE id = $1::uuid`,
 				visitorID).Scan(&watchlistStatus, &visitCount); err == nil {
-				if settings.AutoApproveVIP && watchlistStatus == models.WatchlistVIP {
-					status = models.VisitStatusApproved
+				if settings.AutoApproveVIP && watchlistStatus == WatchlistVIP {
+					status = VisitStatusApproved
 				} else if settings.AutoApproveReturning && visitCount > 1 {
-					status = models.VisitStatusApproved
+					status = VisitStatusApproved
 				}
 			}
 		}
-		approved := status == models.VisitStatusApproved
+		approved := status == VisitStatusApproved
 
 		qrToken, err := generateQRToken()
 		if err != nil {
@@ -338,7 +337,7 @@ func (h *VisitorHandlers) BatchCreateVisits(w http.ResponseWriter, r *http.Reque
 		}
 		qrExpiresAt := group.ExpectedArrival.Add(qrValidityDuration)
 
-		var visit models.Visit
+		var visit Visit
 		err = h.db.Pool.QueryRow(r.Context(), `
 			INSERT INTO dm3_identity.visits
 			  (tenant_id, visitor_id, host_user_id, purpose,

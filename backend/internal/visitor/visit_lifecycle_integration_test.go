@@ -15,7 +15,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
-	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
@@ -130,9 +129,9 @@ func mustJSONBody(t *testing.T, payload any) *bytes.Buffer {
 	return bytes.NewBuffer(body)
 }
 
-func decodeVisitResponse(t *testing.T, w *httptest.ResponseRecorder) models.Visit {
+func decodeVisitResponse(t *testing.T, w *httptest.ResponseRecorder) Visit {
 	t.Helper()
-	var visit models.Visit
+	var visit Visit
 	if err := json.Unmarshal(w.Body.Bytes(), &visit); err != nil {
 		t.Fatalf("decode visit response: %v, body=%s", err, w.Body.String())
 	}
@@ -167,7 +166,7 @@ func TestVisitorLifecycleCreateApproveCheckinCheckout(t *testing.T) {
 			"company":    "Duali QA",
 		},
 		"host_user_id":       hostID,
-		"purpose":            models.VisitPurposeMeeting,
+		"purpose":            VisitPurposeMeeting,
 		"expected_arrival":   expectedArrival.Format(time.RFC3339),
 		"expected_departure": expectedDeparture.Format(time.RFC3339),
 		"escort_required":    true,
@@ -179,7 +178,7 @@ func TestVisitorLifecycleCreateApproveCheckinCheckout(t *testing.T) {
 		t.Fatalf("create visit: expected 201, got %d: %s", createW.Code, createW.Body.String())
 	}
 	createdVisit := decodeVisitResponse(t, createW)
-	if createdVisit.Status != models.VisitStatusPreRegistered || createdVisit.HostUserID != hostID {
+	if createdVisit.Status != VisitStatusPreRegistered || createdVisit.HostUserID != hostID {
 		t.Fatalf("unexpected created visit: %+v", createdVisit)
 	}
 
@@ -189,7 +188,7 @@ func TestVisitorLifecycleCreateApproveCheckinCheckout(t *testing.T) {
 		t.Fatalf("approve visit: expected 200, got %d: %s", approveW.Code, approveW.Body.String())
 	}
 	approvedVisit := decodeVisitResponse(t, approveW)
-	if approvedVisit.Status != models.VisitStatusApproved || !approvedVisit.HostApproved || approvedVisit.HostApprovedAt == nil {
+	if approvedVisit.Status != VisitStatusApproved || !approvedVisit.HostApproved || approvedVisit.HostApprovedAt == nil {
 		t.Fatalf("unexpected approved visit: %+v", approvedVisit)
 	}
 
@@ -207,7 +206,7 @@ func TestVisitorLifecycleCreateApproveCheckinCheckout(t *testing.T) {
 		t.Fatalf("checkin visit: expected 200, got %d: %s", checkinW.Code, checkinW.Body.String())
 	}
 	checkedInVisit := decodeVisitResponse(t, checkinW)
-	if checkedInVisit.Status != models.VisitStatusCheckedIn || checkedInVisit.TempCredentialID == nil || checkedInVisit.ActualCheckin == nil {
+	if checkedInVisit.Status != VisitStatusCheckedIn || checkedInVisit.TempCredentialID == nil || checkedInVisit.ActualCheckin == nil {
 		t.Fatalf("unexpected checked in visit: %+v", checkedInVisit)
 	}
 
@@ -217,7 +216,7 @@ func TestVisitorLifecycleCreateApproveCheckinCheckout(t *testing.T) {
 		t.Fatalf("checkout visit: expected 200, got %d: %s", checkoutW.Code, checkoutW.Body.String())
 	}
 	checkedOutVisit := decodeVisitResponse(t, checkoutW)
-	if checkedOutVisit.Status != models.VisitStatusCheckedOut || checkedOutVisit.ActualCheckout == nil || checkedOutVisit.CheckoutBy == nil || *checkedOutVisit.CheckoutBy != "00000000-0000-0000-0000-0000000000aa" {
+	if checkedOutVisit.Status != VisitStatusCheckedOut || checkedOutVisit.ActualCheckout == nil || checkedOutVisit.CheckoutBy == nil || *checkedOutVisit.CheckoutBy != "00000000-0000-0000-0000-0000000000aa" {
 		t.Fatalf("unexpected checked out visit: %+v", checkedOutVisit)
 	}
 
@@ -268,7 +267,7 @@ func TestWalkinVisitCreatesWaitingVisitAndStoresNationalID(t *testing.T) {
 			"national_id": "WALKIN-999",
 		},
 		"host_user_id":       hostID,
-		"purpose":            models.VisitPurposeDelivery,
+		"purpose":            VisitPurposeDelivery,
 		"expected_departure": departure.Format(time.RFC3339),
 		"escort_required":    false,
 	}
@@ -278,7 +277,7 @@ func TestWalkinVisitCreatesWaitingVisitAndStoresNationalID(t *testing.T) {
 		t.Fatalf("walkin visit: expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 	visit := decodeVisitResponse(t, w)
-	if visit.Status != models.VisitStatusWaiting || visit.ExpectedDeparture == nil || visit.QRToken == "" {
+	if visit.Status != VisitStatusWaiting || visit.ExpectedDeparture == nil || visit.QRToken == "" {
 		t.Fatalf("unexpected walkin visit: %+v", visit)
 	}
 
@@ -299,7 +298,7 @@ func TestVisitorCheckinBlockedByWatchlist(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupVisitorRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusApproved)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusApproved)
 	ctx := context.Background()
 	var fullName string
 	err := database.Pool.QueryRow(ctx, `SELECT first_name || ' ' || last_name FROM dm3_identity.visitors WHERE id = (SELECT visitor_id FROM dm3_identity.visits WHERE id = $1::uuid)`, visitID).Scan(&fullName)
@@ -309,14 +308,14 @@ func TestVisitorCheckinBlockedByWatchlist(t *testing.T) {
 	_, err = database.Pool.Exec(ctx, `
 		INSERT INTO dm3_identity.watchlist (tenant_id, entry_type, match_field, match_value, reason, added_by)
 		VALUES ($1::uuid, $2, 'name', $3, 'security block', '00000000-0000-0000-0000-0000000000aa'::uuid)`,
-		visitorTestTenantID, models.WatchlistBlacklisted, fullName,
+		visitorTestTenantID, WatchlistBlacklisted, fullName,
 	)
 	if err != nil {
 		t.Fatalf("seed watchlist entry: %v", err)
 	}
 
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/checkin", mustJSONBody(t, map[string]any{"checkin_method": models.CheckinMethodReception})))
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/checkin", mustJSONBody(t, map[string]any{"checkin_method": CheckinMethodReception})))
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("watchlist block: expected 403, got %d: %s", w.Code, w.Body.String())
 	}
@@ -334,7 +333,7 @@ func TestVisitorCheckinBlockedByWatchlist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("count temp credentials: %v", err)
 	}
-	if visitStatus != models.VisitStatusApproved || tempCredCount != 0 {
+	if visitStatus != VisitStatusApproved || tempCredCount != 0 {
 		t.Fatalf("watchlist block should leave visit untouched, status=%s temp_creds=%d", visitStatus, tempCredCount)
 	}
 }
@@ -345,10 +344,10 @@ func TestMarkNoShowCandidatesMarksOnlyOverdueOpenVisits(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	ctx := context.Background()
-	preRegID, _, _ := createVisitorFixture(t, database, models.VisitStatusPreRegistered)
-	approvedID, _, _ := createVisitorFixture(t, database, models.VisitStatusApproved)
-	waitingID, _, _ := createVisitorFixture(t, database, models.VisitStatusWaiting)
-	checkedInID, _, _ := createVisitorFixture(t, database, models.VisitStatusCheckedIn)
+	preRegID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
+	approvedID, _, _ := createVisitorFixture(t, database, VisitStatusApproved)
+	waitingID, _, _ := createVisitorFixture(t, database, VisitStatusWaiting)
+	checkedInID, _, _ := createVisitorFixture(t, database, VisitStatusCheckedIn)
 
 	for _, id := range []string{preRegID, approvedID, waitingID, checkedInID} {
 		_, err := database.Pool.Exec(ctx, `UPDATE dm3_identity.visits SET expected_arrival = now() - interval '3 hours' WHERE id = $1::uuid`, id)
@@ -378,10 +377,10 @@ func TestMarkNoShowCandidatesMarksOnlyOverdueOpenVisits(t *testing.T) {
 		}
 		statuses[id] = status
 	}
-	if statuses[preRegID] != models.VisitStatusNoShow || statuses[approvedID] != models.VisitStatusNoShow || statuses[waitingID] != models.VisitStatusNoShow {
+	if statuses[preRegID] != VisitStatusNoShow || statuses[approvedID] != VisitStatusNoShow || statuses[waitingID] != VisitStatusNoShow {
 		t.Fatalf("expected overdue open visits to be no_show, got %+v", statuses)
 	}
-	if statuses[checkedInID] != models.VisitStatusCheckedIn {
+	if statuses[checkedInID] != VisitStatusCheckedIn {
 		t.Fatalf("checked-in visit should stay checked_in, got %+v", statuses)
 	}
 }
@@ -390,7 +389,7 @@ func TestVisitorCheckinReusesExistingTempAccessOnRetry(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	visitID, qrToken, _ := createVisitorFixture(t, database, models.VisitStatusPreRegistered)
+	visitID, qrToken, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 	ctx := context.Background()
 
 	var tempUserID, tempCredID string
@@ -430,7 +429,7 @@ func TestVisitorCheckinReusesExistingTempAccessOnRetry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load visit after checkin: %v", err)
 	}
-	if status != models.VisitStatusCheckedIn {
+	if status != VisitStatusCheckedIn {
 		t.Fatalf("expected checked_in, got %s", status)
 	}
 	if linkedCredID != tempCredID {
@@ -451,7 +450,7 @@ func TestVisitorCheckoutRevokesTempAccessAndClosesBadge(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	visitID, qrToken, badgeNumber := createVisitorFixture(t, database, models.VisitStatusCheckedIn)
+	visitID, qrToken, badgeNumber := createVisitorFixture(t, database, VisitStatusCheckedIn)
 	ctx := context.Background()
 
 	var tempUserID, tempCredID string
@@ -507,7 +506,7 @@ func TestVisitorCheckoutRevokesTempAccessAndClosesBadge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load badge: %v", err)
 	}
-	if visitStatus != models.VisitStatusCheckedOut {
+	if visitStatus != VisitStatusCheckedOut {
 		t.Fatalf("expected checked_out, got %s", visitStatus)
 	}
 	if credentialStatus != "revoked" {
@@ -525,7 +524,7 @@ func TestAutoCheckoutSharesManualCleanupSemantics(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	visitID, qrToken, badgeNumber := createVisitorFixture(t, database, models.VisitStatusCheckedIn)
+	visitID, qrToken, badgeNumber := createVisitorFixture(t, database, VisitStatusCheckedIn)
 	ctx := context.Background()
 
 	var tempUserID, tempCredID string
@@ -581,7 +580,7 @@ func TestAutoCheckoutSharesManualCleanupSemantics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load badge: %v", err)
 	}
-	if visitStatus != models.VisitStatusCheckedOut || credentialStatus != "revoked" || userStatus != "inactive" || badgeReturnedAt == nil {
+	if visitStatus != VisitStatusCheckedOut || credentialStatus != "revoked" || userStatus != "inactive" || badgeReturnedAt == nil {
 		payload, _ := json.Marshal(map[string]any{
 			"visit_status": visitStatus,
 			"credential":   credentialStatus,

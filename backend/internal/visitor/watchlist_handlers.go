@@ -10,7 +10,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
-	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
@@ -57,9 +56,9 @@ func (h *VisitorHandlers) ListWatchlist(w http.ResponseWriter, r *http.Request) 
 	}
 	defer rows.Close()
 
-	entries := []models.WatchlistEntry{}
+	entries := []WatchlistEntry{}
 	for rows.Next() {
-		var e models.WatchlistEntry
+		var e WatchlistEntry
 		if err := rows.Scan(&e.ID, &e.TenantID, &e.EntryType, &e.MatchField, &e.MatchValue, &e.FaceTemplateRef, &e.Reason, &e.AddedBy, &e.ExpiresAt, &e.CreatedAt); err != nil {
 			slog.Error("list watchlist scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
@@ -103,7 +102,7 @@ func (h *VisitorHandlers) CreateWatchlistEntry(w http.ResponseWriter, r *http.Re
 		httputil.Error(w, http.StatusBadRequest, "entry_type, match_field, match_value, and reason are required")
 		return
 	}
-	if req.EntryType != models.WatchlistVIP && req.EntryType != models.WatchlistBlacklisted {
+	if req.EntryType != WatchlistVIP && req.EntryType != WatchlistBlacklisted {
 		httputil.Error(w, http.StatusBadRequest, "invalid entry_type")
 		return
 	}
@@ -113,7 +112,7 @@ func (h *VisitorHandlers) CreateWatchlistEntry(w http.ResponseWriter, r *http.Re
 		addedBy = claims.Sub
 	}
 
-	var entry models.WatchlistEntry
+	var entry WatchlistEntry
 	err := h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.watchlist
 		  (tenant_id, entry_type, match_field, match_value, face_template_ref, reason, added_by, expires_at)

@@ -162,6 +162,8 @@ Only a handful of pages (Dashboard, Devices, Identities, System Settings) connec
 ## Git Conventions
 
 - Conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
+- **Commit after every completed task** — each logical unit of work gets its own commit so progress is trackable and easy to rollback
+- Use `DM3_NO_AUTO_RELOAD=1` prefix when committing to skip the post-commit auto-reload hook
 - Never push without explicit permission from the project owner
 - Never `git push --no-verify`
 

@@ -9,7 +9,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
-	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
@@ -76,10 +75,10 @@ func (h *VisitorHandlers) ListRecurringTemplates(w http.ResponseWriter, r *http.
 	}
 	defer rows.Close()
 
-	templates := []models.RecurringVisitTemplate{}
+	templates := []RecurringVisitTemplate{}
 	for rows.Next() {
-		var t models.RecurringVisitTemplate
-		var v models.Visitor
+		var t RecurringVisitTemplate
+		var v Visitor
 		if err := rows.Scan(
 			&t.ID, &t.TenantID, &t.VisitorID, &t.HostUserID, &t.Purpose,
 			&t.AccessAreas, &t.EscortRequired, &t.RecurrenceRule,
@@ -142,7 +141,7 @@ func (h *VisitorHandlers) CreateRecurringTemplate(w http.ResponseWriter, r *http
 		createdBy = claims.Sub
 	}
 
-	var t models.RecurringVisitTemplate
+	var t RecurringVisitTemplate
 	err := h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.recurring_visit_templates
 		  (tenant_id, visitor_id, host_user_id, purpose, access_areas,
@@ -195,7 +194,7 @@ func (h *VisitorHandlers) UpdateRecurringTemplate(w http.ResponseWriter, r *http
 		return
 	}
 
-	var t models.RecurringVisitTemplate
+	var t RecurringVisitTemplate
 	err := h.db.Pool.QueryRow(r.Context(), `
 		UPDATE dm3_identity.recurring_visit_templates
 		SET active   = COALESCE($3, active),

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
-	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
@@ -79,7 +78,7 @@ func (h *VisitorHandlers) WalkinVisit(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	qrExpiresAt := now.Add(4 * time.Hour)
-	var visit models.Visit
+	var visit Visit
 	err = h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.visits
 		  (tenant_id, visitor_id, host_user_id, purpose, purpose_note,

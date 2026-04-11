@@ -8,7 +8,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
-	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
@@ -50,9 +49,9 @@ func (h *VisitorHandlers) ListAgreements(w http.ResponseWriter, r *http.Request)
 	}
 	defer rows.Close()
 
-	agreements := []models.VisitorAgreement{}
+	agreements := []VisitorAgreement{}
 	for rows.Next() {
-		var a models.VisitorAgreement
+		var a VisitorAgreement
 		if err := rows.Scan(
 			&a.ID, &a.TenantID, &a.Name, &a.Content, &a.Version,
 			&a.Active, &a.RequiredFor, &a.CreatedAt, &a.UpdatedAt,
@@ -92,7 +91,7 @@ func (h *VisitorHandlers) CreateAgreement(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var a models.VisitorAgreement
+	var a VisitorAgreement
 	err := h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.visitor_agreements (tenant_id, name, content, required_for)
 		VALUES ($1::uuid, $2, $3, $4)
@@ -145,7 +144,7 @@ func (h *VisitorHandlers) UpdateAgreement(w http.ResponseWriter, r *http.Request
 		versionBump = ", version = version + 1"
 	}
 
-	var a models.VisitorAgreement
+	var a VisitorAgreement
 	err := h.db.Pool.QueryRow(r.Context(), `
 		UPDATE dm3_identity.visitor_agreements
 		SET name         = COALESCE($3, name),
@@ -218,7 +217,7 @@ func (h *VisitorHandlers) SignAgreement(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var sig models.VisitorAgreementSignature
+	var sig VisitorAgreementSignature
 	err := h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.visitor_agreement_signatures
 		  (tenant_id, visit_id, agreement_id, visitor_id, signature_ref)
@@ -272,7 +271,7 @@ func (h *VisitorHandlers) ListVisitSignatures(w http.ResponseWriter, r *http.Req
 	defer rows.Close()
 
 	type signatureWithName struct {
-		models.VisitorAgreementSignature
+		VisitorAgreementSignature
 		AgreementName    string `json:"agreement_name"`
 		AgreementVersion int    `json:"agreement_version"`
 	}

@@ -55,9 +55,13 @@ func main() {
 	}
 	defer natsClient.Close()
 
-	// Ensure NATS stream
+	// Ensure NATS streams
 	if err := natsClient.EnsureStream(ctx, "DEVICES", []string{"dm3.devices.>"}); err != nil {
-		slog.Error("failed to ensure nats stream", "error", err)
+		slog.Error("failed to ensure DEVICES nats stream", "error", err)
+		os.Exit(1)
+	}
+	if err := natsClient.EnsureStream(ctx, "ACCESS", []string{"dm3.access.>"}); err != nil {
+		slog.Error("failed to ensure ACCESS nats stream", "error", err)
 		os.Exit(1)
 	}
 

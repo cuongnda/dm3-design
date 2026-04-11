@@ -15,7 +15,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
-	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
@@ -94,7 +93,7 @@ func (h *VisitorHandlers) ListVisits(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	visits := []models.Visit{}
+	visits := []Visit{}
 	for rows.Next() {
 		v, err := scanVisitWithJoins(rows)
 		if err != nil {
@@ -247,19 +246,19 @@ func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Determine initial visit status based on approval settings
-	initialStatus := models.VisitStatusPreRegistered
+	initialStatus := VisitStatusPreRegistered
 	if !settings.ApprovalRequired {
-		initialStatus = models.VisitStatusApproved
+		initialStatus = VisitStatusApproved
 	} else {
 		var watchlistStatus string
 		var visitCount int
 		if err := h.db.Pool.QueryRow(r.Context(),
 			`SELECT watchlist_status, visit_count FROM dm3_identity.visitors WHERE id = $1::uuid`,
 			visitorID).Scan(&watchlistStatus, &visitCount); err == nil {
-			if settings.AutoApproveVIP && watchlistStatus == models.WatchlistVIP {
-				initialStatus = models.VisitStatusApproved
+			if settings.AutoApproveVIP && watchlistStatus == WatchlistVIP {
+				initialStatus = VisitStatusApproved
 			} else if settings.AutoApproveReturning && visitCount > 1 {
-				initialStatus = models.VisitStatusApproved
+				initialStatus = VisitStatusApproved
 			}
 		}
 	}
@@ -272,9 +271,9 @@ func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 	}
 	qrExpiresAt := req.ExpectedArrival.Add(time.Duration(settings.QRValidityAfterHours) * time.Hour)
 
-	isAutoApproved := initialStatus == models.VisitStatusApproved
+	isAutoApproved := initialStatus == VisitStatusApproved
 
-	var visit models.Visit
+	var visit Visit
 	err = h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_identity.visits
 		  (tenant_id, visitor_id, host_user_id, purpose, purpose_note,
@@ -316,7 +315,7 @@ func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.audit != nil {
 		auditAction := "visit.pre_registered"
-		if initialStatus == models.VisitStatusApproved {
+		if initialStatus == VisitStatusApproved {
 			auditAction = "visit.auto_approved"
 		}
 		h.audit.LogFromRequest(r, auditAction, "visit", visit.ID, visitorName, "success", nil, visit)
@@ -361,7 +360,7 @@ func (h *VisitorHandlers) UpdateVisit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var oldVisit models.Visit
+	var oldVisit Visit
 	if err := h.db.Pool.QueryRow(r.Context(), `SELECT id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		status, expected_arrival, expected_departure, actual_checkin, actual_checkout,
 		checkin_method, checkin_device_id, checkin_photo_ref, checkout_by, qr_token, qr_expires_at,
@@ -379,7 +378,7 @@ func (h *VisitorHandlers) UpdateVisit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var visit models.Visit
+	var visit Visit
 	err := h.db.Pool.QueryRow(r.Context(), `
 		UPDATE dm3_identity.visits
 		SET purpose            = COALESCE($3, purpose),
@@ -455,12 +454,12 @@ func (h *VisitorHandlers) ApproveVisit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := models.VisitStatusRejected
+	status := VisitStatusRejected
 	if req.Approved {
-		status = models.VisitStatusApproved
+		status = VisitStatusApproved
 	}
 
-	var visit models.Visit
+	var visit Visit
 	err := h.db.Pool.QueryRow(r.Context(), `
 		UPDATE dm3_identity.visits
 		SET status           = $3,
@@ -564,7 +563,7 @@ func (h *VisitorHandlers) ReinviteVisit(w http.ResponseWriter, r *http.Request) 
 
 	newQRExpiry := expectedArrival.Add(time.Duration(settings.QRValidityAfterHours) * time.Hour)
 
-	var visit models.Visit
+	var visit Visit
 	err = h.db.Pool.QueryRow(r.Context(), `
 		UPDATE dm3_identity.visits
 		SET qr_token       = $3,
@@ -858,7 +857,7 @@ func (h *VisitorHandlers) GetTodaySummary(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var summary models.VisitSummary
+	var summary VisitSummary
 	err := h.db.Pool.QueryRow(r.Context(), `
 		SELECT
 		  COUNT(*) FILTER (WHERE status = 'waiting')      AS waiting,
@@ -879,10 +878,10 @@ func (h *VisitorHandlers) GetTodaySummary(w http.ResponseWriter, r *http.Request
 
 type rowScanner interface{ Scan(dest ...any) error }
 
-func scanVisitWithJoins(row rowScanner) (models.Visit, error) {
-	var v models.Visit
-	vis := &models.Visitor{}
-	host := &models.VisitHost{}
+func scanVisitWithJoins(row rowScanner) (Visit, error) {
+	var v Visit
+	vis := &Visitor{}
+	host := &VisitHost{}
 	err := row.Scan(
 		&v.ID, &v.TenantID, &v.VisitorID, &v.HostUserID,
 		&v.Purpose, &v.PurposeNote, &v.Status,
@@ -1027,7 +1026,7 @@ var (
 )
 
 type visitRow struct {
-	models.Visit
+	Visit
 	VisitorFirstName string
 	VisitorLastName  string
 }
@@ -1044,31 +1043,31 @@ type checkoutCleanup struct {
 	AlreadyCheckedOut   bool
 }
 
-func (h *VisitorHandlers) checkinVisitTx(ctx context.Context, tx pgx.Tx, tenantID, visitID string, req checkinRequest) (models.Visit, string, bool, string, error) {
+func (h *VisitorHandlers) checkinVisitTx(ctx context.Context, tx pgx.Tx, tenantID, visitID string, req checkinRequest) (Visit, string, bool, string, error) {
 	lockedVisit, tempUserID, tempCredID, err := loadVisitForLifecycle(ctx, tx, tenantID, visitID)
 	if err != nil {
-		return models.Visit{}, "", false, "", err
+		return Visit{}, "", false, "", err
 	}
 	visitorName := auditEntityName(lockedVisit.VisitorFirstName, lockedVisit.VisitorLastName)
 
-	if lockedVisit.Status == models.VisitStatusCheckedIn {
+	if lockedVisit.Status == VisitStatusCheckedIn {
 		if tempCredID == nil {
 			credID, _, ensureErr := ensureTemporaryAccess(ctx, tx, tenantID, lockedVisit, tempUserID)
 			if ensureErr != nil {
-				return models.Visit{}, "", false, visitorName, ensureErr
+				return Visit{}, "", false, visitorName, ensureErr
 			}
 			tempCredID = &credID
 		}
 		visit, getErr := getVisitByIDTx(ctx, tx, tenantID, visitID)
 		return visit, derefString(tempCredID), true, visitorName, getErr
 	}
-	if lockedVisit.Status != models.VisitStatusPreRegistered && lockedVisit.Status != models.VisitStatusApproved && lockedVisit.Status != models.VisitStatusWaiting {
-		return models.Visit{}, "", false, visitorName, errVisitCheckinConflict
+	if lockedVisit.Status != VisitStatusPreRegistered && lockedVisit.Status != VisitStatusApproved && lockedVisit.Status != VisitStatusWaiting {
+		return Visit{}, "", false, visitorName, errVisitCheckinConflict
 	}
 
 	credID, _, err := ensureTemporaryAccess(ctx, tx, tenantID, lockedVisit, tempUserID)
 	if err != nil {
-		return models.Visit{}, "", false, visitorName, err
+		return Visit{}, "", false, visitorName, err
 	}
 	_, err = tx.Exec(ctx, `
 		UPDATE dm3_identity.visits
@@ -1086,38 +1085,38 @@ func (h *VisitorHandlers) checkinVisitTx(ctx context.Context, tx pgx.Tx, tenantI
 		visitID, tenantID, req.CheckinMethod, req.CheckinDeviceID, req.PhotoRef, req.ItemsCarried, req.NDASigned, req.BadgeNumber, credID,
 	)
 	if err != nil {
-		return models.Visit{}, "", false, visitorName, err
+		return Visit{}, "", false, visitorName, err
 	}
 	visit, err := getVisitByIDTx(ctx, tx, tenantID, visitID)
 	return visit, credID, false, visitorName, err
 }
 
-func (h *VisitorHandlers) checkoutVisitTx(ctx context.Context, tx pgx.Tx, tenantID, visitID string, opts checkoutOptions) (models.Visit, checkoutCleanup, error) {
+func (h *VisitorHandlers) checkoutVisitTx(ctx context.Context, tx pgx.Tx, tenantID, visitID string, opts checkoutOptions) (Visit, checkoutCleanup, error) {
 	lockedVisit, tempUserID, tempCredID, err := loadVisitForLifecycle(ctx, tx, tenantID, visitID)
 	if err != nil {
-		return models.Visit{}, checkoutCleanup{}, err
+		return Visit{}, checkoutCleanup{}, err
 	}
 	cleanup := checkoutCleanup{TempCredentialID: tempCredID}
-	if lockedVisit.Status != models.VisitStatusCheckedIn && lockedVisit.Status != models.VisitStatusCheckedOut {
-		return models.Visit{}, cleanup, errVisitCheckoutConflict
+	if lockedVisit.Status != VisitStatusCheckedIn && lockedVisit.Status != VisitStatusCheckedOut {
+		return Visit{}, cleanup, errVisitCheckoutConflict
 	}
-	cleanup.AlreadyCheckedOut = lockedVisit.Status == models.VisitStatusCheckedOut
+	cleanup.AlreadyCheckedOut = lockedVisit.Status == VisitStatusCheckedOut
 
 	if tempCredID != nil {
 		if _, err := tx.Exec(ctx, `UPDATE dm3_identity.credentials SET status = 'revoked', valid_until = now(), updated_at = now() WHERE id = $1::uuid AND status <> 'revoked'`, *tempCredID); err != nil {
-			return models.Visit{}, cleanup, err
+			return Visit{}, cleanup, err
 		}
 	}
 	if tempUserID != nil {
 		cmd, err := tx.Exec(ctx, `UPDATE dm3_identity.users SET status = 'inactive', expired_date = COALESCE(expired_date, CURRENT_DATE), updated_at = now() WHERE id = $1::uuid AND tenant_id = $2::uuid AND status <> 'inactive'`, *tempUserID, tenantID)
 		if err != nil {
-			return models.Visit{}, cleanup, err
+			return Visit{}, cleanup, err
 		}
 		cleanup.TempUserDeactivated = cmd.RowsAffected() > 0
 	}
 	badgeCmd, err := tx.Exec(ctx, `UPDATE dm3_identity.visitor_badges SET returned_at = COALESCE(returned_at, now()) WHERE visit_id = $1::uuid AND tenant_id = $2::uuid AND returned_at IS NULL`, visitID, tenantID)
 	if err != nil {
-		return models.Visit{}, cleanup, err
+		return Visit{}, cleanup, err
 	}
 	cleanup.BadgeClosed = badgeCmd.RowsAffected() > 0
 
@@ -1129,7 +1128,7 @@ func (h *VisitorHandlers) checkoutVisitTx(ctx context.Context, tx pgx.Tx, tenant
 			    checkout_by     = COALESCE($3::uuid, checkout_by),
 			    updated_at      = now()
 			WHERE id = $1::uuid AND tenant_id = $2::uuid`, visitID, tenantID, opts.CheckoutBy); err != nil {
-			return models.Visit{}, cleanup, err
+			return Visit{}, cleanup, err
 		}
 	}
 	visit, err := getVisitByIDTx(ctx, tx, tenantID, visitID)
@@ -1265,8 +1264,8 @@ func ensureTemporaryAccess(ctx context.Context, tx pgx.Tx, tenantID string, visi
 	return credID, existingUserID, err
 }
 
-func getVisitByIDTx(ctx context.Context, tx pgx.Tx, tenantID, visitID string) (models.Visit, error) {
-	var visit models.Visit
+func getVisitByIDTx(ctx context.Context, tx pgx.Tx, tenantID, visitID string) (Visit, error) {
+	var visit Visit
 	err := tx.QueryRow(ctx, `
 		SELECT id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		       status, expected_arrival, expected_departure,
@@ -1323,7 +1322,7 @@ func nilIfEmptyUUIDArray(values []string) any {
 
 func isValidVisitPurpose(v string) bool {
 	switch v {
-	case models.VisitPurposeMeeting, models.VisitPurposeInterview, models.VisitPurposeDelivery, models.VisitPurposeMaintenance, models.VisitPurposeTour, models.VisitPurposeContractSigning, models.VisitPurposeOther:
+	case VisitPurposeMeeting, VisitPurposeInterview, VisitPurposeDelivery, VisitPurposeMaintenance, VisitPurposeTour, VisitPurposeContractSigning, VisitPurposeOther:
 		return true
 	default:
 		return false
@@ -1332,7 +1331,7 @@ func isValidVisitPurpose(v string) bool {
 
 func isValidCheckinMethod(v string) bool {
 	switch v {
-	case models.CheckinMethodTerminalQR, models.CheckinMethodTerminalManual, models.CheckinMethodReception, models.CheckinMethodSelfService, models.CheckinMethodMobileQR:
+	case CheckinMethodTerminalQR, CheckinMethodTerminalManual, CheckinMethodReception, CheckinMethodSelfService, CheckinMethodMobileQR:
 		return true
 	default:
 		return false

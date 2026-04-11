@@ -12,7 +12,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
-	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
@@ -24,7 +23,7 @@ func TestApproveVisitWithEmptyBody(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupVisitorRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusPreRegistered)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
 	// POST with no body should default to approved=true
 	w := httptest.NewRecorder()
@@ -33,7 +32,7 @@ func TestApproveVisitWithEmptyBody(t *testing.T) {
 		t.Fatalf("approve with empty body: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	visit := decodeVisitResponse(t, w)
-	if visit.Status != models.VisitStatusApproved {
+	if visit.Status != VisitStatusApproved {
 		t.Fatalf("expected approved, got %s", visit.Status)
 	}
 	if !visit.HostApproved {
@@ -47,7 +46,7 @@ func TestRejectVisit(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupVisitorRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusPreRegistered)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/approve",
@@ -56,7 +55,7 @@ func TestRejectVisit(t *testing.T) {
 		t.Fatalf("reject visit: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	visit := decodeVisitResponse(t, w)
-	if visit.Status != models.VisitStatusRejected {
+	if visit.Status != VisitStatusRejected {
 		t.Fatalf("expected rejected, got %s", visit.Status)
 	}
 	if visit.HostApproved {
@@ -70,7 +69,7 @@ func TestApproveAlreadyApprovedVisitFails(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupVisitorRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusApproved)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusApproved)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/approve",
@@ -86,7 +85,7 @@ func TestApproveCheckedInVisitFails(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupVisitorRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusCheckedIn)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusCheckedIn)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/approve",
@@ -102,7 +101,7 @@ func TestApproveWaitingVisitSucceeds(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupVisitorRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusWaiting)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusWaiting)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/approve",
@@ -111,7 +110,7 @@ func TestApproveWaitingVisitSucceeds(t *testing.T) {
 		t.Fatalf("approve waiting: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	visit := decodeVisitResponse(t, w)
-	if visit.Status != models.VisitStatusApproved {
+	if visit.Status != VisitStatusApproved {
 		t.Fatalf("expected approved, got %s", visit.Status)
 	}
 }
@@ -139,11 +138,11 @@ func TestCheckinFromCheckedOutStatusFails(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupVisitorRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusCheckedOut)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusCheckedOut)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/checkin",
-		mustJSONBody(t, map[string]any{"checkin_method": models.CheckinMethodReception})))
+		mustJSONBody(t, map[string]any{"checkin_method": CheckinMethodReception})))
 	if w.Code != http.StatusConflict {
 		t.Fatalf("checkin from checked_out: expected 409, got %d: %s", w.Code, w.Body.String())
 	}
@@ -155,11 +154,11 @@ func TestCheckinFromNoShowStatusFails(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupVisitorRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusNoShow)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusNoShow)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/checkin",
-		mustJSONBody(t, map[string]any{"checkin_method": models.CheckinMethodReception})))
+		mustJSONBody(t, map[string]any{"checkin_method": CheckinMethodReception})))
 	if w.Code != http.StatusConflict {
 		t.Fatalf("checkin from no_show: expected 409, got %d: %s", w.Code, w.Body.String())
 	}
@@ -171,11 +170,11 @@ func TestCheckinFromRejectedStatusFails(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupVisitorRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusRejected)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusRejected)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/checkin",
-		mustJSONBody(t, map[string]any{"checkin_method": models.CheckinMethodReception})))
+		mustJSONBody(t, map[string]any{"checkin_method": CheckinMethodReception})))
 	if w.Code != http.StatusConflict {
 		t.Fatalf("checkin from rejected: expected 409, got %d: %s", w.Code, w.Body.String())
 	}
@@ -187,7 +186,7 @@ func TestCheckinWithInvalidMethodFails(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupVisitorRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusPreRegistered)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/checkin",
@@ -203,11 +202,11 @@ func TestCheckinWithWrongQRTokenFails(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupVisitorRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusApproved)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusApproved)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/checkin",
-		mustJSONBody(t, map[string]any{"checkin_method": models.CheckinMethodTerminalQR, "qr_token": "wrong-token-value"})))
+		mustJSONBody(t, map[string]any{"checkin_method": CheckinMethodTerminalQR, "qr_token": "wrong-token-value"})))
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("checkin wrong qr: expected 403, got %d: %s", w.Code, w.Body.String())
 	}
@@ -218,17 +217,17 @@ func TestCheckinAllValidMethods(t *testing.T) {
 	defer database.Close()
 
 	methods := []string{
-		models.CheckinMethodTerminalQR,
-		models.CheckinMethodTerminalManual,
-		models.CheckinMethodReception,
-		models.CheckinMethodSelfService,
-		models.CheckinMethodMobileQR,
+		CheckinMethodTerminalQR,
+		CheckinMethodTerminalManual,
+		CheckinMethodReception,
+		CheckinMethodSelfService,
+		CheckinMethodMobileQR,
 	}
 	for _, method := range methods {
 		t.Run(method, func(t *testing.T) {
 			h := NewVisitorHandlers(database, nil)
 			router := setupVisitorRouter(h)
-			visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusPreRegistered)
+			visitID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/checkin",
@@ -248,7 +247,7 @@ func TestCheckoutWithEmptyBody(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupVisitorRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusCheckedIn)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusCheckedIn)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/checkout", nil))
@@ -256,7 +255,7 @@ func TestCheckoutWithEmptyBody(t *testing.T) {
 		t.Fatalf("checkout empty body: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	visit := decodeVisitResponse(t, w)
-	if visit.Status != models.VisitStatusCheckedOut {
+	if visit.Status != VisitStatusCheckedOut {
 		t.Fatalf("expected checked_out, got %s", visit.Status)
 	}
 }
@@ -267,7 +266,7 @@ func TestCheckoutFromPreRegisteredFails(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupVisitorRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusPreRegistered)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/checkout",
@@ -283,7 +282,7 @@ func TestCheckoutIdempotent(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupVisitorRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusCheckedIn)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusCheckedIn)
 
 	// First checkout
 	w1 := httptest.NewRecorder()
@@ -324,7 +323,7 @@ func TestGetVisitByQRValid(t *testing.T) {
 	defer database.Close()
 
 	h := NewVisitorHandlers(database, nil)
-	visitID, qrToken, _ := createVisitorFixture(t, database, models.VisitStatusPreRegistered)
+	visitID, qrToken, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
 	r := httputil.NewRouter()
 	r.Get("/api/v1/visitors/qr/{qr_token}", h.GetVisitByQR)
@@ -341,7 +340,7 @@ func TestGetVisitByQRValid(t *testing.T) {
 	if resp["visit_id"] != visitID {
 		t.Fatalf("expected visit_id %s, got %v", visitID, resp["visit_id"])
 	}
-	if resp["status"] != models.VisitStatusPreRegistered {
+	if resp["status"] != VisitStatusPreRegistered {
 		t.Fatalf("expected status pre_registered, got %v", resp["status"])
 	}
 }
@@ -351,7 +350,7 @@ func TestGetVisitByQRExpired(t *testing.T) {
 	defer database.Close()
 
 	h := NewVisitorHandlers(database, nil)
-	_, qrToken, _ := createVisitorFixture(t, database, models.VisitStatusPreRegistered)
+	_, qrToken, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
 	// Expire the QR token
 	ctx := context.Background()
@@ -390,7 +389,7 @@ func TestGetVisitByQRWithAuthContext(t *testing.T) {
 	defer database.Close()
 
 	h := NewVisitorHandlers(database, nil)
-	_, qrToken, _ := createVisitorFixture(t, database, models.VisitStatusApproved)
+	_, qrToken, _ := createVisitorFixture(t, database, VisitStatusApproved)
 
 	// With auth context — should filter by tenant_id
 	claims := &authsvc.AccessClaims{
@@ -427,7 +426,7 @@ func TestTodaySummaryReturnsCorrectCounts(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("today summary: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	var summary models.VisitSummary
+	var summary VisitSummary
 	if err := json.Unmarshal(w.Body.Bytes(), &summary); err != nil {
 		t.Fatalf("decode summary: %v", err)
 	}
@@ -506,8 +505,8 @@ func TestListVisitsFilterByStatus(t *testing.T) {
 	router := setupListVisitsRouter(h)
 
 	// Create visits with different statuses
-	createVisitorFixture(t, database, models.VisitStatusPreRegistered)
-	createVisitorFixture(t, database, models.VisitStatusCheckedIn)
+	createVisitorFixture(t, database, VisitStatusPreRegistered)
+	createVisitorFixture(t, database, VisitStatusCheckedIn)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/visitors?status=checked_in", nil))
@@ -515,13 +514,13 @@ func TestListVisitsFilterByStatus(t *testing.T) {
 		t.Fatalf("list by status: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	var resp struct {
-		Data []models.Visit `json:"data"`
+		Data []Visit `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
 	for _, v := range resp.Data {
-		if v.Status != models.VisitStatusCheckedIn {
+		if v.Status != VisitStatusCheckedIn {
 			t.Fatalf("expected only checked_in visits, got %s", v.Status)
 		}
 	}
@@ -566,7 +565,7 @@ func TestGetVisitReturnsJoinedData(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupListVisitsRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusPreRegistered)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/visitors/"+visitID, nil))
@@ -626,9 +625,9 @@ func TestUpdateVisitChangesFields(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupMutationRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusPreRegistered)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
-	newPurpose := models.VisitPurposeInterview
+	newPurpose := VisitPurposeInterview
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodPut, "/api/v1/visitors/"+visitID,
 		mustJSONBody(t, map[string]any{"purpose": newPurpose, "notes": "updated notes"})))
@@ -647,7 +646,7 @@ func TestUpdateVisitCheckedInStatusFails(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupMutationRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusCheckedIn)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusCheckedIn)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodPut, "/api/v1/visitors/"+visitID,
@@ -663,7 +662,7 @@ func TestUpdateVisitInvalidPurposeFails(t *testing.T) {
 
 	h := NewVisitorHandlers(database, nil)
 	router := setupMutationRouter(h)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusPreRegistered)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
 	w := httptest.NewRecorder()
 	invalid := "invalid_purpose"
@@ -685,13 +684,13 @@ func TestCreateVisitAllPurposes(t *testing.T) {
 	hostID := createHostRecord(t, database, "Purpose", "Host")
 
 	purposes := []string{
-		models.VisitPurposeMeeting,
-		models.VisitPurposeInterview,
-		models.VisitPurposeDelivery,
-		models.VisitPurposeMaintenance,
-		models.VisitPurposeTour,
-		models.VisitPurposeContractSigning,
-		models.VisitPurposeOther,
+		VisitPurposeMeeting,
+		VisitPurposeInterview,
+		VisitPurposeDelivery,
+		VisitPurposeMaintenance,
+		VisitPurposeTour,
+		VisitPurposeContractSigning,
+		VisitPurposeOther,
 	}
 	for _, purpose := range purposes {
 		t.Run(purpose, func(t *testing.T) {
@@ -742,7 +741,7 @@ func TestCreateVisitInvalidHostFails(t *testing.T) {
 	req := map[string]any{
 		"visitor":          map[string]any{"first_name": "Test", "last_name": "User"},
 		"host_user_id":     "00000000-0000-0000-0000-fffffffffffe",
-		"purpose":          models.VisitPurposeMeeting,
+		"purpose":          VisitPurposeMeeting,
 		"expected_arrival": time.Now().Add(1 * time.Hour).Format(time.RFC3339),
 	}
 	w := httptest.NewRecorder()
@@ -770,7 +769,7 @@ func TestViewerCannotCreateVisit(t *testing.T) {
 	req := map[string]any{
 		"visitor":          map[string]any{"first_name": "Test", "last_name": "User"},
 		"host_user_id":     "some-id",
-		"purpose":          models.VisitPurposeMeeting,
+		"purpose":          VisitPurposeMeeting,
 		"expected_arrival": time.Now().Add(1 * time.Hour).Format(time.RFC3339),
 	}
 	w := httptest.NewRecorder()
@@ -785,7 +784,7 @@ func TestViewerCannotCheckinVisit(t *testing.T) {
 	defer database.Close()
 
 	h := NewVisitorHandlers(database, nil)
-	visitID, _, _ := createVisitorFixture(t, database, models.VisitStatusApproved)
+	visitID, _, _ := createVisitorFixture(t, database, VisitStatusApproved)
 
 	viewerRouter := setupVisitorRouterWithClaims(h, &authsvc.AccessClaims{
 		Sub:   "00000000-0000-0000-0000-0000000000bb",
@@ -797,7 +796,7 @@ func TestViewerCannotCheckinVisit(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	viewerRouter.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/checkin",
-		mustJSONBody(t, map[string]any{"checkin_method": models.CheckinMethodReception})))
+		mustJSONBody(t, map[string]any{"checkin_method": CheckinMethodReception})))
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("viewer checkin: expected 403, got %d", w.Code)
 	}
@@ -879,7 +878,7 @@ func TestWatchlistCreateAndDelete(t *testing.T) {
 	seed := time.Now().UnixNano()
 	// Create
 	createReq := map[string]any{
-		"entry_type":  models.WatchlistBlacklisted,
+		"entry_type":  WatchlistBlacklisted,
 		"match_field": "email",
 		"match_value": fmt.Sprintf("watchtest+%d@example.com", seed),
 		"reason":      "test entry",
@@ -889,11 +888,11 @@ func TestWatchlistCreateAndDelete(t *testing.T) {
 	if createW.Code != http.StatusCreated {
 		t.Fatalf("create watchlist: expected 201, got %d: %s", createW.Code, createW.Body.String())
 	}
-	var entry models.WatchlistEntry
+	var entry WatchlistEntry
 	if err := json.Unmarshal(createW.Body.Bytes(), &entry); err != nil {
 		t.Fatalf("decode watchlist entry: %v", err)
 	}
-	if entry.EntryType != models.WatchlistBlacklisted || entry.MatchField != "email" {
+	if entry.EntryType != WatchlistBlacklisted || entry.MatchField != "email" {
 		t.Fatalf("unexpected watchlist entry: %+v", entry)
 	}
 
@@ -985,7 +984,7 @@ func TestVisitorUpsertDeduplicatesByEmail(t *testing.T) {
 		req := map[string]any{
 			"visitor":          map[string]any{"first_name": "Same", "last_name": "Person", "email": email, "phone": fmt.Sprintf("+8491%07d", seed%10000000)},
 			"host_user_id":     hostID,
-			"purpose":          models.VisitPurposeMeeting,
+			"purpose":          VisitPurposeMeeting,
 			"expected_arrival": time.Now().Add(time.Duration(i+1) * time.Hour).Format(time.RFC3339),
 		}
 		w := httptest.NewRecorder()

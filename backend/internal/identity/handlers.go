@@ -45,7 +45,7 @@ func (h *IdentityHandlers) publishEvent(subject string, data any) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := h.nats.Publish(ctx, subject, b); err != nil {
-		slog.Error("nats publish error", "subject", subject, "error", err)
+		slog.Warn("nats publish error", "subject", subject, "error", err)
 	}
 }
 

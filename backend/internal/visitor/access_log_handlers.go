@@ -9,7 +9,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
-	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
@@ -51,9 +50,9 @@ func (h *VisitorHandlers) ListVisitAccessLog(w http.ResponseWriter, r *http.Requ
 	}
 	defer rows.Close()
 
-	entries := []models.VisitorAccessLogEntry{}
+	entries := []VisitorAccessLogEntry{}
 	for rows.Next() {
-		var e models.VisitorAccessLogEntry
+		var e VisitorAccessLogEntry
 		if err := rows.Scan(
 			&e.ID, &e.TenantID, &e.VisitID, &e.VisitorID, &e.AccessEventID,
 			&e.AccessPointID, &e.AccessPointName, &e.ZoneID, &e.ZoneName,
@@ -110,9 +109,9 @@ func (h *VisitorHandlers) ListVisitorHistory(w http.ResponseWriter, r *http.Requ
 	}
 	defer rows.Close()
 
-	entries := []models.VisitorAccessLogEntry{}
+	entries := []VisitorAccessLogEntry{}
 	for rows.Next() {
-		var e models.VisitorAccessLogEntry
+		var e VisitorAccessLogEntry
 		if err := rows.Scan(
 			&e.ID, &e.TenantID, &e.VisitID, &e.VisitorID, &e.AccessEventID,
 			&e.AccessPointID, &e.AccessPointName, &e.ZoneID, &e.ZoneName,
@@ -188,9 +187,9 @@ func (h *VisitorHandlers) GetEvacuationList(w http.ResponseWriter, r *http.Reque
 	}
 	defer rows.Close()
 
-	entries := []models.EvacuationEntry{}
+	entries := []EvacuationEntry{}
 	for rows.Next() {
-		var e models.EvacuationEntry
+		var e EvacuationEntry
 		if err := rows.Scan(
 			&e.VisitID, &e.VisitorID, &e.VisitorName,
 			&e.VisitorCompany, &e.VisitorPhone, &e.VisitorPhotoRef,
