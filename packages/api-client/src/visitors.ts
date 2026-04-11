@@ -391,28 +391,29 @@ export function triggerEvacuation(): Promise<EvacuationResponse> {
 export interface AgreementDTO {
   id: string;
   tenant_id: string;
-  title: string;
+  name: string;
   content: string;
   version: number;
-  is_active: boolean;
-  requires_signature: boolean;
+  active: boolean;
+  required_for?: string[];
   created_at: string;
   updated_at: string;
 }
 
 export interface CreateAgreementRequest {
-  title: string;
+  name: string;
   content: string;
-  requires_signature?: boolean;
+  required_for?: string[];
 }
 
 export interface AgreementSignatureDTO {
   id: string;
+  tenant_id: string;
   agreement_id: string;
   visit_id: string;
   visitor_id: string;
+  signature_ref?: string;
   signed_at: string;
-  signature_data?: string;
 }
 
 export function listAgreements(): Promise<AgreementDTO[]> {
@@ -423,7 +424,7 @@ export function createAgreement(data: CreateAgreementRequest): Promise<Agreement
   return apiFetch<AgreementDTO>(`${BASE}/agreements`, { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function updateAgreement(id: string, data: Partial<CreateAgreementRequest>): Promise<AgreementDTO> {
+export function updateAgreement(id: string, data: Partial<CreateAgreementRequest> & { active?: boolean }): Promise<AgreementDTO> {
   return apiFetch<AgreementDTO>(`${BASE}/agreements/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 
@@ -431,10 +432,10 @@ export function deleteAgreement(id: string): Promise<void> {
   return apiFetch<void>(`${BASE}/agreements/${id}`, { method: 'DELETE' });
 }
 
-export function signAgreement(agreementId: string, visitId: string, signatureData?: string): Promise<AgreementSignatureDTO> {
-  return apiFetch<AgreementSignatureDTO>(`${BASE}/agreements/${agreementId}/sign`, {
+export function signAgreement(visitId: string, agreementId: string, visitorId: string, signatureRef?: string): Promise<AgreementSignatureDTO> {
+  return apiFetch<AgreementSignatureDTO>(`${BASE}/visits/${visitId}/agreements/sign`, {
     method: 'POST',
-    body: JSON.stringify({ visit_id: visitId, signature_data: signatureData }),
+    body: JSON.stringify({ agreement_id: agreementId, visitor_id: visitorId, signature_ref: signatureRef }),
   });
 }
 
@@ -487,22 +488,28 @@ export interface RecurringTemplateDTO {
   visitor_id: string;
   host_user_id: string;
   purpose: string;
-  schedule_cron: string;
-  schedule_description?: string;
   access_areas?: string[];
-  is_active: boolean;
-  next_visit_at?: string;
+  escort_required: boolean;
+  recurrence_rule: string;
+  start_date: string;
+  end_date?: string;
+  active: boolean;
+  last_generated?: string;
+  created_by: string;
   created_at: string;
   updated_at: string;
+  visitor?: VisitorDTO;
 }
 
 export interface CreateRecurringTemplateRequest {
   visitor_id: string;
   host_user_id: string;
   purpose: string;
-  schedule_cron: string;
-  schedule_description?: string;
+  recurrence_rule: string;
+  start_date: string;
+  end_date?: string;
   access_areas?: string[];
+  escort_required?: boolean;
 }
 
 export function listRecurringTemplates(): Promise<RecurringTemplateDTO[]> {
@@ -513,7 +520,7 @@ export function createRecurringTemplate(data: CreateRecurringTemplateRequest): P
   return apiFetch<RecurringTemplateDTO>(`${BASE}/recurring`, { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function updateRecurringTemplate(id: string, data: Partial<CreateRecurringTemplateRequest & { is_active: boolean }>): Promise<RecurringTemplateDTO> {
+export function updateRecurringTemplate(id: string, data: Partial<CreateRecurringTemplateRequest & { active: boolean }>): Promise<RecurringTemplateDTO> {
   return apiFetch<RecurringTemplateDTO>(`${BASE}/recurring/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 

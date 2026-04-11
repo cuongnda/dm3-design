@@ -23,7 +23,7 @@ export function VisitorAgreementsPage() {
   const { t } = useTranslation('manage');
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
-  const [title, setTitle] = useState('');
+  const [name, setName] = useState('');
   const [content, setContent] = useState('');
 
   const { data: agreements = [], isLoading } = useQuery({
@@ -32,11 +32,11 @@ export function VisitorAgreementsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => createAgreement({ title, content }),
+    mutationFn: () => createAgreement({ name, content }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['visitor-agreements'] });
       setShowForm(false);
-      setTitle('');
+      setName('');
       setContent('');
     },
   });
@@ -47,19 +47,19 @@ export function VisitorAgreementsPage() {
   });
 
   const columns: Column<AgreementDTO>[] = [
-    { key: 'title', header: 'Title', render: (r) => <span className="font-medium">{r.title}</span> },
+    { key: 'name', header: 'Name', render: (r) => <span className="font-medium">{r.name}</span> },
     {
-      key: 'is_active', header: 'Status', width: '100px',
+      key: 'active', header: 'Status', width: '100px',
       render: (r) => (
-        <span className={cn('text-[12px] font-medium', r.is_active ? 'text-emerald-400' : 'text-muted-foreground')}>
-          {r.is_active ? 'Active' : 'Inactive'}
+        <span className={cn('text-[12px] font-medium', r.active ? 'text-emerald-400' : 'text-muted-foreground')}>
+          {r.active ? 'Active' : 'Inactive'}
         </span>
       ),
     },
     { key: 'version', header: 'Version', width: '80px', render: (r) => <span className="text-muted-foreground">v{r.version}</span> },
     {
-      key: 'requires_signature', header: 'Signature', width: '100px',
-      render: (r) => <span className="text-muted-foreground text-[12px]">{r.requires_signature ? 'Required' : 'Optional'}</span>,
+      key: 'required_for', header: 'Required For', width: '160px',
+      render: (r) => <span className="text-muted-foreground text-[12px]">{r.required_for?.join(', ') || 'All purposes'}</span>,
     },
     {
       key: 'created_at', header: 'Created', width: '120px',
@@ -91,15 +91,21 @@ export function VisitorAgreementsPage() {
         <DataTable columns={columns} data={agreements} rowKey={(r) => r.id} />
       )}
 
-      <AppModal open={showForm} onOpenChange={setShowForm} title="Create Agreement" size="md" showCancelButton
-        primaryAction={{ label: 'Create', onClick: () => createMutation.mutate(), disabled: !title.trim() || !content.trim() || createMutation.isPending }}>
+      <AppModal
+        open={showForm}
+        onOpenChange={(open) => { setShowForm(open); if (!open) { setName(''); setContent(''); } }}
+        title="Create Agreement"
+        size="md"
+        showCancelButton
+        primaryAction={{ label: 'Create', onClick: () => createMutation.mutate(), disabled: !name.trim() || !content.trim() || createMutation.isPending }}
+      >
         <div className="space-y-3">
           <div>
-            <Label className="text-[12px]">Title</Label>
-            <Input className="mt-1 h-8 text-[13px]" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Non-Disclosure Agreement" data-testid="visitors-input-agreement-title" />
+            <Label className="text-[12px]">Name *</Label>
+            <Input className="mt-1 h-8 text-[13px]" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Non-Disclosure Agreement" data-testid="visitors-input-agreement-name" />
           </div>
           <div>
-            <Label className="text-[12px]">Content</Label>
+            <Label className="text-[12px]">Content *</Label>
             <textarea
               className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-[13px] min-h-[120px] resize-y"
               value={content}

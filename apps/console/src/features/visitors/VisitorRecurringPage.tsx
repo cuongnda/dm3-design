@@ -23,30 +23,38 @@ export function VisitorRecurringPage() {
   });
 
   const toggleMutation = useMutation({
-    mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
-      updateRecurringTemplate(id, { is_active }),
+    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
+      updateRecurringTemplate(id, { active }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['visitor-recurring'] }),
   });
 
   const columns: Column<RecurringTemplateDTO>[] = [
-    { key: 'purpose', header: 'Purpose', render: (r) => <span className="font-medium">{r.purpose}</span> },
+    { key: 'purpose', header: 'Purpose', render: (r) => <span className="font-medium capitalize">{r.purpose.replace(/_/g, ' ')}</span> },
     {
-      key: 'schedule', header: 'Schedule',
-      render: (r) => <span className="text-muted-foreground text-[12px]">{r.schedule_description ?? r.schedule_cron}</span>,
+      key: 'recurrence_rule', header: 'Schedule',
+      render: (r) => <span className="text-muted-foreground text-[12px] font-mono">{r.recurrence_rule}</span>,
     },
     {
-      key: 'is_active', header: 'Status', width: '80px',
+      key: 'start_date', header: 'Period', width: '160px',
       render: (r) => (
-        <span className={cn('text-[12px] font-medium', r.is_active ? 'text-emerald-400' : 'text-muted-foreground')}>
-          {r.is_active ? 'Active' : 'Paused'}
+        <span className="text-muted-foreground text-[12px]">
+          {r.start_date}{r.end_date ? ` — ${r.end_date}` : ' — ongoing'}
         </span>
       ),
     },
     {
-      key: 'next_visit_at', header: 'Next Visit', width: '140px',
+      key: 'active', header: 'Status', width: '80px',
+      render: (r) => (
+        <span className={cn('text-[12px] font-medium', r.active ? 'text-emerald-400' : 'text-muted-foreground')}>
+          {r.active ? 'Active' : 'Paused'}
+        </span>
+      ),
+    },
+    {
+      key: 'last_generated', header: 'Last Generated', width: '140px',
       render: (r) => (
         <span className="font-mono text-[12px] text-muted-foreground">
-          {r.next_visit_at ? new Date(r.next_visit_at).toLocaleDateString() : '—'}
+          {r.last_generated ? new Date(r.last_generated).toLocaleDateString() : '—'}
         </span>
       ),
     },
@@ -54,8 +62,8 @@ export function VisitorRecurringPage() {
       key: 'actions', header: '', width: '100px',
       render: (r) => (
         <div className="flex gap-1">
-          <Button size="xs" variant="ghost" onClick={() => toggleMutation.mutate({ id: r.id, is_active: !r.is_active })}>
-            {r.is_active ? <PauseCircle size={14} className="text-amber-400" /> : <PlayCircle size={14} className="text-emerald-400" />}
+          <Button size="xs" variant="ghost" onClick={() => toggleMutation.mutate({ id: r.id, active: !r.active })}>
+            {r.active ? <PauseCircle size={14} className="text-amber-400" /> : <PlayCircle size={14} className="text-emerald-400" />}
           </Button>
           <Button size="xs" variant="ghost" className="text-destructive" onClick={() => deleteMutation.mutate(r.id)}>
             <Trash2 size={14} />
