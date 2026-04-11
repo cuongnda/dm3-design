@@ -133,6 +133,8 @@ services:
         condition: service_completed_successfully
       nats:
         condition: service_healthy
+      emqx:
+        condition: service_healthy
     networks:
       - dm3-local
     healthcheck:
@@ -199,6 +201,8 @@ services:
         condition: service_completed_successfully
       nats:
         condition: service_healthy
+      emqx:
+        condition: service_healthy
       minio:
         condition: service_healthy
     networks:
@@ -230,6 +234,31 @@ services:
       - dm3-local
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8001/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  visitor-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-visitor-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: visitor-svc
+      HTTP_PORT: "8006"
+      DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
+      JWT_SECRET: dm3-local-jwt-secret-change-me
+      NATS_URL: nats://nats:4222
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8006/healthz"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -314,6 +343,8 @@ services:
       device-gateway:
         condition: service_healthy
       audit-svc:
+        condition: service_healthy
+      visitor-svc:
         condition: service_healthy
     networks:
       - dm3-local
