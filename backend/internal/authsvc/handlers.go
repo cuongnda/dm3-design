@@ -539,6 +539,7 @@ func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 		i18n.ErrorResponse(w, r, http.StatusNotFound, "user.not_found")
 		return
 	}
+	user.EnabledPlugins = claims.EnabledPlugins
 	httputil.JSON(w, http.StatusOK, user)
 }
 
@@ -702,6 +703,7 @@ type userResponse struct {
 	PreferredLanguage     *string    `json:"preferred_language,omitempty"`
 	Timezone              *string    `json:"timezone,omitempty"`
 	SessionTimeoutMinutes *int       `json:"session_timeout_minutes,omitempty"`
+	EnabledPlugins        []string   `json:"enabled_plugins,omitempty"`
 }
 
 func (h *AuthHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {

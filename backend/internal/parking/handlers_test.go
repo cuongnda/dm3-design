@@ -1,6 +1,7 @@
 package parking
 
 import (
+	"github.com/duali/dm3-backend/internal/models"
 	"bytes"
 	"encoding/json"
 	"math"
@@ -46,14 +47,14 @@ func TestLooksLikePlate(t *testing.T) {
 
 func TestCalculateFee(t *testing.T) {
 	t.Run("hourly", func(t *testing.T) {
-		rule := ParkingFeeRule{RateType: "hourly", FreeMinutes: 15, Rates: mustJSON(map[string]any{"hourly_rate": 10000.0})}
+		rule := models.ParkingFeeRule{RateType: "hourly", FreeMinutes: 15, Rates: mustJSON(map[string]any{"hourly_rate": 10000.0})}
 		if got := calculateFee(rule, 70); got != 10000 {
 			t.Errorf("hourly fee = %v, want 10000", got)
 		}
 	})
 
 	t.Run("flat", func(t *testing.T) {
-		rule := ParkingFeeRule{RateType: "flat", Rates: mustJSON(map[string]any{"amount": 5000.0})}
+		rule := models.ParkingFeeRule{RateType: "flat", Rates: mustJSON(map[string]any{"amount": 5000.0})}
 		if got := calculateFee(rule, 5); got != 5000 {
 			t.Errorf("flat fee = %v, want 5000", got)
 		}
@@ -61,21 +62,21 @@ func TestCalculateFee(t *testing.T) {
 
 	t.Run("max daily cap", func(t *testing.T) {
 		maxDaily := 30000.0
-		rule := ParkingFeeRule{RateType: "hourly", Rates: mustJSON(map[string]any{"hourly_rate": 10000.0}), MaxDaily: &maxDaily}
+		rule := models.ParkingFeeRule{RateType: "hourly", Rates: mustJSON(map[string]any{"hourly_rate": 10000.0}), MaxDaily: &maxDaily}
 		if got := calculateFee(rule, 10*60); got != 30000 {
 			t.Errorf("max daily fee = %v, want 30000", got)
 		}
 	})
 
 	t.Run("tiered", func(t *testing.T) {
-		rule := ParkingFeeRule{RateType: "tiered", Rates: mustJSON(map[string]any{"tiers": []map[string]any{{"up_to_minutes": 120, "flat_amount": 10000.0}, {"up_to_minutes": 360, "per_hour": 5000.0}, {"per_hour": 2000.0}}})}
+		rule := models.ParkingFeeRule{RateType: "tiered", Rates: mustJSON(map[string]any{"tiers": []map[string]any{{"up_to_minutes": 120, "flat_amount": 10000.0}, {"up_to_minutes": 360, "per_hour": 5000.0}, {"per_hour": 2000.0}}})}
 		if got := calculateFee(rule, 4*60); got != 20000 {
 			t.Errorf("tiered fee = %v, want 20000", got)
 		}
 	})
 
 	t.Run("free minutes not exceeded", func(t *testing.T) {
-		rule := ParkingFeeRule{RateType: "hourly", FreeMinutes: 30, Rates: mustJSON(map[string]any{"hourly_rate": 10000.0})}
+		rule := models.ParkingFeeRule{RateType: "hourly", FreeMinutes: 30, Rates: mustJSON(map[string]any{"hourly_rate": 10000.0})}
 		if got := calculateFee(rule, 20); got != 0 {
 			t.Errorf("free period fee = %v, want 0", got)
 		}
@@ -83,7 +84,7 @@ func TestCalculateFee(t *testing.T) {
 }
 
 func TestRoundFeeToNearestThousand(t *testing.T) {
-	rule := ParkingFeeRule{RateType: "flat", Rates: mustJSON(map[string]any{"amount": 15499.0})}
+	rule := models.ParkingFeeRule{RateType: "flat", Rates: mustJSON(map[string]any{"amount": 15499.0})}
 	if got := calculateFee(rule, 1); math.Abs(got-15000) > 0.1 {
 		t.Errorf("rounded fee = %v, want ~15000", got)
 	}
@@ -141,9 +142,9 @@ func TestDefaultRegistrationStatus(t *testing.T) {
 		category string
 		want     string
 	}{
-		{ParkingVehicleCategoryResident, "registered"},
-		{ParkingVehicleCategoryTemporary, "temporary"},
-		{ParkingVehicleCategoryVisitor, "visitor"},
+		{models.ParkingVehicleCategoryResident, "registered"},
+		{models.ParkingVehicleCategoryTemporary, "temporary"},
+		{models.ParkingVehicleCategoryVisitor, "visitor"},
 		{"unknown", "visitor"},
 	}
 	for _, tt := range tests {

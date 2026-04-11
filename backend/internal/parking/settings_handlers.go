@@ -25,6 +25,7 @@ type ParkingSettings struct {
 	DefaultFeeCurrency          string    `json:"default_fee_currency"`
 	NotifyOnDisputed            bool      `json:"notify_on_disputed"`
 	CapacityAlertThreshold      int       `json:"capacity_alert_threshold"`
+	EnforceAccessRules          bool      `json:"enforce_access_rules"`
 	CreatedAt                   time.Time `json:"created_at"`
 	UpdatedAt                   time.Time `json:"updated_at"`
 }
@@ -65,6 +66,7 @@ func (h *ParkingHandlers) UpdateSettings(w http.ResponseWriter, r *http.Request)
 		DefaultFeeCurrency       *string  `json:"default_fee_currency"`
 		NotifyOnDisputed         *bool    `json:"notify_on_disputed"`
 		CapacityAlertThreshold   *int     `json:"capacity_alert_threshold"`
+		EnforceAccessRules       *bool    `json:"enforce_access_rules"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -90,17 +92,18 @@ func (h *ParkingHandlers) UpdateSettings(w http.ResponseWriter, r *http.Request)
 		default_fee_currency = COALESCE($9, default_fee_currency),
 		notify_on_disputed = COALESCE($10, notify_on_disputed),
 		capacity_alert_threshold = COALESCE($11, capacity_alert_threshold),
+		enforce_access_rules = COALESCE($12, enforce_access_rules),
 		updated_at = now()
 		WHERE tenant_id = $1::uuid
 		RETURNING id, tenant_id, auto_open_barrier_on_pass, confidence_threshold, require_payment_before_exit,
 		    free_minutes_global, max_session_hours, allow_unregistered_entry, plate_recognition_enabled,
-		    default_fee_currency, notify_on_disputed, capacity_alert_threshold, created_at, updated_at`,
+		    default_fee_currency, notify_on_disputed, capacity_alert_threshold, enforce_access_rules, created_at, updated_at`,
 		cid, req.AutoOpenBarrierOnPass, req.ConfidenceThreshold, req.RequirePaymentBeforeExit,
 		req.FreeMinutesGlobal, req.MaxSessionHours, req.AllowUnregisteredEntry, req.PlateRecognitionEnabled,
-		req.DefaultFeeCurrency, req.NotifyOnDisputed, req.CapacityAlertThreshold,
+		req.DefaultFeeCurrency, req.NotifyOnDisputed, req.CapacityAlertThreshold, req.EnforceAccessRules,
 	).Scan(&s.ID, &s.TenantID, &s.AutoOpenBarrierOnPass, &s.ConfidenceThreshold, &s.RequirePaymentBeforeExit,
 		&s.FreeMinutesGlobal, &s.MaxSessionHours, &s.AllowUnregisteredEntry, &s.PlateRecognitionEnabled,
-		&s.DefaultFeeCurrency, &s.NotifyOnDisputed, &s.CapacityAlertThreshold, &s.CreatedAt, &s.UpdatedAt)
+		&s.DefaultFeeCurrency, &s.NotifyOnDisputed, &s.CapacityAlertThreshold, &s.EnforceAccessRules, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		slog.Error("update parking settings error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
@@ -115,11 +118,12 @@ func (h *ParkingHandlers) getOrCreateSettings(ctx context.Context, cid string) (
 	err := h.db.Pool.QueryRow(ctx, `SELECT id, tenant_id, auto_open_barrier_on_pass, confidence_threshold,
 		require_payment_before_exit, free_minutes_global, max_session_hours, allow_unregistered_entry,
 		plate_recognition_enabled, default_fee_currency, notify_on_disputed, capacity_alert_threshold,
-		created_at, updated_at
+		enforce_access_rules, created_at, updated_at
 		FROM dm3_parking.parking_settings WHERE tenant_id = $1::uuid`, cid,
 	).Scan(&s.ID, &s.TenantID, &s.AutoOpenBarrierOnPass, &s.ConfidenceThreshold, &s.RequirePaymentBeforeExit,
 		&s.FreeMinutesGlobal, &s.MaxSessionHours, &s.AllowUnregisteredEntry, &s.PlateRecognitionEnabled,
-		&s.DefaultFeeCurrency, &s.NotifyOnDisputed, &s.CapacityAlertThreshold, &s.CreatedAt, &s.UpdatedAt)
+		&s.DefaultFeeCurrency, &s.NotifyOnDisputed, &s.CapacityAlertThreshold, &s.EnforceAccessRules,
+		&s.CreatedAt, &s.UpdatedAt)
 	if err == nil {
 		return s, nil
 	}
@@ -128,25 +132,27 @@ func (h *ParkingHandlers) getOrCreateSettings(ctx context.Context, cid string) (
 	err = h.db.Pool.QueryRow(ctx, `INSERT INTO dm3_parking.parking_settings
 		(tenant_id, auto_open_barrier_on_pass, confidence_threshold, require_payment_before_exit,
 		 free_minutes_global, max_session_hours, allow_unregistered_entry, plate_recognition_enabled,
-		 default_fee_currency, notify_on_disputed, capacity_alert_threshold)
-		VALUES ($1::uuid, true, 0.85, true, 0, 24, true, true, 'VND', true, 80)
+		 default_fee_currency, notify_on_disputed, capacity_alert_threshold, enforce_access_rules)
+		VALUES ($1::uuid, true, 0.85, true, 0, 24, true, true, 'VND', true, 80, false)
 		ON CONFLICT (tenant_id) DO NOTHING
 		RETURNING id, tenant_id, auto_open_barrier_on_pass, confidence_threshold, require_payment_before_exit,
 		    free_minutes_global, max_session_hours, allow_unregistered_entry, plate_recognition_enabled,
-		    default_fee_currency, notify_on_disputed, capacity_alert_threshold, created_at, updated_at`, cid,
+		    default_fee_currency, notify_on_disputed, capacity_alert_threshold, enforce_access_rules, created_at, updated_at`, cid,
 	).Scan(&s.ID, &s.TenantID, &s.AutoOpenBarrierOnPass, &s.ConfidenceThreshold, &s.RequirePaymentBeforeExit,
 		&s.FreeMinutesGlobal, &s.MaxSessionHours, &s.AllowUnregisteredEntry, &s.PlateRecognitionEnabled,
-		&s.DefaultFeeCurrency, &s.NotifyOnDisputed, &s.CapacityAlertThreshold, &s.CreatedAt, &s.UpdatedAt)
+		&s.DefaultFeeCurrency, &s.NotifyOnDisputed, &s.CapacityAlertThreshold, &s.EnforceAccessRules,
+		&s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		// ON CONFLICT might have fired; re-query
 		err = h.db.Pool.QueryRow(ctx, `SELECT id, tenant_id, auto_open_barrier_on_pass, confidence_threshold,
 			require_payment_before_exit, free_minutes_global, max_session_hours, allow_unregistered_entry,
 			plate_recognition_enabled, default_fee_currency, notify_on_disputed, capacity_alert_threshold,
-			created_at, updated_at
+			enforce_access_rules, created_at, updated_at
 			FROM dm3_parking.parking_settings WHERE tenant_id = $1::uuid`, cid,
 		).Scan(&s.ID, &s.TenantID, &s.AutoOpenBarrierOnPass, &s.ConfidenceThreshold, &s.RequirePaymentBeforeExit,
 			&s.FreeMinutesGlobal, &s.MaxSessionHours, &s.AllowUnregisteredEntry, &s.PlateRecognitionEnabled,
-			&s.DefaultFeeCurrency, &s.NotifyOnDisputed, &s.CapacityAlertThreshold, &s.CreatedAt, &s.UpdatedAt)
+			&s.DefaultFeeCurrency, &s.NotifyOnDisputed, &s.CapacityAlertThreshold, &s.EnforceAccessRules,
+			&s.CreatedAt, &s.UpdatedAt)
 	}
 	return s, err
 }

@@ -32,6 +32,25 @@ const (
 	ParkingPaymentStatusRefunded = "refunded"
 )
 
+// Parking credential match types used in ParkingSession.MatchedBy.
+const (
+	ParkingMatchPlate    = "plate"
+	ParkingMatchRFID     = "rfid"
+	ParkingMatchNFC      = "nfc"
+	ParkingMatchRFIDPlate = "rfid+plate"
+	ParkingMatchNFCPlate  = "nfc+plate"
+)
+
+// Parking event types published to NATS.
+const (
+	ParkingEventSessionEntry   = "session.entry"
+	ParkingEventSessionExit    = "session.exit"
+	ParkingEventSessionPayment = "session.payment"
+	ParkingEventRecognition    = "recognition"
+	ParkingEventPassCreated    = "pass.created"
+	ParkingEventBarrierCommand = "barrier.command"
+)
+
 // ParkingLot is the top-level physical grouping for parking zones.
 type ParkingLot struct {
 	ID                 string          `json:"id"`
@@ -49,11 +68,13 @@ type ParkingLot struct {
 }
 
 // ParkingZone groups capacity and device integration config.
+// Can be linked to an access zone for unified zone hierarchy.
 type ParkingZone struct {
 	ID                  string          `json:"id"`
 	TenantID            string          `json:"tenant_id"`
 	LotID               string          `json:"lot_id"`
 	SiteID              *string         `json:"site_id,omitempty"`
+	AccessZoneID        *string         `json:"access_zone_id,omitempty"`
 	Name                string          `json:"name"`
 	Code                string          `json:"code"`
 	Type                string          `json:"type"`
@@ -70,13 +91,18 @@ type ParkingZone struct {
 }
 
 // ParkingVehicle is a registered or observed vehicle.
+// Can be linked to a user (long-term) or visitor (temporary), but not both.
+// Supports 3 credential types: licence plate, RFID (UHF), NFC card.
 type ParkingVehicle struct {
 	ID                 string          `json:"id"`
 	TenantID           string          `json:"tenant_id"`
 	OwnerUserID        *string         `json:"owner_id,omitempty"`
+	VisitorID          *string         `json:"visitor_id,omitempty"`
 	PlateNumber        string          `json:"plate_number"`
 	NormalizedPlate    string          `json:"normalized_plate"`
 	PlateImageRef      *string         `json:"plate_image_ref,omitempty"`
+	RFIDTag            *string         `json:"rfid_tag,omitempty"`
+	NFCCardID          *string         `json:"nfc_card_id,omitempty"`
 	Type               string          `json:"type"`
 	Category           string          `json:"category"`
 	Brand              *string         `json:"brand,omitempty"`

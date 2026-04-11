@@ -19,6 +19,7 @@ interface MeResponse {
   role?: string | null;
   company_id?: string | null;
   preferred_language?: string | null;
+  enabled_plugins?: string[] | null;
 }
 
 interface AuthState {
@@ -55,6 +56,7 @@ export const useAuthStore = create<AuthState>()(
           i18n.changeLanguage(normalized);
           set({
             isAuthenticated: true,
+            enabledPlugins: me.enabled_plugins ?? [],
             user: {
               id: me.id,
               name: me.name || me.email.split('@')[0],

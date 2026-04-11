@@ -13,15 +13,16 @@ import { toast } from '@/lib/toast';
 
 interface Vehicle {
   id: string;
-  user_id?: string | null;
+  owner_id?: string | null;
+  visitor_id?: string | null;
   plate_number: string;
-  vehicle_type: string;
-  brand: string;
-  model: string;
-  color: string;
-  description: string;
-  status: string;
-  owner_name: string;
+  type: string;
+  category: string;
+  brand?: string;
+  color?: string;
+  rfid_tag?: string;
+  nfc_card_id?: string;
+  registration_status: string;
   created_at: string;
   updated_at: string;
 }
@@ -65,37 +66,40 @@ function VehicleModal({ isOpen, onClose, onSave, vehicle, users, preSelectedUser
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     plate_number: '',
-    vehicle_type: 'car',
+    type: 'car',
+    category: 'resident',
     brand: '',
-    model: '',
     color: '',
-    description: '',
-    user_id: preSelectedUserId || '',
-    status: 'active',
+    rfid_tag: '',
+    nfc_card_id: '',
+    owner_id: preSelectedUserId || '',
+    registration_status: 'registered',
   });
 
   useEffect(() => {
     if (vehicle) {
       setFormData({
         plate_number: vehicle.plate_number,
-        vehicle_type: vehicle.vehicle_type,
-        brand: vehicle.brand,
-        model: vehicle.model,
-        color: vehicle.color,
-        description: vehicle.description,
-        user_id: vehicle.user_id || '',
-        status: vehicle.status,
+        type: vehicle.type,
+        category: vehicle.category,
+        brand: vehicle.brand || '',
+        color: vehicle.color || '',
+        rfid_tag: vehicle.rfid_tag || '',
+        nfc_card_id: vehicle.nfc_card_id || '',
+        owner_id: vehicle.owner_id || '',
+        registration_status: vehicle.registration_status,
       });
     } else {
       setFormData({
         plate_number: '',
-        vehicle_type: 'car',
+        type: 'car',
+        category: 'resident',
         brand: '',
-        model: '',
         color: '',
-        description: '',
-        user_id: preSelectedUserId || '',
-        status: 'active',
+        rfid_tag: '',
+        nfc_card_id: '',
+        owner_id: preSelectedUserId || '',
+        registration_status: 'registered',
       });
     }
   }, [vehicle, isOpen, preSelectedUserId]);
@@ -108,7 +112,9 @@ function VehicleModal({ isOpen, onClose, onSave, vehicle, users, preSelectedUser
     setLoading(true);
     try {
       const payload: Record<string, unknown> = { ...formData };
-      if (!payload.user_id) delete payload.user_id;
+      if (!payload.owner_id) delete payload.owner_id;
+      if (!payload.rfid_tag) delete payload.rfid_tag;
+      if (!payload.nfc_card_id) delete payload.nfc_card_id;
       await onSave(payload);
       onClose();
     } catch (err) {
@@ -147,17 +153,37 @@ function VehicleModal({ isOpen, onClose, onSave, vehicle, users, preSelectedUser
           />
         </div>
 
-        {/* Type + Color */}
+        {/* Type + Category */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label>{t('modal.vehicleType')}</Label>
-            <Select value={formData.vehicle_type} onValueChange={(v) => setFormData((p) => ({ ...p, vehicle_type: v }))}>
+            <Select value={formData.type} onValueChange={(v) => setFormData((p) => ({ ...p, type: v }))}>
               <SelectOption value="car">{t('type.car')}</SelectOption>
               <SelectOption value="motorbike">{t('type.motorbike')}</SelectOption>
               <SelectOption value="bicycle">{t('type.bicycle')}</SelectOption>
               <SelectOption value="truck">{t('type.truck')}</SelectOption>
-              <SelectOption value="other">{t('type.other')}</SelectOption>
             </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>{t('modal.category', 'Category')}</Label>
+            <Select value={formData.category} onValueChange={(v) => setFormData((p) => ({ ...p, category: v }))}>
+              <SelectOption value="resident">{t('category.resident', 'Resident')}</SelectOption>
+              <SelectOption value="visitor">{t('category.visitor', 'Visitor')}</SelectOption>
+              <SelectOption value="temporary">{t('category.temporary', 'Temporary')}</SelectOption>
+            </Select>
+          </div>
+        </div>
+
+        {/* Brand + Color */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label>{t('modal.brand')}</Label>
+            <Input
+              value={formData.brand}
+              onChange={(e) => setFormData((p) => ({ ...p, brand: e.target.value }))}
+              placeholder="Toyota"
+              disabled={loading}
+            />
           </div>
           <div className="space-y-1">
             <Label>{t('modal.color')}</Label>
@@ -170,24 +196,26 @@ function VehicleModal({ isOpen, onClose, onSave, vehicle, users, preSelectedUser
           </div>
         </div>
 
-        {/* Brand + Model */}
+        {/* Credentials: RFID + NFC */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label>{t('modal.brand')}</Label>
+            <Label>{t('modal.rfidTag', 'RFID Tag (UHF)')}</Label>
             <Input
-              value={formData.brand}
-              onChange={(e) => setFormData((p) => ({ ...p, brand: e.target.value }))}
-              placeholder="Toyota"
+              value={formData.rfid_tag}
+              onChange={(e) => setFormData((p) => ({ ...p, rfid_tag: e.target.value }))}
+              placeholder="E200-xxxx-xxxx"
               disabled={loading}
+              data-testid="vehicle-input-rfid"
             />
           </div>
           <div className="space-y-1">
-            <Label>{t('modal.model')}</Label>
+            <Label>{t('modal.nfcCard', 'NFC Card ID')}</Label>
             <Input
-              value={formData.model}
-              onChange={(e) => setFormData((p) => ({ ...p, model: e.target.value }))}
-              placeholder="Camry"
+              value={formData.nfc_card_id}
+              onChange={(e) => setFormData((p) => ({ ...p, nfc_card_id: e.target.value }))}
+              placeholder="04:xx:xx:xx:xx:xx"
               disabled={loading}
+              data-testid="vehicle-input-nfc"
             />
           </div>
         </div>
@@ -195,7 +223,7 @@ function VehicleModal({ isOpen, onClose, onSave, vehicle, users, preSelectedUser
         {/* Owner (user) */}
         <div className="space-y-1">
           <Label>{t('modal.owner')}</Label>
-          <Select value={formData.user_id} onValueChange={(v) => setFormData((p) => ({ ...p, user_id: v }))}>
+          <Select value={formData.owner_id} onValueChange={(v) => setFormData((p) => ({ ...p, owner_id: v }))}>
             <SelectOption value="">{t('modal.ownerNone')}</SelectOption>
             {users.map((u) => (
               <SelectOption key={u.id} value={u.id}>{u.full_name} ({u.user_code})</SelectOption>
@@ -203,24 +231,14 @@ function VehicleModal({ isOpen, onClose, onSave, vehicle, users, preSelectedUser
           </Select>
         </div>
 
-        {/* Description */}
-        <div className="space-y-1">
-          <Label>{t('modal.description')}</Label>
-          <Input
-            value={formData.description}
-            onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
-            placeholder=""
-            disabled={loading}
-          />
-        </div>
-
-        {/* Status (edit only) */}
+        {/* Registration Status (edit only) */}
         {vehicle && (
           <div className="space-y-1">
-            <Label>{t('modal.status')}</Label>
-            <Select value={formData.status} onValueChange={(v) => setFormData((p) => ({ ...p, status: v }))}>
-              <SelectOption value="active">{t('status.active')}</SelectOption>
-              <SelectOption value="inactive">{t('status.inactive')}</SelectOption>
+            <Label>{t('modal.status', 'Status')}</Label>
+            <Select value={formData.registration_status} onValueChange={(v) => setFormData((p) => ({ ...p, registration_status: v }))}>
+              <SelectOption value="registered">{t('status.registered', 'Registered')}</SelectOption>
+              <SelectOption value="visitor">{t('status.visitor', 'Visitor')}</SelectOption>
+              <SelectOption value="temporary">{t('status.temporary', 'Temporary')}</SelectOption>
               <SelectOption value="blacklisted">{t('status.blacklisted')}</SelectOption>
             </Select>
           </div>
@@ -237,7 +255,7 @@ export function VehicleManagementPage() {
   const { t: tc } = useTranslation('common');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const preUserId = searchParams.get('user_id') || '';
+  const preUserId = searchParams.get('owner_id') || searchParams.get('user_id') || '';
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [total, setTotal] = useState(0);
@@ -269,23 +287,21 @@ export function VehicleManagementPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), limit: String(pageSize) });
-      if (search) params.append('search', search);
-      if (preUserId) params.append('user_id', preUserId);
-      if (sortBy) params.append('sort_by', sortBy);
-      if (sortDir) params.append('sort_order', sortDir.toUpperCase());
+      if (search) params.append('plate', search);
+      if (preUserId) params.append('owner_id', preUserId);
       const data = await apiFetch<{
-        vehicles: Vehicle[];
-        pagination: { total: number; total_pages: number };
-      }>(`/api/v1/identity/vehicles?${params}`);
-      setVehicles(data.vehicles || []);
-      setTotal(data.pagination?.total || 0);
-      setTotalPages(data.pagination?.total_pages || 1);
+        data: Vehicle[];
+        total: number;
+      }>(`/api/v1/parking/vehicles?${params}`);
+      setVehicles(data.data || []);
+      setTotal(data.total || 0);
+      setTotalPages(Math.max(1, Math.ceil((data.total || 0) / pageSize)));
     } catch {
       setVehicles([]);
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, sortBy, sortDir, preUserId]);
+  }, [page, pageSize, search, preUserId]);
 
   useEffect(() => { fetchVehicles(); }, [fetchVehicles]);
   useEffect(() => { setPage(1); }, [search, pageSize, sortBy, sortDir]);
@@ -293,7 +309,7 @@ export function VehicleManagementPage() {
 
   const handleCreate = async (data: Record<string, unknown>) => {
     try {
-      await apiFetch('/api/v1/identity/vehicles', { method: 'POST', body: JSON.stringify(data) });
+      await apiFetch('/api/v1/parking/vehicles', { method: 'POST', body: JSON.stringify(data) });
       setShowCreateModal(false);
       fetchVehicles();
       toast(t('toast.created'), 'success');
@@ -306,7 +322,7 @@ export function VehicleManagementPage() {
   const handleEdit = async (data: Record<string, unknown>) => {
     if (!editingVehicle) return;
     try {
-      await apiFetch(`/api/v1/identity/vehicles/${editingVehicle.id}`, { method: 'PUT', body: JSON.stringify(data) });
+      await apiFetch(`/api/v1/parking/vehicles/${editingVehicle.id}`, { method: 'PUT', body: JSON.stringify(data) });
       setEditingVehicle(null);
       fetchVehicles();
       toast(t('toast.updated'), 'success');
@@ -320,7 +336,7 @@ export function VehicleManagementPage() {
     if (!deletingVehicle) return;
     setDeleteLoading(true);
     try {
-      await apiFetch(`/api/v1/identity/vehicles/${deletingVehicle.id}`, { method: 'DELETE' });
+      await apiFetch(`/api/v1/parking/vehicles/${deletingVehicle.id}`, { method: 'DELETE' });
       setDeletingVehicle(null);
       fetchVehicles();
       toast(t('toast.deleted'), 'success');
@@ -334,7 +350,7 @@ export function VehicleManagementPage() {
   const handleBulkDeleteConfirm = async () => {
     setBulkDeleteLoading(true);
     try {
-      await apiFetch('/api/v1/identity/vehicles/bulk-delete', {
+      await apiFetch('/api/v1/parking/vehicles/bulk-delete', {
         method: 'POST',
         body: JSON.stringify({ ids: Array.from(selected) }),
       });
@@ -365,55 +381,47 @@ export function VehicleManagementPage() {
         ),
       },
       {
-        key: 'vehicle_type',
+        key: 'type',
         header: t('col.type'),
         width: '96px',
-        sortable: true,
         render: (v) => (
           <div className="flex items-center gap-1.5 text-[13px] capitalize">
-            {TYPE_ICONS[v.vehicle_type] ?? <Car size={14} />}
-            {t(`type.${v.vehicle_type}`, v.vehicle_type)}
+            {TYPE_ICONS[v.type] ?? <Car size={14} />}
+            {t(`type.${v.type}`, v.type)}
           </div>
+        ),
+      },
+      {
+        key: 'category',
+        header: t('col.category', 'Category'),
+        width: '96px',
+        render: (v) => (
+          <span className="text-[13px] capitalize">{t(`category.${v.category}`, v.category)}</span>
         ),
       },
       {
         key: 'brand',
         header: t('col.brandModel'),
-        sortable: true,
         render: (v) => (
-          <span className="text-[13px]">
-            {[v.brand, v.model].filter(Boolean).join(' ') || '—'}
-          </span>
+          <span className="text-[13px]">{v.brand || '—'}</span>
         ),
       },
       {
-        key: 'color',
-        header: t('col.color'),
-        width: '80px',
-        render: (v) => <span className="text-[13px]">{v.color || '—'}</span>,
+        key: 'credentials',
+        header: t('col.credentials', 'Credentials'),
+        render: (v) => (
+          <div className="flex flex-col gap-0.5 text-[12px] text-muted-foreground">
+            {v.rfid_tag && <span>RFID: {v.rfid_tag}</span>}
+            {v.nfc_card_id && <span>NFC: {v.nfc_card_id}</span>}
+            {!v.rfid_tag && !v.nfc_card_id && <span>Plate only</span>}
+          </div>
+        ),
       },
       {
-        key: 'owner_name',
-        header: t('col.owner'),
-        sortable: true,
-        render: (v) =>
-          v.owner_name ? (
-            <button
-              className="text-[13px] text-primary hover:underline"
-              onClick={(e) => { e.stopPropagation(); if (v.user_id) navigate(`/manage/users/${v.user_id}`); }}
-            >
-              {v.owner_name}
-            </button>
-          ) : (
-            <span className="text-[13px] text-muted-foreground">—</span>
-          ),
-      },
-      {
-        key: 'status',
+        key: 'registration_status',
         header: t('col.status'),
         width: '96px',
-        sortable: true,
-        render: (v) => <Badge variant={statusVariant(v.status)}>{t(`status.${v.status}`, v.status)}</Badge>,
+        render: (v) => <Badge variant={statusVariant(v.registration_status === 'blacklisted' ? 'blacklisted' : v.registration_status === 'registered' ? 'active' : 'secondary')}>{t(`status.${v.registration_status}`, v.registration_status)}</Badge>,
       },
       {
         key: 'actions',
@@ -438,7 +446,7 @@ export function VehicleManagementPage() {
         ),
       },
     ],
-    [t, tc, navigate],
+    [t, tc],
   );
 
   return (
@@ -464,15 +472,15 @@ export function VehicleManagementPage() {
               <div className="text-xs text-muted-foreground">{t('stat.total')}</div>
             </Card>
             <Card className="p-3">
-              <div className="text-2xl font-bold">{vehicles.filter((v) => v.vehicle_type === 'car').length}</div>
+              <div className="text-2xl font-bold">{vehicles.filter((v) => v.type === 'car').length}</div>
               <div className="text-xs text-muted-foreground">{t('stat.cars')}</div>
             </Card>
             <Card className="p-3">
-              <div className="text-2xl font-bold">{vehicles.filter((v) => v.vehicle_type === 'motorbike').length}</div>
+              <div className="text-2xl font-bold">{vehicles.filter((v) => v.type === 'motorbike').length}</div>
               <div className="text-xs text-muted-foreground">{t('stat.motorbikes')}</div>
             </Card>
             <Card className="p-3">
-              <div className="text-2xl font-bold">{vehicles.filter((v) => v.status === 'blacklisted').length}</div>
+              <div className="text-2xl font-bold">{vehicles.filter((v) => v.registration_status === 'blacklisted').length}</div>
               <div className="text-xs text-muted-foreground">{t('stat.blacklisted')}</div>
             </Card>
           </div>
@@ -534,10 +542,10 @@ export function VehicleManagementPage() {
           loading={loading}
           sortColumns={[
             { value: 'plate_number', label: t('sort.plate') },
-            { value: 'vehicle_type', label: t('sort.type') },
+            { value: 'type', label: t('sort.type') },
             { value: 'brand', label: t('sort.brand') },
-            { value: 'owner_name', label: t('sort.owner') },
-            { value: 'status', label: t('sort.status') },
+            { value: 'category', label: t('sort.category', 'Category') },
+            { value: 'registration_status', label: t('sort.status') },
           ]}
           sortBy={sortBy}
           sortDir={sortDir}

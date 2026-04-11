@@ -78,7 +78,7 @@ func (h *AccessHandlers) ListAccessDevices(w http.ResponseWriter, r *http.Reques
 	query := fmt.Sprintf(`SELECT id, tenant_id, device_id, name, type,
 		status, state, mode, unlock_duration_ms, anti_passback, emergency_unlock,
 		firmware_version, ip_address, last_event_at, last_heartbeat_at,
-		config_version, user_db_version, rules_version, metadata, created_at, updated_at
+		config_version, user_db_version, rules_version, source, source_ref, metadata, created_at, updated_at
 		FROM dm3_access.access_devices %s ORDER BY name ASC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
 	args = append(args, limit, offset)
 
@@ -96,7 +96,7 @@ func (h *AccessHandlers) ListAccessDevices(w http.ResponseWriter, r *http.Reques
 		if err := rows.Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type,
 			&d.Status, &d.State, &d.Mode, &d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock,
 			&d.FirmwareVersion, &d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt,
-			&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Metadata,
+			&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Source, &d.SourceRef, &d.Metadata,
 			&d.CreatedAt, &d.UpdatedAt); err != nil {
 			slog.Error("list access devices scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
@@ -153,12 +153,12 @@ func (h *AccessHandlers) CreateAccessDevice(w http.ResponseWriter, r *http.Reque
 		 RETURNING id, tenant_id, device_id, name, type,
 		 status, state, mode, unlock_duration_ms, anti_passback, emergency_unlock,
 		 firmware_version, ip_address, last_event_at, last_heartbeat_at,
-		 config_version, user_db_version, rules_version, metadata, created_at, updated_at`,
+		 config_version, user_db_version, rules_version, source, source_ref, metadata, created_at, updated_at`,
 		req.Name, req.Type, req.DeviceID, unlockMs, antiPassback, emergencyUnlock, cid,
 	).Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type,
 		&d.Status, &d.State, &d.Mode, &d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock,
 		&d.FirmwareVersion, &d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt,
-		&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Metadata,
+		&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Source, &d.SourceRef, &d.Metadata,
 		&d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
 		slog.Error("create access device error", "error", err)
@@ -213,12 +213,12 @@ func (h *AccessHandlers) UpdateAccessDevice(w http.ResponseWriter, r *http.Reque
 		 RETURNING id, tenant_id, device_id, name, type,
 		 status, state, mode, unlock_duration_ms, anti_passback, emergency_unlock,
 		 firmware_version, ip_address, last_event_at, last_heartbeat_at,
-		 config_version, user_db_version, rules_version, metadata, created_at, updated_at`,
+		 config_version, user_db_version, rules_version, source, source_ref, metadata, created_at, updated_at`,
 		id, req.Name, req.Status, req.State, req.Mode, req.DeviceID, cid,
 	).Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type,
 		&d.Status, &d.State, &d.Mode, &d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock,
 		&d.FirmwareVersion, &d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt,
-		&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Metadata,
+		&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Source, &d.SourceRef, &d.Metadata,
 		&d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "access device not found")
@@ -507,12 +507,12 @@ func (h *AccessHandlers) scanAccessDevice(r *http.Request, id string) (models.Ac
 		`SELECT id, tenant_id, device_id, name, type,
 		 status, state, mode, unlock_duration_ms, anti_passback, emergency_unlock,
 		 firmware_version, ip_address, last_event_at, last_heartbeat_at,
-		 config_version, user_db_version, rules_version, metadata, created_at, updated_at
+		 config_version, user_db_version, rules_version, source, source_ref, metadata, created_at, updated_at
 		 FROM dm3_access.access_devices WHERE id = $1::uuid AND tenant_id = $2::uuid`, id, cid,
 	).Scan(&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type,
 		&d.Status, &d.State, &d.Mode, &d.UnlockDurationMs, &d.AntiPassback, &d.EmergencyUnlock,
 		&d.FirmwareVersion, &d.IPAddress, &d.LastEventAt, &d.LastHeartbeatAt,
-		&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Metadata,
+		&d.ConfigVersion, &d.UserDBVersion, &d.RulesVersion, &d.Source, &d.SourceRef, &d.Metadata,
 		&d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

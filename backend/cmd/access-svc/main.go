@@ -71,6 +71,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Ensure PARKING stream (created by parking-svc; access-svc subscribes for access events)
+	if err := natsClient.EnsureStream(ctx, "PARKING", []string{"dm3.parking.>"}); err != nil {
+		slog.Error("failed to ensure PARKING nats stream", "error", err)
+		os.Exit(1)
+	}
+
 	// Start NATS consumer for access events
 	consumer := access.NewNATSConsumer(database, natsClient)
 	if err := consumer.Start(ctx); err != nil {
@@ -82,6 +88,20 @@ func main() {
 	visitorCredConsumer := access.NewVisitorCredentialConsumer(database, natsClient)
 	if err := visitorCredConsumer.Start(ctx); err != nil {
 		slog.Error("failed to start visitor credential consumer", "error", err)
+		os.Exit(1)
+	}
+
+	// Start parking access consumer (ingests parking entry/exit into access_events)
+	parkingAccessConsumer := access.NewParkingAccessConsumer(database, natsClient)
+	if err := parkingAccessConsumer.Start(ctx); err != nil {
+		slog.Error("failed to start parking access consumer", "error", err)
+		os.Exit(1)
+	}
+
+	// Start parking barrier consumer (auto-registers barrier devices from parking zones)
+	parkingBarrierConsumer := access.NewParkingBarrierConsumer(database, natsClient)
+	if err := parkingBarrierConsumer.Start(ctx); err != nil {
+		slog.Error("failed to start parking barrier consumer", "error", err)
 		os.Exit(1)
 	}
 

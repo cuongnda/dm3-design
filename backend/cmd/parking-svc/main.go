@@ -115,6 +115,7 @@ func main() {
 			pr.Get("/vehicles/{id}", parkingHandlers.GetParkingVehicle)
 			pr.Put("/vehicles/{id}", parkingHandlers.UpdateParkingVehicle)
 			pr.Delete("/vehicles/{id}", parkingHandlers.DeleteParkingVehicle)
+			pr.Post("/vehicles/bulk-delete", parkingHandlers.BulkDeleteParkingVehicles)
 			pr.Get("/sessions", parkingHandlers.ListParkingSessions)
 			pr.Post("/sessions", parkingHandlers.CreateParkingSession)
 			pr.Post("/sessions/recognitions", parkingHandlers.RecognizeParkingPlate)

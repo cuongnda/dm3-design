@@ -22,6 +22,7 @@ export interface ParkingZoneDTO {
   tenant_id: string;
   lot_id: string;
   site_id?: string;
+  access_zone_id?: string;
   name: string;
   code: string;
   type: string;
@@ -38,9 +39,12 @@ export interface ParkingVehicleDTO {
   id: string;
   tenant_id: string;
   owner_id?: string;
+  visitor_id?: string;
   plate_number: string;
-  normalized_plate_number: string;
+  normalized_plate: string;
   plate_image_ref?: string;
+  rfid_tag?: string;
+  nfc_card_id?: string;
   type: string;
   category: string;
   brand?: string;
@@ -144,7 +148,10 @@ export interface ListParkingSessionsParams {
 
 export interface CreateParkingVehicleRequest {
   owner_id?: string;
+  visitor_id?: string;
   plate_number: string;
+  rfid_tag?: string;
+  nfc_card_id?: string;
   type: string;
   category?: string;
   brand?: string;
@@ -156,8 +163,10 @@ export interface CreateParkingVehicleRequest {
 export interface CreateParkingSessionRequest {
   lot_id: string;
   zone_id: string;
-  plate_number: string;
+  plate_number?: string;
   vehicle_type: string;
+  rfid_tag?: string;
+  nfc_card_id?: string;
   entry_device_id?: string;
   plate_image_ref?: string;
   matched_by?: string;
@@ -184,8 +193,10 @@ export interface ParkingRecognitionRequest {
   lot_id: string;
   zone_id: string;
   direction: "entry" | "exit";
-  plate_number: string;
+  plate_number?: string;
   vehicle_type: string;
+  rfid_tag?: string;
+  nfc_card_id?: string;
   device_id?: string;
   image_ref?: string;
   confidence?: number;
@@ -202,6 +213,8 @@ export interface ExitParkingSessionRequest {
   exit_device_id?: string;
   plate_number?: string;
   plate_image_ref?: string;
+  rfid_tag?: string;
+  nfc_card_id?: string;
 }
 
 export interface ListParkingPassesParams {
@@ -223,19 +236,18 @@ export interface ListParkingFeeRulesParams {
 export interface ParkingFeeRuleDTO {
   id: string;
   tenant_id: string;
+  site_id?: string;
   lot_id?: string;
   zone_id?: string;
   name: string;
+  vehicle_type: string;
   rate_type: string;
+  rates: Record<string, unknown>;
+  free_minutes: number;
+  max_daily?: number;
   applies_to: string;
-  vehicle_type?: string;
-  base_rate: number;
-  hourly_rate: number;
-  daily_max?: number;
-  currency: string;
   priority: number;
-  tiers?: Record<string, unknown>[];
-  status: string;
+  enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -263,19 +275,18 @@ export interface CreateParkingZoneRequest {
 }
 
 export interface CreateParkingFeeRuleRequest {
+  site_id?: string;
   lot_id?: string;
   zone_id?: string;
   name: string;
+  vehicle_type: string;
   rate_type: string;
+  rates: Record<string, unknown>;
+  free_minutes?: number;
+  max_daily?: number;
   applies_to?: string;
-  vehicle_type?: string;
-  base_rate: number;
-  hourly_rate: number;
-  daily_max?: number;
-  currency?: string;
   priority?: number;
-  tiers?: Record<string, unknown>[];
-  status?: string;
+  enabled?: boolean;
 }
 
 export interface ParkingSettingsDTO {
@@ -291,6 +302,7 @@ export interface ParkingSettingsDTO {
   default_fee_currency: string;
   notify_on_disputed: boolean;
   capacity_alert_threshold: number;
+  enforce_access_rules: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -306,6 +318,7 @@ export interface UpdateParkingSettingsRequest {
   default_fee_currency?: string;
   notify_on_disputed?: boolean;
   capacity_alert_threshold?: number;
+  enforce_access_rules?: boolean;
 }
 
 export interface ZoneOccupancyDTO {

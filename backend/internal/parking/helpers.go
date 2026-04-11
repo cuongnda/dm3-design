@@ -67,3 +67,10 @@ func emptyToNil(s string) any {
 	}
 	return s
 }
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return strings.TrimSpace(*s)
+}

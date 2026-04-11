@@ -181,17 +181,7 @@ func main() {
 			gr.Delete("/groups/{id}/members/{userID}", handlers.RemoveGroupMember)
 		})
 
-		// Vehicles: manager+ can write
-		r.Group(func(vr chi.Router) {
-			vr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
-			vr.Get("/vehicles", handlers.ListVehicles)
-			vr.Post("/vehicles", handlers.CreateVehicle)
-			vr.Get("/vehicles/{vehicleID}", handlers.GetVehicle)
-			vr.Put("/vehicles/{vehicleID}", handlers.UpdateVehicle)
-			vr.Delete("/vehicles/{vehicleID}", handlers.DeleteVehicle)
-			vr.Post("/vehicles/bulk-delete", handlers.BulkDeleteVehicles)
-			vr.Get("/users/{id}/vehicles", handlers.ListUserVehicles)
-		})
+		// Vehicles: removed — now managed by parking-svc (dm3_parking.parking_vehicles)
 
 		// Stats: all roles can read
 		r.Get("/stats", handlers.GetStats)
