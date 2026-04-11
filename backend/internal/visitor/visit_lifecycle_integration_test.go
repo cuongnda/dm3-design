@@ -142,7 +142,7 @@ func TestVisitorLifecycleCreateApproveCheckinCheckout(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	hostID := createHostRecord(t, database, "Flow", "Host")
 	hostClaims := &authsvc.AccessClaims{
 		Sub:   hostID,
@@ -253,7 +253,7 @@ func TestWalkinVisitCreatesWaitingVisitAndStoresNationalID(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	hostID := createHostRecord(t, database, "Lobby", "Host")
 	departure := time.Now().Add(90 * time.Minute).UTC().Truncate(time.Second)
@@ -296,7 +296,7 @@ func TestVisitorCheckinBlockedByWatchlist(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusApproved)
 	ctx := context.Background()
@@ -342,7 +342,7 @@ func TestMarkNoShowCandidatesMarksOnlyOverdueOpenVisits(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	ctx := context.Background()
 	preRegID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 	approvedID, _, _ := createVisitorFixture(t, database, VisitStatusApproved)
@@ -410,7 +410,7 @@ func TestVisitorCheckinReusesExistingTempAccessOnRetry(t *testing.T) {
 		t.Fatalf("seed temp credential: %v", err)
 	}
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	body := `{"checkin_method":"reception","badge_number":"B-01"}`
 
@@ -479,7 +479,7 @@ func TestVisitorCheckoutRevokesTempAccessAndClosesBadge(t *testing.T) {
 		t.Fatalf("create badge: %v", err)
 	}
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/visitors/"+visitID+"/checkout", bytes.NewBufferString(`{"badge_returned":false}`))
 	w := httptest.NewRecorder()
@@ -553,7 +553,7 @@ func TestAutoCheckoutSharesManualCleanupSemantics(t *testing.T) {
 		t.Fatalf("create badge: %v", err)
 	}
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	cleanup, err := h.autoCheckoutVisit(ctx, visitorTestTenantID, visitID)
 	if err != nil {
 		t.Fatalf("autoCheckoutVisit: %v", err)

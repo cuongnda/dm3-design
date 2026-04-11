@@ -21,7 +21,7 @@ func TestApproveVisitWithEmptyBody(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
@@ -44,7 +44,7 @@ func TestRejectVisit(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
@@ -67,7 +67,7 @@ func TestApproveAlreadyApprovedVisitFails(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusApproved)
 
@@ -83,7 +83,7 @@ func TestApproveCheckedInVisitFails(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusCheckedIn)
 
@@ -99,7 +99,7 @@ func TestApproveWaitingVisitSucceeds(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusWaiting)
 
@@ -119,7 +119,7 @@ func TestApproveNonExistentVisitReturns404(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 
 	w := httptest.NewRecorder()
@@ -136,7 +136,7 @@ func TestCheckinFromCheckedOutStatusFails(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusCheckedOut)
 
@@ -152,7 +152,7 @@ func TestCheckinFromNoShowStatusFails(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusNoShow)
 
@@ -168,7 +168,7 @@ func TestCheckinFromRejectedStatusFails(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusRejected)
 
@@ -184,7 +184,7 @@ func TestCheckinWithInvalidMethodFails(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
@@ -200,7 +200,7 @@ func TestCheckinWithWrongQRTokenFails(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusApproved)
 
@@ -225,7 +225,7 @@ func TestCheckinAllValidMethods(t *testing.T) {
 	}
 	for _, method := range methods {
 		t.Run(method, func(t *testing.T) {
-			h := NewVisitorHandlers(database, nil)
+			h := NewVisitorHandlers(database, nil, nil)
 			router := setupVisitorRouter(h)
 			visitID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
@@ -245,7 +245,7 @@ func TestCheckoutWithEmptyBody(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusCheckedIn)
 
@@ -264,7 +264,7 @@ func TestCheckoutFromPreRegisteredFails(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
@@ -280,7 +280,7 @@ func TestCheckoutIdempotent(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusCheckedIn)
 
@@ -305,7 +305,7 @@ func TestCheckoutNonExistentVisitReturns404(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 
 	w := httptest.NewRecorder()
@@ -322,7 +322,7 @@ func TestGetVisitByQRValid(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	visitID, qrToken, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
 	r := httputil.NewRouter()
@@ -349,7 +349,7 @@ func TestGetVisitByQRExpired(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	_, qrToken, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
 	// Expire the QR token
@@ -373,7 +373,7 @@ func TestGetVisitByQRInvalidToken(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	r := httputil.NewRouter()
 	r.Get("/api/v1/visitors/qr/{qr_token}", h.GetVisitByQR)
 
@@ -388,7 +388,7 @@ func TestGetVisitByQRWithAuthContext(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	_, qrToken, _ := createVisitorFixture(t, database, VisitStatusApproved)
 
 	// With auth context — should filter by tenant_id
@@ -418,7 +418,7 @@ func TestTodaySummaryReturnsCorrectCounts(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupListVisitsRouter(h)
 
 	w := httptest.NewRecorder()
@@ -440,7 +440,7 @@ func TestTodaySummaryRequiresAuth(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	// No claims middleware
 	w := httptest.NewRecorder()
 	h.GetTodaySummary(w, httptest.NewRequest(http.MethodGet, "/api/v1/visitors/today/summary", nil))
@@ -480,7 +480,7 @@ func TestListVisitsDefaultPagination(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupListVisitsRouter(h)
 
 	w := httptest.NewRecorder()
@@ -501,7 +501,7 @@ func TestListVisitsFilterByStatus(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupListVisitsRouter(h)
 
 	// Create visits with different statuses
@@ -530,7 +530,7 @@ func TestListVisitsFilterByDate(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupListVisitsRouter(h)
 
 	today := time.Now().Format("2006-01-02")
@@ -545,7 +545,7 @@ func TestListVisitsSearch(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupListVisitsRouter(h)
 
 	seed := time.Now().UnixNano()
@@ -563,7 +563,7 @@ func TestGetVisitReturnsJoinedData(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupListVisitsRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
@@ -585,7 +585,7 @@ func TestGetVisitNotFound(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupListVisitsRouter(h)
 
 	w := httptest.NewRecorder()
@@ -623,7 +623,7 @@ func TestUpdateVisitChangesFields(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupMutationRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
@@ -644,7 +644,7 @@ func TestUpdateVisitCheckedInStatusFails(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupMutationRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusCheckedIn)
 
@@ -660,7 +660,7 @@ func TestUpdateVisitInvalidPurposeFails(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupMutationRouter(h)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusPreRegistered)
 
@@ -679,7 +679,7 @@ func TestCreateVisitAllPurposes(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	hostID := createHostRecord(t, database, "Purpose", "Host")
 
@@ -714,7 +714,7 @@ func TestCreateVisitInvalidPurposeFails(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	hostID := createHostRecord(t, database, "Bad", "Host")
 
@@ -735,7 +735,7 @@ func TestCreateVisitInvalidHostFails(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 
 	req := map[string]any{
@@ -757,7 +757,7 @@ func TestViewerCannotCreateVisit(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	viewerRouter := setupVisitorRouterWithClaims(h, &authsvc.AccessClaims{
 		Sub:   "00000000-0000-0000-0000-0000000000bb",
 		CID:   visitorTestTenantID,
@@ -783,7 +783,7 @@ func TestViewerCannotCheckinVisit(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusApproved)
 
 	viewerRouter := setupVisitorRouterWithClaims(h, &authsvc.AccessClaims{
@@ -806,7 +806,7 @@ func TestHostCanApproveOwnVisitOnly(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	hostID := createHostRecord(t, database, "MyHost", "User")
 
 	// Create a visit for this host
@@ -872,7 +872,7 @@ func TestWatchlistCreateAndDelete(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupWatchlistRouter(h)
 
 	seed := time.Now().UnixNano()
@@ -922,7 +922,7 @@ func TestWatchlistCreateValidation(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupWatchlistRouter(h)
 
 	tests := []struct {
@@ -950,7 +950,7 @@ func TestWatchlistViewerCannotCreate(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	viewerRouter := setupVisitorRouterWithClaims(h, &authsvc.AccessClaims{
 		Sub:   "00000000-0000-0000-0000-0000000000bb",
 		CID:   visitorTestTenantID,
@@ -973,7 +973,7 @@ func TestVisitorUpsertDeduplicatesByEmail(t *testing.T) {
 	database := setupVisitorTestDB(t)
 	defer database.Close()
 
-	h := NewVisitorHandlers(database, nil)
+	h := NewVisitorHandlers(database, nil, nil)
 	router := setupVisitorRouter(h)
 	hostID := createHostRecord(t, database, "Dedup", "Host")
 

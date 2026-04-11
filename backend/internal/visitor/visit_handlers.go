@@ -74,12 +74,9 @@ func (h *VisitorHandlers) ListVisits(w http.ResponseWriter, r *http.Request) {
 		       vis.id, vis.tenant_id, vis.first_name, vis.last_name, vis.display_name,
 		       vis.email, vis.phone, vis.company, vis.national_id, vis.photo_ref,
 		       vis.watchlist_status, vis.watchlist_reason, vis.visit_count, vis.last_visit_at,
-		       vis.created_at, vis.updated_at,
-		       u.id, COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,''), COALESCE(d.name,'')
+		       vis.created_at, vis.updated_at
 		FROM dm3_visitor.visits v
 		JOIN dm3_visitor.visitors vis ON vis.id = v.visitor_id
-		LEFT JOIN dm3_identity.users u ON u.id = v.host_user_id
-		LEFT JOIN dm3_identity.departments d ON d.id = u.department_id
 		%s
 		ORDER BY v.expected_arrival DESC
 		LIMIT $%d OFFSET $%d`, where, idx, idx+1)
@@ -95,11 +92,16 @@ func (h *VisitorHandlers) ListVisits(w http.ResponseWriter, r *http.Request) {
 
 	visits := []Visit{}
 	for rows.Next() {
-		v, err := scanVisitWithJoins(rows)
+		v, err := scanVisit(rows)
 		if err != nil {
 			slog.Error("list visits scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
+		}
+		if h.cache != nil {
+			if host := h.cache.GetUser(r.Context(), v.HostUserID); host != nil {
+				v.Host = &VisitHost{ID: host.ID, Name: host.Name, Department: host.Department}
+			}
 		}
 		visits = append(visits, v)
 	}
@@ -134,18 +136,20 @@ func (h *VisitorHandlers) GetVisit(w http.ResponseWriter, r *http.Request) {
 		       vis.id, vis.tenant_id, vis.first_name, vis.last_name, vis.display_name,
 		       vis.email, vis.phone, vis.company, vis.national_id, vis.photo_ref,
 		       vis.watchlist_status, vis.watchlist_reason, vis.visit_count, vis.last_visit_at,
-		       vis.created_at, vis.updated_at,
-		       u.id, COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,''), COALESCE(d.name,'')
+		       vis.created_at, vis.updated_at
 		FROM dm3_visitor.visits v
 		JOIN dm3_visitor.visitors vis ON vis.id = v.visitor_id
-		LEFT JOIN dm3_identity.users u ON u.id = v.host_user_id
-		LEFT JOIN dm3_identity.departments d ON d.id = u.department_id
 		WHERE v.id = $1::uuid AND v.tenant_id = $2::uuid`, id, cid)
 
-	visit, err := scanVisitWithJoins(row)
+	visit, err := scanVisit(row)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "visit not found")
 		return
+	}
+	if h.cache != nil {
+		if host := h.cache.GetUser(r.Context(), visit.HostUserID); host != nil {
+			visit.Host = &VisitHost{ID: host.ID, Name: host.Name, Department: host.Department}
+		}
 	}
 	httputil.JSON(w, http.StatusOK, visit)
 }
@@ -500,8 +504,19 @@ func (h *VisitorHandlers) ApproveVisit(w http.ResponseWriter, r *http.Request) {
 		h.audit.LogFromRequest(r, action, "visit", visit.ID, "", "success", nil, visit)
 	}
 	if req.Approved {
+		var visitorName string
+		_ = h.db.Pool.QueryRow(r.Context(),
+			`SELECT COALESCE(display_name, first_name || ' ' || last_name) FROM dm3_visitor.visitors WHERE id = $1::uuid`,
+			visit.VisitorID,
+		).Scan(&visitorName)
 		h.publishEvent(r.Context(), cid, EventVisitApproved, map[string]any{
-			"visit_id": visit.ID, "visitor_id": visit.VisitorID, "host_user_id": visit.HostUserID,
+			"tenant_id":           cid,
+			"visit_id":            visit.ID,
+			"visitor_id":          visit.VisitorID,
+			"visitor_name":        visitorName,
+			"access_areas":        visit.AccessAreas,
+			"expected_arrival":    visit.ExpectedArrival,
+			"expected_departure":  visit.ExpectedDeparture,
 		})
 	} else {
 		h.publishEvent(r.Context(), cid, EventVisitRejected, map[string]any{
@@ -877,6 +892,34 @@ func (h *VisitorHandlers) GetTodaySummary(w http.ResponseWriter, r *http.Request
 }
 
 type rowScanner interface{ Scan(dest ...any) error }
+
+// scanVisit scans a Visit and its embedded Visitor from a query that does NOT
+// include the cross-schema host JOIN columns. Host info is populated separately
+// via LookupCache.
+func scanVisit(row rowScanner) (Visit, error) {
+	var v Visit
+	vis := &Visitor{}
+	err := row.Scan(
+		&v.ID, &v.TenantID, &v.VisitorID, &v.HostUserID,
+		&v.Purpose, &v.PurposeNote, &v.Status,
+		&v.ExpectedArrival, &v.ExpectedDeparture,
+		&v.ActualCheckin, &v.ActualCheckout,
+		&v.CheckinMethod, &v.CheckinDeviceID, &v.CheckinPhotoRef, &v.CheckoutBy,
+		&v.QRToken, &v.QRExpiresAt, &v.BadgeNumber, &v.TempCredentialID,
+		&v.AccessAreas, &v.EscortRequired, &v.VehiclePlate, &v.ItemsCarried,
+		&v.NDASigned, &v.HostApproved, &v.HostApprovedAt, &v.Notes,
+		&v.CreatedAt, &v.UpdatedAt,
+		&vis.ID, &vis.TenantID, &vis.FirstName, &vis.LastName, &vis.DisplayName,
+		&vis.Email, &vis.Phone, &vis.Company, &vis.NationalID, &vis.PhotoRef,
+		&vis.WatchlistStatus, &vis.WatchlistReason, &vis.VisitCount, &vis.LastVisitAt,
+		&vis.CreatedAt, &vis.UpdatedAt,
+	)
+	if err != nil {
+		return v, err
+	}
+	v.Visitor = vis
+	return v, nil
+}
 
 func scanVisitWithJoins(row rowScanner) (Visit, error) {
 	var v Visit

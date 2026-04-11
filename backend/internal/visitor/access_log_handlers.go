@@ -164,12 +164,11 @@ func (h *VisitorHandlers) GetEvacuationList(w http.ResponseWriter, r *http.Reque
 		SELECT v.id, v.visitor_id,
 		       vis.first_name || ' ' || vis.last_name,
 		       vis.company, vis.phone, vis.photo_ref,
-		       COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,''),
+		       v.host_user_id,
 		       v.actual_checkin,
 		       last_log.access_point_name, last_log.zone_name, last_log.event_time
 		FROM dm3_visitor.visits v
 		JOIN dm3_visitor.visitors vis ON vis.id = v.visitor_id
-		LEFT JOIN dm3_identity.users u ON u.id = v.host_user_id
 		LEFT JOIN LATERAL (
 			SELECT access_point_name, zone_name, event_time
 			FROM dm3_visitor.visitor_access_log al
@@ -190,15 +189,21 @@ func (h *VisitorHandlers) GetEvacuationList(w http.ResponseWriter, r *http.Reque
 	entries := []EvacuationEntry{}
 	for rows.Next() {
 		var e EvacuationEntry
+		var hostUserID string
 		if err := rows.Scan(
 			&e.VisitID, &e.VisitorID, &e.VisitorName,
 			&e.VisitorCompany, &e.VisitorPhone, &e.VisitorPhotoRef,
-			&e.HostName, &e.CheckinTime,
+			&hostUserID, &e.CheckinTime,
 			&e.LastAccessPoint, &e.LastZone, &e.LastEventTime,
 		); err != nil {
 			slog.Error("scan evacuation entry error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
+		}
+		if h.cache != nil {
+			if host := h.cache.GetUser(r.Context(), hostUserID); host != nil {
+				e.HostName = host.Name
+			}
 		}
 		entries = append(entries, e)
 	}

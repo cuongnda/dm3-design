@@ -60,9 +60,31 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Ensure ACCESS stream to subscribe to credential.created events
+	if err := natsClient.EnsureStream(ctx, "ACCESS", []string{"dm3.access.>"}); err != nil {
+		slog.Error("failed to ensure ACCESS stream", "error", err)
+		os.Exit(1)
+	}
+
 	// Ensure AUDIT stream for audit event publishing
 	if err := natsClient.EnsureStream(ctx, "AUDIT", []string{"dm3.audit.>"}); err != nil {
 		slog.Error("failed to ensure AUDIT stream", "error", err)
+		os.Exit(1)
+	}
+
+	// Build lookup cache and subscribe to user/zone events from upstream services.
+	// The IDENTITY and ACCESS streams are owned by identity-svc and access-svc respectively;
+	// we subscribe as a durable consumer to keep the cache warm.
+	lookupCache := visitor.NewLookupCache(database)
+	if err := lookupCache.Subscribe(ctx, natsClient); err != nil {
+		slog.Warn("failed to subscribe lookup cache to NATS events; falling back to DB-only resolution", "error", err)
+	}
+
+	// Start credential consumer: receives credential.created from access-svc and
+	// stores the temp_credential_id on the visit.
+	credConsumer := visitor.NewCredentialConsumer(database, natsClient)
+	if err := credConsumer.Start(ctx); err != nil {
+		slog.Error("failed to start credential consumer", "error", err)
 		os.Exit(1)
 	}
 
@@ -87,7 +109,7 @@ func main() {
 	})
 
 	// HTTP handlers
-	visitorHandlers := visitor.NewVisitorHandlers(database, auditLog, natsClient)
+	visitorHandlers := visitor.NewVisitorHandlers(database, auditLog, lookupCache, natsClient)
 
 	// HTTP routes
 	r := httputil.NewRouter()

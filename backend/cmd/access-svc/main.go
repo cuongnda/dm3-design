@@ -65,10 +65,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Ensure VISITOR stream (created by visitor-svc; access-svc subscribes to it)
+	if err := natsClient.EnsureStream(ctx, "VISITOR", []string{"dm3.visitor.>"}); err != nil {
+		slog.Error("failed to ensure VISITOR nats stream", "error", err)
+		os.Exit(1)
+	}
+
 	// Start NATS consumer for access events
 	consumer := access.NewNATSConsumer(database, natsClient)
 	if err := consumer.Start(ctx); err != nil {
 		slog.Error("failed to start nats consumer", "error", err)
+		os.Exit(1)
+	}
+
+	// Start visitor credential consumer
+	visitorCredConsumer := access.NewVisitorCredentialConsumer(database, natsClient)
+	if err := visitorCredConsumer.Start(ctx); err != nil {
+		slog.Error("failed to start visitor credential consumer", "error", err)
 		os.Exit(1)
 	}
 
