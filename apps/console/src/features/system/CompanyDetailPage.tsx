@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Building2, Users, Cpu, DoorOpen, Activity, Save } from 'lucide-react';
-import { fetchCompany, updateCompany, suspendCompany, type CompanyDTO } from '@/lib/api';
+import { ArrowLeft, Building2, Users, Cpu, DoorOpen, Activity, Save, Puzzle } from 'lucide-react';
+import { fetchCompany, updateCompany, suspendCompany, fetchTenantPlugins, updateTenantPlugins, type CompanyDTO, type PluginInfo } from '@/lib/api';
 import { Button, Input, Select, SelectOption, Label } from '@dm3/ui';
 
 const statusColors: Record<string, string> = {
@@ -21,6 +21,19 @@ export function CompanyDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: '', address: '', phone: '', max_devices: 0, max_users: 0, plan: '' });
 
+  const [availablePlugins, setAvailablePlugins] = useState<PluginInfo[]>([]);
+  const [enabledPlugins, setEnabledPlugins] = useState<string[]>([]);
+  const [savingPlugins, setSavingPlugins] = useState(false);
+  const [pluginSaveMsg, setPluginSaveMsg] = useState<'saved' | 'error' | null>(null);
+
+  const loadPlugins = useCallback(async (tenantId: string) => {
+    try {
+      const res = await fetchTenantPlugins(tenantId);
+      setAvailablePlugins(res.available_plugins);
+      setEnabledPlugins(res.enabled_plugins);
+    } catch { /* */ }
+  }, []);
+
   useEffect(() => {
     if (!id) return;
     fetchCompany(id)
@@ -30,7 +43,8 @@ export function CompanyDetailPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [id]);
+    loadPlugins(id);
+  }, [id, loadPlugins]);
 
   const handleSave = async () => {
     if (!id) return;
@@ -41,6 +55,24 @@ export function CompanyDetailPage() {
       setEditing(false);
     } catch { /* */ }
     setSaving(false);
+  };
+
+  const handleTogglePlugin = async (pluginId: string, enabled: boolean) => {
+    if (!id) return;
+    setSavingPlugins(true);
+    setPluginSaveMsg(null);
+    const next = enabled
+      ? [...enabledPlugins, pluginId]
+      : enabledPlugins.filter((p) => p !== pluginId);
+    try {
+      const res = await updateTenantPlugins(id, next);
+      setEnabledPlugins(res.enabled_plugins);
+      setPluginSaveMsg('saved');
+    } catch {
+      setPluginSaveMsg('error');
+    }
+    setSavingPlugins(false);
+    setTimeout(() => setPluginSaveMsg(null), 2000);
   };
 
   const handleSuspend = async () => {
@@ -189,6 +221,68 @@ export function CompanyDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Plugins */}
+      {availablePlugins.length > 0 && (
+        <div className="border border-border rounded-lg bg-card mt-6">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <Puzzle size={16} className="text-operate" />
+              <h2 className="text-[14px] font-medium text-foreground">{t('plugins.title')}</h2>
+            </div>
+            {pluginSaveMsg === 'saved' && (
+              <span className="text-[11px] text-success">{t('plugins.saved')}</span>
+            )}
+            {pluginSaveMsg === 'error' && (
+              <span className="text-[11px] text-error">{t('plugins.saveError')}</span>
+            )}
+          </div>
+          <div className="p-4">
+            <p className="text-[12px] text-muted-foreground mb-4">{t('plugins.description')}</p>
+            <div className="space-y-3">
+              {availablePlugins.map((plugin) => {
+                const isEnabled = enabledPlugins.includes(plugin.id);
+                return (
+                  <div
+                    key={plugin.id}
+                    data-testid={`plugin-toggle-${plugin.id}`}
+                    className="flex items-center justify-between py-2 px-3 rounded-lg border border-border"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-medium text-foreground">{plugin.name}</span>
+                        {plugin.is_core && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-operate/10 text-operate border border-operate/20 font-medium">
+                            {t('plugins.core')}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{plugin.description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={isEnabled}
+                      disabled={plugin.is_core || savingPlugins}
+                      onClick={() => handleTogglePlugin(plugin.id, !isEnabled)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors
+                        ${isEnabled ? 'bg-operate' : 'bg-muted'}
+                        ${plugin.is_core || savingPlugins ? 'opacity-50 cursor-not-allowed' : ''}
+                      `}
+                    >
+                      <span
+                        className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform
+                          ${isEnabled ? 'translate-x-4' : 'translate-x-0.5'}
+                        `}
+                      />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

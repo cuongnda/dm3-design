@@ -105,9 +105,9 @@ export function Sidebar() {
   const navigate = useNavigate();
   const handleLogout = () => { logout(); navigate('/login'); };
   const user = useAuthStore((s) => s.user);
-  const enabledModules = useAuthStore((s) => s.enabledModules);
+  const enabledPlugins = useAuthStore((s) => s.enabledPlugins);
   const unreadCount = useNotificationStore((s) => s.unreadCount);
-  const hasVisitor = enabledModules?.includes('visitor') ?? false;
+  const hasVisitor = enabledPlugins?.includes('visitor') ?? false;
   const c = sidebarCollapsed;
   const iconSize = c ? 20 : 18;
 

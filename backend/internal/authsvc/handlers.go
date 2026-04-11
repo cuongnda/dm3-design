@@ -33,7 +33,7 @@ type AccessClaims struct {
 	Name           string   `json:"name"`
 	Roles          []string `json:"roles"`
 	Role           string   `json:"role,omitempty"` // primary_manager, manager, operator, viewer, system_admin
-	EnabledModules []string `json:"enabled_modules,omitempty"`
+	EnabledPlugins []string `json:"enabled_plugins,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -106,6 +106,7 @@ type loginStepResponse struct {
 	RefreshToken   string         `json:"refresh_token,omitempty"`
 	User           *loginUserInfo `json:"user,omitempty"`
 	Companies      []companyInfo  `json:"companies,omitempty"`
+	EnabledPlugins []string       `json:"enabled_plugins,omitempty"`
 }
 
 type loginStep2Request struct {
@@ -260,8 +261,8 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		}
-		modules, _ := h.fetchEnabledModules(r.Context(), c.ID)
-		accessToken, err := h.generateAccessToken(chosenAccount.id, c.ID, chosenAccount.email, chosenAccount.fullName, chosenAccount.roles, c.ID, c.Role, modules)
+		plugins, _ := h.fetchEnabledPlugins(r.Context(), c.ID)
+		accessToken, err := h.generateAccessToken(chosenAccount.id, c.ID, chosenAccount.email, chosenAccount.fullName, chosenAccount.roles, c.ID, c.Role, plugins)
 		if err != nil {
 			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 			return
@@ -285,10 +286,11 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 			Status:     "success",
 		})
 		httputil.JSON(w, http.StatusOK, loginStepResponse{
-			Step:         "complete",
-			AccessToken:  accessToken,
-			RefreshToken: refreshToken,
-			User:         &loginUserInfo{ID: chosenAccount.id, Name: chosenAccount.fullName, Email: chosenAccount.email, Role: c.Role, CID: c.ID},
+			Step:           "complete",
+			AccessToken:    accessToken,
+			RefreshToken:   refreshToken,
+			User:           &loginUserInfo{ID: chosenAccount.id, Name: chosenAccount.fullName, Email: chosenAccount.email, Role: c.Role, CID: c.ID},
+			EnabledPlugins: plugins,
 		})
 		return
 	}
@@ -360,8 +362,8 @@ func (h *AuthHandlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	modules, _ := h.fetchEnabledModules(r.Context(), req.TenantID)
-	accessToken, err := h.generateAccessToken(account.id, req.TenantID, account.email, account.fullName, account.roles, req.TenantID, account.role, modules)
+	plugins, _ := h.fetchEnabledPlugins(r.Context(), req.TenantID)
+	accessToken, err := h.generateAccessToken(account.id, req.TenantID, account.email, account.fullName, account.roles, req.TenantID, account.role, plugins)
 	if err != nil {
 		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 		return
@@ -384,10 +386,11 @@ func (h *AuthHandlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 		Status:     "success",
 	})
 	httputil.JSON(w, http.StatusOK, loginStepResponse{
-		Step:         "complete",
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		User:         &loginUserInfo{ID: account.id, Name: account.fullName, Email: account.email, Role: account.role, CID: req.TenantID},
+		Step:           "complete",
+		AccessToken:    accessToken,
+		RefreshToken:   refreshToken,
+		User:           &loginUserInfo{ID: account.id, Name: account.fullName, Email: account.email, Role: account.role, CID: req.TenantID},
+		EnabledPlugins: plugins,
 	})
 }
 
@@ -463,8 +466,8 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 		refreshTenantID = *refreshCompanyID
 	}
 
-	refreshModules, _ := h.fetchEnabledModules(r.Context(), refreshTenantID)
-	accessToken, err := h.generateAccessToken(userID, tenantID, email, fullName, roles, refreshTenantID, refreshUserRole, refreshModules)
+	refreshPlugins, _ := h.fetchEnabledPlugins(r.Context(), refreshTenantID)
+	accessToken, err := h.generateAccessToken(userID, tenantID, email, fullName, roles, refreshTenantID, refreshUserRole, refreshPlugins)
 	if err != nil {
 		slog.Error("Refresh: failed to generate access token", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal server error")
@@ -981,24 +984,24 @@ func (h *AuthHandlers) generateTempToken(userID, email string) (string, error) {
 	return token.SignedString([]byte(h.jwtSecret))
 }
 
-// fetchEnabledModules queries the tenant's enabled_modules from the database.
+// fetchEnabledPlugins queries the tenant's enabled_plugins from the database.
 // Returns nil (not an error) when tenantID is empty (e.g. system_admin with no company).
-func (h *AuthHandlers) fetchEnabledModules(ctx context.Context, tenantID string) ([]string, error) {
+func (h *AuthHandlers) fetchEnabledPlugins(ctx context.Context, tenantID string) ([]string, error) {
 	if tenantID == "" {
 		return nil, nil
 	}
-	var modules []string
+	var plugins []string
 	err := h.db.Pool.QueryRow(ctx,
-		`SELECT enabled_modules FROM dm3_auth.tenants WHERE id = $1::uuid`,
+		`SELECT enabled_plugins FROM dm3_auth.tenants WHERE id = $1::uuid`,
 		tenantID,
-	).Scan(&modules)
+	).Scan(&plugins)
 	if err != nil {
-		return nil, fmt.Errorf("fetchEnabledModules: %w", err)
+		return nil, fmt.Errorf("fetchEnabledPlugins: %w", err)
 	}
-	return modules, nil
+	return plugins, nil
 }
 
-func (h *AuthHandlers) generateAccessToken(userID, companyID, email, name string, roles []string, selectedCompanyID, role string, enabledModules []string) (string, error) {
+func (h *AuthHandlers) generateAccessToken(userID, companyID, email, name string, roles []string, selectedCompanyID, role string, enabledPlugins []string) (string, error) {
 	now := time.Now()
 	claims := AccessClaims{
 		Sub:            userID,
@@ -1007,7 +1010,7 @@ func (h *AuthHandlers) generateAccessToken(userID, companyID, email, name string
 		Name:           name,
 		Roles:          roles,
 		Role:           role,
-		EnabledModules: enabledModules,
+		EnabledPlugins: enabledPlugins,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(15 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(now),

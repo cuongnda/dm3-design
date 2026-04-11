@@ -24,8 +24,8 @@ interface MeResponse {
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
-  enabledModules: string[];
-  login: (user: User, enabledModules?: string[]) => void;
+  enabledPlugins: string[];
+  login: (user: User, enabledPlugins?: string[]) => void;
   logout: () => void;
   checkAuth: () => Promise<void>;
 }
@@ -35,11 +35,11 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       isAuthenticated: false,
-      enabledModules: [],
-      login: (user, enabledModules = []) => set({ user, isAuthenticated: true, enabledModules }),
+      enabledPlugins: [],
+      login: (user, enabledPlugins = []) => set({ user, isAuthenticated: true, enabledPlugins }),
       logout: () => {
         clearToken();
-        set({ user: null, isAuthenticated: false, enabledModules: [] });
+        set({ user: null, isAuthenticated: false, enabledPlugins: [] });
       },
       checkAuth: async () => {
         const token = getToken();
@@ -74,7 +74,7 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
-export const hasModule = (moduleName: string): boolean => {
-  const { enabledModules } = useAuthStore.getState();
-  return enabledModules?.includes(moduleName) ?? false;
+export const hasPlugin = (pluginName: string): boolean => {
+  const { enabledPlugins } = useAuthStore.getState();
+  return enabledPlugins?.includes(pluginName) ?? false;
 };

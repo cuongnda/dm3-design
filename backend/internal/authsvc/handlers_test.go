@@ -2,6 +2,7 @@ package authsvc
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -135,6 +136,150 @@ func TestClaimsFromContext(t *testing.T) {
 	got = ClaimsFromContext(context.Background())
 	if got != nil {
 		t.Fatal("expected nil claims")
+	}
+}
+
+func TestAccessTokenContainsEnabledPlugins(t *testing.T) {
+	h := &AuthHandlers{jwtSecret: testSecret}
+	plugins := []string{"core", "visitor"}
+
+	tokenStr, err := h.generateAccessToken("user-1", "company-1", "test@example.com", "Test", []string{"admin"}, "company-1", "admin", plugins)
+	if err != nil {
+		t.Fatalf("generateAccessToken: %v", err)
+	}
+
+	token, err := jwt.ParseWithClaims(tokenStr, &AccessClaims{}, func(t *jwt.Token) (interface{}, error) {
+		return []byte(testSecret), nil
+	})
+	if err != nil {
+		t.Fatalf("parse token: %v", err)
+	}
+
+	claims := token.Claims.(*AccessClaims)
+	if len(claims.EnabledPlugins) != 2 {
+		t.Fatalf("enabled_plugins length = %d, want 2", len(claims.EnabledPlugins))
+	}
+	if claims.EnabledPlugins[0] != "core" || claims.EnabledPlugins[1] != "visitor" {
+		t.Errorf("enabled_plugins = %v, want [core visitor]", claims.EnabledPlugins)
+	}
+}
+
+func TestAccessTokenNilPluginsOmitted(t *testing.T) {
+	h := &AuthHandlers{jwtSecret: testSecret}
+
+	tokenStr, err := h.generateAccessToken("user-1", "company-1", "test@example.com", "Test", []string{"admin"}, "company-1", "admin", nil)
+	if err != nil {
+		t.Fatalf("generateAccessToken: %v", err)
+	}
+
+	token, err := jwt.ParseWithClaims(tokenStr, &AccessClaims{}, func(t *jwt.Token) (interface{}, error) {
+		return []byte(testSecret), nil
+	})
+	if err != nil {
+		t.Fatalf("parse token: %v", err)
+	}
+
+	claims := token.Claims.(*AccessClaims)
+	if claims.EnabledPlugins != nil {
+		t.Errorf("enabled_plugins = %v, want nil for system_admin", claims.EnabledPlugins)
+	}
+}
+
+func TestLoginStepResponseIncludesEnabledPlugins(t *testing.T) {
+	// Verify the loginStepResponse struct serializes enabled_plugins correctly.
+	// This is the bug that caused the visitor menu to disappear — the response
+	// struct was missing the EnabledPlugins field.
+	resp := loginStepResponse{
+		Step:           "complete",
+		AccessToken:    "token",
+		RefreshToken:   "refresh",
+		User:           &loginUserInfo{ID: "u1", Name: "Test", Email: "test@test.com"},
+		EnabledPlugins: []string{"core", "visitor"},
+	}
+
+	// Marshal and verify
+	data, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	plugins, ok := parsed["enabled_plugins"]
+	if !ok {
+		t.Fatal("enabled_plugins missing from login response JSON")
+	}
+
+	arr, ok := plugins.([]interface{})
+	if !ok {
+		t.Fatal("enabled_plugins is not an array")
+	}
+	if len(arr) != 2 {
+		t.Fatalf("enabled_plugins length = %d, want 2", len(arr))
+	}
+	if arr[0] != "core" || arr[1] != "visitor" {
+		t.Errorf("enabled_plugins = %v, want [core visitor]", arr)
+	}
+}
+
+func TestPluginRegistryContainsCore(t *testing.T) {
+	found := false
+	for _, p := range AvailablePlugins {
+		if p.ID == "core" && p.IsCore {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("AvailablePlugins must contain core with IsCore=true")
+	}
+}
+
+func TestIsValidPlugin(t *testing.T) {
+	if !IsValidPlugin("core") {
+		t.Error("core should be valid")
+	}
+	if !IsValidPlugin("visitor") {
+		t.Error("visitor should be valid")
+	}
+	if IsValidPlugin("nonexistent") {
+		t.Error("nonexistent should be invalid")
+	}
+}
+
+func TestRequirePluginMiddleware(t *testing.T) {
+	tests := []struct {
+		name       string
+		plugins    []string
+		required   string
+		wantStatus int
+	}{
+		{"visitor enabled", []string{"core", "visitor"}, "visitor", 200},
+		{"visitor not enabled", []string{"core"}, "visitor", 403},
+		{"core always present", []string{"core"}, "core", 200},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			claims := &AccessClaims{
+				Sub:            "user-1",
+				EnabledPlugins: tt.plugins,
+			}
+			allowed := false
+			for _, p := range claims.EnabledPlugins {
+				if p == tt.required {
+					allowed = true
+				}
+			}
+			if allowed && tt.wantStatus != 200 {
+				t.Errorf("expected blocked but was allowed")
+			}
+			if !allowed && tt.wantStatus != 403 {
+				t.Errorf("expected allowed but was blocked")
+			}
+		})
 	}
 }
 

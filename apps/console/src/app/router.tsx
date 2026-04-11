@@ -18,7 +18,7 @@ import { UserAccountDetailPage } from '@/features/system/UserAccountDetailPage';
 import { CreateUserAccountPage } from '@/features/system/CreateUserAccountPage';
 import { ProtectedRoute } from './ProtectedRoute';
 import { RoleBasedRoute } from './RoleBasedRoute';
-import { ModuleGuard } from '@/components/common/ModuleGuard';
+import { PluginGuard } from '@/components/common/PluginGuard';
 
 // Essential Security Features (legacy)
 const AccessControlPage = lazy(() =>
@@ -310,15 +310,15 @@ export const Router = createBrowserRouter([
               { path: 'manage/contractors', element: <LazyWrap><ContractorsPage /></LazyWrap> },
 
               // VISITORS
-              { path: 'visitors', element: <ModuleGuard module="visitor"><LazyWrap><VisitorsPage /></LazyWrap></ModuleGuard> },
-              { path: 'visitors/register', element: <ModuleGuard module="visitor"><LazyWrap><VisitorPreRegisterPage /></LazyWrap></ModuleGuard> },
-              { path: 'visitors/groups', element: <ModuleGuard module="visitor"><LazyWrap><VisitorGroupsPage /></LazyWrap></ModuleGuard> },
-              { path: 'visitors/watchlist', element: <ModuleGuard module="visitor"><LazyWrap><VisitorWatchlistPage /></LazyWrap></ModuleGuard> },
-              { path: 'visitors/agreements', element: <ModuleGuard module="visitor"><LazyWrap><VisitorAgreementsPage /></LazyWrap></ModuleGuard> },
-              { path: 'visitors/access-history', element: <ModuleGuard module="visitor"><LazyWrap><VisitorAccessHistoryPage /></LazyWrap></ModuleGuard> },
-              { path: 'visitors/analytics', element: <ModuleGuard module="visitor"><LazyWrap><VisitorAnalyticsPage /></LazyWrap></ModuleGuard> },
-              { path: 'visitors/recurring', element: <ModuleGuard module="visitor"><LazyWrap><VisitorRecurringPage /></LazyWrap></ModuleGuard> },
-              { path: 'visitors/settings', element: <ModuleGuard module="visitor"><LazyWrap><VisitorSettingsPage /></LazyWrap></ModuleGuard> },
+              { path: 'visitors', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorsPage /></LazyWrap></PluginGuard> },
+              { path: 'visitors/register', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorPreRegisterPage /></LazyWrap></PluginGuard> },
+              { path: 'visitors/groups', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorGroupsPage /></LazyWrap></PluginGuard> },
+              { path: 'visitors/watchlist', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorWatchlistPage /></LazyWrap></PluginGuard> },
+              { path: 'visitors/agreements', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorAgreementsPage /></LazyWrap></PluginGuard> },
+              { path: 'visitors/access-history', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorAccessHistoryPage /></LazyWrap></PluginGuard> },
+              { path: 'visitors/analytics', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorAnalyticsPage /></LazyWrap></PluginGuard> },
+              { path: 'visitors/recurring', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorRecurringPage /></LazyWrap></PluginGuard> },
+              { path: 'visitors/settings', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorSettingsPage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance', element: <LazyWrap><AttendancePage /></LazyWrap> },
               { path: 'manage/deliveries', element: <LazyWrap><DeliveriesPage /></LazyWrap> },
               { path: 'manage/provisioning', element: <LazyWrap><ProvisioningPage /></LazyWrap> },

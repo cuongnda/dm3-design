@@ -58,10 +58,10 @@ This document tracks the current implementation status of DM3 features. Updated:
   - visits table v2 columns: `group_id`, `recurring_template_id`, `cancelled_reason`, `rejection_reason`, `approved_by`, `checkout_reason`, `reinvite_count`
   - **Event-driven architecture**: publishes `visit.approved`, `visit.checkedin`, `visit.checkedout`, `visit.cancelled` events; subscribes to `identity.user.updated`, `access.zone.updated` for local cache invalidation
   - **Credential integration**: `visit.approved` → access-svc creates temp credential in `dm3_visitor.temp_credentials`; `visit.ended` → access-svc revokes credential
-  - **Feature flag**: per-tenant `enabled_modules` toggle in tenant settings; visitor module disabled by default until explicitly enabled
+  - **Feature flag**: per-tenant `enabled_plugins` toggle in tenant settings; visitor plugin disabled by default until explicitly enabled
   - Implemented: Visitor CRUD ✅ | Visit scheduling & check-in/out ✅ | Walk-in registration ✅ | Watchlist management ✅ | QR code check-in ✅ | Badge printing ✅ | Auto-checkout cron ✅ | Visit Groups (batch/conference) ✅ | Recurring visit templates ✅ | Visitor access log ✅ | Visitor agreements & signatures ✅ | Analytics (top visitors, stats) ✅ | Per-tenant settings ✅ | Evacuation list ✅ | Reinvite flow ✅ | Temp credential lifecycle ✅
   - API: 40+ endpoints under `/api/v1/visitors/` — visits CRUD, lifecycle (approve/checkin/checkout/reinvite), walk-in, batch, groups, watchlist, agreements, analytics, recurring, settings, access-log, evacuation, QR lookup
-  - Frontend: `apps/console/src/features/visitors/` (8 pages) + `apps/console/src/features/manage/visitors/` (main VisitorsPage with hooks). Lazy-loaded behind `ModuleGuard` component (feature flag check). API client: `packages/api-client/src/visitors.ts` (35+ functions)
+  - Frontend: `apps/console/src/features/visitors/` (8 pages) + `apps/console/src/features/manage/visitors/` (main VisitorsPage with hooks). Lazy-loaded behind `PluginGuard` component (feature flag check). API client: `packages/api-client/src/visitors.ts` (35+ functions)
 
 - **device-gateway** (`backend/internal/gateway/`) — MQTT bridge, device provisioning, sync coordination, WebSocket events, managed firmware storage
   - Status: ✅ Compliant | Risk: Low

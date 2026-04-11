@@ -25,7 +25,7 @@ export interface LoginResponse {
   refresh_token?: string;
   user?: LoginUser;
   companies?: LoginCompany[];
-  enabled_modules?: string[];
+  enabled_plugins?: string[];
 }
 
 export interface MeResponse {

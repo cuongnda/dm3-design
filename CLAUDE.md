@@ -22,13 +22,6 @@ Run a single app:
 cd apps/console && npm run dev      # Console at http://localhost:3000
 ```
 
-E2E tests (Playwright):
-```bash
-cd apps/console
-npm run test:e2e
-npm run test:e2e:ui   # interactive UI mode
-```
-
 ### Backend (Go — run from `backend/`)
 
 ```bash
@@ -61,13 +54,36 @@ docker compose -f docker-compose.local.yml up -d postgres-db-timescale nats emqx
 
 Required services: TimescaleDB `:5433`, NATS+JetStream `:4222`, EMQX MQTT `:1884`.
 
-### Automation tests (pytest)
+### Automation tests (pytest — single test location for all black-box tests)
 
 ```bash
 cd automation
-pytest tests/api/          # backend API tests
-pytest tests/web/          # Playwright UI tests
+pytest tests/api/                    # backend API tests (no browser)
+pytest tests/web/                    # Playwright web UI tests
+pytest tests/tenant_isolation/       # tenant isolation tests
+pytest -m api                        # run by marker
+pytest -m web                        # run by marker
+pytest -m smoke                      # quick smoke suite
+pytest                               # everything
 ```
+
+## Testing Strategy
+
+**Two-layer approach — one backend layer, one automation layer:**
+
+| Layer | Location | Framework | What it tests |
+|---|---|---|---|
+| **Go unit/integration** | `backend/**/*_test.go` | Go testing + testify | Handlers, DB queries, middleware |
+| **Automation (API + Web + Isolation)** | `automation/` | pytest + Playwright Python | API contracts, web UI, tenant security |
+
+**Rules:**
+- All new API tests go in `automation/tests/api/`
+- All new web UI tests go in `automation/tests/web/`
+- Go tests stay next to the code they test (Go convention)
+- Do NOT create Playwright TS tests in `apps/` or root `tests/` — those locations were deprecated
+- Web tests use page objects from `automation/common/page_objects/`
+- Test data uses factories from `automation/common/factories.py`
+- All web selectors must use `data-testid` attributes
 
 ## Architecture
 

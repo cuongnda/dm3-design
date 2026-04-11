@@ -1,27 +1,27 @@
-# Module Isolation Architecture
+# Plugin Isolation Architecture
 
 > Domain: OPERATE + SMART | Status: Active | Last updated: 2026-04-11
 
 ## Overview
 
-DM3 uses a modular architecture where features beyond core access control are implemented as optional modules. Each module can be independently enabled/disabled per tenant at runtime. This document defines the standard pattern that all optional modules must follow.
+DM3 uses a plugin architecture where features beyond core access control are implemented as optional plugins. Each plugin can be independently enabled/disabled per tenant at runtime. This document defines the standard pattern that all optional plugins must follow.
 
-The **visitor module** is the first implementation of this pattern and serves as the reference example. Future optional modules (parking, intercom, smart building analytics) should replicate this structure exactly.
+The **visitor plugin** is the first implementation of this pattern and serves as the reference example. Future optional plugins (parking, intercom, smart building analytics) should replicate this structure exactly.
 
-## Module Anatomy
+## Plugin Anatomy
 
-Every optional module has these components:
+Every optional plugin has these components:
 
 ### Backend
 
-- **Own PostgreSQL schema** (`dm3_{module}`) — never shares tables with core (`dm3_auth`, `dm3_access`, `dm3_identity`, `dm3_devices`)
-- **Own Go models** in `internal/{module}/models.go` — NOT in shared `internal/models/`
-- **Own microservice** at `cmd/{module}-svc/main.go` with independent health checks on a unique port
+- **Own PostgreSQL schema** (`dm3_{plugin}`) — never shares tables with core (`dm3_auth`, `dm3_access`, `dm3_identity`, `dm3_devices`)
+- **Own Go models** in `internal/{plugin}/models.go` — NOT in shared `internal/models/`
+- **Own microservice** at `cmd/{plugin}-svc/main.go` with independent health checks on a unique port
 - **Own NATS stream** for domain events (e.g., `VISITOR` stream, subjects `dm3.visitor.>`)
-- **Own HTTP handlers** in `internal/{module}/handlers.go`
-- **Feature flag** via `enabled_modules` on the `dm3_auth.companies` record (VARCHAR[] array)
-- **Frontend feature directory** at `apps/console/src/features/{module}/` with conditional route loading
-- **API client** at `packages/api-client/src/{module}.ts` (OpenAPI-generated or manual)
+- **Own HTTP handlers** in `internal/{plugin}/handlers.go`
+- **Feature flag** via `enabled_plugins` on the `dm3_auth.tenants` record (VARCHAR[] array)
+- **Frontend feature directory** at `apps/console/src/features/{plugin}/` with conditional route loading
+- **API client** at `packages/api-client/src/{plugin}.ts` (OpenAPI-generated or manual)
 
 ### Example: Visitor Module Structure
 
@@ -184,23 +184,23 @@ This asynchronous flow ensures:
 
 ### Tenant-Level Enablement
 
-Modules are enabled/disabled per tenant (company) using the `enabled_modules` VARCHAR[] array on `dm3_auth.companies`:
+Modules are enabled/disabled per tenant (company) using the `enabled_plugins` VARCHAR[] array on `dm3_auth.companies`:
 
 ```sql
 -- Companies table
 CREATE TABLE dm3_auth.companies (
     id UUID PRIMARY KEY,
     name VARCHAR NOT NULL,
-    enabled_modules VARCHAR[] DEFAULT ARRAY['core'],
+    enabled_plugins VARCHAR[] DEFAULT ARRAY['core'],
     ...
 );
 
 -- Core is always present
 -- Example with visitor enabled:
-enabled_modules = ARRAY['core', 'visitor']
+enabled_plugins = ARRAY['core', 'visitor']
 
 -- Example with parking and intercom:
-enabled_modules = ARRAY['core', 'visitor', 'parking', 'intercom']
+enabled_plugins = ARRAY['core', 'visitor', 'parking', 'intercom']
 ```
 
 ### Backend Middleware
@@ -208,8 +208,8 @@ enabled_modules = ARRAY['core', 'visitor', 'parking', 'intercom']
 Add a middleware check to module handlers:
 
 ```go
-// RequireModule middleware
-func RequireModule(moduleName string) func(next http.Handler) http.Handler {
+// RequirePlugin middleware
+func RequirePlugin(moduleName string) func(next http.Handler) http.Handler {
     return func(next http.Handler) http.Handler {
         return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
             // Extract tenant_id from JWT claims
@@ -228,12 +228,12 @@ func RequireModule(moduleName string) func(next http.Handler) http.Handler {
 }
 
 // Use in router:
-// r.With(RequireModule("visitor")).Post("/api/v1/visitors", h.CreateVisitor)
+// r.With(RequirePlugin("visitor")).Post("/api/v1/visitors", h.CreateVisitor)
 ```
 
 ### Frontend Conditional Loading
 
-Read `enabled_modules` from auth context, conditionally register routes:
+Read `enabled_plugins` from auth context, conditionally register routes:
 
 ```typescript
 // apps/console/src/app/router.tsx
@@ -246,13 +246,13 @@ export function createRouter() {
     { path: '/', element: <DashboardPage /> },
     
     // Module routes (conditional)
-    ...(auth.company?.enabled_modules?.includes('visitor') ? [
+    ...(auth.company?.enabled_plugins?.includes('visitor') ? [
       { path: '/visitors', element: <VisitorListPage /> },
       { path: '/visitors/:id', element: <VisitorDetailPage /> },
       { path: '/visitors/groups', element: <VisitorGroupsPage /> },
     ] : []),
     
-    ...(auth.company?.enabled_modules?.includes('parking') ? [
+    ...(auth.company?.enabled_plugins?.includes('parking') ? [
       { path: '/parking', element: <ParkingPage /> },
     ] : []),
   ];
@@ -281,14 +281,14 @@ Conditionally show module navigation items:
 ```tsx
 <nav>
   <NavItem href="/" label="Dashboard" />
-  {auth.company?.enabled_modules?.includes('visitor') && (
+  {auth.company?.enabled_plugins?.includes('visitor') && (
     <>
       <NavItem href="/visitors" label="Visitors" icon={<UserIcon />} />
       <NavItem href="/visitors/groups" label="Visitor Groups" />
       <NavItem href="/visitors/watchlist" label="Watchlist" />
     </>
   )}
-  {auth.company?.enabled_modules?.includes('parking') && (
+  {auth.company?.enabled_plugins?.includes('parking') && (
     <NavItem href="/parking" label="Parking" icon={<CarIcon />} />
   )}
 </nav>
@@ -413,7 +413,7 @@ When creating a new optional module (e.g., `parking`, `intercom`), follow this c
   - [ ] Build local read-only caches
   - [ ] Error handling with exponential backoff
   
-- [ ] **Middleware**: Add `RequireModule("{module}")` check
+- [ ] **Middleware**: Add `RequirePlugin("{module}")` check
   - [ ] Verify module is enabled for tenant
   - [ ] Return 403 if disabled
   
@@ -431,11 +431,11 @@ When creating a new optional module (e.g., `parking`, `intercom`), follow this c
   
 - [ ] **Router Integration**: Update `apps/console/src/app/router.tsx`
   - [ ] Import feature pages
-  - [ ] Conditionally register routes based on `enabled_modules`
+  - [ ] Conditionally register routes based on `enabled_plugins`
   - [ ] Use lazy loading for large modules
   
 - [ ] **Navigation**: Update sidebar/menu
-  - [ ] Show/hide module items based on `enabled_modules`
+  - [ ] Show/hide module items based on `enabled_plugins`
   - [ ] Use appropriate icons and labels
   - [ ] Group related items together
   
@@ -473,7 +473,7 @@ When creating a new optional module (e.g., `parking`, `intercom`), follow this c
   
 - [ ] **IMPLEMENTATION_STATUS.md**: Mark module as implemented
   - [ ] Note which pages are real vs mock
-  - [ ] List enabled_modules status
+  - [ ] List enabled_plugins status
   
 - [ ] **Architecture Docs**: Add module-specific design doc if complex
   - [ ] Use same format as `docs/architecture/access-model-design.md`
@@ -511,7 +511,7 @@ The visitor module demonstrates all patterns in this document:
 
 - **API Client**: `packages/api-client/src/visitors.ts`
 - **Routes**: Conditionally loaded in `apps/console/src/app/router.tsx`
-- **Sidebar**: Visitor menu items shown when `visitor` ∈ `enabled_modules`
+- **Sidebar**: Visitor menu items shown when `visitor` ∈ `enabled_plugins`
 
 ### Credential Flow
 
@@ -527,11 +527,11 @@ The visitor module demonstrates all patterns in this document:
 
 ```sql
 -- Tenant has visitor enabled
-SELECT enabled_modules FROM dm3_auth.companies WHERE id = 'tenant-uuid';
+SELECT enabled_plugins FROM dm3_auth.companies WHERE id = 'tenant-uuid';
 -- Result: {core,visitor}
 
 -- Tenant without visitor
-SELECT enabled_modules FROM dm3_auth.companies WHERE id = 'other-tenant-uuid';
+SELECT enabled_plugins FROM dm3_auth.companies WHERE id = 'other-tenant-uuid';
 -- Result: {core}
 ```
 
@@ -545,7 +545,7 @@ Visitors
 └── Settings
 ```
 
-Only when visitor is in `enabled_modules`.
+Only when visitor is in `enabled_plugins`.
 
 ## Related Documents
 

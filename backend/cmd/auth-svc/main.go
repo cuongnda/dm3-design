@@ -137,6 +137,11 @@ func main() {
 			sr.Delete("/api/v1/auth/system/accounts/{id}", h.DeleteUserAccount)
 			sr.Post("/api/v1/auth/system/accounts/{id}/reset-password", h.ResetUserPassword)
 			sr.Put("/api/v1/auth/system/accounts/{id}/change-password", h.ChangeUserPassword)
+
+			// Plugin management
+			sr.Get("/api/v1/auth/system/plugins", h.ListAvailablePlugins)
+			sr.Get("/api/v1/auth/system/companies/{id}/plugins", h.GetTenantPlugins)
+			sr.Put("/api/v1/auth/system/companies/{id}/plugins", h.UpdateTenantPlugins)
 		})
 	})
 
