@@ -336,7 +336,13 @@ export const Router = createBrowserRouter([
 
               // OPERATE
               { path: 'operate/room-booking', element: <LazyWrap><RoomBookingPage /></LazyWrap> },
-              { path: 'operate/parking', element: <LazyWrap><ParkingPage /></LazyWrap> },
+              { path: 'operate/parking', element: <PluginGuard plugin="parking"><LazyWrap><ParkingPage /></LazyWrap></PluginGuard> },
+              { path: 'operate/parking/sessions', element: <PluginGuard plugin="parking"><LazyWrap><ParkingPage /></LazyWrap></PluginGuard> },
+              { path: 'operate/parking/vehicles', element: <PluginGuard plugin="parking"><LazyWrap><ParkingPage /></LazyWrap></PluginGuard> },
+              { path: 'operate/parking/zones', element: <PluginGuard plugin="parking"><LazyWrap><ParkingPage /></LazyWrap></PluginGuard> },
+              { path: 'operate/parking/passes', element: <PluginGuard plugin="parking"><LazyWrap><ParkingPage /></LazyWrap></PluginGuard> },
+              { path: 'operate/parking/fee-rules', element: <PluginGuard plugin="parking"><LazyWrap><ParkingPage /></LazyWrap></PluginGuard> },
+              { path: 'operate/parking/reports', element: <PluginGuard plugin="parking"><LazyWrap><ParkingPage /></LazyWrap></PluginGuard> },
               { path: 'operate/maintenance', element: <LazyWrap><MaintenancePage /></LazyWrap> },
               { path: 'operate/guard-tour', element: <LazyWrap><GuardTourPage /></LazyWrap> },
               { path: 'operate/keys', element: <LazyWrap><KeyManagementPage /></LazyWrap> },

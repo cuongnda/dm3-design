@@ -65,6 +65,12 @@ export const ROUTES = {
   // OPERATE
   roomBooking: '/operate/room-booking',
   parking: '/operate/parking',
+  parkingSessions: '/operate/parking/sessions',
+  parkingVehicles: '/operate/parking/vehicles',
+  parkingZones: '/operate/parking/zones',
+  parkingPasses: '/operate/parking/passes',
+  parkingFeeRules: '/operate/parking/fee-rules',
+  parkingReports: '/operate/parking/reports',
   maintenance: '/operate/maintenance',
   guardTour: '/operate/guard-tour',
   keys: '/operate/keys',

@@ -108,6 +108,7 @@ export function Sidebar() {
   const enabledPlugins = useAuthStore((s) => s.enabledPlugins);
   const unreadCount = useNotificationStore((s) => s.unreadCount);
   const hasVisitor = enabledPlugins?.includes('visitor') ?? false;
+  const hasParking = enabledPlugins?.includes('parking') ?? false;
   const c = sidebarCollapsed;
   const iconSize = c ? 20 : 18;
 
@@ -179,7 +180,9 @@ export function Sidebar() {
 
         <SectionLabel label={t('nav.operate')} color="#F59E0B" collapsed={c} />
         <SidebarNavItem to={ROUTES.roomBooking} icon={<Building2 size={iconSize} />} label={t('nav.roomBooking')} collapsed={c} />
-        <SidebarNavItem to={ROUTES.parking} icon={<Car size={iconSize} />} label={t('nav.parking')} collapsed={c} />
+        {hasParking && (
+          <SidebarNavItem to={ROUTES.parking} icon={<Car size={iconSize} />} label={t('nav.parking')} collapsed={c} />
+        )}
         <SidebarNavItem to={ROUTES.maintenance} icon={<Hammer size={iconSize} />} label={t('nav.maintenance')} collapsed={c} />
         <SidebarNavItem to={ROUTES.guardTour} icon={<Shield size={iconSize} />} label={t('nav.guardTour')} collapsed={c} />
         <SidebarNavItem to={ROUTES.keys} icon={<Key size={iconSize} />} label={t('nav.keys')} collapsed={c} />
