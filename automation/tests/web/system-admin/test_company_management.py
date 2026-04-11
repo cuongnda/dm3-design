@@ -22,7 +22,7 @@ def executor(test_data):
     headless = os.environ.get('HEADLESS', 'true').lower() == 'true'
     exe = WebTestExecutor(headless=headless)
     # Login as sysadmin first
-    exe.login("sysadmin@duali.com", "sysadmin123")
+    exe.login("sysadmin@duali.com", "admin123")
     yield exe
     exe.close()
 

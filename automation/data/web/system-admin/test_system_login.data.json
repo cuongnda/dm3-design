@@ -11,7 +11,7 @@
     "steps": [
       { "action": "goto", "data": { "url": "/login" } },
       { "action": "fill", "data": { "testid": "login-input-email", "value": "sysadmin@duali.com" } },
-      { "action": "fill", "data": { "testid": "login-input-password", "value": "sysadmin123" } },
+      { "action": "fill", "data": { "testid": "login-input-password", "value": "admin123" } },
       { "action": "click", "data": { "testid": "login-button-submit" } },
       { "action": "wait_url", "data": { "url": "/system" } }
     ],

@@ -13,7 +13,7 @@ BASE = "/api/v1/system"
 @pytest.fixture(scope="module")
 def client():
     c = APIClient()
-    c.login("sysadmin@duali.com", "sysadmin123")
+    c.login("sysadmin@duali.com", "admin123")
     return c
 
 

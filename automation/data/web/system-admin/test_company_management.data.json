@@ -30,7 +30,7 @@
       {
         "action": "fill",
         "testid": "company-input-search",
-        "value": "Test"
+        "value": "Duali"
       },
       {
         "action": "wait",

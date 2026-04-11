@@ -13,7 +13,7 @@ DATA_FILE = Path(__file__).parent.parent.parent.parent / "data" / "web" / "syste
 @pytest.fixture(scope="module")
 def executor():
     exe = WebTestExecutor(headless=True)
-    exe.login("sysadmin@duali.com", "sysadmin123")
+    exe.login("sysadmin@duali.com", "admin123")
     yield exe
     exe.close()
 
