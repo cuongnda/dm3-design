@@ -520,7 +520,10 @@ func (h *VisitorHandlers) ApproveVisit(w http.ResponseWriter, r *http.Request) {
 		})
 	} else {
 		h.publishEvent(r.Context(), cid, EventVisitRejected, map[string]any{
-			"visit_id": visit.ID, "visitor_id": visit.VisitorID,
+			"tenant_id":          cid,
+			"visit_id":           visit.ID,
+			"visitor_id":         visit.VisitorID,
+			"temp_credential_id": visit.TempCredentialID,
 		})
 	}
 	httputil.JSON(w, http.StatusOK, visit)
@@ -811,6 +814,14 @@ func (h *VisitorHandlers) CheckoutVisit(w http.ResponseWriter, r *http.Request) 
 			"temporary_access": map[string]any{"credential_id": cleanup.TempCredentialID, "sync_status": "pending_revoke_sync", "user_deactivated": cleanup.TempUserDeactivated},
 			"badge":            map[string]any{"returned": req.BadgeReturned, "closed": cleanup.BadgeClosed},
 			"idempotent":       cleanup.AlreadyCheckedOut,
+		})
+	}
+	if !cleanup.AlreadyCheckedOut {
+		h.publishEvent(r.Context(), cid, EventVisitCheckedOut, map[string]any{
+			"tenant_id":          cid,
+			"visit_id":           visit.ID,
+			"temp_credential_id": cleanup.TempCredentialID,
+			"reason":             "manual",
 		})
 	}
 	httputil.JSON(w, http.StatusOK, visit)
@@ -1205,6 +1216,14 @@ func (h *VisitorHandlers) autoCheckoutVisit(ctx context.Context, tenantID, visit
 				"badge":            map[string]any{"closed": cleanup.BadgeClosed},
 				"idempotent":       cleanup.AlreadyCheckedOut,
 			},
+		})
+	}
+	if !cleanup.AlreadyCheckedOut {
+		h.publishEvent(ctx, tenantID, EventVisitCheckedOut, map[string]any{
+			"tenant_id":          tenantID,
+			"visit_id":           visit.ID,
+			"temp_credential_id": cleanup.TempCredentialID,
+			"reason":             "auto",
 		})
 	}
 	return &cleanup, nil
