@@ -31,14 +31,14 @@ func (h *VisitorHandlers) ListVisitAccessLog(w http.ResponseWriter, r *http.Requ
 
 	var total int64
 	_ = h.db.Pool.QueryRow(r.Context(),
-		`SELECT COUNT(*) FROM dm3_identity.visitor_access_log WHERE visit_id = $1::uuid AND tenant_id = $2::uuid`,
+		`SELECT COUNT(*) FROM dm3_visitor.visitor_access_log WHERE visit_id = $1::uuid AND tenant_id = $2::uuid`,
 		visitID, cid).Scan(&total)
 
 	rows, err := h.db.Pool.Query(r.Context(), `
 		SELECT id, tenant_id, visit_id, visitor_id, access_event_id,
 		       access_point_id, access_point_name, zone_id, zone_name,
 		       direction, decision, event_time, credential_type, created_at
-		FROM dm3_identity.visitor_access_log
+		FROM dm3_visitor.visitor_access_log
 		WHERE visit_id = $1::uuid AND tenant_id = $2::uuid
 		ORDER BY event_time DESC
 		LIMIT $3 OFFSET $4`,
@@ -90,14 +90,14 @@ func (h *VisitorHandlers) ListVisitorHistory(w http.ResponseWriter, r *http.Requ
 
 	var total int64
 	_ = h.db.Pool.QueryRow(r.Context(),
-		`SELECT COUNT(*) FROM dm3_identity.visitor_access_log WHERE visitor_id = $1::uuid AND tenant_id = $2::uuid`,
+		`SELECT COUNT(*) FROM dm3_visitor.visitor_access_log WHERE visitor_id = $1::uuid AND tenant_id = $2::uuid`,
 		visitorID, cid).Scan(&total)
 
 	rows, err := h.db.Pool.Query(r.Context(), `
 		SELECT id, tenant_id, visit_id, visitor_id, access_event_id,
 		       access_point_id, access_point_name, zone_id, zone_name,
 		       direction, decision, event_time, credential_type, created_at
-		FROM dm3_identity.visitor_access_log
+		FROM dm3_visitor.visitor_access_log
 		WHERE visitor_id = $1::uuid AND tenant_id = $2::uuid
 		ORDER BY event_time DESC
 		LIMIT $3 OFFSET $4`,
@@ -167,12 +167,12 @@ func (h *VisitorHandlers) GetEvacuationList(w http.ResponseWriter, r *http.Reque
 		       COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,''),
 		       v.actual_checkin,
 		       last_log.access_point_name, last_log.zone_name, last_log.event_time
-		FROM dm3_identity.visits v
-		JOIN dm3_identity.visitors vis ON vis.id = v.visitor_id
+		FROM dm3_visitor.visits v
+		JOIN dm3_visitor.visitors vis ON vis.id = v.visitor_id
 		LEFT JOIN dm3_identity.users u ON u.id = v.host_user_id
 		LEFT JOIN LATERAL (
 			SELECT access_point_name, zone_name, event_time
-			FROM dm3_identity.visitor_access_log al
+			FROM dm3_visitor.visitor_access_log al
 			WHERE al.visit_id = v.id AND al.tenant_id = v.tenant_id
 			ORDER BY al.event_time DESC
 			LIMIT 1

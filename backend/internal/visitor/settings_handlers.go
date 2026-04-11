@@ -83,7 +83,7 @@ func (h *VisitorHandlers) UpdateSettings(w http.ResponseWriter, r *http.Request)
 	defer cancel()
 
 	err := h.db.Pool.QueryRow(dbCtx, `
-		UPDATE dm3_identity.visitor_settings SET
+		UPDATE dm3_visitor.visitor_settings SET
 			approval_required       = $2,
 			auto_approve_returning  = $3,
 			auto_approve_vip        = $4,
@@ -186,7 +186,7 @@ func (h *VisitorHandlers) getOrCreateSettings(ctx context.Context, tenantID stri
 
 	var s VisitorSettings
 	err := h.db.Pool.QueryRow(dbCtx, `
-		INSERT INTO dm3_identity.visitor_settings (tenant_id)
+		INSERT INTO dm3_visitor.visitor_settings (tenant_id)
 		VALUES ($1)
 		ON CONFLICT (tenant_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id
 		RETURNING id, tenant_id, approval_required, auto_approve_returning, auto_approve_vip,

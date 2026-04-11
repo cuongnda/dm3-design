@@ -44,15 +44,15 @@ func (h *VisitorHandlers) ListVisitGroups(w http.ResponseWriter, r *http.Request
 
 	var total int64
 	_ = h.db.Pool.QueryRow(r.Context(),
-		`SELECT COUNT(*) FROM dm3_identity.visit_groups WHERE tenant_id = $1::uuid`, cid).Scan(&total)
+		`SELECT COUNT(*) FROM dm3_visitor.visit_groups WHERE tenant_id = $1::uuid`, cid).Scan(&total)
 
 	rows, err := h.db.Pool.Query(r.Context(), `
 		SELECT g.id, g.tenant_id, g.name, g.description, g.host_user_id,
 		       g.purpose, g.expected_arrival, g.expected_departure,
 		       g.access_areas, g.escort_required, g.created_by,
 		       g.created_at, g.updated_at,
-		       (SELECT COUNT(*) FROM dm3_identity.visits v WHERE v.group_id = g.id)
-		FROM dm3_identity.visit_groups g
+		       (SELECT COUNT(*) FROM dm3_visitor.visits v WHERE v.group_id = g.id)
+		FROM dm3_visitor.visit_groups g
 		WHERE g.tenant_id = $1::uuid
 		ORDER BY g.expected_arrival DESC
 		LIMIT $2 OFFSET $3`, cid, limit, offset)
@@ -105,8 +105,8 @@ func (h *VisitorHandlers) GetVisitGroup(w http.ResponseWriter, r *http.Request) 
 		       g.purpose, g.expected_arrival, g.expected_departure,
 		       g.access_areas, g.escort_required, g.created_by,
 		       g.created_at, g.updated_at,
-		       (SELECT COUNT(*) FROM dm3_identity.visits v WHERE v.group_id = g.id)
-		FROM dm3_identity.visit_groups g
+		       (SELECT COUNT(*) FROM dm3_visitor.visits v WHERE v.group_id = g.id)
+		FROM dm3_visitor.visit_groups g
 		WHERE g.id = $1::uuid AND g.tenant_id = $2::uuid`, groupID, cid).Scan(
 		&g.ID, &g.TenantID, &g.Name, &g.Description, &g.HostUserID,
 		&g.Purpose, &g.ExpectedArrival, &g.ExpectedDeparture,
@@ -150,7 +150,7 @@ func (h *VisitorHandlers) CreateVisitGroup(w http.ResponseWriter, r *http.Reques
 
 	var g VisitGroup
 	err := h.db.Pool.QueryRow(r.Context(), `
-		INSERT INTO dm3_identity.visit_groups
+		INSERT INTO dm3_visitor.visit_groups
 		  (tenant_id, name, description, host_user_id, purpose,
 		   expected_arrival, expected_departure, access_areas, escort_required, created_by)
 		VALUES ($1::uuid, $2, $3, $4::uuid, $5, $6, $7, $8::uuid[], $9, $10::uuid)
@@ -192,7 +192,7 @@ func (h *VisitorHandlers) DeleteVisitGroup(w http.ResponseWriter, r *http.Reques
 
 	var memberCount int
 	_ = h.db.Pool.QueryRow(r.Context(),
-		`SELECT COUNT(*) FROM dm3_identity.visits WHERE group_id = $1::uuid AND tenant_id = $2::uuid`,
+		`SELECT COUNT(*) FROM dm3_visitor.visits WHERE group_id = $1::uuid AND tenant_id = $2::uuid`,
 		groupID, cid).Scan(&memberCount)
 	if memberCount > 0 {
 		httputil.Error(w, http.StatusConflict, fmt.Sprintf("cannot delete group with %d linked visits", memberCount))
@@ -200,7 +200,7 @@ func (h *VisitorHandlers) DeleteVisitGroup(w http.ResponseWriter, r *http.Reques
 	}
 
 	cmd, err := h.db.Pool.Exec(r.Context(),
-		`DELETE FROM dm3_identity.visit_groups WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+		`DELETE FROM dm3_visitor.visit_groups WHERE id = $1::uuid AND tenant_id = $2::uuid`,
 		groupID, cid)
 	if err != nil || cmd.RowsAffected() == 0 {
 		httputil.Error(w, http.StatusNotFound, "visit group not found")
@@ -271,7 +271,7 @@ func (h *VisitorHandlers) BatchCreateVisits(w http.ResponseWriter, r *http.Reque
 	err := h.db.Pool.QueryRow(r.Context(), `
 		SELECT id, tenant_id, host_user_id, purpose, expected_arrival, expected_departure,
 		       access_areas, escort_required
-		FROM dm3_identity.visit_groups
+		FROM dm3_visitor.visit_groups
 		WHERE id = $1::uuid AND tenant_id = $2::uuid`, req.GroupID, cid).Scan(
 		&group.ID, &group.TenantID, &group.HostUserID, &group.Purpose,
 		&group.ExpectedArrival, &group.ExpectedDeparture, &group.AccessAreas, &group.EscortRequired,
@@ -318,7 +318,7 @@ func (h *VisitorHandlers) BatchCreateVisits(w http.ResponseWriter, r *http.Reque
 			var watchlistStatus string
 			var visitCount int
 			if err := h.db.Pool.QueryRow(r.Context(),
-				`SELECT watchlist_status, visit_count FROM dm3_identity.visitors WHERE id = $1::uuid`,
+				`SELECT watchlist_status, visit_count FROM dm3_visitor.visitors WHERE id = $1::uuid`,
 				visitorID).Scan(&watchlistStatus, &visitCount); err == nil {
 				if settings.AutoApproveVIP && watchlistStatus == WatchlistVIP {
 					status = VisitStatusApproved
@@ -339,7 +339,7 @@ func (h *VisitorHandlers) BatchCreateVisits(w http.ResponseWriter, r *http.Reque
 
 		var visit Visit
 		err = h.db.Pool.QueryRow(r.Context(), `
-			INSERT INTO dm3_identity.visits
+			INSERT INTO dm3_visitor.visits
 			  (tenant_id, visitor_id, host_user_id, purpose,
 			   status, expected_arrival, expected_departure,
 			   qr_token, qr_expires_at, access_areas, escort_required,

@@ -113,6 +113,7 @@ func main() {
 		vr.Group(func(ar chi.Router) {
 			ar.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
 			ar.Use(authsvc.RequireCompany())
+			ar.Use(authsvc.RequireModule("visitor"))
 
 			// Dashboard
 			ar.Get("/today/summary", visitorHandlers.GetTodaySummary)

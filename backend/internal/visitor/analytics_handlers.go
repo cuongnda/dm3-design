@@ -62,33 +62,33 @@ func (h *VisitorHandlers) GetVisitorAnalytics(w http.ResponseWriter, r *http.Req
 	// Total visits and unique visitors
 	_ = h.db.Pool.QueryRow(r.Context(), `
 		SELECT COUNT(*), COUNT(DISTINCT visitor_id)
-		FROM dm3_identity.visits
+		FROM dm3_visitor.visits
 		WHERE tenant_id = $1::uuid AND created_at >= $2`,
 		cid, since).Scan(&analytics.TotalVisits, &analytics.UniqueVisitors)
 
 	// Currently checked in
 	_ = h.db.Pool.QueryRow(r.Context(), `
-		SELECT COUNT(*) FROM dm3_identity.visits
+		SELECT COUNT(*) FROM dm3_visitor.visits
 		WHERE tenant_id = $1::uuid AND status = 'checked_in'`,
 		cid).Scan(&analytics.CheckedIn)
 
 	// No-shows in period
 	_ = h.db.Pool.QueryRow(r.Context(), `
-		SELECT COUNT(*) FROM dm3_identity.visits
+		SELECT COUNT(*) FROM dm3_visitor.visits
 		WHERE tenant_id = $1::uuid AND status = 'no_show' AND updated_at >= $2`,
 		cid, since).Scan(&analytics.NoShows)
 
 	// Average visit duration (minutes) for completed visits
 	_ = h.db.Pool.QueryRow(r.Context(), `
 		SELECT AVG(EXTRACT(EPOCH FROM (actual_checkout - actual_checkin)) / 60)
-		FROM dm3_identity.visits
+		FROM dm3_visitor.visits
 		WHERE tenant_id = $1::uuid AND actual_checkin IS NOT NULL AND actual_checkout IS NOT NULL
 		  AND created_at >= $2`,
 		cid, since).Scan(&analytics.AvgDurationMin)
 
 	// Visits by purpose
 	purposeRows, err := h.db.Pool.Query(r.Context(), `
-		SELECT purpose, COUNT(*) FROM dm3_identity.visits
+		SELECT purpose, COUNT(*) FROM dm3_visitor.visits
 		WHERE tenant_id = $1::uuid AND created_at >= $2
 		GROUP BY purpose ORDER BY COUNT(*) DESC`,
 		cid, since)
@@ -105,7 +105,7 @@ func (h *VisitorHandlers) GetVisitorAnalytics(w http.ResponseWriter, r *http.Req
 
 	// Visits by status
 	statusRows, err := h.db.Pool.Query(r.Context(), `
-		SELECT status, COUNT(*) FROM dm3_identity.visits
+		SELECT status, COUNT(*) FROM dm3_visitor.visits
 		WHERE tenant_id = $1::uuid AND created_at >= $2
 		GROUP BY status ORDER BY COUNT(*) DESC`,
 		cid, since)
@@ -123,7 +123,7 @@ func (h *VisitorHandlers) GetVisitorAnalytics(w http.ResponseWriter, r *http.Req
 	// Peak hour (most check-ins)
 	_ = h.db.Pool.QueryRow(r.Context(), `
 		SELECT EXTRACT(HOUR FROM actual_checkin)::int
-		FROM dm3_identity.visits
+		FROM dm3_visitor.visits
 		WHERE tenant_id = $1::uuid AND actual_checkin IS NOT NULL AND created_at >= $2
 		GROUP BY EXTRACT(HOUR FROM actual_checkin)
 		ORDER BY COUNT(*) DESC
@@ -133,7 +133,7 @@ func (h *VisitorHandlers) GetVisitorAnalytics(w http.ResponseWriter, r *http.Req
 	// Daily trend
 	trendRows, err := h.db.Pool.Query(r.Context(), `
 		SELECT expected_arrival::date::text, COUNT(*)
-		FROM dm3_identity.visits
+		FROM dm3_visitor.visits
 		WHERE tenant_id = $1::uuid AND created_at >= $2
 		GROUP BY expected_arrival::date
 		ORDER BY expected_arrival::date`,
@@ -180,7 +180,7 @@ func (h *VisitorHandlers) GetTopVisitors(w http.ResponseWriter, r *http.Request)
 	rows, err := h.db.Pool.Query(r.Context(), `
 		SELECT vis.id, vis.first_name || ' ' || vis.last_name, vis.company,
 		       vis.visit_count, vis.last_visit_at
-		FROM dm3_identity.visitors vis
+		FROM dm3_visitor.visitors vis
 		WHERE vis.tenant_id = $1::uuid AND vis.visit_count > 0
 		ORDER BY vis.visit_count DESC, vis.last_visit_at DESC NULLS LAST
 		LIMIT $2`, cid, limit)

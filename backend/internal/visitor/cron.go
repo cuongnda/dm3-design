@@ -30,8 +30,8 @@ func (h *VisitorHandlers) autoCheckout(ctx context.Context) {
 			// Use per-tenant auto_checkout_hour from visitor_settings (default 22)
 			rows, err := h.db.Pool.Query(ctx, `
 				SELECT v.id::text, v.tenant_id::text
-				FROM dm3_identity.visits v
-				LEFT JOIN dm3_identity.visitor_settings s ON s.tenant_id = v.tenant_id
+				FROM dm3_visitor.visits v
+				LEFT JOIN dm3_visitor.visitor_settings s ON s.tenant_id = v.tenant_id
 				WHERE v.status = 'checked_in'
 				  AND v.actual_checkout IS NULL
 				  AND v.expected_arrival::date = CURRENT_DATE
@@ -94,14 +94,14 @@ func (h *VisitorHandlers) markNoShows(ctx context.Context) {
 func (h *VisitorHandlers) markNoShowCandidates(ctx context.Context) (int64, error) {
 	// Use per-tenant no_show_grace_minutes from visitor_settings (default 120 min)
 	rows, err := h.db.Pool.Query(ctx, `
-		UPDATE dm3_identity.visits v
+		UPDATE dm3_visitor.visits v
 		SET status     = 'no_show',
 		    updated_at = now()
 		FROM (
 			SELECT vis.id,
 			       COALESCE(s.no_show_grace_minutes, 120) AS grace_minutes
-			FROM dm3_identity.visits vis
-			LEFT JOIN dm3_identity.visitor_settings s ON s.tenant_id = vis.tenant_id
+			FROM dm3_visitor.visits vis
+			LEFT JOIN dm3_visitor.visitor_settings s ON s.tenant_id = vis.tenant_id
 			WHERE vis.status IN ('pre_registered', 'approved', 'waiting')
 		) sub
 		WHERE v.id = sub.id

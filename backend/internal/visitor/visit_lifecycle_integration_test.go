@@ -74,7 +74,7 @@ func createVisitorFixture(t *testing.T, database *db.DB, status string) (visitID
 	qrToken = fmt.Sprintf("qr-%x", seed)
 	badgeNumber = fmt.Sprintf("B%016x", seed)
 	err := database.Pool.QueryRow(ctx, `
-		INSERT INTO dm3_identity.visits (
+		INSERT INTO dm3_visitor.visits (
 			tenant_id, visitor_id, host_user_id, purpose, status,
 			expected_arrival, expected_departure, qr_token, qr_expires_at, badge_number
 		)
@@ -110,7 +110,7 @@ func createVisitorRecord(t *testing.T, database *db.DB, firstName, lastName stri
 	ctx := context.Background()
 	var visitorID string
 	err := database.Pool.QueryRow(ctx, `
-		INSERT INTO dm3_identity.visitors (tenant_id, first_name, last_name, email, phone, company, national_id, watchlist_status, visit_count)
+		INSERT INTO dm3_visitor.visitors (tenant_id, first_name, last_name, email, phone, company, national_id, watchlist_status, visit_count)
 		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, 'none', 0)
 		RETURNING id`, visitorTestTenantID, firstName, lastName, email, phone, company, nationalID,
 	).Scan(&visitorID)
@@ -226,9 +226,9 @@ func TestVisitorLifecycleCreateApproveCheckinCheckout(t *testing.T) {
 	var badgeReturnedAt *time.Time
 	err := database.Pool.QueryRow(ctx, `
 		SELECT c.status, u.status, v.items_carried, vis.national_id,
-		       (SELECT returned_at FROM dm3_identity.visitor_badges WHERE visit_id = $1::uuid AND badge_number = 'FLOW-BADGE-01' LIMIT 1)
-		FROM dm3_identity.visits v
-		JOIN dm3_identity.visitors vis ON vis.id = v.visitor_id
+		       (SELECT returned_at FROM dm3_visitor.visitor_badges WHERE visit_id = $1::uuid AND badge_number = 'FLOW-BADGE-01' LIMIT 1)
+		FROM dm3_visitor.visits v
+		JOIN dm3_visitor.visitors vis ON vis.id = v.visitor_id
 		JOIN dm3_identity.credentials c ON c.id = v.temp_credential_id
 		JOIN dm3_identity.users u ON u.id = c.user_id
 		WHERE v.id = $1::uuid`, createdVisit.ID,
@@ -240,7 +240,7 @@ func TestVisitorLifecycleCreateApproveCheckinCheckout(t *testing.T) {
 		t.Fatalf("unexpected lifecycle side effects: credential=%s temp_user=%s items=%s national_id=%s badge_closed=%t", credentialStatus, tempUserStatus, visitItemsCarried, visitorNationalID, badgeReturnedAt != nil)
 	}
 	var visitorVisitCount int
-	err = database.Pool.QueryRow(ctx, `SELECT visit_count FROM dm3_identity.visitors WHERE id = $1::uuid`, createdVisit.VisitorID).Scan(&visitorVisitCount)
+	err = database.Pool.QueryRow(ctx, `SELECT visit_count FROM dm3_visitor.visitors WHERE id = $1::uuid`, createdVisit.VisitorID).Scan(&visitorVisitCount)
 	if err != nil {
 		t.Fatalf("load visitor visit_count: %v", err)
 	}
@@ -283,7 +283,7 @@ func TestWalkinVisitCreatesWaitingVisitAndStoresNationalID(t *testing.T) {
 
 	ctx := context.Background()
 	var nationalID string
-	err := database.Pool.QueryRow(ctx, `SELECT national_id FROM dm3_identity.visitors WHERE id = $1::uuid`, visit.VisitorID).Scan(&nationalID)
+	err := database.Pool.QueryRow(ctx, `SELECT national_id FROM dm3_visitor.visitors WHERE id = $1::uuid`, visit.VisitorID).Scan(&nationalID)
 	if err != nil {
 		t.Fatalf("load walkin visitor: %v", err)
 	}
@@ -301,12 +301,12 @@ func TestVisitorCheckinBlockedByWatchlist(t *testing.T) {
 	visitID, _, _ := createVisitorFixture(t, database, VisitStatusApproved)
 	ctx := context.Background()
 	var fullName string
-	err := database.Pool.QueryRow(ctx, `SELECT first_name || ' ' || last_name FROM dm3_identity.visitors WHERE id = (SELECT visitor_id FROM dm3_identity.visits WHERE id = $1::uuid)`, visitID).Scan(&fullName)
+	err := database.Pool.QueryRow(ctx, `SELECT first_name || ' ' || last_name FROM dm3_visitor.visitors WHERE id = (SELECT visitor_id FROM dm3_visitor.visits WHERE id = $1::uuid)`, visitID).Scan(&fullName)
 	if err != nil {
 		t.Fatalf("load visitor name: %v", err)
 	}
 	_, err = database.Pool.Exec(ctx, `
-		INSERT INTO dm3_identity.watchlist (tenant_id, entry_type, match_field, match_value, reason, added_by)
+		INSERT INTO dm3_visitor.watchlist (tenant_id, entry_type, match_field, match_value, reason, added_by)
 		VALUES ($1::uuid, $2, 'name', $3, 'security block', '00000000-0000-0000-0000-0000000000aa'::uuid)`,
 		visitorTestTenantID, WatchlistBlacklisted, fullName,
 	)
@@ -325,11 +325,11 @@ func TestVisitorCheckinBlockedByWatchlist(t *testing.T) {
 
 	var visitStatus string
 	var tempCredCount int
-	err = database.Pool.QueryRow(ctx, `SELECT status FROM dm3_identity.visits WHERE id = $1::uuid`, visitID).Scan(&visitStatus)
+	err = database.Pool.QueryRow(ctx, `SELECT status FROM dm3_visitor.visits WHERE id = $1::uuid`, visitID).Scan(&visitStatus)
 	if err != nil {
 		t.Fatalf("load visit status: %v", err)
 	}
-	err = database.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM dm3_identity.credentials WHERE tenant_id = $1::uuid AND value = (SELECT qr_token FROM dm3_identity.visits WHERE id = $2::uuid)`, visitorTestTenantID, visitID).Scan(&tempCredCount)
+	err = database.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM dm3_identity.credentials WHERE tenant_id = $1::uuid AND value = (SELECT qr_token FROM dm3_visitor.visits WHERE id = $2::uuid)`, visitorTestTenantID, visitID).Scan(&tempCredCount)
 	if err != nil {
 		t.Fatalf("count temp credentials: %v", err)
 	}
@@ -350,7 +350,7 @@ func TestMarkNoShowCandidatesMarksOnlyOverdueOpenVisits(t *testing.T) {
 	checkedInID, _, _ := createVisitorFixture(t, database, VisitStatusCheckedIn)
 
 	for _, id := range []string{preRegID, approvedID, waitingID, checkedInID} {
-		_, err := database.Pool.Exec(ctx, `UPDATE dm3_identity.visits SET expected_arrival = now() - interval '3 hours' WHERE id = $1::uuid`, id)
+		_, err := database.Pool.Exec(ctx, `UPDATE dm3_visitor.visits SET expected_arrival = now() - interval '3 hours' WHERE id = $1::uuid`, id)
 		if err != nil {
 			t.Fatalf("age visit %s: %v", id, err)
 		}
@@ -365,7 +365,7 @@ func TestMarkNoShowCandidatesMarksOnlyOverdueOpenVisits(t *testing.T) {
 	}
 
 	statuses := map[string]string{}
-	rows, err := database.Pool.Query(ctx, `SELECT id::text, status FROM dm3_identity.visits WHERE id = ANY($1::uuid[])`, []string{preRegID, approvedID, waitingID, checkedInID})
+	rows, err := database.Pool.Query(ctx, `SELECT id::text, status FROM dm3_visitor.visits WHERE id = ANY($1::uuid[])`, []string{preRegID, approvedID, waitingID, checkedInID})
 	if err != nil {
 		t.Fatalf("query statuses: %v", err)
 	}
@@ -425,7 +425,7 @@ func TestVisitorCheckinReusesExistingTempAccessOnRetry(t *testing.T) {
 
 	var linkedCredID string
 	var status string
-	err = database.Pool.QueryRow(ctx, `SELECT status, temp_credential_id::text FROM dm3_identity.visits WHERE id = $1::uuid`, visitID).Scan(&status, &linkedCredID)
+	err = database.Pool.QueryRow(ctx, `SELECT status, temp_credential_id::text FROM dm3_visitor.visits WHERE id = $1::uuid`, visitID).Scan(&status, &linkedCredID)
 	if err != nil {
 		t.Fatalf("load visit after checkin: %v", err)
 	}
@@ -470,11 +470,11 @@ func TestVisitorCheckoutRevokesTempAccessAndClosesBadge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed temp credential: %v", err)
 	}
-	_, err = database.Pool.Exec(ctx, `UPDATE dm3_identity.visits SET temp_credential_id = $2::uuid WHERE id = $1::uuid`, visitID, tempCredID)
+	_, err = database.Pool.Exec(ctx, `UPDATE dm3_visitor.visits SET temp_credential_id = $2::uuid WHERE id = $1::uuid`, visitID, tempCredID)
 	if err != nil {
 		t.Fatalf("link credential: %v", err)
 	}
-	_, err = database.Pool.Exec(ctx, `INSERT INTO dm3_identity.visitor_badges (tenant_id, visit_id, badge_number) VALUES ($1::uuid, $2::uuid, $3)`, visitorTestTenantID, visitID, badgeNumber)
+	_, err = database.Pool.Exec(ctx, `INSERT INTO dm3_visitor.visitor_badges (tenant_id, visit_id, badge_number) VALUES ($1::uuid, $2::uuid, $3)`, visitorTestTenantID, visitID, badgeNumber)
 	if err != nil {
 		t.Fatalf("create badge: %v", err)
 	}
@@ -490,7 +490,7 @@ func TestVisitorCheckoutRevokesTempAccessAndClosesBadge(t *testing.T) {
 
 	var visitStatus, credentialStatus, userStatus string
 	var badgeReturnedAt *time.Time
-	err = database.Pool.QueryRow(ctx, `SELECT status FROM dm3_identity.visits WHERE id = $1::uuid`, visitID).Scan(&visitStatus)
+	err = database.Pool.QueryRow(ctx, `SELECT status FROM dm3_visitor.visits WHERE id = $1::uuid`, visitID).Scan(&visitStatus)
 	if err != nil {
 		t.Fatalf("load visit: %v", err)
 	}
@@ -502,7 +502,7 @@ func TestVisitorCheckoutRevokesTempAccessAndClosesBadge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load temp user: %v", err)
 	}
-	err = database.Pool.QueryRow(ctx, `SELECT returned_at FROM dm3_identity.visitor_badges WHERE visit_id = $1::uuid AND badge_number = $2`, visitID, badgeNumber).Scan(&badgeReturnedAt)
+	err = database.Pool.QueryRow(ctx, `SELECT returned_at FROM dm3_visitor.visitor_badges WHERE visit_id = $1::uuid AND badge_number = $2`, visitID, badgeNumber).Scan(&badgeReturnedAt)
 	if err != nil {
 		t.Fatalf("load badge: %v", err)
 	}
@@ -544,11 +544,11 @@ func TestAutoCheckoutSharesManualCleanupSemantics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed temp credential: %v", err)
 	}
-	_, err = database.Pool.Exec(ctx, `UPDATE dm3_identity.visits SET temp_credential_id = $2::uuid WHERE id = $1::uuid`, visitID, tempCredID)
+	_, err = database.Pool.Exec(ctx, `UPDATE dm3_visitor.visits SET temp_credential_id = $2::uuid WHERE id = $1::uuid`, visitID, tempCredID)
 	if err != nil {
 		t.Fatalf("link credential: %v", err)
 	}
-	_, err = database.Pool.Exec(ctx, `INSERT INTO dm3_identity.visitor_badges (tenant_id, visit_id, badge_number) VALUES ($1::uuid, $2::uuid, $3)`, visitorTestTenantID, visitID, badgeNumber)
+	_, err = database.Pool.Exec(ctx, `INSERT INTO dm3_visitor.visitor_badges (tenant_id, visit_id, badge_number) VALUES ($1::uuid, $2::uuid, $3)`, visitorTestTenantID, visitID, badgeNumber)
 	if err != nil {
 		t.Fatalf("create badge: %v", err)
 	}
@@ -564,7 +564,7 @@ func TestAutoCheckoutSharesManualCleanupSemantics(t *testing.T) {
 
 	var visitStatus, credentialStatus, userStatus string
 	var badgeReturnedAt *time.Time
-	err = database.Pool.QueryRow(ctx, `SELECT status FROM dm3_identity.visits WHERE id = $1::uuid`, visitID).Scan(&visitStatus)
+	err = database.Pool.QueryRow(ctx, `SELECT status FROM dm3_visitor.visits WHERE id = $1::uuid`, visitID).Scan(&visitStatus)
 	if err != nil {
 		t.Fatalf("load visit: %v", err)
 	}
@@ -576,7 +576,7 @@ func TestAutoCheckoutSharesManualCleanupSemantics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load temp user: %v", err)
 	}
-	err = database.Pool.QueryRow(ctx, `SELECT returned_at FROM dm3_identity.visitor_badges WHERE visit_id = $1::uuid AND badge_number = $2`, visitID, badgeNumber).Scan(&badgeReturnedAt)
+	err = database.Pool.QueryRow(ctx, `SELECT returned_at FROM dm3_visitor.visitor_badges WHERE visit_id = $1::uuid AND badge_number = $2`, visitID, badgeNumber).Scan(&badgeReturnedAt)
 	if err != nil {
 		t.Fatalf("load badge: %v", err)
 	}

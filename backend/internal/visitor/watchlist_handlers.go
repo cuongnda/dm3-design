@@ -38,12 +38,12 @@ func (h *VisitorHandlers) ListWatchlist(w http.ResponseWriter, r *http.Request) 
 
 	countArgs := append([]any(nil), args...)
 	var total int64
-	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_identity.watchlist "+where, countArgs...).Scan(&total)
+	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_visitor.watchlist "+where, countArgs...).Scan(&total)
 
 	query := fmt.Sprintf(`
 		SELECT id, tenant_id, entry_type, match_field, match_value,
 		       face_template_ref, reason, added_by, expires_at, created_at
-		FROM dm3_identity.watchlist %s
+		FROM dm3_visitor.watchlist %s
 		ORDER BY created_at DESC
 		LIMIT $%d OFFSET $%d`, where, idx, idx+1)
 	args = append(args, limit, offset)
@@ -114,7 +114,7 @@ func (h *VisitorHandlers) CreateWatchlistEntry(w http.ResponseWriter, r *http.Re
 
 	var entry WatchlistEntry
 	err := h.db.Pool.QueryRow(r.Context(), `
-		INSERT INTO dm3_identity.watchlist
+		INSERT INTO dm3_visitor.watchlist
 		  (tenant_id, entry_type, match_field, match_value, face_template_ref, reason, added_by, expires_at)
 		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::uuid, $8)
 		RETURNING id, tenant_id, entry_type, match_field, match_value, face_template_ref, reason, added_by, expires_at, created_at`,
@@ -143,7 +143,7 @@ func (h *VisitorHandlers) DeleteWatchlistEntry(w http.ResponseWriter, r *http.Re
 	}
 	id := chi.URLParam(r, "id")
 
-	tag, err := h.db.Pool.Exec(r.Context(), `DELETE FROM dm3_identity.watchlist WHERE id = $1::uuid AND tenant_id = $2::uuid`, id, cid)
+	tag, err := h.db.Pool.Exec(r.Context(), `DELETE FROM dm3_visitor.watchlist WHERE id = $1::uuid AND tenant_id = $2::uuid`, id, cid)
 	if err != nil {
 		slog.Error("delete watchlist entry error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal error")

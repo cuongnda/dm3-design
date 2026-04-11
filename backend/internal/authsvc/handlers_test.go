@@ -13,7 +13,7 @@ const testSecret = "test-secret-key"
 func TestGenerateAndValidateAccessToken(t *testing.T) {
 	h := &AuthHandlers{jwtSecret: testSecret}
 
-	tokenStr, err := h.generateAccessToken("user-1", "company-1", "test@example.com", "Test User", []string{"admin"}, "company-1", "admin")
+	tokenStr, err := h.generateAccessToken("user-1", "company-1", "test@example.com", "Test User", []string{"admin"}, "company-1", "admin", nil)
 	if err != nil {
 		t.Fatalf("generateAccessToken: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestAccessTokenExpired(t *testing.T) {
 
 func TestInvalidSecret(t *testing.T) {
 	h := &AuthHandlers{jwtSecret: testSecret}
-	tokenStr, _ := h.generateAccessToken("user-1", "company-1", "test@example.com", "Test", []string{"admin"}, "company-1", "admin")
+	tokenStr, _ := h.generateAccessToken("user-1", "company-1", "test@example.com", "Test", []string{"admin"}, "company-1", "admin", nil)
 
 	_, err := jwt.ParseWithClaims(tokenStr, &AccessClaims{}, func(t *jwt.Token) (interface{}, error) {
 		return []byte("wrong-secret"), nil

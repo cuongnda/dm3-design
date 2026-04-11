@@ -43,10 +43,10 @@ func (h *VisitorHandlers) ListRecurringTemplates(w http.ResponseWriter, r *http.
 	var total int64
 	if activeOnly {
 		_ = h.db.Pool.QueryRow(r.Context(),
-			`SELECT COUNT(*) FROM dm3_identity.recurring_visit_templates WHERE tenant_id = $1::uuid AND active = true`, cid).Scan(&total)
+			`SELECT COUNT(*) FROM dm3_visitor.recurring_visit_templates WHERE tenant_id = $1::uuid AND active = true`, cid).Scan(&total)
 	} else {
 		_ = h.db.Pool.QueryRow(r.Context(),
-			`SELECT COUNT(*) FROM dm3_identity.recurring_visit_templates WHERE tenant_id = $1::uuid`, cid).Scan(&total)
+			`SELECT COUNT(*) FROM dm3_visitor.recurring_visit_templates WHERE tenant_id = $1::uuid`, cid).Scan(&total)
 	}
 
 	activeFilter := ""
@@ -63,8 +63,8 @@ func (h *VisitorHandlers) ListRecurringTemplates(w http.ResponseWriter, r *http.
 		       vis.email, vis.phone, vis.company, vis.national_id, vis.photo_ref,
 		       vis.watchlist_status, vis.watchlist_reason, vis.visit_count, vis.last_visit_at,
 		       vis.created_at, vis.updated_at
-		FROM dm3_identity.recurring_visit_templates t
-		JOIN dm3_identity.visitors vis ON vis.id = t.visitor_id
+		FROM dm3_visitor.recurring_visit_templates t
+		JOIN dm3_visitor.visitors vis ON vis.id = t.visitor_id
 		WHERE t.tenant_id = $1::uuid`+activeFilter+`
 		ORDER BY t.created_at DESC
 		LIMIT $2 OFFSET $3`, cid, limit, offset)
@@ -143,7 +143,7 @@ func (h *VisitorHandlers) CreateRecurringTemplate(w http.ResponseWriter, r *http
 
 	var t RecurringVisitTemplate
 	err := h.db.Pool.QueryRow(r.Context(), `
-		INSERT INTO dm3_identity.recurring_visit_templates
+		INSERT INTO dm3_visitor.recurring_visit_templates
 		  (tenant_id, visitor_id, host_user_id, purpose, access_areas,
 		   escort_required, recurrence_rule, start_date, end_date, created_by)
 		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5::uuid[], $6, $7, $8::date, $9::date, $10::uuid)
@@ -196,7 +196,7 @@ func (h *VisitorHandlers) UpdateRecurringTemplate(w http.ResponseWriter, r *http
 
 	var t RecurringVisitTemplate
 	err := h.db.Pool.QueryRow(r.Context(), `
-		UPDATE dm3_identity.recurring_visit_templates
+		UPDATE dm3_visitor.recurring_visit_templates
 		SET active   = COALESCE($3, active),
 		    end_date = COALESCE($4::date, end_date),
 		    updated_at = now()
@@ -238,7 +238,7 @@ func (h *VisitorHandlers) DeleteRecurringTemplate(w http.ResponseWriter, r *http
 	templateID := chi.URLParam(r, "template_id")
 
 	cmd, err := h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_identity.recurring_visit_templates SET active = false, updated_at = now()
+		`UPDATE dm3_visitor.recurring_visit_templates SET active = false, updated_at = now()
 		 WHERE id = $1::uuid AND tenant_id = $2::uuid`,
 		templateID, cid)
 	if err != nil || cmd.RowsAffected() == 0 {

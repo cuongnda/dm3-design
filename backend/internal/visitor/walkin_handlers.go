@@ -64,7 +64,7 @@ func (h *VisitorHandlers) WalkinVisit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Visitor.NationalID != nil {
-		if _, err := h.db.Pool.Exec(r.Context(), `UPDATE dm3_identity.visitors SET national_id = $2, updated_at = now() WHERE id = $1::uuid`, visitorID, req.Visitor.NationalID); err != nil {
+		if _, err := h.db.Pool.Exec(r.Context(), `UPDATE dm3_visitor.visitors SET national_id = $2, updated_at = now() WHERE id = $1::uuid`, visitorID, req.Visitor.NationalID); err != nil {
 			slog.Error("walkin update national_id error", "error", err)
 		}
 	}
@@ -80,7 +80,7 @@ func (h *VisitorHandlers) WalkinVisit(w http.ResponseWriter, r *http.Request) {
 	qrExpiresAt := now.Add(4 * time.Hour)
 	var visit Visit
 	err = h.db.Pool.QueryRow(r.Context(), `
-		INSERT INTO dm3_identity.visits
+		INSERT INTO dm3_visitor.visits
 		  (tenant_id, visitor_id, host_user_id, purpose, purpose_note,
 		   status, expected_arrival, expected_departure, qr_token, qr_expires_at,
 		   access_areas, escort_required, vehicle_plate)

@@ -166,7 +166,7 @@ func TestSystemAdminTokenHasNoCompanyID(t *testing.T) {
 	h := &AuthHandlers{jwtSecret: testSecret}
 
 	// System admin should get token without tenant_id
-	tokenStr, err := h.generateAccessToken("admin-1", "system", "sysadmin@duali.com", "System Admin", []string{"admin"}, "", "system_admin")
+	tokenStr, err := h.generateAccessToken("admin-1", "system", "sysadmin@duali.com", "System Admin", []string{"admin"}, "", "system_admin", nil)
 	if err != nil {
 		t.Fatalf("generateAccessToken: %v", err)
 	}

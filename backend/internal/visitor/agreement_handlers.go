@@ -39,7 +39,7 @@ func (h *VisitorHandlers) ListAgreements(w http.ResponseWriter, r *http.Request)
 
 	rows, err := h.db.Pool.Query(r.Context(), `
 		SELECT id, tenant_id, name, content, version, active, required_for, created_at, updated_at
-		FROM dm3_identity.visitor_agreements
+		FROM dm3_visitor.visitor_agreements
 		WHERE tenant_id = $1::uuid`+activeFilter+`
 		ORDER BY created_at DESC`, cid)
 	if err != nil {
@@ -93,7 +93,7 @@ func (h *VisitorHandlers) CreateAgreement(w http.ResponseWriter, r *http.Request
 
 	var a VisitorAgreement
 	err := h.db.Pool.QueryRow(r.Context(), `
-		INSERT INTO dm3_identity.visitor_agreements (tenant_id, name, content, required_for)
+		INSERT INTO dm3_visitor.visitor_agreements (tenant_id, name, content, required_for)
 		VALUES ($1::uuid, $2, $3, $4)
 		RETURNING id, tenant_id, name, content, version, active, required_for, created_at, updated_at`,
 		cid, req.Name, req.Content, req.RequiredFor,
@@ -146,7 +146,7 @@ func (h *VisitorHandlers) UpdateAgreement(w http.ResponseWriter, r *http.Request
 
 	var a VisitorAgreement
 	err := h.db.Pool.QueryRow(r.Context(), `
-		UPDATE dm3_identity.visitor_agreements
+		UPDATE dm3_visitor.visitor_agreements
 		SET name         = COALESCE($3, name),
 		    content      = COALESCE($4, content),
 		    active       = COALESCE($5, active),
@@ -202,7 +202,7 @@ func (h *VisitorHandlers) SignAgreement(w http.ResponseWriter, r *http.Request) 
 	// Verify visit belongs to tenant
 	var visitExists bool
 	if err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT EXISTS(SELECT 1 FROM dm3_identity.visits WHERE id = $1::uuid AND tenant_id = $2::uuid)`,
+		`SELECT EXISTS(SELECT 1 FROM dm3_visitor.visits WHERE id = $1::uuid AND tenant_id = $2::uuid)`,
 		visitID, cid).Scan(&visitExists); err != nil || !visitExists {
 		httputil.Error(w, http.StatusNotFound, "visit not found")
 		return
@@ -211,7 +211,7 @@ func (h *VisitorHandlers) SignAgreement(w http.ResponseWriter, r *http.Request) 
 	// Verify the agreement is active
 	var agreementActive bool
 	if err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT active FROM dm3_identity.visitor_agreements WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+		`SELECT active FROM dm3_visitor.visitor_agreements WHERE id = $1::uuid AND tenant_id = $2::uuid`,
 		req.AgreementID, cid).Scan(&agreementActive); err != nil || !agreementActive {
 		httputil.Error(w, http.StatusBadRequest, "agreement not found or inactive")
 		return
@@ -219,7 +219,7 @@ func (h *VisitorHandlers) SignAgreement(w http.ResponseWriter, r *http.Request) 
 
 	var sig VisitorAgreementSignature
 	err := h.db.Pool.QueryRow(r.Context(), `
-		INSERT INTO dm3_identity.visitor_agreement_signatures
+		INSERT INTO dm3_visitor.visitor_agreement_signatures
 		  (tenant_id, visit_id, agreement_id, visitor_id, signature_ref)
 		VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5)
 		ON CONFLICT DO NOTHING
@@ -259,8 +259,8 @@ func (h *VisitorHandlers) ListVisitSignatures(w http.ResponseWriter, r *http.Req
 	rows, err := h.db.Pool.Query(r.Context(), `
 		SELECT s.id, s.tenant_id, s.visit_id, s.agreement_id, s.visitor_id, s.signature_ref, s.signed_at,
 		       a.name, a.version
-		FROM dm3_identity.visitor_agreement_signatures s
-		JOIN dm3_identity.visitor_agreements a ON a.id = s.agreement_id
+		FROM dm3_visitor.visitor_agreement_signatures s
+		JOIN dm3_visitor.visitor_agreements a ON a.id = s.agreement_id
 		WHERE s.visit_id = $1::uuid AND s.tenant_id = $2::uuid
 		ORDER BY s.signed_at DESC`, visitID, cid)
 	if err != nil {

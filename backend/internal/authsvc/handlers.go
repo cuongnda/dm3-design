@@ -1,6 +1,7 @@
 package authsvc
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -25,13 +26,14 @@ import (
 // ─── Claims ──────────────────────────────────────────────────────────────────
 
 type AccessClaims struct {
-	Sub      string   `json:"sub"`
-	TID      string   `json:"tid,omitempty"` // tenant_id
-	CID      string   `json:"cid,omitempty"` // tenant_id
-	Email    string   `json:"email"`
-	Name     string   `json:"name"`
-	Roles    []string `json:"roles"`
-	Role     string   `json:"role,omitempty"` // primary_manager, manager, operator, viewer, system_admin
+	Sub            string   `json:"sub"`
+	TID            string   `json:"tid,omitempty"` // tenant_id
+	CID            string   `json:"cid,omitempty"` // tenant_id
+	Email          string   `json:"email"`
+	Name           string   `json:"name"`
+	Roles          []string `json:"roles"`
+	Role           string   `json:"role,omitempty"` // primary_manager, manager, operator, viewer, system_admin
+	EnabledModules []string `json:"enabled_modules,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -194,7 +196,7 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 		if first.companyID != nil {
 			cid = *first.companyID
 		}
-		accessToken, err := h.generateAccessToken(first.id, cid, first.email, first.fullName, first.roles, cid, first.role)
+		accessToken, err := h.generateAccessToken(first.id, cid, first.email, first.fullName, first.roles, cid, first.role, nil)
 		if err != nil {
 			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 			return
@@ -258,7 +260,8 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		}
-		accessToken, err := h.generateAccessToken(chosenAccount.id, c.ID, chosenAccount.email, chosenAccount.fullName, chosenAccount.roles, c.ID, c.Role)
+		modules, _ := h.fetchEnabledModules(r.Context(), c.ID)
+		accessToken, err := h.generateAccessToken(chosenAccount.id, c.ID, chosenAccount.email, chosenAccount.fullName, chosenAccount.roles, c.ID, c.Role, modules)
 		if err != nil {
 			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 			return
@@ -357,7 +360,8 @@ func (h *AuthHandlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := h.generateAccessToken(account.id, req.TenantID, account.email, account.fullName, account.roles, req.TenantID, account.role)
+	modules, _ := h.fetchEnabledModules(r.Context(), req.TenantID)
+	accessToken, err := h.generateAccessToken(account.id, req.TenantID, account.email, account.fullName, account.roles, req.TenantID, account.role, modules)
 	if err != nil {
 		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 		return
@@ -459,7 +463,8 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 		refreshTenantID = *refreshCompanyID
 	}
 
-	accessToken, err := h.generateAccessToken(userID, tenantID, email, fullName, roles, refreshTenantID, refreshUserRole)
+	refreshModules, _ := h.fetchEnabledModules(r.Context(), refreshTenantID)
+	accessToken, err := h.generateAccessToken(userID, tenantID, email, fullName, roles, refreshTenantID, refreshUserRole, refreshModules)
 	if err != nil {
 		slog.Error("Refresh: failed to generate access token", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal server error")
@@ -976,15 +981,33 @@ func (h *AuthHandlers) generateTempToken(userID, email string) (string, error) {
 	return token.SignedString([]byte(h.jwtSecret))
 }
 
-func (h *AuthHandlers) generateAccessToken(userID, companyID, email, name string, roles []string, selectedCompanyID, role string) (string, error) {
+// fetchEnabledModules queries the tenant's enabled_modules from the database.
+// Returns nil (not an error) when tenantID is empty (e.g. system_admin with no company).
+func (h *AuthHandlers) fetchEnabledModules(ctx context.Context, tenantID string) ([]string, error) {
+	if tenantID == "" {
+		return nil, nil
+	}
+	var modules []string
+	err := h.db.Pool.QueryRow(ctx,
+		`SELECT enabled_modules FROM dm3_auth.tenants WHERE id = $1::uuid`,
+		tenantID,
+	).Scan(&modules)
+	if err != nil {
+		return nil, fmt.Errorf("fetchEnabledModules: %w", err)
+	}
+	return modules, nil
+}
+
+func (h *AuthHandlers) generateAccessToken(userID, companyID, email, name string, roles []string, selectedCompanyID, role string, enabledModules []string) (string, error) {
 	now := time.Now()
 	claims := AccessClaims{
-		Sub:   userID,
-		CID:   selectedCompanyID,
-		Email: email,
-		Name:  name,
-		Roles: roles,
-		Role:  role,
+		Sub:            userID,
+		CID:            selectedCompanyID,
+		Email:          email,
+		Name:           name,
+		Roles:          roles,
+		Role:           role,
+		EnabledModules: enabledModules,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(15 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(now),
