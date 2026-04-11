@@ -45,3 +45,27 @@ def test_company_detail_edit_mode(executor, test_data):
 
 def test_create_company_page(executor, test_data):
     executor.run(test_data["test_create_company_page"])
+
+
+def test_company_detail_plugins_section(executor, test_data):
+    executor.run(test_data["test_company_detail_plugins_section"])
+
+
+def test_company_detail_core_plugin_disabled(executor, test_data):
+    executor.run(test_data["test_company_detail_core_plugin_disabled"])
+
+
+def test_company_detail_toggle_plugin(executor, test_data):
+    executor.run(test_data["test_company_detail_toggle_plugin"])
+
+
+def test_company_detail_stats_visible(executor, test_data):
+    executor.run(test_data["test_company_detail_stats_visible"])
+
+
+def test_company_detail_suspend_button(executor, test_data):
+    executor.run(test_data["test_company_detail_suspend_button"])
+
+
+def test_company_detail_back_navigation(executor, test_data):
+    executor.run(test_data["test_company_detail_back_navigation"])
