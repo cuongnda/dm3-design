@@ -32,31 +32,32 @@ export function VisitorAccessHistoryPage() {
 
   const columns: Column<VisitorAccessLogDTO>[] = [
     {
-      key: 'timestamp', header: 'Time', width: '160px',
+      key: 'event_time', header: 'Time', width: '160px',
       render: (r) => (
         <span className="font-mono text-[12px] text-muted-foreground">
-          {new Date(r.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+          {new Date(r.event_time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
         </span>
       ),
     },
-    { key: 'access_point_name', header: 'Access Point', render: (r) => <span className="font-medium">{r.access_point_name ?? r.access_point_id}</span> },
+    { key: 'access_point_name', header: 'Access Point', render: (r) => <span className="font-medium">{r.access_point_name ?? r.access_point_id ?? '—'}</span> },
+    { key: 'zone_name', header: 'Zone', width: '120px', render: (r) => <span className="text-muted-foreground text-[12px]">{r.zone_name ?? '—'}</span> },
     {
       key: 'direction', header: 'Direction', width: '80px',
       render: (r) => (
         <span className={cn('text-[12px] font-medium', r.direction === 'entry' ? 'text-emerald-400' : 'text-orange-400')}>
-          {r.direction === 'entry' ? 'Entry' : 'Exit'}
+          {r.direction === 'entry' ? 'Entry' : r.direction === 'exit' ? 'Exit' : r.direction ?? '—'}
         </span>
       ),
     },
     {
-      key: 'granted', header: 'Result', width: '80px',
+      key: 'decision', header: 'Result', width: '80px',
       render: (r) => (
-        <span className={cn('text-[12px] font-medium', r.granted ? 'text-emerald-400' : 'text-destructive')}>
-          {r.granted ? 'Granted' : 'Denied'}
+        <span className={cn('text-[12px] font-medium', r.decision === 'granted' ? 'text-emerald-400' : 'text-destructive')}>
+          {r.decision === 'granted' ? 'Granted' : 'Denied'}
         </span>
       ),
     },
-    { key: 'method', header: 'Method', width: '100px', render: (r) => <span className="text-muted-foreground text-[12px]">{r.method}</span> },
+    { key: 'credential_type', header: 'Method', width: '100px', render: (r) => <span className="text-muted-foreground text-[12px]">{r.credential_type ?? '—'}</span> },
   ];
 
   return (

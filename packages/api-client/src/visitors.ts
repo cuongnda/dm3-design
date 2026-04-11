@@ -281,14 +281,27 @@ export interface VisitGroupDTO {
   tenant_id: string;
   name: string;
   description?: string;
-  visit_count: number;
+  host_user_id: string;
+  purpose: string;
+  expected_arrival: string;
+  expected_departure?: string;
+  access_areas?: string[];
+  escort_required: boolean;
+  created_by: string;
   created_at: string;
   updated_at: string;
+  member_count: number;
 }
 
 export interface CreateVisitGroupRequest {
   name: string;
   description?: string;
+  host_user_id: string;
+  purpose: string;
+  expected_arrival: string;
+  expected_departure?: string;
+  access_areas?: string[];
+  escort_required?: boolean;
 }
 
 export interface ListVisitGroupsParams {
@@ -329,12 +342,16 @@ export interface VisitorAccessLogDTO {
   tenant_id: string;
   visit_id: string;
   visitor_id: string;
-  access_point_id: string;
+  access_event_id?: string;
+  access_point_id?: string;
   access_point_name?: string;
-  direction: string;
-  granted: boolean;
-  method: string;
-  timestamp: string;
+  zone_id?: string;
+  zone_name?: string;
+  direction?: string;
+  decision: string;
+  event_time: string;
+  credential_type?: string;
+  created_at: string;
 }
 
 export interface ListAccessLogParams {
@@ -427,33 +444,32 @@ export interface VisitorAnalyticsDTO {
   period: string;
   total_visits: number;
   unique_visitors: number;
-  avg_duration_minutes: number;
-  peak_hour: number;
+  checked_in: number;
+  no_shows: number;
+  avg_duration_minutes: number | null;
   by_purpose: Record<string, number>;
   by_status: Record<string, number>;
+  peak_hour: number | null;
+  daily_trend?: { date: string; count: number }[];
 }
 
 export interface TopVisitorDTO {
   visitor_id: string;
-  visitor_name: string;
-  visitor_company?: string;
+  name: string;
+  company?: string;
   visit_count: number;
-  last_visit: string;
+  last_visit_at?: string;
 }
 
 export interface AnalyticsParams {
-  from?: string;
-  to?: string;
-  group_by?: 'day' | 'week' | 'month';
+  period?: '7d' | '30d' | '90d';
 }
 
-export function getVisitorAnalytics(params?: AnalyticsParams): Promise<VisitorAnalyticsDTO[]> {
+export function getVisitorAnalytics(params?: AnalyticsParams): Promise<VisitorAnalyticsDTO> {
   const qs = new URLSearchParams();
-  if (params?.from) qs.set('from', params.from);
-  if (params?.to) qs.set('to', params.to);
-  if (params?.group_by) qs.set('group_by', params.group_by);
+  if (params?.period) qs.set('period', params.period);
   const q = qs.toString();
-  return apiFetch<VisitorAnalyticsDTO[]>(`${BASE}/analytics${q ? '?' + q : ''}`);
+  return apiFetch<VisitorAnalyticsDTO>(`${BASE}/analytics${q ? '?' + q : ''}`);
 }
 
 export function getTopVisitors(params?: { limit?: number }): Promise<TopVisitorDTO[]> {
@@ -508,37 +524,67 @@ export function deleteRecurringTemplate(id: string): Promise<void> {
 // ─── Visitor Settings ───────────────────────────────────────────────────────
 
 export interface VisitorSettingsDTO {
+  id: string;
   tenant_id: string;
-  require_approval: boolean;
-  approval_roles: string[];
-  require_nda: boolean;
-  require_photo: boolean;
-  require_id: boolean;
+  approval_required: boolean;
+  auto_approve_returning: boolean;
+  auto_approve_vip: boolean;
+  approver_user_ids: string[];
+  approval_timeout_hours: number;
+  default_duration_hours: number;
+  max_duration_hours: number;
+  auto_checkout_hour: number;
+  no_show_grace_minutes: number;
+  qr_validity_before_hours: number;
+  qr_validity_after_hours: number;
+  require_email: boolean;
   require_phone: boolean;
-  auto_checkout_hours: number;
-  max_visit_duration_hours: number;
-  qr_expiry_hours: number;
-  max_reinvites: number;
-  enable_watchlist: boolean;
-  enable_recurring: boolean;
-  custom_fields: Record<string, unknown>;
+  require_national_id: boolean;
+  require_company: boolean;
+  require_photo: boolean;
+  require_nda: boolean;
+  badge_enabled: boolean;
+  badge_auto_assign: boolean;
+  badge_prefix: string;
+  badge_pool_size: number;
+  notify_host_on_arrival: boolean;
+  notify_host_on_register: boolean;
+  notify_method: string;
+  allowed_purposes?: string[];
+  self_service_enabled: boolean;
+  self_service_requires_qr: boolean;
+  created_at: string;
   updated_at: string;
 }
 
 export interface UpdateVisitorSettingsRequest {
-  require_approval?: boolean;
-  approval_roles?: string[];
-  require_nda?: boolean;
-  require_photo?: boolean;
-  require_id?: boolean;
+  approval_required?: boolean;
+  auto_approve_returning?: boolean;
+  auto_approve_vip?: boolean;
+  approver_user_ids?: string[];
+  approval_timeout_hours?: number;
+  default_duration_hours?: number;
+  max_duration_hours?: number;
+  auto_checkout_hour?: number;
+  no_show_grace_minutes?: number;
+  qr_validity_before_hours?: number;
+  qr_validity_after_hours?: number;
+  require_email?: boolean;
   require_phone?: boolean;
-  auto_checkout_hours?: number;
-  max_visit_duration_hours?: number;
-  qr_expiry_hours?: number;
-  max_reinvites?: number;
-  enable_watchlist?: boolean;
-  enable_recurring?: boolean;
-  custom_fields?: Record<string, unknown>;
+  require_national_id?: boolean;
+  require_company?: boolean;
+  require_photo?: boolean;
+  require_nda?: boolean;
+  badge_enabled?: boolean;
+  badge_auto_assign?: boolean;
+  badge_prefix?: string;
+  badge_pool_size?: number;
+  notify_host_on_arrival?: boolean;
+  notify_host_on_register?: boolean;
+  notify_method?: string;
+  allowed_purposes?: string[];
+  self_service_enabled?: boolean;
+  self_service_requires_qr?: boolean;
 }
 
 export function getVisitorSettings(): Promise<VisitorSettingsDTO> {

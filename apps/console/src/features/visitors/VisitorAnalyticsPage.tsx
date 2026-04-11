@@ -4,13 +4,11 @@ import { PageHeader, StatCard, Button } from '@dm3/ui';
 import { getVisitorAnalytics, getTopVisitors, type VisitorAnalyticsDTO, type TopVisitorDTO } from '@dm3/api-client';
 
 export function VisitorAnalyticsPage() {
-  const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month'>('week');
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-  const today = new Date().toISOString().slice(0, 10);
+  const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('30d');
 
-  const { data: analytics = [], isLoading } = useQuery({
-    queryKey: ['visitor-analytics', groupBy],
-    queryFn: () => getVisitorAnalytics({ from: thirtyDaysAgo, to: today, group_by: groupBy }),
+  const { data: analytics, isLoading } = useQuery({
+    queryKey: ['visitor-analytics', period],
+    queryFn: () => getVisitorAnalytics({ period }),
   });
 
   const { data: topVisitors = [] } = useQuery({
@@ -18,60 +16,83 @@ export function VisitorAnalyticsPage() {
     queryFn: () => getTopVisitors({ limit: 10 }),
   });
 
-  const totals = analytics.reduce(
-    (acc, a) => ({
-      visits: acc.visits + a.total_visits,
-      unique: acc.unique + a.unique_visitors,
-      avgDuration: acc.avgDuration + a.avg_duration_minutes,
-    }),
-    { visits: 0, unique: 0, avgDuration: 0 }
-  );
-  const avgDuration = analytics.length > 0 ? Math.round(totals.avgDuration / analytics.length) : 0;
-
   return (
     <div>
       <PageHeader title="Visitor Analytics" description="Insights and trends for visitor activity">
         <div className="flex gap-1">
-          {(['day', 'week', 'month'] as const).map((g) => (
+          {(['7d', '30d', '90d'] as const).map((p) => (
             <Button
-              key={g}
+              key={p}
               size="xs"
-              variant={groupBy === g ? 'default' : 'outline'}
-              onClick={() => setGroupBy(g)}
-              className={groupBy === g ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+              variant={period === p ? 'default' : 'outline'}
+              onClick={() => setPeriod(p)}
+              className={period === p ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
             >
-              {g.charAt(0).toUpperCase() + g.slice(1)}
+              {p === '7d' ? '7 Days' : p === '30d' ? '30 Days' : '90 Days'}
             </Button>
           ))}
         </div>
       </PageHeader>
 
       <div className="grid grid-cols-4 gap-3 mb-6">
-        <StatCard label="Total Visits" value={String(totals.visits)} sub="last 30 days" domain="visitors" />
-        <StatCard label="Unique Visitors" value={String(totals.unique)} sub="last 30 days" domain="visitors" />
-        <StatCard label="Avg Duration" value={`${avgDuration}m`} sub="per visit" domain="visitors" />
-        <StatCard label="Top Visitors" value={String(topVisitors.length)} sub="frequent" domain="visitors" />
+        <StatCard label="Total Visits" value={String(analytics?.total_visits ?? 0)} sub={`last ${period}`} domain="visitors" />
+        <StatCard label="Unique Visitors" value={String(analytics?.unique_visitors ?? 0)} sub={`last ${period}`} domain="visitors" />
+        <StatCard label="Avg Duration" value={analytics?.avg_duration_minutes != null ? `${Math.round(analytics.avg_duration_minutes)}m` : '—'} sub="per visit" domain="visitors" />
+        <StatCard label="Checked In" value={String(analytics?.checked_in ?? 0)} sub="currently" domain="visitors" />
       </div>
 
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Loading analytics...</div>
-      ) : analytics.length === 0 ? (
+      ) : !analytics ? (
         <div className="text-center py-12 text-muted-foreground">No visitor data for this period</div>
       ) : (
         <div className="grid grid-cols-2 gap-4">
           <div className="rounded-lg border border-border p-4">
-            <h3 className="text-[13px] font-semibold mb-3">Visits by Period</h3>
-            <div className="space-y-2">
-              {analytics.map((a) => (
-                <div key={a.period} className="flex items-center justify-between text-[12px]">
-                  <span className="text-muted-foreground">{a.period}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-foreground font-medium">{a.total_visits} visits</span>
-                    <span className="text-muted-foreground">{a.unique_visitors} unique</span>
+            <h3 className="text-[13px] font-semibold mb-3">By Purpose</h3>
+            {Object.keys(analytics.by_purpose).length === 0 ? (
+              <div className="text-center py-6 text-muted-foreground text-[12px]">No data</div>
+            ) : (
+              <div className="space-y-2">
+                {Object.entries(analytics.by_purpose).map(([purpose, count]) => (
+                  <div key={purpose} className="flex items-center justify-between text-[12px]">
+                    <span className="text-muted-foreground capitalize">{purpose.replace(/_/g, ' ')}</span>
+                    <span className="text-foreground font-medium">{count} visits</span>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-border p-4">
+            <h3 className="text-[13px] font-semibold mb-3">By Status</h3>
+            {Object.keys(analytics.by_status).length === 0 ? (
+              <div className="text-center py-6 text-muted-foreground text-[12px]">No data</div>
+            ) : (
+              <div className="space-y-2">
+                {Object.entries(analytics.by_status).map(([status, count]) => (
+                  <div key={status} className="flex items-center justify-between text-[12px]">
+                    <span className="text-muted-foreground capitalize">{status.replace(/_/g, ' ')}</span>
+                    <span className="text-foreground font-medium">{count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-border p-4">
+            <h3 className="text-[13px] font-semibold mb-3">Daily Trend</h3>
+            {!analytics.daily_trend || analytics.daily_trend.length === 0 ? (
+              <div className="text-center py-6 text-muted-foreground text-[12px]">No data</div>
+            ) : (
+              <div className="space-y-1 max-h-60 overflow-y-auto">
+                {analytics.daily_trend.map((d) => (
+                  <div key={d.date} className="flex items-center justify-between text-[12px]">
+                    <span className="text-muted-foreground font-mono">{d.date}</span>
+                    <span className="text-foreground font-medium">{d.count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="rounded-lg border border-border p-4">
@@ -85,8 +106,8 @@ export function VisitorAnalyticsPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-muted-foreground w-4">{i + 1}.</span>
                       <div>
-                        <span className="font-medium text-foreground">{v.visitor_name}</span>
-                        {v.visitor_company && <span className="text-muted-foreground ml-1.5">({v.visitor_company})</span>}
+                        <span className="font-medium text-foreground">{v.name}</span>
+                        {v.company && <span className="text-muted-foreground ml-1.5">({v.company})</span>}
                       </div>
                     </div>
                     <span className="text-emerald-400 font-medium">{v.visit_count} visits</span>

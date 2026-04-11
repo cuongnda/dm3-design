@@ -25,19 +25,35 @@ export function VisitorGroupsPage() {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [hostUserId, setHostUserId] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const [expectedArrival, setExpectedArrival] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['visit-groups', page],
     queryFn: () => listVisitGroups({ page, limit: 20 }),
   });
 
+  const resetForm = () => {
+    setName('');
+    setDescription('');
+    setHostUserId('');
+    setPurpose('');
+    setExpectedArrival('');
+  };
+
   const createMutation = useMutation({
-    mutationFn: () => createVisitGroup({ name, description: description || undefined }),
+    mutationFn: () => createVisitGroup({
+      name,
+      description: description || undefined,
+      host_user_id: hostUserId,
+      purpose,
+      expected_arrival: new Date(expectedArrival).toISOString(),
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['visit-groups'] });
       setShowForm(false);
-      setName('');
-      setDescription('');
+      resetForm();
     },
   });
 
@@ -51,8 +67,12 @@ export function VisitorGroupsPage() {
 
   const columns: Column<VisitGroupDTO>[] = [
     { key: 'name', header: t('visitors.groups.name', 'Name'), render: (r) => <span className="font-medium">{r.name}</span> },
-    { key: 'description', header: t('visitors.groups.description', 'Description'), render: (r) => <span className="text-muted-foreground text-[13px]">{r.description || '—'}</span> },
-    { key: 'visit_count', header: t('visitors.groups.visitCount', 'Visits'), width: '100px', render: (r) => <span className="text-muted-foreground">{r.visit_count}</span> },
+    { key: 'purpose', header: t('visitors.groups.purpose', 'Purpose'), render: (r) => <span className="text-muted-foreground text-[13px] capitalize">{r.purpose.replace(/_/g, ' ')}</span> },
+    {
+      key: 'expected_arrival', header: t('visitors.groups.arrival', 'Arrival'), width: '140px',
+      render: (r) => <span className="font-mono text-[12px] text-muted-foreground">{new Date(r.expected_arrival).toLocaleDateString()}</span>,
+    },
+    { key: 'member_count', header: t('visitors.groups.visitCount', 'Visitors'), width: '80px', render: (r) => <span className="text-muted-foreground">{r.member_count}</span> },
     {
       key: 'created_at', header: t('visitors.groups.created', 'Created'), width: '140px',
       render: (r) => <span className="font-mono text-[12px] text-muted-foreground">{new Date(r.created_at).toLocaleDateString()}</span>,
@@ -66,6 +86,8 @@ export function VisitorGroupsPage() {
       ),
     },
   ];
+
+  const canCreate = name.trim() && hostUserId.trim() && purpose.trim() && expectedArrival;
 
   return (
     <div>
@@ -94,24 +116,36 @@ export function VisitorGroupsPage() {
 
       <AppModal
         open={showForm}
-        onOpenChange={setShowForm}
+        onOpenChange={(open) => { setShowForm(open); if (!open) resetForm(); }}
         title={t('visitors.groups.create', 'Create Group')}
         size="sm"
         showCancelButton
         primaryAction={{
           label: createMutation.isPending ? 'Creating...' : 'Create',
           onClick: () => createMutation.mutate(),
-          disabled: !name.trim() || createMutation.isPending,
+          disabled: !canCreate || createMutation.isPending,
         }}
       >
         <div className="space-y-3">
           <div>
-            <Label className="text-[12px]">{t('visitors.groups.name', 'Name')}</Label>
+            <Label className="text-[12px]">{t('visitors.groups.name', 'Name')} *</Label>
             <Input className="mt-1 h-8 text-[13px]" value={name} onChange={(e) => setName(e.target.value)} data-testid="visitors-input-group-name" />
           </div>
           <div>
             <Label className="text-[12px]">{t('visitors.groups.description', 'Description')}</Label>
             <Input className="mt-1 h-8 text-[13px]" value={description} onChange={(e) => setDescription(e.target.value)} data-testid="visitors-input-group-description" />
+          </div>
+          <div>
+            <Label className="text-[12px]">Host User ID *</Label>
+            <Input className="mt-1 h-8 text-[13px]" placeholder="UUID of the host user" value={hostUserId} onChange={(e) => setHostUserId(e.target.value)} data-testid="visitors-input-group-host" />
+          </div>
+          <div>
+            <Label className="text-[12px]">Purpose *</Label>
+            <Input className="mt-1 h-8 text-[13px]" placeholder="e.g. meeting, interview, delivery" value={purpose} onChange={(e) => setPurpose(e.target.value)} data-testid="visitors-input-group-purpose" />
+          </div>
+          <div>
+            <Label className="text-[12px]">Expected Arrival *</Label>
+            <Input type="datetime-local" className="mt-1 h-8 text-[13px]" value={expectedArrival} onChange={(e) => setExpectedArrival(e.target.value)} data-testid="visitors-input-group-arrival" />
           </div>
         </div>
       </AppModal>
