@@ -8,7 +8,7 @@ This document tracks the current implementation status of DM3 features. Updated:
 
 > **Two systemic gaps found that cannot be buried in per-item detail:**
 >
-> 1. **Service topology is 25% implemented.** The architecture doc (`docs/architecture/system-architecture.md:281`) specifies ~20 microservices. 5 exist in `backend/cmd/` (auth-svc, access-svc, identity-svc, device-gateway, audit-svc). All domain services (visitor-svc, booking-svc, parking-svc, guard-tour-svc, analytics-svc, etc.) are absent.
+> 1. **Service topology is ~35% implemented.** The architecture doc (`docs/architecture/system-architecture.md:281`) specifies ~20 microservices. 7 exist in `backend/cmd/` (auth-svc, access-svc, identity-svc, device-gateway, audit-svc, visitor-svc on port 8006, parking-svc on port 8007). Remaining domain services (booking-svc, guard-tour-svc, analytics-svc, etc.) are absent.
 >
 > 2. **The majority of frontend pages are mock-data-only UI shells.** 21 of ~30 feature pages import from `mock-data` files or define inline hardcoded arrays with zero API client usage. ALL OPERATE, ALL SMART, and most SECURE/MANAGE pages are visual prototypes, not working features. Only DashboardPage, DeviceDetailPage, IdentitiesPage/PersonDetailPage/GroupsPage, and SystemSettingsPage integrate with real backend APIs.
 >
@@ -20,9 +20,9 @@ This document tracks the current implementation status of DM3 features. Updated:
 
 | Layer | Status | Details |
 |-------|--------|---------|
-| Service Topology | ❌ Gap | 6 of ~20 specified services implemented. Evidence: `backend/cmd/` has 6 dirs (auth-svc, identity-svc, access-svc, device-gateway, audit-svc, visitor-svc on port 8006); `docs/architecture/system-architecture.md:281` specifies ~20 |
+| Service Topology | ❌ Gap | 7 of ~20 specified services implemented. Evidence: `backend/cmd/` has 7 dirs (auth-svc, identity-svc, access-svc, device-gateway, audit-svc, visitor-svc on port 8006, parking-svc on port 8007); `docs/architecture/system-architecture.md:281` specifies ~20 |
 | Data Flow / MQTT Pipeline | ✅ Compliant | Topic `dm/{tid}/device/{did}/{cat}` confirmed. Envelope (v, id, ts) confirmed. NATS bridge confirmed. Evidence: `backend/internal/gateway/mqtt_handler.go:48-57, 27-35` |
-| Data Model / ER | ⚠️ Partial | Core access hierarchy implemented (`dm3_access`). Visitor module isolated into own schema: `dm3_visitor` (11 tables: visitors, visits, visitor_badges, watchlist, visitor_settings, visit_groups, visitor_access_log, recurring_visit_templates, visitor_agreements, visitor_agreement_signatures, temp_credentials). Parking Phase 1 tables implemented (`dm3_operate`). Vehicle registry in `dm3_identity.vehicles`. `dm3_audit` schema active (audit_logs hypertable). Remaining gaps: contractors, rooms, maintenance, keys. See `docs/architecture/module-isolation.md`. |
+| Data Model / ER | ⚠️ Partial | Core access hierarchy implemented (`dm3_access`). Visitor module isolated into own schema: `dm3_visitor` (11 tables). Parking module isolated into own schema: `dm3_parking` (6 tables: parking_lots, parking_zones, parking_vehicles, parking_fee_rules, parking_passes, parking_sessions). Vehicle registry in `dm3_identity.vehicles`. `dm3_audit` schema active (audit_logs hypertable). Remaining gaps: contractors, rooms, maintenance, keys. See `docs/architecture/module-isolation.md`. |
 | Security | ⚠️ Partial | JWT auth, bcrypt, CORS, refresh-token replay detection confirmed. Missing: TLS config in docker-compose for EMQX, no rate limiting middleware found. |
 | Deployment | ✅ Compliant | All 6 infra services present in `backend/docker-compose.yml` with correct ports. Simulator is in a separate `simulator/docker-compose.yml` (minor split). No Traefik gateway config found. |
 
@@ -176,7 +176,7 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Evidence: `ProvisioningPage.tsx` — imports mock-data for device provisioning flow; backend provisioning flow is fully implemented (`gateway/provisioning.go`)
   - Deviation: Frontend device provisioning UI is a mock-data shell. Access Group-based rule provisioning is handled via the Access Groups UI (see above), not this page.
 
-#### OPERATE Domain — ⚠️ ALL FRONTEND PAGES ARE MOCK-DATA SHELLS (parking has backend DB schema)
+#### OPERATE Domain — ⚠️ MOST FRONTEND PAGES ARE MOCK-DATA SHELLS (parking has full backend)
 
 - **Room Booking** (`RoomBookingPage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: Medium
@@ -184,10 +184,11 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Deviation: No backend implementation. Frontend and backend both incomplete.
 
 - **Parking** (`ParkingPage`)
-  - Status: ⚠️ Partial (backend DB tables exist, frontend still mock-only) | Risk: Medium
-  - Evidence: `apps/console/src/features/operate/parking/ParkingPage.tsx:7` — `import ... from './mock-data'`; DB tables exist in `dm3_operate` schema
-  - Backend progress: Phase 1 DB tables implemented — `dm3_operate.parking_lots`, `parking_zones`, `parking_vehicles`, `parking_fee_rules`, `parking_passes`, `parking_sessions` with indexes and triggers. Go models in `backend/internal/models/parking.go`. No API handlers yet.
-  - Deviation: Frontend is still mock-data shell. Backend has DB schema and models but no HTTP handlers or NATS consumers.
+  - Status: ⚠️ Partial (full backend + plugin gating, frontend still mock-only) | Risk: Low
+  - Backend: Standalone `parking-svc` on port 8007 with 19 API endpoints. Isolated `dm3_parking` schema (migration 000008). Models, handlers, helpers, events in `backend/internal/parking/`. NATS stream `PARKING` for events. Plugin-gated via `RequirePlugin("parking")`. Unit + integration tests in `backend/internal/parking/*_test.go`. Seed data in `backend/scripts/seed_parking.sql`.
+  - Infrastructure: Docker Compose service, nginx proxy, Makefile entry all configured.
+  - Frontend: Plugin-gated routes with `PluginGuard`, sidebar conditionally shows parking nav. Page content is still mock-data shell.
+  - Deviation: Frontend pages need to be connected to real API endpoints (same pattern as visitor module).
 
 - **Maintenance** (`MaintenancePage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: Low
@@ -372,9 +373,9 @@ High-level features mentioned in vision documents but lacking detailed specifica
 ## Summary
 
 - **✅ Compliant** (fully matches spec): auth-svc (v1), access-svc current scope (including zones + managed map assets), device-gateway, audit-svc, MQTT pipeline, Dashboard, Devices, SystemSettings, IdentityManagement, AccessGroups/AccessControl, VisitorManagement, NATS, Valkey, MinIO, TimescaleDB, shared packages — **~16 items**
-- **⚠️ Partial** (UI shell or missing components): 19+ frontend pages are mock-data-only; parking has DB schema but no API handlers; AP passage time UI is still missing; EMQX missing TLS; Android terminal unverified; Flutter is placeholder — **~26 items**
-- **❌ Gap** (claimed implemented, not found): Flutter apps, service topology (15 of ~20 services missing) — **~2 items + systemic**
+- **⚠️ Partial** (UI shell or missing components): 19+ frontend pages are mock-data-only; parking has full backend but frontend still mock-only; AP passage time UI is still missing; EMQX missing TLS; Android terminal unverified; Flutter is placeholder — **~25 items**
+- **❌ Gap** (claimed implemented, not found): Flutter apps, service topology (13 of ~20 services missing) — **~2 items + systemic**
 - **📋 Specified**: ~15 features with detailed specs ready for development
 - **🔮 Vision Only**: ~20 next-generation features awaiting specification
 
-> **Audit note:** The prior "~40 major features Implemented" claim overstates completeness. The core platform (auth, devices, identity, real-time pipeline, audit trail) is genuinely implemented end-to-end. Visitor management is now fully implemented (backend + frontend) with schema isolation: `dm3_visitor` is an independently deployable schema with its own service (visitor-svc, port 8006), event-driven credential lifecycle, per-tenant feature flag, and lazy-loaded frontend. See `docs/architecture/module-isolation.md`. Parking has Phase 1 DB schema and Go models but no API handlers yet. The remaining domain feature layer (OPERATE excluding parking schema, SMART, most of SECURE) exists as frontend UI prototypes backed by mock data.
+> **Audit note:** The prior "~40 major features Implemented" claim overstates completeness. The core platform (auth, devices, identity, real-time pipeline, audit trail) is genuinely implemented end-to-end. Visitor management is fully implemented (backend + frontend) with schema isolation: `dm3_visitor` is an independently deployable schema with its own service (visitor-svc, port 8006). Parking management has a full backend implementation: standalone `parking-svc` (port 8007), isolated `dm3_parking` schema (6 tables), 19 API endpoints, NATS events, plugin gating, unit + integration tests, and seed data — but the frontend pages are still mock-data shells. See `docs/architecture/module-isolation.md`. The remaining domain feature layer (OPERATE excluding parking, SMART, most of SECURE) exists as frontend UI prototypes backed by mock data.
