@@ -151,6 +151,19 @@ func (h *VisitorHandlers) GetVisit(w http.ResponseWriter, r *http.Request) {
 			visit.Host = &VisitHost{ID: host.ID, Name: host.Name, Department: host.Department}
 		}
 	}
+	// Fallback: query host directly if cache miss or cache unavailable
+	if visit.Host == nil && visit.HostUserID != "" {
+		var host VisitHost
+		err := h.db.Pool.QueryRow(r.Context(),
+			`SELECT u.id, COALESCE(u.first_name || ' ' || u.last_name, ''), COALESCE(d.name, '')
+			 FROM dm3_identity.users u
+			 LEFT JOIN dm3_identity.departments d ON d.id = u.department_id
+			 WHERE u.id = $1::uuid AND u.tenant_id = $2::uuid`,
+			visit.HostUserID, cid).Scan(&host.ID, &host.Name, &host.Department)
+		if err == nil {
+			visit.Host = &host
+		}
+	}
 	httputil.JSON(w, http.StatusOK, visit)
 }
 

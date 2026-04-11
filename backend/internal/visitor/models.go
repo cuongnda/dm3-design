@@ -235,7 +235,7 @@ type EvacuationEntry struct {
 	VisitorPhone    *string    `json:"visitor_phone,omitempty"`
 	VisitorPhotoRef *string    `json:"visitor_photo_ref,omitempty"`
 	HostName        string     `json:"host_name"`
-	CheckinTime     time.Time  `json:"checkin_time"`
+	CheckinTime     *time.Time `json:"checkin_time,omitempty"`
 	LastAccessPoint *string    `json:"last_access_point,omitempty"`
 	LastZone        *string    `json:"last_zone,omitempty"`
 	LastEventTime   *time.Time `json:"last_event_time,omitempty"`

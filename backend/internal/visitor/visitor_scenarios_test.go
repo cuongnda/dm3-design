@@ -354,7 +354,7 @@ func TestGetVisitByQRExpired(t *testing.T) {
 
 	// Expire the QR token
 	ctx := context.Background()
-	_, err := database.Pool.Exec(ctx, `UPDATE dm3_identity.visits SET qr_expires_at = now() - interval '1 hour' WHERE qr_token = $1`, qrToken)
+	_, err := database.Pool.Exec(ctx, `UPDATE dm3_visitor.visits SET qr_expires_at = now() - interval '1 hour' WHERE qr_token = $1`, qrToken)
 	if err != nil {
 		t.Fatalf("expire qr: %v", err)
 	}
@@ -815,7 +815,7 @@ func TestHostCanApproveOwnVisitOnly(t *testing.T) {
 	visitorID := createVisitorRecord(t, database, fmt.Sprintf("HostTest%d", seed), "Visitor", nil, nil, nil, nil)
 	var visitID string
 	err := database.Pool.QueryRow(ctx, `
-		INSERT INTO dm3_identity.visits (tenant_id, visitor_id, host_user_id, purpose, status,
+		INSERT INTO dm3_visitor.visits (tenant_id, visitor_id, host_user_id, purpose, status,
 			expected_arrival, expected_departure, qr_token, qr_expires_at)
 		VALUES ($1::uuid, $2::uuid, $3::uuid, 'meeting', 'pre_registered',
 			now() + interval '1 hour', now() + interval '3 hours', $4, now() + interval '1 day')
@@ -998,7 +998,7 @@ func TestVisitorUpsertDeduplicatesByEmail(t *testing.T) {
 	ctx := context.Background()
 	var count int
 	var visitCount int
-	err := database.Pool.QueryRow(ctx, `SELECT COUNT(*), MAX(visit_count) FROM dm3_identity.visitors WHERE email = $1 AND tenant_id = $2::uuid`, email, visitorTestTenantID).Scan(&count, &visitCount)
+	err := database.Pool.QueryRow(ctx, `SELECT COUNT(*), MAX(visit_count) FROM dm3_visitor.visitors WHERE email = $1 AND tenant_id = $2::uuid`, email, visitorTestTenantID).Scan(&count, &visitCount)
 	if err != nil {
 		t.Fatalf("count visitors: %v", err)
 	}

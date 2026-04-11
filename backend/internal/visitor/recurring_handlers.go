@@ -57,7 +57,7 @@ func (h *VisitorHandlers) ListRecurringTemplates(w http.ResponseWriter, r *http.
 	rows, err := h.db.Pool.Query(r.Context(), `
 		SELECT t.id, t.tenant_id, t.visitor_id, t.host_user_id, t.purpose,
 		       t.access_areas, t.escort_required, t.recurrence_rule,
-		       t.start_date, t.end_date, t.active, t.last_generated,
+		       t.start_date::text, t.end_date::text, t.active, t.last_generated::text,
 		       t.created_by, t.created_at, t.updated_at,
 		       vis.id, vis.tenant_id, vis.first_name, vis.last_name, vis.display_name,
 		       vis.email, vis.phone, vis.company, vis.national_id, vis.photo_ref,
@@ -149,7 +149,7 @@ func (h *VisitorHandlers) CreateRecurringTemplate(w http.ResponseWriter, r *http
 		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5::uuid[], $6, $7, $8::date, $9::date, $10::uuid)
 		RETURNING id, tenant_id, visitor_id, host_user_id, purpose,
 		          access_areas, escort_required, recurrence_rule,
-		          start_date, end_date, active, last_generated,
+		          start_date::text, end_date::text, active, last_generated::text,
 		          created_by, created_at, updated_at`,
 		cid, req.VisitorID, req.HostUserID, req.Purpose, req.AccessAreas,
 		req.EscortRequired, req.RecurrenceRule, req.StartDate, req.EndDate, createdBy,
@@ -203,7 +203,7 @@ func (h *VisitorHandlers) UpdateRecurringTemplate(w http.ResponseWriter, r *http
 		WHERE id = $1::uuid AND tenant_id = $2::uuid
 		RETURNING id, tenant_id, visitor_id, host_user_id, purpose,
 		          access_areas, escort_required, recurrence_rule,
-		          start_date, end_date, active, last_generated,
+		          start_date::text, end_date::text, active, last_generated::text,
 		          created_by, created_at, updated_at`,
 		templateID, cid, req.Active, req.EndDate,
 	).Scan(
