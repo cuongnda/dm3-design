@@ -18,6 +18,7 @@ import { UserAccountDetailPage } from '@/features/system/UserAccountDetailPage';
 import { CreateUserAccountPage } from '@/features/system/CreateUserAccountPage';
 import { ProtectedRoute } from './ProtectedRoute';
 import { RoleBasedRoute } from './RoleBasedRoute';
+import { ModuleGuard } from '@/components/common/ModuleGuard';
 
 // Essential Security Features (legacy)
 const AccessControlPage = lazy(() =>
@@ -309,15 +310,15 @@ export const Router = createBrowserRouter([
               { path: 'manage/contractors', element: <LazyWrap><ContractorsPage /></LazyWrap> },
 
               // VISITORS
-              { path: 'visitors', element: <LazyWrap><VisitorsPage /></LazyWrap> },
-              { path: 'visitors/register', element: <LazyWrap><VisitorPreRegisterPage /></LazyWrap> },
-              { path: 'visitors/groups', element: <LazyWrap><VisitorGroupsPage /></LazyWrap> },
-              { path: 'visitors/watchlist', element: <LazyWrap><VisitorWatchlistPage /></LazyWrap> },
-              { path: 'visitors/agreements', element: <LazyWrap><VisitorAgreementsPage /></LazyWrap> },
-              { path: 'visitors/access-history', element: <LazyWrap><VisitorAccessHistoryPage /></LazyWrap> },
-              { path: 'visitors/analytics', element: <LazyWrap><VisitorAnalyticsPage /></LazyWrap> },
-              { path: 'visitors/recurring', element: <LazyWrap><VisitorRecurringPage /></LazyWrap> },
-              { path: 'visitors/settings', element: <LazyWrap><VisitorSettingsPage /></LazyWrap> },
+              { path: 'visitors', element: <ModuleGuard module="visitor"><LazyWrap><VisitorsPage /></LazyWrap></ModuleGuard> },
+              { path: 'visitors/register', element: <ModuleGuard module="visitor"><LazyWrap><VisitorPreRegisterPage /></LazyWrap></ModuleGuard> },
+              { path: 'visitors/groups', element: <ModuleGuard module="visitor"><LazyWrap><VisitorGroupsPage /></LazyWrap></ModuleGuard> },
+              { path: 'visitors/watchlist', element: <ModuleGuard module="visitor"><LazyWrap><VisitorWatchlistPage /></LazyWrap></ModuleGuard> },
+              { path: 'visitors/agreements', element: <ModuleGuard module="visitor"><LazyWrap><VisitorAgreementsPage /></LazyWrap></ModuleGuard> },
+              { path: 'visitors/access-history', element: <ModuleGuard module="visitor"><LazyWrap><VisitorAccessHistoryPage /></LazyWrap></ModuleGuard> },
+              { path: 'visitors/analytics', element: <ModuleGuard module="visitor"><LazyWrap><VisitorAnalyticsPage /></LazyWrap></ModuleGuard> },
+              { path: 'visitors/recurring', element: <ModuleGuard module="visitor"><LazyWrap><VisitorRecurringPage /></LazyWrap></ModuleGuard> },
+              { path: 'visitors/settings', element: <ModuleGuard module="visitor"><LazyWrap><VisitorSettingsPage /></LazyWrap></ModuleGuard> },
               { path: 'manage/attendance', element: <LazyWrap><AttendancePage /></LazyWrap> },
               { path: 'manage/deliveries', element: <LazyWrap><DeliveriesPage /></LazyWrap> },
               { path: 'manage/provisioning', element: <LazyWrap><ProvisioningPage /></LazyWrap> },

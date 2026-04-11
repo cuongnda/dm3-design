@@ -24,7 +24,8 @@ interface MeResponse {
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
-  login: (user: User) => void;
+  enabledModules: string[];
+  login: (user: User, enabledModules?: string[]) => void;
   logout: () => void;
   checkAuth: () => Promise<void>;
 }
@@ -34,10 +35,11 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       isAuthenticated: false,
-      login: (user) => set({ user, isAuthenticated: true }),
+      enabledModules: [],
+      login: (user, enabledModules = []) => set({ user, isAuthenticated: true, enabledModules }),
       logout: () => {
         clearToken();
-        set({ user: null, isAuthenticated: false });
+        set({ user: null, isAuthenticated: false, enabledModules: [] });
       },
       checkAuth: async () => {
         const token = getToken();
@@ -71,3 +73,8 @@ export const useAuthStore = create<AuthState>()(
     { name: 'dm3-auth' }
   )
 );
+
+export const hasModule = (moduleName: string): boolean => {
+  const { enabledModules } = useAuthStore.getState();
+  return enabledModules?.includes(moduleName) ?? false;
+};

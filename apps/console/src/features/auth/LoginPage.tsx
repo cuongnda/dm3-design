@@ -25,7 +25,7 @@ export function LoginPage() {
   const login = useAuthStore((s) => s.login);
   const navigate = useNavigate();
 
-  const completeLogin = (accessToken: string, refreshToken: string, userInfo: LoginUser) => {
+  const completeLogin = (accessToken: string, refreshToken: string, userInfo: LoginUser, enabledModules: string[] = []) => {
     setToken(accessToken, refreshToken);
     const role = userInfo.role || 'user';
     // Ensure isAuthenticated transitions false→true so TenantProvider re-fetches.
@@ -37,7 +37,7 @@ export function LoginPage() {
       email: userInfo.email,
       role,
       initials: (userInfo.name || userInfo.email).slice(0, 2).toUpperCase(),
-    });
+    }, enabledModules);
     navigate(role === 'system_admin' ? '/system' : '/');
   };
 
@@ -49,7 +49,7 @@ export function LoginPage() {
       const res = await apiLogin(email, password);
 
       if (res.step === 'complete' && res.access_token && res.user) {
-        completeLogin(res.access_token, res.refresh_token ?? '', res.user);
+        completeLogin(res.access_token, res.refresh_token ?? '', res.user, res.enabled_modules ?? []);
       } else if (res.step === 'select_company' && res.temporary_token && res.companies) {
         setTempToken(res.temporary_token);
         setCompanies(res.companies);
@@ -69,7 +69,7 @@ export function LoginPage() {
     try {
       const res = await loginStep2(tempToken, companyId);
       if (res.step === 'complete' && res.access_token && res.user) {
-        completeLogin(res.access_token, res.refresh_token ?? '', res.user);
+        completeLogin(res.access_token, res.refresh_token ?? '', res.user, res.enabled_modules ?? []);
       }
     } catch {
       setError(t('error.failedSelectCompany'));

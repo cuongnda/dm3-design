@@ -105,7 +105,9 @@ export function Sidebar() {
   const navigate = useNavigate();
   const handleLogout = () => { logout(); navigate('/login'); };
   const user = useAuthStore((s) => s.user);
+  const enabledModules = useAuthStore((s) => s.enabledModules);
   const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const hasVisitor = enabledModules?.includes('visitor') ?? false;
   const c = sidebarCollapsed;
   const iconSize = c ? 20 : 18;
 
@@ -153,16 +155,20 @@ export function Sidebar() {
         <SidebarNavItem to={ROUTES.deliveries} icon={<Package size={iconSize} />} label={t('nav.deliveries')} collapsed={c} />
         <SidebarNavItem to={ROUTES.vehicles} icon={<Car size={iconSize} />} label={t('nav.vehicles') + ' *'} collapsed={c} />
 
-        <SectionLabel label={t('nav.visitorsSection')} color="#10B981" collapsed={c} />
-        <SidebarNavItem to={ROUTES.visitors} icon={<LayoutDashboard size={iconSize} />} label={t('nav.visitorsDashboard')} collapsed={c} />
-        <SidebarNavItem to={ROUTES.visitorsRegister} icon={<UserPlus size={iconSize} />} label={t('nav.visitorsRegister')} collapsed={c} />
-        <SidebarNavItem to={ROUTES.visitorsGroups} icon={<Users2 size={iconSize} />} label={t('nav.visitorsGroups')} collapsed={c} />
-        <SidebarNavItem to={ROUTES.visitorsWatchlist} icon={<Eye size={iconSize} />} label={t('nav.visitorsWatchlist')} collapsed={c} />
-        <SidebarNavItem to={ROUTES.visitorsAgreements} icon={<FileText size={iconSize} />} label={t('nav.visitorsAgreements')} collapsed={c} />
-        <SidebarNavItem to={ROUTES.visitorsAccessHistory} icon={<ClipboardList size={iconSize} />} label={t('nav.visitorsAccessHistory')} collapsed={c} />
-        <SidebarNavItem to={ROUTES.visitorsAnalytics} icon={<BarChart3 size={iconSize} />} label={t('nav.visitorsAnalytics')} collapsed={c} />
-        <SidebarNavItem to={ROUTES.visitorsRecurring} icon={<CalendarClock size={iconSize} />} label={t('nav.visitorsRecurring')} collapsed={c} />
-        <SidebarNavItem to={ROUTES.visitorsSettings} icon={<SlidersHorizontal size={iconSize} />} label={t('nav.visitorsSettings')} collapsed={c} />
+        {hasVisitor && (
+          <>
+            <SectionLabel label={t('nav.visitorsSection')} color="#10B981" collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitors} icon={<LayoutDashboard size={iconSize} />} label={t('nav.visitorsDashboard')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitorsRegister} icon={<UserPlus size={iconSize} />} label={t('nav.visitorsRegister')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitorsGroups} icon={<Users2 size={iconSize} />} label={t('nav.visitorsGroups')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitorsWatchlist} icon={<Eye size={iconSize} />} label={t('nav.visitorsWatchlist')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitorsAgreements} icon={<FileText size={iconSize} />} label={t('nav.visitorsAgreements')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitorsAccessHistory} icon={<ClipboardList size={iconSize} />} label={t('nav.visitorsAccessHistory')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitorsAnalytics} icon={<BarChart3 size={iconSize} />} label={t('nav.visitorsAnalytics')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitorsRecurring} icon={<CalendarClock size={iconSize} />} label={t('nav.visitorsRecurring')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitorsSettings} icon={<SlidersHorizontal size={iconSize} />} label={t('nav.visitorsSettings')} collapsed={c} />
+          </>
+        )}
 
         <SectionLabel label={t('nav.access')} color="#F59E0B" collapsed={c} />
         <SidebarNavItem to={ROUTES.zones} icon={<MapPin size={iconSize} />} label={t('nav.zones') + ' *'} collapsed={c} />

@@ -135,6 +135,7 @@ export interface LoginResponse {
     refresh_token?: string;
     user?: LoginUser;
     companies?: LoginCompany[];
+    enabled_modules?: string[];
 }
 
 // Legacy compat
