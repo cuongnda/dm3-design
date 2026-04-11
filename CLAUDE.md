@@ -126,7 +126,7 @@ Domain colors: SECURE `#3B82F6` · MANAGE `#8B5CF6` · OPERATE `#F59E0B` · SMAR
 ### Database
 
 TimescaleDB on port `5433`, database `dm3`, user `dm3`, password `dm3secret`.  
-Schema is split into namespaced schemas: `dm3_auth`, `dm3_devices`, `dm3_access`, `dm3_identity`.  
+Schema is split into namespaced schemas: `dm3_auth`, `dm3_devices`, `dm3_access`, `dm3_identity`, `dm3_visitor`.  
 Single migration file: `backend/pkg/db/migrations/001_initial.sql`.
 
 ## Frontend Conventions

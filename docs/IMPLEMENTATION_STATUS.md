@@ -1,6 +1,6 @@
 # Implementation Status
 
-This document tracks the current implementation status of DM3 features. Updated: 2026-04-11 (visitor v2 tables, visitor-svc standalone service, ER diagram update).
+This document tracks the current implementation status of DM3 features. Updated: 2026-04-11 (visitor module isolation: dm3_visitor schema, temp_credentials, feature flag, lazy-load frontend, ER diagram updated).
 
 ---
 
@@ -20,9 +20,9 @@ This document tracks the current implementation status of DM3 features. Updated:
 
 | Layer | Status | Details |
 |-------|--------|---------|
-| Service Topology | ❌ Gap | 6 of ~20 specified services implemented. Evidence: `backend/cmd/` has 6 dirs (auth-svc, identity-svc, access-svc, device-gateway, audit-svc, visitor-svc); `docs/architecture/system-architecture.md:281` specifies ~20 |
+| Service Topology | ❌ Gap | 6 of ~20 specified services implemented. Evidence: `backend/cmd/` has 6 dirs (auth-svc, identity-svc, access-svc, device-gateway, audit-svc, visitor-svc on port 8006); `docs/architecture/system-architecture.md:281` specifies ~20 |
 | Data Flow / MQTT Pipeline | ✅ Compliant | Topic `dm/{tid}/device/{did}/{cat}` confirmed. Envelope (v, id, ts) confirmed. NATS bridge confirmed. Evidence: `backend/internal/gateway/mqtt_handler.go:48-57, 27-35` |
-| Data Model / ER | ⚠️ Partial | Core access hierarchy implemented (`dm3_access`). Visitor v1+v2 tables implemented (`dm3_identity.visitors`, `visits`, `visitor_badges`, `watchlist`, `visitor_settings`, `visit_groups`, `visitor_access_log`, `recurring_visit_templates`, `visitor_agreements`, `visitor_agreement_signatures`). Parking Phase 1 tables implemented (`dm3_operate`). Vehicle registry in `dm3_identity.vehicles`. `dm3_audit` schema active (audit_logs hypertable). Remaining gaps: contractors, rooms, maintenance, keys. |
+| Data Model / ER | ⚠️ Partial | Core access hierarchy implemented (`dm3_access`). Visitor module isolated into own schema: `dm3_visitor` (11 tables: visitors, visits, visitor_badges, watchlist, visitor_settings, visit_groups, visitor_access_log, recurring_visit_templates, visitor_agreements, visitor_agreement_signatures, temp_credentials). Parking Phase 1 tables implemented (`dm3_operate`). Vehicle registry in `dm3_identity.vehicles`. `dm3_audit` schema active (audit_logs hypertable). Remaining gaps: contractors, rooms, maintenance, keys. See `docs/architecture/module-isolation.md`. |
 | Security | ⚠️ Partial | JWT auth, bcrypt, CORS, refresh-token replay detection confirmed. Missing: TLS config in docker-compose for EMQX, no rate limiting middleware found. |
 | Deployment | ✅ Compliant | All 6 infra services present in `backend/docker-compose.yml` with correct ports. Simulator is in a separate `simulator/docker-compose.yml` (minor split). No Traefik gateway config found. |
 
@@ -49,15 +49,19 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Implemented: User CRUD ✅ | Credentials ✅ | Groups ✅ | Departments ✅ | Vehicle registry ✅
   - Deviation: No `contractors`, `rooms`, or `maintenance` tables. These features are mock-UI only.
 
-- **visitor-svc** (`backend/cmd/visitor-svc/`, `backend/internal/visitor/`) — Standalone visitor management service
-  - Status: ✅ Compliant (v2) | Risk: Low
-  - Evidence: `backend/cmd/visitor-svc/main.go` — standalone service with PostgreSQL, NATS streaming, i18n, audit logging, health checks, graceful shutdown. Migration 000001 (core tables) + 000003 (v2 tables) confirmed.
-  - DB tables (migration 001): `dm3_identity.visitors`, `dm3_identity.visits`, `dm3_identity.visitor_badges`, `dm3_identity.watchlist`
-  - DB tables (migration 003 — v2): `dm3_identity.visitor_settings`, `dm3_identity.visit_groups`, `dm3_identity.visitor_access_log`, `dm3_identity.recurring_visit_templates`, `dm3_identity.visitor_agreements`, `dm3_identity.visitor_agreement_signatures`
+- **visitor-svc** (`backend/cmd/visitor-svc/`, `backend/internal/visitor/`) — Standalone visitor management service (port 8006)
+  - Status: ✅ Compliant (v2, module isolation) | Risk: Low
+  - Evidence: `backend/cmd/visitor-svc/main.go` — standalone service with PostgreSQL, NATS streaming, i18n, audit logging, health checks, graceful shutdown. Migration 000005 (dm3_visitor schema) + 000006 (temp_credentials) confirmed.
+  - **Schema isolation**: All visitor tables moved from `dm3_identity` to own `dm3_visitor` schema (independently deployable). See `docs/architecture/module-isolation.md`.
+  - DB tables (dm3_visitor schema — migration 000005): `visitors`, `visits`, `visitor_badges`, `watchlist`, `visitor_settings`, `visit_groups`, `visitor_access_log`, `recurring_visit_templates`, `visitor_agreements`, `visitor_agreement_signatures`
+  - DB tables (migration 000006): `temp_credentials` — automatically created on visit approval via `visit.approved` NATS event; revoked on checkout/cancellation via `visit.ended` event
   - visits table v2 columns: `group_id`, `recurring_template_id`, `cancelled_reason`, `rejection_reason`, `approved_by`, `checkout_reason`, `reinvite_count`
-  - Implemented: Visitor CRUD ✅ | Visit scheduling & check-in/out ✅ | Walk-in registration ✅ | Watchlist management ✅ | QR code check-in ✅ | Badge printing ✅ | Auto-checkout cron ✅ | Visit Groups (batch/conference) ✅ | Recurring visit templates ✅ | Visitor access log ✅ | Visitor agreements & signatures ✅ | Analytics (top visitors, stats) ✅ | Per-tenant settings ✅ | Evacuation list ✅ | Reinvite flow ✅
+  - **Event-driven architecture**: publishes `visit.approved`, `visit.checkedin`, `visit.checkedout`, `visit.cancelled` events; subscribes to `identity.user.updated`, `access.zone.updated` for local cache invalidation
+  - **Credential integration**: `visit.approved` → access-svc creates temp credential in `dm3_visitor.temp_credentials`; `visit.ended` → access-svc revokes credential
+  - **Feature flag**: per-tenant `enabled_modules` toggle in tenant settings; visitor module disabled by default until explicitly enabled
+  - Implemented: Visitor CRUD ✅ | Visit scheduling & check-in/out ✅ | Walk-in registration ✅ | Watchlist management ✅ | QR code check-in ✅ | Badge printing ✅ | Auto-checkout cron ✅ | Visit Groups (batch/conference) ✅ | Recurring visit templates ✅ | Visitor access log ✅ | Visitor agreements & signatures ✅ | Analytics (top visitors, stats) ✅ | Per-tenant settings ✅ | Evacuation list ✅ | Reinvite flow ✅ | Temp credential lifecycle ✅
   - API: 40+ endpoints under `/api/v1/visitors/` — visits CRUD, lifecycle (approve/checkin/checkout/reinvite), walk-in, batch, groups, watchlist, agreements, analytics, recurring, settings, access-log, evacuation, QR lookup
-  - Frontend: `apps/console/src/features/visitors/` (8 pages) + `apps/console/src/features/manage/visitors/` (main VisitorsPage with hooks). API client: `packages/api-client/src/visitors.ts` (35+ functions)
+  - Frontend: `apps/console/src/features/visitors/` (8 pages) + `apps/console/src/features/manage/visitors/` (main VisitorsPage with hooks). Lazy-loaded behind `ModuleGuard` component (feature flag check). API client: `packages/api-client/src/visitors.ts` (35+ functions)
 
 - **device-gateway** (`backend/internal/gateway/`) — MQTT bridge, device provisioning, sync coordination, WebSocket events, managed firmware storage
   - Status: ✅ Compliant | Risk: Low
@@ -149,8 +153,7 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Evidence: `backend/internal/visitor/` — 16 handler files; `backend/cmd/visitor-svc/main.go` — standalone service; `packages/api-client/src/visitors.ts` — 35+ API functions; `apps/console/src/features/manage/visitors/` + `apps/console/src/features/visitors/` — real API hooks
   - Implemented (v1): Visitor CRUD ✅ | Visit scheduling & check-in/out ✅ | Walk-in registration ✅ | Watchlist management ✅ | QR code check-in ✅ | Badge printing ✅ | Auto-checkout cron ✅
   - Implemented (v2 — migration 003): Visit Groups (batch/conference) ✅ | Recurring visit templates ✅ | Visitor access log ✅ | Visitor agreements & NDA signatures ✅ | Per-tenant visitor settings ✅ | Analytics (top visitors, stats) ✅ | Evacuation list ✅ | Reinvite flow ✅ | Batch create ✅
-  - DB tables (v1): `dm3_identity.visitors`, `visits`, `visitor_badges`, `watchlist`
-  - DB tables (v2): `visitor_settings`, `visit_groups`, `visitor_access_log`, `recurring_visit_templates`, `visitor_agreements`, `visitor_agreement_signatures`
+  - DB tables (dm3_visitor schema — 11 tables): `visitors`, `visits`, `visitor_badges`, `watchlist`, `visitor_settings`, `visit_groups`, `visitor_access_log`, `recurring_visit_templates`, `visitor_agreements`, `visitor_agreement_signatures`, `temp_credentials`
   - Frontend pages: VisitorsPage, VisitorSettingsPage, VisitorWatchlistPage, VisitorGroupsPage, VisitorAccessHistoryPage, VisitorAnalyticsPage, VisitorPreRegisterPage, VisitorAgreementsPage, VisitorRecurringPage
 
 - **Contractor Management** (`ContractorsPage`)
@@ -374,4 +377,4 @@ High-level features mentioned in vision documents but lacking detailed specifica
 - **📋 Specified**: ~15 features with detailed specs ready for development
 - **🔮 Vision Only**: ~20 next-generation features awaiting specification
 
-> **Audit note:** The prior "~40 major features Implemented" claim overstates completeness. The core platform (auth, devices, identity, real-time pipeline, audit trail) is genuinely implemented end-to-end. Visitor management is now fully implemented (backend + frontend). Parking has Phase 1 DB schema and Go models but no API handlers yet. The remaining domain feature layer (OPERATE excluding parking schema, SMART, most of SECURE) exists as frontend UI prototypes backed by mock data.
+> **Audit note:** The prior "~40 major features Implemented" claim overstates completeness. The core platform (auth, devices, identity, real-time pipeline, audit trail) is genuinely implemented end-to-end. Visitor management is now fully implemented (backend + frontend) with schema isolation: `dm3_visitor` is an independently deployable schema with its own service (visitor-svc, port 8006), event-driven credential lifecycle, per-tenant feature flag, and lazy-loaded frontend. See `docs/architecture/module-isolation.md`. Parking has Phase 1 DB schema and Go models but no API handlers yet. The remaining domain feature layer (OPERATE excluding parking schema, SMART, most of SECURE) exists as frontend UI prototypes backed by mock data.
