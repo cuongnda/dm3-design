@@ -54,6 +54,10 @@ export interface ParkingVehicleDTO {
   active_pass_id?: string;
   created_at: string;
   updated_at: string;
+  // Read-only display fields resolved via soft FK lookup on the server.
+  // owner_type is "user", "visitor", or undefined/empty for anonymous vehicles.
+  owner_name?: string;
+  owner_type?: "user" | "visitor" | "";
 }
 
 export interface ParkingPassDTO {

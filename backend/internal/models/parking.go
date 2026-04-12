@@ -113,6 +113,11 @@ type ParkingVehicle struct {
 	Metadata           json.RawMessage `json:"metadata,omitempty"`
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`
+
+	// Read-only display fields resolved at query time via soft FK lookups.
+	// OwnerType is one of: "user", "visitor", or "" when the vehicle is anonymous.
+	OwnerName *string `json:"owner_name,omitempty"`
+	OwnerType string  `json:"owner_type,omitempty"`
 }
 
 // ParkingFeeRule stores the minimal phase-1 tariff definition.

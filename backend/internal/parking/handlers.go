@@ -510,14 +510,23 @@ func (h *ParkingHandlers) ListParkingVehicles(w http.ResponseWriter, r *http.Req
 	}
 	var total int64
 	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_parking.parking_vehicles "+where, args...).Scan(&total)
-	query := fmt.Sprintf(`SELECT id, tenant_id, COALESCE(owner_user_id::text,''), COALESCE(visitor_id::text,''),
-			plate_number, normalized_plate, plate_image_ref, COALESCE(rfid_tag,''), COALESCE(nfc_card_id,''),
-			type, category, brand, color, registration_status,
-			COALESCE(monthly_pass_id::text,''), COALESCE(active_pass_id::text,''), metadata,
-			created_at, updated_at
-		FROM dm3_parking.parking_vehicles %s
-		ORDER BY updated_at DESC
-		LIMIT $%d OFFSET $%d`, where, idx, idx+1)
+	// Resolve owner display name via soft FK lookup (see docs/changelog/2026-04-12-parking-access-integration.md).
+	// Cross-schema LEFT JOIN is read-only; parking-svc does not hold FKs into these schemas.
+	qualifiedWhere := strings.ReplaceAll(where, "WHERE ", "WHERE v.")
+	qualifiedWhere = strings.ReplaceAll(qualifiedWhere, " AND ", " AND v.")
+	query := fmt.Sprintf(`SELECT v.id, v.tenant_id, COALESCE(v.owner_user_id::text,''), COALESCE(v.visitor_id::text,''),
+			v.plate_number, v.normalized_plate, v.plate_image_ref, COALESCE(v.rfid_tag,''), COALESCE(v.nfc_card_id,''),
+			v.type, v.category, v.brand, v.color, v.registration_status,
+			COALESCE(v.monthly_pass_id::text,''), COALESCE(v.active_pass_id::text,''), v.metadata,
+			v.created_at, v.updated_at,
+			COALESCE(NULLIF(TRIM(u.first_name || ' ' || u.last_name), ''), '') AS user_name,
+			COALESCE(vis.display_name, '') AS visitor_name
+		FROM dm3_parking.parking_vehicles v
+		LEFT JOIN dm3_identity.users u ON u.id = v.owner_user_id
+		LEFT JOIN dm3_visitor.visitors vis ON vis.id = v.visitor_id
+		%s
+		ORDER BY v.updated_at DESC
+		LIMIT $%d OFFSET $%d`, qualifiedWhere, idx, idx+1)
 	args = append(args, limit, offset)
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
@@ -528,11 +537,12 @@ func (h *ParkingHandlers) ListParkingVehicles(w http.ResponseWriter, r *http.Req
 	vehicles := []models.ParkingVehicle{}
 	for rows.Next() {
 		var v models.ParkingVehicle
-		var ownerID, visitorID, monthlyPassID, activePassID, rfidTag, nfcCardID string
+		var ownerID, visitorID, monthlyPassID, activePassID, rfidTag, nfcCardID, userName, visitorName string
 		if err := rows.Scan(&v.ID, &v.TenantID, &ownerID, &visitorID, &v.PlateNumber, &v.NormalizedPlate,
 			&v.PlateImageRef, &rfidTag, &nfcCardID,
 			&v.Type, &v.Category, &v.Brand, &v.Color, &v.RegistrationStatus,
-			&monthlyPassID, &activePassID, &v.Metadata, &v.CreatedAt, &v.UpdatedAt); err != nil {
+			&monthlyPassID, &activePassID, &v.Metadata, &v.CreatedAt, &v.UpdatedAt,
+			&userName, &visitorName); err != nil {
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
@@ -542,6 +552,21 @@ func (h *ParkingHandlers) ListParkingVehicles(w http.ResponseWriter, r *http.Req
 		v.ActivePassID = nilIfEmpty(activePassID)
 		v.RFIDTag = nilIfEmpty(rfidTag)
 		v.NFCCardID = nilIfEmpty(nfcCardID)
+		// Take local copies before addressing; the Scan destinations are reused on the next iteration.
+		switch {
+		case v.OwnerUserID != nil && userName != "":
+			name := userName
+			v.OwnerName = &name
+			v.OwnerType = "user"
+		case v.OwnerUserID != nil:
+			v.OwnerType = "user"
+		case v.VisitorID != nil && visitorName != "":
+			name := visitorName
+			v.OwnerName = &name
+			v.OwnerType = "visitor"
+		case v.VisitorID != nil:
+			v.OwnerType = "visitor"
+		}
 		vehicles = append(vehicles, v)
 	}
 	if vehicles == nil {
