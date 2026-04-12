@@ -15,7 +15,7 @@ export interface CameraDTO {
   brand?: string;
   rtsp_url: string;
   rtsp_username?: string;
-  recording_mode: string;
+  recording_mode: 'event_only' | 'disabled';
   pre_roll_sec: number;
   post_roll_sec: number;
   last_checked_at?: string;
@@ -75,7 +75,7 @@ export interface CreateCameraRequest {
   rtsp_username?: string;
   rtsp_password?: string;
   brand?: string;
-  recording_mode?: string;
+  recording_mode?: 'event_only' | 'disabled';
   pre_roll_sec?: number;
   post_roll_sec?: number;
 }
@@ -87,7 +87,7 @@ export interface UpdateCameraRequest {
   rtsp_username?: string;
   rtsp_password?: string;
   brand?: string;
-  recording_mode?: string;
+  recording_mode?: 'event_only' | 'disabled';
   pre_roll_sec?: number;
   post_roll_sec?: number;
 }

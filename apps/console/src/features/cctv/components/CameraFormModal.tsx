@@ -1,7 +1,15 @@
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { AppModal, Button, Input, Label } from '@dm3/ui';
 import { useTranslation } from 'react-i18next';
-import type { CameraDTO, CreateCameraRequest, TestConnectionDTO } from '@dm3/api-client';
+import {
+  listAccessPoints,
+  type CameraDTO,
+  type CreateCameraRequest,
+  type TestConnectionDTO,
+} from '@dm3/api-client';
+
+type RecordingMode = 'event_only' | 'disabled';
 
 interface FormState {
   name: string;
@@ -10,9 +18,14 @@ interface FormState {
   rtsp_password: string;
   brand: string;
   access_point_id: string;
-  recording_mode: string;
+  recording_mode: RecordingMode;
   pre_roll_sec: number;
   post_roll_sec: number;
+}
+
+function redactRtspCredentials(s: string | undefined): string {
+  if (!s) return '';
+  return s.replace(/rtsp(s?):\/\/[^@\s]*@/gi, 'rtsp$1://***@');
 }
 
 const emptyForm: FormState = {
@@ -22,7 +35,7 @@ const emptyForm: FormState = {
   rtsp_password: '',
   brand: '',
   access_point_id: '',
-  recording_mode: 'event',
+  recording_mode: 'event_only' as RecordingMode,
   pre_roll_sec: 10,
   post_roll_sec: 10,
 };
@@ -51,6 +64,15 @@ export function CameraFormModal({
   const { t } = useTranslation('common');
   const [form, setForm] = useState<FormState>(emptyForm);
 
+  // Access points for the linkage dropdown. Load all (first 200) — typical tenant
+  // will have far fewer, and this avoids async-search complexity for now.
+  const { data: accessPointsResp } = useQuery({
+    queryKey: ['access-points-all'],
+    queryFn: () => listAccessPoints({ limit: 200 }),
+    enabled: open,
+  });
+  const accessPoints = accessPointsResp?.data ?? [];
+
   useEffect(() => {
     if (editing) {
       setForm({
@@ -60,7 +82,7 @@ export function CameraFormModal({
         rtsp_password: '', // never pre-fill password
         brand: editing.brand ?? '',
         access_point_id: editing.access_point_id ?? '',
-        recording_mode: editing.recording_mode,
+        recording_mode: editing.recording_mode as RecordingMode,
         pre_roll_sec: editing.pre_roll_sec,
         post_roll_sec: editing.post_roll_sec,
       });
@@ -142,6 +164,23 @@ export function CameraFormModal({
           </div>
         </div>
 
+        <div>
+          <Label className="text-[12px]">{t('cctv.cameras.fields.accessPoint')}</Label>
+          <select
+            className="mt-1 w-full h-8 rounded-md border border-border bg-background px-2 text-[13px]"
+            value={form.access_point_id}
+            onChange={(e) => set('access_point_id', e.target.value)}
+            data-testid="cctv-select-access-point"
+          >
+            <option value="">{t('cctv.cameras.fields.accessPointNone')}</option>
+            {accessPoints.map((ap) => (
+              <option key={ap.id} value={ap.id}>
+                {ap.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="text-[12px]">{t('cctv.cameras.fields.brand')}</Label>
@@ -158,12 +197,11 @@ export function CameraFormModal({
             <select
               className="mt-1 w-full h-8 rounded-md border border-border bg-background px-2 text-[13px]"
               value={form.recording_mode}
-              onChange={(e) => set('recording_mode', e.target.value)}
+              onChange={(e) => set('recording_mode', e.target.value as RecordingMode)}
               data-testid="cctv-select-recording-mode"
             >
-              <option value="event">{t('cctv.cameras.recordingModes.event')}</option>
-              <option value="continuous">{t('cctv.cameras.recordingModes.continuous')}</option>
-              <option value="off">{t('cctv.cameras.recordingModes.off')}</option>
+              <option value="event_only">{t('cctv.cameras.recordingModes.event')}</option>
+              <option value="disabled">{t('cctv.cameras.recordingModes.off')}</option>
             </select>
           </div>
         </div>
@@ -211,7 +249,7 @@ export function CameraFormModal({
                 {testResult.resolution && ` · ${testResult.resolution}`}
               </span>
             ) : (
-              <span>{t('cctv.cameras.testFailed')}: {testResult.error}</span>
+              <span>{t('cctv.cameras.testFailed')}: {redactRtspCredentials(testResult.error)}</span>
             )}
           </div>
         )}

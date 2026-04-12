@@ -140,7 +140,7 @@ export function CCTVCamerasPage() {
             size="xs"
             variant="ghost"
             onClick={() => openEdit(r)}
-            data-testid="cctv-button-edit-camera"
+            data-testid={`cctv-button-edit-camera-${r.id}`}
             aria-label={t('cctv.cameras.edit')}
           >
             <Pencil size={14} />
@@ -149,7 +149,7 @@ export function CCTVCamerasPage() {
             size="xs"
             variant="ghost"
             onClick={() => testMutation.mutate(r.id)}
-            data-testid="cctv-button-test-camera"
+            data-testid={`cctv-button-test-camera-${r.id}`}
             aria-label={t('cctv.cameras.test')}
           >
             <Play size={14} />
@@ -158,8 +158,12 @@ export function CCTVCamerasPage() {
             size="xs"
             variant="ghost"
             className="text-destructive"
-            onClick={() => deleteMutation.mutate(r.id)}
-            data-testid="cctv-button-delete-camera"
+            onClick={() => {
+              if (window.confirm(t('cctv.cameras.confirmDelete', { name: r.name }))) {
+                deleteMutation.mutate(r.id);
+              }
+            }}
+            data-testid={`cctv-button-delete-camera-${r.id}`}
             aria-label={t('cctv.cameras.delete')}
           >
             <Trash2 size={14} />

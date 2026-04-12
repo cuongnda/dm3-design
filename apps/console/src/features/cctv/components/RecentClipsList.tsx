@@ -46,7 +46,7 @@ export function RecentClipsList({ clips, onPlay }: Props) {
               size="xs"
               variant="ghost"
               onClick={() => onPlay(clip)}
-              data-testid="cctv-button-play-clip"
+              data-testid={`cctv-button-play-clip-${clip.id}`}
               aria-label={t('cctv.clips.play')}
             >
               <Play size={14} />

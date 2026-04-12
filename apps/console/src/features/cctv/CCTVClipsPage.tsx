@@ -21,7 +21,7 @@ export function CCTVClipsPage() {
   const [toFilter, setToFilter] = useState('');
 
   const { data: camerasData } = useQuery({
-    queryKey: ['cctv-cameras', 'all'],
+    queryKey: ['cctv-cameras-all'],
     queryFn: () => listCameras({ limit: 200 }),
   });
   const cameras = camerasData?.data ?? [];
@@ -110,7 +110,7 @@ export function CCTVClipsPage() {
             variant="ghost"
             onClick={() => playMutation.mutate(r)}
             disabled={playMutation.isPending}
-            data-testid="cctv-button-play-clip"
+            data-testid={`cctv-button-play-clip-${r.id}`}
             aria-label={t('cctv.clips.play')}
           >
             <Play size={14} />

@@ -45,14 +45,19 @@ async function startWhep(
   // Wait for ICE gathering to complete (or timeout after 3s)
   await new Promise<void>((resolve) => {
     if (pc.iceGatheringState === 'complete') { resolve(); return; }
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
     const onStateChange = () => {
       if (pc.iceGatheringState === 'complete') {
+        if (timeoutHandle !== null) clearTimeout(timeoutHandle);
         pc.removeEventListener('icegatheringstatechange', onStateChange);
         resolve();
       }
     };
     pc.addEventListener('icegatheringstatechange', onStateChange);
-    setTimeout(resolve, 3000);
+    timeoutHandle = setTimeout(() => {
+      pc.removeEventListener('icegatheringstatechange', onStateChange);
+      resolve();
+    }, 3000);
   });
 
   if (signal.aborted) { pc.close(); throw new DOMException('Aborted', 'AbortError'); }
@@ -120,8 +125,8 @@ export function LiveTile({ camera }: Props) {
       // Try WHEP first (sub-second latency).
       try {
         const pc = await startWhep(urls.whep_url, videoEl, abortCtrl.signal);
-        if (!mounted) { pc.close(); return; }
         pcRef.current = pc;
+        if (!mounted) { pc.close(); pcRef.current = null; return; }
         setTransport('whep');
         setState('playing');
         return;
@@ -165,7 +170,7 @@ export function LiveTile({ camera }: Props) {
   return (
     <div
       ref={containerRef}
-      className="relative bg-[#0B1120] rounded-lg border border-border overflow-hidden flex flex-col min-h-0"
+      className="relative h-full w-full bg-[#0B1120] rounded-lg border border-border overflow-hidden flex flex-col min-h-0"
     >
       {/* Video */}
       <video
