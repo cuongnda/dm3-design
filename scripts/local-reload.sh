@@ -16,6 +16,20 @@ COMPOSE_FILE="docker-compose.local.yml"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
 
+# Backend Go services built from backend/Dockerfile. Add new services here
+# (and only here) so build/restart/health-check lists stay in sync.
+BACKEND_SERVICES=(auth-svc identity-svc access-svc device-gateway audit-svc visitor-svc parking-svc cctv-svc)
+
+# Compose interpolates ${VAR} at parse time — if any required var is unset,
+# every `docker compose ...` call fails before it even looks at the target
+# service. Provide safe local-dev defaults so the reload script works on a
+# fresh checkout without a hand-crafted .env. Real secrets should still come
+# from the developer's .env when present; `:=` only fills in what's missing.
+: "${MEDIAMTX_STREAM_PASS:=dev-stream-pass}"
+: "${MEDIAMTX_API_PASS:=dev-api-pass}"
+: "${CCTV_CREDENTIAL_KEY:=dev-cctv-credential-key-change-me-32b}"
+export MEDIAMTX_STREAM_PASS MEDIAMTX_API_PASS CCTV_CREDENTIAL_KEY
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -85,7 +99,7 @@ reload_backend() {
     # so every service must be rebuilt — otherwise migrate (and per-service) images
     # go stale and migration files added after the last build will be missing.
     docker compose -f "$COMPOSE_FILE" build --quiet \
-        migrate auth-svc identity-svc access-svc device-gateway audit-svc visitor-svc parking-svc 2>&1 | tail -3
+        migrate "${BACKEND_SERVICES[@]}" 2>&1 | tail -3
 
     log "Running migrations..."
     docker compose -f "$COMPOSE_FILE" up -d migrate 2>/dev/null
@@ -101,14 +115,14 @@ reload_backend() {
 
     log "Restarting backend services..."
     docker compose -f "$COMPOSE_FILE" up -d \
-        auth-svc identity-svc access-svc device-gateway audit-svc visitor-svc parking-svc 2>&1 | tail -5
+        "${BACKEND_SERVICES[@]}" 2>&1 | tail -5
 
     # Wait for services to be healthy
     log "Waiting for services to become healthy..."
     local retries=30
     while [ $retries -gt 0 ]; do
         local all_healthy=true
-        for svc in auth-svc identity-svc access-svc device-gateway audit-svc visitor-svc parking-svc; do
+        for svc in "${BACKEND_SERVICES[@]}"; do
             local status
             status=$(docker inspect --format='{{.State.Health.Status}}' "dm3-local-$svc" 2>/dev/null || echo "missing")
             if [ "$status" != "healthy" ]; then
@@ -146,7 +160,7 @@ restart_only() {
 
     log "Restarting all services (no rebuild)..."
     docker compose -f "$COMPOSE_FILE" restart \
-        auth-svc identity-svc access-svc device-gateway audit-svc visitor-svc parking-svc 2>&1
+        "${BACKEND_SERVICES[@]}" 2>&1
 
     log "Reloading nginx..."
     docker exec dm3-local-nginx nginx -s reload 2>/dev/null || true
