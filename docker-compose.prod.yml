@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_DB: ${DB_NAME:-dm3}
       POSTGRES_USER: ${DB_USER:-dm3}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
     networks:
@@ -71,7 +71,7 @@ services:
     restart: unless-stopped
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-dm3admin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
@@ -92,7 +92,7 @@ services:
     container_name: dm3-migrate
     environment:
       SERVICE_NAME: migrate
-      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
     depends_on:
       timescaledb:
         condition: service_healthy
@@ -111,8 +111,8 @@ services:
     environment:
       SERVICE_NAME: auth-svc
       HTTP_PORT: "8005"
-      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       NATS_URL: nats://nats:4222
       MQTT_BROKER: tcp://emqx:1883
     depends_on:
@@ -137,8 +137,8 @@ services:
     environment:
       SERVICE_NAME: identity-svc
       HTTP_PORT: "8004"
-      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       NATS_URL: nats://nats:4222
       MQTT_BROKER: tcp://emqx:1883
       PHOTO_STORAGE: local
@@ -167,8 +167,8 @@ services:
     environment:
       SERVICE_NAME: access-svc
       HTTP_PORT: "8003"
-      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       NATS_URL: nats://nats:4222
       MQTT_BROKER: tcp://emqx:1883
     depends_on:
@@ -193,8 +193,8 @@ services:
     environment:
       SERVICE_NAME: audit-svc
       HTTP_PORT: "8001"
-      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       NATS_URL: nats://nats:4222
     depends_on:
       migrate:
@@ -218,12 +218,12 @@ services:
     environment:
       SERVICE_NAME: device-gateway
       HTTP_PORT: "8002"
-      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       NATS_URL: nats://nats:4222
       MQTT_BROKER: tcp://emqx:1883
       VALKEY_URL: valkey:6379
-      BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET}
+      BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET:?BOOTSTRAP_SECRET must be set in .env}
       KNOWN_APP_SIGNATURES: ${KNOWN_APP_SIGNATURES:-}
     depends_on:
       migrate:
@@ -251,8 +251,8 @@ services:
     environment:
       SERVICE_NAME: visitor-svc
       HTTP_PORT: "8006"
-      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       NATS_URL: nats://nats:4222
       MQTT_BROKER: tcp://emqx:1883
     depends_on:
@@ -277,8 +277,8 @@ services:
     environment:
       SERVICE_NAME: parking-svc
       HTTP_PORT: "8007"
-      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       NATS_URL: nats://nats:4222
       MQTT_BROKER: tcp://emqx:1883
     depends_on:
@@ -321,10 +321,10 @@ services:
     environment:
       SERVICE_NAME: cctv-svc
       HTTP_PORT: "8008"
-      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       NATS_URL: nats://nats:4222
-      CCTV_CREDENTIAL_KEY: ${CCTV_CREDENTIAL_KEY}
+      CCTV_CREDENTIAL_KEY: ${CCTV_CREDENTIAL_KEY:?CCTV_CREDENTIAL_KEY must be set in .env (32+ chars)}
       MEDIAMTX_API_URL: "http://mediamtx:9997"
       MEDIAMTX_API_USER: ${MEDIAMTX_API_USER:-}
       MEDIAMTX_API_PASS: ${MEDIAMTX_API_PASS:-}
