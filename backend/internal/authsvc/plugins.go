@@ -15,6 +15,7 @@ var AvailablePlugins = []PluginInfo{
 	{ID: "visitor", Name: "Visitor Management", Description: "Pre-registration, walk-in, approval workflows, watchlist", Category: "operate", IsCore: false},
 	{ID: "parking", Name: "Parking Management", Description: "Vehicle tracking, parking zones, permits", Category: "operate", IsCore: false},
 	{ID: "intercom", Name: "Intercom", Description: "Video intercom, remote door unlock, call routing", Category: "smart", IsCore: false},
+	{ID: "cctv", Name: "CCTV", Description: "IP camera registry, live view, event-linked clip recording", Category: "secure", IsCore: false},
 	{ID: "smart_building", Name: "Smart Building", Description: "HVAC, lighting, occupancy analytics", Category: "smart", IsCore: false},
 }
 
