@@ -86,6 +86,20 @@ func main() {
 		slog.Error("failed to ensure AUDIT stream", "error", err)
 		os.Exit(1)
 	}
+	// DEVICES stream is owned by device-gateway; ensure it exists so the
+	// cctv access-event consumer can attach even if cctv-svc starts first.
+	if err := natsClient.EnsureStream(ctx, "DEVICES", []string{"dm3.devices.>"}); err != nil {
+		slog.Error("failed to ensure DEVICES stream", "error", err)
+		os.Exit(1)
+	}
+
+	// Start access-event consumer — creates placeholder event_clips rows when
+	// access events fire on access points that have cameras bound to them.
+	accessEventConsumer := cctv.NewAccessEventConsumer(database, natsClient)
+	if err := accessEventConsumer.Start(ctx); err != nil {
+		slog.Error("failed to start cctv access-event consumer", "error", err)
+		os.Exit(1)
+	}
 
 	// Audit logger
 	auditLog := audit.New(natsClient, "cctv-svc")
