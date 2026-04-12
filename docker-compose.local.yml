@@ -306,11 +306,9 @@ services:
       - "8889:8889"
     networks:
       - dm3-local
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9997/v3/config/global/get"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    # mediamtx image is distroless (no wget/curl). We rely on the service
+    # starting (port binding is visible in logs) plus cctv-svc's own retries
+    # against the :9997 API instead of a docker healthcheck.
 
   cctv-svc:
     build:
@@ -335,7 +333,7 @@ services:
       nats:
         condition: service_healthy
       mediamtx:
-        condition: service_healthy
+        condition: service_started
     networks:
       - dm3-local
     healthcheck:
