@@ -1,6 +1,6 @@
 .PHONY: build test lint docker-up docker-down migrate seed seed-api dev clean
 
-SERVICES := device-gateway access-svc identity-svc auth-svc audit-svc visitor-svc parking-svc
+SERVICES := device-gateway access-svc identity-svc auth-svc audit-svc visitor-svc parking-svc cctv-svc
 BIN_DIR := bin
 
 build:
