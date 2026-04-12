@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 # Fail fast if the deploy .env is missing any required keys.
-# Run by GitLab CI's verify:compose job after copying the runner's
-# /home/gitlab-runner/.env.dm3 into the workspace as .env.
+#
+# Called by GitLab CI after scripts/write-ci-env.sh has generated .env
+# from the project's CI/CD variables. Acts as a second line of defense:
+# write-ci-env.sh already asserts the same variables are set in the
+# shell, this script re-reads the file on disk and re-checks, so a
+# broken write (truncation, wrong path, stale cached .env) doesn't
+# sneak past.
 #
 # Required keys are the ones docker-compose.prod.yml interpolates with
-# the ${VAR:?...} syntax, plus any that must be non-empty but use a
-# default-expansion ${VAR:-default} in compose that we still want
-# audited at deploy time.
+# the ${VAR:?...} syntax.
 set -euo pipefail
 
 ENV_FILE="${ENV_FILE:-.env}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
     echo "[check-deploy-env] FAIL: $ENV_FILE does not exist." >&2
-    echo "[check-deploy-env] Expected /home/gitlab-runner/.env.dm3 to be copied to $ENV_FILE" >&2
+    echo "[check-deploy-env] Expected scripts/write-ci-env.sh to have generated it from CI variables." >&2
     exit 1
 fi
 
@@ -42,7 +45,8 @@ if (( ${#missing[@]} > 0 )); then
         echo "  - $key" >&2
     done
     echo "" >&2
-    echo "[check-deploy-env] Fix: SSH to the runner host and edit /home/gitlab-runner/.env.dm3" >&2
+    echo "[check-deploy-env] Fix: add the missing keys in GitLab project" >&2
+    echo "[check-deploy-env]   Settings → CI/CD → Variables (Protect + Mask)." >&2
     echo "[check-deploy-env] See .env.example for the full list of keys." >&2
     exit 1
 fi

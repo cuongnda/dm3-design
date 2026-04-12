@@ -2,14 +2,20 @@ stages:
   - verify
   - deploy
 
+# ── Shared bootstrap ──────────────────────────────────────────────────────────
+# Jobs that need .env use .setup_env as a script-level include. It generates
+# .env from GitLab CI/CD project variables and installs a trap to shred the
+# file at job exit so secrets don't linger in the shell-executor workspace.
+
+.setup_env: &setup_env |
+  trap 'rm -f .env' EXIT
+  bash scripts/write-ci-env.sh
+
 verify:compose:
   stage: verify
   script:
     - echo "=== Validating deploy compose config ==="
-    # Fail loudly if the runner's .env.dm3 is missing or unreadable.
-    # Silent fallback used to hide misconfigured deploy environments and let
-    # compose start services with blank required vars.
-    - cp /home/gitlab-runner/.env.dm3 .env
+    - *setup_env
     - bash scripts/check-deploy-env.sh
     - docker compose -f docker-compose.prod.yml config -q
   only:
@@ -49,10 +55,8 @@ deploy:staging:
     url: http://dm3.demasterpro.com
   script:
     - echo "=== Deploying DM3 to staging ==="
-    # Fail loudly if the runner's .env.dm3 is missing or unreadable.
-    # Silent fallback used to hide misconfigured deploy environments and let
-    # compose start services with blank required vars.
-    - cp /home/gitlab-runner/.env.dm3 .env
+    - *setup_env
+    - bash scripts/check-deploy-env.sh
     - docker compose -f docker-compose.prod.yml --profile test down --timeout 30 || true
     - docker compose -f docker-compose.prod.yml --profile test build --no-cache
     - docker compose -f docker-compose.prod.yml up -d --remove-orphans
@@ -80,10 +84,8 @@ deploy:production:
     name: production
     url: http://dm3.demasterpro.com
   script:
-    # Fail loudly if the runner's .env.dm3 is missing or unreadable.
-    # Silent fallback used to hide misconfigured deploy environments and let
-    # compose start services with blank required vars.
-    - cp /home/gitlab-runner/.env.dm3 .env
+    - *setup_env
+    - bash scripts/check-deploy-env.sh
     - docker compose -f docker-compose.prod.yml down --timeout 30 || true
     - docker compose -f docker-compose.prod.yml build --no-cache
     - docker compose -f docker-compose.prod.yml up -d --remove-orphans
