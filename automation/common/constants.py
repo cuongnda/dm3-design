@@ -19,7 +19,7 @@ WEB_URL = os.getenv('WEB_URL', 'http://localhost:3000')
 
 # System Admin credentials
 SYSADMIN_EMAIL = os.getenv('SYSADMIN_EMAIL', 'sysadmin@duali.com')
-SYSADMIN_PASSWORD = os.getenv('SYSADMIN_PASSWORD', 'sysadmin123')
+SYSADMIN_PASSWORD = os.getenv('SYSADMIN_PASSWORD', 'admin123')
 
 # Company Admin credentials
 ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'admin@duali.com')

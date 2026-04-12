@@ -2,6 +2,7 @@ package access
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	pathpkg "path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -22,6 +24,23 @@ import (
 	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
+
+// publishEvent publishes a NATS event for access changes (fire-and-forget).
+func (h *AccessHandlers) publishEvent(subject string, data any) {
+	if h.nats == nil {
+		return
+	}
+	b, err := json.Marshal(data)
+	if err != nil {
+		slog.Warn("access publishEvent marshal error", "subject", subject, "error", err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := h.nats.Publish(ctx, subject, b); err != nil {
+		slog.Warn("access publishEvent nats error", "subject", subject, "error", err)
+	}
+}
 
 // ─── Zones ───────────────────────────────────────────────────────────────────
 
@@ -165,6 +184,11 @@ func (h *AccessHandlers) CreateZone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.audit.LogFromRequest(r, "access.zone.create", "zone", z.ID, z.Name, "success", nil, z)
+	go h.publishEvent("dm3.access."+cid+".zone.created", map[string]any{
+		"zone_id":   z.ID,
+		"tenant_id": z.TenantID,
+		"name":      z.Name,
+	})
 	httputil.JSON(w, http.StatusCreated, z)
 }
 
@@ -256,6 +280,11 @@ func (h *AccessHandlers) UpdateZone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.audit.LogFromRequest(r, "access.zone.update", "zone", z.ID, z.Name, "success", nil, z)
+	go h.publishEvent("dm3.access."+cid+".zone.updated", map[string]any{
+		"zone_id":   z.ID,
+		"tenant_id": z.TenantID,
+		"name":      z.Name,
+	})
 	httputil.JSON(w, http.StatusOK, z)
 }
 
@@ -279,6 +308,10 @@ func (h *AccessHandlers) DeleteZone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.audit.LogFromRequest(r, "access.zone.delete", "zone", id, "", "success", nil, nil)
+	go h.publishEvent("dm3.access."+cid+".zone.deleted", map[string]any{
+		"zone_id":   id,
+		"tenant_id": cid,
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
 

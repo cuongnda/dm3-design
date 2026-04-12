@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_DB: ${DB_NAME:-dm3}
       POSTGRES_USER: ${DB_USER:-dm3}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
     networks:
@@ -71,7 +71,7 @@ services:
     restart: unless-stopped
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-dm3admin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
@@ -92,7 +92,7 @@ services:
     container_name: dm3-migrate
     environment:
       SERVICE_NAME: migrate
-      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
     depends_on:
       timescaledb:
         condition: service_healthy
@@ -111,8 +111,8 @@ services:
     environment:
       SERVICE_NAME: auth-svc
       HTTP_PORT: "8005"
-      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       NATS_URL: nats://nats:4222
       MQTT_BROKER: tcp://emqx:1883
       SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
@@ -144,8 +144,8 @@ services:
     environment:
       SERVICE_NAME: identity-svc
       HTTP_PORT: "8004"
-      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       NATS_URL: nats://nats:4222
       MQTT_BROKER: tcp://emqx:1883
       PHOTO_STORAGE: local
@@ -180,8 +180,8 @@ services:
     environment:
       SERVICE_NAME: access-svc
       HTTP_PORT: "8003"
-      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       NATS_URL: nats://nats:4222
       MQTT_BROKER: tcp://emqx:1883
     depends_on:
@@ -206,8 +206,8 @@ services:
     environment:
       SERVICE_NAME: audit-svc
       HTTP_PORT: "8001"
-      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       NATS_URL: nats://nats:4222
     depends_on:
       migrate:
@@ -231,12 +231,12 @@ services:
     environment:
       SERVICE_NAME: device-gateway
       HTTP_PORT: "8002"
-      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       NATS_URL: nats://nats:4222
       MQTT_BROKER: tcp://emqx:1883
       VALKEY_URL: valkey:6379
-      BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET}
+      BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET:?BOOTSTRAP_SECRET must be set in .env}
       KNOWN_APP_SIGNATURES: ${KNOWN_APP_SIGNATURES:-}
     depends_on:
       migrate:
@@ -251,6 +251,109 @@ services:
       - dm3-internal
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8002/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  visitor-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-visitor-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: visitor-svc
+      HTTP_PORT: "8006"
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      NATS_URL: nats://nats:4222
+      MQTT_BROKER: tcp://emqx:1883
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+    networks:
+      - dm3-internal
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8006/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  parking-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-parking-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: parking-svc
+      HTTP_PORT: "8007"
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      NATS_URL: nats://nats:4222
+      MQTT_BROKER: tcp://emqx:1883
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+    networks:
+      - dm3-internal
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8007/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── MediaMTX — RTSP ingest + WebRTC/WHEP + LL-HLS egress ───────────────────
+  mediamtx:
+    image: bluenviron/mediamtx:1.9.3
+    container_name: dm3-mediamtx
+    restart: unless-stopped
+    environment:
+      MTX_API: "yes"
+      MTX_APIADDRESS: ":9997"
+      MTX_WEBRTCADDRESS: ":8889"
+      MTX_HLSADDRESS: ":8888"
+      MTX_HLSVARIANT: "lowLatency"
+      MTX_RTSPADDRESS: ":8554"
+    networks:
+      - dm3-internal
+    # mediamtx image is distroless (no wget/curl). We rely on the service
+    # starting (port binding is visible in logs) plus cctv-svc's own retries
+    # against the :9997 API instead of a docker healthcheck.
+
+  cctv-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-cctv-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: cctv-svc
+      HTTP_PORT: "8008"
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      NATS_URL: nats://nats:4222
+      CCTV_CREDENTIAL_KEY: ${CCTV_CREDENTIAL_KEY:?CCTV_CREDENTIAL_KEY must be set in .env (32+ chars)}
+      MEDIAMTX_API_URL: "http://mediamtx:9997"
+      MEDIAMTX_API_USER: ${MEDIAMTX_API_USER:-}
+      MEDIAMTX_API_PASS: ${MEDIAMTX_API_PASS:-}
+      MEDIAMTX_WHEP_BASE: ${MEDIAMTX_WHEP_BASE:-https://dm3-cctv.demasterpro.com}
+      MEDIAMTX_HLS_BASE: ${MEDIAMTX_HLS_BASE:-https://dm3-cctv.demasterpro.com}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+      mediamtx:
+        condition: service_started
+    networks:
+      - dm3-internal
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8008/healthz"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -297,6 +400,12 @@ services:
       device-gateway:
         condition: service_healthy
       audit-svc:
+        condition: service_healthy
+      visitor-svc:
+        condition: service_healthy
+      parking-svc:
+        condition: service_healthy
+      cctv-svc:
         condition: service_healthy
     networks:
       - dm3-internal

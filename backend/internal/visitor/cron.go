@@ -27,36 +27,36 @@ func (h *VisitorHandlers) autoCheckout(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			now := time.Now()
-			// Only trigger auto-checkout after 22:00
-			if now.Hour() < 22 {
-				continue
-			}
+			// Use per-tenant auto_checkout_hour from visitor_settings (default 22)
 			rows, err := h.db.Pool.Query(ctx, `
-				SELECT id::text, tenant_id::text
-				FROM dm3_identity.visits
-				WHERE status = 'checked_in'
-				  AND actual_checkout IS NULL
-				  AND expected_arrival::date = CURRENT_DATE
+				SELECT v.id::text, v.tenant_id::text
+				FROM dm3_visitor.visits v
+				LEFT JOIN dm3_visitor.visitor_settings s ON s.tenant_id = v.tenant_id
+				WHERE v.status = 'checked_in'
+				  AND v.actual_checkout IS NULL
+				  AND v.expected_arrival::date = CURRENT_DATE
+				  AND EXTRACT(HOUR FROM now()) >= COALESCE(s.auto_checkout_hour, 22)
 				LIMIT 500`)
 			if err != nil {
 				slog.Error("auto checkout query error", "error", err)
 				continue
 			}
 			count := int64(0)
-			for rows.Next() {
-				var visitID, tenantID string
-				if err := rows.Scan(&visitID, &tenantID); err != nil {
-					slog.Error("auto checkout scan error", "error", err)
-					continue
+			func() {
+				defer rows.Close()
+				for rows.Next() {
+					var visitID, tenantID string
+					if err := rows.Scan(&visitID, &tenantID); err != nil {
+						slog.Error("auto checkout scan error", "error", err)
+						continue
+					}
+					if _, err := h.autoCheckoutVisit(ctx, tenantID, visitID); err != nil {
+						slog.Error("auto checkout error", "visit_id", visitID, "tenant_id", tenantID, "error", err)
+						continue
+					}
+					count++
 				}
-				if _, err := h.autoCheckoutVisit(ctx, tenantID, visitID); err != nil {
-					slog.Error("auto checkout error", "visit_id", visitID, "tenant_id", tenantID, "error", err)
-					continue
-				}
-				count++
-			}
-			rows.Close()
+			}()
 			if err := rows.Err(); err != nil {
 				slog.Error("auto checkout rows error", "error", err)
 			}
@@ -92,13 +92,21 @@ func (h *VisitorHandlers) markNoShows(ctx context.Context) {
 }
 
 func (h *VisitorHandlers) markNoShowCandidates(ctx context.Context) (int64, error) {
+	// Use per-tenant no_show_grace_minutes from visitor_settings (default 120 min)
 	rows, err := h.db.Pool.Query(ctx, `
-		UPDATE dm3_identity.visits
+		UPDATE dm3_visitor.visits v
 		SET status     = 'no_show',
 		    updated_at = now()
-		WHERE status IN ('pre_registered', 'approved', 'waiting')
-		  AND expected_arrival < now() - INTERVAL '2 hours'
-		RETURNING id::text, tenant_id::text`)
+		FROM (
+			SELECT vis.id,
+			       COALESCE(s.no_show_grace_minutes, 120) AS grace_minutes
+			FROM dm3_visitor.visits vis
+			LEFT JOIN dm3_visitor.visitor_settings s ON s.tenant_id = vis.tenant_id
+			WHERE vis.status IN ('pre_registered', 'approved', 'waiting')
+		) sub
+		WHERE v.id = sub.id
+		  AND v.expected_arrival < now() - make_interval(mins => sub.grace_minutes)
+		RETURNING v.id::text, v.tenant_id::text`)
 	if err != nil {
 		return 0, err
 	}
@@ -115,7 +123,7 @@ func (h *VisitorHandlers) markNoShowCandidates(ctx context.Context) (int64, erro
 		if h.audit != nil {
 			h.audit.Log(audit.Entry{
 				TenantID:   tenantID,
-				Service:    "identity-svc",
+				Service:    "visitor-svc",
 				Action:     "visit.no_show",
 				EntityType: "visit",
 				EntityID:   visitID,

@@ -135,6 +135,7 @@ export interface LoginResponse {
     refresh_token?: string;
     user?: LoginUser;
     companies?: LoginCompany[];
+    enabled_plugins?: string[];
 }
 
 // Legacy compat
@@ -794,6 +795,37 @@ export async function updateCompany(id: string, data: Partial<CreateCompanyReque
 
 export async function suspendCompany(id: string): Promise<void> {
     await apiFetch<void>(`${AUTH_SYSTEM_URL}/companies/${id}`, { method: 'DELETE' });
+}
+
+// ─── Plugins ────────────────────────────────────────────────
+
+export interface PluginInfo {
+    id: string;
+    name: string;
+    description: string;
+    category: string;
+    is_core: boolean;
+}
+
+export interface TenantPluginsDTO {
+    tenant_id: string;
+    enabled_plugins: string[];
+    available_plugins: PluginInfo[];
+}
+
+export async function fetchAvailablePlugins(): Promise<PluginInfo[]> {
+    return apiFetch<PluginInfo[]>(`${AUTH_SYSTEM_URL}/plugins`);
+}
+
+export async function fetchTenantPlugins(id: string): Promise<TenantPluginsDTO> {
+    return apiFetch<TenantPluginsDTO>(`${AUTH_SYSTEM_URL}/companies/${id}/plugins`);
+}
+
+export async function updateTenantPlugins(id: string, enabledPlugins: string[]): Promise<TenantPluginsDTO> {
+    return apiFetch<TenantPluginsDTO>(`${AUTH_SYSTEM_URL}/companies/${id}/plugins`, {
+        method: 'PUT',
+        body: JSON.stringify({ enabled_plugins: enabledPlugins }),
+    });
 }
 
 // ─── Accounts ───────────────────────────────────────────────

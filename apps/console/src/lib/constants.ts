@@ -1,6 +1,8 @@
 export const DOMAIN_COLORS = {
   secure: '#3B82F6',
   manage: '#8B5CF6',
+  visitors: '#10B981',
+  parking: '#F59E0B',
   operate: '#F59E0B',
   smart: '#06B6D4',
   platform: '#6B7280',
@@ -9,6 +11,8 @@ export const DOMAIN_COLORS = {
 export const DOMAIN_LABELS = {
   secure: 'SECURE',
   manage: 'MANAGE',
+  visitors: 'VISITORS',
+  parking: 'PARKING',
   operate: 'OPERATE',
   smart: 'SMART',
 } as const;
@@ -39,11 +43,19 @@ export const ROUTES = {
   users: '/manage/users',
   departments: '/manage/departments',
   identities: '/manage/identities',
-  visitors: '/manage/visitors',
   contractors: '/manage/contractors',
   attendance: '/manage/attendance',
   deliveries: '/manage/deliveries',
-  vehicles: '/manage/vehicles',
+  // VISITORS
+  visitors: '/visitors',
+  visitorsRegister: '/visitors/register',
+  visitorsGroups: '/visitors/groups',
+  visitorsWatchlist: '/visitors/watchlist',
+  visitorsAgreements: '/visitors/agreements',
+  visitorsAccessHistory: '/visitors/access-history',
+  visitorsAnalytics: '/visitors/analytics',
+  visitorsRecurring: '/visitors/recurring',
+  visitorsSettings: '/visitors/settings',
   // ACCESS
   zones: '/access/zones',
   accessPoints: '/access/access-points',
@@ -53,7 +65,14 @@ export const ROUTES = {
   devices: '/devices',
   // OPERATE
   roomBooking: '/operate/room-booking',
-  parking: '/operate/parking',
+  parking: '/parking',
+  parkingSessions: '/parking/sessions',
+  parkingVehicles: '/parking/vehicles',
+  parkingZones: '/parking/zones',
+  parkingPasses: '/parking/passes',
+  parkingFeeRules: '/parking/fee-rules',
+  parkingAnalytics: '/parking/analytics',
+  parkingSettings: '/parking/settings',
   maintenance: '/operate/maintenance',
   guardTour: '/operate/guard-tour',
   keys: '/operate/keys',
@@ -62,6 +81,12 @@ export const ROUTES = {
   aiAssistant: '/smart/ai-assistant',
   analytics: '/smart/analytics',
   automation: '/smart/automation',
+  // CCTV
+  cctvDashboard: '/cctv/dashboard',
+  cctvCameras: '/cctv/cameras',
+  cctvLive: '/cctv/live',
+  cctvClips: '/cctv/clips',
+  cctvSettings: '/cctv/settings',
   // SETTINGS
   settings: '/settings',
   // AUTH

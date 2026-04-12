@@ -19,12 +19,14 @@ interface MeResponse {
   role?: string | null;
   company_id?: string | null;
   preferred_language?: string | null;
+  enabled_plugins?: string[] | null;
 }
 
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
-  login: (user: User) => void;
+  enabledPlugins: string[];
+  login: (user: User, enabledPlugins?: string[]) => void;
   logout: () => void;
   checkAuth: () => Promise<void>;
 }
@@ -34,10 +36,11 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       isAuthenticated: false,
-      login: (user) => set({ user, isAuthenticated: true }),
+      enabledPlugins: [],
+      login: (user, enabledPlugins = []) => set({ user, isAuthenticated: true, enabledPlugins }),
       logout: () => {
         clearToken();
-        set({ user: null, isAuthenticated: false });
+        set({ user: null, isAuthenticated: false, enabledPlugins: [] });
       },
       checkAuth: async () => {
         const token = getToken();
@@ -53,6 +56,7 @@ export const useAuthStore = create<AuthState>()(
           i18n.changeLanguage(normalized);
           set({
             isAuthenticated: true,
+            enabledPlugins: me.enabled_plugins ?? [],
             user: {
               id: me.id,
               name: me.name || me.email.split('@')[0],
@@ -71,3 +75,8 @@ export const useAuthStore = create<AuthState>()(
     { name: 'dm3-auth' }
   )
 );
+
+export const hasPlugin = (pluginName: string): boolean => {
+  const { enabledPlugins } = useAuthStore.getState();
+  return enabledPlugins?.includes(pluginName) ?? false;
+};

@@ -5,7 +5,8 @@ import {
   Bot, AlertTriangle, Users, UserPlus, Wrench, Clock, Package,
   Building2, Car, Hammer, Shield, Key, Zap, Brain,
   Settings, ChevronLeft, ChevronRight, LogOut, UserCheck, MapPin,
-  Users2, Cpu, User,
+  Users2, Cpu, User, ClipboardList, Eye, FileText, BarChart3,
+  CalendarClock, SlidersHorizontal, CircleDollarSign, Ticket, ParkingSquare,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -104,7 +105,11 @@ export function Sidebar() {
   const navigate = useNavigate();
   const handleLogout = () => { logout(); navigate('/login'); };
   const user = useAuthStore((s) => s.user);
+  const enabledPlugins = useAuthStore((s) => s.enabledPlugins);
   const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const hasVisitor = enabledPlugins?.includes('visitor') ?? false;
+  const hasParking = enabledPlugins?.includes('parking') ?? false;
+  const hasCctv = enabledPlugins?.includes('cctv') ?? false;
   const c = sidebarCollapsed;
   const iconSize = c ? 20 : 18;
 
@@ -147,11 +152,49 @@ export function Sidebar() {
         <SidebarNavItem to={ROUTES.users} icon={<UserCheck size={iconSize} />} label={t('nav.users') + ' *'} collapsed={c} />
         <SidebarNavItem to={ROUTES.departments} icon={<Building2 size={iconSize} />} label={t('nav.departments') + ' *'} collapsed={c} />
         <SidebarNavItem to={ROUTES.identities} icon={<Users size={iconSize} />} label={t('nav.identities')} collapsed={c} />
-        <SidebarNavItem to={ROUTES.visitors} icon={<UserPlus size={iconSize} />} label={t('nav.visitors')} collapsed={c} />
         <SidebarNavItem to={ROUTES.contractors} icon={<Wrench size={iconSize} />} label={t('nav.contractors')} collapsed={c} />
         <SidebarNavItem to={ROUTES.attendance} icon={<Clock size={iconSize} />} label={t('nav.attendance')} collapsed={c} />
         <SidebarNavItem to={ROUTES.deliveries} icon={<Package size={iconSize} />} label={t('nav.deliveries')} collapsed={c} />
-        <SidebarNavItem to={ROUTES.vehicles} icon={<Car size={iconSize} />} label={t('nav.vehicles') + ' *'} collapsed={c} />
+
+        {hasVisitor && (
+          <>
+            <SectionLabel label={t('nav.visitorsSection')} color="#10B981" collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitors} icon={<LayoutDashboard size={iconSize} />} label={t('nav.visitorsDashboard')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitorsRegister} icon={<UserPlus size={iconSize} />} label={t('nav.visitorsRegister')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitorsGroups} icon={<Users2 size={iconSize} />} label={t('nav.visitorsGroups')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitorsWatchlist} icon={<Eye size={iconSize} />} label={t('nav.visitorsWatchlist')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitorsAgreements} icon={<FileText size={iconSize} />} label={t('nav.visitorsAgreements')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitorsAccessHistory} icon={<ClipboardList size={iconSize} />} label={t('nav.visitorsAccessHistory')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitorsAnalytics} icon={<BarChart3 size={iconSize} />} label={t('nav.visitorsAnalytics')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitorsRecurring} icon={<CalendarClock size={iconSize} />} label={t('nav.visitorsRecurring')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.visitorsSettings} icon={<SlidersHorizontal size={iconSize} />} label={t('nav.visitorsSettings')} collapsed={c} />
+          </>
+        )}
+
+        {hasParking && (
+          <>
+            <SectionLabel label={t('nav.parkingSection')} color="#F59E0B" collapsed={c} />
+            <SidebarNavItem to={ROUTES.parking} icon={<LayoutDashboard size={iconSize} />} label={t('nav.parkingDashboard')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.parkingSessions} icon={<ClipboardList size={iconSize} />} label={t('nav.parkingSessions')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.parkingVehicles} icon={<Car size={iconSize} />} label={t('nav.parkingVehicles')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.parkingZones} icon={<ParkingSquare size={iconSize} />} label={t('nav.parkingZones')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.parkingPasses} icon={<Ticket size={iconSize} />} label={t('nav.parkingPasses')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.parkingFeeRules} icon={<CircleDollarSign size={iconSize} />} label={t('nav.parkingFeeRules')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.parkingAnalytics} icon={<BarChart3 size={iconSize} />} label={t('nav.parkingAnalytics')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.parkingSettings} icon={<SlidersHorizontal size={iconSize} />} label={t('nav.parkingSettings')} collapsed={c} />
+          </>
+        )}
+
+        {hasCctv && (
+          <>
+            <SectionLabel label={t('nav.cctvSection')} color="#3B82F6" collapsed={c} />
+            <SidebarNavItem to={ROUTES.cctvDashboard} icon={<LayoutDashboard size={iconSize} />} label={t('nav.cctvDashboard')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.cctvCameras} icon={<Video size={iconSize} />} label={t('nav.cctvCameras')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.cctvLive} icon={<Eye size={iconSize} />} label={t('nav.cctvLive')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.cctvClips} icon={<ClipboardList size={iconSize} />} label={t('nav.cctvClips')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.cctvSettings} icon={<SlidersHorizontal size={iconSize} />} label={t('nav.cctvSettings')} collapsed={c} />
+          </>
+        )}
 
         <SectionLabel label={t('nav.access')} color="#F59E0B" collapsed={c} />
         <SidebarNavItem to={ROUTES.zones} icon={<MapPin size={iconSize} />} label={t('nav.zones') + ' *'} collapsed={c} />
@@ -162,7 +205,6 @@ export function Sidebar() {
 
         <SectionLabel label={t('nav.operate')} color="#F59E0B" collapsed={c} />
         <SidebarNavItem to={ROUTES.roomBooking} icon={<Building2 size={iconSize} />} label={t('nav.roomBooking')} collapsed={c} />
-        <SidebarNavItem to={ROUTES.parking} icon={<Car size={iconSize} />} label={t('nav.parking')} collapsed={c} />
         <SidebarNavItem to={ROUTES.maintenance} icon={<Hammer size={iconSize} />} label={t('nav.maintenance')} collapsed={c} />
         <SidebarNavItem to={ROUTES.guardTour} icon={<Shield size={iconSize} />} label={t('nav.guardTour')} collapsed={c} />
         <SidebarNavItem to={ROUTES.keys} icon={<Key size={iconSize} />} label={t('nav.keys')} collapsed={c} />

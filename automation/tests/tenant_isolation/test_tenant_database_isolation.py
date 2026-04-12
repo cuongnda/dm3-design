@@ -46,19 +46,20 @@ class TestTenantDatabaseIsolation:
                 """, (device_id, company_id, f"Test Device {i}-{j}", "access_reader", "online"))
                 device_ids.append(device_id)
         
-        # Create test persons for each tenant
+        # Create test identity users for each tenant (the legacy dm3_identity.persons
+        # table was folded into dm3_identity.users; see migration 000001).
         person_ids = []
         for i, company_id in enumerate(company_ids):
-            for j in range(2):  # 2 persons per tenant
+            for j in range(2):  # 2 users per tenant
                 person_id = db_client.execute("""
-                    INSERT INTO dm3_identity.persons 
-                    (tenant_id, first_name, last_name, email, employee_id, status)
+                    INSERT INTO dm3_identity.users
+                    (tenant_id, first_name, last_name, email, emp_number, status)
                     VALUES (%s, %s, %s, %s, %s, %s)
                     RETURNING id
                 """, (
-                    company_id, 
-                    f"Person{i}{j}", 
-                    "Test", 
+                    company_id,
+                    f"Person{i}{j}",
+                    "Test",
                     f"person{i}{j}@test.com",
                     f"EMP-{i}-{j}",
                     "active"
@@ -79,13 +80,13 @@ class TestTenantDatabaseIsolation:
         """Test that tenant_id NOT NULL constraints are enforced"""
         tenant_id_tables = [
             'dm3_devices.devices',
-            'dm3_identity.persons',
+            'dm3_identity.users',
             'dm3_identity.credentials',
             'dm3_access.access_rules',
             'dm3_access.doors',
             'dm3_access.access_events'
         ]
-        
+
         for table in tenant_id_tables:
             # Try to insert a record without tenant_id
             with pytest.raises(psycopg2.IntegrityError):
@@ -94,7 +95,7 @@ class TestTenantDatabaseIsolation:
                         INSERT INTO {table} (device_id, name, type, status)
                         VALUES ('test-no-tenant', 'Test Device', 'reader', 'offline')
                     """)
-                elif table == 'dm3_identity.persons':
+                elif table == 'dm3_identity.users':
                     db_client.execute(f"""
                         INSERT INTO {table} (first_name, last_name, email, status)
                         VALUES ('Test', 'Person', 'test@example.com', 'active')
@@ -127,9 +128,9 @@ class TestTenantDatabaseIsolation:
             for device in devices:
                 assert device[1] == company_id  # tenant_id column
             
-            # Test persons isolation
+            # Test identity-users isolation
             persons = db_client.execute("""
-                SELECT id, tenant_id FROM dm3_identity.persons 
+                SELECT id, tenant_id FROM dm3_identity.users
                 WHERE tenant_id = %s
             """, (company_id,)).fetchall()
             
@@ -215,27 +216,27 @@ class TestTenantDatabaseIsolation:
             VALUES (%s, %s, %s, %s, %s)
         """, (test_company_id, "Test Company", "test-co", "enterprise", "active"))
         
-        # Create a person for this company
+        # Create an identity user for this company
         person_id = db_client.execute("""
-            INSERT INTO dm3_identity.persons 
-            (tenant_id, first_name, last_name, email, employee_id)
+            INSERT INTO dm3_identity.users
+            (tenant_id, first_name, last_name, email, emp_number)
             VALUES (%s, %s, %s, %s, %s)
             RETURNING id
         """, (test_company_id, "Test", "Person", "test@cascade.com", "EMP-CASCADE")).fetchone()[0]
-        
-        # Create a credential for this person
+
+        # Create a credential for this user
         db_client.execute("""
-            INSERT INTO dm3_identity.credentials 
-            (tenant_id, person_id, type, value, status)
+            INSERT INTO dm3_identity.credentials
+            (tenant_id, user_id, type, value, status)
             VALUES (%s, %s, %s, %s, %s)
         """, (test_company_id, person_id, "card", "123456789", "active"))
-        
-        # Delete the person
-        db_client.execute("DELETE FROM dm3_identity.persons WHERE id = %s", (person_id,))
-        
+
+        # Delete the user
+        db_client.execute("DELETE FROM dm3_identity.users WHERE id = %s", (person_id,))
+
         # Verify credentials are also deleted (should cascade)
         remaining_credentials = db_client.execute("""
-            SELECT COUNT(*) FROM dm3_identity.credentials WHERE person_id = %s
+            SELECT COUNT(*) FROM dm3_identity.credentials WHERE user_id = %s
         """, (person_id,)).fetchone()[0]
         
         assert remaining_credentials == 0
@@ -303,18 +304,18 @@ class TestTenantDatabaseIsolation:
                 VALUES (%s, %s, %s, %s, %s)
             """, (company_id, name, f"test-{company_id[:8]}", "starter", "active"))
         
-        # Create person in first company
+        # Create identity user in first company
         person_id = db_client.execute("""
-            INSERT INTO dm3_identity.persons 
-            (tenant_id, first_name, last_name, email, employee_id)
+            INSERT INTO dm3_identity.users
+            (tenant_id, first_name, last_name, email, emp_number)
             VALUES (%s, %s, %s, %s, %s)
             RETURNING id
         """, (test_company_id, "Test", "Person", "test@constraint.com", "EMP-CONSTRAINT")).fetchone()[0]
-        
+
         # This should work - same tenant
         db_client.execute("""
-            INSERT INTO dm3_identity.credentials 
-            (tenant_id, person_id, type, value, status)
+            INSERT INTO dm3_identity.credentials
+            (tenant_id, user_id, type, value, status)
             VALUES (%s, %s, %s, %s, %s)
         """, (test_company_id, person_id, "card", "111111111", "active"))
         

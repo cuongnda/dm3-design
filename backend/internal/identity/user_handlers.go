@@ -473,6 +473,12 @@ func (h *IdentityHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 		}()
 	}
 
+	go h.publishEvent("dm3.identity."+companyID+".user.created", map[string]any{
+		"user_id":   userID,
+		"tenant_id": companyID,
+		"name":      req.FirstName + " " + req.LastName,
+		"email":     req.Email,
+	})
 	httputil.JSON(w, http.StatusCreated, map[string]interface{}{
 		"id":         userID,
 		"account_id": accountID,
@@ -618,6 +624,10 @@ func (h *IdentityHandlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.audit.LogFromRequest(r, "identity.user.update", "user", userID, userID, "success", nil, req)
+	go h.publishEvent("dm3.identity."+companyID+".user.updated", map[string]any{
+		"user_id":   userID,
+		"tenant_id": companyID,
+	})
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "user updated successfully"})
 }
 
@@ -645,6 +655,10 @@ func (h *IdentityHandlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.audit.LogFromRequest(r, "identity.user.delete", "user", userID, userID, "success", nil, nil)
+	go h.publishEvent("dm3.identity."+companyID+".user.deleted", map[string]any{
+		"user_id":   userID,
+		"tenant_id": companyID,
+	})
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "user deleted successfully"})
 }
 

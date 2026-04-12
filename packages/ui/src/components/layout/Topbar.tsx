@@ -82,7 +82,6 @@ export function Topbar() {
     contractors:    t('nav.contractors', 'Contractors'),
     attendance:     t('nav.attendance', 'Attendance'),
     deliveries:     t('nav.deliveries', 'Deliveries'),
-    vehicles:       t('nav.vehicles', 'Vehicles'),
     // secure
     'access-control': t('nav.accessControl', 'Access Control'),
     cctv:           t('nav.cctv', 'CCTV'),

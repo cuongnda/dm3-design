@@ -202,7 +202,7 @@ func (h *AuthHandlers) GetCompany(w http.ResponseWriter, r *http.Request) {
 		 c.max_devices, c.max_users, c.created_at, c.updated_at,
 		 (SELECT COUNT(*) FROM dm3_auth.accounts u WHERE u.tenant_id = c.id),
 		 (SELECT COUNT(*) FROM dm3_devices.devices d WHERE d.tenant_id = c.id),
-		 (SELECT COUNT(*) FROM dm3_access.doors dr WHERE dr.tenant_id = c.id),
+		 (SELECT COUNT(*) FROM dm3_access.access_points dr WHERE dr.tenant_id = c.id),
 		 (SELECT COUNT(*) FROM dm3_access.access_events e WHERE e.tenant_id = c.id)
 		 FROM dm3_auth.tenants c WHERE c.id = $1::uuid`, id,
 	).Scan(&c.ID, &c.Name, &c.Code, &c.Plan, &c.Status, &c.LogoURL, &c.Address, &c.Phone, &c.Email,

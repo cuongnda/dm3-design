@@ -7,13 +7,15 @@ interface StatCardProps {
   sub: string;
   trend?: { direction: 'up' | 'down'; text: string };
   icon?: string;
-  domain?: 'secure' | 'manage' | 'operate' | 'smart' | 'error' | 'default';
+  domain?: 'secure' | 'manage' | 'visitors' | 'parking' | 'operate' | 'smart' | 'error' | 'default';
   onClick?: () => void;
 }
 
 const domainColorMap: Record<string, string> = {
   secure: DOMAIN_COLORS.secure,
   manage: DOMAIN_COLORS.manage,
+  visitors: DOMAIN_COLORS.visitors,
+  parking: DOMAIN_COLORS.parking,
   operate: DOMAIN_COLORS.operate,
   smart: DOMAIN_COLORS.smart,
   error: '#EF4444',

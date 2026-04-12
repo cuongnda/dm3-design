@@ -134,6 +134,8 @@ services:
         condition: service_completed_successfully
       nats:
         condition: service_healthy
+      emqx:
+        condition: service_healthy
     networks:
       - dm3-local
     healthcheck:
@@ -186,6 +188,8 @@ services:
         condition: service_completed_successfully
       nats:
         condition: service_healthy
+      emqx:
+        condition: service_healthy
       minio:
         condition: service_healthy
     networks:
@@ -216,6 +220,117 @@ services:
       - dm3-local
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8001/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  visitor-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-visitor-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: visitor-svc
+      HTTP_PORT: "8006"
+      DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
+      JWT_SECRET: dm3-local-jwt-secret-change-me
+      NATS_URL: nats://nats:4222
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8006/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  parking-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-parking-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: parking-svc
+      HTTP_PORT: "8007"
+      DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
+      JWT_SECRET: dm3-local-jwt-secret-change-me
+      NATS_URL: nats://nats:4222
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8007/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── MediaMTX — RTSP ingest + WebRTC/WHEP + LL-HLS egress ───────────────────
+  mediamtx:
+    image: bluenviron/mediamtx:1.9.3
+    container_name: dm3-local-mediamtx
+    restart: unless-stopped
+    environment:
+      MEDIAMTX_STREAM_USER: ${MEDIAMTX_STREAM_USER:-dm3stream}
+      MEDIAMTX_STREAM_PASS: ${MEDIAMTX_STREAM_PASS:?MEDIAMTX_STREAM_PASS must be set}
+      MEDIAMTX_API_USER: ${MEDIAMTX_API_USER:-dm3admin}
+      MEDIAMTX_API_PASS: ${MEDIAMTX_API_PASS:?MEDIAMTX_API_PASS must be set}
+    volumes:
+      - ./deploy/mediamtx/mediamtx.yml:/mediamtx.yml:ro
+    ports:
+      # expose LL-HLS + WHEP for local browser testing
+      - "8888:8888"
+      - "8889:8889"
+      # WebRTC RTP over UDP — without this the ICE candidate at 127.0.0.1
+      # is unreachable and video stays at readyState 0.
+      - "8189:8189/udp"
+    networks:
+      - dm3-local
+    # mediamtx image is distroless (no wget/curl). We rely on the service
+    # starting (port binding is visible in logs) plus cctv-svc's own retries
+    # against the :9997 API instead of a docker healthcheck.
+
+  cctv-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-cctv-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: cctv-svc
+      HTTP_PORT: "8008"
+      DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
+      JWT_SECRET: dm3-local-jwt-secret-change-me
+      NATS_URL: nats://nats:4222
+      # Must be 32 random bytes base64-encoded. Never commit. Generate with: openssl rand -base64 32
+      CCTV_CREDENTIAL_KEY: ${CCTV_CREDENTIAL_KEY:?CCTV_CREDENTIAL_KEY must be set in .env}
+      MEDIAMTX_API_URL: "http://mediamtx:9997"
+      MEDIAMTX_WHEP_BASE: "http://localhost:8889"
+      MEDIAMTX_HLS_BASE: "http://localhost:8888"
+      MEDIAMTX_STREAM_USER: ${MEDIAMTX_STREAM_USER:-dm3stream}
+      MEDIAMTX_STREAM_PASS: ${MEDIAMTX_STREAM_PASS:?MEDIAMTX_STREAM_PASS must be set}
+      MEDIAMTX_API_USER: ${MEDIAMTX_API_USER:-dm3admin}
+      MEDIAMTX_API_PASS: ${MEDIAMTX_API_PASS:?MEDIAMTX_API_PASS must be set}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+      mediamtx:
+        condition: service_started
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8008/healthz"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -291,6 +406,10 @@ services:
       device-gateway:
         condition: service_healthy
       audit-svc:
+        condition: service_healthy
+      visitor-svc:
+        condition: service_healthy
+      parking-svc:
         condition: service_healthy
     networks:
       - dm3-local

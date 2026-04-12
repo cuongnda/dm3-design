@@ -22,6 +22,7 @@ export interface ParkingZoneDTO {
   tenant_id: string;
   lot_id: string;
   site_id?: string;
+  access_zone_id?: string;
   name: string;
   code: string;
   type: string;
@@ -38,9 +39,12 @@ export interface ParkingVehicleDTO {
   id: string;
   tenant_id: string;
   owner_id?: string;
+  visitor_id?: string;
   plate_number: string;
-  normalized_plate_number: string;
+  normalized_plate: string;
   plate_image_ref?: string;
+  rfid_tag?: string;
+  nfc_card_id?: string;
   type: string;
   category: string;
   brand?: string;
@@ -50,6 +54,10 @@ export interface ParkingVehicleDTO {
   active_pass_id?: string;
   created_at: string;
   updated_at: string;
+  // Read-only display fields resolved via soft FK lookup on the server.
+  // owner_type is "user", "visitor", or undefined/empty for anonymous vehicles.
+  owner_name?: string;
+  owner_type?: "user" | "visitor" | "";
 }
 
 export interface ParkingPassDTO {
@@ -144,7 +152,10 @@ export interface ListParkingSessionsParams {
 
 export interface CreateParkingVehicleRequest {
   owner_id?: string;
+  visitor_id?: string;
   plate_number: string;
+  rfid_tag?: string;
+  nfc_card_id?: string;
   type: string;
   category?: string;
   brand?: string;
@@ -156,8 +167,10 @@ export interface CreateParkingVehicleRequest {
 export interface CreateParkingSessionRequest {
   lot_id: string;
   zone_id: string;
-  plate_number: string;
+  plate_number?: string;
   vehicle_type: string;
+  rfid_tag?: string;
+  nfc_card_id?: string;
   entry_device_id?: string;
   plate_image_ref?: string;
   matched_by?: string;
@@ -184,8 +197,10 @@ export interface ParkingRecognitionRequest {
   lot_id: string;
   zone_id: string;
   direction: "entry" | "exit";
-  plate_number: string;
+  plate_number?: string;
   vehicle_type: string;
+  rfid_tag?: string;
+  nfc_card_id?: string;
   device_id?: string;
   image_ref?: string;
   confidence?: number;
@@ -202,6 +217,8 @@ export interface ExitParkingSessionRequest {
   exit_device_id?: string;
   plate_number?: string;
   plate_image_ref?: string;
+  rfid_tag?: string;
+  nfc_card_id?: string;
 }
 
 export interface ListParkingPassesParams {
@@ -210,6 +227,167 @@ export interface ListParkingPassesParams {
   zone_id?: string;
   vehicle_id?: string;
   status?: string;
+}
+
+export interface ListParkingFeeRulesParams {
+  page?: number;
+  limit?: number;
+  lot_id?: string;
+  zone_id?: string;
+  vehicle_type?: string;
+}
+
+export interface ParkingFeeRuleDTO {
+  id: string;
+  tenant_id: string;
+  site_id?: string;
+  lot_id?: string;
+  zone_id?: string;
+  name: string;
+  vehicle_type: string;
+  rate_type: string;
+  rates: Record<string, unknown>;
+  free_minutes: number;
+  max_daily?: number;
+  applies_to: string;
+  priority: number;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateParkingLotRequest {
+  site_id?: string;
+  name: string;
+  code: string;
+  description?: string;
+  status?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CreateParkingZoneRequest {
+  lot_id: string;
+  site_id?: string;
+  name: string;
+  code: string;
+  type?: string;
+  level?: string;
+  total_spaces: number;
+  vehicle_types?: string[];
+  status?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CreateParkingFeeRuleRequest {
+  site_id?: string;
+  lot_id?: string;
+  zone_id?: string;
+  name: string;
+  vehicle_type: string;
+  rate_type: string;
+  rates: Record<string, unknown>;
+  free_minutes?: number;
+  max_daily?: number;
+  applies_to?: string;
+  priority?: number;
+  enabled?: boolean;
+}
+
+export interface ParkingSettingsDTO {
+  id: string;
+  tenant_id: string;
+  auto_open_barrier_on_pass: boolean;
+  confidence_threshold: number;
+  require_payment_before_exit: boolean;
+  free_minutes_global: number;
+  max_session_hours: number;
+  allow_unregistered_entry: boolean;
+  plate_recognition_enabled: boolean;
+  default_fee_currency: string;
+  notify_on_disputed: boolean;
+  capacity_alert_threshold: number;
+  enforce_access_rules: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UpdateParkingSettingsRequest {
+  auto_open_barrier_on_pass?: boolean;
+  confidence_threshold?: number;
+  require_payment_before_exit?: boolean;
+  free_minutes_global?: number;
+  max_session_hours?: number;
+  allow_unregistered_entry?: boolean;
+  plate_recognition_enabled?: boolean;
+  default_fee_currency?: string;
+  notify_on_disputed?: boolean;
+  capacity_alert_threshold?: number;
+  enforce_access_rules?: boolean;
+}
+
+export interface ZoneOccupancyDTO {
+  zone_id: string;
+  zone_name: string;
+  lot_id: string;
+  total_spaces: number;
+  occupied: number;
+  available: number;
+  percent: number;
+}
+
+export interface ParkingDashboardDTO {
+  active_sessions: number;
+  total_spaces: number;
+  occupied_spaces: number;
+  available_spaces: number;
+  occupancy_percent: number;
+  entered_today: number;
+  exited_today: number;
+  revenue_today: number;
+  pending_payments: number;
+  disputed_sessions: number;
+  zone_occupancy: ZoneOccupancyDTO[];
+}
+
+export interface VehicleTypeBreakdownDTO {
+  vehicle_type: string;
+  count: number;
+  revenue: number;
+}
+
+export interface PaymentBreakdownDTO {
+  status: string;
+  count: number;
+}
+
+export interface DailyTrendDTO {
+  date: string;
+  sessions: number;
+  revenue: number;
+}
+
+export interface PeakHourDTO {
+  hour: number;
+  sessions: number;
+}
+
+export interface TopPlateDTO {
+  plate_number: string;
+  vehicle_type: string;
+  visit_count: number;
+}
+
+export interface ParkingAnalyticsDTO {
+  period: string;
+  total_sessions: number;
+  total_revenue: number;
+  avg_duration_minutes: number;
+  avg_occupancy_percent: number;
+  by_vehicle_type: VehicleTypeBreakdownDTO[];
+  by_payment_status: PaymentBreakdownDTO[];
+  daily_trend: DailyTrendDTO[];
+  peak_hours: PeakHourDTO[];
+  top_plates: TopPlateDTO[];
 }
 
 function withQuery<T extends object>(path: string, params?: T) {
@@ -307,6 +485,168 @@ export function createParkingPass(
 ): Promise<ParkingPassDTO> {
   return apiFetch(`${BASE}/passes`, {
     method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+// ─── Get by ID ──────────────────────────────────────────────────────────────
+
+export function getParkingLot(id: string): Promise<ParkingLotDTO> {
+  return apiFetch(`${BASE}/lots/${id}`);
+}
+
+export function getParkingZone(id: string): Promise<ParkingZoneDTO> {
+  return apiFetch(`${BASE}/zones/${id}`);
+}
+
+export function getParkingSession(id: string): Promise<ParkingSessionDTO> {
+  return apiFetch(`${BASE}/sessions/${id}`);
+}
+
+// ─── Lots CRUD ──────────────────────────────────────────────────────────────
+
+export function createParkingLot(
+  data: CreateParkingLotRequest,
+): Promise<ParkingLotDTO> {
+  return apiFetch(`${BASE}/lots`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateParkingLot(
+  id: string,
+  data: Partial<CreateParkingLotRequest>,
+): Promise<ParkingLotDTO> {
+  return apiFetch(`${BASE}/lots/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteParkingLot(id: string): Promise<void> {
+  return apiFetch(`${BASE}/lots/${id}`, { method: "DELETE" });
+}
+
+// ─── Zones CRUD ─────────────────────────────────────────────────────────────
+
+export function createParkingZone(
+  data: CreateParkingZoneRequest,
+): Promise<ParkingZoneDTO> {
+  return apiFetch(`${BASE}/zones`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateParkingZone(
+  id: string,
+  data: Partial<CreateParkingZoneRequest>,
+): Promise<ParkingZoneDTO> {
+  return apiFetch(`${BASE}/zones/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteParkingZone(id: string): Promise<void> {
+  return apiFetch(`${BASE}/zones/${id}`, { method: "DELETE" });
+}
+
+// ─── Vehicles CRUD ──────────────────────────────────────────────────────────
+
+export function updateParkingVehicle(
+  id: string,
+  data: Partial<CreateParkingVehicleRequest>,
+): Promise<ParkingVehicleDTO> {
+  return apiFetch(`${BASE}/vehicles/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteParkingVehicle(id: string): Promise<void> {
+  return apiFetch(`${BASE}/vehicles/${id}`, { method: "DELETE" });
+}
+
+// ─── Fee Rules CRUD ─────────────────────────────────────────────────────────
+
+export function listParkingFeeRules(
+  params?: ListParkingFeeRulesParams,
+): Promise<Paginated<ParkingFeeRuleDTO>> {
+  return apiFetch(withQuery(`${BASE}/fee-rules`, params));
+}
+
+export function createParkingFeeRule(
+  data: CreateParkingFeeRuleRequest,
+): Promise<ParkingFeeRuleDTO> {
+  return apiFetch(`${BASE}/fee-rules`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateParkingFeeRule(
+  id: string,
+  data: Partial<CreateParkingFeeRuleRequest>,
+): Promise<ParkingFeeRuleDTO> {
+  return apiFetch(`${BASE}/fee-rules/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteParkingFeeRule(id: string): Promise<void> {
+  return apiFetch(`${BASE}/fee-rules/${id}`, { method: "DELETE" });
+}
+
+// ─── Passes CRUD ────────────────────────────────────────────────────────────
+
+export function updateParkingPass(
+  id: string,
+  data: Partial<CreateParkingPassRequest>,
+): Promise<ParkingPassDTO> {
+  return apiFetch(`${BASE}/passes/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteParkingPass(id: string): Promise<void> {
+  return apiFetch(`${BASE}/passes/${id}`, { method: "DELETE" });
+}
+
+// ─── Sessions Extra ─────────────────────────────────────────────────────────
+
+export function voidParkingSession(id: string): Promise<ParkingSessionDTO> {
+  return apiFetch(`${BASE}/sessions/${id}/void`, { method: "PUT" });
+}
+
+// ─── Dashboard & Analytics ──────────────────────────────────────────────────
+
+export function getParkingDashboard(): Promise<ParkingDashboardDTO> {
+  return apiFetch(`${BASE}/dashboard`);
+}
+
+export function getParkingAnalytics(
+  period?: "7d" | "30d" | "90d",
+): Promise<ParkingAnalyticsDTO> {
+  return apiFetch(
+    withQuery(`${BASE}/analytics`, period ? { period } : undefined),
+  );
+}
+
+// ─── Settings ───────────────────────────────────────────────────────────────
+
+export function getParkingSettings(): Promise<ParkingSettingsDTO> {
+  return apiFetch(`${BASE}/settings`);
+}
+
+export function updateParkingSettings(
+  data: UpdateParkingSettingsRequest,
+): Promise<ParkingSettingsDTO> {
+  return apiFetch(`${BASE}/settings`, {
+    method: "PUT",
     body: JSON.stringify(data),
   });
 }

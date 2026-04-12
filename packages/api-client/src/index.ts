@@ -13,3 +13,5 @@ export * from './realtime-store';
 export * from './hooks/useWebSocket';
 export * from './visitors';
 export * from './parking';
+export * from './cctv';
+export * from './access-points';

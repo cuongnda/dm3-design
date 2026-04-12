@@ -7,9 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@dm3/api-client": "*",
@@ -20,6 +18,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
+    "hls.js": "^1.6.15",
     "i18next": "^26.0.1",
     "i18next-browser-languagedetector": "^8.2.1",
     "lucide-react": "^0.574.0",
@@ -36,7 +35,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
-    "@playwright/test": "^1.58.2",
     "@types/node": "^24.10.13",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",

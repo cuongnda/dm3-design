@@ -9,8 +9,10 @@ Go monorepo for the Duall Master 3.0 platform.
 | audit-svc | 8001 | Immutable audit log (NATS consumer + query API) |
 | device-gateway | 8002 | MQTT ↔ NATS bridge, device lifecycle |
 | access-svc | 8003 | Access control rules + event processing |
-| identity-svc | 8004 | Users, credentials, groups, visitors |
+| identity-svc | 8004 | Users, credentials, groups |
 | auth-svc | 8005 | JWT auth, two-step company login |
+| visitor-svc | 8006 | Visitor management (plugin-gated, `dm3_visitor` schema) |
+| parking-svc | 8007 | Parking management (plugin-gated, `dm3_parking` schema) |
 
 ## VSCode Debug (Recommended for Development)
 
@@ -49,11 +51,13 @@ Open VSCode → **Run & Debug** panel (Ctrl+Shift+D) → pick a service:
 | Config | Service | Port |
 |--------|---------|------|
 | Audit Service | audit-svc | 8001 |
-| Auth Service | auth-svc | 8005 |
-| Identity Service | identity-svc | 8004 |
-| Access Service | access-svc | 8003 |
 | Device Gateway | device-gateway | 8002 |
-| All Backend Services | all 5 above | — |
+| Access Service | access-svc | 8003 |
+| Identity Service | identity-svc | 8004 |
+| Auth Service | auth-svc | 8005 |
+| Visitor Service | visitor-svc | 8006 |
+| Parking Service | parking-svc | 8007 |
+| All Backend Services | all 7 above | — |
 | Frontend (React) | webapp dev server | 3000 |
 
 Press **F5** to start debugging. Set breakpoints in any `.go` file.
@@ -120,10 +124,13 @@ done
 make build
 
 # Run individually (each in its own terminal)
+./bin/audit-svc
 ./bin/device-gateway
 ./bin/access-svc
 ./bin/identity-svc
 ./bin/auth-svc
+./bin/visitor-svc
+./bin/parking-svc
 ```
 
 Or run one at a time for development:

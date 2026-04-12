@@ -1,6 +1,6 @@
 # Implementation Status
 
-This document tracks the current implementation status of DM3 features. Updated: 2026-04-10 (visitor management, parking schema, migration consolidation).
+This document tracks the current implementation status of DM3 features. Updated: 2026-04-12 (CCTV plugin added: dm3_cctv schema, cctv-svc, MediaMTX + MinIO wiring, console UI; parking ↔ access integration: unified vehicle registry, zone hierarchy soft-FK, NATS event bridge, barrier auto-registration, opt-in access policy check).
 
 ---
 
@@ -8,7 +8,7 @@ This document tracks the current implementation status of DM3 features. Updated:
 
 > **Two systemic gaps found that cannot be buried in per-item detail:**
 >
-> 1. **Service topology is 25% implemented.** The architecture doc (`docs/architecture/system-architecture.md:281`) specifies ~20 microservices. 5 exist in `backend/cmd/` (auth-svc, access-svc, identity-svc, device-gateway, audit-svc). All domain services (visitor-svc, booking-svc, parking-svc, guard-tour-svc, analytics-svc, etc.) are absent.
+> 1. **Service topology is ~40% implemented.** The architecture doc (`docs/architecture/system-architecture.md:281`) specifies ~20 microservices. 8 exist in `backend/cmd/` (auth-svc, access-svc, identity-svc, device-gateway, audit-svc, visitor-svc on port 8006, parking-svc on port 8007, cctv-svc). Remaining domain services (booking-svc, guard-tour-svc, analytics-svc, intercom-svc, intrusion-svc, emergency-svc, etc.) are absent.
 >
 > 2. **The majority of frontend pages are mock-data-only UI shells.** 21 of ~30 feature pages import from `mock-data` files or define inline hardcoded arrays with zero API client usage. ALL OPERATE, ALL SMART, and most SECURE/MANAGE pages are visual prototypes, not working features. Only DashboardPage, DeviceDetailPage, IdentitiesPage/PersonDetailPage/GroupsPage, and SystemSettingsPage integrate with real backend APIs.
 >
@@ -20,9 +20,9 @@ This document tracks the current implementation status of DM3 features. Updated:
 
 | Layer | Status | Details |
 |-------|--------|---------|
-| Service Topology | ❌ Gap | 5 of ~20 specified services implemented. Evidence: `backend/cmd/` has 5 dirs (auth-svc, identity-svc, access-svc, device-gateway, audit-svc); `docs/architecture/system-architecture.md:281` specifies ~20 |
+| Service Topology | ❌ Gap | 8 of ~20 specified services implemented. Evidence: `backend/cmd/` has 8 dirs (auth-svc, identity-svc, access-svc, device-gateway, audit-svc, visitor-svc on port 8006, parking-svc on port 8007, cctv-svc); `docs/architecture/system-architecture.md:281` specifies ~20 |
 | Data Flow / MQTT Pipeline | ✅ Compliant | Topic `dm/{tid}/device/{did}/{cat}` confirmed. Envelope (v, id, ts) confirmed. NATS bridge confirmed. Evidence: `backend/internal/gateway/mqtt_handler.go:48-57, 27-35` |
-| Data Model / ER | ⚠️ Partial | Core access hierarchy implemented (`dm3_access`). Visitor tables implemented (`dm3_identity.visitors`, `visits`, `visitor_badges`, `watchlist`). Parking Phase 1 tables implemented (`dm3_operate.parking_lots`, `parking_zones`, `parking_vehicles`, `parking_fee_rules`, `parking_passes`, `parking_sessions`). Vehicle registry in `dm3_identity.vehicles`. `dm3_audit` schema active (audit_logs hypertable). Remaining gaps: contractors, rooms, maintenance, keys. |
+| Data Model / ER | ⚠️ Partial | Core access hierarchy implemented (`dm3_access`). Visitor module isolated into own schema: `dm3_visitor` (11 tables). Parking module isolated into own schema: `dm3_parking` (7 tables: parking_lots, parking_zones, parking_vehicles, parking_fee_rules, parking_passes, parking_sessions, parking_settings). **Vehicle registry unified into `dm3_parking.parking_vehicles`** (migration 000010 dropped `dm3_identity.vehicles`; parking_vehicles now owns triple credentials: plate + RFID + NFC + visitor_id link). `parking_zones.access_zone_id` soft-FK into `dm3_access.zones` (migration 000010). `dm3_access.access_devices` +`source`/`source_ref` for auto-registered barriers (migration 000011). `parking_settings.enforce_access_rules` opt-in cross-module policy check (migration 000012). **CCTV module isolated into own schema: `dm3_cctv`** (migration 000013 — `cameras` 1-1 extension of `dm3_devices.devices`, `event_clips` hypertable with soft FK to `dm3_access.access_events`, `cctv_settings`). `dm3_audit` schema active (audit_logs hypertable). Remaining gaps: contractors, rooms, maintenance, keys. See `docs/architecture/module-isolation.md`. |
 | Security | ⚠️ Partial | JWT auth, bcrypt, CORS, refresh-token replay detection confirmed. Missing: TLS config in docker-compose for EMQX, no rate limiting middleware found. |
 | Deployment | ✅ Compliant | All 6 infra services present in `backend/docker-compose.yml` with correct ports. Simulator is in a separate `simulator/docker-compose.yml` (minor split). No Traefik gateway config found. |
 
@@ -43,11 +43,25 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Implemented: Access Groups CRUD ✅ | AG↔AP assignment ✅ | AG↔User assignment with temporal membership ✅ | Access Time management ✅ | Access rule sync to devices via MQTT ✅ | Spatial zone hierarchy ✅ | Zone-owned indoor map upload + serving ✅ | Zone detail list/map workflows reflected in console ✅ | Passage Time field on access_points (DB) ✅
   - Deviation: Passage Time (`access_time_id` on access_points) is stored in DB but not yet exposed in the Access Point UI. Broader site modeling beyond the current zone hierarchy still needs separate verification if reintroduced.
 
-- **identity-svc** (`backend/internal/identity/`, `backend/internal/visitor/`) — User/credential management, identity operations, visitor management
-  - Status: ⚠️ Partial | Risk: Medium
-  - Evidence: Migration confirms `dm3_identity.users`, `dm3_identity.credentials`, `dm3_identity.user_groups`, `dm3_identity.departments`, `dm3_identity.visitors`, `dm3_identity.visits`, `dm3_identity.visitor_badges`, `dm3_identity.watchlist`, `dm3_identity.vehicles` ✅
-  - Implemented: User CRUD ✅ | Credentials ✅ | Groups ✅ | Departments ✅ | Visitor management (full CRUD + walk-in + watchlist + QR + cron) ✅ | Vehicle registry ✅
-  - Deviation: No `contractors`, `rooms`, or `maintenance` tables. These features are mock-UI only.
+- **identity-svc** (`backend/internal/identity/`) — User/credential management, identity operations
+  - Status: ✅ Compliant | Risk: Low
+  - Evidence: Migration confirms `dm3_identity.users`, `dm3_identity.credentials`, `dm3_identity.user_groups`, `dm3_identity.departments` ✅
+  - Implemented: User CRUD ✅ | Credentials ✅ | Groups ✅ | Departments ✅
+  - Deviation: No `contractors`, `rooms`, or `maintenance` tables. These features are mock-UI only. Vehicle registry was relocated to `dm3_parking.parking_vehicles` (migration 000010) for unified triple-credential support.
+
+- **visitor-svc** (`backend/cmd/visitor-svc/`, `backend/internal/visitor/`) — Standalone visitor management service (port 8006)
+  - Status: ✅ Compliant (v2, module isolation) | Risk: Low
+  - Evidence: `backend/cmd/visitor-svc/main.go` — standalone service with PostgreSQL, NATS streaming, i18n, audit logging, health checks, graceful shutdown. Migration 000005 (dm3_visitor schema) + 000006 (temp_credentials) confirmed.
+  - **Schema isolation**: All visitor tables moved from `dm3_identity` to own `dm3_visitor` schema (independently deployable). See `docs/architecture/module-isolation.md`.
+  - DB tables (dm3_visitor schema — migration 000005): `visitors`, `visits`, `visitor_badges`, `watchlist`, `visitor_settings`, `visit_groups`, `visitor_access_log`, `recurring_visit_templates`, `visitor_agreements`, `visitor_agreement_signatures`
+  - DB tables (migration 000006): `temp_credentials` — automatically created on visit approval via `visit.approved` NATS event; revoked on checkout/cancellation via `visit.ended` event
+  - visits table v2 columns: `group_id`, `recurring_template_id`, `cancelled_reason`, `rejection_reason`, `approved_by`, `checkout_reason`, `reinvite_count`
+  - **Event-driven architecture**: publishes `visit.approved`, `visit.checkedin`, `visit.checkedout`, `visit.cancelled` events; subscribes to `identity.user.updated`, `access.zone.updated` for local cache invalidation
+  - **Credential integration**: `visit.approved` → access-svc creates temp credential in `dm3_visitor.temp_credentials`; `visit.ended` → access-svc revokes credential
+  - **Feature flag**: per-tenant `enabled_plugins` toggle in tenant settings; visitor plugin disabled by default until explicitly enabled
+  - Implemented: Visitor CRUD ✅ | Visit scheduling & check-in/out ✅ | Walk-in registration ✅ | Watchlist management ✅ | QR code check-in ✅ | Badge printing ✅ | Auto-checkout cron ✅ | Visit Groups (batch/conference) ✅ | Recurring visit templates ✅ | Visitor access log ✅ | Visitor agreements & signatures ✅ | Analytics (top visitors, stats) ✅ | Per-tenant settings ✅ | Evacuation list ✅ | Reinvite flow ✅ | Temp credential lifecycle ✅
+  - API: 40+ endpoints under `/api/v1/visitors/` — visits CRUD, lifecycle (approve/checkin/checkout/reinvite), walk-in, batch, groups, watchlist, agreements, analytics, recurring, settings, access-log, evacuation, QR lookup
+  - Frontend: `apps/console/src/features/visitors/` (8 pages) + `apps/console/src/features/manage/visitors/` (main VisitorsPage with hooks). Lazy-loaded behind `PluginGuard` component (feature flag check). API client: `packages/api-client/src/visitors.ts` (35+ functions)
 
 - **device-gateway** (`backend/internal/gateway/`) — MQTT bridge, device provisioning, sync coordination, WebSocket events, managed firmware storage
   - Status: ✅ Compliant | Risk: Low
@@ -107,10 +121,26 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Evidence: `apps/console/src/features/secure/ai-detection/AIDetectionPage.tsx` — imports from `./mock-data`
   - Deviation: No AI detection backend service or spec-matching API endpoint found. Both frontend and backend are incomplete.
 
-- **CCTV** (`CCTVPage`, `CameraDetailPage`)
-  - Status: ⚠️ Partial | Risk: Medium
-  - Evidence: `CCTVPage.tsx` — has both `useQuery` (partial real API) and mock-data imports; `CameraDetailPage.tsx` — mock-data only
-  - Deviation: Camera playback and live stream endpoints not confirmed in any backend service.
+- **CCTV** (`CCTVCamerasPage`, `CCTVLiveViewPage`, `CCTVClipsPage`, `CCTVSettingsPage`)
+  - Status: ⚠️ Partial (Phase 1 — camera CRUD, live view, and manual/API clips are functional; event-linked clips via access events, MediaMTX path lifecycle management, NVR management, playback/timeline, and PTZ are not yet implemented) | Risk: Medium
+  - Backend: Standalone `cctv-svc` (`backend/cmd/cctv-svc/`, `backend/internal/cctv/`) — camera CRUD, clip listing/presigned playback, live-stream endpoint coordination (WHEP/HLS via MediaMTX), RTSP DESCRIBE probe, AES-GCM credential encryption, retention worker pruning clips + MinIO objects per `cctv_settings.retention_days`. Plugin-gated via `authsvc.RequirePlugin("cctv")`.
+  - Schema (migration 000013, `dm3_cctv`): `cameras` (1-1 extension of `dm3_devices.devices` type='camera' with encrypted RTSP creds + pre/post-roll), `event_clips` (TimescaleDB hypertable, 7-day chunks, soft FKs to devices + `dm3_access.access_events`), `cctv_settings` (per-tenant retention + quota).
+  - Integration with access control:
+    - **Camera is a device**: `cameras.device_id` is both PK and FK to `dm3_devices.devices` — no parallel camera registry.
+    - **Access-point binding**: cameras attach to access_points via existing `dm3_access.access_devices` junction; UI queries `access-points-all` client when assigning.
+    - **Clip ↔ access event link**: `event_clips.access_event_id` is a soft FK (UUID, no hard constraint — preserves clip retention after event purge). Queryable via `GET /api/v1/cctv/clips?access_event_id=…` for access-history playback.
+    - **Event-driven trigger**: _(planned, not yet wired)_ schema supports `trigger='access_event'` with `access_event_id` soft FK, but cctv-svc does not yet subscribe to access-svc events — only manual and API-triggered clips (`trigger='manual'|'api'`) are functional today.
+  - Infrastructure: MediaMTX stream server + cctv-svc wired into `docker-compose.local.yml` and `deploy/nginx/nginx.local.conf` (commit `67a40f25` + `5975b38b`). MinIO bucket `cctv-<tenant>/…` with presigned URL access.
+  - Frontend: `apps/console/src/features/cctv/` — CCTVCamerasPage (CRUD + access-point binding), CCTVLiveViewPage (WHEP primary + HLS.js fallback tile), CCTVClipsPage (filter by camera + access_event_id), CCTVSettingsPage (retention, quota). Lazy-loaded behind `PluginGuard`. API client: `packages/api-client/src/cctv.ts` (50+ DTOs).
+  - Deviation: Phase 1 scope is `event_only` + `disabled` recording modes; continuous recording intentionally out of scope. Some `CameraDetailPage` legacy mock paths remain but are superseded by the new CCTV feature pages.
+  - **Known gaps (tracked for Phase 2):**
+    1. No NATS consumer for access events in cctv-svc — blocks event-linked clip auto-creation (spec BR-CC-006).
+    2. MediaMTX path lifecycle not wired to camera create/update/delete — `mediamtx_client` is initialized but unused by handlers; streams may leak or go stale.
+    3. NVR management schema/endpoints not implemented (spec `docs/specs/secure/cctv.md:52-77`).
+    4. Playback timeline, PTZ control, and bookmarks not implemented.
+    5. `DefaultClipSigner` no-op fallback returns raw object keys when `OBJECT_STORE_ENDPOINT` is unset — acceptable for dev, unsafe for prod.
+    6. Recording-mode DB constraint allows only `event_only|disabled`; spec defines `continuous|motion|event|schedule|off`.
+    7. Integration tests for CCTV are absent in `automation/tests/`.
 
 - **Emergency** (`EmergencyPage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: High
@@ -134,11 +164,13 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Evidence: `PersonDetailPage.tsx:11-12` — uses `usePerson`, `useCredentials`, `useCreateCredential`, `useDeleteCredential`, `useUploadPhoto`, `useEvents` (real API hooks); `IdentitiesPage.tsx` and `GroupsPage.tsx` confirmed to exist in `manage/identities/` with real hook usage
   - Deviation: None significant at UI level. Backend identity tables confirmed in migration.
 
-- **Visitor Management** (`VisitorsPage`)
-  - Status: ✅ Real (backend + frontend working) | Risk: Low
-  - Evidence: `backend/internal/visitor/` — 7 handler files (visitors CRUD, visits CRUD, walk-in flow, watchlist, QR check-in, auto-checkout cron); `backend/internal/models/visitor.go` — domain models; `packages/api-client/src/visitors.ts` — 13 API functions; `apps/console/src/features/manage/visitors/hooks/useVisitors.ts` — 12 TanStack Query hooks; `VisitorsPage.tsx` rewritten from mock to real API
-  - Implemented: Visitor CRUD ✅ | Visit scheduling & check-in/out ✅ | Walk-in registration ✅ | Watchlist management ✅ | QR code check-in ✅ | Badge printing ✅ | Auto-checkout cron ✅ | Frontend with real API hooks ✅
-  - DB tables: `dm3_identity.visitors`, `dm3_identity.visits`, `dm3_identity.visitor_badges`, `dm3_identity.watchlist` — all in consolidated migration
+- **Visitor Management** (`VisitorsPage` + 8 sub-pages)
+  - Status: ✅ Real (backend v2 + frontend working) | Risk: Low
+  - Evidence: `backend/internal/visitor/` — 16 handler files; `backend/cmd/visitor-svc/main.go` — standalone service; `packages/api-client/src/visitors.ts` — 35+ API functions; `apps/console/src/features/manage/visitors/` + `apps/console/src/features/visitors/` — real API hooks
+  - Implemented (v1): Visitor CRUD ✅ | Visit scheduling & check-in/out ✅ | Walk-in registration ✅ | Watchlist management ✅ | QR code check-in ✅ | Badge printing ✅ | Auto-checkout cron ✅
+  - Implemented (v2 — migration 003): Visit Groups (batch/conference) ✅ | Recurring visit templates ✅ | Visitor access log ✅ | Visitor agreements & NDA signatures ✅ | Per-tenant visitor settings ✅ | Analytics (top visitors, stats) ✅ | Evacuation list ✅ | Reinvite flow ✅ | Batch create ✅
+  - DB tables (dm3_visitor schema — 11 tables): `visitors`, `visits`, `visitor_badges`, `watchlist`, `visitor_settings`, `visit_groups`, `visitor_access_log`, `recurring_visit_templates`, `visitor_agreements`, `visitor_agreement_signatures`, `temp_credentials`
+  - Frontend pages: VisitorsPage, VisitorSettingsPage, VisitorWatchlistPage, VisitorGroupsPage, VisitorAccessHistoryPage, VisitorAnalyticsPage, VisitorPreRegisterPage, VisitorAgreementsPage, VisitorRecurringPage
 
 - **Contractor Management** (`ContractorsPage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: Medium
@@ -160,7 +192,7 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Evidence: `ProvisioningPage.tsx` — imports mock-data for device provisioning flow; backend provisioning flow is fully implemented (`gateway/provisioning.go`)
   - Deviation: Frontend device provisioning UI is a mock-data shell. Access Group-based rule provisioning is handled via the Access Groups UI (see above), not this page.
 
-#### OPERATE Domain — ⚠️ ALL FRONTEND PAGES ARE MOCK-DATA SHELLS (parking has backend DB schema)
+#### OPERATE Domain — ⚠️ MOST FRONTEND PAGES ARE MOCK-DATA SHELLS (parking is fully wired end-to-end)
 
 - **Room Booking** (`RoomBookingPage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: Medium
@@ -168,10 +200,17 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Deviation: No backend implementation. Frontend and backend both incomplete.
 
 - **Parking** (`ParkingPage`)
-  - Status: ⚠️ Partial (backend DB tables exist, frontend still mock-only) | Risk: Medium
-  - Evidence: `apps/console/src/features/operate/parking/ParkingPage.tsx:7` — `import ... from './mock-data'`; DB tables exist in `dm3_operate` schema
-  - Backend progress: Phase 1 DB tables implemented — `dm3_operate.parking_lots`, `parking_zones`, `parking_vehicles`, `parking_fee_rules`, `parking_passes`, `parking_sessions` with indexes and triggers. Go models in `backend/internal/models/parking.go`. No API handlers yet.
-  - Deviation: Frontend is still mock-data shell. Backend has DB schema and models but no HTTP handlers or NATS consumers.
+  - Status: ✅ Implemented (full backend + access integration + plugin-gated frontend wired to real APIs) | Risk: Low
+  - Backend: Standalone `parking-svc` on port 8007 with 19 API endpoints. Isolated `dm3_parking` schema (migration 000008). Models, handlers, helpers, events in `backend/internal/parking/`. NATS stream `PARKING` for events. Plugin-gated via `RequirePlugin("parking")`. Unit + integration tests in `backend/internal/parking/*_test.go`. Seed data in `backend/scripts/seed_parking.sql`.
+  - **Parking ↔ Access integration** (migrations 000010–000012, 2026-04-12):
+    - **Phase 1 — Unified vehicle registry**: `dm3_identity.vehicles` dropped; `dm3_parking.parking_vehicles` owns plate + RFID + NFC + visitor_id link. CHECK constraint enforces single owner (user XOR visitor).
+    - **Phase 2 — Triple credential resolution**: entry/exit handlers resolve vehicle by NFC > RFID > plate (with recognition_confidence recorded, `matched_by` populated).
+    - **Phase 3 — NATS event bridge**: parking entry/exit publishes to `dm3.parking.{tid}.access.{direction}`; access-svc `ParkingAccessConsumer` (`backend/internal/access/parking_access_consumer.go`) ingests into `dm3_access.access_events` with `source=parking` metadata and `user_name=vehicle:{plate}`.
+    - **Phase 4 — Barrier auto-registration**: parking zone create/update/delete publishes to `dm3.parking.{tid}.zone.barrier_sync`; access-svc `ParkingBarrierConsumer` upserts `access_devices` (source=parking, source_ref=zone_id, type=barrier), creates matching `access_points`, links via `access_point_devices` with roles `reader_in`/`reader_out`. Idempotent via `UNIQUE(tenant_id, source, source_ref)`.
+    - **Phase 5 — Opt-in access policy check**: `parking_settings.enforce_access_rules=true` triggers cross-module check in `CreateParkingSession` — validates user belongs to an access_group whose access_points reference the zone's `access_zone_id` before allowing entry. Gracefully degrades when zone has no `access_zone_id`, vehicle has no owner, or setting is disabled.
+  - Infrastructure: Docker Compose service, nginx proxy (both local + prod configs route `/api/v1/parking/` to parking-svc:8007), Makefile entry all configured.
+  - Frontend: Plugin-gated routes with `PluginGuard`, sidebar conditionally shows parking nav. All 8 pages in `apps/console/src/features/parking/` (ParkingDashboard, ParkingZones, ParkingVehicles, ParkingSessions, ParkingPasses, ParkingFeeRules, ParkingAnalytics, ParkingSettings) use `@dm3/api-client` with TanStack Query (47 useQuery/useMutation/api-client references, 0 mock imports).
+  - Deviation: None — parking module is now end-to-end wired (backend + access integration + frontend). Same completeness tier as visitor module.
 
 - **Maintenance** (`MaintenancePage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: Low
@@ -295,7 +334,7 @@ Features with detailed specifications in `docs/specs/` but not yet implemented:
 - **HR System Integration** — Auto-sync employee data from HRIS
 - **Mobile Credentials** — Smartphone-based access credentials
 - **Self-service Portal** — Employee self-management interface
-- ~~**Advanced Visitor Workflows** — Complex approval and escort processes~~ → **Implemented** (Phase 1). Visitor CRUD, visit scheduling, walk-in registration, watchlist, QR check-in, badge printing, auto-checkout cron. Advanced workflows (multi-level approval, escort tracking) remain as Phase 2.
+- ~~**Advanced Visitor Workflows** — Complex approval and escort processes~~ → **Implemented** (Phase 1 + v2). Phase 1: Visitor CRUD, visit scheduling, walk-in, watchlist, QR, badge, auto-checkout. V2 (migration 003): visit groups, recurring templates, access log, agreements/NDA, per-tenant settings, analytics, evacuation list, reinvite, batch create. Remaining Phase 3: multi-level approval chains, escort GPS tracking, contractor badge integration.
 
 ### OPERATE Domain
 - **Advanced Booking Features** — Recurring bookings, resource conflicts, calendar sync
@@ -356,9 +395,9 @@ High-level features mentioned in vision documents but lacking detailed specifica
 ## Summary
 
 - **✅ Compliant** (fully matches spec): auth-svc (v1), access-svc current scope (including zones + managed map assets), device-gateway, audit-svc, MQTT pipeline, Dashboard, Devices, SystemSettings, IdentityManagement, AccessGroups/AccessControl, VisitorManagement, NATS, Valkey, MinIO, TimescaleDB, shared packages — **~16 items**
-- **⚠️ Partial** (UI shell or missing components): 19+ frontend pages are mock-data-only; parking has DB schema but no API handlers; AP passage time UI is still missing; EMQX missing TLS; Android terminal unverified; Flutter is placeholder — **~26 items**
-- **❌ Gap** (claimed implemented, not found): Flutter apps, service topology (15 of ~20 services missing) — **~2 items + systemic**
+- **⚠️ Partial** (UI shell or missing components): 19+ frontend pages are mock-data-only; AP passage time UI is still missing; EMQX missing TLS; Android terminal unverified; Flutter is placeholder — **~24 items**
+- **❌ Gap** (claimed implemented, not found): Flutter apps, service topology (13 of ~20 services missing) — **~2 items + systemic**
 - **📋 Specified**: ~15 features with detailed specs ready for development
 - **🔮 Vision Only**: ~20 next-generation features awaiting specification
 
-> **Audit note:** The prior "~40 major features Implemented" claim overstates completeness. The core platform (auth, devices, identity, real-time pipeline, audit trail) is genuinely implemented end-to-end. Visitor management is now fully implemented (backend + frontend). Parking has Phase 1 DB schema and Go models but no API handlers yet. The remaining domain feature layer (OPERATE excluding parking schema, SMART, most of SECURE) exists as frontend UI prototypes backed by mock data.
+> **Audit note:** The prior "~40 major features Implemented" claim overstates completeness. The core platform (auth, devices, identity, real-time pipeline, audit trail) is genuinely implemented end-to-end. Visitor management is fully implemented (backend + frontend) with schema isolation: `dm3_visitor` is an independently deployable schema with its own service (visitor-svc, port 8006). Parking management has a full backend implementation: standalone `parking-svc` (port 8007), isolated `dm3_parking` schema (7 tables), 19 API endpoints, NATS events, plugin gating, unit + integration tests, and seed data. As of 2026-04-12 (migrations 000010–000012), parking-svc is cross-integrated with access-svc: unified vehicle registry with triple credentials (plate/RFID/NFC), parking zones linked into access zone hierarchy via soft-FK, NATS event bridge (parking → `dm3_access.access_events`), barrier device auto-registration into `dm3_access.access_devices`, and an opt-in cross-module access-policy check gated by `parking_settings.enforce_access_rules`. All 8 parking frontend pages are now wired to real APIs via `@dm3/api-client` + TanStack Query (no mock data). See `docs/architecture/module-isolation.md`. The remaining domain feature layer (OPERATE excluding parking, SMART, most of SECURE) exists as frontend UI prototypes backed by mock data.

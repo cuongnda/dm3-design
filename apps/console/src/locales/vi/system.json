@@ -390,5 +390,13 @@
   "firmware.confirmDelete": "Bạn có chắc chắn muốn xóa firmware này?",
   "firmware.notFound": "Không tìm thấy firmware",
   "firmware.uploadedBy": "Người tải lên",
-  "firmware.deployPlaceholder": "Chức năng triển khai firmware chưa được triển khai. Đây là placeholder."
+  "firmware.deployPlaceholder": "Chức năng triển khai firmware chưa được triển khai. Đây là placeholder.",
+  "plugins.title": "Plugin",
+  "plugins.description": "Bật hoặc tắt plugin cho công ty này",
+  "plugins.enabled": "Đã bật",
+  "plugins.disabled": "Đã tắt",
+  "plugins.core": "Luôn bật",
+  "plugins.saving": "Đang lưu...",
+  "plugins.saved": "Đã cập nhật plugin",
+  "plugins.saveError": "Cập nhật plugin thất bại"
 }

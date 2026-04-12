@@ -30,7 +30,7 @@
       {
         "action": "fill",
         "testid": "company-input-search",
-        "value": "Test"
+        "value": "Duali"
       },
       {
         "action": "wait",
@@ -133,6 +133,178 @@
       {
         "action": "assert_visible",
         "testid": "create-button-submit"
+      }
+    ]
+  },
+  "test_company_detail_plugins_section": {
+    "description": "Verify plugins section is visible on company detail page",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/companies"
+      },
+      {
+        "action": "click",
+        "css": "[data-testid^='company-row-']",
+        "first": true
+      },
+      {
+        "action": "assert_visible",
+        "testid": "detail-text-name"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "plugin-toggle-core"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "plugin-toggle-visitor"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "plugin-toggle-parking"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "plugin-toggle-intercom"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "plugin-toggle-smart_building"
+      }
+    ]
+  },
+  "test_company_detail_core_plugin_disabled": {
+    "description": "Core plugin toggle should be disabled (always on)",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/companies"
+      },
+      {
+        "action": "click",
+        "css": "[data-testid^='company-row-']",
+        "first": true
+      },
+      {
+        "action": "assert_visible",
+        "testid": "plugin-toggle-core"
+      },
+      {
+        "action": "assert_disabled",
+        "css": "[data-testid='plugin-toggle-core'] button[role='switch']"
+      }
+    ]
+  },
+  "test_company_detail_toggle_plugin": {
+    "description": "Toggle a non-core plugin on and off",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/companies"
+      },
+      {
+        "action": "click",
+        "css": "[data-testid^='company-row-']",
+        "first": true
+      },
+      {
+        "action": "assert_visible",
+        "testid": "plugin-toggle-visitor"
+      },
+      {
+        "action": "click",
+        "css": "[data-testid='plugin-toggle-visitor'] button[role='switch']"
+      },
+      {
+        "action": "wait",
+        "ms": 1500
+      },
+      {
+        "action": "assert_visible",
+        "testid": "plugin-toggle-visitor"
+      }
+    ]
+  },
+  "test_company_detail_stats_visible": {
+    "description": "Verify company detail stats cards are displayed",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/companies"
+      },
+      {
+        "action": "click",
+        "css": "[data-testid^='company-row-']",
+        "first": true
+      },
+      {
+        "action": "assert_visible",
+        "testid": "detail-stat-users"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "detail-stat-devices"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "detail-stat-doors"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "detail-stat-events"
+      }
+    ]
+  },
+  "test_company_detail_suspend_button": {
+    "description": "Verify suspend/activate button is visible on detail page",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/companies"
+      },
+      {
+        "action": "click",
+        "css": "[data-testid^='company-row-']",
+        "first": true
+      },
+      {
+        "action": "assert_visible",
+        "testid": "detail-button-suspend"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "detail-button-back"
+      }
+    ]
+  },
+  "test_company_detail_back_navigation": {
+    "description": "Back button navigates to company list",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/companies"
+      },
+      {
+        "action": "click",
+        "css": "[data-testid^='company-row-']",
+        "first": true
+      },
+      {
+        "action": "assert_visible",
+        "testid": "detail-button-back"
+      },
+      {
+        "action": "click",
+        "testid": "detail-button-back"
+      },
+      {
+        "action": "assert_url_contains",
+        "url": "/system/companies"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "company-table-list"
       }
     ]
   }

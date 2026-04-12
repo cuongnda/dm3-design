@@ -11,6 +11,7 @@ import (
 	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/email"
+	"github.com/duali/dm3-backend/pkg/natsutil"
 )
 
 // VisitorHandlers holds the database dependency for all visitor routes.
@@ -18,11 +19,19 @@ type VisitorHandlers struct {
 	db    *db.DB
 	audit *audit.Logger
 	email *email.Client
+	nats  *natsutil.Client
+	cache *LookupCache
 }
 
 // NewVisitorHandlers constructs a VisitorHandlers with the given database pool.
-func NewVisitorHandlers(database *db.DB, auditLog *audit.Logger) *VisitorHandlers {
-	return &VisitorHandlers{db: database, audit: auditLog}
+// natsClient is optional — pass nil to disable event publishing.
+// cache is optional — pass nil to fall back to direct DB lookups for host/zone resolution.
+func NewVisitorHandlers(database *db.DB, auditLog *audit.Logger, cache *LookupCache, natsClient ...*natsutil.Client) *VisitorHandlers {
+	h := &VisitorHandlers{db: database, audit: auditLog, cache: cache}
+	if len(natsClient) > 0 {
+		h.nats = natsClient[0]
+	}
+	return h
 }
 
 // SetEmailClient configures the email client for visitor invitation emails.

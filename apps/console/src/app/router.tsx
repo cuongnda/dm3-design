@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { MainLayout } from '@dm3/ui';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
@@ -20,6 +20,7 @@ import { UserAccountDetailPage } from '@/features/system/UserAccountDetailPage';
 import { CreateUserAccountPage } from '@/features/system/CreateUserAccountPage';
 import { ProtectedRoute } from './ProtectedRoute';
 import { RoleBasedRoute } from './RoleBasedRoute';
+import { PluginGuard } from '@/components/common/PluginGuard';
 
 // Essential Security Features (legacy)
 const AccessControlPage = lazy(() =>
@@ -96,15 +97,36 @@ const UserManagementPage = lazy(() =>
 const UserDetailPage = lazy(() =>
   import('@/features/user-management/UserDetailPage').then((m) => ({ default: m.UserDetailPage }))
 );
-const VehicleManagementPage = lazy(() =>
-  import('@/features/manage/vehicles/VehicleManagementPage').then((m) => ({ default: m.VehicleManagementPage }))
-);
 const DepartmentManagementPage = lazy(() =>
   import('@/features/department-management/DepartmentManagementPage').then((m) => ({ default: m.DepartmentManagementPage }))
 );
 
 const VisitorsPage = lazy(() =>
   import('@/features/manage/visitors/VisitorsPage').then((m) => ({ default: m.VisitorsPage }))
+);
+const VisitorPreRegisterPage = lazy(() =>
+  import('@/features/visitors/VisitorPreRegisterPage').then((m) => ({ default: m.VisitorPreRegisterPage }))
+);
+const VisitorGroupsPage = lazy(() =>
+  import('@/features/visitors/VisitorGroupsPage').then((m) => ({ default: m.VisitorGroupsPage }))
+);
+const VisitorWatchlistPage = lazy(() =>
+  import('@/features/visitors/VisitorWatchlistPage').then((m) => ({ default: m.VisitorWatchlistPage }))
+);
+const VisitorAgreementsPage = lazy(() =>
+  import('@/features/visitors/VisitorAgreementsPage').then((m) => ({ default: m.VisitorAgreementsPage }))
+);
+const VisitorAccessHistoryPage = lazy(() =>
+  import('@/features/visitors/VisitorAccessHistoryPage').then((m) => ({ default: m.VisitorAccessHistoryPage }))
+);
+const VisitorAnalyticsPage = lazy(() =>
+  import('@/features/visitors/VisitorAnalyticsPage').then((m) => ({ default: m.VisitorAnalyticsPage }))
+);
+const VisitorRecurringPage = lazy(() =>
+  import('@/features/visitors/VisitorRecurringPage').then((m) => ({ default: m.VisitorRecurringPage }))
+);
+const VisitorSettingsPage = lazy(() =>
+  import('@/features/visitors/VisitorSettingsPage').then((m) => ({ default: m.VisitorSettingsPage }))
 );
 const ContractorsPage = lazy(() =>
   import('@/features/manage/contractors/ContractorsPage').then((m) => ({ default: m.ContractorsPage }))
@@ -122,12 +144,50 @@ const ProvisioningPage = lazy(() =>
   import('@/features/manage/provisioning/ProvisioningPage').then((m) => ({ default: m.ProvisioningPage }))
 );
 
+// CCTV
+const CCTVDashboardPage = lazy(() =>
+  import('@/features/cctv/CCTVDashboardPage').then((m) => ({ default: m.CCTVDashboardPage }))
+);
+const CCTVCamerasPage = lazy(() =>
+  import('@/features/cctv/CCTVCamerasPage').then((m) => ({ default: m.CCTVCamerasPage }))
+);
+const CCTVLiveViewPage = lazy(() =>
+  import('@/features/cctv/CCTVLiveViewPage').then((m) => ({ default: m.CCTVLiveViewPage }))
+);
+const CCTVClipsPage = lazy(() =>
+  import('@/features/cctv/CCTVClipsPage').then((m) => ({ default: m.CCTVClipsPage }))
+);
+const CCTVSettingsPage = lazy(() =>
+  import('@/features/cctv/CCTVSettingsPage').then((m) => ({ default: m.CCTVSettingsPage }))
+);
+
 // OPERATE
 const RoomBookingPage = lazy(() =>
   import('@/features/operate/room-booking/RoomBookingPage').then((m) => ({ default: m.RoomBookingPage }))
 );
-const ParkingPage = lazy(() =>
-  import('@/features/operate/parking/ParkingPage').then((m) => ({ default: m.ParkingPage }))
+const ParkingDashboardPage = lazy(() =>
+  import('@/features/parking/ParkingDashboardPage').then((m) => ({ default: m.ParkingDashboardPage }))
+);
+const ParkingSessionsPage = lazy(() =>
+  import('@/features/parking/ParkingSessionsPage').then((m) => ({ default: m.ParkingSessionsPage }))
+);
+const ParkingVehiclesPage = lazy(() =>
+  import('@/features/parking/ParkingVehiclesPage').then((m) => ({ default: m.ParkingVehiclesPage }))
+);
+const ParkingZonesPage = lazy(() =>
+  import('@/features/parking/ParkingZonesPage').then((m) => ({ default: m.ParkingZonesPage }))
+);
+const ParkingPassesPage = lazy(() =>
+  import('@/features/parking/ParkingPassesPage').then((m) => ({ default: m.ParkingPassesPage }))
+);
+const ParkingFeeRulesPage = lazy(() =>
+  import('@/features/parking/ParkingFeeRulesPage').then((m) => ({ default: m.ParkingFeeRulesPage }))
+);
+const ParkingAnalyticsPage2 = lazy(() =>
+  import('@/features/parking/ParkingAnalyticsPage').then((m) => ({ default: m.ParkingAnalyticsPage }))
+);
+const ParkingSettingsPage = lazy(() =>
+  import('@/features/parking/ParkingSettingsPage').then((m) => ({ default: m.ParkingSettingsPage }))
 );
 const MaintenancePage = lazy(() =>
   import('@/features/operate/maintenance/MaintenancePage').then((m) => ({ default: m.MaintenancePage }))
@@ -291,13 +351,24 @@ export const Router = createBrowserRouter([
               { path: 'manage/users', element: <LazyWrap><UserManagementPage /></LazyWrap> },
               { path: 'manage/users/new', element: <LazyWrap><UserDetailPage /></LazyWrap> },
               { path: 'manage/users/:id', element: <LazyWrap><UserDetailPage /></LazyWrap> },
-              { path: 'manage/vehicles', element: <LazyWrap><VehicleManagementPage /></LazyWrap> },
+              // Vehicle registry moved to parking plugin (see docs/changelog/2026-04-12-parking-access-integration.md)
+              { path: 'manage/vehicles', element: <Navigate to="/parking/vehicles" replace /> },
               { path: 'manage/departments', element: <LazyWrap><DepartmentManagementPage /></LazyWrap> },
               { path: 'manage/identities', element: <LazyWrap><IdentitiesPage /></LazyWrap> },
               { path: 'manage/identities/:id', element: <LazyWrap><PersonDetailPage /></LazyWrap> },
               { path: 'manage/identities/groups', element: <LazyWrap><GroupsPage /></LazyWrap> },
-              { path: 'manage/visitors', element: <LazyWrap><VisitorsPage /></LazyWrap> },
               { path: 'manage/contractors', element: <LazyWrap><ContractorsPage /></LazyWrap> },
+
+              // VISITORS
+              { path: 'visitors', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorsPage /></LazyWrap></PluginGuard> },
+              { path: 'visitors/register', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorPreRegisterPage /></LazyWrap></PluginGuard> },
+              { path: 'visitors/groups', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorGroupsPage /></LazyWrap></PluginGuard> },
+              { path: 'visitors/watchlist', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorWatchlistPage /></LazyWrap></PluginGuard> },
+              { path: 'visitors/agreements', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorAgreementsPage /></LazyWrap></PluginGuard> },
+              { path: 'visitors/access-history', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorAccessHistoryPage /></LazyWrap></PluginGuard> },
+              { path: 'visitors/analytics', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorAnalyticsPage /></LazyWrap></PluginGuard> },
+              { path: 'visitors/recurring', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorRecurringPage /></LazyWrap></PluginGuard> },
+              { path: 'visitors/settings', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorSettingsPage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance', element: <LazyWrap><AttendancePage /></LazyWrap> },
               { path: 'manage/deliveries', element: <LazyWrap><DeliveriesPage /></LazyWrap> },
               { path: 'manage/provisioning', element: <LazyWrap><ProvisioningPage /></LazyWrap> },
@@ -313,9 +384,25 @@ export const Router = createBrowserRouter([
               { path: 'devices/provision', element: <LazyWrap><ProvisionDevicePage /></LazyWrap> },
               { path: 'devices/:id', element: <LazyWrap><DeviceDetailPage /></LazyWrap> },
 
+              // CCTV
+              { path: 'cctv/dashboard', element: <PluginGuard plugin="cctv"><LazyWrap><CCTVDashboardPage /></LazyWrap></PluginGuard> },
+              { path: 'cctv/cameras', element: <PluginGuard plugin="cctv"><LazyWrap><CCTVCamerasPage /></LazyWrap></PluginGuard> },
+              { path: 'cctv/live', element: <PluginGuard plugin="cctv"><LazyWrap><CCTVLiveViewPage /></LazyWrap></PluginGuard> },
+              { path: 'cctv/clips', element: <PluginGuard plugin="cctv"><LazyWrap><CCTVClipsPage /></LazyWrap></PluginGuard> },
+              { path: 'cctv/settings', element: <PluginGuard plugin="cctv"><LazyWrap><CCTVSettingsPage /></LazyWrap></PluginGuard> },
+
+              // PARKING
+              { path: 'parking', element: <PluginGuard plugin="parking"><LazyWrap><ParkingDashboardPage /></LazyWrap></PluginGuard> },
+              { path: 'parking/sessions', element: <PluginGuard plugin="parking"><LazyWrap><ParkingSessionsPage /></LazyWrap></PluginGuard> },
+              { path: 'parking/vehicles', element: <PluginGuard plugin="parking"><LazyWrap><ParkingVehiclesPage /></LazyWrap></PluginGuard> },
+              { path: 'parking/zones', element: <PluginGuard plugin="parking"><LazyWrap><ParkingZonesPage /></LazyWrap></PluginGuard> },
+              { path: 'parking/passes', element: <PluginGuard plugin="parking"><LazyWrap><ParkingPassesPage /></LazyWrap></PluginGuard> },
+              { path: 'parking/fee-rules', element: <PluginGuard plugin="parking"><LazyWrap><ParkingFeeRulesPage /></LazyWrap></PluginGuard> },
+              { path: 'parking/analytics', element: <PluginGuard plugin="parking"><LazyWrap><ParkingAnalyticsPage2 /></LazyWrap></PluginGuard> },
+              { path: 'parking/settings', element: <PluginGuard plugin="parking"><LazyWrap><ParkingSettingsPage /></LazyWrap></PluginGuard> },
+
               // OPERATE
               { path: 'operate/room-booking', element: <LazyWrap><RoomBookingPage /></LazyWrap> },
-              { path: 'operate/parking', element: <LazyWrap><ParkingPage /></LazyWrap> },
               { path: 'operate/maintenance', element: <LazyWrap><MaintenancePage /></LazyWrap> },
               { path: 'operate/guard-tour', element: <LazyWrap><GuardTourPage /></LazyWrap> },
               { path: 'operate/keys', element: <LazyWrap><KeyManagementPage /></LazyWrap> },

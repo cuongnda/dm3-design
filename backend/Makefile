@@ -1,6 +1,6 @@
-.PHONY: build test lint docker-up docker-down migrate seed dev clean
+.PHONY: build test lint docker-up docker-down migrate seed seed-api dev clean
 
-SERVICES := device-gateway access-svc identity-svc auth-svc audit-svc
+SERVICES := device-gateway access-svc identity-svc auth-svc audit-svc visitor-svc parking-svc cctv-svc
 BIN_DIR := bin
 
 build:
@@ -36,6 +36,14 @@ migrate:
 seed:
 	@echo "Running seed data..."
 	PGPASSWORD=dm3secret psql -h localhost -p 5433 -U dm3 -d dm3 -f scripts/seed.sql
+
+seed-all:
+	@echo "Running comprehensive seed (all modules)..."
+	PGPASSWORD=dm3secret psql -h localhost -p 5433 -U dm3 -d dm3 -f scripts/seed_all.sql
+
+seed-api:
+	@echo "Running API-based seed (all modules)..."
+	@/bin/bash scripts/seed_all.sh
 
 seed-visitors:
 	@./scripts/seed_visitors.sh

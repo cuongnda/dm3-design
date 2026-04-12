@@ -20,7 +20,7 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- ─── Visitors ───────────────────────────────────────────────────────────────
-INSERT INTO dm3_identity.visitors (id, tenant_id, first_name, last_name, email, phone, company, national_id, watchlist_status, visit_count, last_visit_at)
+INSERT INTO dm3_visitor.visitors (id, tenant_id, first_name, last_name, email, phone, company, national_id, watchlist_status, visit_count, last_visit_at)
 VALUES
   -- Regular visitors
   ('b0000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
@@ -41,7 +41,7 @@ ON CONFLICT (id) DO NOTHING;
 -- ─── Visits (various statuses for testing) ──────────────────────────────────
 
 -- Visit 1: Pre-registered for today (waiting for arrival)
-INSERT INTO dm3_identity.visits (id, tenant_id, visitor_id, host_user_id, purpose, purpose_note, status,
+INSERT INTO dm3_visitor.visits (id, tenant_id, visitor_id, host_user_id, purpose, purpose_note, status,
   expected_arrival, expected_departure, qr_token, qr_expires_at, escort_required, nda_signed, host_approved)
 VALUES (
   'c0000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
@@ -53,7 +53,7 @@ VALUES (
 ) ON CONFLICT (id) DO NOTHING;
 
 -- Visit 2: Approved and waiting (arrived at reception)
-INSERT INTO dm3_identity.visits (id, tenant_id, visitor_id, host_user_id, purpose, purpose_note, status,
+INSERT INTO dm3_visitor.visits (id, tenant_id, visitor_id, host_user_id, purpose, purpose_note, status,
   expected_arrival, expected_departure, qr_token, qr_expires_at, escort_required, nda_signed, host_approved, host_approved_at)
 VALUES (
   'c0000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001',
@@ -65,7 +65,7 @@ VALUES (
 ) ON CONFLICT (id) DO NOTHING;
 
 -- Visit 3: Currently checked in
-INSERT INTO dm3_identity.visits (id, tenant_id, visitor_id, host_user_id, purpose, purpose_note, status,
+INSERT INTO dm3_visitor.visits (id, tenant_id, visitor_id, host_user_id, purpose, purpose_note, status,
   expected_arrival, expected_departure, actual_checkin, checkin_method,
   qr_token, qr_expires_at, badge_number, escort_required, nda_signed, host_approved, host_approved_at)
 VALUES (
@@ -78,7 +78,7 @@ VALUES (
 ) ON CONFLICT (id) DO NOTHING;
 
 -- Visit 4: Checked out (completed visit)
-INSERT INTO dm3_identity.visits (id, tenant_id, visitor_id, host_user_id, purpose, purpose_note, status,
+INSERT INTO dm3_visitor.visits (id, tenant_id, visitor_id, host_user_id, purpose, purpose_note, status,
   expected_arrival, expected_departure, actual_checkin, actual_checkout, checkin_method,
   checkout_by, qr_token, qr_expires_at, badge_number, escort_required, nda_signed, host_approved, host_approved_at)
 VALUES (
@@ -92,7 +92,7 @@ VALUES (
 ) ON CONFLICT (id) DO NOTHING;
 
 -- Visit 5: No-show
-INSERT INTO dm3_identity.visits (id, tenant_id, visitor_id, host_user_id, purpose, status,
+INSERT INTO dm3_visitor.visits (id, tenant_id, visitor_id, host_user_id, purpose, status,
   expected_arrival, expected_departure, qr_token, qr_expires_at, escort_required, nda_signed, host_approved, host_approved_at)
 VALUES (
   'c0000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000001',
@@ -104,7 +104,7 @@ VALUES (
 ) ON CONFLICT (id) DO NOTHING;
 
 -- Visit 6: Waiting status (walk-in, arrived today)
-INSERT INTO dm3_identity.visits (id, tenant_id, visitor_id, host_user_id, purpose, purpose_note, status,
+INSERT INTO dm3_visitor.visits (id, tenant_id, visitor_id, host_user_id, purpose, purpose_note, status,
   expected_arrival, expected_departure, qr_token, qr_expires_at, vehicle_plate, escort_required, nda_signed, host_approved)
 VALUES (
   'c0000000-0000-0000-0000-000000000006', '00000000-0000-0000-0000-000000000001',
@@ -116,7 +116,7 @@ VALUES (
 ) ON CONFLICT (id) DO NOTHING;
 
 -- Visit 7: Pre-registered for tomorrow
-INSERT INTO dm3_identity.visits (id, tenant_id, visitor_id, host_user_id, purpose, purpose_note, status,
+INSERT INTO dm3_visitor.visits (id, tenant_id, visitor_id, host_user_id, purpose, purpose_note, status,
   expected_arrival, expected_departure, qr_token, qr_expires_at, escort_required, nda_signed, host_approved)
 VALUES (
   'c0000000-0000-0000-0000-000000000007', '00000000-0000-0000-0000-000000000001',
@@ -128,7 +128,7 @@ VALUES (
 ) ON CONFLICT (id) DO NOTHING;
 
 -- ─── Watchlist entries ──────────────────────────────────────────────────────
-INSERT INTO dm3_identity.watchlist (id, tenant_id, entry_type, match_field, match_value, reason, added_by)
+INSERT INTO dm3_visitor.watchlist (id, tenant_id, entry_type, match_field, match_value, reason, added_by)
 VALUES
   ('d0000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
    'blacklisted', 'name', 'David Blackwell', 'Previous security incident - unauthorized area access', 'a0000000-0000-0000-0000-000000000001'),
@@ -139,7 +139,7 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- ─── Visitor badges (for checked-in visit) ──────────────────────────────────
-INSERT INTO dm3_identity.visitor_badges (tenant_id, visit_id, badge_number)
+INSERT INTO dm3_visitor.visitor_badges (tenant_id, visit_id, badge_number)
 VALUES ('00000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000003', 'V-001')
 ON CONFLICT DO NOTHING;
 

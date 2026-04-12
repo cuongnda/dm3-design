@@ -22,13 +22,6 @@ Run a single app:
 cd apps/console && npm run dev      # Console at http://localhost:3000
 ```
 
-E2E tests (Playwright):
-```bash
-cd apps/console
-npm run test:e2e
-npm run test:e2e:ui   # interactive UI mode
-```
-
 ### Backend (Go — run from `backend/`)
 
 ```bash
@@ -61,19 +54,42 @@ docker compose -f docker-compose.local.yml up -d postgres-db-timescale nats emqx
 
 Required services: TimescaleDB `:5433`, NATS+JetStream `:4222`, EMQX MQTT `:1884`.
 
-### Automation tests (pytest)
+### Automation tests (pytest — single test location for all black-box tests)
 
 ```bash
 cd automation
-pytest tests/api/          # backend API tests
-pytest tests/web/          # Playwright UI tests
+pytest tests/api/                    # backend API tests (no browser)
+pytest tests/web/                    # Playwright web UI tests
+pytest tests/tenant_isolation/       # tenant isolation tests
+pytest -m api                        # run by marker
+pytest -m web                        # run by marker
+pytest -m smoke                      # quick smoke suite
+pytest                               # everything
 ```
+
+## Testing Strategy
+
+**Two-layer approach — one backend layer, one automation layer:**
+
+| Layer | Location | Framework | What it tests |
+|---|---|---|---|
+| **Go unit/integration** | `backend/**/*_test.go` | Go testing + testify | Handlers, DB queries, middleware |
+| **Automation (API + Web + Isolation)** | `automation/` | pytest + Playwright Python | API contracts, web UI, tenant security |
+
+**Rules:**
+- All new API tests go in `automation/tests/api/`
+- All new web UI tests go in `automation/tests/web/`
+- Go tests stay next to the code they test (Go convention)
+- Do NOT create Playwright TS tests in `apps/` or root `tests/` — those locations were deprecated
+- Web tests use page objects from `automation/common/page_objects/`
+- Test data uses factories from `automation/common/factories.py`
+- All web selectors must use `data-testid` attributes
 
 ## Architecture
 
 ### Backend — Go monorepo (`backend/`)
 
-Five services, all in one Go module (`github.com/duali/dm3-backend`):
+Eight services, all in one Go module (`github.com/duali/dm3-backend`):
 
 | Service | Port | Entry point | Responsibility |
 |---|---|---|---|
@@ -82,6 +98,9 @@ Five services, all in one Go module (`github.com/duali/dm3-backend`):
 | `access-svc` | 8003 | `cmd/access-svc/` | Access rules, schedules, event logs |
 | `device-gateway` | 8002 | `cmd/device-gateway/` | MQTT bridge, device provisioning, WebSocket |
 | `audit-svc` | 8001 | `cmd/audit-svc/` | Immutable audit log (NATS consumer + query API) |
+| `visitor-svc` | 8006 | `cmd/visitor-svc/` | Visitor management (plugin-gated, dm3_visitor schema) |
+| `parking-svc` | 8007 | `cmd/parking-svc/` | Parking management (plugin-gated, dm3_parking schema) |
+| `cctv-svc` | 8008 | `cmd/cctv-svc/` | CCTV cameras, clips, MediaMTX live streams (plugin-gated, dm3_cctv schema) |
 
 **Key internal packages:**
 - `internal/config/` — shared `Config` struct, loaded from env vars (defaults to dev values)
@@ -98,6 +117,7 @@ Five services, all in one Go module (`github.com/duali/dm3-backend`):
 **Key design decisions:**
 - **Offline-first**: devices make access decisions locally; server syncs rules/credentials to devices and aggregates logs
 - **Multi-tenancy**: company = tenant; `tenant_id` on all tenant-scoped tables; two-step login (company code → credentials)
+- **Tenant scoping is explicit, not magic**: every query that touches tenant-scoped data must have a parameterized `WHERE tenant_id = $N` (INSERTs must set `tenant_id` as a real bound column). Do NOT introduce query builders or wrappers that rewrite SQL strings to inject tenant filters — we removed one for exactly these reasons (string heuristics like `strings.Contains(q, "where")` are unreliable and mask isolation bugs). `ValidateResourceAccess` in `internal/tenant/middleware.go` is the supported extra check for cross-tenant lookups.
 - NATS subjects carry `tenant_id` — extract it from subject, not just payload (see `internal/access/nats_consumer.go`)
 - 7-day grace period for expired JWT refresh tokens (to support offline devices)
 - **Audit trail**: every CREATE/UPDATE/DELETE and auth event is logged to `dm3_audit.audit_logs` (TimescaleDB hypertable). Services publish audit entries to NATS (`dm3.audit.{service}`) via `pkg/audit.Logger`; standalone `audit-svc` consumes from NATS and batch-INSERTs into DB. The table is INSERT+SELECT only (no UPDATE/DELETE by application user). Retention: 2 years, compression after 30 days. Query API at `/api/v1/audit/` (system admin) and `/api/v1/audit/tenant/` (tenant-scoped), served by audit-svc on port 8001.
@@ -126,8 +146,8 @@ Domain colors: SECURE `#3B82F6` · MANAGE `#8B5CF6` · OPERATE `#F59E0B` · SMAR
 ### Database
 
 TimescaleDB on port `5433`, database `dm3`, user `dm3`, password `dm3secret`.  
-Schema is split into namespaced schemas: `dm3_auth`, `dm3_devices`, `dm3_access`, `dm3_identity`.  
-Single migration file: `backend/pkg/db/migrations/001_initial.sql`.
+Schema is split into namespaced schemas: `dm3_auth`, `dm3_devices`, `dm3_access`, `dm3_identity`, `dm3_visitor`, `dm3_parking`, `dm3_cctv`, `dm3_audit`.  
+Migrations live in `backend/pkg/db/migrations/` (numbered `000001_*` … `000013_cctv_schema`).
 
 ## Frontend Conventions
 
@@ -162,6 +182,8 @@ Only a handful of pages (Dashboard, Devices, Identities, System Settings) connec
 ## Git Conventions
 
 - Conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
+- **Commit after every completed task** — each logical unit of work gets its own commit so progress is trackable and easy to rollback
+- Use `DM3_NO_AUTO_RELOAD=1` prefix when committing to skip the post-commit auto-reload hook
 - Never push without explicit permission from the project owner
 - Never `git push --no-verify`
 

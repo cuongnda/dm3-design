@@ -55,9 +55,25 @@ func main() {
 	}
 	defer natsClient.Close()
 
-	// Ensure NATS stream
+	// Ensure NATS streams
 	if err := natsClient.EnsureStream(ctx, "DEVICES", []string{"dm3.devices.>"}); err != nil {
-		slog.Error("failed to ensure nats stream", "error", err)
+		slog.Error("failed to ensure DEVICES nats stream", "error", err)
+		os.Exit(1)
+	}
+	if err := natsClient.EnsureStream(ctx, "ACCESS", []string{"dm3.access.>"}); err != nil {
+		slog.Error("failed to ensure ACCESS nats stream", "error", err)
+		os.Exit(1)
+	}
+
+	// Ensure VISITOR stream (created by visitor-svc; access-svc subscribes to it)
+	if err := natsClient.EnsureStream(ctx, "VISITOR", []string{"dm3.visitor.>"}); err != nil {
+		slog.Error("failed to ensure VISITOR nats stream", "error", err)
+		os.Exit(1)
+	}
+
+	// Ensure PARKING stream (created by parking-svc; access-svc subscribes for access events)
+	if err := natsClient.EnsureStream(ctx, "PARKING", []string{"dm3.parking.>"}); err != nil {
+		slog.Error("failed to ensure PARKING nats stream", "error", err)
 		os.Exit(1)
 	}
 
@@ -65,6 +81,27 @@ func main() {
 	consumer := access.NewNATSConsumer(database, natsClient)
 	if err := consumer.Start(ctx); err != nil {
 		slog.Error("failed to start nats consumer", "error", err)
+		os.Exit(1)
+	}
+
+	// Start visitor credential consumer
+	visitorCredConsumer := access.NewVisitorCredentialConsumer(database, natsClient)
+	if err := visitorCredConsumer.Start(ctx); err != nil {
+		slog.Error("failed to start visitor credential consumer", "error", err)
+		os.Exit(1)
+	}
+
+	// Start parking access consumer (ingests parking entry/exit into access_events)
+	parkingAccessConsumer := access.NewParkingAccessConsumer(database, natsClient)
+	if err := parkingAccessConsumer.Start(ctx); err != nil {
+		slog.Error("failed to start parking access consumer", "error", err)
+		os.Exit(1)
+	}
+
+	// Start parking barrier consumer (auto-registers barrier devices from parking zones)
+	parkingBarrierConsumer := access.NewParkingBarrierConsumer(database, natsClient)
+	if err := parkingBarrierConsumer.Start(ctx); err != nil {
+		slog.Error("failed to start parking barrier consumer", "error", err)
 		os.Exit(1)
 	}
 
@@ -216,38 +253,6 @@ func main() {
 
 		// Dashboard stats: all roles can read
 		r.Get("/stats", handlers.GetStats)
-	})
-
-	r.Route("/api/v1/parking", func(r chi.Router) {
-		r.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
-		r.Use(authsvc.RequireCompany())
-
-		r.Group(func(pr chi.Router) {
-			pr.Use(authsvc.RequireWriteRole("operator", "manager", "primary_manager", "system_admin"))
-			pr.Get("/vehicles", handlers.ListParkingVehicles)
-			pr.Post("/vehicles", handlers.CreateParkingVehicle)
-			pr.Get("/vehicles/{id}", handlers.GetParkingVehicle)
-			pr.Get("/sessions", handlers.ListParkingSessions)
-			pr.Post("/sessions", handlers.CreateParkingSession)
-			pr.Post("/sessions/recognitions", handlers.RecognizeParkingPlate)
-			pr.Get("/sessions/{id}", handlers.GetParkingSession)
-			pr.Put("/sessions/{id}/exit", handlers.ExitParkingSession)
-			pr.Post("/sessions/{id}/payment", handlers.ProcessParkingPayment)
-			pr.Get("/passes", handlers.ListParkingPasses)
-		})
-
-		r.Group(func(pr chi.Router) {
-			pr.Use(authsvc.RequireWriteRole("manager", "primary_manager", "system_admin"))
-			pr.Get("/lots", handlers.ListParkingLots)
-			pr.Post("/lots", handlers.CreateParkingLot)
-			pr.Get("/lots/{id}", handlers.GetParkingLot)
-			pr.Get("/zones", handlers.ListParkingZones)
-			pr.Post("/zones", handlers.CreateParkingZone)
-			pr.Get("/zones/{id}", handlers.GetParkingZone)
-			pr.Get("/fee-rules", handlers.ListParkingFeeRules)
-			pr.Post("/fee-rules", handlers.CreateParkingFeeRule)
-			pr.Post("/passes", handlers.CreateParkingPass)
-		})
 	})
 
 	// Start server

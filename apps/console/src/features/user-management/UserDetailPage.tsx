@@ -32,11 +32,14 @@ interface Credential {
 interface Vehicle {
   id: string;
   plate_number: string;
-  vehicle_type: string;
+  type: string;
+  category: string;
   brand: string;
-  model: string;
   color: string;
-  status: string;
+  rfid_tag?: string;
+  nfc_card_id?: string;
+  owner_id?: string | null;
+  registration_status: string;
   created_at: string;
 }
 
@@ -197,10 +200,10 @@ function AssignVehicleModal({ open, onOpenChange, userId, alreadyAssignedIds, on
     setSelectedIds(new Set());
     setSearch('');
     setLoading(true);
-    apiFetch<{ vehicles: Vehicle[] }>('/api/v1/identity/vehicles?limit=100')
+    apiFetch<{ data: Vehicle[] }>('/api/v1/parking/vehicles?limit=100')
       .then((data) => {
-        const available = (data.vehicles || []).filter(
-          (v) => !alreadyAssignedIds.includes(v.id) && v.status !== 'blacklisted'
+        const available = (data.data || []).filter(
+          (v) => !alreadyAssignedIds.includes(v.id) && v.registration_status !== 'blacklisted'
         );
         setVehicles(available);
       })
@@ -215,8 +218,8 @@ function AssignVehicleModal({ open, onOpenChange, userId, alreadyAssignedIds, on
       (v) =>
         v.plate_number.toLowerCase().includes(q) ||
         v.brand?.toLowerCase().includes(q) ||
-        v.model?.toLowerCase().includes(q) ||
-        v.vehicle_type.toLowerCase().includes(q)
+        v.color?.toLowerCase().includes(q) ||
+        v.type.toLowerCase().includes(q)
     );
   }, [vehicles, search]);
 
@@ -234,9 +237,9 @@ function AssignVehicleModal({ open, onOpenChange, userId, alreadyAssignedIds, on
     setAssigning(true);
     try {
       const promises = Array.from(selectedIds).map((vid) =>
-        apiFetch(`/api/v1/identity/vehicles/${vid}`, {
+        apiFetch(`/api/v1/parking/vehicles/${vid}`, {
           method: 'PUT',
-          body: JSON.stringify({ user_id: userId }),
+          body: JSON.stringify({ owner_id: userId }),
         })
       );
       await Promise.all(promises);
@@ -311,8 +314,8 @@ function AssignVehicleModal({ open, onOpenChange, userId, alreadyAssignedIds, on
                       <Checkbox checked={selectedIds.has(v.id)} onCheckedChange={() => toggleSelect(v.id)} />
                     </td>
                     <td className="px-3 py-2 font-mono font-semibold tracking-wider">{v.plate_number}</td>
-                    <td className="px-3 py-2 capitalize">{v.vehicle_type}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{[v.brand, v.model].filter(Boolean).join(' ') || '—'}</td>
+                    <td className="px-3 py-2 capitalize">{v.type}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{v.brand || '—'}</td>
                     <td className="px-3 py-2 text-muted-foreground">{v.color || '—'}</td>
                   </tr>
                 ))}
@@ -436,8 +439,8 @@ export function UserDetailPage() {
     if (!id) return;
     setLoadingVehicles(true);
     try {
-      const data = await apiFetch<{ vehicles: Vehicle[] }>(`/api/v1/identity/users/${id}/vehicles`);
-      setUserVehicles(data.vehicles || []);
+      const data = await apiFetch<{ data: Vehicle[] }>(`/api/v1/parking/vehicles?owner_id=${id}&limit=100`);
+      setUserVehicles(data.data || []);
     } catch { setUserVehicles([]); }
     finally { setLoadingVehicles(false); }
   }, [id]);
@@ -445,7 +448,7 @@ export function UserDetailPage() {
   const handleUnassignVehicle = useCallback(async (vehicleId: string) => {
     setUnassigningVehicleId(vehicleId);
     try {
-      await apiFetch(`/api/v1/identity/vehicles/${vehicleId}`, { method: 'PUT', body: JSON.stringify({ user_id: '' }) });
+      await apiFetch(`/api/v1/parking/vehicles/${vehicleId}`, { method: 'PUT', body: JSON.stringify({ owner_id: null }) });
       toast(t('toast.vehicleUnassigned'), 'success');
       fetchUserVehicles();
     } catch { toast(t('toast.vehicleUnassignFailed'), 'error'); }
@@ -818,7 +821,7 @@ export function UserDetailPage() {
           )}
           {activeTab === 'vehicles' && (
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => navigate('/manage/vehicles')}>
+              <Button variant="outline" size="sm" onClick={() => navigate('/parking/vehicles')}>
                 {t('vehicle.manageAll')}
               </Button>
               <Button size="sm" onClick={() => setShowAssignVehicle(true)} data-testid="user-button-add-vehicle">
@@ -902,7 +905,7 @@ export function UserDetailPage() {
                               variant="ghost"
                               size="sm"
                               className="h-7 text-[12px]"
-                              onClick={() => setEditingCred({ id: cred.id, type: cred.type, value: cred.value, valid_until: cred.valid_until })}
+                              onClick={() => setEditingCred({ id: cred.id, type: cred.type, value: cred.value, valid_until: cred.valid_until ?? undefined })}
                             >
                               <Pencil size={13} className="mr-1" />
                               {t('actions.edit')}
@@ -1041,12 +1044,12 @@ export function UserDetailPage() {
                     {userVehicles.map((v) => (
                       <tr key={v.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors">
                         <td className="px-3 py-2 font-mono font-semibold tracking-wider">{v.plate_number}</td>
-                        <td className="px-3 py-2 capitalize">{v.vehicle_type}</td>
-                        <td className="px-3 py-2 text-muted-foreground">{[v.brand, v.model].filter(Boolean).join(' ') || '—'}</td>
+                        <td className="px-3 py-2 capitalize">{v.type}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{v.brand || '—'}</td>
                         <td className="px-3 py-2 text-muted-foreground">{v.color || '—'}</td>
                         <td className="px-3 py-2">
-                          <Badge variant={v.status === 'active' ? 'default' : v.status === 'blacklisted' ? 'destructive' : 'secondary'} className="text-[11px]">
-                            {v.status}
+                          <Badge variant={v.registration_status === 'registered' ? 'default' : v.registration_status === 'blacklisted' ? 'destructive' : 'secondary'} className="text-[11px]">
+                            {v.registration_status}
                           </Badge>
                         </td>
                         <td className="px-3 py-2 text-right">

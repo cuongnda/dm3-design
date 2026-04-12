@@ -185,7 +185,7 @@ for svc_url in "$SIM_URL" "$GATEWAY_URL" "$AUTH_URL"; do
 done
 
 # Login
-SYSADMIN_TOKEN=$(login "sysadmin@duali.com" "sysadmin123")
+SYSADMIN_TOKEN=$(login "sysadmin@duali.com" "admin123")
 if [ -n "$SYSADMIN_TOKEN" ]; then
     pass "Sysadmin login"
 else
