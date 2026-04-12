@@ -329,14 +329,22 @@ func (h *IdentityHandlers) GetStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// By department
+	// By department — users.department_id → departments.name (legacy 'department'
+	// string column never existed on the current schema; see migration 000001).
 	var deptQuery string
 	var deptArgs []any
 	if cid != "" {
-		deptQuery = `SELECT COALESCE(department,'unassigned'), COUNT(*) FROM dm3_identity.users WHERE tenant_id = $1::uuid GROUP BY department`
+		deptQuery = `SELECT COALESCE(d.name,'unassigned'), COUNT(*)
+		             FROM dm3_identity.users u
+		             LEFT JOIN dm3_identity.departments d ON d.id = u.department_id
+		             WHERE u.tenant_id = $1::uuid
+		             GROUP BY d.name`
 		deptArgs = []any{cid}
 	} else {
-		deptQuery = `SELECT COALESCE(department,'unassigned'), COUNT(*) FROM dm3_identity.users GROUP BY department`
+		deptQuery = `SELECT COALESCE(d.name,'unassigned'), COUNT(*)
+		             FROM dm3_identity.users u
+		             LEFT JOIN dm3_identity.departments d ON d.id = u.department_id
+		             GROUP BY d.name`
 	}
 	rows2, err := h.db.Pool.Query(r.Context(), deptQuery, deptArgs...)
 	if err == nil {
