@@ -122,17 +122,25 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Deviation: No AI detection backend service or spec-matching API endpoint found. Both frontend and backend are incomplete.
 
 - **CCTV** (`CCTVCamerasPage`, `CCTVLiveViewPage`, `CCTVClipsPage`, `CCTVSettingsPage`)
-  - Status: ✅ Implemented (plugin-gated, backend + frontend + infra wired) | Risk: Low
+  - Status: ⚠️ Partial (Phase 1 — camera CRUD, live view, and manual/API clips are functional; event-linked clips via access events, MediaMTX path lifecycle management, NVR management, playback/timeline, and PTZ are not yet implemented) | Risk: Medium
   - Backend: Standalone `cctv-svc` (`backend/cmd/cctv-svc/`, `backend/internal/cctv/`) — camera CRUD, clip listing/presigned playback, live-stream endpoint coordination (WHEP/HLS via MediaMTX), RTSP DESCRIBE probe, AES-GCM credential encryption, retention worker pruning clips + MinIO objects per `cctv_settings.retention_days`. Plugin-gated via `authsvc.RequirePlugin("cctv")`.
   - Schema (migration 000013, `dm3_cctv`): `cameras` (1-1 extension of `dm3_devices.devices` type='camera' with encrypted RTSP creds + pre/post-roll), `event_clips` (TimescaleDB hypertable, 7-day chunks, soft FKs to devices + `dm3_access.access_events`), `cctv_settings` (per-tenant retention + quota).
   - Integration with access control:
     - **Camera is a device**: `cameras.device_id` is both PK and FK to `dm3_devices.devices` — no parallel camera registry.
     - **Access-point binding**: cameras attach to access_points via existing `dm3_access.access_devices` junction; UI queries `access-points-all` client when assigning.
     - **Clip ↔ access event link**: `event_clips.access_event_id` is a soft FK (UUID, no hard constraint — preserves clip retention after event purge). Queryable via `GET /api/v1/cctv/clips?access_event_id=…` for access-history playback.
-    - **Event-driven trigger**: access-svc publishes access events to NATS; cctv-svc consumer creates clips asynchronously (`trigger='access_event'`). Manual and API-triggered clips also supported (`trigger='manual'|'api'`).
+    - **Event-driven trigger**: _(planned, not yet wired)_ schema supports `trigger='access_event'` with `access_event_id` soft FK, but cctv-svc does not yet subscribe to access-svc events — only manual and API-triggered clips (`trigger='manual'|'api'`) are functional today.
   - Infrastructure: MediaMTX stream server + cctv-svc wired into `docker-compose.local.yml` and `deploy/nginx/nginx.local.conf` (commit `67a40f25` + `5975b38b`). MinIO bucket `cctv-<tenant>/…` with presigned URL access.
   - Frontend: `apps/console/src/features/cctv/` — CCTVCamerasPage (CRUD + access-point binding), CCTVLiveViewPage (WHEP primary + HLS.js fallback tile), CCTVClipsPage (filter by camera + access_event_id), CCTVSettingsPage (retention, quota). Lazy-loaded behind `PluginGuard`. API client: `packages/api-client/src/cctv.ts` (50+ DTOs).
   - Deviation: Phase 1 scope is `event_only` + `disabled` recording modes; continuous recording intentionally out of scope. Some `CameraDetailPage` legacy mock paths remain but are superseded by the new CCTV feature pages.
+  - **Known gaps (tracked for Phase 2):**
+    1. No NATS consumer for access events in cctv-svc — blocks event-linked clip auto-creation (spec BR-CC-006).
+    2. MediaMTX path lifecycle not wired to camera create/update/delete — `mediamtx_client` is initialized but unused by handlers; streams may leak or go stale.
+    3. NVR management schema/endpoints not implemented (spec `docs/specs/secure/cctv.md:52-77`).
+    4. Playback timeline, PTZ control, and bookmarks not implemented.
+    5. `DefaultClipSigner` no-op fallback returns raw object keys when `OBJECT_STORE_ENDPOINT` is unset — acceptable for dev, unsafe for prod.
+    6. Recording-mode DB constraint allows only `event_only|disabled`; spec defines `continuous|motion|event|schedule|off`.
+    7. Integration tests for CCTV are absent in `automation/tests/`.
 
 - **Emergency** (`EmergencyPage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: High
