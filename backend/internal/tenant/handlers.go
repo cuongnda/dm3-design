@@ -227,10 +227,11 @@ func (h *TenantHandlers) GetTenantStats(w http.ResponseWriter, r *http.Request) 
 		userCount = 0
 	}
 
-	// Get person count
+	// Get person count (people records in the identity module — maps to dm3_identity.users
+	// in the current schema; the legacy dm3_identity.persons table was folded into users).
 	var personCount int
 	err = h.db.Pool.QueryRow(r.Context(),
-		"SELECT COUNT(*) FROM dm3_identity.persons WHERE tenant_id = $1::uuid",
+		"SELECT COUNT(*) FROM dm3_identity.users WHERE tenant_id = $1::uuid",
 		tenantID,
 	).Scan(&personCount)
 	if err != nil {
