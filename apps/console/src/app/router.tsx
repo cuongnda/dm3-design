@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { MainLayout } from '@dm3/ui';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
@@ -94,9 +94,6 @@ const UserManagementPage = lazy(() =>
 );
 const UserDetailPage = lazy(() =>
   import('@/features/user-management/UserDetailPage').then((m) => ({ default: m.UserDetailPage }))
-);
-const VehicleManagementPage = lazy(() =>
-  import('@/features/manage/vehicles/VehicleManagementPage').then((m) => ({ default: m.VehicleManagementPage }))
 );
 const DepartmentManagementPage = lazy(() =>
   import('@/features/department-management/DepartmentManagementPage').then((m) => ({ default: m.DepartmentManagementPage }))
@@ -323,7 +320,8 @@ export const Router = createBrowserRouter([
               // MANAGE
               { path: 'manage/users', element: <LazyWrap><UserManagementPage /></LazyWrap> },
               { path: 'manage/users/:id', element: <LazyWrap><UserDetailPage /></LazyWrap> },
-              { path: 'manage/vehicles', element: <LazyWrap><VehicleManagementPage /></LazyWrap> },
+              // Vehicle registry moved to parking plugin (see docs/changelog/2026-04-12-parking-access-integration.md)
+              { path: 'manage/vehicles', element: <Navigate to="/parking/vehicles" replace /> },
               { path: 'manage/departments', element: <LazyWrap><DepartmentManagementPage /></LazyWrap> },
               { path: 'manage/identities', element: <LazyWrap><IdentitiesPage /></LazyWrap> },
               { path: 'manage/identities/:id', element: <LazyWrap><PersonDetailPage /></LazyWrap> },

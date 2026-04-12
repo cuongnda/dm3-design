@@ -802,7 +802,7 @@ export function UserDetailPage() {
           )}
           {activeTab === 'vehicles' && (
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => navigate('/manage/vehicles')}>
+              <Button variant="outline" size="sm" onClick={() => navigate('/parking/vehicles')}>
                 {t('vehicle.manageAll')}
               </Button>
               <Button size="sm" onClick={() => setShowAssignVehicle(true)} data-testid="user-button-add-vehicle">
