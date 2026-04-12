@@ -436,7 +436,7 @@ func (h *IdentityHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 		go func() {
 			var companyName string
 			_ = h.db.Pool.QueryRow(context.Background(),
-				`SELECT name FROM dm3_auth.companies WHERE id = $1::uuid`, companyID,
+				`SELECT name FROM dm3_auth.tenants WHERE id = $1::uuid`, companyID,
 			).Scan(&companyName)
 
 			// Check for custom template first
