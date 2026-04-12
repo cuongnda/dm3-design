@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -19,6 +20,30 @@ import (
 	"github.com/duali/dm3-backend/pkg/natsutil"
 	"github.com/duali/dm3-backend/pkg/objectstore"
 )
+
+// validateCredentialKeyEntropy rejects CCTV_CREDENTIAL_KEY values that decode
+// to purely printable-ASCII bytes, which is a strong indicator of a low-entropy
+// placeholder (e.g. "0123456789abcdef0123456789abcdef" base64-encoded).
+func validateCredentialKeyEntropy(b64 string) error {
+	raw, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return fmt.Errorf("CCTV_CREDENTIAL_KEY is not valid base64: %w", err)
+	}
+	if len(raw) != 32 {
+		return fmt.Errorf("CCTV_CREDENTIAL_KEY must decode to 32 bytes (got %d)", len(raw))
+	}
+	allPrintable := true
+	for _, b := range raw {
+		if b < 0x20 || b > 0x7E {
+			allPrintable = false
+			break
+		}
+	}
+	if allPrintable {
+		return fmt.Errorf("CCTV_CREDENTIAL_KEY appears to be a low-entropy placeholder; use a cryptographically random 32-byte key base64-encoded")
+	}
+	return nil
+}
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})))
@@ -41,7 +66,8 @@ func main() {
 	defer database.Close()
 
 	if err := database.RunMigrations(); err != nil {
-		slog.Warn("migrations", "error", err)
+		slog.Error("failed to run migrations", "error", err)
+		os.Exit(1)
 	}
 
 	// NATS
@@ -79,6 +105,10 @@ func main() {
 	credKey := os.Getenv("CCTV_CREDENTIAL_KEY")
 	if credKey == "" {
 		slog.Error("CCTV_CREDENTIAL_KEY env var is required (base64-encoded 32 bytes)")
+		os.Exit(1)
+	}
+	if err := validateCredentialKeyEntropy(credKey); err != nil {
+		slog.Error("invalid CCTV_CREDENTIAL_KEY", "error", err)
 		os.Exit(1)
 	}
 	cipher, err := cctv.NewCredentialCipher(credKey)
@@ -140,7 +170,7 @@ func main() {
 	}
 
 	// HTTP handlers
-	handlers := cctv.NewCCTVHandlers(database, auditLog, natsClient, mediamtxClient, cipher, clipSigner)
+	handlers := cctv.NewCCTVHandlers(database, auditLog, natsClient, mediamtxClient, cipher, clipSigner, objectStore)
 
 	// Retention worker — purges expired clips from object storage and DB.
 	if objectStore != nil {

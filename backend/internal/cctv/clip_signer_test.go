@@ -51,10 +51,10 @@ func TestObjectStoreClipSigner_Sign_NilContext_UsesBackground(t *testing.T) {
 		expiry:     5 * time.Minute,
 	}
 
-	// Pass a non-context value to exercise the fallback path.
-	got, err := signer.Sign("not-a-context", "clip.mp4")
+	// Pass a nil context to exercise the fallback path.
+	got, err := signer.Sign(nil, "clip.mp4")
 	if err != nil {
-		t.Fatalf("Sign with non-context value returned error: %v", err)
+		t.Fatalf("Sign with nil context returned error: %v", err)
 	}
 	if got == "" {
 		t.Fatal("Sign returned empty URL")

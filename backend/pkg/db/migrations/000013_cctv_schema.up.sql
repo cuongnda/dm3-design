@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS dm3_cctv.cameras (
 
 CREATE INDEX IF NOT EXISTS idx_cctv_cameras_tenant ON dm3_cctv.cameras(tenant_id);
 
+DROP TRIGGER IF EXISTS trg_cctv_cameras_updated_at ON dm3_cctv.cameras;
 CREATE TRIGGER trg_cctv_cameras_updated_at
     BEFORE UPDATE ON dm3_cctv.cameras
     FOR EACH ROW EXECUTE FUNCTION dm3_cctv.set_updated_at();
@@ -135,6 +136,7 @@ CREATE TABLE IF NOT EXISTS dm3_cctv.cctv_settings (
     CONSTRAINT chk_cctv_storage_quota     CHECK (storage_quota_gb >= 1)
 );
 
+DROP TRIGGER IF EXISTS trg_cctv_settings_updated_at ON dm3_cctv.cctv_settings;
 CREATE TRIGGER trg_cctv_settings_updated_at
     BEFORE UPDATE ON dm3_cctv.cctv_settings
     FOR EACH ROW EXECUTE FUNCTION dm3_cctv.set_updated_at();

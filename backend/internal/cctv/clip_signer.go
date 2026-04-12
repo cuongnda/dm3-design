@@ -48,13 +48,11 @@ func NewObjectStoreClipSigner(endpoint, accessKey, secretKey, bucket string, use
 }
 
 // Sign returns a presigned GET URL for the given object key, valid for 5 minutes.
-// ctx must be a context.Context; the interface{} type is preserved to match ClipSigner.
-func (s *ObjectStoreClipSigner) Sign(ctx interface{}, objectKey string) (string, error) {
-	c, ok := ctx.(context.Context)
-	if !ok {
-		c = context.Background()
+func (s *ObjectStoreClipSigner) Sign(ctx context.Context, objectKey string) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	u, err := s.client.PresignedGetObject(c, s.bucketName, objectKey, s.expiry, nil)
+	u, err := s.client.PresignedGetObject(ctx, s.bucketName, objectKey, s.expiry, nil)
 	if err != nil {
 		return "", fmt.Errorf("clip signer: presign object %q: %w", objectKey, err)
 	}

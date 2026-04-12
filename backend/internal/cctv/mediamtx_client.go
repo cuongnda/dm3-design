@@ -141,7 +141,7 @@ func (c *HTTPMediaMTXClient) PathExists(ctx context.Context, name string) (bool,
 type NoopMediaMTXClient struct{}
 
 func (NoopMediaMTXClient) UpsertPath(ctx context.Context, name string, cfg PathConfig) error {
-	slog.Debug("mediamtx noop: UpsertPath", "name", name, "source", cfg.Source)
+	slog.Debug("mediamtx noop: UpsertPath", "name", name, "source", redactRTSPCredentials(cfg.Source))
 	return nil
 }
 

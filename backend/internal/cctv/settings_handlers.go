@@ -45,6 +45,15 @@ func (h *CCTVHandlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.PreRollSecDefault != nil && (*req.PreRollSecDefault < 0 || *req.PreRollSecDefault > 60) {
+		httputil.Error(w, http.StatusBadRequest, "pre_roll_sec_default must be between 0 and 60")
+		return
+	}
+	if req.PostRollSecDefault != nil && (*req.PostRollSecDefault < 0 || *req.PostRollSecDefault > 120) {
+		httputil.Error(w, http.StatusBadRequest, "post_roll_sec_default must be between 0 and 120")
+		return
+	}
+
 	// Ensure settings row exists first
 	current, err := h.getOrCreateSettings(r.Context(), cid)
 	if err != nil {

@@ -1,12 +1,16 @@
 package cctv
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/duali/dm3-backend/pkg/httputil"
@@ -16,13 +20,13 @@ import (
 // A no-op default returns the object_key as a relative path.
 // Use ObjectStoreClipSigner (clip_signer.go) for real MinIO presigned URLs.
 type ClipSigner interface {
-	Sign(ctx interface{}, objectKey string) (string, error)
+	Sign(ctx context.Context, objectKey string) (string, error)
 }
 
 // noopClipSigner returns the object_key unchanged.
 type noopClipSigner struct{}
 
-func (noopClipSigner) Sign(_ interface{}, objectKey string) (string, error) {
+func (noopClipSigner) Sign(_ context.Context, objectKey string) (string, error) {
 	return objectKey, nil
 }
 
@@ -37,7 +41,11 @@ func (h *CCTVHandlers) ListClips(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page, limit := parsePagination(r)
+	page, limit, err := parsePagination(r)
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	offset := (page - 1) * limit
 
 	q := r.URL.Query()
@@ -116,7 +124,7 @@ func (h *CCTVHandlers) GetClip(w http.ResponseWriter, r *http.Request) {
 
 	clip, err := h.fetchClip(r, cid, id)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			httputil.Error(w, http.StatusNotFound, "clip not found")
 			return
 		}
@@ -126,8 +134,23 @@ func (h *CCTVHandlers) GetClip(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, clip)
 }
 
+// validateClipObjectKey ensures a caller-supplied object_key is confined to the
+// tenant's prefix and contains no path-traversal segments.
+func validateClipObjectKey(key, tenantID string) error {
+	prefix := "cctv/" + tenantID + "/"
+	if !strings.HasPrefix(key, prefix) {
+		return errors.New("object_key must start with cctv/{tenant_id}/")
+	}
+	for _, seg := range strings.Split(key, "/") {
+		if seg == ".." {
+			return errors.New("object_key must not contain '..' path segments")
+		}
+	}
+	return nil
+}
+
 // CreateClip handles POST /clips
-// Body: {device_id, started_at, ended_at, object_key, access_event_id?, trigger?}
+// Body: {device_id, started_at, ended_at, object_key?, access_event_id?, trigger?}
 func (h *CCTVHandlers) CreateClip(w http.ResponseWriter, r *http.Request) {
 	cid := h.getTenantID(r)
 	if !requireTenant(w, cid) {
@@ -154,9 +177,30 @@ func (h *CCTVHandlers) CreateClip(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusBadRequest, "started_at is required")
 		return
 	}
-	if strings.TrimSpace(req.ObjectKey) == "" {
-		httputil.Error(w, http.StatusBadRequest, "object_key is required")
+
+	// Tenant isolation check: the device must belong to this tenant and be a camera.
+	var exists bool
+	if err := h.db.Pool.QueryRow(r.Context(),
+		`SELECT EXISTS(SELECT 1 FROM dm3_devices.devices WHERE id = $1::uuid AND tenant_id = $2::uuid AND type = 'camera')`,
+		req.DeviceID, cid,
+	).Scan(&exists); err != nil {
+		logInternalError(w, "verify camera tenant error", err)
 		return
+	}
+	if !exists {
+		httputil.Error(w, http.StatusNotFound, "camera not found")
+		return
+	}
+
+	// object_key: validate when supplied, else generate server-side under tenant prefix.
+	objectKey := strings.TrimSpace(req.ObjectKey)
+	if objectKey == "" {
+		objectKey = "cctv/" + cid + "/" + uuid.New().String() + ".mp4"
+	} else {
+		if err := validateClipObjectKey(objectKey, cid); err != nil {
+			httputil.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 
 	trigger := "manual"
@@ -169,7 +213,7 @@ func (h *CCTVHandlers) CreateClip(w http.ResponseWriter, r *http.Request) {
 		INSERT INTO dm3_cctv.event_clips (tenant_id, device_id, access_event_id, started_at, ended_at, object_key, trigger)
 		VALUES ($1::uuid, $2::uuid, $3::uuid, $4::timestamptz, $5::timestamptz, $6, $7)
 		RETURNING id, tenant_id, device_id, access_event_id, started_at, ended_at, duration_ms, object_key, trigger, created_at`,
-		cid, req.DeviceID, req.AccessEventID, req.StartedAt, req.EndedAt, req.ObjectKey, trigger,
+		cid, req.DeviceID, req.AccessEventID, req.StartedAt, req.EndedAt, objectKey, trigger,
 	).Scan(&clip.ID, &clip.TenantID, &clip.DeviceID, &clip.AccessEventID,
 		&clip.StartedAt, &clip.EndedAt, &clip.DurationMs, &clip.ObjectKey, &clip.Trigger, &clip.CreatedAt)
 	if err != nil {
@@ -185,8 +229,8 @@ func (h *CCTVHandlers) CreateClip(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteClip handles DELETE /clips/{id}
-// Note: does NOT delete the MinIO object — that is the retention worker's responsibility.
-// The RetentionWorker (cron.go) sweeps expired clips from object storage on a schedule.
+// Attempts a best-effort object-storage delete after the DB row is removed.
+// The RetentionWorker (cron.go) still sweeps any orphaned objects on a schedule.
 func (h *CCTVHandlers) DeleteClip(w http.ResponseWriter, r *http.Request) {
 	cid := h.getTenantID(r)
 	if !requireTenant(w, cid) {
@@ -195,9 +239,11 @@ func (h *CCTVHandlers) DeleteClip(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var objectKey string
-	_ = h.db.Pool.QueryRow(r.Context(),
+	if err := h.db.Pool.QueryRow(r.Context(),
 		`SELECT object_key FROM dm3_cctv.event_clips WHERE id = $1::uuid AND tenant_id = $2::uuid`,
-		id, cid).Scan(&objectKey)
+		id, cid).Scan(&objectKey); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		slog.Warn("cctv: pre-delete object_key lookup failed (non-fatal)", "clip_id", id, "error", err)
+	}
 
 	tag, err := h.db.Pool.Exec(r.Context(),
 		`DELETE FROM dm3_cctv.event_clips WHERE id = $1::uuid AND tenant_id = $2::uuid`,
@@ -205,6 +251,14 @@ func (h *CCTVHandlers) DeleteClip(w http.ResponseWriter, r *http.Request) {
 	if err != nil || tag.RowsAffected() == 0 {
 		httputil.Error(w, http.StatusNotFound, "clip not found")
 		return
+	}
+
+	// Best-effort object-storage delete. Failure is logged but does not fail the
+	// HTTP response because the retention worker will retry.
+	if h.objectStore != nil && objectKey != "" {
+		if err := h.objectStore.DeleteObject(r.Context(), objectKey); err != nil {
+			slog.Warn("cctv: object store delete failed (non-fatal)", "clip_id", id, "object_key", objectKey, "error", err)
+		}
 	}
 
 	h.audit.LogFromRequest(r, "cctv.clip.delete", "event_clip", id, objectKey, "success", nil, nil)
@@ -223,7 +277,7 @@ func (h *CCTVHandlers) GetClipPlayback(w http.ResponseWriter, r *http.Request) {
 
 	clip, err := h.fetchClip(r, cid, id)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			httputil.Error(w, http.StatusNotFound, "clip not found")
 			return
 		}

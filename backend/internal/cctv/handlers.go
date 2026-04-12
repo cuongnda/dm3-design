@@ -12,32 +12,36 @@ import (
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/natsutil"
+	"github.com/duali/dm3-backend/pkg/objectstore"
 )
 
 // CCTVHandlers holds dependencies for all CCTV HTTP handlers.
 type CCTVHandlers struct {
-	db       *db.DB
-	audit    *audit.Logger
-	nats     *natsutil.Client
-	mediamtx MediaMTXClient
-	cipher   *CredentialCipher
-	signer   ClipSigner
+	db          *db.DB
+	audit       *audit.Logger
+	nats        *natsutil.Client
+	mediamtx    MediaMTXClient
+	cipher      *CredentialCipher
+	signer      ClipSigner
+	objectStore objectstore.Store
 }
 
 // NewCCTVHandlers constructs a CCTVHandlers with the given dependencies.
 // signer is used to produce playback URLs for clips; pass DefaultClipSigner
 // (the no-op) when object storage is not configured.
-func NewCCTVHandlers(database *db.DB, auditLog *audit.Logger, natsClient *natsutil.Client, mediamtx MediaMTXClient, cipher *CredentialCipher, signer ClipSigner) *CCTVHandlers {
+// objectStore is optional (may be nil) and is used for best-effort deletes.
+func NewCCTVHandlers(database *db.DB, auditLog *audit.Logger, natsClient *natsutil.Client, mediamtx MediaMTXClient, cipher *CredentialCipher, signer ClipSigner, objectStore objectstore.Store) *CCTVHandlers {
 	if signer == nil {
 		signer = DefaultClipSigner
 	}
 	return &CCTVHandlers{
-		db:       database,
-		audit:    auditLog,
-		nats:     natsClient,
-		mediamtx: mediamtx,
-		cipher:   cipher,
-		signer:   signer,
+		db:          database,
+		audit:       auditLog,
+		nats:        natsClient,
+		mediamtx:    mediamtx,
+		cipher:      cipher,
+		signer:      signer,
+		objectStore: objectStore,
 	}
 }
 
@@ -47,21 +51,28 @@ func (h *CCTVHandlers) getTenantID(r *http.Request) string {
 	return authsvc.CompanyIDFromContext(r.Context())
 }
 
+// maxPage caps the pagination page number to prevent abuse of OFFSET.
+const maxPage = 10000
+
 // parsePagination extracts page and limit from query params with safe defaults.
-func parsePagination(r *http.Request) (page, limit int) {
+// Returns an error when page exceeds maxPage so callers can respond with 400.
+func parsePagination(r *http.Request) (page, limit int, err error) {
 	page = 1
 	limit = 20
 	if p := r.URL.Query().Get("page"); p != "" {
-		if v, err := strconv.Atoi(p); err == nil && v > 0 {
+		if v, perr := strconv.Atoi(p); perr == nil && v > 0 {
 			page = v
 		}
 	}
 	if l := r.URL.Query().Get("limit"); l != "" {
-		if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= 100 {
+		if v, lerr := strconv.Atoi(l); lerr == nil && v > 0 && v <= 100 {
 			limit = v
 		}
 	}
-	return page, limit
+	if page > maxPage {
+		return 0, 0, fmt.Errorf("page must not exceed %d", maxPage)
+	}
+	return page, limit, nil
 }
 
 // getOrCreateSettings retrieves or lazily creates the CCTV settings row for a tenant.

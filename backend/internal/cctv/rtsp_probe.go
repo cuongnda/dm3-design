@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -26,8 +27,12 @@ type probeResult struct {
 //
 // A 5-second timeout applies to the entire probe. No third-party RTSP library
 // is used — we speak the minimal subset of RTSP/1.0 over a raw TCP connection.
-func probeRTSP(rtspURL, username, password string) probeResult {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func probeRTSP(r *http.Request, rtspURL, username, password string) probeResult {
+	parent := context.Background()
+	if r != nil {
+		parent = r.Context()
+	}
+	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
 	defer cancel()
 
 	start := time.Now()

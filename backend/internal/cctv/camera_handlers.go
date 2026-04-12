@@ -1,10 +1,13 @@
 package cctv
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -14,6 +17,46 @@ import (
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
+// validRecordingModes enumerates accepted values for the recording_mode field.
+var validRecordingModes = map[string]struct{}{
+	"event_only": {},
+	"disabled":   {},
+}
+
+// isValidRecordingMode reports whether s is an accepted recording mode.
+func isValidRecordingMode(s string) bool {
+	_, ok := validRecordingModes[s]
+	return ok
+}
+
+// validateRollSec bounds-checks pre/post-roll seconds.
+func validateRollSec(pre, post int) error {
+	if pre < 0 || pre > 60 {
+		return fmt.Errorf("pre_roll_sec must be between 0 and 60")
+	}
+	if post < 0 || post > 120 {
+		return fmt.Errorf("post_roll_sec must be between 0 and 120")
+	}
+	return nil
+}
+
+// redactRTSPCredentials strips userinfo from an RTSP URL so it's safe to log.
+// On parse failure the raw input is returned unchanged (callers should not crash).
+func redactRTSPCredentials(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	u.User = nil
+	return u.String()
+}
+
+// validCameraStatuses bounds the ?status= query filter.
+var validCameraStatuses = map[string]struct{}{
+	"online":  {},
+	"offline": {},
+	"error":   {},
+}
 
 // ListCameras handles GET /cameras
 // Supports: ?access_point_id=, ?status=, ?page=, ?limit=
@@ -23,7 +66,11 @@ func (h *CCTVHandlers) ListCameras(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page, limit := parsePagination(r)
+	page, limit, err := parsePagination(r)
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	offset := (page - 1) * limit
 
 	accessPointID := r.URL.Query().Get("access_point_id")
@@ -35,6 +82,10 @@ func (h *CCTVHandlers) ListCameras(w http.ResponseWriter, r *http.Request) {
 	argIdx := 2
 
 	if status != "" {
+		if _, ok := validCameraStatuses[status]; !ok {
+			httputil.Error(w, http.StatusBadRequest, "invalid status; expected one of: online, offline, error")
+			return
+		}
 		conditions = append(conditions, fmt.Sprintf("d.status = $%d", argIdx))
 		args = append(args, status)
 		argIdx++
@@ -104,7 +155,7 @@ func (h *CCTVHandlers) GetCamera(w http.ResponseWriter, r *http.Request) {
 
 	cam, err := h.fetchCamera(r, cid, id)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			httputil.Error(w, http.StatusNotFound, "camera not found")
 			return
 		}
@@ -135,9 +186,13 @@ func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	recordingMode := "continuous"
+	recordingMode := "event_only"
 	if req.RecordingMode != nil && *req.RecordingMode != "" {
 		recordingMode = *req.RecordingMode
+	}
+	if !isValidRecordingMode(recordingMode) {
+		httputil.Error(w, http.StatusBadRequest, "invalid recording_mode; expected one of: event_only, disabled")
+		return
 	}
 	preRoll := 10
 	if req.PreRollSec != nil {
@@ -146,6 +201,17 @@ func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 	postRoll := 20
 	if req.PostRollSec != nil {
 		postRoll = *req.PostRollSec
+	}
+	if err := validateRollSec(preRoll, postRoll); err != nil {
+		httputil.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// SSRF check on user-supplied RTSP URL before any DB or MediaMTX write.
+	trimmedURL := strings.TrimSpace(req.RTSPUrl)
+	if err := ValidateRTSPURL(trimmedURL); err != nil {
+		httputil.Error(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	// Encrypt password if provided
@@ -196,7 +262,7 @@ func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 		INSERT INTO dm3_cctv.cameras
 		(device_id, tenant_id, brand, rtsp_url, rtsp_username, rtsp_password_enc, recording_mode, pre_roll_sec, post_roll_sec, stream_profile)
 		VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)`,
-		deviceUUID, cid, req.Brand, strings.TrimSpace(req.RTSPUrl), req.RTSPUsername, encryptedPass,
+		deviceUUID, cid, req.Brand, trimmedURL, req.RTSPUsername, encryptedPass,
 		recordingMode, preRoll, postRoll, streamProfileJSON,
 	)
 	if err != nil {
@@ -218,7 +284,7 @@ func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 	if req.RTSPUsername != nil {
 		rtspUsername = *req.RTSPUsername
 	}
-	sourceURL := composeRTSPURLWithAuth(strings.TrimSpace(req.RTSPUrl), rtspUsername, decryptedPass)
+	sourceURL := composeRTSPURLWithAuth(trimmedURL, rtspUsername, decryptedPass)
 	if err := h.mediamtx.UpsertPath(r.Context(), deviceUUID, PathConfig{
 		Source:         sourceURL,
 		SourceOnDemand: true,
@@ -235,10 +301,32 @@ func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 
 	h.audit.LogFromRequest(r, "cctv.camera.create", "camera", cam.ID, cam.Name, "success", nil, map[string]any{
 		"device_id":      cam.DeviceID,
-		"rtsp_url":       cam.RTSPUrl,
+		"rtsp_url":       redactRTSPCredentials(cam.RTSPUrl),
 		"recording_mode": cam.RecordingMode,
 	})
 	httputil.JSON(w, http.StatusCreated, cam)
+}
+
+// decryptExistingPassword reads the encrypted rtsp_password_enc column for a
+// camera and returns the decrypted plaintext. Returns empty string (nil error)
+// when the column is NULL.
+func (h *CCTVHandlers) decryptExistingPassword(ctx context.Context, tx pgx.Tx, tenantID, cameraID string) (string, error) {
+	var encPass []byte
+	err := tx.QueryRow(ctx, `
+		SELECT rtsp_password_enc FROM dm3_cctv.cameras
+		WHERE device_id = $1::uuid AND tenant_id = $2::uuid`,
+		cameraID, tenantID,
+	).Scan(&encPass)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+	if len(encPass) == 0 {
+		return "", nil
+	}
+	return h.cipher.Decrypt(encPass)
 }
 
 // UpdateCamera handles PUT /cameras/{id}
@@ -252,7 +340,7 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 	// Fetch existing camera to detect RTSP changes
 	existing, err := h.fetchCamera(r, cid, id)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			httputil.Error(w, http.StatusNotFound, "camera not found")
 			return
 		}
@@ -272,8 +360,10 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 		name = strings.TrimSpace(req.Name)
 	}
 	rtspURL := existing.RTSPUrl
+	rtspURLChanged := false
 	if strings.TrimSpace(req.RTSPUrl) != "" {
 		rtspURL = strings.TrimSpace(req.RTSPUrl)
+		rtspURLChanged = rtspURL != existing.RTSPUrl
 	}
 	brand := existing.Brand
 	if req.Brand != nil {
@@ -281,6 +371,10 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 	}
 	recordingMode := existing.RecordingMode
 	if req.RecordingMode != nil && *req.RecordingMode != "" {
+		if !isValidRecordingMode(*req.RecordingMode) {
+			httputil.Error(w, http.StatusBadRequest, "invalid recording_mode; expected one of: event_only, disabled")
+			return
+		}
 		recordingMode = *req.RecordingMode
 	}
 	preRoll := existing.PreRollSec
@@ -291,15 +385,30 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 	if req.PostRollSec != nil {
 		postRoll = *req.PostRollSec
 	}
+	if req.PreRollSec != nil || req.PostRollSec != nil {
+		if err := validateRollSec(preRoll, postRoll); err != nil {
+			httputil.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
 	rtspUsername := existing.RTSPUsername
 	if req.RTSPUsername != nil {
 		rtspUsername = req.RTSPUsername
 	}
 
+	// SSRF validation before any DB write when the URL is being changed.
+	if rtspURLChanged {
+		if err := ValidateRTSPURL(rtspURL); err != nil {
+			httputil.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+
 	// Re-encrypt password if a new one is provided
 	var encryptedPass []byte
 	var decryptedPass string
-	if req.RTSPPassword != nil && *req.RTSPPassword != "" {
+	passwordSupplied := req.RTSPPassword != nil && *req.RTSPPassword != ""
+	if passwordSupplied {
 		encryptedPass, err = h.cipher.Encrypt(*req.RTSPPassword)
 		if err != nil {
 			logInternalError(w, "encrypt rtsp password error", err)
@@ -308,8 +417,27 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 		decryptedPass = *req.RTSPPassword
 	}
 
+	// Wrap device + camera updates in a single transaction for atomicity.
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		logInternalError(w, "begin transaction error", err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	// If no new password supplied, read and decrypt the existing one so that
+	// the MediaMTX source URL (composed below) preserves the stored credential.
+	if !passwordSupplied {
+		existingPass, err := h.decryptExistingPassword(r.Context(), tx, cid, id)
+		if err != nil {
+			logInternalError(w, "decrypt existing rtsp password error", err)
+			return
+		}
+		decryptedPass = existingPass
+	}
+
 	// Update devices.name
-	_, err = h.db.Pool.Exec(r.Context(), `
+	_, err = tx.Exec(r.Context(), `
 		UPDATE dm3_devices.devices SET name = $3, updated_at = now()
 		WHERE id = $1::uuid AND tenant_id = $2::uuid`,
 		id, cid, name,
@@ -321,7 +449,7 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 
 	// Update cctv.cameras
 	if encryptedPass != nil {
-		_, err = h.db.Pool.Exec(r.Context(), `
+		_, err = tx.Exec(r.Context(), `
 			UPDATE dm3_cctv.cameras
 			SET brand = $3, rtsp_url = $4, rtsp_username = $5, rtsp_password_enc = $6,
 			    recording_mode = $7, pre_roll_sec = $8, post_roll_sec = $9, updated_at = now()
@@ -329,7 +457,7 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 			id, cid, brand, rtspURL, rtspUsername, encryptedPass, recordingMode, preRoll, postRoll,
 		)
 	} else {
-		_, err = h.db.Pool.Exec(r.Context(), `
+		_, err = tx.Exec(r.Context(), `
 			UPDATE dm3_cctv.cameras
 			SET brand = $3, rtsp_url = $4, rtsp_username = $5,
 			    recording_mode = $6, pre_roll_sec = $7, post_roll_sec = $8, updated_at = now()
@@ -342,7 +470,12 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update MediaMTX path if RTSP details changed (best-effort)
+	if err := tx.Commit(r.Context()); err != nil {
+		logInternalError(w, "commit transaction error", err)
+		return
+	}
+
+	// Update MediaMTX path if RTSP details changed (best-effort — post-commit)
 	rtspUsernameStr := ""
 	if rtspUsername != nil {
 		rtspUsernameStr = *rtspUsername
@@ -363,7 +496,7 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 
 	h.audit.LogFromRequest(r, "cctv.camera.update", "camera", cam.ID, cam.Name, "success", existing, map[string]any{
 		"device_id":      cam.DeviceID,
-		"rtsp_url":       cam.RTSPUrl,
+		"rtsp_url":       redactRTSPCredentials(cam.RTSPUrl),
 		"recording_mode": cam.RecordingMode,
 	})
 	httputil.JSON(w, http.StatusOK, cam)
@@ -377,9 +510,13 @@ func (h *CCTVHandlers) DeleteCamera(w http.ResponseWriter, r *http.Request) {
 	}
 	id := chi.URLParam(r, "id")
 
-	// Fetch for audit name before deletion
+	// Fetch for audit name before deletion — best-effort lookup.
 	var name string
-	_ = h.db.Pool.QueryRow(r.Context(), `SELECT name FROM dm3_devices.devices WHERE id = $1::uuid AND tenant_id = $2::uuid`, id, cid).Scan(&name)
+	if err := h.db.Pool.QueryRow(r.Context(),
+		`SELECT name FROM dm3_devices.devices WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+		id, cid).Scan(&name); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		slog.Warn("cctv: pre-delete name lookup failed (non-fatal)", "device_id", id, "error", err)
+	}
 
 	// Delete devices row (CASCADE will remove dm3_cctv.cameras row via FK)
 	tag, err := h.db.Pool.Exec(r.Context(),
@@ -415,7 +552,7 @@ func (h *CCTVHandlers) TestCameraConnection(w http.ResponseWriter, r *http.Reque
 	// Fetch camera — need the RTSP URL + credentials for the probe.
 	cam, err := h.fetchCamera(r, cid, id)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			httputil.Error(w, http.StatusNotFound, "camera not found")
 			return
 		}
@@ -438,7 +575,7 @@ func (h *CCTVHandlers) TestCameraConnection(w http.ResponseWriter, r *http.Reque
 		rtspUsername = *cam.RTSPUsername
 	}
 
-	result := probeRTSP(cam.RTSPUrl, rtspUsername, rtspPassword)
+	result := probeRTSP(r, cam.RTSPUrl, rtspUsername, rtspPassword)
 
 	// Persist last_checked_at and stream_profile regardless of probe outcome.
 	profileJSON := fmt.Sprintf(`{"codec":%q,"resolution":%q,"probed_at":%q}`,
