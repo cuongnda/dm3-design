@@ -294,6 +294,59 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── MediaMTX — RTSP ingest + WebRTC/WHEP + LL-HLS egress ───────────────────
+  mediamtx:
+    image: bluenviron/mediamtx:1.9.3
+    container_name: dm3-mediamtx
+    restart: unless-stopped
+    environment:
+      MTX_API: "yes"
+      MTX_APIADDRESS: ":9997"
+      MTX_WEBRTCADDRESS: ":8889"
+      MTX_HLSADDRESS: ":8888"
+      MTX_HLSVARIANT: "lowLatency"
+      MTX_RTSPADDRESS: ":8554"
+    networks:
+      - dm3-internal
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9997/v3/config/global/get"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cctv-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-cctv-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: cctv-svc
+      HTTP_PORT: "8008"
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
+      NATS_URL: nats://nats:4222
+      CCTV_CREDENTIAL_KEY: ${CCTV_CREDENTIAL_KEY}
+      MEDIAMTX_API_URL: "http://mediamtx:9997"
+      MEDIAMTX_API_USER: ${MEDIAMTX_API_USER:-}
+      MEDIAMTX_API_PASS: ${MEDIAMTX_API_PASS:-}
+      MEDIAMTX_WHEP_BASE: ${MEDIAMTX_WHEP_BASE:-https://dm3-cctv.demasterpro.com}
+      MEDIAMTX_HLS_BASE: ${MEDIAMTX_HLS_BASE:-https://dm3-cctv.demasterpro.com}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+      mediamtx:
+        condition: service_healthy
+    networks:
+      - dm3-internal
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8008/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ── Frontend ───────────────────────────────────────────────────────────────
 
   webapp:
@@ -340,6 +393,8 @@ services:
       visitor-svc:
         condition: service_healthy
       parking-svc:
+        condition: service_healthy
+      cctv-svc:
         condition: service_healthy
     networks:
       - dm3-internal
