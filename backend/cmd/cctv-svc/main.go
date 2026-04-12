@@ -134,6 +134,14 @@ func main() {
 	// Object store + clip signer
 	// ObjectStoreClipSigner uses the MinIO client directly for presigned URLs.
 	// Falls back to the no-op signer when OBJECT_STORE_ENDPOINT is not set.
+	//
+	// In production we refuse to start without object storage configured — the
+	// no-op signer returns raw MinIO object keys, which would leak storage
+	// layout to clip-playback clients. Local/dev keeps the fallback for ergonomics.
+	if os.Getenv("APP_ENV") == "production" && cfg.ObjectStoreEndpoint == "" {
+		slog.Error("OBJECT_STORE_ENDPOINT is required in production; no-op clip signer would leak raw object keys")
+		os.Exit(1)
+	}
 	var clipSigner cctv.ClipSigner = cctv.DefaultClipSigner
 	var objectStore objectstore.Store
 	if cfg.ObjectStoreEndpoint != "" {
