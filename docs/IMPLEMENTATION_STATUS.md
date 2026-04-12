@@ -1,6 +1,6 @@
 # Implementation Status
 
-This document tracks the current implementation status of DM3 features. Updated: 2026-04-12 (parking ↔ access integration: unified vehicle registry, zone hierarchy soft-FK, NATS event bridge, barrier auto-registration, opt-in access policy check).
+This document tracks the current implementation status of DM3 features. Updated: 2026-04-12 (CCTV plugin added: dm3_cctv schema, cctv-svc, MediaMTX + MinIO wiring, console UI; parking ↔ access integration: unified vehicle registry, zone hierarchy soft-FK, NATS event bridge, barrier auto-registration, opt-in access policy check).
 
 ---
 
@@ -8,7 +8,7 @@ This document tracks the current implementation status of DM3 features. Updated:
 
 > **Two systemic gaps found that cannot be buried in per-item detail:**
 >
-> 1. **Service topology is ~35% implemented.** The architecture doc (`docs/architecture/system-architecture.md:281`) specifies ~20 microservices. 7 exist in `backend/cmd/` (auth-svc, access-svc, identity-svc, device-gateway, audit-svc, visitor-svc on port 8006, parking-svc on port 8007). Remaining domain services (booking-svc, guard-tour-svc, analytics-svc, etc.) are absent.
+> 1. **Service topology is ~40% implemented.** The architecture doc (`docs/architecture/system-architecture.md:281`) specifies ~20 microservices. 8 exist in `backend/cmd/` (auth-svc, access-svc, identity-svc, device-gateway, audit-svc, visitor-svc on port 8006, parking-svc on port 8007, cctv-svc). Remaining domain services (booking-svc, guard-tour-svc, analytics-svc, intercom-svc, intrusion-svc, emergency-svc, etc.) are absent.
 >
 > 2. **The majority of frontend pages are mock-data-only UI shells.** 21 of ~30 feature pages import from `mock-data` files or define inline hardcoded arrays with zero API client usage. ALL OPERATE, ALL SMART, and most SECURE/MANAGE pages are visual prototypes, not working features. Only DashboardPage, DeviceDetailPage, IdentitiesPage/PersonDetailPage/GroupsPage, and SystemSettingsPage integrate with real backend APIs.
 >
@@ -20,9 +20,9 @@ This document tracks the current implementation status of DM3 features. Updated:
 
 | Layer | Status | Details |
 |-------|--------|---------|
-| Service Topology | ❌ Gap | 7 of ~20 specified services implemented. Evidence: `backend/cmd/` has 7 dirs (auth-svc, identity-svc, access-svc, device-gateway, audit-svc, visitor-svc on port 8006, parking-svc on port 8007); `docs/architecture/system-architecture.md:281` specifies ~20 |
+| Service Topology | ❌ Gap | 8 of ~20 specified services implemented. Evidence: `backend/cmd/` has 8 dirs (auth-svc, identity-svc, access-svc, device-gateway, audit-svc, visitor-svc on port 8006, parking-svc on port 8007, cctv-svc); `docs/architecture/system-architecture.md:281` specifies ~20 |
 | Data Flow / MQTT Pipeline | ✅ Compliant | Topic `dm/{tid}/device/{did}/{cat}` confirmed. Envelope (v, id, ts) confirmed. NATS bridge confirmed. Evidence: `backend/internal/gateway/mqtt_handler.go:48-57, 27-35` |
-| Data Model / ER | ⚠️ Partial | Core access hierarchy implemented (`dm3_access`). Visitor module isolated into own schema: `dm3_visitor` (11 tables). Parking module isolated into own schema: `dm3_parking` (7 tables: parking_lots, parking_zones, parking_vehicles, parking_fee_rules, parking_passes, parking_sessions, parking_settings). **Vehicle registry unified into `dm3_parking.parking_vehicles`** (migration 000010 dropped `dm3_identity.vehicles`; parking_vehicles now owns triple credentials: plate + RFID + NFC + visitor_id link). `parking_zones.access_zone_id` soft-FK into `dm3_access.zones` (migration 000010). `dm3_access.access_devices` +`source`/`source_ref` for auto-registered barriers (migration 000011). `parking_settings.enforce_access_rules` opt-in cross-module policy check (migration 000012). `dm3_audit` schema active (audit_logs hypertable). Remaining gaps: contractors, rooms, maintenance, keys. See `docs/architecture/module-isolation.md`. |
+| Data Model / ER | ⚠️ Partial | Core access hierarchy implemented (`dm3_access`). Visitor module isolated into own schema: `dm3_visitor` (11 tables). Parking module isolated into own schema: `dm3_parking` (7 tables: parking_lots, parking_zones, parking_vehicles, parking_fee_rules, parking_passes, parking_sessions, parking_settings). **Vehicle registry unified into `dm3_parking.parking_vehicles`** (migration 000010 dropped `dm3_identity.vehicles`; parking_vehicles now owns triple credentials: plate + RFID + NFC + visitor_id link). `parking_zones.access_zone_id` soft-FK into `dm3_access.zones` (migration 000010). `dm3_access.access_devices` +`source`/`source_ref` for auto-registered barriers (migration 000011). `parking_settings.enforce_access_rules` opt-in cross-module policy check (migration 000012). **CCTV module isolated into own schema: `dm3_cctv`** (migration 000013 — `cameras` 1-1 extension of `dm3_devices.devices`, `event_clips` hypertable with soft FK to `dm3_access.access_events`, `cctv_settings`). `dm3_audit` schema active (audit_logs hypertable). Remaining gaps: contractors, rooms, maintenance, keys. See `docs/architecture/module-isolation.md`. |
 | Security | ⚠️ Partial | JWT auth, bcrypt, CORS, refresh-token replay detection confirmed. Missing: TLS config in docker-compose for EMQX, no rate limiting middleware found. |
 | Deployment | ✅ Compliant | All 6 infra services present in `backend/docker-compose.yml` with correct ports. Simulator is in a separate `simulator/docker-compose.yml` (minor split). No Traefik gateway config found. |
 
@@ -121,10 +121,18 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Evidence: `apps/console/src/features/secure/ai-detection/AIDetectionPage.tsx` — imports from `./mock-data`
   - Deviation: No AI detection backend service or spec-matching API endpoint found. Both frontend and backend are incomplete.
 
-- **CCTV** (`CCTVPage`, `CameraDetailPage`)
-  - Status: ⚠️ Partial | Risk: Medium
-  - Evidence: `CCTVPage.tsx` — has both `useQuery` (partial real API) and mock-data imports; `CameraDetailPage.tsx` — mock-data only
-  - Deviation: Camera playback and live stream endpoints not confirmed in any backend service.
+- **CCTV** (`CCTVCamerasPage`, `CCTVLiveViewPage`, `CCTVClipsPage`, `CCTVSettingsPage`)
+  - Status: ✅ Implemented (plugin-gated, backend + frontend + infra wired) | Risk: Low
+  - Backend: Standalone `cctv-svc` (`backend/cmd/cctv-svc/`, `backend/internal/cctv/`) — camera CRUD, clip listing/presigned playback, live-stream endpoint coordination (WHEP/HLS via MediaMTX), RTSP DESCRIBE probe, AES-GCM credential encryption, retention worker pruning clips + MinIO objects per `cctv_settings.retention_days`. Plugin-gated via `authsvc.RequirePlugin("cctv")`.
+  - Schema (migration 000013, `dm3_cctv`): `cameras` (1-1 extension of `dm3_devices.devices` type='camera' with encrypted RTSP creds + pre/post-roll), `event_clips` (TimescaleDB hypertable, 7-day chunks, soft FKs to devices + `dm3_access.access_events`), `cctv_settings` (per-tenant retention + quota).
+  - Integration with access control:
+    - **Camera is a device**: `cameras.device_id` is both PK and FK to `dm3_devices.devices` — no parallel camera registry.
+    - **Access-point binding**: cameras attach to access_points via existing `dm3_access.access_devices` junction; UI queries `access-points-all` client when assigning.
+    - **Clip ↔ access event link**: `event_clips.access_event_id` is a soft FK (UUID, no hard constraint — preserves clip retention after event purge). Queryable via `GET /api/v1/cctv/clips?access_event_id=…` for access-history playback.
+    - **Event-driven trigger**: access-svc publishes access events to NATS; cctv-svc consumer creates clips asynchronously (`trigger='access_event'`). Manual and API-triggered clips also supported (`trigger='manual'|'api'`).
+  - Infrastructure: MediaMTX stream server + cctv-svc wired into `docker-compose.local.yml` and `deploy/nginx/nginx.local.conf` (commit `67a40f25` + `5975b38b`). MinIO bucket `cctv-<tenant>/…` with presigned URL access.
+  - Frontend: `apps/console/src/features/cctv/` — CCTVCamerasPage (CRUD + access-point binding), CCTVLiveViewPage (WHEP primary + HLS.js fallback tile), CCTVClipsPage (filter by camera + access_event_id), CCTVSettingsPage (retention, quota). Lazy-loaded behind `PluginGuard`. API client: `packages/api-client/src/cctv.ts` (50+ DTOs).
+  - Deviation: Phase 1 scope is `event_only` + `disabled` recording modes; continuous recording intentionally out of scope. Some `CameraDetailPage` legacy mock paths remain but are superseded by the new CCTV feature pages.
 
 - **Emergency** (`EmergencyPage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: High

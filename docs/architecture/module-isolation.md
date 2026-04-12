@@ -1,12 +1,18 @@
 # Plugin Isolation Architecture
 
-> Domain: OPERATE + SMART | Status: Active | Last updated: 2026-04-11
+> Domain: OPERATE + SMART + SECURE | Status: Active | Last updated: 2026-04-12
 
 ## Overview
 
 DM3 uses a plugin architecture where features beyond core access control are implemented as optional plugins. Each plugin can be independently enabled/disabled per tenant at runtime. This document defines the standard pattern that all optional plugins must follow.
 
-The **visitor plugin** is the first implementation of this pattern and serves as the reference example. Future optional plugins (parking, intercom, smart building analytics) should replicate this structure exactly.
+Three plugins are in production and illustrate three different integration styles:
+
+- **Visitor** (reference implementation) — fully isolated `dm3_visitor` schema; cross-schema references via UUID only; async credential issuance via NATS.
+- **Parking** — adds cross-plugin integration surfaces: unified vehicle registry, zone-hierarchy soft-FK into `dm3_access.zones`, event bridge into `dm3_access.access_events`, opt-in policy check.
+- **CCTV** — device-extension style: `dm3_cctv.cameras` is a 1-1 extension of `dm3_devices.devices` (camera *is* a device); clips link to `dm3_access.access_events` via soft FK; clip creation is event-driven via NATS.
+
+Future optional plugins (intercom, smart building analytics, elevator, turnstile) should pick whichever pattern fits their data model.
 
 ## Plugin Anatomy
 
@@ -304,7 +310,8 @@ Each optional module runs as a standalone microservice:
 | Core (Identity) | `identity-svc` | 8004 | `cmd/identity-svc/` | `dm3_identity` | `IDENTITY` |
 | Visitor | `visitor-svc` | 8006 | `cmd/visitor-svc/` | `dm3_visitor` | `VISITOR` |
 | Parking | `parking-svc` | 8007 | `cmd/parking-svc/` | `dm3_parking` | `PARKING` |
-| Intercom | `intercom-svc` | 8008 | `cmd/intercom-svc/` | `dm3_intercom` | `INTERCOM` |
+| CCTV | `cctv-svc` | 8008 | `cmd/cctv-svc/` | `dm3_cctv` | `CCTV` |
+| Intercom | `intercom-svc` | 8009 | `cmd/intercom-svc/` | `dm3_intercom` | `INTERCOM` |
 
 Each service:
 - Has its own database schema
@@ -593,6 +600,45 @@ replaying the sync event is safe. Future plugins (intercom, turnstile,
 elevator) can reuse this pattern — pick a `source` string (`intercom`,
 `turnstile`, etc.) and publish a `{domain}.zone.barrier_sync`-style
 event.
+
+## CCTV Module — Device-Extension Integration Example
+
+The CCTV plugin demonstrates a third integration style:
+**extending `dm3_devices.devices` with plugin-specific fields** rather than
+owning a parallel registry. A camera *is* a device; the plugin only adds
+what doesn't fit on the base row.
+
+### Integration surfaces (all plugin-safe)
+
+| Surface | Mechanism | Direction |
+|---|---|---|
+| Camera as device | `dm3_cctv.cameras.device_id` is both PK **and** FK to `dm3_devices.devices` (ON DELETE CASCADE). The devices row (type='camera') owns name, tenant, status, last_seen | cctv → devices (hard FK, 1-1 extension) |
+| Access-point binding | Cameras attach to access_points via existing `dm3_access.access_devices` junction — no new cross-plugin link table | cctv → access (existing junction) |
+| Clip ↔ event link | `dm3_cctv.event_clips.access_event_id` soft FK (UUID, nullable, no REFERENCES) → `dm3_access.access_events` | cctv → access (soft FK) |
+| Event-driven clip trigger | access-svc publishes access events to NATS; cctv-svc consumer creates clips with `trigger='access_event'` | access → cctv (async consumer) |
+| Storage | MinIO `cctv-<tenant>/yyyy/mm/dd/<camera>/<clip>.mp4` + TimescaleDB hypertable for metadata (7-day chunks, retention worker per `cctv_settings.retention_days`) | cctv-owned |
+
+### Why the device-extension pattern (not a parallel registry)
+
+- **Cameras already have a device identity** — they appear in device
+  provisioning, status dashboards, and firmware inventories. Forking
+  them into a separate `dm3_cctv.devices` table would duplicate that
+  surface and desync quickly.
+- **Hard FK is safe here** because the relationship is genuinely 1-1
+  and the plugin's own table cascades with the device. Other plugins
+  (parking, visitor) use soft FKs because their rows can outlive the
+  referenced entity; camera rows cannot meaningfully exist without the
+  base device.
+- **Clips use a soft FK** to `access_events` precisely because clips
+  *should* outlive the originating event (retention windows differ).
+
+### Credentials handling
+
+RTSP username/password are stored on `dm3_cctv.cameras.rtsp_password_enc`
+as AES-GCM ciphertext produced by `internal/cctv/crypto.go`. The
+encryption key is loaded from env at service start. Postgres' `pgcrypto`
+is intentionally **not** enabled — the crypto surface lives entirely in
+Go so it can be audited, rotated, and unit-tested in one place.
 
 ## Related Documents
 

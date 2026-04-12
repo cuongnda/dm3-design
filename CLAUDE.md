@@ -89,7 +89,7 @@ pytest                               # everything
 
 ### Backend — Go monorepo (`backend/`)
 
-Seven services, all in one Go module (`github.com/duali/dm3-backend`):
+Eight services, all in one Go module (`github.com/duali/dm3-backend`):
 
 | Service | Port | Entry point | Responsibility |
 |---|---|---|---|
@@ -100,6 +100,7 @@ Seven services, all in one Go module (`github.com/duali/dm3-backend`):
 | `audit-svc` | 8001 | `cmd/audit-svc/` | Immutable audit log (NATS consumer + query API) |
 | `visitor-svc` | 8006 | `cmd/visitor-svc/` | Visitor management (plugin-gated, dm3_visitor schema) |
 | `parking-svc` | 8007 | `cmd/parking-svc/` | Parking management (plugin-gated, dm3_parking schema) |
+| `cctv-svc` | 8008 | `cmd/cctv-svc/` | CCTV cameras, clips, MediaMTX live streams (plugin-gated, dm3_cctv schema) |
 
 **Key internal packages:**
 - `internal/config/` — shared `Config` struct, loaded from env vars (defaults to dev values)
@@ -145,8 +146,8 @@ Domain colors: SECURE `#3B82F6` · MANAGE `#8B5CF6` · OPERATE `#F59E0B` · SMAR
 ### Database
 
 TimescaleDB on port `5433`, database `dm3`, user `dm3`, password `dm3secret`.  
-Schema is split into namespaced schemas: `dm3_auth`, `dm3_devices`, `dm3_access`, `dm3_identity`, `dm3_visitor`, `dm3_parking`.  
-Single migration file: `backend/pkg/db/migrations/001_initial.sql`.
+Schema is split into namespaced schemas: `dm3_auth`, `dm3_devices`, `dm3_access`, `dm3_identity`, `dm3_visitor`, `dm3_parking`, `dm3_cctv`, `dm3_audit`.  
+Migrations live in `backend/pkg/db/migrations/` (numbered `000001_*` … `000013_cctv_schema`).
 
 ## Frontend Conventions
 
