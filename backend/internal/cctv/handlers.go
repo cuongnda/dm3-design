@@ -21,16 +21,23 @@ type CCTVHandlers struct {
 	nats     *natsutil.Client
 	mediamtx MediaMTXClient
 	cipher   *CredentialCipher
+	signer   ClipSigner
 }
 
 // NewCCTVHandlers constructs a CCTVHandlers with the given dependencies.
-func NewCCTVHandlers(database *db.DB, auditLog *audit.Logger, natsClient *natsutil.Client, mediamtx MediaMTXClient, cipher *CredentialCipher) *CCTVHandlers {
+// signer is used to produce playback URLs for clips; pass DefaultClipSigner
+// (the no-op) when object storage is not configured.
+func NewCCTVHandlers(database *db.DB, auditLog *audit.Logger, natsClient *natsutil.Client, mediamtx MediaMTXClient, cipher *CredentialCipher, signer ClipSigner) *CCTVHandlers {
+	if signer == nil {
+		signer = DefaultClipSigner
+	}
 	return &CCTVHandlers{
 		db:       database,
 		audit:    auditLog,
 		nats:     natsClient,
 		mediamtx: mediamtx,
 		cipher:   cipher,
+		signer:   signer,
 	}
 }
 

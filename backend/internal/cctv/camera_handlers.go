@@ -14,6 +14,7 @@ import (
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
+
 // ListCameras handles GET /cameras
 // Supports: ?access_point_id=, ?status=, ?page=, ?limit=
 func (h *CCTVHandlers) ListCameras(w http.ResponseWriter, r *http.Request) {
@@ -398,8 +399,12 @@ func (h *CCTVHandlers) DeleteCamera(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// TestCameraConnection handles POST /cameras/{id}/test-connection
-// Phase 1: checks MediaMTX path status and returns reachability result.
+// TestCameraConnection handles POST /cameras/{id}/test-connection.
+// It performs a real RTSP DESCRIBE probe over TCP to verify connectivity and
+// credentials, then stores the result in dm3_cctv.cameras.stream_profile.
+//
+// Response: {ok, latency_ms, codec, resolution, error?}
+// Always returns HTTP 200; error details are in the response body.
 func (h *CCTVHandlers) TestCameraConnection(w http.ResponseWriter, r *http.Request) {
 	cid := h.getTenantID(r)
 	if !requireTenant(w, cid) {
@@ -407,27 +412,57 @@ func (h *CCTVHandlers) TestCameraConnection(w http.ResponseWriter, r *http.Reque
 	}
 	id := chi.URLParam(r, "id")
 
-	// Verify camera belongs to tenant
-	var exists bool
-	_ = h.db.Pool.QueryRow(r.Context(), `
-		SELECT EXISTS(SELECT 1 FROM dm3_devices.devices WHERE id = $1::uuid AND tenant_id = $2::uuid AND type = 'camera')`,
-		id, cid).Scan(&exists)
-	if !exists {
-		httputil.Error(w, http.StatusNotFound, "camera not found")
+	// Fetch camera — need the RTSP URL + credentials for the probe.
+	cam, err := h.fetchCamera(r, cid, id)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			httputil.Error(w, http.StatusNotFound, "camera not found")
+			return
+		}
+		logInternalError(w, "get camera error", err)
 		return
 	}
 
-	reachable, err := h.mediamtx.PathExists(r.Context(), id)
-	if err != nil {
-		slog.Warn("cctv: mediamtx path exists check failed", "device_id", id, "error", err)
-		reachable = false
+	// Decrypt RTSP password if set.
+	var rtspPassword string
+	var encPass []byte
+	if scanErr := h.db.Pool.QueryRow(r.Context(), `
+		SELECT rtsp_password_enc FROM dm3_cctv.cameras
+		WHERE device_id = $1::uuid AND tenant_id = $2::uuid`,
+		id, cid).Scan(&encPass); scanErr == nil && len(encPass) > 0 {
+		rtspPassword, _ = h.cipher.Decrypt(encPass)
 	}
 
-	httputil.JSON(w, http.StatusOK, map[string]any{
-		"reachable":  reachable,
-		"checked_at": time.Now().UTC(),
-		// TODO(Phase 2): return real stream_profile from RTSP DESCRIBE
-	})
+	rtspUsername := ""
+	if cam.RTSPUsername != nil {
+		rtspUsername = *cam.RTSPUsername
+	}
+
+	result := probeRTSP(cam.RTSPUrl, rtspUsername, rtspPassword)
+
+	// Persist last_checked_at and stream_profile regardless of probe outcome.
+	profileJSON := fmt.Sprintf(`{"codec":%q,"resolution":%q,"probed_at":%q}`,
+		result.Codec, result.Resolution, time.Now().UTC().Format(time.RFC3339))
+	_, dbErr := h.db.Pool.Exec(r.Context(), `
+		UPDATE dm3_cctv.cameras
+		SET last_checked_at = now(),
+		    stream_profile   = $3::jsonb
+		WHERE device_id = $1::uuid AND tenant_id = $2::uuid`,
+		id, cid, profileJSON)
+	if dbErr != nil {
+		slog.Warn("cctv: update stream_profile failed", "device_id", id, "error", dbErr)
+	}
+
+	resp := map[string]any{
+		"ok":         result.OK,
+		"latency_ms": result.LatencyMs,
+		"codec":      result.Codec,
+		"resolution": result.Resolution,
+	}
+	if result.Err != "" {
+		resp["error"] = result.Err
+	}
+	httputil.JSON(w, http.StatusOK, resp)
 }
 
 // fetchCamera retrieves a single camera by device UUID, scoped to tenant.

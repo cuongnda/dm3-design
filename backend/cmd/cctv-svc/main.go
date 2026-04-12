@@ -17,6 +17,7 @@ import (
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/natsutil"
+	"github.com/duali/dm3-backend/pkg/objectstore"
 )
 
 func main() {
@@ -100,8 +101,55 @@ func main() {
 		slog.Warn("MEDIAMTX_API_URL not set — using no-op MediaMTX client (dev mode)")
 	}
 
+	// Object store + clip signer
+	// ObjectStoreClipSigner uses the MinIO client directly for presigned URLs.
+	// Falls back to the no-op signer when OBJECT_STORE_ENDPOINT is not set.
+	var clipSigner cctv.ClipSigner = cctv.DefaultClipSigner
+	var objectStore objectstore.Store
+	if cfg.ObjectStoreEndpoint != "" {
+		var storeErr error
+		objectStore, storeErr = objectstore.NewMinIOStore(ctx, objectstore.Config{
+			Endpoint:         cfg.ObjectStoreEndpoint,
+			AccessKeyID:      cfg.ObjectStoreAccessKeyID,
+			SecretAccessKey:  cfg.ObjectStoreSecretAccessKey,
+			Bucket:           cfg.ObjectStoreBucket,
+			UseSSL:           cfg.ObjectStoreUseSSL,
+			AutoCreateBucket: cfg.ObjectStoreAutoCreateBucket,
+		})
+		if storeErr != nil {
+			slog.Error("failed to initialize object storage", "error", storeErr)
+			os.Exit(1)
+		}
+		slog.Info("using MinIO object storage", "endpoint", cfg.ObjectStoreEndpoint)
+
+		realSigner, signerErr := cctv.NewObjectStoreClipSigner(
+			cfg.ObjectStoreEndpoint,
+			cfg.ObjectStoreAccessKeyID,
+			cfg.ObjectStoreSecretAccessKey,
+			cfg.ObjectStoreBucket,
+			cfg.ObjectStoreUseSSL,
+		)
+		if signerErr != nil {
+			slog.Error("failed to initialize clip signer", "error", signerErr)
+			os.Exit(1)
+		}
+		clipSigner = realSigner
+		slog.Info("clip signer configured", "bucket", cfg.ObjectStoreBucket)
+	} else {
+		slog.Warn("OBJECT_STORE_ENDPOINT not set — clip playback URLs will return object_key unchanged")
+	}
+
 	// HTTP handlers
-	handlers := cctv.NewCCTVHandlers(database, auditLog, natsClient, mediamtxClient, cipher)
+	handlers := cctv.NewCCTVHandlers(database, auditLog, natsClient, mediamtxClient, cipher, clipSigner)
+
+	// Retention worker — purges expired clips from object storage and DB.
+	if objectStore != nil {
+		retentionWorker := cctv.NewRetentionWorker(database, objectStore, time.Hour)
+		go retentionWorker.Run(ctx)
+		slog.Info("cctv retention worker started", "interval", "1h")
+	} else {
+		slog.Warn("object store not configured — retention worker disabled")
+	}
 
 	// Router
 	r := httputil.NewRouter()

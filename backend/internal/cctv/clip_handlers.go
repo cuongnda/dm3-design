@@ -14,7 +14,7 @@ import (
 
 // ClipSigner abstracts object-storage URL signing.
 // A no-op default returns the object_key as a relative path.
-// TODO(Phase 2): wire real MinIO presigned URL signing here.
+// Use ObjectStoreClipSigner (clip_signer.go) for real MinIO presigned URLs.
 type ClipSigner interface {
 	Sign(ctx interface{}, objectKey string) (string, error)
 }
@@ -185,8 +185,8 @@ func (h *CCTVHandlers) CreateClip(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteClip handles DELETE /clips/{id}
-// Note: does NOT delete the MinIO object — that is the retention job's responsibility.
-// TODO(Phase 2): wire retention worker to sweep expired clips from object storage.
+// Note: does NOT delete the MinIO object — that is the retention worker's responsibility.
+// The RetentionWorker (cron.go) sweeps expired clips from object storage on a schedule.
 func (h *CCTVHandlers) DeleteClip(w http.ResponseWriter, r *http.Request) {
 	cid := h.getTenantID(r)
 	if !requireTenant(w, cid) {
@@ -212,8 +212,8 @@ func (h *CCTVHandlers) DeleteClip(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetClipPlayback handles GET /clips/{id}/playback
-// Phase 1: returns the object_key as a relative path (nginx/frontend handles resolution).
-// TODO(Phase 2): replace noopClipSigner with real MinIO presigned URL signer.
+// Returns a presigned GET URL for the clip's object key, valid for 5 minutes.
+// Falls back to returning the object_key unchanged when no signer is configured.
 func (h *CCTVHandlers) GetClipPlayback(w http.ResponseWriter, r *http.Request) {
 	cid := h.getTenantID(r)
 	if !requireTenant(w, cid) {
@@ -231,7 +231,7 @@ func (h *CCTVHandlers) GetClipPlayback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	playbackURL, err := DefaultClipSigner.Sign(r.Context(), clip.ObjectKey)
+	playbackURL, err := h.signer.Sign(r.Context(), clip.ObjectKey)
 	if err != nil {
 		logInternalError(w, "sign clip playback url error", err)
 		return
