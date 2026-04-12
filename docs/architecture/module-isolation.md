@@ -547,6 +547,53 @@ Visitors
 
 Only when visitor is in `enabled_plugins`.
 
+## Parking Module — Cross-Plugin Integration Example
+
+The parking plugin demonstrates how a plugin can **deeply integrate** with
+core access-svc while staying plugin-gated. See
+[`docs/changelog/2026-04-12-parking-access-integration.md`](../changelog/2026-04-12-parking-access-integration.md)
+for the full decision record.
+
+### Integration surfaces (all plugin-safe)
+
+| Surface | Mechanism | Direction |
+|---|---|---|
+| Unified vehicle registry | `dm3_parking.parking_vehicles` owns plate + RFID + NFC + `visitor_id` (soft FK to `dm3_visitor.visitors`) | parking → visitor |
+| Zone hierarchy | `parking_zones.access_zone_id` soft FK to `dm3_access.zones` | parking → access |
+| Event bridge | `dm3.parking.{tid}.access.{direction}` → access-svc `ParkingAccessConsumer` → `dm3_access.access_events` | parking → access (async) |
+| Barrier auto-registration | `dm3.parking.{tid}.zone.barrier_sync` → access-svc `ParkingBarrierConsumer` upserts `access_devices` (source=parking, source_ref=zone_id) | parking → access (async) |
+| Cross-module policy check | Opt-in via `parking_settings.enforce_access_rules` — `CreateParkingSession` validates user has access_group access to `zone.access_zone_id` | parking → access (sync query) |
+
+### Invariants preserved
+
+- **No hard FKs across schemas.** All cross-plugin links are UUID columns
+  with no `REFERENCES` clause.
+- **No Go imports across plugins.** access-svc consumers read events and
+  query their own schema; they never import `internal/parking`.
+- **Opt-in by default.** `enforce_access_rules` defaults to `false`; the
+  event bridge and barrier sync are passive — access-svc ingests what
+  parking-svc publishes, never the other way around.
+- **Graceful degradation.** If the zone has no `access_zone_id`, the
+  vehicle has no owner, or the tenant has the plugin disabled, the
+  checks fall through to the existing parking-only path.
+
+### Auto-registration pattern
+
+To register external resources as access devices without a hard FK, use
+the `source` + `source_ref` columns on `dm3_access.access_devices`:
+
+```sql
+CREATE UNIQUE INDEX uq_access_device_source_ref
+    ON dm3_access.access_devices(tenant_id, source, source_ref)
+    WHERE source IS NOT NULL;
+```
+
+Upsert keyed on `(tenant_id, source, source_ref)` is idempotent, so
+replaying the sync event is safe. Future plugins (intercom, turnstile,
+elevator) can reuse this pattern — pick a `source` string (`intercom`,
+`turnstile`, etc.) and publish a `{domain}.zone.barrier_sync`-style
+event.
+
 ## Related Documents
 
 - [System Architecture](./system-architecture.md) — overall service topology
@@ -554,3 +601,4 @@ Only when visitor is in `enabled_plugins`.
 - [Access Model Design](./access-model-design.md) — core access control rules
 - [IMPLEMENTATION_STATUS.md](../IMPLEMENTATION_STATUS.md) — which features are live vs mock
 - [Visitor Feature Spec](../specs/operate/visitor-management.md) — detailed visitor requirements
+- [2026-04-12 Parking ↔ Access Integration](../changelog/2026-04-12-parking-access-integration.md) — cross-plugin integration decision record
