@@ -31,5 +31,5 @@ export function listAccessPoints(
   if (params?.zone_id) qs.set('zone_id', params.zone_id);
   if (params?.search) qs.set('search', params.search);
   const suffix = qs.toString() ? `?${qs}` : '';
-  return apiFetch(`/api/v1/access-points${suffix}`);
+  return apiFetch(`/api/v1/access/access-points${suffix}`);
 }
