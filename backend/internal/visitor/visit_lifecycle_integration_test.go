@@ -31,6 +31,15 @@ func setupVisitorTestDB(t *testing.T) *db.DB {
 	if err != nil {
 		t.Skipf("database not available: %v", err)
 	}
+	// Ensure the hardcoded test tenant exists; many fixtures insert users and
+	// visits scoped to this tenant and require the FK target to be present.
+	if _, err := database.Pool.Exec(context.Background(), `
+		INSERT INTO dm3_auth.tenants (id, name, code, enabled_plugins)
+		VALUES ($1::uuid, 'Visitor Test Tenant', 'visitor-test', ARRAY['core','visitor']::varchar[])
+		ON CONFLICT (id) DO NOTHING`, visitorTestTenantID); err != nil {
+		database.Close()
+		t.Fatalf("seed test tenant: %v", err)
+	}
 	return database
 }
 
