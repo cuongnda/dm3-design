@@ -19,7 +19,7 @@ echo "✅ Demo data seeded successfully!"
 echo ""
 echo "📊 Data summary:"
 PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "
-SELECT 'Persons' as entity, COUNT(*) as count FROM dm3_identity.persons WHERE tenant_id = '00000000-0000-0000-0000-000000000001'
+SELECT 'Identity Users' as entity, COUNT(*) as count FROM dm3_identity.users WHERE tenant_id = '00000000-0000-0000-0000-000000000001'
 UNION ALL
 SELECT 'Credentials', COUNT(*) FROM dm3_identity.credentials WHERE tenant_id = '00000000-0000-0000-0000-000000000001'
 UNION ALL

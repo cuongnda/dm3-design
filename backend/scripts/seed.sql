@@ -11,29 +11,30 @@ INSERT INTO dm3_devices.devices (device_id, name, type, status, model, firmware_
     ('100005', 'Warehouse Terminal', 'terminal', 'online', 'ba8300', '2.1.0', 'Warehouse Main')
 ON CONFLICT (device_id) DO NOTHING;
 
--- Sample persons
-INSERT INTO dm3_identity.persons (first_name, last_name, email, phone, department, role, employee_id, status) VALUES
-    ('Nguyen', 'Van An', 'an.nguyen@duali.com', '+84901234001', 'Engineering', 'Engineer', 'EMP001', 'active'),
-    ('Tran', 'Thi Binh', 'binh.tran@duali.com', '+84901234002', 'HR', 'Manager', 'EMP002', 'active'),
-    ('Le', 'Duc Cuong', 'cuong.le@duali.com', '+84901234003', 'Engineering', 'Lead', 'EMP003', 'active'),
-    ('Pham', 'Minh Duc', 'duc.pham@duali.com', '+84901234004', 'Sales', 'Executive', 'EMP004', 'active'),
-    ('Hoang', 'Thi Em', 'em.hoang@duali.com', '+84901234005', 'Admin', 'Receptionist', 'EMP005', 'active'),
-    ('Vo', 'Van Phuc', 'phuc.vo@duali.com', '+84901234006', 'Engineering', 'Intern', 'EMP006', 'active'),
-    ('Dang', 'Quang Gia', 'gia.dang@duali.com', '+84901234007', 'Operations', 'Supervisor', 'EMP007', 'active'),
-    ('Bui', 'Thi Huong', 'huong.bui@duali.com', '+84901234008', 'Finance', 'Accountant', 'EMP008', 'active'),
-    ('Do', 'Minh Ich', 'ich.do@duali.com', '+84901234009', 'Security', 'Guard', 'EMP009', 'active'),
-    ('Ngo', 'Van Khanh', 'khanh.ngo@duali.com', '+84901234010', 'IT', 'SysAdmin', 'EMP010', 'active')
+-- Sample identity users (the legacy dm3_identity.persons table was folded into
+-- dm3_identity.users; see migration 000001 for schema).
+INSERT INTO dm3_identity.users (first_name, last_name, email, phone, emp_number, position, status) VALUES
+    ('Nguyen', 'Van An', 'an.nguyen@duali.com', '+84901234001', 'EMP001', 'Engineer', 'active'),
+    ('Tran', 'Thi Binh', 'binh.tran@duali.com', '+84901234002', 'EMP002', 'Manager', 'active'),
+    ('Le', 'Duc Cuong', 'cuong.le@duali.com', '+84901234003', 'EMP003', 'Lead', 'active'),
+    ('Pham', 'Minh Duc', 'duc.pham@duali.com', '+84901234004', 'EMP004', 'Executive', 'active'),
+    ('Hoang', 'Thi Em', 'em.hoang@duali.com', '+84901234005', 'EMP005', 'Receptionist', 'active'),
+    ('Vo', 'Van Phuc', 'phuc.vo@duali.com', '+84901234006', 'EMP006', 'Intern', 'active'),
+    ('Dang', 'Quang Gia', 'gia.dang@duali.com', '+84901234007', 'EMP007', 'Supervisor', 'active'),
+    ('Bui', 'Thi Huong', 'huong.bui@duali.com', '+84901234008', 'EMP008', 'Accountant', 'active'),
+    ('Do', 'Minh Ich', 'ich.do@duali.com', '+84901234009', 'EMP009', 'Guard', 'active'),
+    ('Ngo', 'Van Khanh', 'khanh.ngo@duali.com', '+84901234010', 'EMP010', 'SysAdmin', 'active')
 ON CONFLICT DO NOTHING;
 
--- Credentials for persons (card + pin)
-INSERT INTO dm3_identity.credentials (person_id, type, value, status)
-SELECT p.id, 'card', 'CARD' || LPAD(ROW_NUMBER() OVER ()::text, 6, '0'), 'active'
-FROM dm3_identity.persons p
+-- Credentials for users (card + pin). credentials.user_id FK to dm3_identity.users.
+INSERT INTO dm3_identity.credentials (user_id, type, value, status)
+SELECT u.id, 'card', 'CARD' || LPAD(ROW_NUMBER() OVER ()::text, 6, '0'), 'active'
+FROM dm3_identity.users u
 ON CONFLICT DO NOTHING;
 
-INSERT INTO dm3_identity.credentials (person_id, type, value, status)
-SELECT p.id, 'pin', LPAD((1000 + ROW_NUMBER() OVER ())::text, 4, '0'), 'active'
-FROM dm3_identity.persons p
+INSERT INTO dm3_identity.credentials (user_id, type, value, status)
+SELECT u.id, 'pin', LPAD((1000 + ROW_NUMBER() OVER ())::text, 4, '0'), 'active'
+FROM dm3_identity.users u
 ON CONFLICT DO NOTHING;
 
 -- Doors (linked to devices)
