@@ -80,23 +80,35 @@ check_infra() {
 reload_backend() {
     check_infra
 
-    log "Rebuilding backend image..."
-    docker compose -f "$COMPOSE_FILE" build --quiet auth-svc 2>&1 | tail -3
+    log "Rebuilding backend images (migrate + all services)..."
+    # All backend services share the same Dockerfile but have separate image tags,
+    # so every service must be rebuilt — otherwise migrate (and per-service) images
+    # go stale and migration files added after the last build will be missing.
+    docker compose -f "$COMPOSE_FILE" build --quiet \
+        migrate auth-svc identity-svc access-svc device-gateway audit-svc visitor-svc parking-svc 2>&1 | tail -3
 
     log "Running migrations..."
     docker compose -f "$COMPOSE_FILE" up -d migrate 2>/dev/null
     docker compose -f "$COMPOSE_FILE" wait migrate 2>/dev/null || true
+    # Verify migrate exited cleanly — if not, abort before services try to start against a broken schema.
+    local migrate_exit
+    migrate_exit=$(docker inspect --format='{{.State.ExitCode}}' dm3-local-migrate 2>/dev/null || echo "1")
+    if [ "$migrate_exit" != "0" ]; then
+        err "Migrate container failed (exit $migrate_exit). Last logs:"
+        docker logs dm3-local-migrate --tail 20 2>&1 | sed 's/^/  /'
+        exit 1
+    fi
 
     log "Restarting backend services..."
     docker compose -f "$COMPOSE_FILE" up -d \
-        auth-svc identity-svc access-svc device-gateway audit-svc visitor-svc 2>&1 | tail -5
+        auth-svc identity-svc access-svc device-gateway audit-svc visitor-svc parking-svc 2>&1 | tail -5
 
     # Wait for services to be healthy
     log "Waiting for services to become healthy..."
     local retries=30
     while [ $retries -gt 0 ]; do
         local all_healthy=true
-        for svc in auth-svc identity-svc access-svc device-gateway audit-svc visitor-svc; do
+        for svc in auth-svc identity-svc access-svc device-gateway audit-svc visitor-svc parking-svc; do
             local status
             status=$(docker inspect --format='{{.State.Health.Status}}' "dm3-local-$svc" 2>/dev/null || echo "missing")
             if [ "$status" != "healthy" ]; then
@@ -134,7 +146,7 @@ restart_only() {
 
     log "Restarting all services (no rebuild)..."
     docker compose -f "$COMPOSE_FILE" restart \
-        auth-svc identity-svc access-svc device-gateway audit-svc visitor-svc 2>&1
+        auth-svc identity-svc access-svc device-gateway audit-svc visitor-svc parking-svc 2>&1
 
     log "Reloading nginx..."
     docker exec dm3-local-nginx nginx -s reload 2>/dev/null || true
