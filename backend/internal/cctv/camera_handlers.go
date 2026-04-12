@@ -275,7 +275,11 @@ func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Register path in MediaMTX (best-effort — don't fail camera creation on MediaMTX error)
+	// Register path in MediaMTX (best-effort — don't fail camera creation on MediaMTX error).
+	// The camera row is the source of truth; MediaMTX drift should be healed by
+	// a periodic reconciliation worker.
+	// TODO(cctv): add a reconciler that compares dm3_cctv.cameras against
+	// MediaMTX-configured paths and repairs drift on a timer.
 	var decryptedPass string
 	if encryptedPass != nil {
 		decryptedPass, _ = h.cipher.Decrypt(encryptedPass)
