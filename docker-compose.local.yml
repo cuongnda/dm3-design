@@ -294,16 +294,19 @@ services:
     container_name: dm3-local-mediamtx
     restart: unless-stopped
     environment:
-      MTX_API: "yes"
-      MTX_APIADDRESS: ":9997"
-      MTX_WEBRTCADDRESS: ":8889"
-      MTX_HLSADDRESS: ":8888"
-      MTX_HLSVARIANT: "lowLatency"
-      MTX_RTSPADDRESS: ":8554"
+      MEDIAMTX_STREAM_USER: ${MEDIAMTX_STREAM_USER:-dm3stream}
+      MEDIAMTX_STREAM_PASS: ${MEDIAMTX_STREAM_PASS:?MEDIAMTX_STREAM_PASS must be set}
+      MEDIAMTX_API_USER: ${MEDIAMTX_API_USER:-dm3admin}
+      MEDIAMTX_API_PASS: ${MEDIAMTX_API_PASS:?MEDIAMTX_API_PASS must be set}
+    volumes:
+      - ./deploy/mediamtx/mediamtx.yml:/mediamtx.yml:ro
     ports:
       # expose LL-HLS + WHEP for local browser testing
       - "8888:8888"
       - "8889:8889"
+      # WebRTC RTP over UDP — without this the ICE candidate at 127.0.0.1
+      # is unreachable and video stays at readyState 0.
+      - "8189:8189/udp"
     networks:
       - dm3-local
     # mediamtx image is distroless (no wget/curl). We rely on the service
@@ -322,11 +325,15 @@ services:
       DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
       JWT_SECRET: dm3-local-jwt-secret-change-me
       NATS_URL: nats://nats:4222
-      # Dev-only credential key (base64 of 32 bytes) — rotate in staging/prod
-      CCTV_CREDENTIAL_KEY: "ZG0zbG9jYWxjY3R2Y3JlZGVudGlhbGtleTMyYnl0ZXM="
+      # Must be 32 random bytes base64-encoded. Never commit. Generate with: openssl rand -base64 32
+      CCTV_CREDENTIAL_KEY: ${CCTV_CREDENTIAL_KEY:?CCTV_CREDENTIAL_KEY must be set in .env}
       MEDIAMTX_API_URL: "http://mediamtx:9997"
       MEDIAMTX_WHEP_BASE: "http://localhost:8889"
       MEDIAMTX_HLS_BASE: "http://localhost:8888"
+      MEDIAMTX_STREAM_USER: ${MEDIAMTX_STREAM_USER:-dm3stream}
+      MEDIAMTX_STREAM_PASS: ${MEDIAMTX_STREAM_PASS:?MEDIAMTX_STREAM_PASS must be set}
+      MEDIAMTX_API_USER: ${MEDIAMTX_API_USER:-dm3admin}
+      MEDIAMTX_API_PASS: ${MEDIAMTX_API_PASS:?MEDIAMTX_API_PASS must be set}
     depends_on:
       migrate:
         condition: service_completed_successfully
