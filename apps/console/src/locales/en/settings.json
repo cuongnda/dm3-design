@@ -102,6 +102,23 @@
   "integrations.status.error": "Error",
 
   "settings.tabs.auditLog": "Activity Log",
+  "settings.tabs.emailTemplates": "Email Templates",
   "auditLog.title": "Activity Log",
-  "auditLog.description": "View all changes and actions in your organization"
+  "auditLog.description": "View all changes and actions in your organization",
+
+  "emailTemplates.title": "Email Templates",
+  "emailTemplates.description": "Customize the emails sent by the system",
+  "emailTemplates.templateType": "Template Type",
+  "emailTemplates.subject": "Email Subject",
+  "emailTemplates.bodyHtml": "Email Body (HTML)",
+  "emailTemplates.variables": "Template Variables",
+  "emailTemplates.variablesHint": "Click a variable to insert it at the end of the template",
+  "emailTemplates.clickToInsert": "Click to insert",
+  "emailTemplates.preview": "Preview",
+  "emailTemplates.previewTitle": "Email Preview",
+  "emailTemplates.save": "Save Template",
+  "emailTemplates.saving": "Saving...",
+  "emailTemplates.saved": "Template saved",
+  "emailTemplates.custom": "Custom",
+  "emailTemplates.resetToDefault": "Reset to Default"
 }

@@ -102,6 +102,23 @@
   "integrations.status.error": "Lỗi",
 
   "settings.tabs.auditLog": "Nhật ký hoạt động",
+  "settings.tabs.emailTemplates": "Mẫu email",
   "auditLog.title": "Nhật ký hoạt động",
-  "auditLog.description": "Xem tất cả thay đổi và hành động trong tổ chức"
+  "auditLog.description": "Xem tất cả thay đổi và hành động trong tổ chức",
+
+  "emailTemplates.title": "Mẫu email",
+  "emailTemplates.description": "Tùy chỉnh email được gửi bởi hệ thống",
+  "emailTemplates.templateType": "Loại mẫu",
+  "emailTemplates.subject": "Tiêu đề email",
+  "emailTemplates.bodyHtml": "Nội dung email (HTML)",
+  "emailTemplates.variables": "Biến mẫu",
+  "emailTemplates.variablesHint": "Nhấp vào biến để chèn vào cuối mẫu",
+  "emailTemplates.clickToInsert": "Nhấp để chèn",
+  "emailTemplates.preview": "Xem trước",
+  "emailTemplates.previewTitle": "Xem trước email",
+  "emailTemplates.save": "Lưu mẫu",
+  "emailTemplates.saving": "Đang lưu...",
+  "emailTemplates.saved": "Đã lưu mẫu",
+  "emailTemplates.custom": "Tùy chỉnh",
+  "emailTemplates.resetToDefault": "Khôi phục mặc định"
 }

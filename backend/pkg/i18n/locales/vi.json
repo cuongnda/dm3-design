@@ -14,8 +14,11 @@
   "auth.invalid_refresh_token": "Refresh token không hợp lệ",
   "auth.password_hashing_failed": "Mã hóa mật khẩu thất bại",
   "auth.current_password_incorrect": "Mật khẩu hiện tại không đúng",
+  "auth.invalid_reset_token": "Token đặt lại mật khẩu không hợp lệ hoặc đã hết hạn",
+  "auth.reset_token_expired": "Token đặt lại mật khẩu đã hết hạn",
 
   "validation.invalid_request_body": "Nội dung yêu cầu không hợp lệ",
+  "validation.email_required": "Email là bắt buộc",
   "validation.all_fields_required": "Vui lòng điền đầy đủ các trường",
   "validation.password_too_short": "Mật khẩu phải có ít nhất 6 ký tự",
   "validation.password_mismatch": "Mật khẩu xác nhận không khớp",

@@ -1238,3 +1238,63 @@ export async function downloadFirmware(id: string): Promise<void> {
     anchor.remove();
     window.URL.revokeObjectURL(url);
 }
+
+// ─── Notification APIs ──────────────────────────────────────────────────────
+const NOTIFY_URL = '/api/v1/notifications';
+
+export interface NotificationDTO {
+    id: string;
+    tenant_id: string;
+    user_id?: string;
+    title: string;
+    message: string;
+    type: string;
+    severity: 'critical' | 'warning' | 'info';
+    status: 'unread' | 'read' | 'acknowledged';
+    source: string;
+    reference_type?: string;
+    reference_id?: string;
+    metadata?: Record<string, unknown>;
+    created_at: string;
+    updated_at: string;
+    read_at?: string;
+    acknowledged_at?: string;
+}
+
+export interface NotificationFilters {
+    status?: string;
+    severity?: string;
+    type?: string;
+    source?: string;
+    from?: string;
+    to?: string;
+    search?: string;
+}
+
+export async function fetchNotifications(page = 1, limit = 20, filters?: NotificationFilters): Promise<Paginated<NotificationDTO>> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (filters) {
+        Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });
+    }
+    return apiFetch<Paginated<NotificationDTO>>(`${NOTIFY_URL}?${params}`);
+}
+
+export async function fetchUnreadCount(): Promise<{ count: number }> {
+    return apiFetch<{ count: number }>(`${NOTIFY_URL}/unread-count`);
+}
+
+export async function markNotificationRead(id: string): Promise<NotificationDTO> {
+    return apiFetch<NotificationDTO>(`${NOTIFY_URL}/${id}/read`, { method: 'PATCH' });
+}
+
+export async function markAllNotificationsRead(): Promise<{ updated: number }> {
+    return apiFetch<{ updated: number }>(`${NOTIFY_URL}/mark-all-read`, { method: 'PATCH' });
+}
+
+export async function acknowledgeNotification(id: string): Promise<NotificationDTO> {
+    return apiFetch<NotificationDTO>(`${NOTIFY_URL}/${id}/acknowledge`, { method: 'PATCH' });
+}
+
+export async function deleteNotification(id: string): Promise<void> {
+    return apiFetch<void>(`${NOTIFY_URL}/${id}`, { method: 'DELETE' });
+}

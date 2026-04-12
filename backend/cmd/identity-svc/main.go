@@ -19,6 +19,7 @@ import (
 	"github.com/duali/dm3-backend/internal/visitor"
 	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
+	"github.com/duali/dm3-backend/pkg/email"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/i18n"
 	"github.com/duali/dm3-backend/pkg/natsutil"
@@ -113,10 +114,23 @@ func main() {
 		slog.Info("using MinIO object storage", "endpoint", cfg.ObjectStoreEndpoint)
 	}
 
+	// Email client
+	emailClient := email.New(email.Config{
+		Host:     cfg.SMTPHost,
+		Port:     cfg.SMTPPort,
+		Username: cfg.SMTPUsername,
+		Password: cfg.SMTPPassword,
+		FromName: cfg.SMTPFromName,
+		FromAddr: cfg.SMTPFromAddr,
+		UseTLS:   cfg.SMTPUseTLS,
+	})
+
 	// HTTP handlers
 	handlers := identity.NewIdentityHandlers(database, natsClient, auditLog, objectStore)
+	handlers.SetEmailClient(emailClient, cfg.AppURL)
 	umHandlers := tenant.NewUserManagementHandlers(database, auditLog)
 	visitorHandlers := visitor.NewVisitorHandlers(database, auditLog)
+	visitorHandlers.SetEmailClient(emailClient)
 
 	// HTTP routes
 	r := httputil.NewRouter()
@@ -197,6 +211,19 @@ func main() {
 
 		// Stats: all roles can read
 		r.Get("/stats", handlers.GetStats)
+
+		// Email templates: manager+ can manage
+		r.Route("/email-templates", func(et chi.Router) {
+			et.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			et.Get("/types", handlers.ListEmailTemplateTypes)
+			et.Get("/", handlers.ListEmailTemplates)
+			et.Post("/", handlers.CreateEmailTemplate)
+			et.Post("/preview", handlers.PreviewEmailTemplate)
+			et.Get("/by-type/{type}", handlers.GetEmailTemplateByType)
+			et.Get("/{id}", handlers.GetEmailTemplate)
+			et.Put("/{id}", handlers.UpdateEmailTemplate)
+			et.Delete("/{id}", handlers.DeleteEmailTemplate)
+		})
 	})
 
 	// Department management routes (proxied here from frontend)

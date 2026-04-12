@@ -333,14 +333,17 @@ function AssignVehicleModal({ open, onOpenChange, userId, alreadyAssignedIds, on
 
 export function UserDetailPage() {
   const { t } = useTranslation('users');
-  const { id } = useParams<{ id: string }>();
+  const { id: routeId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const setLabel = useBreadcrumbStore((s) => s.setLabel);
   const clearLabel = useBreadcrumbStore((s) => s.clearLabel);
 
+  const isNew = !routeId;
+  const id = isNew ? undefined : routeId;
+
   // ─── State ───────────────────────────────────────────────────────────────
-  const [user, setUser] = useState<UserType | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<UserType | null>(isNew ? ({} as UserType) : null);
+  const [loading, setLoading] = useState(!isNew);
   const [error, setError] = useState<string | null>(null);
 
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -378,9 +381,10 @@ export function UserDetailPage() {
 
   // ─── Breadcrumb ──────────────────────────────────────────────────────────
   useEffect(() => {
+    if (isNew) { setLabel('new', t('detail.newUser', 'New User')); return () => clearLabel('new'); }
     if (id && user?.full_name) setLabel(id, user.full_name);
     return () => { if (id) clearLabel(id); };
-  }, [id, user?.full_name, setLabel, clearLabel]);
+  }, [id, isNew, user?.full_name, setLabel, clearLabel]);
 
   // ─── Fetchers ────────────────────────────────────────────────────────────
 
@@ -459,16 +463,18 @@ export function UserDetailPage() {
   }, []);
 
   useEffect(() => {
-    fetchUser();
-    fetchCredentials();
-    fetchUserVehicles();
+    if (!isNew) {
+      fetchUser();
+      fetchCredentials();
+      fetchUserVehicles();
+    }
     apiFetch<{ departments: Department[] }>('/api/v1/identity/departments?limit=200')
       .then((d) => setDepartments(d.departments || []))
       .catch(() => {});
     apiFetch<{ data: AccessGroupOption[] }>('/api/v1/access/access-groups?limit=200')
       .then((d) => setAccessGroupOptions(d.data || []))
       .catch(() => {});
-  }, [fetchUser, fetchCredentials, fetchUserVehicles]);
+  }, [isNew, fetchUser, fetchCredentials, fetchUserVehicles]);
 
   useEffect(() => {
     if (selectedAccessGroup) fetchAccessGroupAPs(selectedAccessGroup);
@@ -478,7 +484,6 @@ export function UserDetailPage() {
   // ─── Handlers ────────────────────────────────────────────────────────────
 
   const handleSave = async () => {
-    if (!id) return;
     setSaveLoading(true);
     try {
       const payload: Record<string, unknown> = { ...editForm };
@@ -489,12 +494,20 @@ export function UserDetailPage() {
       if (payload.sex === '') delete payload.sex;
       else payload.sex = payload.sex === 'true';
 
-      await apiFetch(`/api/v1/identity/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      let userId = id;
 
-      if (avatarFile) {
+      if (isNew) {
+        const result = await apiFetch<{ id: string }>('/api/v1/identity/users', { method: 'POST', body: JSON.stringify(payload) });
+        userId = result.id;
+      } else {
+        if (!id) return;
+        await apiFetch(`/api/v1/identity/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      }
+
+      if (avatarFile && userId) {
         const form = new FormData();
         form.append('avatar', avatarFile);
-        await fetch(`/api/v1/identity/users/${id}/avatar`, {
+        await fetch(`/api/v1/identity/users/${userId}/avatar`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${localStorage.getItem('dm3-token') ?? ''}` },
           body: form,
@@ -502,8 +515,8 @@ export function UserDetailPage() {
       }
 
       setAvatarFile(null);
-      toast(t('toast.updated'), 'success');
-      setTimeout(() => navigate('/manage/users'), 800);
+      toast(isNew ? t('toast.created') : t('toast.updated'), 'success');
+      navigate('/manage/users');
     } catch (err) {
       toast(err instanceof Error ? err.message : t('toast.saveFailed'), 'error');
       setSaveLoading(false);
@@ -622,7 +635,7 @@ export function UserDetailPage() {
     );
   }
 
-  if (error || !user) {
+  if (!isNew && (error || !user)) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3">
         <User size={32} className="text-muted-foreground/40" />
@@ -634,10 +647,14 @@ export function UserDetailPage() {
     );
   }
 
-  const displayName = user.full_name || `${user.first_name} ${user.last_name}`;
-  const initials = user.first_name && user.last_name
-    ? `${user.first_name[0]}${user.last_name[0]}`.toUpperCase()
-    : displayName[0]?.toUpperCase() ?? '?';
+  const displayName = isNew
+    ? t('detail.newUser', 'New User')
+    : (user?.full_name || `${user?.first_name} ${user?.last_name}`);
+  const initials = isNew
+    ? '+'
+    : (user?.first_name && user?.last_name
+      ? `${user.first_name[0]}${user.last_name[0]}`.toUpperCase()
+      : displayName[0]?.toUpperCase() ?? '?');
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden" data-testid="user-detail-page">
@@ -676,17 +693,19 @@ export function UserDetailPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-[18px] font-semibold text-foreground">{displayName}</h1>
-                <Badge variant={user.status === 'active' ? 'default' : user.status === 'suspended' ? 'destructive' : 'secondary'} className="text-[11px]">
-                  {t(`status.${user.status}`, user.status)}
-                </Badge>
-                {user.is_master_card && (
+                {!isNew && user && (
+                  <Badge variant={user.status === 'active' ? 'default' : user.status === 'suspended' ? 'destructive' : 'secondary'} className="text-[11px]">
+                    {t(`status.${user.status}`, user.status)}
+                  </Badge>
+                )}
+                {!isNew && user?.is_master_card && (
                   <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-400">
                     {t('detail.masterBadge')}
                   </Badge>
                 )}
               </div>
-              <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                {user.department_name && (
+              {!isNew && <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                {user?.department_name && (
                   <span className="text-[12px] text-muted-foreground flex items-center gap-1">
                     <Building2 size={11} />
                     {user.department_name}
@@ -714,13 +733,13 @@ export function UserDetailPage() {
                   <Hash size={11} />
                   {user.user_code}
                 </span>
-                {user.access_group_name && (
+                {user?.access_group_name && (
                   <span className="text-[12px] text-muted-foreground flex items-center gap-1">
                     <Shield size={11} />
                     {user.access_group_name}
                   </span>
                 )}
-              </div>
+              </div>}
             </div>
           </div>
 
@@ -733,7 +752,7 @@ export function UserDetailPage() {
               <Save size={14} className="mr-1.5" />
               {saveLoading ? t('actions.saving') : t('actions.save')}
             </Button>
-            <Button
+            {!isNew && <Button
               variant="ghost"
               size="sm"
               className="h-7 text-[12px] text-destructive hover:text-destructive"
@@ -741,7 +760,7 @@ export function UserDetailPage() {
               data-testid="user-button-delete"
             >
               <Trash2 size={14} />
-            </Button>
+            </Button>}
           </div>
         </div>
       </div>
@@ -762,18 +781,18 @@ export function UserDetailPage() {
               <Info size={13} className="mr-1.5" />
               {t('tab.detail')}
             </TabsTrigger>
-            <TabsTrigger value="credentials" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-card-list">
+            {!isNew && <TabsTrigger value="credentials" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-card-list">
               <CreditCard size={13} className="mr-1.5" />
               {t('tab.cardList')} ({credentials.length})
-            </TabsTrigger>
-            <TabsTrigger value="access" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-access-group">
+            </TabsTrigger>}
+            {!isNew && <TabsTrigger value="access" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-access-group">
               <DoorOpen size={13} className="mr-1.5" />
               {t('tab.accessGroup')} ({accessPoints.length})
-            </TabsTrigger>
-            <TabsTrigger value="vehicles" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-vehicle">
+            </TabsTrigger>}
+            {!isNew && <TabsTrigger value="vehicles" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-vehicle">
               <Car size={13} className="mr-1.5" />
               {t('tab.vehicles')} ({userVehicles.length})
-            </TabsTrigger>
+            </TabsTrigger>}
           </TabsList>
 
           {/* Context actions per tab */}

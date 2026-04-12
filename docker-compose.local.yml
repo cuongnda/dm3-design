@@ -5,6 +5,8 @@
 #   docker compose -f docker-compose.local.yml --profile test up -d   # with automation
 #   docker compose -f docker-compose.local.yml down -v                # clean teardown
 #
+# All backend env vars are in deploy/env/local.env (committed to repo).
+#
 # Ports exposed on host:
 #   3000  — Web UI (via nginx)
 #   5433  — TimescaleDB (for direct DB access)
@@ -103,9 +105,10 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: dm3-local-migrate
+    env_file: ./deploy/env/local.env
     environment:
       SERVICE_NAME: migrate
-      DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:-dm3secret}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
     depends_on:
       timescaledb:
         condition: service_healthy
@@ -121,13 +124,11 @@ services:
       dockerfile: Dockerfile
     container_name: dm3-local-auth-svc
     restart: unless-stopped
+    env_file: ./deploy/env/local.env
     environment:
       SERVICE_NAME: auth-svc
       HTTP_PORT: "8005"
-      DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
-      JWT_SECRET: dm3-local-jwt-secret-change-me
-      NATS_URL: nats://nats:4222
-      MQTT_BROKER: tcp://emqx:1883
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:-dm3secret}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -147,18 +148,11 @@ services:
       dockerfile: Dockerfile
     container_name: dm3-local-identity-svc
     restart: unless-stopped
+    env_file: ./deploy/env/local.env
     environment:
       SERVICE_NAME: identity-svc
       HTTP_PORT: "8004"
-      DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
-      JWT_SECRET: dm3-local-jwt-secret-change-me
-      NATS_URL: nats://nats:4222
-      MQTT_BROKER: tcp://emqx:1883
-      OBJECT_STORE_ENDPOINT: minio:9000
-      OBJECT_STORE_ACCESS_KEY: dm3admin
-      OBJECT_STORE_SECRET_KEY: dm3secret123
-      OBJECT_STORE_BUCKET: dm3
-      OBJECT_STORE_USE_SSL: "false"
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:-dm3secret}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
     volumes:
       - identity_photos:/app/data/photos
     depends_on:
@@ -182,18 +176,11 @@ services:
       dockerfile: Dockerfile
     container_name: dm3-local-access-svc
     restart: unless-stopped
+    env_file: ./deploy/env/local.env
     environment:
       SERVICE_NAME: access-svc
       HTTP_PORT: "8003"
-      DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
-      JWT_SECRET: dm3-local-jwt-secret-change-me
-      NATS_URL: nats://nats:4222
-      MQTT_BROKER: tcp://emqx:1883
-      OBJECT_STORE_ENDPOINT: minio:9000
-      OBJECT_STORE_ACCESS_KEY: dm3admin
-      OBJECT_STORE_SECRET_KEY: dm3secret123
-      OBJECT_STORE_BUCKET: dm3
-      OBJECT_STORE_USE_SSL: "false"
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:-dm3secret}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -215,12 +202,11 @@ services:
       dockerfile: Dockerfile
     container_name: dm3-local-audit-svc
     restart: unless-stopped
+    env_file: ./deploy/env/local.env
     environment:
       SERVICE_NAME: audit-svc
       HTTP_PORT: "8001"
-      DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
-      JWT_SECRET: dm3-local-jwt-secret-change-me
-      NATS_URL: nats://nats:4222
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:-dm3secret}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -240,20 +226,11 @@ services:
       dockerfile: Dockerfile
     container_name: dm3-local-device-gateway
     restart: unless-stopped
+    env_file: ./deploy/env/local.env
     environment:
       SERVICE_NAME: device-gateway
       HTTP_PORT: "8002"
-      DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
-      JWT_SECRET: dm3-local-jwt-secret-change-me
-      NATS_URL: nats://nats:4222
-      MQTT_BROKER: tcp://emqx:1883
-      VALKEY_URL: valkey:6379
-      BOOTSTRAP_SECRET: dm3-bootstrap-v1-dev-secret
-      OBJECT_STORE_ENDPOINT: minio:9000
-      OBJECT_STORE_ACCESS_KEY: dm3admin
-      OBJECT_STORE_SECRET_KEY: dm3secret123
-      OBJECT_STORE_BUCKET: dm3
-      OBJECT_STORE_USE_SSL: "false"
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:-dm3secret}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
     depends_on:
       migrate:
         condition: service_completed_successfully

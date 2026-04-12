@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -14,7 +15,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 
+	"log/slog"
+
 	"github.com/duali/dm3-backend/internal/authsvc"
+	"github.com/duali/dm3-backend/pkg/email"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
@@ -328,6 +332,17 @@ func (h *IdentityHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check duplicate email within same company
+	var existingCount int
+	_ = h.db.Pool.QueryRow(r.Context(), `
+		SELECT COUNT(*) FROM dm3_identity.users
+		WHERE tenant_id = $1::uuid AND email = $2 AND (is_deleted = false OR is_deleted IS NULL)
+	`, companyID, req.Email).Scan(&existingCount)
+	if existingCount > 0 {
+		httputil.Error(w, http.StatusConflict, "email already exists in this company")
+		return
+	}
+
 	// Auto-generate sequential user_code per company
 	var maxCode int
 	_ = h.db.Pool.QueryRow(r.Context(), `
@@ -415,6 +430,49 @@ func (h *IdentityHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 		"last_name":  req.LastName,
 		"email":      req.Email,
 	})
+
+	// Send welcome email async
+	if h.email != nil && req.Email != "" {
+		go func() {
+			var companyName string
+			_ = h.db.Pool.QueryRow(context.Background(),
+				`SELECT name FROM dm3_auth.companies WHERE id = $1::uuid`, companyID,
+			).Scan(&companyName)
+
+			// Check for custom template first
+			var customSubject, customBody string
+			var hasCustom bool
+			err := h.db.Pool.QueryRow(context.Background(),
+				`SELECT subject, body_html FROM dm3_identity.email_templates
+				 WHERE tenant_id = $1::uuid AND type = 'account_created' AND is_active = true`,
+				companyID,
+			).Scan(&customSubject, &customBody)
+			if err == nil && customBody != "" {
+				hasCustom = true
+			}
+
+			var msg email.Message
+			if hasCustom {
+				msg = email.RenderCustomTemplate(req.Email, customSubject, customBody, map[string]string{
+					"user_name":    req.FirstName + " " + req.LastName,
+					"email":        req.Email,
+					"company_name": companyName,
+					"login_url":    h.appURL,
+				})
+			} else {
+				msg = email.AccountCreatedEmail(req.Email, email.AccountCreatedData{
+					UserName:    req.FirstName + " " + req.LastName,
+					Email:       req.Email,
+					CompanyName: companyName,
+					LoginURL:    h.appURL,
+				})
+			}
+			if err := h.email.Send(msg); err != nil {
+				slog.Error("failed to send welcome email", "email", req.Email, "error", err)
+			}
+		}()
+	}
+
 	httputil.JSON(w, http.StatusCreated, map[string]interface{}{
 		"id":         userID,
 		"account_id": accountID,

@@ -61,5 +61,10 @@
   "pagination.sort": "Sắp xếp",
   "pagination.sortDefault": "Mặc định",
   "pagination.sortAsc": "Tăng dần — nhấn để giảm dần",
-  "pagination.sortDesc": "Giảm dần — nhấn để tăng dần"
+  "pagination.sortDesc": "Giảm dần — nhấn để tăng dần",
+  "notifications.title": "Thông báo",
+  "notifications.markAllRead": "Đánh dấu đã đọc",
+  "notifications.empty": "Không có thông báo",
+  "notifications.acknowledge": "Xác nhận",
+  "notifications.delete": "Xóa"
 }

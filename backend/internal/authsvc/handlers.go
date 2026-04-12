@@ -18,6 +18,7 @@ import (
 
 	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
+	"github.com/duali/dm3-backend/pkg/email"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/i18n"
 )
@@ -59,10 +60,18 @@ type AuthHandlers struct {
 	db        *db.DB
 	jwtSecret string
 	audit     *audit.Logger
+	email     *email.Client
+	appURL    string
 }
 
 func NewAuthHandlers(database *db.DB, jwtSecret string, auditLog *audit.Logger) *AuthHandlers {
 	return &AuthHandlers{db: database, jwtSecret: jwtSecret, audit: auditLog}
+}
+
+// SetEmailClient configures the email client for password reset and notifications.
+func (h *AuthHandlers) SetEmailClient(client *email.Client, appURL string) {
+	h.email = client
+	h.appURL = appURL
 }
 
 // ─── Auth Routes ─────────────────────────────────────────────────────────────

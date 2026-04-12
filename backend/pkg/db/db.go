@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
-	"strings"
+	"net/url"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -101,13 +101,14 @@ func extractDBName(dsn string) (string, string) {
 	if dbName == "" {
 		return "", ""
 	}
-	// Build admin DSN: replace database name with "postgres"
-	adminDSN := strings.ReplaceAll(dsn, "/"+dbName, "/postgres")
-	if adminDSN == dsn {
-		// Try replacing dbname= param style
-		adminDSN = strings.ReplaceAll(dsn, "dbname="+dbName, "dbname=postgres")
+	// Parse as URL and replace only the path (database name) to avoid
+	// corrupting user/password that may contain similar substrings.
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return "", ""
 	}
-	return dbName, adminDSN
+	u.Path = "/postgres"
+	return dbName, u.String()
 }
 
 // createDatabase connects to the admin DB and creates the target database.

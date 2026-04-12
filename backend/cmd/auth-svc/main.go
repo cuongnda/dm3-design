@@ -18,6 +18,7 @@ import (
 	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/bugreporter"
 	"github.com/duali/dm3-backend/pkg/db"
+	"github.com/duali/dm3-backend/pkg/email"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/i18n"
 	"github.com/duali/dm3-backend/pkg/natsutil"
@@ -78,6 +79,17 @@ func main() {
 	})
 
 	h := authsvc.NewAuthHandlers(database, cfg.JWTSecret, auditLog)
+	emailClient := email.New(email.Config{
+		Host:     cfg.SMTPHost,
+		Port:     cfg.SMTPPort,
+		Username: cfg.SMTPUsername,
+		Password: cfg.SMTPPassword,
+		FromName: cfg.SMTPFromName,
+		FromAddr: cfg.SMTPFromAddr,
+		UseTLS:   cfg.SMTPUseTLS,
+	})
+	h.SetEmailClient(emailClient, cfg.AppURL)
+
 	r := httputil.NewRouter()
 
 	// Bug reporter middleware (auto-reports 5xx to DV Tasks)
@@ -107,6 +119,8 @@ func main() {
 	r.Post("/api/v1/auth/login", h.Login)
 	r.Post("/api/v1/auth/login-step2", h.LoginStep2)
 	r.Post("/api/v1/auth/refresh", h.Refresh)
+	r.Post("/api/v1/auth/password/forgot", h.ForgotPassword)
+	r.Post("/api/v1/auth/password/reset", h.ResetPassword)
 
 	// Protected routes — all under /api/v1/auth/ prefix
 	r.Group(func(pr chi.Router) {

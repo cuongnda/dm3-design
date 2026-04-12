@@ -147,7 +147,15 @@ func (c *Consumer) insertBatch(ctx context.Context, batch []audit.Entry) error {
 	}
 
 	_, err := c.pool.Exec(ctx, query, args...)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Generate notifications for important events
+	for i := range batch {
+		maybeCreateNotification(ctx, c.pool, batch[i])
+	}
+	return nil
 }
 
 // --- DB helpers (moved from pkg/audit) ---

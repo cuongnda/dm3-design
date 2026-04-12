@@ -16,6 +16,7 @@ import (
 	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
+	"github.com/duali/dm3-backend/pkg/email"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/natsutil"
 	"github.com/duali/dm3-backend/pkg/objectstore"
@@ -26,10 +27,18 @@ type IdentityHandlers struct {
 	nats    *natsutil.Client
 	audit   *audit.Logger
 	objects objectstore.Store
+	email   *email.Client
+	appURL  string
 }
 
 func NewIdentityHandlers(database *db.DB, nats *natsutil.Client, auditLog *audit.Logger, objects objectstore.Store) *IdentityHandlers {
 	return &IdentityHandlers{db: database, nats: nats, audit: auditLog, objects: objects}
+}
+
+// SetEmailClient configures the email client for sending notifications.
+func (h *IdentityHandlers) SetEmailClient(client *email.Client, appURL string) {
+	h.email = client
+	h.appURL = appURL
 }
 
 // publishEvent publishes a NATS event for identity changes.

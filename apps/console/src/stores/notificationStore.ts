@@ -1,55 +1,95 @@
 import { create } from 'zustand';
-import type { Alert } from '@dm3/api-client';
+import {
+  fetchNotifications,
+  fetchUnreadCount,
+  markNotificationRead,
+  markAllNotificationsRead,
+  acknowledgeNotification,
+  deleteNotification,
+  type NotificationDTO,
+} from '@/lib/api';
 
 interface NotificationState {
-  notifications: Alert[];
+  notifications: NotificationDTO[];
   unreadCount: number;
-  addNotification: (alert: Alert) => void;
-  markAllRead: () => void;
-  acknowledge: (id: string) => void;
+  loading: boolean;
+
+  /** Fetch latest notifications + unread count from API */
+  refresh: () => Promise<void>;
+
+  /** Mark a single notification as read */
+  markRead: (id: string) => Promise<void>;
+
+  /** Mark all notifications as read */
+  markAllRead: () => Promise<void>;
+
+  /** Acknowledge a notification */
+  acknowledge: (id: string) => Promise<void>;
+
+  /** Delete a notification */
+  remove: (id: string) => Promise<void>;
 }
 
-export const useNotificationStore = create<NotificationState>((set) => ({
-  notifications: [
-    {
-      id: '1',
-      title: 'Door 5 forced open',
-      description: 'Building A, Floor 3',
-      severity: 'critical',
-      timeAgo: '2m ago',
-      source: 'access-control',
-      acknowledged: false,
-    },
-    {
-      id: '2',
-      title: 'Intrusion alarm — Zone B',
-      description: 'Perimeter sensor',
-      severity: 'critical',
-      timeAgo: '5m ago',
-      source: 'intrusion',
-      acknowledged: false,
-    },
-    {
-      id: '3',
-      title: 'NVR-02 storage at 90%',
-      description: 'Camera storage',
-      severity: 'warning',
-      timeAgo: '12m ago',
-      source: 'cctv',
-      acknowledged: false,
-    },
-  ],
-  unreadCount: 3,
-  addNotification: (alert) =>
-    set((s) => ({
-      notifications: [alert, ...s.notifications],
-      unreadCount: s.unreadCount + 1,
-    })),
-  markAllRead: () => set({ unreadCount: 0 }),
-  acknowledge: (id) =>
-    set((s) => ({
-      notifications: s.notifications.map((n) =>
-        n.id === id ? { ...n, acknowledged: true } : n
-      ),
-    })),
+export const useNotificationStore = create<NotificationState>((set, get) => ({
+  notifications: [],
+  unreadCount: 0,
+  loading: false,
+
+  refresh: async () => {
+    try {
+      const [notifRes, countRes] = await Promise.all([
+        fetchNotifications(1, 20),
+        fetchUnreadCount(),
+      ]);
+      set({
+        notifications: notifRes.data ?? [],
+        unreadCount: countRes.count,
+      });
+    } catch {
+      // silently ignore — user may not be logged in yet
+    }
+  },
+
+  markRead: async (id) => {
+    try {
+      const updated = await markNotificationRead(id);
+      set((s) => ({
+        notifications: s.notifications.map((n) => (n.id === id ? updated : n)),
+        unreadCount: Math.max(0, s.unreadCount - 1),
+      }));
+    } catch { /* ignore */ }
+  },
+
+  markAllRead: async () => {
+    try {
+      await markAllNotificationsRead();
+      set((s) => ({
+        notifications: s.notifications.map((n) =>
+          n.status === 'unread' ? { ...n, status: 'read' as const, read_at: new Date().toISOString() } : n
+        ),
+        unreadCount: 0,
+      }));
+    } catch { /* ignore */ }
+  },
+
+  acknowledge: async (id) => {
+    try {
+      const updated = await acknowledgeNotification(id);
+      set((s) => ({
+        notifications: s.notifications.map((n) => (n.id === id ? updated : n)),
+      }));
+    } catch { /* ignore */ }
+  },
+
+  remove: async (id) => {
+    try {
+      await deleteNotification(id);
+      set((s) => ({
+        notifications: s.notifications.filter((n) => n.id !== id),
+        unreadCount: s.notifications.find((n) => n.id === id)?.status === 'unread'
+          ? Math.max(0, s.unreadCount - 1)
+          : s.unreadCount,
+      }));
+    } catch { /* ignore */ }
+  },
 }));

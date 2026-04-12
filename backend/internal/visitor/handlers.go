@@ -10,17 +10,24 @@ import (
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
+	"github.com/duali/dm3-backend/pkg/email"
 )
 
 // VisitorHandlers holds the database dependency for all visitor routes.
 type VisitorHandlers struct {
 	db    *db.DB
 	audit *audit.Logger
+	email *email.Client
 }
 
 // NewVisitorHandlers constructs a VisitorHandlers with the given database pool.
 func NewVisitorHandlers(database *db.DB, auditLog *audit.Logger) *VisitorHandlers {
 	return &VisitorHandlers{db: database, audit: auditLog}
+}
+
+// SetEmailClient configures the email client for visitor invitation emails.
+func (h *VisitorHandlers) SetEmailClient(client *email.Client) {
+	h.email = client
 }
 
 // parsePagination extracts page and limit from query params.

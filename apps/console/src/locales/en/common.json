@@ -61,5 +61,10 @@
   "pagination.sort": "Sort",
   "pagination.sortDefault": "Default",
   "pagination.sortAsc": "Ascending — click for descending",
-  "pagination.sortDesc": "Descending — click for ascending"
+  "pagination.sortDesc": "Descending — click for ascending",
+  "notifications.title": "Notifications",
+  "notifications.markAllRead": "Mark all read",
+  "notifications.empty": "No notifications",
+  "notifications.acknowledge": "Acknowledge",
+  "notifications.delete": "Delete"
 }

@@ -5,7 +5,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useBreadcrumbStore } from '../../stores/breadcrumbStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useThemeStore } from '@/stores/themeStore';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { SearchCommand } from '../common/SearchCommand';
 import { NotificationPanel } from '../common/NotificationPanel';
 import { LanguageSwitcher } from '../common/LanguageSwitcher';
@@ -54,7 +54,7 @@ export function Topbar() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const { notifications, unreadCount, loading: notifLoading, refresh, markRead, markAllRead, acknowledge, remove } = useNotificationStore();
   const { theme, setTheme } = useThemeStore();
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -105,6 +105,15 @@ export function Topbar() {
 
   const breadcrumbLabels = useBreadcrumbStore((s) => s.labels);
   const bc = getBreadcrumb(location.pathname, domainMap, segmentMap, t('breadcrumb.overview'), t('nav.dashboard'), breadcrumbLabels);
+
+  // Refresh notifications on mount + poll every 30s
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, 30000);
+    return () => clearInterval(interval);
+  }, [refresh]);
+
+  const handleNotifClose = useCallback(() => setNotifOpen(false), []);
 
   // Cmd+K shortcut
   useEffect(() => {
@@ -208,7 +217,25 @@ export function Topbar() {
                 <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full border-2 border-background" />
               )}
             </button>
-            {notifOpen && <NotificationPanel onClose={() => setNotifOpen(false)} />}
+            {notifOpen && (
+              <NotificationPanel
+                notifications={notifications}
+                unreadCount={unreadCount}
+                loading={notifLoading}
+                onClose={handleNotifClose}
+                onMarkAllRead={markAllRead}
+                onMarkRead={markRead}
+                onAcknowledge={acknowledge}
+                onDelete={remove}
+                labels={{
+                  title: t('notifications.title', 'Notifications'),
+                  markAllRead: t('notifications.markAllRead', 'Mark all read'),
+                  empty: t('notifications.empty', 'No notifications'),
+                  acknowledge: t('notifications.acknowledge', 'Acknowledge'),
+                  delete: t('notifications.delete', 'Delete'),
+                }}
+              />
+            )}
           </div>
 
           {/* User menu */}

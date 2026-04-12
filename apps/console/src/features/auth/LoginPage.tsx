@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 import { login as apiLogin, loginStep2, setToken } from '@/lib/api';
@@ -196,9 +196,9 @@ export function LoginPage() {
             </Button>
 
             <div className="text-center mt-4">
-              <a href="#" className="text-[12px] text-primary hover:underline">
+              <Link to="/forgot-password" className="text-[12px] text-primary hover:underline">
                 {t('forgotPassword')}
-              </a>
+              </Link>
             </div>
           </form>
         </div>

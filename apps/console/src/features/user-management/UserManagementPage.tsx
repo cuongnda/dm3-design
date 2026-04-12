@@ -5,7 +5,6 @@ import { Plus, Edit, Trash2, Trash, Users } from 'lucide-react';
 import { Button, Input, Multiselect, Badge, AppModal, DataTable, type Column, Card, TablePaginationFooter } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/lib/toast';
-import { UserModal } from './UserModal';
 import type { User } from './types';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
@@ -45,7 +44,6 @@ export function UserManagementPage() {
     const [sortDir, setSortDir] = useState<'asc' | 'desc' | null>('asc');
     const [departments, setDepartments] = useState<Department[]>([]);
     const [selected, setSelected] = useState<Set<string>>(new Set());
-    const [showCreateModal, setShowCreateModal] = useState(false);
     const [deletingUser, setDeletingUser] = useState<User | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
@@ -93,19 +91,6 @@ export function UserManagementPage() {
         setSelected(new Set());
     }, [page, search]);
 
-    const handleCreate = async (data: Partial<User>) => {
-        try {
-            const result = await apiFetch<{ id: string }>('/api/v1/identity/users', { method: 'POST', body: JSON.stringify(data) });
-            setShowCreateModal(false);
-            fetchUsers();
-            toast(t('toast.created'), 'success');
-            return result;
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to create user';
-            toast(message, 'error');
-            throw err;
-        }
-    };
 
     const handleDeleteConfirm = async () => {
         if (!deletingUser) return;
@@ -217,7 +202,7 @@ export function UserManagementPage() {
                         <h1 className="text-[18px] font-semibold text-foreground">{t('title')}</h1>
                         <p className="text-[13px] text-muted-foreground">{t('description')}</p>
                     </div>
-                    <Button size="sm" onClick={() => setShowCreateModal(true)}>
+                    <Button size="sm" onClick={() => navigate('/manage/users/new')}>
                         <Plus size={14} className="mr-1.5" />
                         {t('addUser')}
                     </Button>
@@ -337,9 +322,6 @@ export function UserManagementPage() {
                     onSortChange={handleSortChange}
                 />
             </div>
-
-            {/* Create Modal */}
-            <UserModal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} onSave={handleCreate} />
 
             {/* Single Delete Dialog */}
             <AppModal

@@ -3,6 +3,8 @@ import { lazy, Suspense } from 'react';
 import { MainLayout } from '@dm3/ui';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { LoginPage } from '@/features/auth/LoginPage';
+import { ForgotPasswordPage } from '@/features/auth/ForgotPasswordPage';
+import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage';
 import { SystemLayout } from '@/features/system/SystemLayout';
 import { SystemDashboardPage } from '@/features/system/SystemDashboardPage';
 import { CompanyListPage } from '@/features/system/CompanyListPage';
@@ -177,6 +179,9 @@ const SettingsPage = lazy(() =>
 const TenantAuditLogPage = lazy(() =>
   import('@/features/settings/AuditLogPage').then((m) => ({ default: m.TenantAuditLogPage }))
 );
+const EmailTemplatesPage = lazy(() =>
+  import('@/features/settings/EmailTemplatesPage').then((m) => ({ default: m.EmailTemplatesPage }))
+);
 
 // SYSTEM AUDIT
 const AuditLogPage = lazy(() =>
@@ -214,6 +219,14 @@ export const Router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />,
+  },
+  {
+    path: '/forgot-password',
+    element: <ForgotPasswordPage />,
+  },
+  {
+    path: '/reset-password',
+    element: <ResetPasswordPage />,
   },
   {
     element: <ProtectedRoute />,
@@ -276,6 +289,7 @@ export const Router = createBrowserRouter([
 
               // MANAGE
               { path: 'manage/users', element: <LazyWrap><UserManagementPage /></LazyWrap> },
+              { path: 'manage/users/new', element: <LazyWrap><UserDetailPage /></LazyWrap> },
               { path: 'manage/users/:id', element: <LazyWrap><UserDetailPage /></LazyWrap> },
               { path: 'manage/vehicles', element: <LazyWrap><VehicleManagementPage /></LazyWrap> },
               { path: 'manage/departments', element: <LazyWrap><DepartmentManagementPage /></LazyWrap> },
@@ -318,6 +332,7 @@ export const Router = createBrowserRouter([
               // SETTINGS
               { path: 'settings', element: <LazyWrap><SettingsPage /></LazyWrap> },
               { path: 'settings/audit-log', element: <LazyWrap><TenantAuditLogPage /></LazyWrap> },
+              { path: 'settings/email-templates', element: <LazyWrap><EmailTemplatesPage /></LazyWrap> },
             ],
           },
         ],

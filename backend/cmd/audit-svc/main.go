@@ -64,14 +64,18 @@ func main() {
 	}
 	slog.Info("audit consumer started", "stream", "AUDIT", "subject", "dm3.audit.>")
 
-	// Query API handlers
-	auditHandlers := auditsvc.NewAuditHandlers(database, auditsvc.ClaimsReader{
+	// Claims reader shared by audit + notification handlers
+	claimsReader := auditsvc.ClaimsReader{
 		IsAdmin: func(ctx context.Context) bool {
 			c := authsvc.ClaimsFromContext(ctx)
 			return c != nil && c.Role == "system_admin"
 		},
 		CompanyID: authsvc.CompanyIDFromContext,
-	})
+	}
+
+	// Query API handlers
+	auditHandlers := auditsvc.NewAuditHandlers(database, claimsReader)
+	notifyHandlers := auditsvc.NewNotifyHandlers(database, claimsReader)
 
 	// HTTP routes
 	r := httputil.NewRouter()
@@ -95,6 +99,18 @@ func main() {
 			ar.Use(authsvc.RequireCompany())
 			ar.Get("/api/v1/audit/tenant/logs", auditHandlers.ListAuditLogs)
 			ar.Get("/api/v1/audit/tenant/export", auditHandlers.ExportAuditLogs)
+		})
+
+		// Notifications (tenant-scoped)
+		pr.Group(func(nr chi.Router) {
+			nr.Use(authsvc.RequireCompany())
+			nr.Get("/api/v1/notifications", notifyHandlers.ListNotifications)
+			nr.Get("/api/v1/notifications/unread-count", notifyHandlers.UnreadCount)
+			nr.Post("/api/v1/notifications", notifyHandlers.CreateNotification)
+			nr.Patch("/api/v1/notifications/mark-all-read", notifyHandlers.MarkAllRead)
+			nr.Patch("/api/v1/notifications/{id}/read", notifyHandlers.MarkRead)
+			nr.Patch("/api/v1/notifications/{id}/acknowledge", notifyHandlers.Acknowledge)
+			nr.Delete("/api/v1/notifications/{id}", notifyHandlers.DeleteNotification)
 		})
 
 		// System admin only

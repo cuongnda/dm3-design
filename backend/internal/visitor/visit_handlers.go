@@ -17,6 +17,7 @@ import (
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/audit"
+	"github.com/duali/dm3-backend/pkg/email"
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
@@ -257,6 +258,12 @@ func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 	if h.audit != nil {
 		h.audit.LogFromRequest(r, "visit.pre_registered", "visit", visit.ID, visitorName, "success", nil, visit)
 	}
+
+	// Send invitation email to visitor (async, don't block the response).
+	if h.email != nil && req.Visitor.Email != nil && *req.Visitor.Email != "" {
+		go h.sendVisitorInvitationEmail(cid, *req.Visitor.Email, visitorName, req.HostUserID, req.Purpose, req.ExpectedArrival, qrToken)
+	}
+
 	httputil.JSON(w, http.StatusCreated, visit)
 }
 
@@ -1132,4 +1139,61 @@ func (h *VisitorHandlers) hostExists(r *http.Request, cid, hostUserID string) bo
 	var found string
 	err := h.db.Pool.QueryRow(r.Context(), `SELECT id FROM dm3_identity.users WHERE id = $1::uuid AND tenant_id = $2::uuid AND status NOT IN ('inactive','deleted') AND (is_deleted = false OR is_deleted IS NULL)`, hostUserID, cid).Scan(&found)
 	return err == nil && found != ""
+}
+
+// sendVisitorInvitationEmail sends an invitation email to a visitor (runs in a goroutine).
+func (h *VisitorHandlers) sendVisitorInvitationEmail(tenantID, visitorEmail, visitorName, hostUserID, purpose string, expectedArrival time.Time, qrToken string) {
+	ctx := context.Background()
+
+	// Get company name
+	var companyName string
+	_ = h.db.Pool.QueryRow(ctx, `SELECT name FROM dm3_auth.tenants WHERE id = $1::uuid`, tenantID).Scan(&companyName)
+	if companyName == "" {
+		companyName = "Duall Master"
+	}
+
+	// Get host name
+	var hostName string
+	_ = h.db.Pool.QueryRow(ctx, `SELECT COALESCE(first_name,'') || ' ' || COALESCE(last_name,'') FROM dm3_identity.users WHERE id = $1::uuid`, hostUserID).Scan(&hostName)
+	hostName = strings.TrimSpace(hostName)
+	if hostName == "" {
+		hostName = "Your host"
+	}
+
+	arrivalStr := expectedArrival.Format("Mon, 02 Jan 2006 15:04")
+
+	// Check for custom template
+	var customSubject, customBody string
+	err := h.db.Pool.QueryRow(ctx,
+		`SELECT subject, body_html FROM dm3_identity.email_templates
+		 WHERE tenant_id = $1::uuid AND type = 'visitor_invitation' AND is_active = true`,
+		tenantID,
+	).Scan(&customSubject, &customBody)
+
+	var msg email.Message
+	if err == nil && customBody != "" {
+		msg = email.RenderCustomTemplate(visitorEmail, customSubject, customBody, map[string]string{
+			"visitor_name":     visitorName,
+			"host_name":        hostName,
+			"company_name":     companyName,
+			"purpose":          purpose,
+			"expected_arrival": arrivalStr,
+			"qr_code":          qrToken,
+		})
+	} else {
+		msg = email.VisitorInvitationEmail(visitorEmail, email.VisitorInvitationData{
+			VisitorName:     visitorName,
+			HostName:        hostName,
+			CompanyName:     companyName,
+			Purpose:         purpose,
+			ExpectedArrival: arrivalStr,
+			QRCodeValue:     qrToken,
+		})
+	}
+
+	if err := h.email.Send(msg); err != nil {
+		slog.Error("visitor invitation email failed", "error", err, "to", visitorEmail)
+		return
+	}
+	slog.Info("visitor invitation email sent", "to", visitorEmail, "visitor", visitorName)
 }
