@@ -55,18 +55,16 @@ func (h *TenantHandlers) ListTenants(w http.ResponseWriter, r *http.Request) {
 	}
 	offset := (page - 1) * limit
 
-	// Build query with optional filters
-	qb := NewQueryBuilderOptional(r.Context(), `
+	// System-admin-only endpoint: tenants table is the registry itself,
+	// so we intentionally do not apply a tenant_id filter here.
+	const query = `
 		SELECT id, name, code, plan, status, max_devices, max_users, created_at, updated_at
 		FROM dm3_auth.tenants
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2
-	`)
+	`
 
-	query, args := qb.Build()
-	args = append([]interface{}{limit, offset}, args...)
-
-	rows, err := h.db.Pool.Query(r.Context(), query, args...)
+	rows, err := h.db.Pool.Query(r.Context(), query, limit, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to fetch tenants")
 		return
