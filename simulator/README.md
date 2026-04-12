@@ -8,19 +8,19 @@ Asyncio-based access control device simulator for testing the Duall Master 3.0 s
 # Docker Compose (simulator + Mosquitto broker)
 docker-compose up
 
-# Or install locally
+# Or install locally (host port 1884 → EMQX 1883 in docker-compose.local.yml)
 pip install -e .
-dm3-simulator run --devices 10 --broker mqtt://localhost:1883 --tenant-id tenant-001
+dm3-simulator run --devices 10 --broker mqtt://localhost:1884 --tenant-id tenant-001
 ```
 
 ## CLI Usage
 
 ```bash
-# Run simulator with 10 devices
-dm3-simulator run --devices 10 --broker mqtt://localhost:1883 --tenant-id tenant-001
+# Run simulator with 10 devices (host → local dev stack; EMQX is on host port 1884)
+dm3-simulator run --devices 10 --broker mqtt://localhost:1884 --tenant-id tenant-001
 
-# Stress test mode (max throughput)
-dm3-simulator run --devices 100 --mode stress --broker mqtt://broker:1883 --tenant-id t-001
+# Stress test mode (max throughput) — inside docker-compose network, EMQX is still 1883
+dm3-simulator run --devices 100 --mode stress --broker mqtt://emqx:1883 --tenant-id t-001
 
 # Pre-seed databases with mock data
 dm3-simulator seed --devices 10 --users 50 --output-dir /tmp/dm3-sim
@@ -28,7 +28,7 @@ dm3-simulator seed --devices 10 --users 50 --output-dir /tmp/dm3-sim
 # Full options
 dm3-simulator run \
   --devices 100 \
-  --broker mqtt://localhost:1883 \
+  --broker mqtt://localhost:1884 \
   --tenant-id tenant-001 \
   --site-id site-001 \
   --device-prefix sim \

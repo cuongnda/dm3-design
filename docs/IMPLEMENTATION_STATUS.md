@@ -176,7 +176,7 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Evidence: `ProvisioningPage.tsx` — imports mock-data for device provisioning flow; backend provisioning flow is fully implemented (`gateway/provisioning.go`)
   - Deviation: Frontend device provisioning UI is a mock-data shell. Access Group-based rule provisioning is handled via the Access Groups UI (see above), not this page.
 
-#### OPERATE Domain — ⚠️ MOST FRONTEND PAGES ARE MOCK-DATA SHELLS (parking has full backend)
+#### OPERATE Domain — ⚠️ MOST FRONTEND PAGES ARE MOCK-DATA SHELLS (parking is fully wired end-to-end)
 
 - **Room Booking** (`RoomBookingPage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: Medium
@@ -184,7 +184,7 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Deviation: No backend implementation. Frontend and backend both incomplete.
 
 - **Parking** (`ParkingPage`)
-  - Status: ⚠️ Partial (full backend + access integration + plugin gating, frontend still mock-only) | Risk: Low
+  - Status: ✅ Implemented (full backend + access integration + plugin-gated frontend wired to real APIs) | Risk: Low
   - Backend: Standalone `parking-svc` on port 8007 with 19 API endpoints. Isolated `dm3_parking` schema (migration 000008). Models, handlers, helpers, events in `backend/internal/parking/`. NATS stream `PARKING` for events. Plugin-gated via `RequirePlugin("parking")`. Unit + integration tests in `backend/internal/parking/*_test.go`. Seed data in `backend/scripts/seed_parking.sql`.
   - **Parking ↔ Access integration** (migrations 000010–000012, 2026-04-12):
     - **Phase 1 — Unified vehicle registry**: `dm3_identity.vehicles` dropped; `dm3_parking.parking_vehicles` owns plate + RFID + NFC + visitor_id link. CHECK constraint enforces single owner (user XOR visitor).
@@ -192,9 +192,9 @@ This document tracks the current implementation status of DM3 features. Updated:
     - **Phase 3 — NATS event bridge**: parking entry/exit publishes to `dm3.parking.{tid}.access.{direction}`; access-svc `ParkingAccessConsumer` (`backend/internal/access/parking_access_consumer.go`) ingests into `dm3_access.access_events` with `source=parking` metadata and `user_name=vehicle:{plate}`.
     - **Phase 4 — Barrier auto-registration**: parking zone create/update/delete publishes to `dm3.parking.{tid}.zone.barrier_sync`; access-svc `ParkingBarrierConsumer` upserts `access_devices` (source=parking, source_ref=zone_id, type=barrier), creates matching `access_points`, links via `access_point_devices` with roles `reader_in`/`reader_out`. Idempotent via `UNIQUE(tenant_id, source, source_ref)`.
     - **Phase 5 — Opt-in access policy check**: `parking_settings.enforce_access_rules=true` triggers cross-module check in `CreateParkingSession` — validates user belongs to an access_group whose access_points reference the zone's `access_zone_id` before allowing entry. Gracefully degrades when zone has no `access_zone_id`, vehicle has no owner, or setting is disabled.
-  - Infrastructure: Docker Compose service, nginx proxy, Makefile entry all configured.
-  - Frontend: Plugin-gated routes with `PluginGuard`, sidebar conditionally shows parking nav. Page content is still mock-data shell.
-  - Deviation: Frontend pages need to be connected to real API endpoints (same pattern as visitor module).
+  - Infrastructure: Docker Compose service, nginx proxy (both local + prod configs route `/api/v1/parking/` to parking-svc:8007), Makefile entry all configured.
+  - Frontend: Plugin-gated routes with `PluginGuard`, sidebar conditionally shows parking nav. All 8 pages in `apps/console/src/features/parking/` (ParkingDashboard, ParkingZones, ParkingVehicles, ParkingSessions, ParkingPasses, ParkingFeeRules, ParkingAnalytics, ParkingSettings) use `@dm3/api-client` with TanStack Query (47 useQuery/useMutation/api-client references, 0 mock imports).
+  - Deviation: None — parking module is now end-to-end wired (backend + access integration + frontend). Same completeness tier as visitor module.
 
 - **Maintenance** (`MaintenancePage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: Low
@@ -379,9 +379,9 @@ High-level features mentioned in vision documents but lacking detailed specifica
 ## Summary
 
 - **✅ Compliant** (fully matches spec): auth-svc (v1), access-svc current scope (including zones + managed map assets), device-gateway, audit-svc, MQTT pipeline, Dashboard, Devices, SystemSettings, IdentityManagement, AccessGroups/AccessControl, VisitorManagement, NATS, Valkey, MinIO, TimescaleDB, shared packages — **~16 items**
-- **⚠️ Partial** (UI shell or missing components): 19+ frontend pages are mock-data-only; parking has full backend but frontend still mock-only; AP passage time UI is still missing; EMQX missing TLS; Android terminal unverified; Flutter is placeholder — **~25 items**
+- **⚠️ Partial** (UI shell or missing components): 19+ frontend pages are mock-data-only; AP passage time UI is still missing; EMQX missing TLS; Android terminal unverified; Flutter is placeholder — **~24 items**
 - **❌ Gap** (claimed implemented, not found): Flutter apps, service topology (13 of ~20 services missing) — **~2 items + systemic**
 - **📋 Specified**: ~15 features with detailed specs ready for development
 - **🔮 Vision Only**: ~20 next-generation features awaiting specification
 
-> **Audit note:** The prior "~40 major features Implemented" claim overstates completeness. The core platform (auth, devices, identity, real-time pipeline, audit trail) is genuinely implemented end-to-end. Visitor management is fully implemented (backend + frontend) with schema isolation: `dm3_visitor` is an independently deployable schema with its own service (visitor-svc, port 8006). Parking management has a full backend implementation: standalone `parking-svc` (port 8007), isolated `dm3_parking` schema (7 tables), 19 API endpoints, NATS events, plugin gating, unit + integration tests, and seed data. As of 2026-04-12 (migrations 000010–000012), parking-svc is cross-integrated with access-svc: unified vehicle registry with triple credentials (plate/RFID/NFC), parking zones linked into access zone hierarchy via soft-FK, NATS event bridge (parking → `dm3_access.access_events`), barrier device auto-registration into `dm3_access.access_devices`, and an opt-in cross-module access-policy check gated by `parking_settings.enforce_access_rules`. The frontend pages are still mock-data shells. See `docs/architecture/module-isolation.md`. The remaining domain feature layer (OPERATE excluding parking, SMART, most of SECURE) exists as frontend UI prototypes backed by mock data.
+> **Audit note:** The prior "~40 major features Implemented" claim overstates completeness. The core platform (auth, devices, identity, real-time pipeline, audit trail) is genuinely implemented end-to-end. Visitor management is fully implemented (backend + frontend) with schema isolation: `dm3_visitor` is an independently deployable schema with its own service (visitor-svc, port 8006). Parking management has a full backend implementation: standalone `parking-svc` (port 8007), isolated `dm3_parking` schema (7 tables), 19 API endpoints, NATS events, plugin gating, unit + integration tests, and seed data. As of 2026-04-12 (migrations 000010–000012), parking-svc is cross-integrated with access-svc: unified vehicle registry with triple credentials (plate/RFID/NFC), parking zones linked into access zone hierarchy via soft-FK, NATS event bridge (parking → `dm3_access.access_events`), barrier device auto-registration into `dm3_access.access_devices`, and an opt-in cross-module access-policy check gated by `parking_settings.enforce_access_rules`. All 8 parking frontend pages are now wired to real APIs via `@dm3/api-client` + TanStack Query (no mock data). See `docs/architecture/module-isolation.md`. The remaining domain feature layer (OPERATE excluding parking, SMART, most of SECURE) exists as frontend UI prototypes backed by mock data.
