@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import Hls from 'hls.js';
 import { Maximize2, Video, VideoOff } from 'lucide-react';
 import { getCameraStreamUrls, type CameraDTO } from '@dm3/api-client';
 
@@ -8,14 +9,17 @@ interface Props {
 }
 
 type TileState = 'idle' | 'connecting' | 'playing' | 'error';
+type Transport = 'whep' | 'hls';
 
 /**
- * Lightweight WHEP client (~60 lines).
- * WHEP = WebRTC HTTP Egress Protocol.
- * We POST an SDP offer to the WHEP URL and expect an SDP answer in the response.
- * The resulting RTCPeerConnection is wired to a <video> element.
+ * Lightweight WHEP client + HLS fallback.
  *
- * Phase 2 TODO: HLS.js fallback when WHEP fails (requires hls.js install).
+ * WHEP = WebRTC HTTP Egress Protocol — sub-second latency; fails on restrictive
+ * firewalls / NAT or when the browser cannot negotiate the codec.
+ * HLS is the fallback — higher latency (~3-6s) but works anywhere via HTTP.
+ *
+ * Flow: try WHEP first; on any failure, tear down and try HLS. Only show the
+ * error overlay when both fail.
  */
 async function startWhep(
   whepUrl: string,
@@ -67,11 +71,31 @@ async function startWhep(
   return pc;
 }
 
+function attachHls(
+  hlsUrl: string,
+  videoEl: HTMLVideoElement,
+): Hls | null {
+  // Safari (and some iOS browsers) play HLS natively via the media element.
+  if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+    videoEl.src = hlsUrl;
+    return null;
+  }
+  if (!Hls.isSupported()) {
+    throw new Error('HLS not supported in this browser');
+  }
+  const hls = new Hls({ lowLatencyMode: true });
+  hls.loadSource(hlsUrl);
+  hls.attachMedia(videoEl);
+  return hls;
+}
+
 export function LiveTile({ camera }: Props) {
   const { t } = useTranslation('common');
   const videoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const [state, setState] = useState<TileState>('idle');
+  const [transport, setTransport] = useState<Transport>('whep');
   const [, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -80,23 +104,42 @@ export function LiveTile({ camera }: Props) {
     let mounted = true;
 
     (async () => {
+      setState('connecting');
+      let urls;
       try {
-        setState('connecting');
-        const urls = await getCameraStreamUrls(camera.id);
-        if (!mounted) return;
+        urls = await getCameraStreamUrls(camera.id);
+      } catch {
+        if (mounted) setState('error');
+        return;
+      }
+      if (!mounted) return;
 
-        const videoEl = videoRef.current;
-        if (!videoEl) return;
+      const videoEl = videoRef.current;
+      if (!videoEl) return;
 
+      // Try WHEP first (sub-second latency).
+      try {
         const pc = await startWhep(urls.whep_url, videoEl, abortCtrl.signal);
         if (!mounted) { pc.close(); return; }
-
         pcRef.current = pc;
+        setTransport('whep');
+        setState('playing');
+        return;
+      } catch {
+        if (!mounted || abortCtrl.signal.aborted) return;
+        // fall through to HLS
+      }
+
+      // Fallback: HLS over HTTP.
+      try {
+        if (!urls.hls_url) throw new Error('No HLS URL');
+        const hls = attachHls(urls.hls_url, videoEl);
+        if (!mounted) { hls?.destroy(); return; }
+        hlsRef.current = hls;
+        setTransport('hls');
         setState('playing');
       } catch {
-        if (!mounted) return;
-        // Phase 2 TODO: fallback to HLS when WHEP unavailable
-        setState('error');
+        if (mounted) setState('error');
       }
     })();
 
@@ -105,6 +148,8 @@ export function LiveTile({ camera }: Props) {
       abortCtrl.abort();
       pcRef.current?.close();
       pcRef.current = null;
+      hlsRef.current?.destroy();
+      hlsRef.current = null;
     };
   }, [camera.id]);
 
@@ -142,7 +187,17 @@ export function LiveTile({ camera }: Props) {
           <VideoOff size={12} className="text-red-400" />
         )}
         {state === 'playing' && (
-          <Video size={12} className="text-emerald-400" />
+          <span className="flex items-center gap-1">
+            {transport === 'hls' && (
+              <span
+                className="text-[9px] uppercase tracking-wide text-amber-300"
+                title={t('cctv.live.hlsFallback')}
+              >
+                HLS
+              </span>
+            )}
+            <Video size={12} className="text-emerald-400" />
+          </span>
         )}
       </div>
 

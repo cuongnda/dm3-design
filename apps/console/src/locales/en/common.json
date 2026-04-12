@@ -147,6 +147,8 @@
   "cctv.live.connecting": "Connecting...",
   "cctv.live.streamError": "Stream unavailable",
   "cctv.live.fullscreen": "Toggle fullscreen",
+  "cctv.live.hlsFallback": "Using HLS fallback (WHEP unavailable)",
+  "cctv.clips.allCameras": "All cameras",
 
   "cctv.clips.title": "Event Clips",
   "cctv.clips.description": "Browse and play recorded event clips",

@@ -147,6 +147,8 @@
   "cctv.live.connecting": "Đang kết nối...",
   "cctv.live.streamError": "Luồng không khả dụng",
   "cctv.live.fullscreen": "Toàn màn hình",
+  "cctv.live.hlsFallback": "Dùng HLS dự phòng (WHEP không khả dụng)",
+  "cctv.clips.allCameras": "Tất cả camera",
 
   "cctv.clips.title": "Clip sự kiện",
   "cctv.clips.description": "Xem và phát lại clip sự kiện đã ghi",

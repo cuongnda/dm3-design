@@ -4,6 +4,7 @@ import { PageHeader, DataTable, type Column, Button, AppModal } from '@dm3/ui';
 import { useTranslation } from 'react-i18next';
 import { Trash2, Play, Download } from 'lucide-react';
 import {
+  listCameras,
   listClips,
   getClipPlayback,
   deleteClip,
@@ -15,9 +16,15 @@ export function CCTVClipsPage() {
   const qc = useQueryClient();
 
   const [page, setPage] = useState(1);
-  const [cameraFilter] = useState('');
+  const [cameraFilter, setCameraFilter] = useState('');
   const [fromFilter, setFromFilter] = useState('');
   const [toFilter, setToFilter] = useState('');
+
+  const { data: camerasData } = useQuery({
+    queryKey: ['cctv-cameras', 'all'],
+    queryFn: () => listCameras({ limit: 200 }),
+  });
+  const cameras = camerasData?.data ?? [];
   const [playingClip, setPlayingClip] = useState<ClipDTO | null>(null);
   const [playUrl, setPlayUrl] = useState<string>('');
 
@@ -127,6 +134,18 @@ export function CCTVClipsPage() {
     <div>
       <PageHeader title={t('cctv.clips.title')} description={t('cctv.clips.description')}>
         <div className="flex items-center gap-2">
+          <select
+            className="h-8 rounded-md border border-border bg-background px-2 text-[13px]"
+            value={cameraFilter}
+            onChange={(e) => { setCameraFilter(e.target.value); setPage(1); }}
+            data-testid="cctv-select-camera-filter"
+            aria-label={t('cctv.clips.cols.camera')}
+          >
+            <option value="">{t('cctv.clips.allCameras')}</option>
+            {cameras.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
           <input
             type="date"
             className="h-8 rounded-md border border-border bg-background px-2 text-[13px]"
