@@ -427,9 +427,19 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 
 	// If no new password supplied, read and decrypt the existing one so that
 	// the MediaMTX source URL (composed below) preserves the stored credential.
+	// If decryption fails (typically because CCTV_CREDENTIAL_KEY has been
+	// rotated since the camera was saved), surface a 400 asking the user to
+	// re-enter the password instead of a generic 500.
 	if !passwordSupplied {
 		existingPass, err := h.decryptExistingPassword(r.Context(), tx, cid, id)
 		if err != nil {
+			if strings.Contains(err.Error(), "message authentication failed") {
+				slog.Warn("cctv: existing password undecryptable; credential key likely rotated",
+					"camera_id", id, "tenant_id", cid)
+				httputil.Error(w, http.StatusBadRequest,
+					"stored RTSP password cannot be decrypted (credential key rotated); please re-enter the password")
+				return
+			}
 			logInternalError(w, "decrypt existing rtsp password error", err)
 			return
 		}
