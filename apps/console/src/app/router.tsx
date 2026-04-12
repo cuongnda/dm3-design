@@ -142,6 +142,23 @@ const ProvisioningPage = lazy(() =>
   import('@/features/manage/provisioning/ProvisioningPage').then((m) => ({ default: m.ProvisioningPage }))
 );
 
+// CCTV
+const CCTVDashboardPage = lazy(() =>
+  import('@/features/cctv/CCTVDashboardPage').then((m) => ({ default: m.CCTVDashboardPage }))
+);
+const CCTVCamerasPage = lazy(() =>
+  import('@/features/cctv/CCTVCamerasPage').then((m) => ({ default: m.CCTVCamerasPage }))
+);
+const CCTVLiveViewPage = lazy(() =>
+  import('@/features/cctv/CCTVLiveViewPage').then((m) => ({ default: m.CCTVLiveViewPage }))
+);
+const CCTVClipsPage = lazy(() =>
+  import('@/features/cctv/CCTVClipsPage').then((m) => ({ default: m.CCTVClipsPage }))
+);
+const CCTVSettingsPage = lazy(() =>
+  import('@/features/cctv/CCTVSettingsPage').then((m) => ({ default: m.CCTVSettingsPage }))
+);
+
 // OPERATE
 const RoomBookingPage = lazy(() =>
   import('@/features/operate/room-booking/RoomBookingPage').then((m) => ({ default: m.RoomBookingPage }))
@@ -352,6 +369,13 @@ export const Router = createBrowserRouter([
               { path: 'devices/pending', element: <LazyWrap><PendingDevicesPage /></LazyWrap> },
               { path: 'devices/provision', element: <LazyWrap><ProvisionDevicePage /></LazyWrap> },
               { path: 'devices/:id', element: <LazyWrap><DeviceDetailPage /></LazyWrap> },
+
+              // CCTV
+              { path: 'cctv/dashboard', element: <PluginGuard plugin="cctv"><LazyWrap><CCTVDashboardPage /></LazyWrap></PluginGuard> },
+              { path: 'cctv/cameras', element: <PluginGuard plugin="cctv"><LazyWrap><CCTVCamerasPage /></LazyWrap></PluginGuard> },
+              { path: 'cctv/live', element: <PluginGuard plugin="cctv"><LazyWrap><CCTVLiveViewPage /></LazyWrap></PluginGuard> },
+              { path: 'cctv/clips', element: <PluginGuard plugin="cctv"><LazyWrap><CCTVClipsPage /></LazyWrap></PluginGuard> },
+              { path: 'cctv/settings', element: <PluginGuard plugin="cctv"><LazyWrap><CCTVSettingsPage /></LazyWrap></PluginGuard> },
 
               // PARKING
               { path: 'parking', element: <PluginGuard plugin="parking"><LazyWrap><ParkingDashboardPage /></LazyWrap></PluginGuard> },

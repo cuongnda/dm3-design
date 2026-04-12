@@ -109,6 +109,7 @@ export function Sidebar() {
   const unreadCount = useNotificationStore((s) => s.unreadCount);
   const hasVisitor = enabledPlugins?.includes('visitor') ?? false;
   const hasParking = enabledPlugins?.includes('parking') ?? false;
+  const hasCctv = enabledPlugins?.includes('cctv') ?? false;
   const c = sidebarCollapsed;
   const iconSize = c ? 20 : 18;
 
@@ -181,6 +182,17 @@ export function Sidebar() {
             <SidebarNavItem to={ROUTES.parkingFeeRules} icon={<CircleDollarSign size={iconSize} />} label={t('nav.parkingFeeRules')} collapsed={c} />
             <SidebarNavItem to={ROUTES.parkingAnalytics} icon={<BarChart3 size={iconSize} />} label={t('nav.parkingAnalytics')} collapsed={c} />
             <SidebarNavItem to={ROUTES.parkingSettings} icon={<SlidersHorizontal size={iconSize} />} label={t('nav.parkingSettings')} collapsed={c} />
+          </>
+        )}
+
+        {hasCctv && (
+          <>
+            <SectionLabel label={t('nav.cctvSection')} color="#3B82F6" collapsed={c} />
+            <SidebarNavItem to={ROUTES.cctvDashboard} icon={<LayoutDashboard size={iconSize} />} label={t('nav.cctvDashboard')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.cctvCameras} icon={<Video size={iconSize} />} label={t('nav.cctvCameras')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.cctvLive} icon={<Eye size={iconSize} />} label={t('nav.cctvLive')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.cctvClips} icon={<ClipboardList size={iconSize} />} label={t('nav.cctvClips')} collapsed={c} />
+            <SidebarNavItem to={ROUTES.cctvSettings} icon={<SlidersHorizontal size={iconSize} />} label={t('nav.cctvSettings')} collapsed={c} />
           </>
         )}
 

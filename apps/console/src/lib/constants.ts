@@ -81,6 +81,12 @@ export const ROUTES = {
   aiAssistant: '/smart/ai-assistant',
   analytics: '/smart/analytics',
   automation: '/smart/automation',
+  // CCTV
+  cctvDashboard: '/cctv/dashboard',
+  cctvCameras: '/cctv/cameras',
+  cctvLive: '/cctv/live',
+  cctvClips: '/cctv/clips',
+  cctvSettings: '/cctv/settings',
   // SETTINGS
   settings: '/settings',
   // AUTH
