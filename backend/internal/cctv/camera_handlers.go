@@ -177,7 +177,7 @@ func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 	}
 	err = tx.QueryRow(r.Context(), `
 		INSERT INTO dm3_devices.devices (tenant_id, device_id, name, type, model, status)
-		VALUES ($1::uuid, 'CAM' || upper(substring(gen_random_uuid()::text, 1, 6)), $2, 'camera', $3, 'active')
+		VALUES ($1::uuid, 'CAM' || upper(substring(gen_random_uuid()::text, 1, 6)), $2, 'camera', $3, 'offline')
 		RETURNING id::text`,
 		cid, strings.TrimSpace(req.Name), modelVal,
 	).Scan(&deviceUUID)
