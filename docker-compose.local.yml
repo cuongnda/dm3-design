@@ -155,8 +155,12 @@ services:
       SERVICE_NAME: identity-svc
       HTTP_PORT: "8004"
       DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:-dm3secret}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
-    volumes:
-      - identity_photos:/app/data/photos
+      OBJECT_STORE_ENDPOINT: minio:9000
+      OBJECT_STORE_ACCESS_KEY: ${MINIO_ROOT_USER:-dm3admin}
+      OBJECT_STORE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-dm3secret123}
+      OBJECT_STORE_BUCKET: ${OBJECT_STORE_BUCKET:-dm3}
+      OBJECT_STORE_USE_SSL: "false"
+      OBJECT_STORE_AUTO_CREATE_BUCKET: "true"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -497,7 +501,6 @@ volumes:
   dm3_local_valkey:
   dm3_local_minio:
   dm3_local_automation:
-  identity_photos:
 
 networks:
   dm3-local:

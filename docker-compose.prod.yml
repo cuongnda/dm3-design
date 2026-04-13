@@ -148,20 +148,26 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       NATS_URL: nats://nats:4222
       MQTT_BROKER: tcp://emqx:1883
-      PHOTO_STORAGE: local
-      PHOTO_LOCAL_DIR: /app/data/photos
+      # Photos go to MinIO (S3-compatible). PHOTO_STORAGE defaults to "minio"
+      # in backend/internal/config/config.go, so no override is needed here.
+      OBJECT_STORE_ENDPOINT: minio:9000
+      OBJECT_STORE_ACCESS_KEY: ${MINIO_ROOT_USER:-dm3admin}
+      OBJECT_STORE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
+      OBJECT_STORE_BUCKET: ${OBJECT_STORE_BUCKET:-dm3}
+      OBJECT_STORE_USE_SSL: "false"
+      OBJECT_STORE_AUTO_CREATE_BUCKET: "true"
       SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-DeMasterPro}
       SMTP_FROM_ADDR: ${SMTP_FROM_ADDR:-info@demasterpro.com}
-    volumes:
-      - identity_photos:/app/data/photos
     depends_on:
       migrate:
         condition: service_completed_successfully
       nats:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - dm3-internal
@@ -343,6 +349,13 @@ services:
       MEDIAMTX_API_PASS: ${MEDIAMTX_API_PASS:-}
       MEDIAMTX_WHEP_BASE: ${MEDIAMTX_WHEP_BASE:-https://dm3-cctv.demasterpro.com}
       MEDIAMTX_HLS_BASE: ${MEDIAMTX_HLS_BASE:-https://dm3-cctv.demasterpro.com}
+      # Object store for CCTV clips (S3-compatible MinIO).
+      OBJECT_STORE_ENDPOINT: minio:9000
+      OBJECT_STORE_ACCESS_KEY: ${MINIO_ROOT_USER:-dm3admin}
+      OBJECT_STORE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
+      OBJECT_STORE_BUCKET: ${OBJECT_STORE_BUCKET:-dm3}
+      OBJECT_STORE_USE_SSL: "false"
+      OBJECT_STORE_AUTO_CREATE_BUCKET: "true"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -350,6 +363,8 @@ services:
         condition: service_healthy
       mediamtx:
         condition: service_started
+      minio:
+        condition: service_healthy
     networks:
       - dm3-internal
     healthcheck:
@@ -488,7 +503,6 @@ volumes:
   minio_data:
   certbot_webroot:
   automation_data:
-  identity_photos:
 
 networks:
   dm3-internal:
