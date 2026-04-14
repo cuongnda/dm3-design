@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Monitor, Camera, Cpu, Settings, Terminal, Gauge } from 'lucide-react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, AppModal, Label, Select, Tabs, TabsList, TabsTrigger, TabsContent } from '@dm3/ui';
+import { Search, Monitor, Camera, Cpu, Settings, Terminal, Gauge, Edit } from 'lucide-react';
+import { Button, Card, CardContent, Input, AppModal, Label, Select, Tabs, TabsList, TabsTrigger, TabsContent, DataTable, type Column, TablePaginationFooter } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
 
 // --- Types ---
@@ -511,6 +511,18 @@ export function DevicesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // Table state — client-side sort + pagination over the in-memory list.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [sortBy, setSortBy] = useState<string | null>('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc' | null>('asc');
+
+  const handleSortChange = useCallback((col: string | null, dir: 'asc' | 'desc' | null) => {
+    setSortBy(col);
+    setSortDir(dir);
+    setPage(1);
+  }, []);
+
   const fetchDevices = async () => {
     setLoading(true);
     setError(null);
@@ -530,16 +542,107 @@ export function DevicesPage() {
     fetchDevices();
   }, []);
 
-  const filteredDevices = devices.filter(device => {
-    const matchesSearch = (device.name ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (device.location?.toLowerCase() ?? '').includes(searchTerm.toLowerCase());
-    const matchesType = filterType === 'all' || device.type === filterType;
-    return matchesSearch && matchesType;
-  });
+  const filteredDevices = useMemo(() => {
+    const q = searchTerm.toLowerCase();
+    return devices.filter(device => {
+      const matchesSearch = !q ||
+        (device.name ?? '').toLowerCase().includes(q) ||
+        (device.location?.toLowerCase() ?? '').includes(q) ||
+        (device.device_id?.toLowerCase() ?? '').includes(q);
+      const matchesType = filterType === 'all' || device.type === filterType;
+      return matchesSearch && matchesType;
+    });
+  }, [devices, searchTerm, filterType]);
+
+  const sortedDevices = useMemo(() => {
+    if (!sortBy || !sortDir) return filteredDevices;
+    const dirMul = sortDir === 'asc' ? 1 : -1;
+    return [...filteredDevices].sort((a, b) => {
+      const av = String((a as unknown as Record<string, unknown>)[sortBy] ?? '').toLowerCase();
+      const bv = String((b as unknown as Record<string, unknown>)[sortBy] ?? '').toLowerCase();
+      return av < bv ? -1 * dirMul : av > bv ? 1 * dirMul : 0;
+    });
+  }, [filteredDevices, sortBy, sortDir]);
+
+  const total = sortedDevices.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pagedDevices = useMemo(
+    () => sortedDevices.slice((page - 1) * pageSize, page * pageSize),
+    [sortedDevices, page, pageSize],
+  );
 
   const onlineCount = devices.filter(d => d.status === 'online').length;
   const offlineCount = devices.filter(d => d.status === 'offline').length;
   const warningCount = devices.filter(d => d.status === 'warning').length;
+
+  const deviceColumns = useMemo(
+    (): Column<Device>[] => [
+      {
+        key: 'name',
+        header: 'Device',
+        sortable: true,
+        render: (d) => (
+          <div className="flex items-center gap-3">
+            {getTypeIcon(d.type)}
+            <div className="flex flex-col leading-tight min-w-0">
+              <span className="text-[13px] font-medium truncate">{d.name || d.device_id || 'Unknown Device'}</span>
+              {d.device_id && <span className="text-[11px] font-mono text-muted-foreground truncate">{d.device_id}</span>}
+            </div>
+          </div>
+        ),
+      },
+      {
+        key: 'type',
+        header: 'Type',
+        width: '120px',
+        sortable: true,
+        render: (d) => <span className="text-[13px] capitalize">{d.type}</span>,
+      },
+      {
+        key: 'location',
+        header: 'Location',
+        sortable: true,
+        render: (d) => <span className="text-[13px]">{d.location || '—'}</span>,
+      },
+      {
+        key: 'status',
+        header: 'Status',
+        width: '110px',
+        sortable: true,
+        render: (d) => (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${getStatusColor(d.status)}`}>
+            {d.status}
+          </span>
+        ),
+      },
+      {
+        key: 'firmware_version',
+        header: 'Firmware',
+        width: '120px',
+        sortable: true,
+        render: (d) => <span className="text-[12px] font-mono text-muted-foreground">{d.firmware_version || '—'}</span>,
+      },
+      {
+        key: 'actions',
+        header: 'Actions',
+        width: '88px',
+        render: (d) => (
+          <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Edit"
+              onClick={() => navigate(`/devices/${d.id}/edit`)}
+              data-testid={`device-button-edit-${d.device_id || d.id}`}
+            >
+              <Edit size={14} />
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [navigate],
+  );
 
   const handleEditOpen = (device: Device) => {
     setEditingDevice(device);
@@ -707,58 +810,44 @@ export function DevicesPage() {
       </div>
 
       {/* Devices Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Devices ({filteredDevices.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Device</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Firmware</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredDevices.map((device) => (
-                <TableRow key={device.id} data-testid={`device-row-${device.device_id || device.id}`}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      {getTypeIcon(device.type)}
-                      <span className="font-medium">{device.name || device.device_id || 'Unknown Device'}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="capitalize">{device.type}</TableCell>
-                  <TableCell>{device.location ?? '—'}</TableCell>
-                  <TableCell>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(device.status)}`}>
-                      {device.status}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {device.firmware_version ?? '—'}
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="sm" title="Edit" onClick={() => navigate(`/devices/${device.id}/edit`)} data-testid={`device-button-edit-${device.device_id || device.id}`}>
-                      <Settings size={16} />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-
-          {filteredDevices.length === 0 && (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">No devices found</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+        <div className="min-h-0 flex-1 overflow-auto">
+          <DataTable
+            embedded
+            stickyHeader
+            paginate={false}
+            loading={loading}
+            columns={deviceColumns}
+            data={pagedDevices}
+            rowKey={(d) => d.id}
+            sortState={{ col: sortBy, dir: sortDir }}
+            onSortChange={handleSortChange}
+            onRowDoubleClick={(d) => navigate(`/devices/${d.id}/edit`)}
+            emptyMessage={searchTerm ? 'No devices match your search' : 'No devices found'}
+            emptyIcon={<Monitor size={32} strokeWidth={1.2} />}
+          />
+        </div>
+        <TablePaginationFooter
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          totalPages={totalPages}
+          pageSizeOptions={[10, 20, 50, 100]}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+          loading={loading}
+          sortColumns={[
+            { value: 'name', label: 'Device' },
+            { value: 'type', label: 'Type' },
+            { value: 'location', label: 'Location' },
+            { value: 'status', label: 'Status' },
+            { value: 'firmware_version', label: 'Firmware' },
+          ]}
+          sortBy={sortBy}
+          sortDir={sortDir}
+          onSortChange={handleSortChange}
+        />
+      </div>
 
       {/* Edit Device Modal */}
       <AppModal

@@ -2,8 +2,9 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Activity, CheckCircle2, XCircle, AlertTriangle, DoorOpen,
-  Radio, Pause, Play, Trash2, Search,
+  Radio, Pause, Play, Trash2, Search, CreditCard, ScanFace, QrCode, FingerprintPattern, KeyRound, ShieldQuestionMark,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   useRealtimeStore,
   useConnectionStatus,
@@ -35,6 +36,9 @@ interface TimelineRow {
   detail?: string;          // reason / severity / extra info
   department?: string;      // access events only — from identity enrichment
   cardId?: string;          // access events only — primary active card value
+  cardIds?: string[];       // legacy — flat list of values
+  credentials?: Array<{ type: string; value: string }>; // access events only — typed N-step verify chain
+  credentialType?: string;  // legacy — single type (used as fallback when credentials[] absent)
 }
 
 // ─── Backend event shape (matches handlers.ListEvents) ─────────────────────
@@ -53,6 +57,9 @@ interface BackendEvent {
   time: string;
   department?: string;
   card_id?: string;
+  card_ids?: string[];
+  credentials?: Array<{ type: string; value: string }>;
+  credential_type?: string;
 }
 
 async function fetchBackendEvents(): Promise<TimelineRow[]> {
@@ -74,6 +81,9 @@ async function fetchBackendEvents(): Promise<TimelineRow[]> {
     detail: e.reason || undefined,
     department: e.department || undefined,
     cardId: e.card_id || undefined,
+    cardIds: Array.isArray(e.card_ids) && e.card_ids.length > 0 ? e.card_ids : undefined,
+    credentials: Array.isArray(e.credentials) && e.credentials.length > 0 ? e.credentials : undefined,
+    credentialType: e.credential_type || undefined,
   }));
 }
 
@@ -93,6 +103,9 @@ function accessToRow(e: RealtimeAccessEvent): TimelineRow {
     detail: e.reason,
     department: e.department,
     cardId: e.cardId,
+    cardIds: e.cardIds,
+    credentials: e.credentials,
+    credentialType: e.credentialType,
   };
 }
 
@@ -154,6 +167,26 @@ function resultBadge(kind: RowKind, result: string | undefined, label: string) {
 function formatTime(d: Date) {
   return d.toLocaleTimeString(undefined, { hour12: false }) + '.' +
     String(d.getMilliseconds()).padStart(3, '0');
+}
+
+// Icon for the credential the device matched on. Defaults to a card icon
+// because that's by far the most common case in this fleet.
+const CREDENTIAL_ICONS: Record<string, LucideIcon> = {
+  card_uid: CreditCard,
+  card: CreditCard,
+  nfc: CreditCard,
+  face_template: ScanFace,
+  face: ScanFace,
+  qr_code: QrCode,
+  qr: QrCode,
+  fp_template: FingerprintPattern,
+  fingerprint: FingerprintPattern,
+  pin: KeyRound,
+};
+
+function credentialIcon(type?: string): LucideIcon {
+  if (!type) return ShieldQuestionMark;
+  return CREDENTIAL_ICONS[type] ?? ShieldQuestionMark;
 }
 
 // Build a translator for reason / state codes. Unknown codes fall back
@@ -438,8 +471,35 @@ export function LiveEventsPage() {
                     <td className="px-3 py-1.5 text-muted-foreground truncate max-w-[160px]">
                       {r.department || '—'}
                     </td>
-                    <td className="px-3 py-1.5 text-muted-foreground font-mono truncate max-w-[160px]">
-                      {r.cardId || '—'}
+                    <td className="px-3 py-1.5 text-muted-foreground font-mono max-w-[160px]">
+                      {(() => {
+                        // Prefer the typed credentials[] list (per-entry type → per-entry icon).
+                        // Fall back to the legacy flat card_ids + single credentialType.
+                        const entries: Array<{ type?: string; value: string }> =
+                          r.credentials && r.credentials.length > 0
+                            ? r.credentials
+                            : (r.cardIds && r.cardIds.length > 0
+                              ? r.cardIds.map((v) => ({ type: r.credentialType, value: v }))
+                              : (r.cardId ? [{ type: r.credentialType, value: r.cardId }] : []));
+                        if (entries.length === 0) return '—';
+                        return (
+                          <div className="flex flex-col gap-0.5 leading-tight">
+                            {entries.map((entry, i) => {
+                              const Icon = credentialIcon(entry.type);
+                              return (
+                                <span
+                                  key={`${entry.value}-${i}`}
+                                  className={`inline-flex items-center gap-1 truncate ${i === 0 ? '' : 'text-[10px] opacity-75'}`}
+                                  title={entry.type || ''}
+                                >
+                                  <Icon size={i === 0 ? 11 : 9} className="shrink-0 opacity-60" />
+                                  <span className="truncate">{entry.value}</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-3 py-1.5">
                       {resultBadge(r.kind, r.result, r.result ? t(`result.${r.result}`, { defaultValue: r.result }) : '')}

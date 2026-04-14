@@ -605,6 +605,8 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 			COALESCE(ae.reason,''), COALESCE(ae.confidence, 0), ae.time,
 			COALESCE(dep.name,''),
 			COALESCE(NULLIF(c.value,''), ae.metadata->>'credential_value', ''),
+			COALESCE((SELECT array_agg(value) FROM jsonb_array_elements_text(ae.metadata->'credential_values') AS value), '{}'),
+			COALESCE(ae.metadata->'credentials', '[]'::jsonb),
 			COALESCE(NULLIF(ad.device_id,''), regexp_replace(ae.metadata->>'device_id', '^device:', ''), ''),
 			COALESCE(d.name,'')
 		 FROM dm3_access.access_events ae
@@ -645,12 +647,14 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 			Confidence                                       float64
 			Time                                             any
 			Department, CardID, DeviceID, DeviceName         string
+			CardIDs                                          []string
+			CredentialsJSON                                  []byte
 		}
 		if err := rows.Scan(
 			&e.ID, &e.TenantID, &e.UserID, &e.UserName, &e.UserCode, &e.Avatar,
 			&e.CredentialType, &e.DoorID, &e.Direction, &e.Decision,
 			&e.Reason, &e.Confidence, &e.Time,
-			&e.Department, &e.CardID, &e.DeviceID, &e.DeviceName,
+			&e.Department, &e.CardID, &e.CardIDs, &e.CredentialsJSON, &e.DeviceID, &e.DeviceName,
 		); err != nil {
 			slog.Error("ListEvents: scan failed", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal server error")
@@ -674,12 +678,28 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 			"time":            e.Time,
 			"department":      e.Department,
 			"card_id":         e.CardID,
+			"card_ids":        e.CardIDs,
+			"credentials":     decodeCredentialsJSON(e.CredentialsJSON),
 		})
 	}
 	httputil.JSON(w, http.StatusOK, events)
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+// decodeCredentialsJSON unmarshals the metadata->'credentials' jsonb column
+// into a slice of {type, value} maps, suitable for direct JSON re-encoding
+// to the API consumer. Returns an empty slice on any error / null / [].
+func decodeCredentialsJSON(raw []byte) []map[string]string {
+	if len(raw) == 0 {
+		return []map[string]string{}
+	}
+	var arr []map[string]string
+	if err := json.Unmarshal(raw, &arr); err != nil {
+		return []map[string]string{}
+	}
+	return arr
+}
 
 func parsePagination(r *http.Request) (int, int) {
 	page := 1

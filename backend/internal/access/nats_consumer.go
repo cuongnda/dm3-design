@@ -42,20 +42,118 @@ type deviceEvent struct {
 	Data    json.RawMessage `json:"data"`
 }
 
+// CredentialEntry is one element of the typed credentials array. Each scan
+// in an N-step verify chain produces one entry, so a "QR then card" verify
+// yields two entries with different types.
+type CredentialEntry struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
+}
+
 type accessLogData struct {
-	DoorID          string         `json:"door_id"` // legacy field, may still arrive from older firmware
-	UserID          string         `json:"user_id"`
-	UserName        string         `json:"user_name"`
-	CredentialType  string         `json:"credential_type"`
-	CredentialValue string         `json:"credential_value"` // raw card UID / qr / etc; used as fallback when user_id is bad
-	Direction       string         `json:"direction"`
-	Decision        string         `json:"decision"`
-	Reason          string         `json:"reason"`
-	Confidence      *float64       `json:"confidence"`
-	PhotoRef        string         `json:"photo_ref"`
-	Temperature     *float64       `json:"temperature"`
-	DecidedLocally  *bool          `json:"decided_locally"`
-	Metadata        map[string]any `json:"metadata"`
+	DoorID               string            `json:"door_id"` // legacy field, may still arrive from older firmware
+	UserID               string            `json:"user_id"`
+	UserName             string            `json:"user_name"`
+	Credentials          []CredentialEntry `json:"credentials"`            // PREFERRED: ordered list of typed credentials
+	CredentialType       string            `json:"credential_type"`        // LEGACY mirror of credentials[0].type
+	CredentialValue      string            `json:"credential_value"`       // LEGACY mirror of credentials[0].value
+	OtherCredentialValue json.RawMessage   `json:"other_credential_value"` // LEGACY: 2nd+ factors when credentials[] absent
+	Direction            string            `json:"direction"`
+	Decision             string            `json:"decision"`
+	Reason               string            `json:"reason"`
+	Confidence           *float64          `json:"confidence"`
+	PhotoRef             string            `json:"photo_ref"`
+	Temperature          *float64          `json:"temperature"`
+	DecidedLocally       *bool             `json:"decided_locally"`
+	Metadata             map[string]any    `json:"metadata"`
+}
+
+// normalizeCredentials returns the typed credentials list for an event.
+// It prefers the new `credentials` array if the device sent one; otherwise it
+// reconstructs the list from the legacy `credential_value` + `other_credential_value`
+// fields, marking every reconstructed entry with `credential_type` as its type.
+// The returned list is deduped on (type, value).
+func normalizeCredentials(ald accessLogData) []CredentialEntry {
+	dedupKey := func(e CredentialEntry) string { return e.Type + "\x00" + e.Value }
+
+	if len(ald.Credentials) > 0 {
+		out := make([]CredentialEntry, 0, len(ald.Credentials))
+		seen := make(map[string]struct{}, len(ald.Credentials))
+		for _, e := range ald.Credentials {
+			e.Type = strings.TrimSpace(e.Type)
+			e.Value = strings.TrimSpace(e.Value)
+			if e.Value == "" {
+				continue
+			}
+			if e.Type == "" {
+				e.Type = ald.CredentialType // fall back to the legacy single type
+			}
+			k := dedupKey(e)
+			if _, ok := seen[k]; ok {
+				continue
+			}
+			seen[k] = struct{}{}
+			out = append(out, e)
+		}
+		return out
+	}
+
+	// Legacy reconstruction — every entry inherits the same credential_type
+	// because the per-entry type isn't available without firmware support.
+	primaryType := ald.CredentialType
+	out := make([]CredentialEntry, 0, 4)
+	seen := make(map[string]struct{}, 4)
+	if ald.CredentialValue != "" {
+		e := CredentialEntry{Type: primaryType, Value: ald.CredentialValue}
+		out = append(out, e)
+		seen[dedupKey(e)] = struct{}{}
+	}
+	for _, v := range parseCredentialList(ald.OtherCredentialValue) {
+		e := CredentialEntry{Type: primaryType, Value: v}
+		k := dedupKey(e)
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, e)
+	}
+	return out
+}
+
+// parseCredentialList collapses the device's `other_credential_value` field
+// into a flat slice. Firmwares vary: some send a single string, some send a
+// comma-separated string, and some send a JSON array. Any of those is fine.
+func parseCredentialList(raw json.RawMessage) []string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var arr []string
+	if err := json.Unmarshal(raw, &arr); err == nil {
+		out := make([]string, 0, len(arr))
+		for _, v := range arr {
+			v = strings.TrimSpace(v)
+			if v != "" {
+				out = append(out, v)
+			}
+		}
+		return out
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return nil
+		}
+		out := make([]string, 0, 4)
+		for _, p := range strings.Split(s, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				out = append(out, p)
+			}
+		}
+		return out
+	}
+	return nil
 }
 
 // Start subscribes to NATS device events and ingests access events into the DB.
@@ -96,8 +194,22 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 	if ald.Metadata == nil {
 		ald.Metadata = map[string]any{}
 	}
+	// Normalize to a single typed credentials list:
+	//   1. credentials[] from the device wins (preferred new field).
+	//   2. Otherwise reconstruct from credential_value + other_credential_value,
+	//      with every entry inheriting credential_type as its per-entry type.
+	credEntries := normalizeCredentials(ald)
 	if ald.CredentialValue != "" {
 		ald.Metadata["credential_value"] = ald.CredentialValue
+	}
+	if len(credEntries) > 0 {
+		ald.Metadata["credentials"] = credEntries
+		// Legacy mirror: flat values list, kept for clients still reading card_ids.
+		flat := make([]string, len(credEntries))
+		for i, e := range credEntries {
+			flat[i] = e.Value
+		}
+		ald.Metadata["credential_values"] = flat
 	}
 
 	// Extract tenant_id from NATS subject: dm3.devices.{tenant_id}.{device_id}.evt

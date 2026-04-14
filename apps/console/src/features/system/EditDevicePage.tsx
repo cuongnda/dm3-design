@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Check, Terminal, Cpu, Camera, Gauge, Monitor, Settings2, Search, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Check, Terminal, Cpu, Camera, Gauge, Monitor, Settings2, Search, ShieldCheck, Save, X } from 'lucide-react';
 import { fetchSystemDevice, updateSystemDevice, fetchDevice, updateDevice, fetchCompanies, type CompanyDTO } from '@/lib/api';
 import { DEVICE_TYPE_MODELS, VERIFY_METHODS, getModelCapabilities, type VerifyMethodValue } from '@/lib/device-models';
 import { Button, Input, Select, Label } from '@dm3/ui';
+import { toast } from '@/lib/toast';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
 const DEVICE_TYPE_ICONS: Record<string, { icon: React.ElementType; color: string }> = {
@@ -112,8 +113,6 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
   const [loading, setLoading] = useState(false);
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-  const [savedName, setSavedName] = useState('');
 
   // Immutable identity — shown read-only.
   const [identity, setIdentity] = useState({ device_id: '', type: '', tenant_id: '' });
@@ -149,7 +148,7 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
           verify_logic: (device.verify_logic === 'and' ? 'and' : 'or'),
         });
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load device');
+        if (!cancelled) setError(err instanceof Error ? err.message : t('editDevice.error.loadFailed'));
       } finally {
         if (!cancelled) setLoadingInitial(false);
       }
@@ -180,8 +179,8 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
     });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!id) return;
     setLoading(true);
     setError('');
@@ -195,11 +194,12 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
         verify_methods: config.verify_methods ?? [],
         verify_logic: config.verify_logic,
       });
-      setSavedName(form.name || identity.device_id);
-      setSuccess(true);
+      toast(t('editDevice.success.message'), 'success');
+      navigate(listPath);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update device');
-    } finally {
+      const message = err instanceof Error ? err.message : t('editDevice.error.updateFailed');
+      setError(message);
+      toast(message, 'error');
       setLoading(false);
     }
   };
@@ -208,30 +208,6 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
     return (
       <div className="p-6">
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-operate/30 border-t-operate mx-auto mt-16" />
-      </div>
-    );
-  }
-
-  if (success) {
-    return (
-      <div className="flex-1 min-h-0 overflow-y-auto p-6 max-w-lg mx-auto mt-16">
-        <div className="border border-border rounded-xl p-8 bg-card text-center">
-          <div className="w-14 h-14 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-5">
-            <Check size={28} className="text-success" />
-          </div>
-          <h2 className="text-lg font-semibold text-foreground mb-1">{t('editDevice.success.title', 'Device updated')}</h2>
-          <p className="text-[13px] text-muted-foreground mb-6">
-            <span className="text-foreground font-medium">{savedName}</span> {t('editDevice.success.message', 'has been updated.')}
-          </p>
-          <div className="flex gap-3">
-            <Button variant="outline" className="flex-1" onClick={() => setSuccess(false)}>
-              {t('editDevice.success.keepEditing', 'Keep editing')}
-            </Button>
-            <Button className="flex-1 bg-operate hover:bg-operate/90 text-white" onClick={() => navigate(listPath)}>
-              {t('editDevice.success.goToDevices', 'Back to devices')}
-            </Button>
-          </div>
-        </div>
       </div>
     );
   }
@@ -246,9 +222,20 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
         <ArrowLeft size={15} /> {t('createDevice.backToDevices')}
       </Button>
 
-      <div className="mb-8">
-        <h1 className="text-xl font-semibold text-foreground">{t('editDevice.title', 'Edit Device')}</h1>
-        <p className="text-[13px] text-muted-foreground mt-1">{t('editDevice.subtitle', 'Update the device configuration.')}</p>
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">{t('editDevice.title')}</h1>
+          <p className="text-[13px] text-muted-foreground mt-1">{t('editDevice.subtitle')}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="ghost" size="sm" onClick={() => navigate(listPath)} disabled={loading} data-testid="editdevice-button-cancel">
+            <X size={14} className="mr-1.5" /> {t('editDevice.cancel')}
+          </Button>
+          <Button size="sm" onClick={() => handleSubmit()} disabled={loading} data-testid="editdevice-button-save">
+            <Save size={14} className="mr-1.5" />
+            {loading ? t('editDevice.saving') : t('editDevice.save')}
+          </Button>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -278,7 +265,7 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground mt-3">
-            {t('editDevice.identityLocked', 'Device ID, company, and type are set at provisioning and cannot be changed here.')}
+            {t('editDevice.identityLocked')}
           </p>
         </div>
 
@@ -306,7 +293,7 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
                   {modelsForType.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </Select>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  {isSystemAdmin ? t('createDevice.config.modelHint') : t('editDevice.modelLocked', 'Model is set at provisioning and can only be changed by a system administrator.')}
+                  {isSystemAdmin ? t('createDevice.config.modelHint') : t('editDevice.modelLocked')}
                 </p>
               </div>
               <div>
@@ -414,17 +401,6 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
           </div>
         )}
 
-        {/* Submit */}
-        <div className="pt-2 pb-8">
-          <Button data-testid="editdevice-button-submit" type="submit" disabled={loading} className="w-full h-11 bg-operate hover:bg-operate/90 text-white font-medium text-[14px]">
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                {t('editDevice.saving', 'Saving...')}
-              </span>
-            ) : t('editDevice.save', 'Save changes')}
-          </Button>
-        </div>
       </form>
     </div>
   );

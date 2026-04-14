@@ -22,6 +22,9 @@ export interface RealtimeAccessEvent {
   // Server-enriched via device-gateway mqtt_handler.enrichAccessData.
   department?: string;
   cardId?: string;
+  cardIds?: string[];
+  /** Typed credentials list for N-step verify; each entry has its own type. */
+  credentials?: Array<{ type: string; value: string }>;
 }
 
 // Named RealtimeDeviceStatus to avoid collision with DeviceStatus const in types/enums
@@ -189,6 +192,8 @@ export function transformAccessEvent(data: AccessEventData, event: WSEvent): Rea
     confidence: data.confidence,
     department: data.department || undefined,
     cardId: data.card_id || undefined,
+    cardIds: Array.isArray(data.card_ids) && data.card_ids.length > 0 ? data.card_ids : undefined,
+    credentials: Array.isArray(data.credentials) && data.credentials.length > 0 ? data.credentials : undefined,
   };
 }
 

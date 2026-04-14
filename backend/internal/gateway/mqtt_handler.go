@@ -18,6 +18,78 @@ import (
 
 var uuidRegex = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
+func containsStr(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+// buildCredentialEntries normalizes the device payload into the typed
+// credentials list used by the WS broadcast and downstream consumers.
+// Prefers `credentials[]` (preferred new field). Falls back to reconstructing
+// from `credential_value` + `other_credential_value`, with every reconstructed
+// entry inheriting the single legacy `credential_type`.
+func buildCredentialEntries(m map[string]any, primaryValue string) []map[string]any {
+	primaryType, _ := m["credential_type"].(string)
+	primaryType = strings.TrimSpace(primaryType)
+
+	out := make([]map[string]any, 0, 4)
+	seen := make(map[string]struct{}, 4)
+	add := func(t, v string) {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			return
+		}
+		t = strings.TrimSpace(t)
+		if t == "" {
+			t = primaryType
+		}
+		key := t + "\x00" + v
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		out = append(out, map[string]any{"type": t, "value": v})
+	}
+
+	// 1. Preferred: typed credentials[] from the device.
+	if creds, ok := m["credentials"].([]any); ok {
+		for _, item := range creds {
+			entry, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			t, _ := entry["type"].(string)
+			v, _ := entry["value"].(string)
+			add(t, v)
+		}
+		return out
+	}
+
+	// 2. Legacy reconstruction.
+	if primaryValue != "" {
+		add(primaryType, primaryValue)
+	}
+	if other, ok := m["other_credential_value"]; ok && other != nil {
+		switch v := other.(type) {
+		case string:
+			for _, p := range strings.Split(v, ",") {
+				add(primaryType, p)
+			}
+		case []any:
+			for _, item := range v {
+				if s, ok := item.(string); ok {
+					add(primaryType, s)
+				}
+			}
+		}
+	}
+	return out
+}
+
 // toUUIDPtr returns a *string if s is a valid UUID, otherwise nil.
 func toUUIDPtr(s string) *string {
 	if s == "" || !uuidRegex.MatchString(s) {
@@ -225,6 +297,19 @@ func (h *MQTTHandler) enrichAccessData(ctx context.Context, data json.RawMessage
 	m["avatar"] = avatar
 	m["department"] = department
 	m["card_id"] = cardID
+
+	// Build the typed credentials list. Prefer the new credentials[] field
+	// from the device; otherwise reconstruct from the legacy fields.
+	credEntries := buildCredentialEntries(m, credValue)
+	if len(credEntries) > 0 {
+		m["credentials"] = credEntries
+		// Legacy mirror so older frontends still see card_ids.
+		flat := make([]string, len(credEntries))
+		for i, e := range credEntries {
+			flat[i] = e["value"].(string)
+		}
+		m["card_ids"] = flat
+	}
 	m["device_name"] = deviceName
 	out, jerr := json.Marshal(m)
 	if jerr != nil {

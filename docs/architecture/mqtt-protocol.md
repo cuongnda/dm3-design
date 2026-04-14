@@ -389,8 +389,14 @@ All messages follow a standard envelope format:
     "user_id": "user-uuid",
     "user_name": "Nguyễn Văn A",
     "confidence": 0.97,
-    "reason": "authorized|denied_expired|denied_zone|denied_time|denied_unknown|denied_blacklist",
-    "credential_type": "face_template|card_uid|qr_code|fp_template|pin",
+    "reason": "authorized|denied_expired|denied_zone|denied_time|denied_unknown|denied_blacklist|denied_invalid_card|denied_invalid_qr|denied_invalid_pin|denied_invalid_face|denied_invalid_fp|denied_no_credential|denied_anti_passback|denied_offline",
+    "credentials": [                          // Ordered list of credentials presented in this scan (preferred)
+      { "type": "qr_code",  "value": "123456789" },
+      { "type": "card_uid", "value": "9A232AE9" }
+    ],
+    "credential_type": "qr_code",             // LEGACY — mirrors credentials[0].type for old consumers
+    "credential_value": "123456789",          // LEGACY — mirrors credentials[0].value for old consumers
+    "other_credential_value": [],             // LEGACY — extra factors for N-step verify, see below
     "person_detected": true,
     "temperature": 36.5,       // Optional: thermal reading (°C)
     "mask_detected": true,     // Optional: mask detection
@@ -400,6 +406,50 @@ All messages follow a standard envelope format:
   }
 }
 ```
+
+**Field notes:**
+
+- **`user_id`** — must be the full 36-character UUID. Some legacy firmware truncates this to 30 chars; the server will reject the truncated value via `uuidRegex` and fall back to resolving the user via the credential value (see below). Firmware must send the complete UUID.
+- **`user_name`** — optional. If empty, the server enriches the broadcast with the resolved user's full name from `dm3_identity.users`.
+- **`credentials`** *(preferred — added 2026-04)* — an **ordered array** of every credential the device matched in this scan. Each entry is `{ "type": "<credential_type>", "value": "<raw_value>" }`. The order reflects the actual scan sequence in N-step verify, so a "QR then card" verify yields:
+  ```json
+  "credentials": [
+    { "type": "qr_code",  "value": "123456789" },
+    { "type": "card_uid", "value": "9A232AE9" }
+  ]
+  ```
+  This is the **only field that carries the per-credential type** — the legacy `credential_type` is a single string and cannot describe a mixed-type verify chain. Devices supporting N-step verify must send `credentials`. Single-factor scans should send a 1-element array.
+
+  Valid `type` values: `face_template`, `card_uid`, `qr_code`, `fp_template`, `pin`, `nfc`. Server-side defaults to `card_uid` if `type` is missing, since that's the most common case in the fleet.
+
+- **`credential_type`** *(LEGACY)* — single credential type. Should mirror `credentials[0].type`. Kept so older servers, dashboards, and analytics that aren't `credentials`-aware continue to work during rollout.
+- **`credential_value`** *(LEGACY)* — single raw credential value. Should mirror `credentials[0].value`. Used by the server as a fallback when `user_id` is missing or malformed: it looks up `dm3_identity.credentials` by `value` to recover the user. Also displayed on the monitoring page so unknown-card events still show what was scanned.
+- **`other_credential_value`** *(LEGACY)* — additional credentials beyond the primary, used by old firmware that doesn't yet emit `credentials`. The server accepts any of these shapes for back-compat:
+  - `""` / omitted — no extra factors
+  - `"6F12AB34"` — single extra value as a string
+  - `"6F12AB34,9A232AE9"` — comma-separated list
+  - `["6F12AB34", "AB34CD56", "..."]` — JSON array
+
+  When `credentials` is present, `other_credential_value` is ignored. When it isn't, the server reconstructs a `credentials` array from `credential_type` + `credential_value` + `other_credential_value`, marking every reconstructed entry with the same legacy `credential_type` (the per-entry type is unknown without firmware support).
+
+**Server-side normalization:**
+
+1. `credentials` — used as-is if present.
+2. Otherwise — reconstructed from `credential_value` + `other_credential_value`, all entries inheriting `credential_type` as their type.
+3. Persisted to `dm3_access.access_events.metadata.credentials` as a JSON array of `{type, value}` objects (jsonb column, no schema migration needed).
+4. Returned on the WebSocket broadcast and the `GET /api/v1/gateway/events` API as `credentials: [{type, value}]` so the monitoring page can render the right icon per entry. The legacy `card_ids: string[]` field is also returned for any clients that haven't been updated to read the typed array.
+
+**Server enrichment fields** (added by `device-gateway` before broadcasting on WebSocket; also written back on the REST API for backfill — devices do **not** send these):
+
+| Field | Source | Purpose |
+|---|---|---|
+| `user_name` / `person_name` | `dm3_identity.users.first_name + last_name` | Filled when device sends an empty name |
+| `user_code` | `dm3_identity.users.user_code` | For stacked name + code display |
+| `avatar` | `dm3_identity.users.avatar` | Avatar URL for the live timeline |
+| `department` | `dm3_identity.departments.name` via user → department | Monitoring page column |
+| `card_id` | Primary card on the user's credentials, or `credential_value` for unknown cards | Monitoring page Card ID column |
+| `card_ids` | Full list (primary + extras), see `other_credential_value` above | Monitoring page (stacked) |
+| `device_name` | `dm3_devices.devices.name` (looked up by topic device id) | Monitoring page Device column |
 
 **Note:** The old `access.scan` (device asks server) and `access.decision` (server responds) messages have been **removed**. Devices make all access decisions locally using their synced user DB and access rules. This event is purely for server-side logging, analytics, and dashboards.
 

@@ -27,6 +27,9 @@ export interface AccessEventData {
   // strings when the user couldn't be resolved (unknown user_id, etc.).
   department?: string;
   card_id?: string;
+  card_ids?: string[];
+  /** Typed credentials used in this scan. Preferred over card_ids — each entry carries its own type for the monitoring icon. */
+  credentials?: Array<{ type: string; value: string }>;
   user_code?: string;
   avatar?: string;
   device_name?: string;
