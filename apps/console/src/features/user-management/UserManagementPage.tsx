@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Edit, Trash2, Trash, Users } from 'lucide-react';
 import { Button, Input, Multiselect, Badge, AppModal, DataTable, type Column, Card, TablePaginationFooter } from '@dm3/ui';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, assetUrl } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import type { User } from './types';
 
@@ -135,17 +135,33 @@ export function UserManagementPage() {
     const userColumns = useMemo(
         (): Column<User>[] => [
             {
-                key: 'user_code',
-                header: t('col.code'),
-                width: '96px',
-                sortable: true,
-                render: (u) => <span className="font-mono text-[12px] text-muted-foreground">{u.user_code}</span>,
-            },
-            {
                 key: 'full_name',
                 header: t('col.name'),
                 sortable: true,
-                render: (u) => <span className="text-[13px] font-medium">{u.full_name || `${u.first_name} ${u.last_name}`}</span>,
+                render: (u) => {
+                    const initials = `${u.first_name?.[0] ?? ''}${u.last_name?.[0] ?? ''}`.toUpperCase() || '?';
+                    const name = u.full_name || `${u.first_name} ${u.last_name}`;
+                    return (
+                        <div className="flex items-center gap-2.5">
+                            <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-border bg-muted flex items-center justify-center">
+                                {u.avatar ? (
+                                    <img
+                                        src={assetUrl(u.avatar)}
+                                        alt={name}
+                                        className="h-full w-full object-cover"
+                                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                    />
+                                ) : (
+                                    <span className="text-[11px] font-semibold text-muted-foreground">{initials}</span>
+                                )}
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                                <span className="text-[13px] font-medium truncate">{name}</span>
+                                <span className="font-mono text-[11px] text-muted-foreground truncate">{u.user_code}</span>
+                            </div>
+                        </div>
+                    );
+                },
             },
             {
                 key: 'email',

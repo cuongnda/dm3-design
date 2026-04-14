@@ -1,6 +1,7 @@
 {
   "nav.overview": "Overview",
   "nav.dashboard": "Dashboard",
+  "nav.monitoring": "Monitoring",
   "nav.alerts": "Alerts",
   "nav.secure": "🔒 SECURE",
   "nav.accessControl": "Access Control",

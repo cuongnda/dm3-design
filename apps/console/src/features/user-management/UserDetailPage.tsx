@@ -12,7 +12,7 @@ import {
   Tabs, TabsContent, TabsList, TabsTrigger, Checkbox,
 } from '@dm3/ui';
 import { useBreadcrumbStore } from '@dm3/ui';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, assetUrl } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import type { User as UserType } from './types';
 
@@ -85,31 +85,42 @@ interface AddCredentialModalProps {
   onOpenChange: (v: boolean) => void;
   onSubmit: (type: string, value: string, validUntil: string) => Promise<void>;
   editData?: { type: string; value: string; valid_until?: string } | null;
+  defaultValidUntil?: string;
 }
 
-function AddCredentialModal({ open, onOpenChange, onSubmit, editData }: AddCredentialModalProps) {
+function AddCredentialModal({ open, onOpenChange, onSubmit, editData, defaultValidUntil }: AddCredentialModalProps) {
   const { t } = useTranslation('users');
   const isEdit = !!editData;
+  const fallbackValidUntil = defaultValidUntil && defaultValidUntil.length >= 10
+    ? defaultValidUntil.slice(0, 10)
+    : '3000-01-01';
   const [type, setType] = useState<string>('card');
   const [value, setValue] = useState('');
-  const [validUntil, setValidUntil] = useState('3000-01-01');
+  const [validUntil, setValidUntil] = useState(fallbackValidUntil);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const reset = () => { setType('card'); setValue(''); setValidUntil('3000-01-01'); setError(''); };
+  const reset = () => { setType('card'); setValue(''); setValidUntil(fallbackValidUntil); setError(''); };
   const handleOpenChange = (v: boolean) => { if (!v) reset(); onOpenChange(v); };
 
   useEffect(() => {
-    if (editData && open) {
+    if (!open) return;
+    if (editData) {
       setType(editData.type);
       setValue(editData.value);
       const vu = editData.valid_until;
-      setValidUntil(vu && !vu.startsWith('3000') ? vu.slice(0, 10) : '3000-01-01');
+      setValidUntil(vu && !vu.startsWith('3000') ? vu.slice(0, 10) : fallbackValidUntil);
+    } else {
+      setValidUntil(fallbackValidUntil);
     }
-  }, [editData, open]);
+  }, [editData, open, fallbackValidUntil]);
 
   const handleSubmit = async () => {
     if (!value.trim()) { setError(t('toast.valueRequired')); return; }
+    if (validUntil > fallbackValidUntil) {
+      setError(t('credential.expiryExceedsUser', { date: fallbackValidUntil }));
+      return;
+    }
     setLoading(true);
     try {
       await onSubmit(type, value.trim(), validUntil);
@@ -165,8 +176,13 @@ function AddCredentialModal({ open, onOpenChange, onSubmit, editData }: AddCrede
           <Label>{t('credential.expires')}</Label>
           <Input
             type="date"
-            value={validUntil === '3000-01-01' ? '' : validUntil}
-            onChange={(e) => setValidUntil(e.target.value || '3000-01-01')}
+            value={validUntil}
+            max={fallbackValidUntil}
+            onChange={(e) => {
+              const v = e.target.value || fallbackValidUntil;
+              setValidUntil(v > fallbackValidUntil ? fallbackValidUntil : v);
+              setError('');
+            }}
             disabled={loading}
           />
           <p className="text-[11px] text-muted-foreground">{t('credential.expiryHint')}</p>
@@ -398,7 +414,7 @@ export function UserDetailPage() {
       const data = await apiFetch<{ user: UserType }>(`/api/v1/identity/users/${id}`);
       const u = data.user ?? null;
       setUser(u);
-      setAvatarPreview(u?.avatar || null);
+      setAvatarPreview(u?.avatar ? assetUrl(u.avatar) : null);
       setSelectedAccessGroup(u?.access_group_id || '');
       if (u) {
         setEditForm({
@@ -1220,13 +1236,19 @@ export function UserDetailPage() {
 
       {/* ── Modals ───────────────────────────────────────────────────────── */}
 
-      <AddCredentialModal open={showAddCred} onOpenChange={setShowAddCred} onSubmit={handleAddCredential} />
+      <AddCredentialModal
+        open={showAddCred}
+        onOpenChange={setShowAddCred}
+        onSubmit={handleAddCredential}
+        defaultValidUntil={user?.expired_date ?? editForm.expired_date}
+      />
 
       <AddCredentialModal
         open={!!editingCred}
         onOpenChange={(v) => { if (!v) setEditingCred(null); }}
         onSubmit={handleUpdateCredential}
         editData={editingCred}
+        defaultValidUntil={user?.expired_date ?? editForm.expired_date}
       />
 
       {id && (

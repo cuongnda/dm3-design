@@ -19,6 +19,7 @@ import enAccessPoints from './locales/en/accessPoints.json';
 import enAccessGroups from './locales/en/accessGroups.json';
 import enAccessTimes from './locales/en/accessTimes.json';
 import enVehicles from './locales/en/vehicles.json';
+import enMonitoring from './locales/en/monitoring.json';
 
 import viCommon from './locales/vi/common.json';
 import viAuth from './locales/vi/auth.json';
@@ -37,6 +38,7 @@ import viAccessPoints from './locales/vi/accessPoints.json';
 import viAccessGroups from './locales/vi/accessGroups.json';
 import viAccessTimes from './locales/vi/accessTimes.json';
 import viVehicles from './locales/vi/vehicles.json';
+import viMonitoring from './locales/vi/monitoring.json';
 
 i18n
   .use(LanguageDetector)
@@ -61,6 +63,7 @@ i18n
         accessGroups: enAccessGroups,
         accessTimes: enAccessTimes,
         vehicles: enVehicles,
+        monitoring: enMonitoring,
       },
       vi: {
         common: viCommon,
@@ -80,10 +83,11 @@ i18n
         accessGroups: viAccessGroups,
         accessTimes: viAccessTimes,
         vehicles: viVehicles,
+        monitoring: viMonitoring,
       },
     },
     defaultNS: 'common',
-    ns: ['common', 'auth', 'dashboard', 'secure', 'manage', 'operate', 'smart', 'devices', 'settings', 'system', 'departments', 'users', 'zones', 'accessPoints', 'accessGroups', 'accessTimes', 'vehicles'],
+    ns: ['common', 'auth', 'dashboard', 'secure', 'manage', 'operate', 'smart', 'devices', 'settings', 'system', 'departments', 'users', 'zones', 'accessPoints', 'accessGroups', 'accessTimes', 'vehicles', 'monitoring'],
     fallbackLng: 'en',
     supportedLngs: ['en', 'vi'],
     // Accept region tags like `vi-VN`/`en-US` and map them to base languages `vi`/`en`.

@@ -27,6 +27,9 @@ export interface AccessEventData {
   // strings when the user couldn't be resolved (unknown user_id, etc.).
   department?: string;
   card_id?: string;
+  user_code?: string;
+  avatar?: string;
+  device_name?: string;
 }
 
 export interface DoorStateData {

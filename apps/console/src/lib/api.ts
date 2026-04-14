@@ -109,6 +109,18 @@ export async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<
     return res.json();
 }
 
+// ─── Asset URL helper ───────────────────────────────────────
+// /photos/* is served by an auth-protected route; <img> tags can't send
+// Authorization headers, so append the JWT as a ?token= query param.
+export function assetUrl(path: string | null | undefined): string {
+    if (!path) return '';
+    if (!path.startsWith('/photos/')) return path;
+    const token = getToken();
+    if (!token) return path;
+    const sep = path.includes('?') ? '&' : '?';
+    return `${path}${sep}token=${encodeURIComponent(token)}`;
+}
+
 // ─── Auth API ───────────────────────────────────────────────
 
 export interface LoginCompany {

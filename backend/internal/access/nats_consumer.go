@@ -47,6 +47,7 @@ type accessLogData struct {
 	UserID          string         `json:"user_id"`
 	UserName        string         `json:"user_name"`
 	CredentialType  string         `json:"credential_type"`
+	CredentialValue string         `json:"credential_value"` // raw card UID / qr / etc; used as fallback when user_id is bad
 	Direction       string         `json:"direction"`
 	Decision        string         `json:"decision"`
 	Reason          string         `json:"reason"`
@@ -88,7 +89,16 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 	}
 
 	evtTime := time.UnixMilli(evt.TS)
-	metadataJSON, _ := json.Marshal(ald.Metadata)
+	// Always persist credential_value + device_id in metadata so the
+	// monitoring page can display the raw card UID and the source device
+	// even when the device isn't bound to an access_point yet (so
+	// access_point_id is NULL on the row).
+	if ald.Metadata == nil {
+		ald.Metadata = map[string]any{}
+	}
+	if ald.CredentialValue != "" {
+		ald.Metadata["credential_value"] = ald.CredentialValue
+	}
 
 	// Extract tenant_id from NATS subject: dm3.devices.{tenant_id}.{device_id}.evt
 	parts := strings.SplitN(subject, ".", 5)
@@ -98,8 +108,10 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 	}
 	tenantID := parts[2]
 
-	// Extract device_id from source or subject
-	deviceID := evt.Src
+	// Extract device_id from source or subject. evt.Src is sent as
+	// "device:<id>" by some firmware — strip the prefix so it matches
+	// dm3_devices.devices.device_id.
+	deviceID := strings.TrimPrefix(evt.Src, "device:")
 	if deviceID == "" {
 		deviceID = parts[3]
 	}
@@ -121,6 +133,11 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 		}
 	}
 
+	if deviceID != "" {
+		ald.Metadata["device_id"] = deviceID
+	}
+	metadataJSON, _ := json.Marshal(ald.Metadata)
+
 	// Use a bounded context for DB operations so they cannot hang indefinitely.
 	dbCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -130,10 +147,36 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 		decidedLocally = *ald.DecidedLocally
 	}
 
+	// Resolve user from credential_value when the device's user_id is missing
+	// or malformed (some firmware truncates UUIDs to 30 chars). We look up the
+	// active credential matching the value the device actually scanned and
+	// backfill user_id + user_name from there.
+	resolvedUserID := toUUIDPtr(ald.UserID)
+	resolvedUserName := ald.UserName
+	if resolvedUserID == nil && ald.CredentialValue != "" {
+		var uid, fullName string
+		err := c.db.Pool.QueryRow(dbCtx,
+			`SELECT u.id::text, TRIM(CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,'')))
+			 FROM dm3_identity.credentials cr
+			 JOIN dm3_identity.users u ON u.id = cr.user_id
+			 WHERE cr.tenant_id = $1::uuid AND cr.value = $2 AND cr.status = 'active'
+			 ORDER BY cr.created_at ASC LIMIT 1`,
+			tenantID, ald.CredentialValue,
+		).Scan(&uid, &fullName)
+		if err == nil {
+			resolvedUserID = toUUIDPtr(uid)
+			if resolvedUserName == "" {
+				resolvedUserName = fullName
+			}
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			slog.Warn("nats: credential_value lookup failed", "error", err, "value", ald.CredentialValue)
+		}
+	}
+
 	_, err := c.db.Pool.Exec(dbCtx,
 		`INSERT INTO dm3_access.access_events (time, tenant_id, access_point_id, door_id, user_id, user_name, credential_type, direction, decision, reason, confidence, photo_ref, temperature, decided_locally, metadata)
 		 VALUES ($1, $2::uuid, $3::uuid, $4::uuid, $5::uuid, NULLIF($6,''), NULLIF($7,''), NULLIF($8,''), $9, NULLIF($10,''), $11, NULLIF($12,''), $13, $14, $15)`,
-		evtTime, tenantID, accessPointID, toUUIDPtr(ald.DoorID), toUUIDPtr(ald.UserID), ald.UserName, ald.CredentialType,
+		evtTime, tenantID, accessPointID, toUUIDPtr(ald.DoorID), resolvedUserID, resolvedUserName, ald.CredentialType,
 		ald.Direction, ald.Decision, ald.Reason, ald.Confidence, ald.PhotoRef, ald.Temperature, decidedLocally, metadataJSON)
 	if err != nil {
 		slog.Error("nats: failed to insert access event", "error", err)

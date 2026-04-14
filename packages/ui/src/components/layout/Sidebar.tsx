@@ -139,7 +139,7 @@ export function Sidebar() {
       )}>
         <SectionLabel label={t('nav.overview')} color="#64748B" collapsed={c} />
         <SidebarNavItem to={ROUTES.dashboard} icon={<LayoutDashboard size={iconSize} />} label={t('nav.dashboard')} collapsed={c} />
-        <SidebarNavItem to={ROUTES.monitoring} icon={<Activity size={iconSize} />} label={t('nav.monitoring', 'Monitoring')} collapsed={c} />
+        <SidebarNavItem to={ROUTES.monitoring} icon={<Activity size={iconSize} />} label={t('nav.monitoring') + ' *'} collapsed={c} />
         <SidebarNavItem to={ROUTES.alerts} icon={<Bell size={iconSize} />} label={t('nav.alerts')} badge={unreadCount} collapsed={c} />
 
         <SectionLabel label={t('nav.secure')} color="#3B82F6" collapsed={c} />

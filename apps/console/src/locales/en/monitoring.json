@@ -1,0 +1,79 @@
+{
+  "title": "Monitoring",
+  "description": "Real-time access, alarm, and door events across the tenant.",
+  "live": {
+    "online": "Live",
+    "connecting": "Connecting…",
+    "offline": "Offline"
+  },
+  "actions": {
+    "pause": "Pause",
+    "resume": "Resume",
+    "clear": "Clear"
+  },
+  "kind": {
+    "access": "Access",
+    "alarm": "Alarm",
+    "door": "Door"
+  },
+  "filters": {
+    "allDevices": "All devices",
+    "allResults": "All results",
+    "granted": "Granted",
+    "denied": "Denied",
+    "forced": "Forced",
+    "searchPlaceholder": "Search person / door / device"
+  },
+  "rows": {
+    "count": "{{filtered}} / {{total}} rows",
+    "paused": "(paused)"
+  },
+  "columns": {
+    "time": "Time",
+    "type": "Type",
+    "device": "Device",
+    "name": "Name",
+    "department": "Department",
+    "cardId": "Card ID",
+    "result": "Result",
+    "detail": "Detail"
+  },
+  "empty": {
+    "waiting": "Waiting for events…",
+    "disconnected": "Not connected to the realtime feed."
+  },
+  "result": {
+    "granted": "Granted",
+    "denied": "Denied",
+    "forced": "Forced",
+    "open": "Open",
+    "closed": "Closed",
+    "unlocked": "Unlocked",
+    "locked": "Locked",
+    "alarm": "Alarm",
+    "info": "Info",
+    "warning": "Warning",
+    "critical": "Critical"
+  },
+  "reason": {
+    "authorized": "Authorized",
+    "granted": "Granted",
+    "denied": "Denied",
+    "denied_unknown": "Unknown user",
+    "denied_expired": "Expired credential",
+    "denied_zone": "Zone not allowed",
+    "denied_time": "Outside time schedule",
+    "denied_blacklist": "Blacklisted",
+    "denied_invalid_qr": "Invalid QR code",
+    "denied_invalid_card": "Invalid card",
+    "denied_invalid_pin": "Invalid PIN",
+    "denied_invalid_face": "Face not recognized",
+    "denied_invalid_fp": "Fingerprint not recognized",
+    "denied_no_credential": "No credential provided",
+    "denied_anti_passback": "Anti-passback violation",
+    "denied_offline": "Device offline",
+    "forced": "Door forced open",
+    "held_open": "Door held open",
+    "tampered": "Tamper detected"
+  }
+}

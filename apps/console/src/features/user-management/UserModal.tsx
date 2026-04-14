@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User, Camera } from 'lucide-react';
 import { Input, Select, SelectOption, AppModal, Label } from '@dm3/ui';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, assetUrl } from '@/lib/api';
 import type { User as UserType } from './types';
 
 interface Department {
@@ -68,7 +68,7 @@ export function UserModal({ isOpen, onClose, onSave, user }: UserModalProps) {
                 department_id: user.department_id || '',
                 status: (user.status as 'active' | 'inactive' | 'suspended') || 'active',
             });
-            setAvatarPreview(user.avatar || null);
+            setAvatarPreview(user.avatar ? assetUrl(user.avatar) : null);
         } else {
             setFormData({ ...EMPTY_FORM });
             setAvatarPreview(null);

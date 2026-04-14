@@ -1,6 +1,7 @@
 {
   "nav.overview": "Tổng quan",
   "nav.dashboard": "Bảng điều khiển",
+  "nav.monitoring": "Giám sát",
   "nav.alerts": "Cảnh báo",
   "nav.secure": "🔒 BẢO MẬT",
   "nav.accessControl": "Kiểm soát ra vào",

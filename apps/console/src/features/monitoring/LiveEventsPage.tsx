@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Activity, CheckCircle2, XCircle, AlertTriangle, DoorOpen,
   Radio, Pause, Play, Trash2, Search,
@@ -11,7 +12,7 @@ import {
   type DoorStatus,
 } from '@dm3/api-client';
 import { Button, Input, Select, SelectOption, PageHeader } from '@dm3/ui';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, assetUrl } from '@/lib/api';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -26,7 +27,10 @@ interface TimelineRow {
   kind: RowKind;
   time: Date;
   deviceId: string;
+  deviceName?: string;      // friendly name of the source device
   subject: string;          // person name, alarm type, or door id
+  userCode?: string;        // access events only — user_code for stacked display
+  avatar?: string;          // access events only — user avatar URL
   result?: string;          // granted / denied / forced / state
   detail?: string;          // reason / severity / extra info
   department?: string;      // access events only — from identity enrichment
@@ -38,8 +42,11 @@ interface TimelineRow {
 interface BackendEvent {
   id: string;
   device_id: string;
+  device_name?: string;
   event_type: string;
   user_name: string;
+  user_code?: string;
+  avatar?: string;
   door_id: string;
   decision: string;
   reason: string;
@@ -59,7 +66,10 @@ async function fetchBackendEvents(): Promise<TimelineRow[]> {
     kind: 'access' as const,
     time: new Date(e.time),
     deviceId: e.device_id,
-    subject: e.user_name || 'Unknown',
+    deviceName: e.device_name || undefined,
+    subject: e.user_name || '—',
+    userCode: e.user_code || undefined,
+    avatar: e.avatar || undefined,
     result: e.decision,
     detail: e.reason || undefined,
     department: e.department || undefined,
@@ -75,7 +85,10 @@ function accessToRow(e: RealtimeAccessEvent): TimelineRow {
     kind: 'access',
     time: e.time,
     deviceId: e.deviceId,
-    subject: e.personName || 'Unknown',
+    deviceName: e.deviceName,
+    subject: e.personName || '—',
+    userCode: e.userCode,
+    avatar: e.avatar,
     result: e.decision,
     detail: e.reason,
     department: e.department,
@@ -109,13 +122,13 @@ function doorToRow(d: DoorStatus, doorId: string): TimelineRow {
 
 // ─── Styling helpers ───────────────────────────────────────────────────────
 
-const KIND_META: Record<RowKind, { icon: React.ElementType; label: string; color: string }> = {
-  access: { icon: CheckCircle2, label: 'Access', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
-  alarm:  { icon: AlertTriangle, label: 'Alarm',  color: 'text-red-400 bg-red-500/10 border-red-500/20' },
-  door:   { icon: DoorOpen,      label: 'Door',   color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+const KIND_META: Record<RowKind, { icon: React.ElementType; color: string }> = {
+  access: { icon: CheckCircle2, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  alarm:  { icon: AlertTriangle, color: 'text-red-400 bg-red-500/10 border-red-500/20' },
+  door:   { icon: DoorOpen,      color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
 };
 
-function resultBadge(kind: RowKind, result?: string) {
+function resultBadge(kind: RowKind, result: string | undefined, label: string) {
   if (!result) return null;
   let cls = 'text-muted-foreground bg-muted';
   if (kind === 'access') {
@@ -133,7 +146,7 @@ function resultBadge(kind: RowKind, result?: string) {
   }
   return (
     <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium capitalize ${cls}`}>
-      {result}
+      {label}
     </span>
   );
 }
@@ -143,11 +156,27 @@ function formatTime(d: Date) {
     String(d.getMilliseconds()).padStart(3, '0');
 }
 
+// Build a translator for reason / state codes. Unknown codes fall back
+// to a humanized version of the code itself ("snake_case" → "Snake case").
+function useReasonLabel() {
+  const { t } = useTranslation('monitoring');
+  return (detail?: string): string => {
+    if (!detail) return '—';
+    const key = `reason.${detail}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+    const cleaned = detail.replace(/_/g, ' ').trim();
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  };
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────
 
 const MAX_ROWS = 200;
 
 export function LiveEventsPage() {
+  const { t } = useTranslation('monitoring');
+  const reasonLabel = useReasonLabel();
   const { connected, connecting } = useConnectionStatus();
 
   // Local merged timeline. Realtime store only keeps access events;
@@ -233,13 +262,13 @@ export function LiveEventsPage() {
     : connecting
       ? 'text-amber-400 bg-amber-500/10'
       : 'text-red-400 bg-red-500/10';
-  const liveLabel = connected ? 'Live' : connecting ? 'Connecting…' : 'Offline';
+  const liveLabel = connected ? t('live.online') : connecting ? t('live.connecting') : t('live.offline');
 
   return (
     <div className="flex-1 min-h-0 flex flex-col p-6 gap-4">
       <PageHeader
-        title="Monitoring"
-        description="Real-time access, alarm, and door events across the tenant."
+        title={t('title')}
+        description={t('description')}
       >
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${liveColor}`}>
@@ -253,7 +282,7 @@ export function LiveEventsPage() {
             onClick={() => setPaused((p) => !p)}
             className="gap-1"
           >
-            {paused ? <><Play size={13} /> Resume</> : <><Pause size={13} /> Pause</>}
+            {paused ? <><Play size={13} /> {t('actions.resume')}</> : <><Pause size={13} /> {t('actions.pause')}</>}
           </Button>
           <Button
             data-testid="monitoring-button-clear"
@@ -262,7 +291,7 @@ export function LiveEventsPage() {
             onClick={() => setRows([])}
             className="gap-1"
           >
-            <Trash2 size={13} /> Clear
+            <Trash2 size={13} /> {t('actions.clear')}
           </Button>
         </div>
       </PageHeader>
@@ -284,7 +313,7 @@ export function LiveEventsPage() {
               data-testid={`monitoring-chip-${k}`}
             >
               <Icon size={12} />
-              {meta.label}
+              {t(`kind.${k}`)}
             </button>
           );
         })}
@@ -297,7 +326,7 @@ export function LiveEventsPage() {
           className="w-44"
           data-testid="monitoring-select-device"
         >
-          <SelectOption value="">All devices</SelectOption>
+          <SelectOption value="">{t('filters.allDevices')}</SelectOption>
           {devices.map((d) => <SelectOption key={d} value={d}>{d}</SelectOption>)}
         </Select>
 
@@ -307,10 +336,10 @@ export function LiveEventsPage() {
           className="w-36"
           data-testid="monitoring-select-result"
         >
-          <SelectOption value="">All results</SelectOption>
-          <SelectOption value="granted">Granted</SelectOption>
-          <SelectOption value="denied">Denied</SelectOption>
-          <SelectOption value="forced">Forced</SelectOption>
+          <SelectOption value="">{t('filters.allResults')}</SelectOption>
+          <SelectOption value="granted">{t('filters.granted')}</SelectOption>
+          <SelectOption value="denied">{t('filters.denied')}</SelectOption>
+          <SelectOption value="forced">{t('filters.forced')}</SelectOption>
         </Select>
 
         <div className="relative flex-1 min-w-[180px] max-w-xs">
@@ -318,15 +347,15 @@ export function LiveEventsPage() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search person / door / device"
+            placeholder={t('filters.searchPlaceholder')}
             className="pl-8 h-8 text-[12px]"
             data-testid="monitoring-input-search"
           />
         </div>
 
         <div className="ml-auto text-[11px] text-muted-foreground">
-          {filtered.length} / {rows.length} rows
-          {paused && <span className="ml-2 text-amber-400">(paused)</span>}
+          {t('rows.count', { filtered: filtered.length, total: rows.length })}
+          {paused && <span className="ml-2 text-amber-400">{t('rows.paused')}</span>}
         </div>
       </div>
 
@@ -335,14 +364,14 @@ export function LiveEventsPage() {
         <table className="w-full text-[12px]">
           <thead className="sticky top-0 bg-muted/50 backdrop-blur z-10">
             <tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-              <th className="px-3 py-2 font-medium w-32">Time</th>
-              <th className="px-3 py-2 font-medium w-24">Type</th>
-              <th className="px-3 py-2 font-medium w-48">Device</th>
-              <th className="px-3 py-2 font-medium">Name</th>
-              <th className="px-3 py-2 font-medium">Department</th>
-              <th className="px-3 py-2 font-medium font-mono">Card ID</th>
-              <th className="px-3 py-2 font-medium w-28">Result</th>
-              <th className="px-3 py-2 font-medium">Detail</th>
+              <th className="px-3 py-2 font-medium w-32">{t('columns.time')}</th>
+              <th className="px-3 py-2 font-medium w-24">{t('columns.type')}</th>
+              <th className="px-3 py-2 font-medium w-48">{t('columns.device')}</th>
+              <th className="px-3 py-2 font-medium">{t('columns.name')}</th>
+              <th className="px-3 py-2 font-medium">{t('columns.department')}</th>
+              <th className="px-3 py-2 font-medium font-mono">{t('columns.cardId')}</th>
+              <th className="px-3 py-2 font-medium w-28">{t('columns.result')}</th>
+              <th className="px-3 py-2 font-medium">{t('columns.detail')}</th>
             </tr>
           </thead>
           <tbody>
@@ -350,9 +379,7 @@ export function LiveEventsPage() {
               <tr>
                 <td colSpan={8} className="px-3 py-16 text-center text-muted-foreground">
                   <Activity size={24} className="mx-auto mb-2 opacity-40" />
-                  {connected
-                    ? 'Waiting for events…'
-                    : 'Not connected to the realtime feed.'}
+                  {connected ? t('empty.waiting') : t('empty.disconnected')}
                 </td>
               </tr>
             ) : (
@@ -371,14 +398,42 @@ export function LiveEventsPage() {
                     <td className="px-3 py-1.5">
                       <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${meta.color}`}>
                         <Icon size={10} />
-                        {meta.label}
+                        {t(`kind.${r.kind}`)}
                       </span>
                     </td>
-                    <td className="px-3 py-1.5 font-mono text-muted-foreground truncate max-w-[180px]">
-                      {r.deviceId || '—'}
+                    <td className="px-3 py-1.5 max-w-[200px]">
+                      {r.deviceId || r.deviceName ? (
+                        <div className="flex flex-col leading-tight">
+                          <span className="text-[12px] text-foreground truncate">{r.deviceName || '—'}</span>
+                          <span className="text-[10px] font-mono text-muted-foreground truncate">{r.deviceId || ''}</span>
+                        </div>
+                      ) : '—'}
                     </td>
-                    <td className="px-3 py-1.5 text-foreground truncate max-w-[200px]">
-                      {r.subject}
+                    <td className="px-3 py-1.5 max-w-[220px]">
+                      {r.kind === 'access' && r.subject !== '—' ? (
+                        <div className="flex items-center gap-2">
+                          <div className="h-7 w-7 shrink-0 overflow-hidden rounded-full border border-border bg-muted flex items-center justify-center">
+                            {r.avatar ? (
+                              <img
+                                src={assetUrl(r.avatar)}
+                                alt={r.subject}
+                                className="h-full w-full object-cover"
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            ) : (
+                              <span className="text-[10px] font-semibold text-muted-foreground">
+                                {r.subject.split(' ').map(s => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-col leading-tight min-w-0">
+                            <span className="text-[12px] text-foreground truncate">{r.subject}</span>
+                            {r.userCode && <span className="text-[10px] font-mono text-muted-foreground truncate">{r.userCode}</span>}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-[12px] text-muted-foreground">{r.subject}</span>
+                      )}
                     </td>
                     <td className="px-3 py-1.5 text-muted-foreground truncate max-w-[160px]">
                       {r.department || '—'}
@@ -387,10 +442,10 @@ export function LiveEventsPage() {
                       {r.cardId || '—'}
                     </td>
                     <td className="px-3 py-1.5">
-                      {resultBadge(r.kind, r.result)}
+                      {resultBadge(r.kind, r.result, r.result ? t(`result.${r.result}`, { defaultValue: r.result }) : '')}
                     </td>
                     <td className="px-3 py-1.5 text-muted-foreground truncate max-w-[240px]">
-                      {r.detail ?? '—'}
+                      {reasonLabel(r.detail)}
                     </td>
                   </tr>
                 );

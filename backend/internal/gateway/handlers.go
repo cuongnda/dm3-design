@@ -596,11 +596,17 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	// actually triggered the event if the consumer stores it.
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT ae.id::text, ae.tenant_id::text,
-			COALESCE(ae.user_id::text,''), COALESCE(ae.user_name,''),
+			COALESCE(ae.user_id::text,''),
+			COALESCE(NULLIF(ae.user_name,''), TRIM(CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,'')))),
+			COALESCE(u.user_code,''),
+			COALESCE(u.avatar,''),
 			COALESCE(ae.credential_type,''), COALESCE(ae.door_id::text,''),
 			COALESCE(ae.direction,''), ae.decision,
 			COALESCE(ae.reason,''), COALESCE(ae.confidence, 0), ae.time,
-			COALESCE(dep.name,''), COALESCE(c.value,'')
+			COALESCE(dep.name,''),
+			COALESCE(NULLIF(c.value,''), ae.metadata->>'credential_value', ''),
+			COALESCE(NULLIF(ad.device_id,''), regexp_replace(ae.metadata->>'device_id', '^device:', ''), ''),
+			COALESCE(d.name,'')
 		 FROM dm3_access.access_events ae
 		 LEFT JOIN dm3_identity.users u ON u.id = ae.user_id
 		 LEFT JOIN dm3_identity.departments dep ON dep.id = u.department_id
@@ -610,6 +616,16 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 			 ORDER BY created_at ASC
 			 LIMIT 1
 		 ) c ON true
+		 LEFT JOIN LATERAL (
+			 SELECT apd.access_device_id AS device_id
+			 FROM dm3_access.access_point_devices apd
+			 WHERE apd.access_point_id = ae.access_point_id
+			 ORDER BY apd.created_at ASC
+			 LIMIT 1
+		 ) ad ON true
+		 LEFT JOIN dm3_devices.devices d
+		   ON d.device_id = COALESCE(NULLIF(ad.device_id,''), regexp_replace(ae.metadata->>'device_id', '^device:', ''))
+		  AND d.tenant_id = ae.tenant_id
 		 WHERE ae.tenant_id = $1::uuid
 		 ORDER BY ae.time DESC LIMIT $2 OFFSET $3`,
 		cid, limit, (page-1)*limit)
@@ -623,18 +639,18 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	events := []map[string]any{}
 	for rows.Next() {
 		var e struct {
-			ID, TenantID, UserID, UserName              string
-			CredentialType, DoorID, Direction, Decision string
-			Reason                                      string
-			Confidence                                  float64
-			Time                                        interface{}
-			Department, CardID                          string
+			ID, TenantID, UserID, UserName, UserCode, Avatar string
+			CredentialType, DoorID, Direction, Decision      string
+			Reason                                           string
+			Confidence                                       float64
+			Time                                             any
+			Department, CardID, DeviceID, DeviceName         string
 		}
 		if err := rows.Scan(
-			&e.ID, &e.TenantID, &e.UserID, &e.UserName,
+			&e.ID, &e.TenantID, &e.UserID, &e.UserName, &e.UserCode, &e.Avatar,
 			&e.CredentialType, &e.DoorID, &e.Direction, &e.Decision,
 			&e.Reason, &e.Confidence, &e.Time,
-			&e.Department, &e.CardID,
+			&e.Department, &e.CardID, &e.DeviceID, &e.DeviceName,
 		); err != nil {
 			slog.Error("ListEvents: scan failed", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal server error")
@@ -643,8 +659,12 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 		events = append(events, map[string]any{
 			"id":              e.ID,
 			"tenant_id":       e.TenantID,
+			"device_id":       e.DeviceID,
+			"device_name":     e.DeviceName,
 			"user_id":         e.UserID,
 			"user_name":       e.UserName,
+			"user_code":       e.UserCode,
+			"avatar":          e.Avatar,
 			"credential_type": e.CredentialType,
 			"door_id":         e.DoorID,
 			"direction":       e.Direction,

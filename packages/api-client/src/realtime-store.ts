@@ -7,8 +7,11 @@ export interface RealtimeAccessEvent {
   id: string;
   time: Date;
   deviceId: string;
+  deviceName?: string;
   companyId: string;
   personName?: string;
+  userCode?: string;
+  avatar?: string;
   doorId?: string;
   doorName?: string;
   decision: string;
@@ -173,7 +176,10 @@ export function transformAccessEvent(data: AccessEventData, event: WSEvent): Rea
     time: new Date(event.time),
     deviceId: event.device_id,
     companyId: event.company_id,
+    deviceName: data.device_name || undefined,
     personName: data.person_name || data.user_name,
+    userCode: data.user_code || undefined,
+    avatar: data.avatar || undefined,
     doorId: data.door_id,
     doorName: data.door_id, // TODO: Map to actual door name
     decision: data.decision,

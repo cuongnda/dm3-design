@@ -138,7 +138,7 @@ func (h *MQTTHandler) Handle(topic string, payload []byte) {
 	// augmented payload. Non-access events pass through untouched.
 	broadcastData := env.Data
 	if strings.HasPrefix(env.Type, "access.") {
-		broadcastData = h.enrichAccessData(ctx, env.Data)
+		broadcastData = h.enrichAccessData(ctx, env.Data, pt.TenantID, pt.DeviceID)
 	}
 
 	// Broadcast to WebSocket hub
@@ -157,7 +157,7 @@ func (h *MQTTHandler) Handle(topic string, payload []byte) {
 // kept cheap — a single LEFT JOIN query with a LIMIT 1 subquery. If
 // the lookup fails or the user isn't found, the original payload is
 // returned unchanged.
-func (h *MQTTHandler) enrichAccessData(ctx context.Context, data json.RawMessage) json.RawMessage {
+func (h *MQTTHandler) enrichAccessData(ctx context.Context, data json.RawMessage, tenantID, deviceID string) json.RawMessage {
 	if len(data) == 0 {
 		return data
 	}
@@ -166,29 +166,68 @@ func (h *MQTTHandler) enrichAccessData(ctx context.Context, data json.RawMessage
 		return data
 	}
 	userID, _ := m["user_id"].(string)
-	if userID == "" || !uuidRegex.MatchString(userID) {
-		return data
+	credValue, _ := m["credential_value"].(string)
+	var fullName, userCode, avatar, department, cardID string
+	var err error
+	switch {
+	case uuidRegex.MatchString(userID):
+		err = h.db.Pool.QueryRow(ctx,
+			`SELECT TRIM(CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,''))),
+			        COALESCE(u.user_code,''), COALESCE(u.avatar,''),
+			        COALESCE(dep.name,''), COALESCE(c.value,'')
+			 FROM dm3_identity.users u
+			 LEFT JOIN dm3_identity.departments dep ON dep.id = u.department_id
+			 LEFT JOIN LATERAL (
+				 SELECT value FROM dm3_identity.credentials
+				 WHERE user_id = u.id AND type = 'card' AND status = 'active'
+				 ORDER BY created_at ASC
+				 LIMIT 1
+			 ) c ON true
+			 WHERE u.id = $1::uuid`, userID,
+		).Scan(&fullName, &userCode, &avatar, &department, &cardID)
+	case credValue != "":
+		// Device sent a malformed user_id (e.g. truncated UUID) but a valid
+		// credential_value. Resolve the user via the credential row.
+		err = h.db.Pool.QueryRow(ctx,
+			`SELECT TRIM(CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,''))),
+			        COALESCE(u.user_code,''), COALESCE(u.avatar,''),
+			        COALESCE(dep.name,''), cr.value
+			 FROM dm3_identity.credentials cr
+			 JOIN dm3_identity.users u ON u.id = cr.user_id
+			 LEFT JOIN dm3_identity.departments dep ON dep.id = u.department_id
+			 WHERE cr.value = $1 AND cr.status = 'active'
+			 ORDER BY cr.created_at ASC LIMIT 1`, credValue,
+		).Scan(&fullName, &userCode, &avatar, &department, &cardID)
 	}
-	var department, cardID string
-	err := h.db.Pool.QueryRow(ctx,
-		`SELECT COALESCE(dep.name,''), COALESCE(c.value,'')
-		 FROM dm3_identity.users u
-		 LEFT JOIN dm3_identity.departments dep ON dep.id = u.department_id
-		 LEFT JOIN LATERAL (
-			 SELECT value FROM dm3_identity.credentials
-			 WHERE user_id = u.id AND type = 'card' AND status = 'active'
-			 ORDER BY created_at ASC
-			 LIMIT 1
-		 ) c ON true
-		 WHERE u.id = $1::uuid`, userID,
-	).Scan(&department, &cardID)
-	if err != nil {
-		return data
+	_ = err // lookup misses are expected for unknown cards — fall through
+	if cardID == "" {
+		cardID = credValue
 	}
+
+	// Resolve device name from devices table — independent of the user lookup.
+	var deviceName string
+	if deviceID != "" {
+		_ = h.db.Pool.QueryRow(ctx,
+			`SELECT COALESCE(name,'') FROM dm3_devices.devices
+			 WHERE device_id = $1 AND tenant_id = $2::uuid`,
+			deviceID, tenantID,
+		).Scan(&deviceName)
+	}
+
+	// Only fill name fields if the device didn't already send one.
+	if existing, _ := m["user_name"].(string); existing == "" && fullName != "" {
+		m["user_name"] = fullName
+	}
+	if existing, _ := m["person_name"].(string); existing == "" && fullName != "" {
+		m["person_name"] = fullName
+	}
+	m["user_code"] = userCode
+	m["avatar"] = avatar
 	m["department"] = department
 	m["card_id"] = cardID
-	out, err := json.Marshal(m)
-	if err != nil {
+	m["device_name"] = deviceName
+	out, jerr := json.Marshal(m)
+	if jerr != nil {
 		return data
 	}
 	return out
