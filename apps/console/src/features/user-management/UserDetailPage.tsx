@@ -83,24 +83,35 @@ const CREDENTIAL_ICON_MAP: Record<string, { icon: React.ReactNode; color: string
 interface AddCredentialModalProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSubmit: (type: string, value: string, validUntil: string) => Promise<void>;
-  editData?: { type: string; value: string; valid_until?: string } | null;
+  onSubmit: (type: string, value: string, validFrom: string, validUntil: string) => Promise<void>;
+  editData?: { type: string; value: string; valid_from?: string; valid_until?: string } | null;
+  defaultValidFrom?: string;
   defaultValidUntil?: string;
 }
 
-function AddCredentialModal({ open, onOpenChange, onSubmit, editData, defaultValidUntil }: AddCredentialModalProps) {
+function AddCredentialModal({ open, onOpenChange, onSubmit, editData, defaultValidFrom, defaultValidUntil }: AddCredentialModalProps) {
   const { t } = useTranslation('users');
   const isEdit = !!editData;
+  const fallbackValidFrom = defaultValidFrom && defaultValidFrom.length >= 10
+    ? defaultValidFrom.slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
   const fallbackValidUntil = defaultValidUntil && defaultValidUntil.length >= 10
     ? defaultValidUntil.slice(0, 10)
     : '3000-01-01';
   const [type, setType] = useState<string>('card');
   const [value, setValue] = useState('');
+  const [validFrom, setValidFrom] = useState(fallbackValidFrom);
   const [validUntil, setValidUntil] = useState(fallbackValidUntil);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const reset = () => { setType('card'); setValue(''); setValidUntil(fallbackValidUntil); setError(''); };
+  const reset = () => {
+    setType('card');
+    setValue('');
+    setValidFrom(fallbackValidFrom);
+    setValidUntil(fallbackValidUntil);
+    setError('');
+  };
   const handleOpenChange = (v: boolean) => { if (!v) reset(); onOpenChange(v); };
 
   useEffect(() => {
@@ -108,22 +119,33 @@ function AddCredentialModal({ open, onOpenChange, onSubmit, editData, defaultVal
     if (editData) {
       setType(editData.type);
       setValue(editData.value);
+      const vf = editData.valid_from;
+      setValidFrom(vf && vf.length >= 10 ? vf.slice(0, 10) : fallbackValidFrom);
       const vu = editData.valid_until;
       setValidUntil(vu && !vu.startsWith('3000') ? vu.slice(0, 10) : fallbackValidUntil);
     } else {
+      setValidFrom(fallbackValidFrom);
       setValidUntil(fallbackValidUntil);
     }
-  }, [editData, open, fallbackValidUntil]);
+  }, [editData, open, fallbackValidFrom, fallbackValidUntil]);
 
   const handleSubmit = async () => {
     if (!value.trim()) { setError(t('toast.valueRequired')); return; }
+    if (validFrom < fallbackValidFrom) {
+      setError(t('credential.startBeforeUser', { date: fallbackValidFrom }));
+      return;
+    }
     if (validUntil > fallbackValidUntil) {
       setError(t('credential.expiryExceedsUser', { date: fallbackValidUntil }));
       return;
     }
+    if (validFrom > validUntil) {
+      setError(t('credential.startAfterEnd'));
+      return;
+    }
     setLoading(true);
     try {
-      await onSubmit(type, value.trim(), validUntil);
+      await onSubmit(type, value.trim(), validFrom, validUntil);
       handleOpenChange(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('toast.credentialAddFailed'));
@@ -172,21 +194,40 @@ function AddCredentialModal({ open, onOpenChange, onSubmit, editData, defaultVal
             data-testid="user-input-credential-value"
           />
         </div>
-        <div className="space-y-1">
-          <Label>{t('credential.expires')}</Label>
-          <Input
-            type="date"
-            value={validUntil}
-            max={fallbackValidUntil}
-            onChange={(e) => {
-              const v = e.target.value || fallbackValidUntil;
-              setValidUntil(v > fallbackValidUntil ? fallbackValidUntil : v);
-              setError('');
-            }}
-            disabled={loading}
-          />
-          <p className="text-[11px] text-muted-foreground">{t('credential.expiryHint')}</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label>{t('credential.validFrom')}</Label>
+            <Input
+              type="date"
+              value={validFrom}
+              min={fallbackValidFrom}
+              max={validUntil || fallbackValidUntil}
+              onChange={(e) => {
+                const v = e.target.value || fallbackValidFrom;
+                const clamped = v < fallbackValidFrom ? fallbackValidFrom : v;
+                setValidFrom(clamped);
+                setError('');
+              }}
+              disabled={loading}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>{t('credential.expires')}</Label>
+            <Input
+              type="date"
+              value={validUntil}
+              min={validFrom || fallbackValidFrom}
+              max={fallbackValidUntil}
+              onChange={(e) => {
+                const v = e.target.value || fallbackValidUntil;
+                setValidUntil(v > fallbackValidUntil ? fallbackValidUntil : v);
+                setError('');
+              }}
+              disabled={loading}
+            />
+          </div>
         </div>
+        <p className="text-[11px] text-muted-foreground">{t('credential.dateHint')}</p>
         {error && <p className="text-[12px] text-destructive">{error}</p>}
       </div>
     </AppModal>
@@ -385,7 +426,7 @@ export function UserDetailPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const [showAddCred, setShowAddCred] = useState(false);
-  const [editingCred, setEditingCred] = useState<{ id: string; type: string; value: string; valid_until?: string } | null>(null);
+  const [editingCred, setEditingCred] = useState<{ id: string; type: string; value: string; valid_from?: string; valid_until?: string } | null>(null);
   const [deletingCredId, setDeletingCredId] = useState<string | null>(null);
   const [selectedCreds, setSelectedCreds] = useState<Set<string>>(new Set());
   const [bulkDeleteCredLoading, setBulkDeleteCredLoading] = useState(false);
@@ -561,18 +602,20 @@ export function UserDetailPage() {
     setAvatarPreview(URL.createObjectURL(file));
   };
 
-  const handleAddCredential = async (type: string, value: string, validUntil: string) => {
+  const handleAddCredential = async (type: string, value: string, validFrom: string, validUntil: string) => {
     if (!id) return;
     const payload: Record<string, unknown> = { type, value, status: 'active' };
+    if (validFrom) payload.valid_from = new Date(validFrom).toISOString();
     if (validUntil && validUntil !== '3000-01-01') payload.valid_until = new Date(validUntil).toISOString();
     await apiFetch(`/api/v1/identity/users/${id}/credentials`, { method: 'POST', body: JSON.stringify(payload) });
     await fetchCredentials();
     toast(t('toast.credentialAdded'), 'success');
   };
 
-  const handleUpdateCredential = async (type: string, value: string, validUntil: string) => {
+  const handleUpdateCredential = async (type: string, value: string, validFrom: string, validUntil: string) => {
     if (!id || !editingCred) return;
     const payload: Record<string, unknown> = { type, value, status: 'active' };
+    if (validFrom) payload.valid_from = new Date(validFrom).toISOString();
     if (validUntil && validUntil !== '3000-01-01') payload.valid_until = new Date(validUntil).toISOString();
     await apiFetch(`/api/v1/identity/users/${id}/credentials/${editingCred.id}`, { method: 'PUT', body: JSON.stringify(payload) });
     await fetchCredentials();
@@ -877,6 +920,7 @@ export function UserDetailPage() {
                       <th className="px-3 py-2 text-left font-medium text-foreground">{t('credential.type')}</th>
                       <th className="px-3 py-2 text-left font-medium text-foreground">{t('credential.value')}</th>
                       <th className="px-3 py-2 text-left font-medium text-foreground">{t('modal.status', 'Status')}</th>
+                      <th className="px-3 py-2 text-left font-medium text-foreground">{t('credential.validFrom')}</th>
                       <th className="px-3 py-2 text-left font-medium text-foreground">{t('credential.expires')}</th>
                       <th className="px-3 py-2 text-left font-medium text-foreground">{t('modal.created')}</th>
                       <th className="px-3 py-2 text-right font-medium text-foreground">{t('actions.actions', 'Actions')}</th>
@@ -911,6 +955,9 @@ export function UserDetailPage() {
                             </Badge>
                           </td>
                           <td className="px-3 py-2 text-[12px] text-muted-foreground">
+                            {cred.valid_from ? new Date(cred.valid_from).toLocaleDateString() : '—'}
+                          </td>
+                          <td className="px-3 py-2 text-[12px] text-muted-foreground">
                             {hasExpiry ? new Date(cred.valid_until!).toLocaleDateString() : '—'}
                           </td>
                           <td className="px-3 py-2 text-[12px] text-muted-foreground">
@@ -921,7 +968,7 @@ export function UserDetailPage() {
                               variant="ghost"
                               size="sm"
                               className="h-7 text-[12px]"
-                              onClick={() => setEditingCred({ id: cred.id, type: cred.type, value: cred.value, valid_until: cred.valid_until ?? undefined })}
+                              onClick={() => setEditingCred({ id: cred.id, type: cred.type, value: cred.value, valid_from: cred.valid_from ?? undefined, valid_until: cred.valid_until ?? undefined })}
                             >
                               <Pencil size={13} className="mr-1" />
                               {t('actions.edit')}
@@ -1240,6 +1287,7 @@ export function UserDetailPage() {
         open={showAddCred}
         onOpenChange={setShowAddCred}
         onSubmit={handleAddCredential}
+        defaultValidFrom={user?.effective_date ?? editForm.effective_date}
         defaultValidUntil={user?.expired_date ?? editForm.expired_date}
       />
 
@@ -1248,6 +1296,7 @@ export function UserDetailPage() {
         onOpenChange={(v) => { if (!v) setEditingCred(null); }}
         onSubmit={handleUpdateCredential}
         editData={editingCred}
+        defaultValidFrom={user?.effective_date ?? editForm.effective_date}
         defaultValidUntil={user?.expired_date ?? editForm.expired_date}
       />
 

@@ -96,7 +96,7 @@ func (s *BlacklistSyncer) PushBlacklist(ctx context.Context, tenantID, deviceID 
 			if err := credRows.Scan(&userID, &cType, &cValue); err != nil {
 				continue
 			}
-			credsByUser[userID] = append(credsByUser[userID], buildSyncCred(cType, cValue))
+			credsByUser[userID] = append(credsByUser[userID], buildSyncCred(cType, cValue, nil, nil))
 		}
 		if err := credRows.Err(); err != nil {
 			return fmt.Errorf("blacklist: iterate credentials: %w", err)

@@ -37,16 +37,18 @@ type syncPersonUser struct {
 }
 
 type syncPersonCred struct {
-	Type    string `json:"type"`              // card, face, fingerprint, qr, pin
-	UID     string `json:"uid,omitempty"`     // for card type
-	Template string `json:"template,omitempty"` // for face/fingerprint (base64)
-	Code    string `json:"code,omitempty"`    // for qr/pin
-	Version string `json:"version,omitempty"` // e.g. "arcface_v3"
-	Finger  string `json:"finger,omitempty"`  // e.g. "right_index" for fingerprint
+	Type       string `json:"type"`                   // card, face, fingerprint, qr, pin
+	UID        string `json:"uid,omitempty"`          // for card type
+	Template   string `json:"template,omitempty"`     // for face/fingerprint (base64)
+	Code       string `json:"code,omitempty"`         // for qr/pin
+	Version    string `json:"version,omitempty"`      // e.g. "arcface_v3"
+	Finger     string `json:"finger,omitempty"`       // e.g. "right_index" for fingerprint
+	ValidFrom  *int64 `json:"valid_from,omitempty"`   // epoch ms — credential-level start (overrides user-level when set)
+	ValidUntil *int64 `json:"valid_until,omitempty"`  // epoch ms — credential-level expiry (overrides user-level when set)
 }
 
-// buildSyncCred maps a credential type+value from DB to the spec-compliant struct.
-func buildSyncCred(credType, credValue string) syncPersonCred {
+// buildSyncCred maps a credential type+value+validity from DB to the spec-compliant struct.
+func buildSyncCred(credType, credValue string, validFrom, validUntil *time.Time) syncPersonCred {
 	c := syncPersonCred{Type: credType}
 	switch credType {
 	case "card":
@@ -62,6 +64,14 @@ func buildSyncCred(credType, credValue string) syncPersonCred {
 		c.Code = credValue
 	default:
 		c.UID = credValue // fallback
+	}
+	if validFrom != nil {
+		ms := validFrom.UnixMilli()
+		c.ValidFrom = &ms
+	}
+	if validUntil != nil {
+		ms := validUntil.UnixMilli()
+		c.ValidUntil = &ms
 	}
 	return c
 }
@@ -123,14 +133,22 @@ func (s *PersonSyncer) PushPersonSync(ctx context.Context, tenantID, deviceID st
 		})
 	}
 
-	// 2. Fetch all active credentials for the tenant (indexed by user_id)
+	// 2. Fetch all active credentials for the tenant (indexed by user_id).
+	// We pull valid_from / valid_until so the device can enforce credential-
+	// level expiry locally without waiting for the next sync to drop the row.
+	//
+	// We deliberately do NOT filter on `valid_until > now()`. If we did, an
+	// edit to an already-expired credential (e.g. extending the expiry into
+	// the future) would never reach the device, because the row would still
+	// look expired during the post-edit sync. The device receives the dates
+	// and enforces expiry locally — that's the contract documented in
+	// mqtt-protocol.md §7.4.
 	credRows, err := s.db.Pool.Query(ctx, `
-		SELECT c.user_id, c.type, c.value
+		SELECT c.user_id, c.type, c.value, c.valid_from, c.valid_until
 		FROM dm3_identity.credentials c
 		JOIN dm3_identity.users u ON u.id = c.user_id
 		WHERE u.tenant_id = $1::uuid
 		  AND c.status = 'active'
-		  AND (c.valid_until IS NULL OR c.valid_until > now())
 		ORDER BY c.user_id
 	`, tenantID)
 	if err != nil {
@@ -141,10 +159,11 @@ func (s *PersonSyncer) PushPersonSync(ctx context.Context, tenantID, deviceID st
 	credsByUser := map[string][]syncPersonCred{}
 	for credRows.Next() {
 		var userID, cType, cValue string
-		if err := credRows.Scan(&userID, &cType, &cValue); err != nil {
+		var validFrom, validUntil *time.Time
+		if err := credRows.Scan(&userID, &cType, &cValue, &validFrom, &validUntil); err != nil {
 			continue
 		}
-		cred := buildSyncCred(cType, cValue)
+		cred := buildSyncCred(cType, cValue, validFrom, validUntil)
 		credsByUser[userID] = append(credsByUser[userID], cred)
 	}
 	if err := credRows.Err(); err != nil {

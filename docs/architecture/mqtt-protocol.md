@@ -863,7 +863,7 @@ For offline/hybrid mode — push user credentials to device local storage.
         "user_id": "user-uuid",
         "name": "Nguyễn Văn A",
         "credentials": [
-          {"type": "card", "uid": "AABBCCDD"},
+          {"type": "card", "uid": "AABBCCDD", "valid_from": 1739900000000, "valid_until": 1771436000000},
           {"type": "face", "template": "base64_encoded", "version": "arcface_v3"},
           {"type": "fingerprint", "template": "base64_encoded", "finger": "right_index"}
         ],
@@ -881,6 +881,13 @@ For offline/hybrid mode — push user credentials to device local storage.
   }
 }
 ```
+
+**Credential-level validity** *(added 2026-04)* — each credential entry MAY carry its own `valid_from` / `valid_until` (epoch ms). Semantics:
+
+- Both fields are **optional** and **omitted when null** in the DB. If absent, the credential inherits the user-level `valid_from` / `valid_until` from the parent object.
+- When **both** user-level and credential-level dates are present, the **credential-level dates are authoritative** for that specific credential. So a user can have one card valid until 2027-12-31 and a second card valid until 2026-06-30, and the device must reject the second card after its own expiry even though the user is still valid overall.
+- The server only sends credentials whose `valid_until` is `NULL` or in the future — already-expired rows are filtered out at query time, so the device never has to garbage-collect dead credentials. But the server **does** push the new `valid_until` whenever a credential is updated (via the `dm3.identity.person.changed` NATS event → `IdentityConsumer` fan-out → `cfg.person_sync` to every online device in the tenant), so the device receives the date change in real time.
+- Firmware MUST honor credential-level dates locally. Without firmware support, editing a future expiry has no visible effect until the credential actually expires and disappears from the next sync.
 
 **Ack** (`dm/{tid}/device/{did}/cfg/ack`):
 ```json
