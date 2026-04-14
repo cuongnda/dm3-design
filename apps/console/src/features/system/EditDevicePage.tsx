@@ -217,31 +217,39 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
   const companyName = companies.find(c => c.id === identity.tenant_id)?.name ?? identity.tenant_id;
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto p-6 max-w-3xl">
-      <Button data-testid="editdevice-button-back" variant="ghost" size="sm" onClick={() => navigate(listPath)} className="mb-4 text-muted-foreground hover:text-foreground gap-1">
-        <ArrowLeft size={15} /> {t('createDevice.backToDevices')}
-      </Button>
-
-      <div className="mb-8 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">{t('editDevice.title')}</h1>
-          <p className="text-[13px] text-muted-foreground mt-1">{t('editDevice.subtitle')}</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button variant="ghost" size="sm" onClick={() => navigate(listPath)} disabled={loading} data-testid="editdevice-button-cancel">
-            <X size={14} className="mr-1.5" /> {t('editDevice.cancel')}
+    <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col overflow-hidden">
+      {/* Pinned header — stays put while the form body scrolls below.
+          Lives inside the parent <main> p-6, so we use minimal internal
+          padding to avoid stacking margins. */}
+      <div className="shrink-0 border-b border-border bg-background pb-3">
+        <div className="max-w-3xl">
+          <Button data-testid="editdevice-button-back" variant="ghost" size="sm" onClick={() => navigate(listPath)} className="mb-1.5 px-0 h-auto py-0 text-muted-foreground hover:text-foreground gap-1">
+            <ArrowLeft size={14} /> {t('createDevice.backToDevices')}
           </Button>
-          <Button size="sm" onClick={() => handleSubmit()} disabled={loading} data-testid="editdevice-button-save">
-            <Save size={14} className="mr-1.5" />
-            {loading ? t('editDevice.saving') : t('editDevice.save')}
-          </Button>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-[18px] font-semibold text-foreground leading-tight">{t('editDevice.title')}</h1>
+              <p className="text-[12px] text-muted-foreground mt-0.5">{t('editDevice.subtitle')}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="ghost" size="sm" onClick={() => navigate(listPath)} disabled={loading} data-testid="editdevice-button-cancel">
+                <X size={14} className="mr-1.5" /> {t('editDevice.cancel')}
+              </Button>
+              <Button size="sm" onClick={() => handleSubmit()} disabled={loading} data-testid="editdevice-button-save">
+                <Save size={14} className="mr-1.5" />
+                {loading ? t('editDevice.saving') : t('editDevice.save')}
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {error && (
-          <div data-testid="editdevice-text-error" className="px-4 py-3 bg-error/10 border border-error/30 rounded-lg text-error text-[13px]">{error}</div>
-        )}
+      {/* Scrollable form body */}
+      <div className="min-h-0 flex-1 overflow-y-auto pt-4">
+        <form onSubmit={handleSubmit} className="max-w-3xl space-y-5">
+          {error && (
+            <div data-testid="editdevice-text-error" className="px-4 py-3 bg-error/10 border border-error/30 rounded-lg text-error text-[13px]">{error}</div>
+          )}
 
         {/* Read-only identity block */}
         <div className="border border-border rounded-lg bg-muted/30 px-5 py-4">
@@ -403,7 +411,8 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
           </div>
         )}
 
-      </form>
+        </form>
+      </div>
     </div>
   );
 }

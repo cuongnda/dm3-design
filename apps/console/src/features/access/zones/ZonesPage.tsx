@@ -12,65 +12,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Input,
-  Label,
-  Select,
-  SelectOption,
 } from '@dm3/ui';
 import { useZones } from './hooks/useZones';
-import type { Zone, ZoneFormData } from './types';
-
-interface ZoneFormState {
-  name: string;
-  description: string;
-  parent_id: string;
-  timezone: string;
-  address: string;
-  building: string;
-  floor: string;
-  geo_lat: string;
-  geo_lng: string;
-  map_image_url: string;
-  map_image_width: string;
-  map_image_height: string;
-}
+import type { Zone } from './types';
 
 interface ZoneTreeNode {
   zone: Zone;
   children: ZoneTreeNode[];
   level: number;
-}
-
-const emptyForm: ZoneFormState = {
-  name: '',
-  description: '',
-  parent_id: '',
-  timezone: 'Asia/Ho_Chi_Minh',
-  address: '',
-  building: '',
-  floor: '',
-  geo_lat: '',
-  geo_lng: '',
-  map_image_url: '',
-  map_image_width: '',
-  map_image_height: '',
-};
-
-function zoneFormToData(form: ZoneFormState): ZoneFormData {
-  return {
-    name: form.name,
-    description: form.description || undefined,
-    parent_id: form.parent_id || undefined,
-    timezone: form.timezone || undefined,
-    address: form.address || undefined,
-    building: form.building || undefined,
-    floor: form.floor || undefined,
-    geo_lat: form.geo_lat === '' ? undefined : Number(form.geo_lat),
-    geo_lng: form.geo_lng === '' ? undefined : Number(form.geo_lng),
-    map_image_url: form.map_image_url || undefined,
-    map_image_width: form.map_image_width === '' ? undefined : Number(form.map_image_width),
-    map_image_height: form.map_image_height === '' ? undefined : Number(form.map_image_height),
-    map_metadata: { origin: 'top-left' },
-  };
 }
 
 function buildZoneTree(zones: Zone[]): ZoneTreeNode[] {
@@ -127,19 +76,14 @@ function flattenTree(nodes: ZoneTreeNode[]): ZoneTreeNode[] {
 export function ZonesPage() {
   const { t } = useTranslation('zones');
   const navigate = useNavigate();
-  const { zones, loading, pagination, createZone, updateZone, deleteZone } = useZones();
+  const { zones, loading, pagination, deleteZone } = useZones();
 
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingZone, setEditingZone] = useState<Zone | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [zoneToDelete, setZoneToDelete] = useState<Zone | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [formData, setFormData] = useState<ZoneFormState>(emptyForm);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = useState(false);
 
   const zoneTree = useMemo(() => buildZoneTree(zones), [zones]);
   const visibleTree = useMemo(() => filterZoneTree(zoneTree, search), [zoneTree, search]);
@@ -150,58 +94,13 @@ export function ZonesPage() {
     setExpanded((prev) => ({ ...prev, [zoneId]: !prev[zoneId] }));
   };
 
-  const openCreate = () => {
-    setFormData(emptyForm);
-    setFormErrors({});
-    setShowCreateModal(true);
-  };
-
-  const openEdit = (zone: Zone) => {
-    setFormData({
-      name: zone.name,
-      description: zone.description ?? '',
-      parent_id: zone.parent_id ?? '',
-      timezone: zone.timezone ?? 'Asia/Ho_Chi_Minh',
-      address: zone.address ?? '',
-      building: zone.building ?? '',
-      floor: zone.floor ?? '',
-      geo_lat: zone.geo_lat?.toString() ?? '',
-      geo_lng: zone.geo_lng?.toString() ?? '',
-      map_image_url: zone.map_image_url ?? '',
-      map_image_width: zone.map_image_width?.toString() ?? zone.map_width?.toString() ?? '',
-      map_image_height: zone.map_image_height?.toString() ?? zone.map_height?.toString() ?? '',
-    });
-    setFormErrors({});
-    setEditingZone(zone);
-  };
+  const openCreate = () => navigate('/access/zones/new');
+  const openEdit = (zone: Zone) => navigate(`/access/zones/${zone.id}/edit`);
 
   const openDelete = (zone: Zone) => {
     setZoneToDelete(zone);
     setDeleteError(null);
     setShowDeleteDialog(true);
-  };
-
-  const validateForm = (): boolean => {
-    const errors: Record<string, string> = {};
-    if (!formData.name.trim()) errors.name = t('validation.nameRequired', 'Name is required');
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleCreateSubmit = async () => {
-    if (!validateForm()) return;
-    setSubmitting(true);
-    const success = await createZone(zoneFormToData(formData));
-    setSubmitting(false);
-    if (success) setShowCreateModal(false);
-  };
-
-  const handleEditSubmit = async () => {
-    if (!editingZone || !validateForm()) return;
-    setSubmitting(true);
-    const success = await updateZone(editingZone.id, zoneFormToData(formData));
-    setSubmitting(false);
-    if (success) setEditingZone(null);
   };
 
   const handleDeleteConfirm = async () => {
@@ -220,76 +119,6 @@ export function ZonesPage() {
       setDeleteLoading(false);
     }
   };
-
-  const handleFieldChange = (field: keyof ZoneFormState, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    if (formErrors[field]) setFormErrors((prev) => ({ ...prev, [field]: '' }));
-  };
-
-  const zoneForm = (
-    <div className="space-y-4">
-      <div>
-        <Label htmlFor="zone-name">{t('form.name', 'Name')} *</Label>
-        <Input id="zone-name" value={formData.name} onChange={(e) => handleFieldChange('name', e.target.value)} className={formErrors.name ? 'border-destructive' : ''} disabled={submitting} />
-        {formErrors.name && <p className="mt-1 text-sm text-destructive">{formErrors.name}</p>}
-      </div>
-      <div>
-        <Label htmlFor="zone-description">{t('form.description', 'Description')}</Label>
-        <Input id="zone-description" value={formData.description} onChange={(e) => handleFieldChange('description', e.target.value)} disabled={submitting} />
-      </div>
-      <div>
-        <Label>{t('form.parentZone', 'Parent Zone')}</Label>
-        <Select value={formData.parent_id} onValueChange={(value) => handleFieldChange('parent_id', value)} disabled={submitting}>
-          <SelectOption value="">{t('form.noParent', 'No parent')}</SelectOption>
-          {zones.filter((zone) => !editingZone || zone.id !== editingZone.id).map((zone) => <SelectOption key={zone.id} value={zone.id}>{zone.name}</SelectOption>)}
-        </Select>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Timezone</Label>
-          <Input value={formData.timezone} onChange={(e) => handleFieldChange('timezone', e.target.value)} disabled={submitting} />
-        </div>
-        <div>
-          <Label>Address</Label>
-          <Input value={formData.address} onChange={(e) => handleFieldChange('address', e.target.value)} disabled={submitting} />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Building</Label>
-          <Input value={formData.building} onChange={(e) => handleFieldChange('building', e.target.value)} disabled={submitting} />
-        </div>
-        <div>
-          <Label>Floor</Label>
-          <Input value={formData.floor} onChange={(e) => handleFieldChange('floor', e.target.value)} disabled={submitting} />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Geo Lat</Label>
-          <Input value={formData.geo_lat} onChange={(e) => handleFieldChange('geo_lat', e.target.value)} disabled={submitting} />
-        </div>
-        <div>
-          <Label>Geo Lng</Label>
-          <Input value={formData.geo_lng} onChange={(e) => handleFieldChange('geo_lng', e.target.value)} disabled={submitting} />
-        </div>
-      </div>
-      <div>
-        <Label>Map Image URL</Label>
-        <Input value={formData.map_image_url} onChange={(e) => handleFieldChange('map_image_url', e.target.value)} disabled={submitting} />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Map Width</Label>
-          <Input value={formData.map_image_width} onChange={(e) => handleFieldChange('map_image_width', e.target.value)} disabled={submitting} />
-        </div>
-        <div>
-          <Label>Map Height</Label>
-          <Input value={formData.map_image_height} onChange={(e) => handleFieldChange('map_image_height', e.target.value)} disabled={submitting} />
-        </div>
-      </div>
-    </div>
-  );
 
   const renderNode = (node: ZoneTreeNode) => {
     const isExpanded = expanded[node.zone.id] ?? true;
@@ -404,14 +233,6 @@ export function ZonesPage() {
           <div className="space-y-2">{visibleTree.map(renderNode)}</div>
         )}
       </Card>
-
-      <AppModal open={showCreateModal} onOpenChange={setShowCreateModal} title={<span className="flex items-center gap-2"><MapPin size={16} />{t('createZone', 'Create Zone')}</span>} size="sm" showCancelButton cancelLabel={t('cancel', 'Cancel')} primaryAction={{ label: submitting ? t('saving', 'Saving...') : t('save', 'Save'), onClick: handleCreateSubmit, disabled: submitting, loading: submitting }}>
-        {zoneForm}
-      </AppModal>
-
-      <AppModal open={!!editingZone} onOpenChange={(open) => { if (!open) setEditingZone(null); }} title={<span className="flex items-center gap-2"><MapPin size={16} />{t('editZone', 'Edit Zone')}</span>} size="sm" showCancelButton cancelLabel={t('cancel', 'Cancel')} primaryAction={{ label: submitting ? t('saving', 'Saving...') : t('save', 'Save'), onClick: handleEditSubmit, disabled: submitting, loading: submitting }}>
-        {zoneForm}
-      </AppModal>
 
       <AppModal open={showDeleteDialog} onOpenChange={(open) => { if (!open) { setShowDeleteDialog(false); setZoneToDelete(null); setDeleteError(null); } }} title={<span className="flex items-center gap-2 text-destructive"><Trash2 size={16} />{t('deleteZone', 'Delete Zone')}</span>} size="xs" style={{ maxWidth: '22rem' }} showCancelButton cancelLabel={t('cancel', 'Cancel')} cancelDisabled={deleteLoading} errorMessage={deleteError ?? undefined} primaryAction={{ label: deleteLoading ? t('deleting', 'Deleting...') : t('delete', 'Delete'), variant: 'destructive', onClick: handleDeleteConfirm, loading: deleteLoading, disabled: deleteLoading }}>
         <p className="text-[13px] text-muted-foreground">{t('deleteConfirm', 'Are you sure you want to delete')} <span className="font-medium text-foreground">"{zoneToDelete?.name}"</span>?</p>

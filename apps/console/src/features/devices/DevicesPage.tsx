@@ -777,9 +777,9 @@ export function DevicesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-semibold">{t('devices.management.title')}</h1>
           <p className="text-muted-foreground">{t('devices.management.description')}</p>
@@ -788,7 +788,7 @@ export function DevicesPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 shrink-0">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -847,7 +847,7 @@ export function DevicesPage() {
       </div>
 
       {/* Search and Filter */}
-      <div className="flex gap-4">
+      <div className="flex gap-4 shrink-0">
         <div className="flex-1 relative">
           <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
           <Input

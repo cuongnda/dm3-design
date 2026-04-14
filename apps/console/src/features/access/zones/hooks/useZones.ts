@@ -26,7 +26,8 @@ interface UseZonesReturn {
     sortBy: string | null;
     sortDir: 'asc' | 'desc' | null;
     fetchZones: () => Promise<void>;
-    createZone: (data: ZoneFormData) => Promise<boolean>;
+    fetchZone: (id: string) => Promise<Zone | null>;
+    createZone: (data: ZoneFormData) => Promise<Zone | null>;
     updateZone: (id: string, data: ZoneFormData) => Promise<boolean>;
     deleteZone: (id: string) => Promise<boolean>;
     changePage: (page: number) => void;
@@ -73,26 +74,37 @@ export function useZones(): UseZonesReturn {
         }
     }, [pagination.page, pagination.limit, sortBy, sortDir]);
 
+    const fetchZone = useCallback(async (id: string): Promise<Zone | null> => {
+        try {
+            const z = await apiFetch<Zone>(`/api/v1/access/zones/${id}`);
+            return z;
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to fetch zone';
+            setError(message);
+            return null;
+        }
+    }, []);
+
     const createZone = useCallback(
-        async (data: ZoneFormData): Promise<boolean> => {
+        async (data: ZoneFormData): Promise<Zone | null> => {
             try {
                 const payload: ZoneFormData = {
                     ...data,
                     parent_id: data.parent_id || undefined,
                     description: data.description || undefined,
                 };
-                await apiFetch<Zone>('/api/v1/access/zones', {
+                const created = await apiFetch<Zone>('/api/v1/access/zones', {
                     method: 'POST',
                     body: JSON.stringify(payload),
                 });
                 await fetchZones();
                 toast(t('toast.created'), 'success');
-                return true;
+                return created;
             } catch (err) {
                 const message = err instanceof Error ? err.message : 'Failed to create zone';
                 setError(message);
                 toast(message, 'error');
-                return false;
+                return null;
             }
         },
         [fetchZones, t],
@@ -165,6 +177,7 @@ export function useZones(): UseZonesReturn {
         sortBy,
         sortDir,
         fetchZones,
+        fetchZone,
         createZone,
         updateZone,
         deleteZone,

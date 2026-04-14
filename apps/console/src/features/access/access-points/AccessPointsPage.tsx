@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Plus, Edit, Trash2, Eye, Trash } from 'lucide-react';
@@ -35,30 +35,33 @@ interface AccessPointModalProps {
 function AccessPointModal({ open, onOpenChange, title, initial, zones, onSubmit }: AccessPointModalProps) {
     const { t } = useTranslation('accessPoints');
     const [submitting, setSubmitting] = useState(false);
+    // Map placement fields (map_x/y/rotation/label) intentionally not edited
+    // here — they're set via drag-and-drop in the zone editor. We keep any
+    // existing values from `initial` so a save doesn't accidentally clobber
+    // them, but the modal only exposes the identity fields.
     const [form, setForm] = useState<AccessPointFormData>({
         name: initial?.name ?? '',
         description: initial?.description ?? '',
         zone_id: initial?.zone_id ?? '',
-        map_x: initial?.map_x,
-        map_y: initial?.map_y,
-        map_rotation: initial?.map_rotation,
-        map_label: initial?.map_label ?? '',
     });
     const [nameError, setNameError] = useState('');
 
-    const handleOpenChange = (v: boolean) => {
-        if (v) {
+    // Reset form whenever the modal transitions to open. Without this, useState's
+    // one-time initializer runs only on first mount, so reopening Create after a
+    // Save (or after editing a different access point) shows stale field values.
+    useEffect(() => {
+        if (open) {
             setForm({
                 name: initial?.name ?? '',
                 description: initial?.description ?? '',
                 zone_id: initial?.zone_id ?? '',
-                map_x: initial?.map_x,
-                map_y: initial?.map_y,
-                map_rotation: initial?.map_rotation,
-                map_label: initial?.map_label ?? '',
             });
             setNameError('');
+            setSubmitting(false);
         }
+    }, [open, initial]);
+
+    const handleOpenChange = (v: boolean) => {
         onOpenChange(v);
     };
 
@@ -72,10 +75,6 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, onSubmit 
             name: form.name.trim(),
             ...(form.description?.trim() && { description: form.description.trim() }),
             ...(form.zone_id && { zone_id: form.zone_id }),
-            ...(typeof form.map_x === 'number' && !Number.isNaN(form.map_x) && { map_x: form.map_x }),
-            ...(typeof form.map_y === 'number' && !Number.isNaN(form.map_y) && { map_y: form.map_y }),
-            ...(typeof form.map_rotation === 'number' && !Number.isNaN(form.map_rotation) && { map_rotation: form.map_rotation }),
-            ...(form.map_label?.trim() && { map_label: form.map_label.trim() }),
         };
         const ok = await onSubmit(payload);
         setSubmitting(false);
@@ -85,10 +84,6 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, onSubmit 
     const setField = (field: keyof AccessPointFormData, value: AccessPointFormData[keyof AccessPointFormData]) => {
         setForm((prev) => ({ ...prev, [field]: value }));
         if (field === 'name') setNameError('');
-    };
-
-    const setNumber = (field: 'map_x' | 'map_y' | 'map_rotation', value: string) => {
-        setForm((prev) => ({ ...prev, [field]: value === '' ? undefined : Number(value) }));
     };
 
     return (
@@ -148,27 +143,6 @@ function AccessPointModal({ open, onOpenChange, title, initial, zones, onSubmit 
                     </Select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <Label htmlFor="ap-map-x">Map X</Label>
-                        <Input id="ap-map-x" type="number" step="0.01" value={form.map_x ?? ''} onChange={(e) => setNumber('map_x', e.target.value)} disabled={submitting} />
-                    </div>
-                    <div>
-                        <Label htmlFor="ap-map-y">Map Y</Label>
-                        <Input id="ap-map-y" type="number" step="0.01" value={form.map_y ?? ''} onChange={(e) => setNumber('map_y', e.target.value)} disabled={submitting} />
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <Label htmlFor="ap-map-rotation">Rotation</Label>
-                        <Input id="ap-map-rotation" type="number" step="1" value={form.map_rotation ?? ''} onChange={(e) => setNumber('map_rotation', e.target.value)} disabled={submitting} />
-                    </div>
-                    <div>
-                        <Label htmlFor="ap-map-label">Map Label</Label>
-                        <Input id="ap-map-label" value={form.map_label ?? ''} onChange={(e) => setField('map_label', e.target.value)} disabled={submitting} />
-                    </div>
-                </div>
             </div>
         </AppModal>
     );
