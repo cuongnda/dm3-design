@@ -261,7 +261,9 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
             )}
             <div className="min-w-0">
               <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{t('createDevice.deviceType')}</div>
-              <div className="text-[13px] text-foreground capitalize">{identity.type}</div>
+              <div className="text-[13px] text-foreground">
+                {t(`createDevice.type.${identity.type}`, { ns: 'system', defaultValue: identity.type })}
+              </div>
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground mt-3">

@@ -857,7 +857,7 @@ For offline/hybrid mode — push user credentials to device local storage.
 {
   "type": "cfg.person_sync",
   "data": {
-    "action": "upsert|delete|full_sync",
+    "action": "upsert|delete|clear|full_sync",
     "users": [
       {
         "user_id": "user-uuid",
@@ -881,6 +881,24 @@ For offline/hybrid mode — push user credentials to device local storage.
   }
 }
 ```
+
+**Action semantics:**
+
+| Action | What the device must do | When it's used |
+|---|---|---|
+| `upsert` | Insert or update the listed users; leave all other locally stored users untouched. | Incremental delta sync. |
+| `delete` | Remove the listed users from local storage by `user_id`. Other users untouched. | A user was removed from the tenant. |
+| `clear` | **Drop every locally stored user.** The `users` array is always empty for this action. After `clear`, the device's local user DB MUST be empty until the next message arrives. | First half of the manual replace flow (see below). |
+| `full_sync` | Treat the listed users as the **authoritative full set** for this device. The device SHOULD reconcile by removing any locally stored user not in the payload. If the device can't reliably do that reconciliation, the server protects against staleness by sending an explicit `clear` first — see "Manual replace flow" below. | Cold device sync, periodic resync, or the second half of a manual replace flow. |
+
+**Manual replace flow** *(added 2026-04, used by the on-demand "Transmit Data" button)* — when an operator manually triggers a sync from the web console, the server uses a two-message flow to guarantee the device ends up with exactly the authorized set:
+
+1. **`action: "clear"`** — empty users array. The device must drop every locally stored user.
+2. **`action: "full_sync"`** — the authoritative full set, possibly across multiple batches if `total_count > batch size`. The device loads exactly these users.
+
+The two messages share the same topic and arrive in publish order. The device MUST process them in the order they are received. Both messages produce their own `cfg.person_sync.ack` so the server can detect partial failure (e.g. `clear` succeeded but `full_sync` was lost — the operator would see only some users in the next status report).
+
+**Auto sync flow** *(unchanged)* — credential edits, role changes, etc. fan out via NATS → `IdentityConsumer` → `PushPersonSync`, which sends a single `full_sync` message. No `clear` is sent on the auto path because the user is making one small change and a destructive clear-then-resync would briefly leave the device with an empty user DB on every keystroke.
 
 **Credential-level validity** *(added 2026-04)* — each credential entry MAY carry its own `valid_from` / `valid_until` (epoch ms). Semantics:
 

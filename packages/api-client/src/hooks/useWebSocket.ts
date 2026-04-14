@@ -27,6 +27,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   const updateDeviceStatus = useRealtimeStore(s => s.updateDeviceStatus);
   const updateDoorStatus = useRealtimeStore(s => s.updateDoorStatus);
   const addAlarm = useRealtimeStore(s => s.addAlarm);
+  const upsertSyncJob = useRealtimeStore(s => s.upsertSyncJob);
   const clearOldEvents = useRealtimeStore(s => s.clearOldEvents);
   const connecting = useRealtimeStore(s => s.connecting);
   const { enableToasts = true, toastProvider = 'notification', ...wsOptions } = options;
@@ -127,6 +128,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
               `${data.alarm_type} at ${data.door_id || data.zone || 'unknown location'}`
             );
           }
+        },
+        onSyncProgress: (data) => {
+          // SyncJobData mirrors the SyncJob shape in realtime-store, so we
+          // can write it through unchanged. The Transmit modal subscribes to
+          // syncJobs[jobId] and re-renders on each update.
+          upsertSyncJob(data);
         },
         onGenericEvent: (event) => {
           // Log all events for debugging

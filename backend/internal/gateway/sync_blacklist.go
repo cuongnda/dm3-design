@@ -41,6 +41,14 @@ type blacklistPayload struct {
 // then sends cfg.blacklist to the specified device.
 // Uses users.status IN ('suspended', 'deleted') as the blacklist source.
 func (s *BlacklistSyncer) PushBlacklist(ctx context.Context, tenantID, deviceID string) error {
+	return s.PushBlacklistJob(ctx, tenantID, deviceID, nil)
+}
+
+// PushBlacklistJob is the same push but tagged for progress tracking.
+func (s *BlacklistSyncer) PushBlacklistJob(ctx context.Context, tenantID, deviceID string, jobCtx *SyncJobContext) error {
+	if jobCtx != nil {
+		jobCtx.Registry.SetTypeTotal(jobCtx.JobID, jobCtx.Type, 1)
+	}
 	// Fetch blacklisted users (suspended or deleted but not fully removed)
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT u.id, CONCAT(u.first_name, ' ', u.last_name), u.status, u.updated_at
@@ -143,6 +151,11 @@ func (s *BlacklistSyncer) PushBlacklist(ctx context.Context, tenantID, deviceID 
 		Type:    "cfg.blacklist",
 		Data:    dataBytes,
 	}
+	if jobCtx != nil {
+		envelope.JobID = jobCtx.JobID
+		envelope.Index = 1
+		envelope.Total = 1
+	}
 
 	envBytes, err := json.Marshal(envelope)
 	if err != nil {
@@ -152,6 +165,9 @@ func (s *BlacklistSyncer) PushBlacklist(ctx context.Context, tenantID, deviceID 
 	topic := fmt.Sprintf("dm/%s/device/%s/cfg", tenantID, deviceID)
 	if err := s.mqtt.Publish(ctx, topic, 2, envBytes); err != nil {
 		return fmt.Errorf("blacklist: publish: %w", err)
+	}
+	if jobCtx != nil {
+		jobCtx.Registry.IncrementPublished(jobCtx.JobID, jobCtx.Type)
 	}
 
 	slog.Info("blacklist: pushed",

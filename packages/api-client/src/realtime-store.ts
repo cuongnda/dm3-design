@@ -59,6 +59,30 @@ export interface RealtimeAlarm {
   acknowledged: boolean;
 }
 
+// Live progress for a manual "Transmit Data" job. Mirrors the backend
+// gateway.SyncJob struct — see backend/internal/gateway/sync_job.go.
+export interface SyncJobTypeStat {
+  total: number;
+  published: number;
+  acked: number;
+  status: 'pending' | 'publishing' | 'ok' | 'error';
+  error?: string;
+}
+
+export interface SyncJob {
+  id: string;
+  tenant_id: string;
+  device_id: string;
+  types: string[];
+  total: number;
+  published: number;
+  acked: number;
+  started_at: string;
+  finished_at?: string;
+  per_type: Record<string, SyncJobTypeStat>;
+  errors?: string[];
+}
+
 export interface RealtimeState {
   // Connection status
   connected: boolean;
@@ -70,6 +94,7 @@ export interface RealtimeState {
   deviceStatuses: Record<string, RealtimeDeviceStatus>;
   doorStatuses: Record<string, DoorStatus>;
   alarms: RealtimeAlarm[];
+  syncJobs: Record<string, SyncJob>;
 
   // Actions
   setConnectionStatus: (connected: boolean, connecting?: boolean) => void;
@@ -78,6 +103,7 @@ export interface RealtimeState {
   updateDoorStatus: (status: DoorStatus) => void;
   addAlarm: (alarm: RealtimeAlarm) => void;
   acknowledgeAlarm: (alarmId: string) => void;
+  upsertSyncJob: (job: SyncJob) => void;
   clearOldEvents: () => void;
   reset: () => void;
 }
@@ -91,6 +117,7 @@ export const useRealtimeStore = create<RealtimeState>()(
     deviceStatuses: {},
     doorStatuses: {},
     alarms: [],
+    syncJobs: {},
 
     // Actions
     setConnectionStatus: (connected, connecting = false) =>
@@ -151,6 +178,11 @@ export const useRealtimeStore = create<RealtimeState>()(
         ),
       })),
 
+    upsertSyncJob: (job) =>
+      set((state) => ({
+        syncJobs: { ...state.syncJobs, [job.id]: job },
+      })),
+
     clearOldEvents: () =>
       set((state) => {
         const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -168,6 +200,7 @@ export const useRealtimeStore = create<RealtimeState>()(
         deviceStatuses: {},
         doorStatuses: {},
         alarms: [],
+        syncJobs: {},
       }),
   }))
 );

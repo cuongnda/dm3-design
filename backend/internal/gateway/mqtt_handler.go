@@ -98,7 +98,7 @@ func toUUIDPtr(s string) *string {
 	return &s
 }
 
-// MQTTEnvelope is the standard message envelope from devices.
+// MQTTEnvelope is the standard message envelope used in both directions.
 type MQTTEnvelope struct {
 	Version int             `json:"v"`
 	ID      string          `json:"id"`
@@ -110,6 +110,12 @@ type MQTTEnvelope struct {
 	Ref    string `json:"ref,omitempty"`
 	Status string `json:"status,omitempty"`
 	Error  string `json:"error,omitempty"`
+	// Transmit-job tracking. Set on outbound sync messages so the device
+	// echoes them back in acks, letting the server correlate progress.
+	// Devices ignoring these fields keep working — they're additive.
+	JobID string `json:"job_id,omitempty"`
+	Index int    `json:"index,omitempty"` // 1-based position within the job
+	Total int    `json:"total,omitempty"` // total messages the server intends to publish for this job
 }
 
 // ParsedTopic holds the extracted fields from an MQTT topic.
@@ -465,6 +471,11 @@ func (h *MQTTHandler) handleCommandResponse(ctx context.Context, pt ParsedTopic,
 }
 
 func (h *MQTTHandler) handleConfigAck(_ context.Context, pt ParsedTopic, env MQTTEnvelope) {
+	// If the device echoed back our job_id, advance the SyncJob registry so
+	// the live progress UI sees the ack land.
+	if env.JobID != "" && h.sync != nil && h.sync.Jobs != nil {
+		h.sync.Jobs.IncrementAcked(env.JobID)
+	}
 	switch env.Type {
 	case "cfg.person_sync.ack":
 		var data struct {

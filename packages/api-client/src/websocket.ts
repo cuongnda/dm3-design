@@ -58,12 +58,35 @@ export interface AlarmData {
   severity: 'info' | 'warning' | 'critical';
 }
 
+// Live progress payload for a manual "Transmit Data" job. Mirrors the backend
+// gateway.SyncJob struct.
+export interface SyncJobData {
+  id: string;
+  tenant_id: string;
+  device_id: string;
+  types: string[];
+  total: number;
+  published: number;
+  acked: number;
+  started_at: string;
+  finished_at?: string;
+  per_type: Record<string, {
+    total: number;
+    published: number;
+    acked: number;
+    status: 'pending' | 'publishing' | 'ok' | 'error';
+    error?: string;
+  }>;
+  errors?: string[];
+}
+
 // Event handler function types
 export type WSEventHandler = (event: WSEvent) => void;
 export type AccessEventHandler = (data: AccessEventData, event: WSEvent) => void;
 export type DoorStateHandler = (data: DoorStateData, event: WSEvent) => void;
 export type DeviceStatusHandler = (data: DeviceStatusData, event: WSEvent) => void;
 export type AlarmEventHandler = (data: AlarmData, event: WSEvent) => void;
+export type SyncProgressHandler = (data: SyncJobData, event: WSEvent) => void;
 
 export interface WSConnectionOptions {
   onConnect?: () => void;
@@ -73,6 +96,7 @@ export interface WSConnectionOptions {
   onDoorState?: DoorStateHandler;
   onDeviceStatus?: DeviceStatusHandler;
   onAlarmEvent?: AlarmEventHandler;
+  onSyncProgress?: SyncProgressHandler;
   onGenericEvent?: WSEventHandler;
   autoReconnect?: boolean;
   maxReconnectAttempts?: number;
@@ -292,6 +316,8 @@ export class WebSocketClient {
       this.options.onDeviceStatus?.(event.data as DeviceStatusData, event);
     } else if (event.type === 'alarm.triggered') {
       this.options.onAlarmEvent?.(event.data as AlarmData, event);
+    } else if (event.type === 'sync.progress') {
+      this.options.onSyncProgress?.(event.data as SyncJobData, event);
     }
 
     // Always call generic handler

@@ -135,7 +135,7 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
           {t('addAccessPoint', 'Add Access Point')}
         </span>
       }
-      size="md"
+      size="lg"
       showCancelButton
       cancelLabel={t('cancel', 'Cancel')}
       errorMessage={error || undefined}
@@ -365,7 +365,7 @@ function AddUserModal({ open, onOpenChange, linkedUserIds, onSubmit }: AddUserMo
           {t('addUser', 'Add User')}
         </span>
       }
-      size="md"
+      size="lg"
       showCancelButton
       cancelLabel={t('cancel', 'Cancel')}
       errorMessage={error || undefined}

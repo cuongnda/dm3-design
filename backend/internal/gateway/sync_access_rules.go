@@ -60,6 +60,14 @@ type accessRulesPayload struct {
 // PushAccessRules derives access rules from the access_groups → access_points
 // chain and sends cfg.access_rules to the specified device.
 func (s *AccessRulesSyncer) PushAccessRules(ctx context.Context, tenantID, deviceID string) error {
+	return s.PushAccessRulesJob(ctx, tenantID, deviceID, nil)
+}
+
+// PushAccessRulesJob is the same push but tagged for progress tracking.
+func (s *AccessRulesSyncer) PushAccessRulesJob(ctx context.Context, tenantID, deviceID string, jobCtx *SyncJobContext) error {
+	if jobCtx != nil {
+		jobCtx.Registry.SetTypeTotal(jobCtx.JobID, jobCtx.Type, 1)
+	}
 	// Resolve the access point linked to this device. apd.access_device_id is
 	// a text column that in practice stores dm3_devices.devices.id (uuid as
 	// text); the original code matched it against the literal device_id
@@ -97,7 +105,7 @@ func (s *AccessRulesSyncer) PushAccessRules(ctx context.Context, tenantID, devic
 		AccessRules: accessRules,
 	}
 
-	if err := s.publishAccessRules(ctx, tenantID, deviceID, payload); err != nil {
+	if err := s.publishAccessRulesJob(ctx, tenantID, deviceID, payload, jobCtx); err != nil {
 		return err
 	}
 
@@ -295,6 +303,10 @@ func (s *AccessRulesSyncer) fetchUserAccessRules(ctx context.Context, tenantID, 
 }
 
 func (s *AccessRulesSyncer) publishAccessRules(ctx context.Context, tenantID, deviceID string, payload accessRulesPayload) error {
+	return s.publishAccessRulesJob(ctx, tenantID, deviceID, payload, nil)
+}
+
+func (s *AccessRulesSyncer) publishAccessRulesJob(ctx context.Context, tenantID, deviceID string, payload accessRulesPayload, jobCtx *SyncJobContext) error {
 	dataBytes, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal data: %w", err)
@@ -308,6 +320,11 @@ func (s *AccessRulesSyncer) publishAccessRules(ctx context.Context, tenantID, de
 		Type:    "cfg.access_rules",
 		Data:    dataBytes,
 	}
+	if jobCtx != nil {
+		envelope.JobID = jobCtx.JobID
+		envelope.Index = 1
+		envelope.Total = 1
+	}
 
 	envBytes, err := json.Marshal(envelope)
 	if err != nil {
@@ -315,5 +332,11 @@ func (s *AccessRulesSyncer) publishAccessRules(ctx context.Context, tenantID, de
 	}
 
 	topic := fmt.Sprintf("dm/%s/device/%s/cfg", tenantID, deviceID)
-	return s.mqtt.Publish(ctx, topic, 2, envBytes)
+	if err := s.mqtt.Publish(ctx, topic, 2, envBytes); err != nil {
+		return err
+	}
+	if jobCtx != nil {
+		jobCtx.Registry.IncrementPublished(jobCtx.JobID, jobCtx.Type)
+	}
+	return nil
 }

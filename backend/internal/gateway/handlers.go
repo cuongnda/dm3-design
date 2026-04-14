@@ -350,6 +350,12 @@ func (h *GatewayHandlers) UpdateDevice(w http.ResponseWriter, r *http.Request) {
 // returned — the HTTP response for the update should still succeed even
 // if the device is offline or MQTT is flaky.
 func (h *GatewayHandlers) pushDeviceConfig(ctx context.Context, d models.Device) {
+	h.pushDeviceConfigJob(ctx, d, nil)
+}
+
+// pushDeviceConfigJob is the same push but tagged with a SyncJobContext so
+// the manual transmit flow can track index/total and progress.
+func (h *GatewayHandlers) pushDeviceConfigJob(ctx context.Context, d models.Device, jobCtx *SyncJobContext) {
 	if h.mqtt == nil || d.TenantID == "" || d.DeviceID == "" {
 		return
 	}
@@ -382,6 +388,12 @@ func (h *GatewayHandlers) pushDeviceConfig(ctx context.Context, d models.Device)
 		Type:    "cfg.device_update",
 		Data:    dataBytes,
 	}
+	if jobCtx != nil {
+		envelope.JobID = jobCtx.JobID
+		envelope.Index = 1
+		envelope.Total = 1
+		jobCtx.Registry.SetTypeTotal(jobCtx.JobID, jobCtx.Type, 1)
+	}
 	envBytes, err := json.Marshal(envelope)
 	if err != nil {
 		slog.Error("pushDeviceConfig: marshal envelope", "error", err, "device_id", d.DeviceID)
@@ -393,6 +405,9 @@ func (h *GatewayHandlers) pushDeviceConfig(ctx context.Context, d models.Device)
 		slog.Error("pushDeviceConfig: mqtt publish failed",
 			"error", err, "topic", topic, "device_id", d.DeviceID)
 		return
+	}
+	if jobCtx != nil {
+		jobCtx.Registry.IncrementPublished(jobCtx.JobID, jobCtx.Type)
 	}
 	slog.Info("pushDeviceConfig: sent",
 		"device_id", d.DeviceID, "tenant_id", d.TenantID, "topic", topic)

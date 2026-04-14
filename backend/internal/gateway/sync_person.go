@@ -85,10 +85,25 @@ type personSyncPayload struct {
 	BatchTotal int              `json:"batch_total"`
 }
 
-// PushPersonSync fetches all active users + credentials for a tenant and sends
-// batched cfg.person_sync messages to the specified device.
+// PushPersonSync fetches all active users + credentials authorized to use the
+// target device, then sends batched cfg.person_sync messages to that device.
+//
+// "Authorized to use the device" means the user belongs to at least one access
+// group whose access points include this device. Users with no access group,
+// or whose groups don't reach this device, are excluded — there's no point
+// pushing them to a reader they can never use.
 func (s *PersonSyncer) PushPersonSync(ctx context.Context, tenantID, deviceID string) error {
-	// 1. Fetch all active users for the tenant
+	return s.PushPersonSyncJob(ctx, tenantID, deviceID, nil)
+}
+
+// PushPersonSyncJob is the same push but accepts a SyncJobContext for progress
+// tracking. nil jobCtx behaves identically to PushPersonSync.
+func (s *PersonSyncer) PushPersonSyncJob(ctx context.Context, tenantID, deviceID string, jobCtx *SyncJobContext) error {
+	// 1. Fetch active users authorized for THIS device. The EXISTS subquery
+	// walks: user → access_group_users → access_group_access_points
+	//        → access_point_devices → devices.device_id
+	// We use the same join semantics as PushAccessRules to stay consistent
+	// (apd.access_device_id is text storing dm3_devices.devices.id::text).
 	userRows, err := s.db.Pool.Query(ctx, `
 		SELECT u.id, CONCAT(u.first_name, ' ', u.last_name),
 		       u.effective_date, u.expired_date
@@ -96,8 +111,22 @@ func (s *PersonSyncer) PushPersonSync(ctx context.Context, tenantID, deviceID st
 		WHERE u.tenant_id = $1::uuid
 		  AND u.status = 'active'
 		  AND (u.is_deleted = false OR u.is_deleted IS NULL)
+		  AND EXISTS (
+		      SELECT 1
+		      FROM dm3_access.access_group_users agu
+		      JOIN dm3_access.access_group_access_points agap
+		           ON agap.access_group_id = agu.access_group_id
+		      JOIN dm3_access.access_point_devices apd
+		           ON apd.access_point_id = agap.access_point_id
+		      JOIN dm3_devices.devices d
+		           ON d.id::text = apd.access_device_id
+		      WHERE agu.user_id = u.id
+		        AND agu.tenant_id = $1::uuid
+		        AND (agu.effective_to IS NULL OR agu.effective_to > now())
+		        AND d.device_id = $2
+		  )
 		ORDER BY u.id
-	`, tenantID)
+	`, tenantID, deviceID)
 	if err != nil {
 		return fmt.Errorf("person_sync: query users: %w", err)
 	}
@@ -143,14 +172,20 @@ func (s *PersonSyncer) PushPersonSync(ctx context.Context, tenantID, deviceID st
 	// look expired during the post-edit sync. The device receives the dates
 	// and enforces expiry locally — that's the contract documented in
 	// mqtt-protocol.md §7.4.
+	// Build the list of authorized user IDs from the filtered users above so
+	// we only fetch credentials for users we actually plan to send.
+	authorizedUserIDs := make([]string, len(users))
+	for i, u := range users {
+		authorizedUserIDs[i] = u.ID
+	}
 	credRows, err := s.db.Pool.Query(ctx, `
 		SELECT c.user_id, c.type, c.value, c.valid_from, c.valid_until
 		FROM dm3_identity.credentials c
-		JOIN dm3_identity.users u ON u.id = c.user_id
-		WHERE u.tenant_id = $1::uuid
+		WHERE c.tenant_id = $1::uuid
 		  AND c.status = 'active'
+		  AND c.user_id = ANY($2::uuid[])
 		ORDER BY c.user_id
-	`, tenantID)
+	`, tenantID, authorizedUserIDs)
 	if err != nil {
 		return fmt.Errorf("person_sync: query credentials: %w", err)
 	}
@@ -285,6 +320,23 @@ func (s *PersonSyncer) PushPersonSync(ctx context.Context, tenantID, deviceID st
 	// 6. Send in batches
 	totalCount := len(syncUsers)
 	batchTotal := (totalCount + personSyncBatchSize - 1) / personSyncBatchSize
+	if batchTotal == 0 {
+		batchTotal = 1 // always send one full_sync, even if user list is empty
+	}
+	if jobCtx != nil {
+		// PushPersonSyncJob may be called standalone or after a clear in the
+		// manual transmit flow. The clear (if any) has already pre-registered
+		// its slot via SetTypeTotal in PushClearAllUsersJob. We add batchTotal
+		// on top so the per-type total covers every message we're about to
+		// publish: clear (already counted) + this run's batches.
+		current := 0
+		if snap := jobCtx.Registry.Get(jobCtx.JobID); snap != nil {
+			if s := snap.PerType[jobCtx.Type]; s != nil {
+				current = s.Total
+			}
+		}
+		jobCtx.Registry.SetTypeTotal(jobCtx.JobID, jobCtx.Type, current+batchTotal)
+	}
 
 	for i := range batchTotal {
 		start := i * personSyncBatchSize
@@ -298,7 +350,7 @@ func (s *PersonSyncer) PushPersonSync(ctx context.Context, tenantID, deviceID st
 			BatchTotal: batchTotal,
 		}
 
-		if err := s.publishPersonSync(ctx, tenantID, deviceID, payload); err != nil {
+		if err := s.publishPersonSyncJob(ctx, tenantID, deviceID, payload, jobCtx); err != nil {
 			return fmt.Errorf("person_sync: batch %d/%d: %w", i+1, batchTotal, err)
 		}
 	}
@@ -312,7 +364,49 @@ func (s *PersonSyncer) PushPersonSync(ctx context.Context, tenantID, deviceID st
 	return nil
 }
 
+// PushClearAllUsers tells the device to wipe its local user database. This is
+// the first half of a manual "Transmit Data" replace flow: clear → full_sync.
+// We deliberately do NOT call this from the auto-sync path (IdentityConsumer)
+// because doing so on every credential edit would briefly leave the device
+// with an empty user DB between the two messages.
+//
+// Wire format: cfg.person_sync with `action: "clear"` and `users: []`. The
+// firmware contract (see mqtt-protocol.md §7.4) is to drop every locally
+// stored user on receipt and reply with an ack carrying local_total = 0.
+func (s *PersonSyncer) PushClearAllUsers(ctx context.Context, tenantID, deviceID string) error {
+	return s.PushClearAllUsersJob(ctx, tenantID, deviceID, nil)
+}
+
+// PushClearAllUsersJob is the same as PushClearAllUsers but tagged with a
+// SyncJobContext for progress tracking. The clear message counts as 1 of the
+// person_sync type's expected messages; the follow-up full_sync will set the
+// final per-type total once it knows how many user batches will be sent.
+func (s *PersonSyncer) PushClearAllUsersJob(ctx context.Context, tenantID, deviceID string, jobCtx *SyncJobContext) error {
+	payload := personSyncPayload{
+		Action:     "clear",
+		Users:      []syncPersonUser{},
+		TotalCount: 0,
+		Batch:      1,
+		BatchTotal: 1,
+	}
+	// Pre-register one slot for the clear so progress is visible immediately;
+	// PushPersonSyncJob will widen the per-type total to 1 + batchTotal once
+	// it computes the number of batches.
+	if jobCtx != nil {
+		jobCtx.Registry.SetTypeTotal(jobCtx.JobID, jobCtx.Type, 1)
+	}
+	if err := s.publishPersonSyncJob(ctx, tenantID, deviceID, payload, jobCtx); err != nil {
+		return fmt.Errorf("person_sync clear: %w", err)
+	}
+	slog.Info("person_sync: cleared", "device", deviceID, "tenant", tenantID)
+	return nil
+}
+
 func (s *PersonSyncer) publishPersonSync(ctx context.Context, tenantID, deviceID string, payload personSyncPayload) error {
+	return s.publishPersonSyncJob(ctx, tenantID, deviceID, payload, nil)
+}
+
+func (s *PersonSyncer) publishPersonSyncJob(ctx context.Context, tenantID, deviceID string, payload personSyncPayload, jobCtx *SyncJobContext) error {
 	dataBytes, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal data: %w", err)
@@ -326,6 +420,16 @@ func (s *PersonSyncer) publishPersonSync(ctx context.Context, tenantID, deviceID
 		Type:    "cfg.person_sync",
 		Data:    dataBytes,
 	}
+	if jobCtx != nil {
+		envelope.JobID = jobCtx.JobID
+		// Best-effort index/total — read the live counters from the registry.
+		if snap := jobCtx.Registry.Get(jobCtx.JobID); snap != nil {
+			if s := snap.PerType[jobCtx.Type]; s != nil {
+				envelope.Index = s.Published + 1
+				envelope.Total = s.Total
+			}
+		}
+	}
 
 	envBytes, err := json.Marshal(envelope)
 	if err != nil {
@@ -333,5 +437,11 @@ func (s *PersonSyncer) publishPersonSync(ctx context.Context, tenantID, deviceID
 	}
 
 	topic := fmt.Sprintf("dm/%s/device/%s/cfg", tenantID, deviceID)
-	return s.mqtt.Publish(ctx, topic, 2, envBytes)
+	if err := s.mqtt.Publish(ctx, topic, 2, envBytes); err != nil {
+		return err
+	}
+	if jobCtx != nil {
+		jobCtx.Registry.IncrementPublished(jobCtx.JobID, jobCtx.Type)
+	}
+	return nil
 }

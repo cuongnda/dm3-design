@@ -86,6 +86,7 @@ func main() {
 
 	// Sync service
 	syncService := gateway.NewSyncService(database, mqttClient)
+	syncService.AttachHub(hub)
 
 	// MQTT message handler
 	mqttHandler := gateway.NewMQTTHandler(database, natsClient, hub)
@@ -229,6 +230,7 @@ func main() {
 			cr.Group(func(mr chi.Router) {
 				mr.Use(authsvc.RequireRole("primary_manager", "manager", "system_admin"))
 				mr.Post("/devices/{id}/sync", syncService.HandleSyncRequest)
+				mr.Get("/devices/{id}/sync/jobs/{jobID}", syncService.HandleGetSyncJob)
 			})
 		})
 

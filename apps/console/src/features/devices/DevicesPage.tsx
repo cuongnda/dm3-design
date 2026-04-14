@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Search, Monitor, Camera, Cpu, Settings, Terminal, Gauge, Edit, Send } from 'lucide-react';
 import { Button, Card, CardContent, Input, AppModal, Label, Select, Tabs, TabsList, TabsTrigger, TabsContent, DataTable, type Column, TablePaginationFooter, Checkbox } from '@dm3/ui';
+import { useRealtimeStore } from '@dm3/api-client';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/lib/toast';
 
@@ -492,6 +494,7 @@ function TerminalConfigSection({ config, onChange, disabled }: {
 
 export function DevicesPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation('devices');
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -521,12 +524,22 @@ export function DevicesPage() {
     blacklist: false,
   });
   const [transmitting, setTransmitting] = useState(false);
+  const [transmitJobId, setTransmitJobId] = useState<string | null>(null);
+  // Read live job progress from the realtime store. Updates every time a
+  // sync.progress WS event arrives for our job.
+  const transmitJob = useRealtimeStore((s) => (transmitJobId ? s.syncJobs[transmitJobId] : undefined));
 
   const openTransmit = (device: Device) => {
     setTransmitDevice(device);
+    setTransmitJobId(null);
     setTransmitTypes({ config: true, person_sync: true, access_rules: true, blacklist: false });
   };
-  const closeTransmit = () => { if (!transmitting) setTransmitDevice(null); };
+  const closeTransmit = () => {
+    if (!transmitting) {
+      setTransmitDevice(null);
+      setTransmitJobId(null);
+    }
+  };
   const toggleTransmitType = (key: string) =>
     setTransmitTypes((prev) => ({ ...prev, [key]: !prev[key] }));
 
@@ -534,24 +547,25 @@ export function DevicesPage() {
     if (!transmitDevice) return;
     const selected = Object.entries(transmitTypes).filter(([, v]) => v).map(([k]) => k);
     if (selected.length === 0) {
-      toast('Select at least one item to transmit', 'error');
+      toast(t('devices.toast.selectOne'), 'error');
       return;
     }
     setTransmitting(true);
+    setTransmitJobId(null);
     try {
-      const res = await apiFetch<{ results: Record<string, string> }>(
+      const res = await apiFetch<{ results: Record<string, string>; job_id?: string }>(
         `/api/v1/gateway/devices/${transmitDevice.id}/sync?type=${selected.join(',')}`,
         { method: 'POST' },
       );
+      if (res.job_id) setTransmitJobId(res.job_id);
       const failed = Object.entries(res.results || {}).filter(([, v]) => v !== 'ok');
       if (failed.length === 0) {
-        toast(`Transmitted ${selected.length} item(s) to ${transmitDevice.name || transmitDevice.device_id}`, 'success');
-        setTransmitDevice(null);
+        toast(t('devices.toast.transmitSuccess', { count: selected.length, name: transmitDevice.name || transmitDevice.device_id }), 'success');
       } else {
-        toast(`${failed.length} item(s) failed: ${failed.map(([k]) => k).join(', ')}`, 'error');
+        toast(t('devices.toast.transmitFailed', { count: failed.length, names: failed.map(([k]) => k).join(', ') }), 'error');
       }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Transmit failed', 'error');
+      toast(err instanceof Error ? err.message : t('devices.toast.transmitError'), 'error');
     } finally {
       setTransmitting(false);
     }
@@ -625,13 +639,13 @@ export function DevicesPage() {
     (): Column<Device>[] => [
       {
         key: 'name',
-        header: 'Device',
+        header: t('devices.column.device'),
         sortable: true,
         render: (d) => (
           <div className="flex items-center gap-3">
             {getTypeIcon(d.type)}
             <div className="flex flex-col leading-tight min-w-0">
-              <span className="text-[13px] font-medium truncate">{d.name || d.device_id || 'Unknown Device'}</span>
+              <span className="text-[13px] font-medium truncate">{d.name || d.device_id || t('devices.list.unknown')}</span>
               {d.device_id && <span className="text-[11px] font-mono text-muted-foreground truncate">{d.device_id}</span>}
             </div>
           </div>
@@ -639,45 +653,49 @@ export function DevicesPage() {
       },
       {
         key: 'type',
-        header: 'Type',
+        header: t('devices.column.type'),
         width: '120px',
         sortable: true,
-        render: (d) => <span className="text-[13px] capitalize">{d.type}</span>,
+        render: (d) => (
+          <span className="text-[13px]">
+            {t(`devices.types.${d.type}`, { defaultValue: d.type })}
+          </span>
+        ),
       },
       {
         key: 'location',
-        header: 'Location',
+        header: t('devices.column.location'),
         sortable: true,
         render: (d) => <span className="text-[13px]">{d.location || '—'}</span>,
       },
       {
         key: 'status',
-        header: 'Status',
+        header: t('devices.column.status'),
         width: '110px',
         sortable: true,
         render: (d) => (
           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${getStatusColor(d.status)}`}>
-            {d.status}
+            {t(`devices.status.${d.status}`, { defaultValue: d.status })}
           </span>
         ),
       },
       {
         key: 'firmware_version',
-        header: 'Firmware',
+        header: t('devices.column.firmware'),
         width: '120px',
         sortable: true,
         render: (d) => <span className="text-[12px] font-mono text-muted-foreground">{d.firmware_version || '—'}</span>,
       },
       {
         key: 'actions',
-        header: 'Actions',
+        header: t('devices.column.actions'),
         width: '120px',
         render: (d) => (
           <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
             <Button
               variant="ghost"
               size="sm"
-              title="Transmit data"
+              title={t('devices.action.transmit')}
               onClick={() => openTransmit(d)}
               data-testid={`device-button-transmit-${d.device_id || d.id}`}
             >
@@ -686,7 +704,7 @@ export function DevicesPage() {
             <Button
               variant="ghost"
               size="sm"
-              title="Edit"
+              title={t('devices.action.edit')}
               onClick={() => navigate(`/devices/${d.id}/edit`)}
               data-testid={`device-button-edit-${d.device_id || d.id}`}
             >
@@ -696,7 +714,7 @@ export function DevicesPage() {
         ),
       },
     ],
-    [navigate],
+    [navigate, t],
   );
 
   const handleEditOpen = (device: Device) => {
@@ -741,7 +759,7 @@ export function DevicesPage() {
       <div className="flex items-center justify-center py-16">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-          <p className="text-sm text-muted-foreground">Loading devices...</p>
+          <p className="text-sm text-muted-foreground">{t('devices.list.loading')}</p>
         </div>
       </div>
     );
@@ -752,7 +770,7 @@ export function DevicesPage() {
       <div className="flex items-center justify-center py-16">
         <div className="flex flex-col items-center gap-3 text-center">
           <p className="text-sm text-red-600">{error}</p>
-          <Button onClick={() => window.location.reload()}>Retry</Button>
+          <Button onClick={() => window.location.reload()}>{t('devices.list.retry')}</Button>
         </div>
       </div>
     );
@@ -763,8 +781,8 @@ export function DevicesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Device Management</h1>
-          <p className="text-muted-foreground">Monitor and manage security devices</p>
+          <h1 className="text-2xl font-semibold">{t('devices.management.title')}</h1>
+          <p className="text-muted-foreground">{t('devices.management.description')}</p>
         </div>
 {/* Add Device is only available on /system/devices for system admins */}
       </div>
@@ -779,7 +797,7 @@ export function DevicesPage() {
               </div>
               <div>
                 <div className="text-2xl font-bold text-primary">{devices.length}</div>
-                <div className="text-sm text-muted-foreground">Total Devices</div>
+                <div className="text-sm text-muted-foreground">{t('devices.stats.total')}</div>
               </div>
             </div>
           </CardContent>
@@ -793,7 +811,7 @@ export function DevicesPage() {
               </div>
               <div>
                 <div className="text-2xl font-bold text-green-600">{onlineCount}</div>
-                <div className="text-sm text-muted-foreground">Online</div>
+                <div className="text-sm text-muted-foreground">{t('devices.stats.online')}</div>
               </div>
             </div>
           </CardContent>
@@ -807,7 +825,7 @@ export function DevicesPage() {
               </div>
               <div>
                 <div className="text-2xl font-bold text-yellow-600">{warningCount}</div>
-                <div className="text-sm text-muted-foreground">Warning</div>
+                <div className="text-sm text-muted-foreground">{t('devices.stats.warning')}</div>
               </div>
             </div>
           </CardContent>
@@ -821,7 +839,7 @@ export function DevicesPage() {
               </div>
               <div>
                 <div className="text-2xl font-bold text-gray-600">{offlineCount}</div>
-                <div className="text-sm text-muted-foreground">Offline</div>
+                <div className="text-sm text-muted-foreground">{t('devices.stats.offline')}</div>
               </div>
             </div>
           </CardContent>
@@ -834,7 +852,7 @@ export function DevicesPage() {
           <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search devices by name or location..."
+            placeholder={t('devices.list.searchPlaceholder')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -846,7 +864,7 @@ export function DevicesPage() {
             variant={filterType === 'all' ? 'default' : 'outline'}
             onClick={() => setFilterType('all')}
           >
-            All
+            {t('devices.list.filterAll')}
           </Button>
           {DEVICE_TYPES.map(dt => {
             const Icon = dt.icon;
@@ -857,7 +875,7 @@ export function DevicesPage() {
                 onClick={() => setFilterType(dt.value)}
               >
                 <Icon size={16} className="mr-2" />
-                {dt.label}s
+                {t(`devices.types.${dt.value}`, { defaultValue: dt.label })}
               </Button>
             );
           })}
@@ -878,7 +896,7 @@ export function DevicesPage() {
             sortState={{ col: sortBy, dir: sortDir }}
             onSortChange={handleSortChange}
             onRowDoubleClick={(d) => navigate(`/devices/${d.id}/edit`)}
-            emptyMessage={searchTerm ? 'No devices match your search' : 'No devices found'}
+            emptyMessage={searchTerm ? t('devices.list.emptySearch') : t('devices.list.empty')}
             emptyIcon={<Monitor size={32} strokeWidth={1.2} />}
           />
         </div>
@@ -997,15 +1015,15 @@ export function DevicesPage() {
         onOpenChange={(v) => { if (!v) closeTransmit(); }}
         title={
           <span className="flex items-center gap-2">
-            <Send size={16} /> Transmit data — {transmitDevice?.name || transmitDevice?.device_id || ''}
+            <Send size={16} /> {t('devices.transmit.title')} — {transmitDevice?.name || transmitDevice?.device_id || ''}
           </span>
         }
         size="sm"
         showCancelButton
-        cancelLabel="Cancel"
+        cancelLabel={transmitJob && transmitJob.finished_at ? t('devices.transmit.action.close') : t('devices.transmit.action.cancel')}
         cancelDisabled={transmitting}
         primaryAction={{
-          label: transmitting ? 'Transmitting…' : 'Transmit',
+          label: transmitting ? t('devices.transmit.action.submitting') : t('devices.transmit.action.submit'),
           onClick: handleTransmit,
           disabled: transmitting,
           loading: transmitting,
@@ -1014,7 +1032,7 @@ export function DevicesPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-[12px] text-muted-foreground">
-              Choose what to push. Each item is sent independently.
+              {t('devices.transmit.description')}
             </p>
             {(() => {
               const keys = ['config', 'person_sync', 'access_rules', 'blacklist'];
@@ -1030,33 +1048,100 @@ export function DevicesPage() {
                   disabled={transmitting}
                   className="text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
                 >
-                  {allOn ? 'Deselect all' : 'Select all'}
+                  {allOn ? t('devices.transmit.deselectAll') : t('devices.transmit.selectAll')}
                 </button>
               );
             })()}
           </div>
           {[
-            { key: 'config', label: 'Device config', desc: 'Name, location, model, relay duration, timezone, verify methods' },
-            { key: 'person_sync', label: 'Users & cards', desc: 'All active users with their credentials and validity dates' },
-            { key: 'access_rules', label: 'Access rules & access time', desc: 'Access groups, allowed access points, schedules' },
-            { key: 'blacklist', label: 'Blacklist', desc: 'Suspended/deleted users and credentials' },
-          ].map(({ key, label, desc }) => (
-            <label
-              key={key}
-              className="flex items-start gap-2.5 rounded-md border border-border bg-card p-2.5 cursor-pointer hover:border-ring/40 transition-colors"
-            >
-              <Checkbox
-                checked={!!transmitTypes[key]}
-                onCheckedChange={() => toggleTransmitType(key)}
-                disabled={transmitting}
-                className="mt-0.5"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-medium text-foreground">{label}</div>
-                <div className="text-[11px] text-muted-foreground">{desc}</div>
+            { key: 'config', label: t('devices.transmit.item.config.label'), desc: t('devices.transmit.item.config.desc') },
+            { key: 'person_sync', label: t('devices.transmit.item.person_sync.label'), desc: t('devices.transmit.item.person_sync.desc') },
+            { key: 'access_rules', label: t('devices.transmit.item.access_rules.label'), desc: t('devices.transmit.item.access_rules.desc') },
+            { key: 'blacklist', label: t('devices.transmit.item.blacklist.label'), desc: t('devices.transmit.item.blacklist.desc') },
+          ].map(({ key, label, desc }) => {
+            const stat = transmitJob?.per_type?.[key];
+            const checked = !!transmitTypes[key];
+            // Progress reflects max(published, acked). Firmware that doesn't
+            // echo job_id back will keep `acked` at 0, so we show "Sent" as
+            // success and surface the acked count separately when it arrives.
+            const progress = stat ? Math.max(stat.published, stat.acked) : 0;
+            const pct = stat && stat.total > 0 ? Math.min(100, (progress / stat.total) * 100) : 0;
+            return (
+              <label
+                key={key}
+                className="flex items-start gap-2.5 rounded-md border border-border bg-card p-2.5 cursor-pointer hover:border-ring/40 transition-colors"
+              >
+                <Checkbox
+                  checked={checked}
+                  onCheckedChange={() => toggleTransmitType(key)}
+                  disabled={transmitting || !!transmitJob}
+                  className="mt-0.5"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[13px] font-medium text-foreground">{label}</div>
+                    {stat && (
+                      <span className={`text-[10px] font-medium ${
+                        stat.status === 'error' ? 'text-destructive' :
+                        stat.status === 'ok' ? 'text-emerald-500' :
+                        stat.status === 'publishing' ? 'text-primary' : 'text-muted-foreground'
+                      }`}>
+                        {stat.status === 'error' ? t('devices.transmit.status.failed') :
+                         stat.status === 'ok' ? (stat.acked >= stat.total ? t('devices.transmit.status.acked') : t('devices.transmit.status.sent')) :
+                         stat.status === 'publishing' ? `${progress}/${stat.total}` : t('devices.transmit.status.pending')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">{desc}</div>
+                  {stat && stat.error && (
+                    <div className="text-[11px] text-destructive mt-1 truncate" title={stat.error}>{stat.error}</div>
+                  )}
+                  {stat && stat.total > 0 && (
+                    <div className="mt-1.5 h-1 rounded bg-muted overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-200 ${stat.status === 'error' ? 'bg-destructive' : stat.status === 'ok' ? 'bg-emerald-500' : 'bg-primary'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </label>
+            );
+          })}
+          {transmitJob && (() => {
+            const progress = Math.max(transmitJob.published, transmitJob.acked);
+            const pct = transmitJob.total > 0 ? Math.min(100, (progress / transmitJob.total) * 100) : 0;
+            return (
+              <div className="rounded-md border border-border bg-muted/40 p-3 space-y-2">
+                <div className="flex items-center justify-between text-[12px]">
+                  <span className="font-medium text-foreground">{t('devices.transmit.overall')}</span>
+                  <span className="font-mono text-muted-foreground">
+                    {Math.round(pct)}%
+                    <span className="ml-1.5 opacity-60">
+                      ({progress}/{transmitJob.total} {t('devices.transmit.msgsLabel')}
+                      {transmitJob.acked > 0 && transmitJob.acked < transmitJob.published && `, ${t('devices.transmit.ackedSuffix', { count: transmitJob.acked })}`})
+                    </span>
+                  </span>
+                </div>
+                <div className="h-1.5 rounded bg-muted overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-200 ${transmitJob.errors && transmitJob.errors.length > 0 ? 'bg-destructive' : transmitJob.finished_at ? 'bg-emerald-500' : 'bg-primary'}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                {transmitJob.acked === 0 && transmitJob.finished_at && (
+                  <div className="text-[11px] text-muted-foreground">
+                    {t('devices.transmit.ackHint')}
+                  </div>
+                )}
+                {transmitJob.errors && transmitJob.errors.length > 0 && (
+                  <div className="text-[11px] text-destructive">
+                    {transmitJob.errors.map((e, i) => <div key={i}>• {e}</div>)}
+                  </div>
+                )}
               </div>
-            </label>
-          ))}
+            );
+          })()}
         </div>
       </AppModal>
 
