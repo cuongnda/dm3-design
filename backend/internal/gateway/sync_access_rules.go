@@ -60,12 +60,17 @@ type accessRulesPayload struct {
 // PushAccessRules derives access rules from the access_groups → access_points
 // chain and sends cfg.access_rules to the specified device.
 func (s *AccessRulesSyncer) PushAccessRules(ctx context.Context, tenantID, deviceID string) error {
-	// Resolve the access point linked to this device via access_point_devices junction.
+	// Resolve the access point linked to this device. apd.access_device_id is
+	// a text column that in practice stores dm3_devices.devices.id (uuid as
+	// text); the original code matched it against the literal device_id
+	// string ("840107") which silently misses. We join through devices to
+	// translate the literal device_id to its uuid first.
 	var accessPointID string
 	err := s.db.Pool.QueryRow(ctx, `
 		SELECT apd.access_point_id::text
 		FROM dm3_access.access_point_devices apd
-		WHERE apd.access_device_id = $1
+		JOIN dm3_devices.devices d ON d.id::text = apd.access_device_id
+		WHERE d.device_id = $1
 		  AND apd.tenant_id = $2::uuid
 		LIMIT 1
 	`, deviceID, tenantID).Scan(&accessPointID)

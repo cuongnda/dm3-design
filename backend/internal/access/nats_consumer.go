@@ -228,14 +228,17 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 		deviceID = parts[3]
 	}
 
-	// Resolve access_point_id from device_id via access_point_devices junction table
+	// Resolve access_point_id from the literal device_id. apd.access_device_id
+	// is a text column storing dm3_devices.devices.id (uuid as text), so we
+	// must translate the literal device_id ("840107") to its uuid via devices.
 	var accessPointID *string
 	if deviceID != "" {
 		lookupCtx, lookupCancel := context.WithTimeout(ctx, 2*time.Second)
 		err := c.db.Pool.QueryRow(lookupCtx,
 			`SELECT ap.id::text FROM dm3_access.access_points ap
 			 JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
-			 WHERE apd.access_device_id = $1 AND ap.tenant_id = $2::uuid
+			 JOIN dm3_devices.devices d ON d.id::text = apd.access_device_id
+			 WHERE d.device_id = $1 AND ap.tenant_id = $2::uuid
 			 LIMIT 1`,
 			deviceID, tenantID,
 		).Scan(&accessPointID)

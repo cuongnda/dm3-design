@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Monitor, Camera, Cpu, Settings, Terminal, Gauge, Edit } from 'lucide-react';
-import { Button, Card, CardContent, Input, AppModal, Label, Select, Tabs, TabsList, TabsTrigger, TabsContent, DataTable, type Column, TablePaginationFooter } from '@dm3/ui';
+import { Search, Monitor, Camera, Cpu, Settings, Terminal, Gauge, Edit, Send } from 'lucide-react';
+import { Button, Card, CardContent, Input, AppModal, Label, Select, Tabs, TabsList, TabsTrigger, TabsContent, DataTable, type Column, TablePaginationFooter, Checkbox } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
+import { toast } from '@/lib/toast';
 
 // --- Types ---
 
@@ -511,6 +512,51 @@ export function DevicesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // Transmit Data modal state — manual on-demand sync push.
+  const [transmitDevice, setTransmitDevice] = useState<Device | null>(null);
+  const [transmitTypes, setTransmitTypes] = useState<Record<string, boolean>>({
+    config: true,
+    person_sync: true,
+    access_rules: true,
+    blacklist: false,
+  });
+  const [transmitting, setTransmitting] = useState(false);
+
+  const openTransmit = (device: Device) => {
+    setTransmitDevice(device);
+    setTransmitTypes({ config: true, person_sync: true, access_rules: true, blacklist: false });
+  };
+  const closeTransmit = () => { if (!transmitting) setTransmitDevice(null); };
+  const toggleTransmitType = (key: string) =>
+    setTransmitTypes((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const handleTransmit = async () => {
+    if (!transmitDevice) return;
+    const selected = Object.entries(transmitTypes).filter(([, v]) => v).map(([k]) => k);
+    if (selected.length === 0) {
+      toast('Select at least one item to transmit', 'error');
+      return;
+    }
+    setTransmitting(true);
+    try {
+      const res = await apiFetch<{ results: Record<string, string> }>(
+        `/api/v1/gateway/devices/${transmitDevice.id}/sync?type=${selected.join(',')}`,
+        { method: 'POST' },
+      );
+      const failed = Object.entries(res.results || {}).filter(([, v]) => v !== 'ok');
+      if (failed.length === 0) {
+        toast(`Transmitted ${selected.length} item(s) to ${transmitDevice.name || transmitDevice.device_id}`, 'success');
+        setTransmitDevice(null);
+      } else {
+        toast(`${failed.length} item(s) failed: ${failed.map(([k]) => k).join(', ')}`, 'error');
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Transmit failed', 'error');
+    } finally {
+      setTransmitting(false);
+    }
+  };
+
   // Table state — client-side sort + pagination over the in-memory list.
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -625,9 +671,18 @@ export function DevicesPage() {
       {
         key: 'actions',
         header: 'Actions',
-        width: '88px',
+        width: '120px',
         render: (d) => (
           <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Transmit data"
+              onClick={() => openTransmit(d)}
+              data-testid={`device-button-transmit-${d.device_id || d.id}`}
+            >
+              <Send size={14} />
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -934,6 +989,75 @@ export function DevicesPage() {
             </TabsContent>
           )}
         </Tabs>
+      </AppModal>
+
+      {/* Transmit Data modal */}
+      <AppModal
+        open={!!transmitDevice}
+        onOpenChange={(v) => { if (!v) closeTransmit(); }}
+        title={
+          <span className="flex items-center gap-2">
+            <Send size={16} /> Transmit data — {transmitDevice?.name || transmitDevice?.device_id || ''}
+          </span>
+        }
+        size="sm"
+        showCancelButton
+        cancelLabel="Cancel"
+        cancelDisabled={transmitting}
+        primaryAction={{
+          label: transmitting ? 'Transmitting…' : 'Transmit',
+          onClick: handleTransmit,
+          disabled: transmitting,
+          loading: transmitting,
+        }}
+      >
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[12px] text-muted-foreground">
+              Choose what to push. Each item is sent independently.
+            </p>
+            {(() => {
+              const keys = ['config', 'person_sync', 'access_rules', 'blacklist'];
+              const allOn = keys.every((k) => transmitTypes[k]);
+              return (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next: Record<string, boolean> = {};
+                    for (const k of keys) next[k] = !allOn;
+                    setTransmitTypes(next);
+                  }}
+                  disabled={transmitting}
+                  className="text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
+                >
+                  {allOn ? 'Deselect all' : 'Select all'}
+                </button>
+              );
+            })()}
+          </div>
+          {[
+            { key: 'config', label: 'Device config', desc: 'Name, location, model, relay duration, timezone, verify methods' },
+            { key: 'person_sync', label: 'Users & cards', desc: 'All active users with their credentials and validity dates' },
+            { key: 'access_rules', label: 'Access rules & access time', desc: 'Access groups, allowed access points, schedules' },
+            { key: 'blacklist', label: 'Blacklist', desc: 'Suspended/deleted users and credentials' },
+          ].map(({ key, label, desc }) => (
+            <label
+              key={key}
+              className="flex items-start gap-2.5 rounded-md border border-border bg-card p-2.5 cursor-pointer hover:border-ring/40 transition-colors"
+            >
+              <Checkbox
+                checked={!!transmitTypes[key]}
+                onCheckedChange={() => toggleTransmitType(key)}
+                disabled={transmitting}
+                className="mt-0.5"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-medium text-foreground">{label}</div>
+                <div className="text-[11px] text-muted-foreground">{desc}</div>
+              </div>
+            </label>
+          ))}
+        </div>
       </AppModal>
 
     </div>

@@ -165,6 +165,7 @@ func main() {
 
 	// HTTP handlers
 	handlers := gateway.NewGatewayHandlers(database, mqttClient, auditLog)
+	syncService.AttachHandlers(handlers)
 	provHandlers := gateway.NewProvisioningHandlers(database, mqttClient, cfg, auditLog)
 	firmwareHandlers := gateway.NewFirmwareHandlers(database, objectStore)
 

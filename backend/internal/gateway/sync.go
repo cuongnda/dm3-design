@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/mqtt"
@@ -20,6 +22,7 @@ import (
 type SyncService struct {
 	db        *db.DB
 	mqtt      *mqtt.Client
+	handlers  *GatewayHandlers // for pushDeviceConfig
 	Persons   *PersonSyncer
 	Rules     *AccessRulesSyncer
 	Blacklist *BlacklistSyncer
@@ -35,59 +38,110 @@ func NewSyncService(database *db.DB, mqttClient *mqtt.Client) *SyncService {
 	}
 }
 
-// PushSyncToDevice pushes all sync types (person_sync, access_rules, blacklist) to a device.
+// AttachHandlers gives the sync service a back-reference to the device
+// handlers so it can reuse pushDeviceConfig for the "config" sync type
+// without duplicating the cfg.device_update marshaling logic.
+func (s *SyncService) AttachHandlers(h *GatewayHandlers) { s.handlers = h }
+
+// validSyncTypes is the canonical list of supported sync targets. Order matters
+// for "all" — config goes first so the device has the right settings before any
+// downstream rules / persons / blacklist get evaluated.
+var validSyncTypes = []string{"config", "person_sync", "access_rules", "blacklist"}
+
+// PushSyncToDevice pushes all sync types to a device.
 func (s *SyncService) PushSyncToDevice(ctx context.Context, companyID, deviceID string) error {
-	return s.pushSyncTypes(ctx, companyID, deviceID, "all")
-}
-
-// pushSyncTypes pushes the specified sync type(s) to a device.
-// syncType: "person_sync", "access_rules", "blacklist", or "all".
-func (s *SyncService) pushSyncTypes(ctx context.Context, companyID, deviceID, syncType string) error {
-	slog.Info("sync: pushing", "type", syncType, "company", companyID, "device", deviceID)
-
-	var errs []error
-
-	if syncType == "all" || syncType == "person_sync" {
-		if err := s.Persons.PushPersonSync(ctx, companyID, deviceID); err != nil {
-			slog.Error("sync: person_sync failed", "device", deviceID, "error", err)
-			errs = append(errs, err)
+	results, _ := s.pushSyncTypes(ctx, companyID, "", deviceID, validSyncTypes)
+	for t, r := range results {
+		if strings.HasPrefix(r, "error") {
+			return fmt.Errorf("sync %s: %s", t, r)
 		}
-	}
-
-	if syncType == "all" || syncType == "access_rules" {
-		if err := s.Rules.PushAccessRules(ctx, companyID, deviceID); err != nil {
-			slog.Error("sync: access_rules failed", "device", deviceID, "error", err)
-			errs = append(errs, err)
-		}
-	}
-
-	if syncType == "all" || syncType == "blacklist" {
-		if err := s.Blacklist.PushBlacklist(ctx, companyID, deviceID); err != nil {
-			slog.Error("sync: blacklist failed", "device", deviceID, "error", err)
-			errs = append(errs, err)
-		}
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("sync: %d error(s), first: %w", len(errs), errs[0])
 	}
 	return nil
 }
 
+// pushSyncTypes pushes the specified sync type(s) to a device. Each type runs
+// independently — failures are collected so a partial sync still reports what
+// succeeded. deviceDBID is the dm3_devices.devices.id (uuid) used to load the
+// device row for the config push; pass "" to skip the config branch.
+func (s *SyncService) pushSyncTypes(ctx context.Context, companyID, deviceDBID, deviceID string, types []string) (results map[string]string, err error) {
+	results = map[string]string{}
+	slog.Info("sync: pushing", "types", types, "company", companyID, "device", deviceID)
+
+	for _, t := range types {
+		switch t {
+		case "config":
+			if s.handlers == nil || deviceDBID == "" {
+				results[t] = "error: config push not available"
+				continue
+			}
+			d, derr := s.handlers.loadDeviceForSync(ctx, deviceDBID)
+			if derr != nil {
+				slog.Error("sync: load device for config", "device", deviceID, "error", derr)
+				results[t] = "error: " + derr.Error()
+				continue
+			}
+			s.handlers.pushDeviceConfig(ctx, d)
+			results[t] = "ok"
+		case "person_sync":
+			if perr := s.Persons.PushPersonSync(ctx, companyID, deviceID); perr != nil {
+				slog.Error("sync: person_sync failed", "device", deviceID, "error", perr)
+				results[t] = "error: " + perr.Error()
+				continue
+			}
+			results[t] = "ok"
+		case "access_rules":
+			if rerr := s.Rules.PushAccessRules(ctx, companyID, deviceID); rerr != nil {
+				slog.Error("sync: access_rules failed", "device", deviceID, "error", rerr)
+				results[t] = "error: " + rerr.Error()
+				continue
+			}
+			results[t] = "ok"
+		case "blacklist":
+			if berr := s.Blacklist.PushBlacklist(ctx, companyID, deviceID); berr != nil {
+				slog.Error("sync: blacklist failed", "device", deviceID, "error", berr)
+				results[t] = "error: " + berr.Error()
+				continue
+			}
+			results[t] = "ok"
+		default:
+			results[t] = "error: unknown sync type"
+		}
+	}
+	return results, nil
+}
+
 // HandleSyncRequest handles POST /api/v1/devices/{id}/sync — manual sync trigger.
-// Query param ?type=person_sync|access_rules|blacklist|all (default: all)
+// Query param ?type=config|person_sync|access_rules|blacklist|all (default: all).
+// Multiple types may be combined as a comma-separated list, e.g. ?type=config,person_sync.
 func (s *SyncService) HandleSyncRequest(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	syncType := r.URL.Query().Get("type")
-	if syncType == "" {
-		syncType = "all"
+	rawType := r.URL.Query().Get("type")
+	if rawType == "" {
+		rawType = "all"
 	}
-	switch syncType {
-	case "person_sync", "access_rules", "blacklist", "all":
-		// valid
-	default:
-		httputil.Error(w, http.StatusBadRequest, "invalid sync type: must be person_sync, access_rules, blacklist, or all")
+
+	var types []string
+	if rawType == "all" {
+		types = append(types, validSyncTypes...)
+	} else {
+		seen := map[string]bool{}
+		for _, t := range strings.Split(rawType, ",") {
+			t = strings.TrimSpace(t)
+			if t == "" || seen[t] {
+				continue
+			}
+			if !contains(validSyncTypes, t) {
+				httputil.Error(w, http.StatusBadRequest,
+					"invalid sync type: must be one of "+strings.Join(validSyncTypes, ", ")+", or 'all'")
+				return
+			}
+			seen[t] = true
+			types = append(types, t)
+		}
+	}
+	if len(types) == 0 {
+		httputil.Error(w, http.StatusBadRequest, "no sync types specified")
 		return
 	}
 
@@ -101,18 +155,32 @@ func (s *SyncService) HandleSyncRequest(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := s.pushSyncTypes(r.Context(), companyID, deviceID, syncType); err != nil {
-		slog.Error("sync: push failed", "error", err, "device", deviceID, "type", syncType)
-		httputil.Error(w, http.StatusInternalServerError, "sync failed")
-		return
-	}
+	results, _ := s.pushSyncTypes(r.Context(), companyID, id, deviceID, types)
 
-	httputil.JSON(w, http.StatusOK, map[string]string{
+	httputil.JSON(w, http.StatusOK, map[string]any{
 		"status":    "sync_pushed",
-		"type":      syncType,
+		"types":     types,
+		"results":   results,
 		"device_id": deviceID,
 		"tenant_id": companyID,
 	})
+}
+
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+// loadDeviceForSync reads the minimal fields from dm3_devices.devices needed
+// to publish a cfg.device_update message. Returns models.Device so it can be
+// passed straight to pushDeviceConfig.
+func (h *GatewayHandlers) loadDeviceForSync(ctx context.Context, dbID string) (models.Device, error) {
+	query := `SELECT ` + deviceColumns + ` FROM dm3_devices.devices WHERE id = $1::uuid`
+	return scanDevice(h.db.Pool.QueryRow(ctx, query, dbID))
 }
 
 func generateUUID() string {
