@@ -49,17 +49,21 @@ func (h *AccessHandlers) ListAccessGroups(w http.ResponseWriter, r *http.Request
 		"name":               "ag.name",
 		"created_at":         "ag.created_at",
 		"access_point_count": "COUNT(DISTINCT agap.access_point_id)",
-		"user_count":         "COUNT(DISTINCT agu.user_id)",
+		"user_count":         "COUNT(DISTINCT u.id)",
 	}, "ag.name")
+	// user_count joins through dm3_identity.users with an is_deleted filter
+	// so soft-deleted users (still present in agu) don't inflate the count.
 	query := fmt.Sprintf(`
 		SELECT ag.id, ag.tenant_id, ag.access_time_id, ag.name, ag.description, ag.is_default, ag.type,
 		       COUNT(DISTINCT agap.access_point_id) AS access_point_count,
-		       COUNT(DISTINCT agu.user_id) AS user_count,
+		       COUNT(DISTINCT u.id) AS user_count,
 		       ag.created_at, ag.updated_at
 		FROM dm3_access.access_groups ag
 		LEFT JOIN dm3_access.access_group_access_points agap ON agap.access_group_id = ag.id
 		LEFT JOIN dm3_access.access_group_users agu ON agu.access_group_id = ag.id
 		    AND (agu.effective_to IS NULL OR agu.effective_to > now())
+		LEFT JOIN dm3_identity.users u ON u.id = agu.user_id
+		    AND (u.is_deleted = false OR u.is_deleted IS NULL)
 		%s
 		GROUP BY ag.id
 		ORDER BY %s %s
@@ -109,13 +113,15 @@ func (h *AccessHandlers) GetAccessGroup(w http.ResponseWriter, r *http.Request) 
 	err := h.db.Pool.QueryRow(r.Context(),
 		`SELECT ag.id, ag.tenant_id, ag.access_time_id, ag.name, ag.description, ag.is_default, ag.type,
 		        COUNT(DISTINCT agap.access_point_id) AS access_point_count,
-		        COUNT(DISTINCT agu.user_id) AS user_count,
+		        COUNT(DISTINCT u.id) AS user_count,
 		        ag.created_at, ag.updated_at,
 		        agt.id, agt.name, agt.timezone
 		 FROM dm3_access.access_groups ag
 		 LEFT JOIN dm3_access.access_group_access_points agap ON agap.access_group_id = ag.id
 		 LEFT JOIN dm3_access.access_group_users agu ON agu.access_group_id = ag.id
 		     AND (agu.effective_to IS NULL OR agu.effective_to > now())
+		 LEFT JOIN dm3_identity.users u ON u.id = agu.user_id
+		     AND (u.is_deleted = false OR u.is_deleted IS NULL)
 		 LEFT JOIN dm3_access.access_times agt ON agt.id = ag.access_time_id
 		 WHERE ag.id = $1::uuid
 		   AND ag.tenant_id = $2::uuid

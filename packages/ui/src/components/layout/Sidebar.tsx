@@ -260,12 +260,12 @@ export function Sidebar() {
         </div>
 
         {/* Collapse toggle */}
-        <div className={cn('border-t border-sidebar-border py-1', c ? 'flex justify-center' : 'px-3')}>
+        <div className={cn('border-t border-sidebar-border py-1 flex', c ? 'justify-center px-2' : 'justify-end px-3')}>
           <button
             onClick={toggleSidebar}
             className={cn(
-              'flex items-center justify-center h-7 rounded-md text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors',
-              c ? 'w-8' : 'w-full'
+              'flex items-center h-7 rounded-md text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors',
+              c ? 'w-8 justify-center' : 'w-auto px-1.5 justify-end'
             )}
           >
             {c ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}

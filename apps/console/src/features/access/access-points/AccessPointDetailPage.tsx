@@ -601,25 +601,34 @@ export function AccessPointDetailPage() {
                 <div className="text-red-500 text-sm p-2 mb-2 bg-red-50 rounded shrink-0">{error}</div>
             )}
 
-            {/* Page header */}
-            <div className="flex shrink-0 items-start justify-between">
-                <div className="flex items-start gap-3">
-                    <Button variant="ghost" size="sm" className="mt-0.5 shrink-0" onClick={() => navigate('/access/access-points')}>
-                        <ArrowLeft size={14} className="mr-1.5" />
-                        {t('backToList', 'Access Points')}
-                    </Button>
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <Shield size={18} className="text-primary" />
-                            <h1 className="text-[18px] font-semibold text-foreground">{ap.name}</h1>
-                        </div>
-                        {ap.description && <p className="mt-0.5 text-[13px] text-muted-foreground">{ap.description}</p>}
-                    </div>
-                </div>
-                <Button variant="outline" size="sm" onClick={openEditModal}>
-                    <Edit size={14} className="mr-1.5" />
-                    {t('edit', 'Edit')}
+            {/* Page header — matches AccessGroupDetailPage layout */}
+            <div className="shrink-0">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate('/access/access-points')}
+                    className="flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground mb-3 px-0 h-auto"
+                >
+                    <ArrowLeft size={13} />
+                    {t('backToList', 'Access Points')}
                 </Button>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <Shield size={20} className="text-primary shrink-0" />
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-[18px] font-semibold text-foreground">{ap.name}</h1>
+                            </div>
+                            {ap.description && (
+                                <p className="text-[12px] text-muted-foreground mt-0.5">{ap.description}</p>
+                            )}
+                        </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={openEditModal}>
+                        <Edit size={14} className="mr-1.5" />
+                        {t('edit', 'Edit')}
+                    </Button>
+                </div>
             </div>
 
             {/* Tabs */}
