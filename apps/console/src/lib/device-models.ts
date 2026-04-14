@@ -82,3 +82,19 @@ export const ALL_DEVICE_MODELS: { value: string; label: string; type: string }[]
   Object.entries(DEVICE_TYPE_MODELS).flatMap(([type, models]) =>
     models.map(m => ({ ...m, type }))
   );
+
+/**
+ * Reverse-lookup: given a canonical model value (e.g. "dqmini_plus"),
+ * return the device type it belongs to ("controller") and the human
+ * label ("DQMini+"). Returns null if the value isn't a known model.
+ *
+ * Used by the Pending Devices page to auto-select (type, model) from
+ * the free-form `device_type` string the firmware sent in its bootstrap
+ * payload. Keep in sync with the Go `validDeviceModels` list in
+ * backend/internal/gateway/provisioning.go.
+ */
+export function resolveDeviceModel(value: string): { type: string; label: string } | null {
+  if (!value) return null;
+  const hit = ALL_DEVICE_MODELS.find((m) => m.value === value);
+  return hit ? { type: hit.type, label: hit.label } : null;
+}

@@ -998,6 +998,17 @@ export async function fetchSystemDevices(params?: Record<string, string>): Promi
     return apiFetch<any[]>(`${GATEWAY_URL}/system/devices${qs}`);
 }
 
+export async function fetchSystemDevice(id: string): Promise<any> {
+    return apiFetch<any>(`${GATEWAY_URL}/system/devices/${id}`);
+}
+
+export async function updateSystemDevice(id: string, data: Record<string, any>): Promise<any> {
+    return apiFetch<any>(`${GATEWAY_URL}/system/devices/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+    });
+}
+
 // ─── Device Provisioning API (device-gateway :8002) ─────────
 
 export interface ProvisionRequest {
@@ -1046,6 +1057,8 @@ export interface ApproveRequest {
     tenant_id: string;
     name: string;
     location?: string;
+    type?: string;
+    model?: string;
 }
 
 export async function provisionDevice(data: ProvisionRequest): Promise<ProvisionResponse> {
@@ -1088,7 +1101,7 @@ export async function fetchDevice(id: string): Promise<DeviceDTO> {
     return apiFetch<DeviceDTO>(`${GATEWAY_URL}/devices/${id}`);
 }
 
-export async function updateDevice(id: string, data: Partial<{ name: string; location: string }>): Promise<DeviceDTO> {
+export async function updateDevice(id: string, data: Record<string, any>): Promise<DeviceDTO> {
     return apiFetch<DeviceDTO>(`${GATEWAY_URL}/devices/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),

@@ -1,11 +1,13 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -261,44 +263,174 @@ func (h *GatewayHandlers) GetDevice(w http.ResponseWriter, r *http.Request) {
 // ─── Update Device ──────────────────────────────────────────────────────────
 
 type updateDeviceRequest struct {
-	Name     *string `json:"name"`
-	Location *string `json:"location"`
-	Status   *string `json:"status"`
+	Name          *string   `json:"name"`
+	Location      *string   `json:"location"`
+	Status        *string   `json:"status"`
+	Model         *string   `json:"model"`
+	OpenRelayMs   *int      `json:"open_relay_ms"`
+	Timezone      *string   `json:"timezone"`
+	VerifyMethods *[]string `json:"verify_methods"`
+	VerifyLogic   *string   `json:"verify_logic"`
+}
+
+// updateDeviceSQL builds the UPDATE statement + args for a device row,
+// optionally scoped to a tenant. When scopeTenantID is empty the update
+// hits any row by id (used by the sysadmin global handler).
+func updateDeviceSQL(id string, req updateDeviceRequest, scopeTenantID string) (string, []any) {
+	query := `UPDATE dm3_devices.devices SET
+			name = COALESCE($2, name),
+			location = COALESCE($3, location),
+			status = COALESCE($4, status),
+			model = COALESCE($5, model),
+			open_relay_ms = COALESCE($6, open_relay_ms),
+			timezone = COALESCE($7, timezone),
+			verify_methods = COALESCE($8, verify_methods),
+			verify_logic = COALESCE($9, verify_logic),
+			updated_at = now()
+		 WHERE id = $1::uuid`
+	args := []any{
+		id,
+		req.Name,
+		req.Location,
+		req.Status,
+		req.Model,
+		req.OpenRelayMs,
+		req.Timezone,
+		req.VerifyMethods,
+		req.VerifyLogic,
+	}
+	if scopeTenantID != "" {
+		query += " AND tenant_id = $10::uuid"
+		args = append(args, scopeTenantID)
+	}
+	query += ` RETURNING ` + deviceColumns
+	return query, args
+}
+
+func (h *GatewayHandlers) decodeUpdateDevice(w http.ResponseWriter, r *http.Request) (updateDeviceRequest, bool) {
+	var req updateDeviceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		return req, false
+	}
+	if req.Status != nil && !models.IsValidDeviceStatus(*req.Status) {
+		httputil.Error(w, http.StatusBadRequest, "invalid status: must be online, offline, or warning")
+		return req, false
+	}
+	if req.VerifyLogic != nil && *req.VerifyLogic != "or" && *req.VerifyLogic != "and" {
+		httputil.Error(w, http.StatusBadRequest, "invalid verify_logic: must be 'or' or 'and'")
+		return req, false
+	}
+	return req, true
 }
 
 func (h *GatewayHandlers) UpdateDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
-	var req updateDeviceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	if req.Status != nil && !models.IsValidDeviceStatus(*req.Status) {
-		httputil.Error(w, http.StatusBadRequest, "invalid status: must be online, offline, or warning")
+	req, ok := h.decodeUpdateDevice(w, r)
+	if !ok {
 		return
 	}
 
-	query := `UPDATE dm3_devices.devices SET
-			name = COALESCE($2, name),
-			location = COALESCE($3, location),
-			status = COALESCE($4, status),
-			updated_at = now()
-		 WHERE id = $1::uuid`
-	args := []any{id, req.Name, req.Location, req.Status}
-	if cid != "" {
-		query += " AND tenant_id = $5::uuid"
-		args = append(args, cid)
-	}
-	query += ` RETURNING ` + deviceColumns
-
+	query, args := updateDeviceSQL(id, req, cid)
 	d, err := scanDevice(h.db.Pool.QueryRow(r.Context(), query, args...))
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
 	}
 	h.audit.LogFromRequest(r, "device.update", "device", d.ID, d.Name, "success", nil, d)
+	h.pushDeviceConfig(r.Context(), d)
+	httputil.JSON(w, http.StatusOK, d)
+}
+
+// pushDeviceConfig publishes the current editable device settings to the
+// device's MQTT cfg topic so running firmware applies the change without
+// waiting for a full reconnect. Best-effort: errors are logged, not
+// returned — the HTTP response for the update should still succeed even
+// if the device is offline or MQTT is flaky.
+func (h *GatewayHandlers) pushDeviceConfig(ctx context.Context, d models.Device) {
+	if h.mqtt == nil || d.TenantID == "" || d.DeviceID == "" {
+		return
+	}
+
+	// Flat payload matching the fields editable on the EditDevicePage.
+	// Firmware authors map these to their local equivalents. See
+	// docs/architecture/mqtt-protocol.md §7.2 for context — this is a
+	// targeted settings push, not a cfg.full replacement.
+	payload := map[string]any{
+		"device_id":      d.DeviceID,
+		"name":           d.Name,
+		"location":       d.Location,
+		"model":          d.Model,
+		"open_relay_ms":  d.OpenRelayMs,
+		"timezone":       d.Timezone,
+		"verify_methods": d.VerifyMethods,
+		"verify_logic":   d.VerifyLogic,
+	}
+	dataBytes, err := json.Marshal(payload)
+	if err != nil {
+		slog.Error("pushDeviceConfig: marshal data", "error", err, "device_id", d.DeviceID)
+		return
+	}
+
+	envelope := MQTTEnvelope{
+		Version: 1,
+		ID:      generateUUID(),
+		TS:      time.Now().UnixMilli(),
+		Src:     "server:device-gateway",
+		Type:    "cfg.device_update",
+		Data:    dataBytes,
+	}
+	envBytes, err := json.Marshal(envelope)
+	if err != nil {
+		slog.Error("pushDeviceConfig: marshal envelope", "error", err, "device_id", d.DeviceID)
+		return
+	}
+
+	topic := fmt.Sprintf("dm/%s/device/%s/cfg", d.TenantID, d.DeviceID)
+	if err := h.mqtt.Publish(ctx, topic, 2, envBytes); err != nil {
+		slog.Error("pushDeviceConfig: mqtt publish failed",
+			"error", err, "topic", topic, "device_id", d.DeviceID)
+		return
+	}
+	slog.Info("pushDeviceConfig: sent",
+		"device_id", d.DeviceID, "tenant_id", d.TenantID, "topic", topic)
+}
+
+// ─── Get / Update Device (system admin, cross-tenant) ───────────────────────
+
+// GetDeviceGlobal handles GET /api/v1/gateway/system/devices/{id}
+// — returns a device by id regardless of tenant. System admin only.
+func (h *GatewayHandlers) GetDeviceGlobal(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	query := `SELECT ` + deviceColumns + ` FROM dm3_devices.devices WHERE id = $1::uuid`
+	d, err := scanDevice(h.db.Pool.QueryRow(r.Context(), query, id))
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "device not found")
+		return
+	}
+	httputil.JSON(w, http.StatusOK, d)
+}
+
+// UpdateDeviceGlobal handles PUT /api/v1/gateway/system/devices/{id}
+// — updates any device regardless of tenant. System admin only.
+func (h *GatewayHandlers) UpdateDeviceGlobal(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	req, ok := h.decodeUpdateDevice(w, r)
+	if !ok {
+		return
+	}
+
+	query, args := updateDeviceSQL(id, req, "")
+	d, err := scanDevice(h.db.Pool.QueryRow(r.Context(), query, args...))
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "device not found")
+		return
+	}
+	h.audit.LogFromRequest(r, "device.update", "device", d.ID, d.Name, "success", nil, d)
+	h.pushDeviceConfig(r.Context(), d)
 	httputil.JSON(w, http.StatusOK, d)
 }
 
@@ -448,13 +580,38 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	page, limit := parsePagination(r)
 
+	// dm3_access.access_events schema:
+	//   id, tenant_id, time, access_point_id, door_id, user_id,
+	//   user_name, credential_type, direction, decision, reason,
+	//   confidence, photo_ref, temperature, decided_locally, metadata
+	// There is no device_id, event_type, or method column — the Live
+	// Events page should treat them as absent and fall back to display
+	// defaults. user_id / door_id are uuids; we cast to text in the
+	// SELECT so COALESCE to '' works.
+	//
+	// LEFT JOIN identity tables to enrich each row with the person's
+	// department and primary active card. LIMIT 1 subquery picks the
+	// oldest active card as the "primary" — good enough for a monitoring
+	// display; a future refinement would look up the credential that
+	// actually triggered the event if the consumer stores it.
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, tenant_id, device_id, event_type, COALESCE(user_id,''), COALESCE(user_name,''),
-			COALESCE(method,''), COALESCE(door_id,''), COALESCE(direction,''), COALESCE(decision,''),
-			COALESCE(reason,''), confidence, time
-		 FROM dm3_access.access_events
-		 WHERE tenant_id = $1::uuid
-		 ORDER BY time DESC LIMIT $2 OFFSET $3`,
+		`SELECT ae.id::text, ae.tenant_id::text,
+			COALESCE(ae.user_id::text,''), COALESCE(ae.user_name,''),
+			COALESCE(ae.credential_type,''), COALESCE(ae.door_id::text,''),
+			COALESCE(ae.direction,''), ae.decision,
+			COALESCE(ae.reason,''), COALESCE(ae.confidence, 0), ae.time,
+			COALESCE(dep.name,''), COALESCE(c.value,'')
+		 FROM dm3_access.access_events ae
+		 LEFT JOIN dm3_identity.users u ON u.id = ae.user_id
+		 LEFT JOIN dm3_identity.departments dep ON dep.id = u.department_id
+		 LEFT JOIN LATERAL (
+			 SELECT value FROM dm3_identity.credentials
+			 WHERE user_id = u.id AND type = 'card' AND status = 'active'
+			 ORDER BY created_at ASC
+			 LIMIT 1
+		 ) c ON true
+		 WHERE ae.tenant_id = $1::uuid
+		 ORDER BY ae.time DESC LIMIT $2 OFFSET $3`,
 		cid, limit, (page-1)*limit)
 	if err != nil {
 		slog.Error("ListEvents: query failed", "error", err)
@@ -466,23 +623,37 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	events := []map[string]any{}
 	for rows.Next() {
 		var e struct {
-			ID, TenantID, DeviceID, EventType, UserID, UserName string
-			Method, DoorID, Direction, Decision, Reason         string
-			Confidence                                          float64
-			Time                                                interface{}
+			ID, TenantID, UserID, UserName              string
+			CredentialType, DoorID, Direction, Decision string
+			Reason                                      string
+			Confidence                                  float64
+			Time                                        interface{}
+			Department, CardID                          string
 		}
-		if err := rows.Scan(&e.ID, &e.TenantID, &e.DeviceID, &e.EventType, &e.UserID, &e.UserName,
-			&e.Method, &e.DoorID, &e.Direction, &e.Decision, &e.Reason, &e.Confidence, &e.Time); err != nil {
+		if err := rows.Scan(
+			&e.ID, &e.TenantID, &e.UserID, &e.UserName,
+			&e.CredentialType, &e.DoorID, &e.Direction, &e.Decision,
+			&e.Reason, &e.Confidence, &e.Time,
+			&e.Department, &e.CardID,
+		); err != nil {
 			slog.Error("ListEvents: scan failed", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		events = append(events, map[string]any{
-			"id": e.ID, "tenant_id": e.TenantID, "device_id": e.DeviceID,
-			"event_type": e.EventType, "user_id": e.UserID, "user_name": e.UserName,
-			"method": e.Method, "door_id": e.DoorID, "direction": e.Direction,
-			"decision": e.Decision, "reason": e.Reason, "confidence": e.Confidence,
-			"time": e.Time,
+			"id":              e.ID,
+			"tenant_id":       e.TenantID,
+			"user_id":         e.UserID,
+			"user_name":       e.UserName,
+			"credential_type": e.CredentialType,
+			"door_id":         e.DoorID,
+			"direction":       e.Direction,
+			"decision":        e.Decision,
+			"reason":          e.Reason,
+			"confidence":      e.Confidence,
+			"time":            e.Time,
+			"department":      e.Department,
+			"card_id":         e.CardID,
 		})
 	}
 	httputil.JSON(w, http.StatusOK, events)

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Search, Monitor, Camera, Cpu, Settings, Terminal, Gauge } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, AppModal, Label, Select, Tabs, TabsList, TabsTrigger, TabsContent } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
@@ -489,6 +490,7 @@ function TerminalConfigSection({ config, onChange, disabled }: {
 // --- Main Page ---
 
 export function DevicesPage() {
+  const navigate = useNavigate();
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -741,7 +743,7 @@ export function DevicesPage() {
                     {device.firmware_version ?? '—'}
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="sm" title="Settings" onClick={() => handleEditOpen(device)} data-testid={`device-button-edit-${device.device_id || device.id}`}>
+                    <Button variant="ghost" size="sm" title="Edit" onClick={() => navigate(`/devices/${device.id}/edit`)} data-testid={`device-button-edit-${device.device_id || device.id}`}>
                       <Settings size={16} />
                     </Button>
                   </TableCell>

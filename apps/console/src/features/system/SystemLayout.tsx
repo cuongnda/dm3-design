@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { Building2, Settings, LogOut, Smartphone, HardDrive, LayoutDashboard, Users, Package, FileText } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
-import { fetchPendingDevices } from '@/lib/api';
+import { usePendingDevices } from '@/lib/hooks';
 import { useTranslation } from 'react-i18next';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
@@ -22,15 +21,8 @@ export function SystemLayout() {
   const logout = useAuthStore((s) => s.logout);
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
-  const [pendingCount, setPendingCount] = useState(0);
-
-  useEffect(() => {
-    fetchPendingDevices().then((d) => setPendingCount(d.length)).catch(() => {});
-    const iv = setInterval(() => {
-      fetchPendingDevices().then((d) => setPendingCount(d.length)).catch(() => {});
-    }, 30000);
-    return () => clearInterval(iv);
-  }, []);
+  const { data: pendingDevices = [] } = usePendingDevices();
+  const pendingCount = pendingDevices.length;
 
   const handleLogout = () => {
     logout();

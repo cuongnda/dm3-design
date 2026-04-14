@@ -479,6 +479,7 @@ func (h *IdentityHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 		"name":      req.FirstName + " " + req.LastName,
 		"email":     req.Email,
 	})
+	h.publishPersonChanged(companyID, userID, "user.create")
 	httputil.JSON(w, http.StatusCreated, map[string]interface{}{
 		"id":         userID,
 		"account_id": accountID,
@@ -628,6 +629,7 @@ func (h *IdentityHandlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		"user_id":   userID,
 		"tenant_id": companyID,
 	})
+	h.publishPersonChanged(companyID, userID, "user.update")
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "user updated successfully"})
 }
 
@@ -659,6 +661,7 @@ func (h *IdentityHandlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		"user_id":   userID,
 		"tenant_id": companyID,
 	})
+	h.publishPersonChanged(companyID, userID, "user.delete")
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "user deleted successfully"})
 }
 

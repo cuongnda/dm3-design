@@ -132,14 +132,66 @@ func (h *MQTTHandler) Handle(topic string, payload []byte) {
 		slog.Error("nats publish failed", "subject", natsSubject, "error", err)
 	}
 
+	// Enrich access events with identity context so the live monitoring
+	// page can show name / department / card without an N+1 fetch per row.
+	// We merge fields into env.Data (JSON object) and broadcast the
+	// augmented payload. Non-access events pass through untouched.
+	broadcastData := env.Data
+	if strings.HasPrefix(env.Type, "access.") {
+		broadcastData = h.enrichAccessData(ctx, env.Data)
+	}
+
 	// Broadcast to WebSocket hub
 	h.hub.Broadcast(WSEvent{
 		Type:     env.Type,
 		DeviceID: pt.DeviceID,
 		TenantID: pt.TenantID,
-		Data:     env.Data,
+		Data:     broadcastData,
 		Time:     time.UnixMilli(env.TS),
 	})
+}
+
+// enrichAccessData looks up the acting user's department and primary
+// card from dm3_identity and merges those fields into the JSON payload
+// as `department` and `card_id`. Called on every access event, so it's
+// kept cheap — a single LEFT JOIN query with a LIMIT 1 subquery. If
+// the lookup fails or the user isn't found, the original payload is
+// returned unchanged.
+func (h *MQTTHandler) enrichAccessData(ctx context.Context, data json.RawMessage) json.RawMessage {
+	if len(data) == 0 {
+		return data
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		return data
+	}
+	userID, _ := m["user_id"].(string)
+	if userID == "" || !uuidRegex.MatchString(userID) {
+		return data
+	}
+	var department, cardID string
+	err := h.db.Pool.QueryRow(ctx,
+		`SELECT COALESCE(dep.name,''), COALESCE(c.value,'')
+		 FROM dm3_identity.users u
+		 LEFT JOIN dm3_identity.departments dep ON dep.id = u.department_id
+		 LEFT JOIN LATERAL (
+			 SELECT value FROM dm3_identity.credentials
+			 WHERE user_id = u.id AND type = 'card' AND status = 'active'
+			 ORDER BY created_at ASC
+			 LIMIT 1
+		 ) c ON true
+		 WHERE u.id = $1::uuid`, userID,
+	).Scan(&department, &cardID)
+	if err != nil {
+		return data
+	}
+	m["department"] = department
+	m["card_id"] = cardID
+	out, err := json.Marshal(m)
+	if err != nil {
+		return data
+	}
+	return out
 }
 
 func (h *MQTTHandler) handleEvent(ctx context.Context, pt ParsedTopic, env MQTTEnvelope) {

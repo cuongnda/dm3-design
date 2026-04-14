@@ -45,7 +45,267 @@ Device Boot → TLS Handshake → CONNECT(username=device_id, password=JWT)
 
 ---
 
-## 2. Topic Hierarchy
+## 2. Device Bootstrap & Provisioning
+
+Before a device has a JWT it cannot connect as `device:{rid}`. It must first
+go through the bootstrap handshake to obtain credentials. Until a device
+completes this flow it will **not** appear in the "pending devices" list,
+and any heartbeats published outside the flow are silently dropped.
+
+Firmware must mirror what the simulator (`simulator/src/dm3_simulator/device.py`) does.
+Verified end-to-end against the simulator on 2026-04-13.
+
+### 2.1 Bootstrap MQTT credentials
+
+Before the device has a JWT it connects with *bootstrap* credentials:
+
+```
+username: bootstrap:{rid}
+password: HMAC-SHA256(BOOTSTRAP_SECRET, "{rid}:{unix_minute}")  // hex
+```
+
+- `rid` = device RID, max 20 chars (DB constraint).
+- `unix_minute` = `floor(unix_time_seconds / 60)`. Regenerate on each reconnect —
+  the window is short, so the device clock must be roughly in sync.
+- `BOOTSTRAP_SECRET` default (dev): `dm3-bootstrap-v1-dev-secret`.
+  Production value comes from the backend env var `BOOTSTRAP_SECRET`.
+
+Reference: `simulator/src/dm3_simulator/device.py:176-189`,
+`backend/internal/config/config.go` (`BootstrapSecret`).
+
+### 2.2 Subscribe to the response topic FIRST
+
+Before publishing, subscribe:
+
+```
+dm/bootstrap/{rid}/response        QoS 1
+```
+
+The approval response (§2.5) arrives here, possibly minutes or hours later.
+Do not unsubscribe until you have received `device.approved`.
+
+### 2.3 Publish registration
+
+```
+topic:   dm/bootstrap/register   QoS 1
+payload: JSON, UTF-8, no whitespace, keys sorted alphabetically
+```
+
+Payload fields (all required):
+
+| Field | Type | Notes |
+|---|---|---|
+| `type` | string | constant `"device.register"` |
+| `rid` | string | device RID |
+| `device_type` | string | canonical model name (see §2.3.1). Exact match, case-sensitive. Unknown values are rejected with `device.register_nack`. |
+| `firmware_version` | string | e.g. `"fw-1.2.3"` |
+| `hardware_fingerprint` | object | `{android_id, mac_address, model, firmware_version}` — may carry `app_signature_hash` |
+| `nonce` | string | fresh UUIDv4 per request; replay-checked against `dm3_devices.used_nonces` |
+| `timestamp` | int | current unix seconds |
+| `hmac` | string | see below |
+
+#### 2.3.1 Accepted `device_type` values
+
+The `device_type` field must be one of the canonical model names below —
+**exact match, lowercase, no aliases, no case folding**. If the device
+firmware uses a different casing or format (`"DQMiniPlus"`, `"ICU-300N"`,
+`"dqmini+"`), it must be updated to emit the canonical string.
+Unrecognized values are rejected at the MQTT bootstrap handler with:
+
+```json
+{
+  "type": "device.register_nack",
+  "status": "error",
+  "message": "unknown device_type \"...\"; must be one of: ..."
+}
+```
+
+Source of truth:
+`backend/internal/gateway/provisioning.go` (`validDeviceModels`) and the
+`chk_device_model` / `chk_device_type` CHECK constraints in
+`backend/pkg/db/migrations/000001_initial.up.sql`.
+
+| `device_type` | Resolved top-level `type` |
+|---|---|
+| `ra08` | terminal |
+| `ba8300` | terminal |
+| `df970` | terminal |
+| `dq200` | terminal |
+| `dq8500` | terminal |
+| `icu970` | terminal |
+| `icu300n` | terminal |
+| `ipopx` | terminal |
+| `itouch_pop_x` | terminal |
+| `icu400` | terminal |
+| `de960` | terminal |
+| `de950` | terminal |
+| `dqmini_plus` | terminal |
+| `camera_dc` | camera |
+| `cctv` | camera |
+| `door_sensor` | sensor |
+
+When `ApprovePending` persists the device it stores the canonical model
+in `devices.model` and the resolved top-level type in `devices.type`.
+
+**HMAC computation (critical — byte-exact):**
+
+1. Build the payload object WITHOUT the `hmac` field.
+2. Serialize as JSON with:
+   - keys sorted alphabetically,
+   - compact separators `,` and `:` (no spaces),
+   - UTF-8.
+   This must match Go's `json.Marshal` output byte-for-byte.
+3. `hmac = hex(HMAC_SHA256(BOOTSTRAP_SECRET, canonical_json))`.
+4. Add the `hmac` field and publish the full object
+   (also serialized with sorted keys / compact separators).
+
+The server recomputes by stripping `hmac`, re-marshalling with Go's
+`json.Marshal`, and comparing. Any stray whitespace, key order, or
+field-rename will fail verification silently (the row is rejected before
+it reaches `pending_registrations`).
+
+Reference: `simulator/src/dm3_simulator/device.py:211-239`,
+`backend/internal/gateway/provisioning.go:708-714`.
+
+**Optional: app signature.** If the backend is configured with
+`KNOWN_APP_SIGNATURES`, include `hardware_fingerprint.app_signature_hash`
+(hex-encoded SHA-256 of the APK signing cert). Devices whose hash isn't
+on the allow-list land in pending with `signature_verified = false` and
+require manual approval.
+
+### 2.4 Server responds with `register_ack`
+
+Topic: `dm/bootstrap/{rid}/response`
+
+```json
+{
+  "type": "device.register_ack",
+  "rid": "...",
+  "status": "pending_approval"
+}
+```
+
+At this point the device exists in `dm3_devices.pending_registrations`
+and is visible to the sysadmin console at
+`GET /api/v1/gateway/devices/pending`.
+
+The device must now **stay subscribed and wait**. Do not retry the
+registration — the `nonce` replay check will reject the second attempt.
+
+### 2.5 Sysadmin approves
+
+```
+POST /api/v1/gateway/devices/pending/{id}/approve
+Authorization: Bearer <sysadmin JWT>
+Body: { "tenant_id": "<uuid>", "name": "...", "location": "..." }
+```
+
+Note: the field is `tenant_id`, not `company_id`.
+
+Gateway publishes on `dm/bootstrap/{rid}/response`:
+
+```json
+{
+  "type": "device.approved",
+  "rid": "840107",
+  "status": "approved",
+  "credentials": {
+    "mqtt_username": "device:840107",
+    "mqtt_token": "<JWT, 24h TTL>",
+    "token_expires_at": "2026-04-14T03:07:09Z",
+    "refresh_url": "/api/v1/gateway/devices/refresh-token"
+  },
+  "company": { "id": "<tenant uuid>" },
+  "config": {
+    "heartbeat_interval_sec": 30,
+    "sync_url": "/api/v1",
+    "tenant_id": "<tenant uuid>"
+  }
+}
+```
+
+**The tenant_id is a UUID.** Do not hardcode company codes like `"DUALI"`.
+The firmware must persist `company.id` from this message and use it in
+every subsequent MQTT topic.
+
+### 2.6 Reconnect as a provisioned device
+
+Disconnect the bootstrap MQTT session. Reconnect with:
+
+```
+username: device:{rid}
+password: <mqtt_token from §2.5>
+```
+
+The device now uses the full topic hierarchy documented in §3 below.
+`{tenant_id}` is the UUID from `company.id` in §2.5. Device-gateway
+subscribes to `dm/+/device/+/sta` etc.; the `+` wildcard matches one
+level, so any string works syntactically, but the handler will reject
+heartbeats for a `(tenant_id, device_id)` pair it does not know about.
+
+### 2.7 Token refresh
+
+The JWT expires in 24h. Before expiry:
+
+```
+POST /api/v1/gateway/devices/refresh-token
+Body: { "rid": "...", "token": "<current jwt>" }
+```
+
+This endpoint is on the gateway HTTP API and does NOT require a user
+JWT. It accepts expired tokens within a 7-day grace window to tolerate
+offline devices (see `backend/internal/gateway/provisioning.go:588`).
+
+### 2.8 Legacy topics (NOT supported)
+
+For firmware migrating from DM2:
+
+| Old | New |
+|---|---|
+| `/topic/online` | `dm/{tenant_id}/device/{rid}/sta` |
+| `/topic/auth_start/{rid}` | `dm/{tenant_id}/device/{rid}/evt` |
+| `/topic/auth_stepN/{rid}` | single `evt` publish with payload `{type: "access_event", ...}` |
+| `/topic/certificate/{rid}` | `dm/bootstrap/{rid}/response` |
+
+Device-gateway does not subscribe to `/topic/*`.
+
+### 2.9 Verifying against the simulator
+
+```bash
+# 1. Start stack: postgres-db-timescale, emqx, nats, device-gateway, auth-svc
+# 2. Start simulator:
+cd simulator && .venv/bin/dm3-simulator run \
+    --devices 0 --broker mqtt://localhost:1884 --api-port 9090
+
+# 3. Trigger a bootstrap:
+curl -X POST http://localhost:9090/api/simulate/bootstrap \
+  -H 'Content-Type: application/json' \
+  -d '{"rid":"sim-test-01","device_type":"terminal"}'
+
+# 4. Check pending list as sysadmin:
+TOKEN=$(curl -s -X POST http://localhost:8005/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"sysadmin@duali.com","password":"admin123"}' \
+  | jq -r .access_token)
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8002/api/v1/gateway/devices/pending
+
+# 5. Approve — PENDING_ID from step 4:
+curl -X POST "http://localhost:8002/api/v1/gateway/devices/pending/$PENDING_ID/approve" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"tenant_id":"00000000-0000-0000-0000-000000000001","name":"Sim Test"}'
+
+# 6. Confirm online:
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8002/api/v1/gateway/devices | jq '.[] | select(.device_id=="sim-test-01")'
+```
+
+Full E2E script: `backend/scripts/e2e-provisioning-test.sh`.
+
+---
+
+## 3. Topic Hierarchy
 
 ```
 dm/{tenant_id}/
@@ -76,7 +336,7 @@ dm/{tenant_id}/
 
 ---
 
-## 3. Message Envelope
+## 4. Message Envelope
 
 All messages follow a standard envelope format:
 
@@ -102,7 +362,7 @@ All messages follow a standard envelope format:
 
 ---
 
-## 4. Device Events (`evt`)
+## 5. Device Events (`evt`)
 
 ### 4.1 Access Log Event (Offline-First)
 
@@ -231,7 +491,7 @@ All messages follow a standard envelope format:
 
 ---
 
-## 5. Device Status (`sta`)
+## 6. Device Status (`sta`)
 
 **Topic:** `dm/{tid}/device/{did}/sta`
 **QoS:** 1
@@ -286,7 +546,7 @@ All messages follow a standard envelope format:
 
 ---
 
-## 6. Commands (`cmd`)
+## 7. Commands (`cmd`)
 
 **Topic:** `dm/{tid}/device/{did}/cmd`
 **QoS:** 2
@@ -398,7 +658,7 @@ All messages follow a standard envelope format:
 
 ---
 
-## 7. Configuration (`cfg`)
+## 8. Configuration (`cfg`)
 
 **Topic:** `dm/{tid}/device/{did}/cfg`
 **QoS:** 2
@@ -466,7 +726,80 @@ Sent after device first connects or on major config change.
 }
 ```
 
-### 7.3 User Database Sync
+### 7.3 Device Settings Update (`cfg.device_update`)
+
+Pushed by `device-gateway` immediately after a successful
+`PUT /api/v1/gateway/devices/{id}` (company-scoped) or
+`PUT /api/v1/gateway/system/devices/{id}` (sysadmin). Carries the
+flat set of fields editable on the console EditDevicePage so running
+firmware can apply the change without waiting for a reconnect or a
+full `cfg.full` resync.
+
+- **Topic:** `dm/{tid}/device/{did}/cfg`
+- **QoS:** 2 (exactly-once — misapplying a config is worse than losing a heartbeat)
+- **Retain:** false
+- **Direction:** server → device
+- **Best-effort:** a publish failure is logged but does NOT fail the HTTP update.
+  Offline devices will pick up the change on their next full sync
+  (`cfg.person_sync` / `cfg.full`).
+
+```json
+{
+  "version": 1,
+  "id": "b7f3d2a1-4c8e-11ef-9c4d-0242ac120002",
+  "ts": 1776064500123,
+  "src": "server:device-gateway",
+  "type": "cfg.device_update",
+  "data": {
+    "device_id": "840107",
+    "name": "DQ Mini+ Demo",
+    "location": "Office Staff",
+    "model": "dqmini_plus",
+    "open_relay_ms": 3000,
+    "timezone": "Asia/Ho_Chi_Minh",
+    "verify_methods": ["face", "nfc", "pin"],
+    "verify_logic": "or"
+  }
+}
+```
+
+**`data` fields** (all always present — no nulls, no omitted keys):
+
+| Field | Type | Notes |
+|---|---|---|
+| `device_id` | string | Device RID — mirrors the topic. Firmware SHOULD compare to its local RID and drop the message if mismatched. |
+| `name` | string | Display name. Empty string if unset. |
+| `location` | string | Free-form location. Empty string if unset. |
+| `model` | string | Canonical model name (see §2.3.1). Empty string if unset. |
+| `open_relay_ms` | int | Door unlock duration in milliseconds. Column default 3000. |
+| `timezone` | string | IANA TZ name. Column default `"Asia/Ho_Chi_Minh"`. |
+| `verify_methods` | string[] | Enabled verification methods. Values: `face`, `fingerprint`, `iris`, `nfc`, `nfc_phone`, `pin`, `plate_number`, `qr`, `vnid`. Empty array if none. |
+| `verify_logic` | string | `"or"` or `"and"` — how multiple methods combine when two or more are enabled. Column default `"or"`. |
+
+Because every field is always present, firmware cannot distinguish
+"unset" from "explicitly cleared." If you need that distinction later
+(e.g. to avoid overwriting an unrelated field), switch to
+`cfg.patch` (§7.2) for targeted updates.
+
+**Optional ack.** Firmware MAY publish an acknowledgement on
+`dm/{tid}/device/{did}/cfg/ack`:
+
+```json
+{
+  "type": "cfg.device_update.ack",
+  "ref": "<envelope id from the update>",
+  "status": "ok",
+  "data": { "applied_at": 1776064500456 }
+}
+```
+
+`device-gateway` currently receives messages on `cfg/ack` but does not
+yet process `cfg.device_update.ack` specifically. Producing the ack is
+still useful for future observability and is cheap.
+
+Source of truth: `backend/internal/gateway/handlers.go` → `pushDeviceConfig`.
+
+### 7.4 User Database Sync
 
 For offline/hybrid mode — push user credentials to device local storage.
 
@@ -514,7 +847,7 @@ For offline/hybrid mode — push user credentials to device local storage.
 }
 ```
 
-### 7.4 Blacklist Push (Priority Sync)
+### 7.5 Blacklist Push (Priority Sync)
 
 Real-time blacklist updates pushed to devices with highest priority. Device must process immediately.
 
@@ -544,7 +877,7 @@ Real-time blacklist updates pushed to devices with highest priority. Device must
 **QoS:** 2 (exactly-once — critical for security)
 **Priority:** Immediate — device must process before next access decision
 
-### 7.5 Access Rules Sync
+### 7.6 Access Rules Sync
 
 Push access rules to devices for local decision-making. The payload encodes:
 - **`passage_time`**: when the AP is freely open for everyone (no credential check). Highest priority — device enforces autonomously.
@@ -609,7 +942,7 @@ Device logic: if `passage_time` is active for the current time → open for all 
 }
 ```
 
-### 7.6 Firmware Update
+### 7.7 Firmware Update
 
 ```json
 {
@@ -628,7 +961,7 @@ Device logic: if `passage_time` is active for the current time → open for all 
 
 ---
 
-## 8. Offline-First Architecture & Sync
+## 9. Offline-First Architecture & Sync
 
 > **Offline is the DEFAULT operating mode.** Devices always make access decisions locally using their synced user DB and access rules. Connectivity adds sync capabilities but is never required for access decisions.
 
@@ -718,7 +1051,7 @@ Local SQLite Database on Device:
 
 ---
 
-## 9. Message Flow Diagrams
+## 10. Message Flow Diagrams
 
 ### 9.1 Normal Access Flow (Offline-First — Local Decision)
 
@@ -787,7 +1120,7 @@ Guard Station              Server                 EMQX                  All Devi
 
 ---
 
-## 10. QoS & Reliability Matrix
+## 11. QoS & Reliability Matrix
 
 | Message Type | QoS | Retain | Priority | Timeout | Retry |
 |-------------|-----|--------|----------|---------|-------|
@@ -805,7 +1138,7 @@ Guard Station              Server                 EMQX                  All Devi
 
 ---
 
-## 11. Security Considerations
+## 12. Security Considerations
 
 1. **TLS 1.3** mandatory for all MQTT connections
 2. **JWT rotation**: Device tokens expire every 24h, auto-refreshed via `cfg` topic
@@ -818,7 +1151,7 @@ Guard Station              Server                 EMQX                  All Devi
 
 ---
 
-## 12. Error Codes
+## 13. Error Codes
 
 | Code | Description |
 |------|-------------|
@@ -835,7 +1168,7 @@ Guard Station              Server                 EMQX                  All Devi
 
 ---
 
-## 13. Bandwidth Estimation
+## 14. Bandwidth Estimation
 
 | Scenario | Devices | Events/day | Bandwidth |
 |----------|---------|-----------|-----------|

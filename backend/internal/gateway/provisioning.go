@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -39,11 +40,23 @@ func NewProvisioningHandlers(database *db.DB, mqttClient *mqtt.Client, cfg *conf
 // ─── QR Flow ─────────────────────────────────────────────────────────────────
 
 type provisionRequest struct {
-	DeviceID string `json:"device_id"`
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	TenantID string `json:"tenant_id"`
-	Location string `json:"location"`
+	DeviceID string         `json:"device_id"`
+	Name     string         `json:"name"`
+	Type     string         `json:"type"`
+	TenantID string         `json:"tenant_id"`
+	Location string         `json:"location"`
+	Config   *deviceConfig  `json:"config,omitempty"`
+}
+
+// deviceConfig mirrors the "config" object sent by the console
+// CreateDevicePage / EditDevicePage. All fields are optional; nil means
+// "don't change".
+type deviceConfig struct {
+	Model         *string  `json:"model,omitempty"`
+	OpenRelayMs   *int     `json:"open_relay_ms,omitempty"`
+	Timezone      *string  `json:"timezone,omitempty"`
+	VerifyMethods []string `json:"verify_methods,omitempty"`
+	VerifyLogic   *string  `json:"verify_logic,omitempty"`
 }
 
 type qrTokenClaims struct {
@@ -85,13 +98,48 @@ func (h *ProvisioningHandlers) ProvisionDevice(w http.ResponseWriter, r *http.Re
 		createdBy = &claims.Sub
 	}
 
+	// Unpack config — all fields optional. NULLs fall back to column
+	// defaults (open_relay_ms=3000, timezone='Asia/Ho_Chi_Minh',
+	// verify_methods='{}', verify_logic='or').
+	var (
+		model         any
+		openRelayMs   any
+		timezone      any
+		verifyMethods any
+		verifyLogic   any
+	)
+	if req.Config != nil {
+		if req.Config.Model != nil && *req.Config.Model != "" {
+			model = *req.Config.Model
+		}
+		if req.Config.OpenRelayMs != nil {
+			openRelayMs = *req.Config.OpenRelayMs
+		}
+		if req.Config.Timezone != nil && *req.Config.Timezone != "" {
+			timezone = *req.Config.Timezone
+		}
+		if req.Config.VerifyMethods != nil {
+			verifyMethods = req.Config.VerifyMethods
+		}
+		if req.Config.VerifyLogic != nil && *req.Config.VerifyLogic != "" {
+			verifyLogic = *req.Config.VerifyLogic
+		}
+	}
+
 	// Create device with status=offline (not yet connected)
 	var deviceDBID string
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_devices.devices (device_id, name, type, location, tenant_id, status)
-		 VALUES ($1, $2, $3, $4, $5::uuid, 'offline')
+		`INSERT INTO dm3_devices.devices
+		   (device_id, name, type, location, tenant_id, status,
+		    model, open_relay_ms, timezone, verify_methods, verify_logic)
+		 VALUES ($1, $2, $3, $4, $5::uuid, 'offline',
+		    $6, COALESCE($7::int, 3000),
+		    COALESCE($8::text, 'Asia/Ho_Chi_Minh'),
+		    COALESCE($9::text[], '{}'::text[]),
+		    COALESCE($10::text, 'or'))
 		 RETURNING id`,
 		req.DeviceID, req.Name, req.Type, req.Location, companyID,
+		model, openRelayMs, timezone, verifyMethods, verifyLogic,
 	).Scan(&deviceDBID)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -354,6 +402,87 @@ type approveRequest struct {
 	TenantID string `json:"tenant_id"`
 	Name     string `json:"name"`
 	Location string `json:"location"`
+	// Optional: override the auto-detected (type, model) derived from
+	// pending_registrations.device_type. When either is empty, the
+	// handler falls back to validateDeviceType(pending.device_type).
+	Type  string `json:"type,omitempty"`
+	Model string `json:"model,omitempty"`
+}
+
+// resolveApprovalTypeModel decides which (type, model) to persist for
+// an approved device. If the admin supplied explicit values in the
+// request they win (after validation); otherwise the pending row's
+// device_type is classified.
+func resolveApprovalTypeModel(req approveRequest, pendingDeviceType string) (typ, model string, err error) {
+	if req.Model != "" {
+		for _, m := range validDeviceModels {
+			if m.Model == req.Model {
+				resolved := m.Type
+				if req.Type != "" {
+					resolved = req.Type
+				}
+				switch resolved {
+				case "terminal", "controller", "camera", "sensor":
+					return resolved, m.Model, nil
+				}
+				return "", "", fmt.Errorf("invalid type %q: must be terminal, controller, camera, or sensor", resolved)
+			}
+		}
+		return "", "", fmt.Errorf("unknown model %q; see /api/v1/gateway/devices/pending for accepted values", req.Model)
+	}
+	return validateDeviceType(pendingDeviceType)
+}
+
+// validDeviceModels lists every canonical model name accepted by the
+// dm3_devices.devices CHECK constraint (chk_device_model) paired with its
+// top-level type (chk_device_type). Keep in sync with
+// backend/pkg/db/migrations/000001_initial.up.sql AND with the frontend
+// map in apps/console/src/lib/device-models.ts — the frontend Edit page
+// uses (type, model) to populate the model dropdown, so the type
+// assignment below MUST match DEVICE_TYPE_MODELS or the dropdown will
+// render empty. This is the single source of truth for `device_type`
+// values a device may send in its bootstrap payload.
+var validDeviceModels = []struct{ Model, Type string }{
+	// terminal (full-capability access control)
+	{"ra08", "terminal"},
+	{"ba8300", "terminal"},
+	{"df970", "terminal"},
+	{"dq200", "terminal"},
+	{"dq8500", "terminal"},
+	{"icu970", "terminal"},
+	// controller (face + nfc + qr + pin)
+	{"icu300n", "controller"},
+	{"ipopx", "controller"},
+	{"itouch_pop_x", "controller"},
+	{"icu400", "controller"},
+	{"dqmini_plus", "controller"},
+	// camera
+	{"camera_dc", "camera"},
+	{"cctv", "camera"},
+	// sensor / reader
+	{"door_sensor", "sensor"},
+	{"de960", "sensor"},
+	{"de950", "sensor"},
+}
+
+// validateDeviceType resolves the raw `device_type` string from the
+// bootstrap payload to a (type, model) pair. The match is exact — no
+// case folding, no alias table. Devices must send one of the canonical
+// model names listed in validDeviceModels. If the value does not match,
+// an error is returned so the caller can reject the registration with
+// a clear message instead of silently coercing it to a default.
+func validateDeviceType(raw string) (typ, model string, err error) {
+	for _, m := range validDeviceModels {
+		if raw == m.Model {
+			return m.Type, m.Model, nil
+		}
+	}
+	names := make([]string, len(validDeviceModels))
+	for i, m := range validDeviceModels {
+		names[i] = m.Model
+	}
+	return "", "", fmt.Errorf("unknown device_type %q; must be one of: %s",
+		raw, strings.Join(names, ", "))
 }
 
 // ApprovePending handles POST /api/v1/devices/pending/{id}/approve
@@ -393,28 +522,59 @@ func (h *ProvisioningHandlers) ApprovePending(w http.ResponseWriter, r *http.Req
 		assignedBy = &claims.Sub
 	}
 
-	// Update pending registration
-	_, _ = h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_devices.pending_registrations SET status = 'approved', tenant_id = $1::uuid,
-		 assigned_by = $2, reviewed_at = now() WHERE id = $3::uuid`,
-		req.TenantID, assignedBy, regID,
-	)
+	// Resolve (type, model): admin can override via request body; otherwise
+	// auto-classify from the pending row's device_type. Validate BEFORE
+	// opening the transaction so a bad value can't flip status=approved.
+	typ, model, err := resolveApprovalTypeModel(req, deviceType)
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
-	// Create device record
 	name := req.Name
 	if name == "" {
 		name = fmt.Sprintf("Device %s", rid)
 	}
+
+	// Run the UPDATE of pending_registrations and the INSERT into devices
+	// in a single transaction. Previously these were separate Pool.Exec
+	// calls, so an INSERT failure (e.g. CHECK constraint violation) left
+	// the pending row marked `approved` with no corresponding device,
+	// creating orphans that could never be reconciled.
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		slog.Error("ApprovePending: begin tx failed", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+
+	if _, err := tx.Exec(r.Context(),
+		`UPDATE dm3_devices.pending_registrations SET status = 'approved', tenant_id = $1::uuid,
+		 assigned_by = $2, reviewed_at = now() WHERE id = $3::uuid`,
+		req.TenantID, assignedBy, regID,
+	); err != nil {
+		slog.Error("ApprovePending: update pending failed", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
 	var deviceDBID string
-	err = h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO dm3_devices.devices (device_id, name, type, location, tenant_id, status, firmware_version, hardware_fingerprint, provisioned_at, provisioned_by)
-		 VALUES ($1, $2, $3, $4, $5::uuid, $9, $6, $7, now(), $8)
-		 ON CONFLICT (device_id) DO UPDATE SET status = $9, name = $2, type = $3, location = $4, tenant_id = $5::uuid, firmware_version = $6, hardware_fingerprint = $7, provisioned_at = now(), provisioned_by = $8, updated_at = now()
+	err = tx.QueryRow(r.Context(),
+		`INSERT INTO dm3_devices.devices (device_id, name, type, model, location, tenant_id, status, firmware_version, hardware_fingerprint, provisioned_at, provisioned_by)
+		 VALUES ($1, $2, $3, $10, $4, $5::uuid, $9, $6, $7, now(), $8)
+		 ON CONFLICT (device_id) DO UPDATE SET status = $9, name = $2, type = $3, model = $10, location = $4, tenant_id = $5::uuid, firmware_version = $6, hardware_fingerprint = $7, provisioned_at = now(), provisioned_by = $8, updated_at = now()
 		 RETURNING id`,
-		rid, name, deviceType, req.Location, req.TenantID, firmwareVersion, fp, assignedBy, models.DeviceStatusOnline,
+		rid, name, typ, req.Location, req.TenantID, firmwareVersion, fp, assignedBy, models.DeviceStatusOnline, model,
 	).Scan(&deviceDBID)
 	if err != nil {
 		slog.Error("ApprovePending: insert device failed", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		slog.Error("ApprovePending: commit failed", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -710,6 +870,14 @@ func (h *BootstrapMQTTHandler) Handle(topic string, payload []byte) {
 	if !hmacValid {
 		slog.Warn("bootstrap: HMAC verification failed", "rid", msg.RID)
 		h.publishResponse(ctx, msg.RID, "device.register_nack", "error", "HMAC verification failed")
+		return
+	}
+
+	// 1b. Validate device_type against the canonical model list. Reject
+	// unknown values early so they never enter pending_registrations.
+	if _, _, err := validateDeviceType(msg.DeviceType); err != nil {
+		slog.Warn("bootstrap: invalid device_type", "rid", msg.RID, "device_type", msg.DeviceType)
+		h.publishResponse(ctx, msg.RID, "device.register_nack", "error", err.Error())
 		return
 	}
 

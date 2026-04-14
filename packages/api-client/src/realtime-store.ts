@@ -16,6 +16,9 @@ export interface RealtimeAccessEvent {
   credentialType?: string;
   direction?: string;
   confidence?: number;
+  // Server-enriched via device-gateway mqtt_handler.enrichAccessData.
+  department?: string;
+  cardId?: string;
 }
 
 // Named RealtimeDeviceStatus to avoid collision with DeviceStatus const in types/enums
@@ -170,7 +173,7 @@ export function transformAccessEvent(data: AccessEventData, event: WSEvent): Rea
     time: new Date(event.time),
     deviceId: event.device_id,
     companyId: event.company_id,
-    personName: data.person_name,
+    personName: data.person_name || data.user_name,
     doorId: data.door_id,
     doorName: data.door_id, // TODO: Map to actual door name
     decision: data.decision,
@@ -178,6 +181,8 @@ export function transformAccessEvent(data: AccessEventData, event: WSEvent): Rea
     credentialType: data.credential_type,
     direction: data.direction,
     confidence: data.confidence,
+    department: data.department || undefined,
+    cardId: data.card_id || undefined,
   };
 }
 

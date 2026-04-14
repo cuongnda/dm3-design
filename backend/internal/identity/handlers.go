@@ -58,6 +58,21 @@ func (h *IdentityHandlers) publishEvent(subject string, data any) {
 	}
 }
 
+// publishPersonChanged notifies downstream services (device-gateway) that
+// a person/credential in the given tenant has changed and any online
+// devices should re-sync. The reason field is informational only —
+// device-gateway always does a full tenant-level PushPersonSync.
+func (h *IdentityHandlers) publishPersonChanged(tenantID, userID, reason string) {
+	if tenantID == "" {
+		return
+	}
+	h.publishEvent("dm3.identity.person.changed", map[string]string{
+		"tenant_id": tenantID,
+		"user_id":   userID,
+		"reason":    reason,
+	})
+}
+
 // ─── Photo Upload ────────────────────────────────────────────────────────────
 
 func (h *IdentityHandlers) UploadPhoto(w http.ResponseWriter, r *http.Request) {
@@ -147,6 +162,20 @@ func (h *IdentityHandlers) CreateCredential(w http.ResponseWriter, r *http.Reque
 		req.Status = "active"
 	}
 
+	// Default validity window. The device firmware treats a missing
+	// valid_until as "unknown" in some builds, so we always persist a
+	// concrete sentinel: today for valid_from and 3000-01-01 for
+	// valid_until. This matches the user-level effective_date /
+	// expired_date defaults in CreateUser.
+	if req.ValidFrom == nil {
+		now := time.Now().UTC()
+		req.ValidFrom = &now
+	}
+	if req.ValidUntil == nil {
+		maxDate := time.Date(3000, 1, 1, 0, 0, 0, 0, time.UTC)
+		req.ValidUntil = &maxDate
+	}
+
 	var c models.Credential
 	err := h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO dm3_identity.credentials (tenant_id, user_id, type, value, status, valid_from, valid_until, updated_at)
@@ -161,6 +190,7 @@ func (h *IdentityHandlers) CreateCredential(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	h.audit.LogFromRequest(r, "identity.credential.create", "credential", c.ID, c.Type, "success", nil, map[string]any{"type": c.Type, "user_id": userID})
+	h.publishPersonChanged(tenantID, userID, "credential.create")
 	httputil.JSON(w, http.StatusCreated, c)
 }
 
@@ -192,12 +222,20 @@ func (h *IdentityHandlers) UpdateCredential(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Backfill defaults for NULL validity after update: if the admin
+	// didn't send valid_from/valid_until AND the stored row is still
+	// NULL, snap to the same sentinels CreateCredential uses
+	// (now / 3000-01-01). An existing concrete value is never clobbered —
+	// the triple-COALESCE `incoming → existing → sentinel` picks the
+	// first non-NULL, so editing just the card value leaves expiry alone.
 	var c models.Credential
 	err := h.db.Pool.QueryRow(r.Context(),
 		`UPDATE dm3_identity.credentials SET
 			type = COALESCE(NULLIF($3,''), type), value = COALESCE(NULLIF($4,''), value),
-			status = COALESCE(NULLIF($5,''), status), valid_from = COALESCE($6, valid_from),
-			valid_until = COALESCE($7, valid_until), updated_at = now()
+			status = COALESCE(NULLIF($5,''), status),
+			valid_from = COALESCE($6, valid_from, now()),
+			valid_until = COALESCE($7, valid_until, '3000-01-01'::timestamptz),
+			updated_at = now()
 		 WHERE id = $1::uuid AND user_id = $2::uuid
 		 RETURNING id, tenant_id, user_id, type, value, status, valid_from, valid_until, created_at, updated_at`,
 		credID, userID, req.Type, req.Value, req.Status, req.ValidFrom, req.ValidUntil,
@@ -208,6 +246,7 @@ func (h *IdentityHandlers) UpdateCredential(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	h.audit.LogFromRequest(r, "identity.credential.update", "credential", c.ID, c.Type, "success", nil, req)
+	h.publishPersonChanged(c.TenantID, userID, "credential.update")
 	httputil.JSON(w, http.StatusOK, c)
 }
 
@@ -215,17 +254,20 @@ func (h *IdentityHandlers) DeleteCredential(w http.ResponseWriter, r *http.Reque
 	userID := chi.URLParam(r, "id")
 	credID := chi.URLParam(r, "credID")
 
-	tag, err := h.db.Pool.Exec(r.Context(),
-		`DELETE FROM dm3_identity.credentials WHERE id = $1::uuid AND user_id = $2::uuid`, credID, userID)
+	// RETURNING tenant_id so we can fan out a sync event without a
+	// second roundtrip to look it up.
+	var tenantID string
+	err := h.db.Pool.QueryRow(r.Context(),
+		`DELETE FROM dm3_identity.credentials
+		 WHERE id = $1::uuid AND user_id = $2::uuid
+		 RETURNING tenant_id`, credID, userID,
+	).Scan(&tenantID)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if tag.RowsAffected() == 0 {
 		httputil.Error(w, http.StatusNotFound, "credential not found")
 		return
 	}
 	h.audit.LogFromRequest(r, "identity.credential.delete", "credential", credID, credID, "success", nil, nil)
+	h.publishPersonChanged(tenantID, userID, "credential.delete")
 	w.WriteHeader(http.StatusNoContent)
 }
 

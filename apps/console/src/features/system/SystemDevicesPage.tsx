@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHeader, Button, Select, SelectOption, DataTable, type Column, AppModal } from '@dm3/ui';
 import { fetchSystemDevices, fetchCompanies, apiFetch, type CompanyDTO } from '@/lib/api';
-import { RefreshCw, Plus, Trash2, Monitor, Wifi, WifiOff, AlertTriangle, Terminal, Cpu, Camera, Gauge } from 'lucide-react';
+import { RefreshCw, Plus, Pencil, Trash2, Monitor, Wifi, WifiOff, AlertTriangle, Terminal, Cpu, Camera, Gauge } from 'lucide-react';
 
 interface SystemDevice {
   id: string;
@@ -174,9 +174,14 @@ export function SystemDevicesPage() {
       key: 'actions' as keyof SystemDevice,
       header: '',
       render: (d) => (
-        <Button variant="ghost" size="sm" title="Delete" onClick={() => handleDeleteOpen(d)} data-testid={`sysdevice-button-delete-${d.device_id}`}>
-          <Trash2 size={14} className="text-destructive" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" title="Edit" onClick={() => navigate(`/system/devices/${d.id}/edit`)} data-testid={`sysdevice-button-edit-${d.device_id}`}>
+            <Pencil size={14} className="text-muted-foreground" />
+          </Button>
+          <Button variant="ghost" size="sm" title="Delete" onClick={() => handleDeleteOpen(d)} data-testid={`sysdevice-button-delete-${d.device_id}`}>
+            <Trash2 size={14} className="text-destructive" />
+          </Button>
+        </div>
       ),
     },
   ], [tSystem, tDevices]);

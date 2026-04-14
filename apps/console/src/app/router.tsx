@@ -12,6 +12,7 @@ import { CreateCompanyPage } from '@/features/system/CreateCompanyPage';
 import { CompanyDetailPage } from '@/features/system/CompanyDetailPage';
 import { SystemDevicesPage } from '@/features/system/SystemDevicesPage';
 import { CreateDevicePage } from '@/features/system/CreateDevicePage';
+import { EditDevicePage } from '@/features/system/EditDevicePage';
 import { FirmwareListPage } from '@/features/system/FirmwareListPage';
 import { FirmwareUploadPage } from '@/features/system/FirmwareUploadPage';
 import { FirmwareDetailPage } from '@/features/system/FirmwareDetailPage';
@@ -214,6 +215,9 @@ const AutomationPage = lazy(() =>
 );
 
 // DEVICES
+const LiveEventsPage = lazy(() =>
+  import('@/features/monitoring/LiveEventsPage').then((m) => ({ default: m.LiveEventsPage }))
+);
 const DevicesPage = lazy(() =>
   import('@/features/devices/DevicesPage').then((m) => ({ default: m.DevicesPage }))
 );
@@ -305,6 +309,7 @@ export const Router = createBrowserRouter([
           { path: 'devices/pending', element: <LazyWrap><PendingDevicesPage isSystemAdmin={true} /></LazyWrap> },
           { path: 'devices', element: <SystemDevicesPage /> },
           { path: 'devices/new', element: <CreateDevicePage /> },
+          { path: 'devices/:id/edit', element: <EditDevicePage /> },
           { path: 'firmware', element: <FirmwareListPage /> },
           { path: 'firmware/upload', element: <FirmwareUploadPage /> },
           { path: 'firmware/:id', element: <FirmwareDetailPage /> },
@@ -321,6 +326,7 @@ export const Router = createBrowserRouter([
             children: [
               { index: true, element: <DashboardPage /> },
               { path: 'alerts', element: <LazyWrap><AlertsPage /></LazyWrap> },
+              { path: 'monitoring', element: <LazyWrap><LiveEventsPage /></LazyWrap> },
 
               // SECURE (legacy routes)
               { path: 'secure/access-control', element: <LazyWrap><AccessControlPage /></LazyWrap> },
@@ -382,6 +388,7 @@ export const Router = createBrowserRouter([
               { path: 'devices', element: <LazyWrap><DevicesPage /></LazyWrap> },
               { path: 'devices/pending', element: <LazyWrap><PendingDevicesPage /></LazyWrap> },
               { path: 'devices/provision', element: <LazyWrap><ProvisionDevicePage /></LazyWrap> },
+              { path: 'devices/:id/edit', element: <EditDevicePage isSystemAdmin={false} /> },
               { path: 'devices/:id', element: <LazyWrap><DeviceDetailPage /></LazyWrap> },
 
               // CCTV

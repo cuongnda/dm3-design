@@ -15,6 +15,7 @@ import {
 } from '@dm3/ui';
 import { fetchCompanies, type PendingDevice, type CompanyDTO } from '@/lib/api';
 import { usePendingDevices, useApprovePendingDevice, useRejectPendingDevice } from '@/lib/hooks';
+import { DEVICE_TYPE_MODELS, resolveDeviceModel } from '@/lib/device-models';
 import { RefreshCw } from 'lucide-react';
 
 interface Props {
@@ -27,7 +28,7 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
   const [companies, setCompanies] = useState<CompanyDTO[]>([]);
 
   // Per-row form state
-  const [rowState, setRowState] = useState<Record<string, { tenant_id: string; name: string; location: string }>>({});
+  const [rowState, setRowState] = useState<Record<string, { tenant_id: string; name: string; location: string; type: string; model: string }>>({});
 
   const { data: devices = [], isLoading: loading, refetch: loadData } = usePendingDevices();
   const approveDevice = useApprovePendingDevice();
@@ -40,13 +41,22 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
   }, [isSystemAdmin]);
 
   useEffect(() => {
-    // Only add entries for new devices, never overwrite existing form state
+    // Only add entries for new devices, never overwrite existing form state.
+    // Auto-detect type + model from the bootstrap `device_type` string so
+    // the admin sees the matching selects pre-selected.
     setRowState((prev) => {
       let changed = false;
       const next = { ...prev };
       devices.forEach((d) => {
         if (!prev[d.id]) {
-          next[d.id] = { tenant_id: '', name: '', location: '' };
+          const detected = resolveDeviceModel(d.device_type);
+          next[d.id] = {
+            tenant_id: '',
+            name: '',
+            location: '',
+            type: detected?.type ?? '',
+            model: detected ? d.device_type : '',
+          };
           changed = true;
         }
       });
@@ -55,13 +65,25 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
   }, [devices]);
 
   const updateRow = (id: string, field: string, value: string) => {
-    setRowState((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+    setRowState((prev) => {
+      const current = prev[id] ?? { tenant_id: '', name: '', location: '', type: '', model: '' };
+      const next = { ...current, [field]: value };
+      // Changing type resets model; changing model snaps type to match.
+      if (field === 'type' && value !== current.type) {
+        next.model = '';
+      } else if (field === 'model' && value) {
+        const detected = resolveDeviceModel(value);
+        if (detected) next.type = detected.type;
+      }
+      return { ...prev, [id]: next };
+    });
   };
 
   const handleApprove = (d: PendingDevice) => {
     const row = rowState[d.id];
     if (isSystemAdmin && !row?.tenant_id) return;
     if (!row?.name) return;
+    if (!row?.type || !row?.model) return;
 
     approveDevice.mutate({
       id: d.id,
@@ -69,6 +91,8 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
         tenant_id: row.tenant_id,
         name: row.name,
         location: row.location || undefined,
+        type: row.type,
+        model: row.model,
       },
     });
   };
@@ -88,7 +112,7 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
   };
 
   const inputCls =
-    'h-7 px-2 text-[12px] bg-input border-border text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]';
+    'bg-input border-border text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]';
 
   return (
     <div className={isSystemAdmin ? 'p-6' : ''}>
@@ -104,6 +128,7 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
             <TableRow className="hover:bg-transparent">
               <TableHead className="px-4 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{t('pendingDevices.table.rid')}</TableHead>
               <TableHead className="px-4 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{t('pendingDevices.table.type')}</TableHead>
+              <TableHead className="px-4 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Model</TableHead>
               <TableHead className="px-4 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{t('pendingDevices.table.firmware')}</TableHead>
               <TableHead className="px-4 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{t('pendingDevices.table.signature')}</TableHead>
               <TableHead className="px-4 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{t('pendingDevices.table.requested')}</TableHead>
@@ -117,13 +142,13 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={isSystemAdmin ? 8 : 7} className="py-12 text-center">
+                <TableCell colSpan={isSystemAdmin ? 9 : 8} className="py-12 text-center">
                   <div className="w-5 h-5 border-2 border-ring/30 border-t-ring rounded-full animate-spin mx-auto" />
                 </TableCell>
               </TableRow>
             ) : devices.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={isSystemAdmin ? 8 : 7} className="py-12 text-center text-[13px] text-muted-foreground">
+                <TableCell colSpan={isSystemAdmin ? 9 : 8} className="py-12 text-center text-[13px] text-muted-foreground">
                   No pending registrations
                 </TableCell>
               </TableRow>
@@ -131,7 +156,31 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
               devices.map((d) => (
                 <TableRow key={d.id} data-testid={`pending-row-${d.id}`}>
                   <TableCell className="px-4 text-[13px] font-mono text-foreground">{d.rid}</TableCell>
-                  <TableCell className="px-4 text-[13px] text-muted-foreground">{d.device_type}</TableCell>
+                  <TableCell className="px-4">
+                    <Select
+                      value={rowState[d.id]?.type || ''}
+                      onChange={(e) => updateRow(d.id, 'type', e.target.value)}
+                      className={`${inputCls} w-32`}
+                    >
+                      <SelectOption value="">Select...</SelectOption>
+                      {Object.keys(DEVICE_TYPE_MODELS).map((t) => (
+                        <SelectOption key={t} value={t}>{t}</SelectOption>
+                      ))}
+                    </Select>
+                  </TableCell>
+                  <TableCell className="px-4">
+                    <Select
+                      value={rowState[d.id]?.model || ''}
+                      onChange={(e) => updateRow(d.id, 'model', e.target.value)}
+                      className={`${inputCls} w-36`}
+                      disabled={!rowState[d.id]?.type}
+                    >
+                      <SelectOption value="">Select...</SelectOption>
+                      {(DEVICE_TYPE_MODELS[rowState[d.id]?.type ?? ''] ?? []).map((m) => (
+                        <SelectOption key={m.value} value={m.value}>{m.label}</SelectOption>
+                      ))}
+                    </Select>
+                  </TableCell>
                   <TableCell className="px-4 text-[13px] text-muted-foreground font-mono">{d.firmware_version || '—'}</TableCell>
                   <TableCell className="px-4">
                     {d.signature_verified ? (
@@ -175,7 +224,7 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
                         data-testid={`pending-button-approve-${d.id}`}
                         size="xs"
                         onClick={() => handleApprove(d)}
-                        disabled={approveDevice.isPending || rejectDevice.isPending || !rowState[d.id]?.name || (isSystemAdmin && !rowState[d.id]?.tenant_id)}
+                        disabled={approveDevice.isPending || rejectDevice.isPending || !rowState[d.id]?.name || !rowState[d.id]?.type || !rowState[d.id]?.model || (isSystemAdmin && !rowState[d.id]?.tenant_id)}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white"
                       >
                         {approveDevice.isPending ? 'Approving...' : t('pendingDevices.actions.approve')}

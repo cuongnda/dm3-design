@@ -73,6 +73,13 @@ func main() {
 		slog.Error("failed to create nats stream", "error", err)
 		os.Exit(1)
 	}
+	// IDENTITY stream is primarily owned by identity-svc, but we ensure
+	// it exists here too in case device-gateway starts before identity-svc
+	// has had a chance to create it. The config is idempotent.
+	if err := natsClient.EnsureStream(ctx, "IDENTITY", []string{"dm3.identity.>"}); err != nil {
+		slog.Error("failed to ensure IDENTITY nats stream", "error", err)
+		os.Exit(1)
+	}
 
 	// WebSocket event hub
 	hub := gateway.NewEventHub()
@@ -100,6 +107,15 @@ func main() {
 
 	// Start heartbeat checker
 	go gateway.StartHeartbeatChecker(ctx, database, hub)
+
+	// Real-time identity → device push: subscribe to identity-svc's
+	// person.changed events and fan out a PushPersonSync to every
+	// online device in the affected tenant.
+	identityConsumer := gateway.NewIdentityConsumer(database, natsClient, syncService)
+	if err := identityConsumer.Start(ctx); err != nil {
+		slog.Error("failed to start identity consumer", "error", err)
+		os.Exit(1)
+	}
 
 	// Bootstrap MQTT handler
 	bootstrapHandler := gateway.NewBootstrapMQTTHandler(database, mqttClient, cfg)
@@ -178,8 +194,11 @@ func main() {
 			sr.Get("/devices/pending", provHandlers.ListPending)
 			sr.Post("/devices/pending/{id}/approve", provHandlers.ApprovePending)
 			sr.Post("/devices/pending/{id}/reject", provHandlers.RejectPending)
-			// Global device list for system admin (no company filter required)
+			// Global device list + per-device edit for system admin
+			// (no company filter required)
 			sr.Get("/system/devices", handlers.ListDevicesGlobal)
+			sr.Get("/system/devices/{id}", handlers.GetDeviceGlobal)
+			sr.Put("/system/devices/{id}", handlers.UpdateDeviceGlobal)
 
 			// Firmware management
 			sr.Get("/system/firmware", firmwareHandlers.ListFirmwares)

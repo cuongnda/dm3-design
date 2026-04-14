@@ -227,7 +227,7 @@ assert_contains "$BS_STATUS" "registering\|pending\|bootstrap" "Start bootstrap 
 # 1.3 Wait for pending list
 sleep 3
 PENDING=$(curl -s -H "Authorization: Bearer $SYSADMIN_TOKEN" \
-    "${GATEWAY_URL}/api/v1/devices/pending")
+    "${GATEWAY_URL}/api/v1/gateway/devices/pending")
 
 # Find our device in pending list
 FOUND_RID=$(echo "$PENDING" | jq -r ".[] | select(.rid==\"$RID_1\") | .rid" 2>/dev/null)
@@ -240,10 +240,10 @@ PENDING_ID_1=$(echo "$PENDING" | jq -r ".[] | select(.rid==\"$RID_1\") | .id" 2>
 
 # 1.4 Approve device
 if [ -n "$PENDING_ID_1" ]; then
-    RESP=$(curl -s -X POST "${GATEWAY_URL}/api/v1/devices/pending/${PENDING_ID_1}/approve" \
+    RESP=$(curl -s -X POST "${GATEWAY_URL}/api/v1/gateway/devices/pending/${PENDING_ID_1}/approve" \
         -H "Authorization: Bearer $SYSADMIN_TOKEN" \
         -H "Content-Type: application/json" \
-        -d "{\"company_id\":\"$COMPANY_ID\",\"name\":\"E2E Test Device\",\"location\":\"Test Lab\"}")
+        -d "{\"tenant_id\":\"$COMPANY_ID\",\"name\":\"E2E Test Device\",\"location\":\"Test Lab\"}")
     APPROVE_STATUS=$(echo "$RESP" | jq -r '.status // empty')
     assert_eq "approved" "$APPROVE_STATUS" "Approve device" || true
     DEVICE_DB_ID_1=$(echo "$RESP" | jq -r '.device_id // empty')
@@ -259,7 +259,7 @@ assert_contains "$SIM_PROV" "provisioned\|READY\|ready\|online" "Device reconnec
 
 # 1.6 Device appears in gateway device list
 DEVICES=$(curl -s -H "Authorization: Bearer $ADMIN_TOKEN" \
-    "${GATEWAY_URL}/api/v1/devices")
+    "${GATEWAY_URL}/api/v1/gateway/devices")
 FOUND_IN_LIST=$(echo "$DEVICES" | jq -r ".[] | select(.device_id==\"$RID_1\") | .device_id" 2>/dev/null)
 assert_eq "$RID_1" "$FOUND_IN_LIST" "Device appears in gateway list" || true
 
@@ -283,12 +283,12 @@ assert_contains "$(echo "$RESP" | jq -r '.status // .provisioning_status // empt
 # 2.2 Wait for pending
 sleep 3
 PENDING=$(curl -s -H "Authorization: Bearer $SYSADMIN_TOKEN" \
-    "${GATEWAY_URL}/api/v1/devices/pending")
+    "${GATEWAY_URL}/api/v1/gateway/devices/pending")
 PENDING_ID_2=$(echo "$PENDING" | jq -r ".[] | select(.rid==\"$RID_2\") | .id" 2>/dev/null)
 
 if [ -n "$PENDING_ID_2" ]; then
     # 2.3 Reject
-    RESP=$(curl -s -X POST "${GATEWAY_URL}/api/v1/devices/pending/${PENDING_ID_2}/reject" \
+    RESP=$(curl -s -X POST "${GATEWAY_URL}/api/v1/gateway/devices/pending/${PENDING_ID_2}/reject" \
         -H "Authorization: Bearer $SYSADMIN_TOKEN" \
         -H "Content-Type: application/json")
     REJECT_STATUS=$(echo "$RESP" | jq -r '.status // empty')
@@ -305,7 +305,7 @@ assert_contains "$SIM_STATUS" "rejected\|REJECTED" "Device marked as rejected" |
 
 # 2.5 Device NOT in gateway list
 DEVICES=$(curl -s -H "Authorization: Bearer $ADMIN_TOKEN" \
-    "${GATEWAY_URL}/api/v1/devices")
+    "${GATEWAY_URL}/api/v1/gateway/devices")
 assert_not_contains "$(echo "$DEVICES" | jq -r '.[].device_id' 2>/dev/null)" \
     "$RID_2" "Rejected device not in gateway list" || true
 
@@ -315,10 +315,10 @@ echo ""
 echo "--- 3. QR Provisioning Happy Path ---"
 
 # 3.1 Create QR provision on gateway
-RESP=$(curl -s -X POST "${GATEWAY_URL}/api/v1/devices/provision" \
+RESP=$(curl -s -X POST "${GATEWAY_URL}/api/v1/gateway/devices/provision" \
     -H "Authorization: Bearer $ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
-    -d "{\"device_id\":\"$RID_3\",\"name\":\"QR Test Device\",\"type\":\"terminal\",\"company_id\":\"$COMPANY_ID\"}")
+    -d "{\"device_id\":\"$RID_3\",\"name\":\"QR Test Device\",\"type\":\"terminal\",\"tenant_id\":\"$COMPANY_ID\"}")
 QR_TOKEN=$(echo "$RESP" | jq -r '.provisioning.qr_token // empty')
 if [ -n "$QR_TOKEN" ]; then
     pass "QR provisioning created — token received"
@@ -347,7 +347,7 @@ fi
 # 3.4 Wait and verify online
 sleep 5
 DEVICES=$(curl -s -H "Authorization: Bearer $ADMIN_TOKEN" \
-    "${GATEWAY_URL}/api/v1/devices")
+    "${GATEWAY_URL}/api/v1/gateway/devices")
 QR_DEV_STATUS=$(echo "$DEVICES" | jq -r ".[] | select(.device_id==\"$RID_3\") | .status" 2>/dev/null)
 assert_contains "$QR_DEV_STATUS" "online\|activated\|provisioning" "QR device appears in gateway" || true
 
@@ -381,7 +381,7 @@ if [ -n "$DEVICE_DB_ID_1" ]; then
 
     # 5.2 Trigger sync if empty
     if [ "$LOCAL_COUNT" = "0" ] || [ "$LOCAL_COUNT" = "null" ]; then
-        curl -s -X POST "${GATEWAY_URL}/api/v1/devices/${DEVICE_DB_ID_1}/sync" \
+        curl -s -X POST "${GATEWAY_URL}/api/v1/gateway/devices/${DEVICE_DB_ID_1}/sync" \
             -H "Authorization: Bearer $ADMIN_TOKEN" >/dev/null 2>&1
         # Also try via simulator
         curl -s -X POST "${SIM_URL}/api/devices/${RID_1}/sync" >/dev/null 2>&1
@@ -439,7 +439,7 @@ if [ -n "$RID_1" ]; then
 fi
 
 if [ -n "$DEVICE_TOKEN_1" ]; then
-    RESP=$(curl -s -X POST "${GATEWAY_URL}/api/v1/devices/refresh-token" \
+    RESP=$(curl -s -X POST "${GATEWAY_URL}/api/v1/gateway/devices/refresh-token" \
         -H "Authorization: Bearer $DEVICE_TOKEN_1" \
         -H "Content-Type: application/json")
     NEW_TOKEN=$(echo "$RESP" | jq -r '.token // empty')

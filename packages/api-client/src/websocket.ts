@@ -15,11 +15,18 @@ export interface AccessEventData {
   door_id?: string;
   direction?: string;
   decision: string;
+  user_id?: string;
   person_id?: string;
   person_name?: string;
+  user_name?: string;
   confidence?: number;
   reason?: string;
   credential_type?: string;
+  // Server-enriched fields, added in device-gateway
+  // mqtt_handler.enrichAccessData before the broadcast. May be empty
+  // strings when the user couldn't be resolved (unknown user_id, etc.).
+  department?: string;
+  card_id?: string;
 }
 
 export interface DoorStateData {

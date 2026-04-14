@@ -31,6 +31,7 @@ export type StatusKey = keyof typeof STATUS_COLORS;
 export const ROUTES = {
   dashboard: '/',
   alerts: '/alerts',
+  monitoring: '/monitoring',
   // SECURE
   accessControl: '/secure/access-control',
   accessTime: '/secure/access-control/access-time',

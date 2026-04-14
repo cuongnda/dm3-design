@@ -869,7 +869,7 @@ export function UserDetailPage() {
                   <tbody>
                     {credentials.map((cred) => {
                       const info = CREDENTIAL_ICON_MAP[cred.type] ?? CREDENTIAL_ICON_MAP.card;
-                      const hasExpiry = cred.valid_until && !cred.valid_until.startsWith('3000');
+                      const hasExpiry = !!cred.valid_until;
                       return (
                         <tr
                           key={cred.id}
