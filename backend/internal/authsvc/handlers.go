@@ -133,7 +133,19 @@ type accountForLogin struct {
 	roles        []string
 	status       string
 	role         string
+	lockedUntil  *time.Time
 }
+
+// Account lockout policy — second half of P1.2 (security review C1).
+// IP rate limiting (httprate, see cmd/auth-svc/main.go) bounds *attempts
+// per source IP*; this bounds attempts per *account*. They compose: an
+// attacker rotating IPs still has only loginLockoutMaxFailures shots
+// against any single email before the account freezes for
+// loginLockoutDuration.
+const (
+	loginLockoutMaxFailures = 5
+	loginLockoutDuration    = 15 * time.Minute
+)
 
 func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
@@ -148,7 +160,7 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch all accounts matching this email (one per company).
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, tenant_id::text, email, COALESCE(full_name, email), password_hash, ARRAY[role], status, role
+		`SELECT id, tenant_id::text, email, COALESCE(full_name, email), password_hash, ARRAY[role], status, role, locked_until
 		 FROM dm3_auth.accounts
 		 WHERE email = $1 AND status != 'deleted'
 		 ORDER BY tenant_id NULLS FIRST`,
@@ -163,7 +175,7 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	var accounts []accountForLogin
 	for rows.Next() {
 		var a accountForLogin
-		if err := rows.Scan(&a.id, &a.companyID, &a.email, &a.fullName, &a.passwordHash, &a.roles, &a.status, &a.role); err != nil {
+		if err := rows.Scan(&a.id, &a.companyID, &a.email, &a.fullName, &a.passwordHash, &a.roles, &a.status, &a.role, &a.lockedUntil); err != nil {
 			continue
 		}
 		accounts = append(accounts, a)
@@ -173,8 +185,39 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Account lockout check — return generic invalid_credentials so a
+	// caller cannot distinguish "wrong password" from "account locked"
+	// (that would aid enumeration). All accounts sharing this email
+	// share the same password_hash, so the first row's lock state is
+	// authoritative for the credential check.
+	if lu := accounts[0].lockedUntil; lu != nil && lu.After(time.Now()) {
+		h.audit.Log(audit.Entry{
+			ActorEmail: req.Email,
+			ActorIP:    audit.IPFromRequest(r),
+			UserAgent:  r.Header.Get("User-Agent"),
+			Action:     "auth.login_locked",
+			EntityType: "account",
+			EntityName: req.Email,
+			Status:     "failure",
+		})
+		i18n.ErrorResponse(w, r, http.StatusUnauthorized, "auth.invalid_credentials")
+		return
+	}
+
 	// Verify password against the first account found (all share the same password).
 	if err := bcrypt.CompareHashAndPassword([]byte(accounts[0].passwordHash), []byte(req.Password)); err != nil {
+		// Increment failure counter; trip the lock at the threshold.
+		// CASE expression keeps a still-valid earlier lock in place and
+		// only sets a new lock when this attempt is the trigger.
+		_, _ = h.db.Pool.Exec(r.Context(),
+			`UPDATE dm3_auth.accounts
+			    SET failed_attempts = failed_attempts + 1,
+			        locked_until = CASE
+			            WHEN failed_attempts + 1 >= $2 THEN now() + ($3 || ' seconds')::interval
+			            ELSE locked_until
+			        END
+			  WHERE email = $1 AND status != 'deleted'`,
+			req.Email, loginLockoutMaxFailures, int(loginLockoutDuration.Seconds()))
 		h.audit.Log(audit.Entry{
 			ActorEmail: req.Email,
 			ActorIP:    audit.IPFromRequest(r),
@@ -194,10 +237,14 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update last_login for all matched accounts.
+	// Update last_login for all matched accounts and reset lockout state.
 	_, _ = h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_auth.accounts SET last_login = now(), login_count = login_count + 1
-		 WHERE email = $1 AND status != 'deleted'`, req.Email)
+		`UPDATE dm3_auth.accounts
+		    SET last_login = now(),
+		        login_count = login_count + 1,
+		        failed_attempts = 0,
+		        locked_until = NULL
+		  WHERE email = $1 AND status != 'deleted'`, req.Email)
 
 	// System admin account (tenant_id IS NULL) → complete immediately.
 	first := accounts[0]
