@@ -1158,9 +1158,14 @@ func (h *ParkingHandlers) RecognizeParkingPlate(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Determine matchedBy: card credentials take priority over ANPR confidence
+	// Determine matchedBy: card credentials (nfc/rfid, with or without plate)
+	// take priority over ANPR confidence tiers. A *pure* plate resolution is
+	// semantically an ANPR event — the vehicle only matched because the plate
+	// was read — so classify it by confidence tier (anpr_auto / anpr_review /
+	// manual_override). Otherwise we'd store "plate" and lose the signal that
+	// this decision came from the recognition pipeline, not an operator.
 	matchedBy := resolution.MatchedBy
-	if matchedBy == "" && hasPlate {
+	if (matchedBy == "" || matchedBy == models.ParkingMatchPlate) && hasPlate {
 		confidence := 0.0
 		if req.Confidence != nil {
 			confidence = *req.Confidence
