@@ -1,6 +1,6 @@
 # Implementation Status
 
-This document tracks the current implementation status of DM3 features. Updated: 2026-04-12 (CCTV plugin added: dm3_cctv schema, cctv-svc, MediaMTX + MinIO wiring, console UI; parking ↔ access integration: unified vehicle registry, zone hierarchy soft-FK, NATS event bridge, barrier auto-registration, opt-in access policy check).
+This document tracks the current implementation status of DM3 features. Updated: 2026-04-15 (auth hardening: per-IP rate-limiting on public auth endpoints, per-account lockout after repeated failures, password reset token flow — migrations 000017/000020; access event idempotency via partial unique index + `ON CONFLICT` for JetStream redeliveries — migration 000021; zones gained `type` column site/building/floor/room/zone — migration 000019; visitor `temp_credentials` gained revoked_at/revoked_reason — migration 000018; new Access History page under SECURE wired to real `/api/v1/access/events` list + CSV/Excel export; remote door control + bulk dispatch per MQTT §6.1; atomic camera + CCTV row provisioning from devices form).
 
 ---
 
@@ -32,15 +32,16 @@ This document tracks the current implementation status of DM3 features. Updated:
 
 ### Backend Services (Go)
 
-- **auth-svc** (`backend/internal/authsvc/`) — JWT auth, bcrypt, refresh tokens, RBAC, two-step company login
+- **auth-svc** (`backend/internal/authsvc/`) — JWT auth, bcrypt, refresh tokens, RBAC, two-step company login, password reset, per-IP rate limiting, per-account lockout
   - Status: ✅ Compliant (v1) | Risk: Low
   - Evidence: `handlers.go:824-840` — `generateAccessToken` emits sub, cid, email, name, role, exp, iat (15min TTL ✅); `handlers.go:565-590` — DeviceClaims with sub, cid, did, dtype, permissions (24h ✅); `handlers.go:366-372` — refresh token rotation + replay detection ✅; bcrypt confirmed at `handlers.go:166, 662, 767`
+  - Hardening (2026-04): per-IP rate limiting on public auth endpoints (`cmd/auth-svc/main.go`, commit `dd273972`); per-account lockout after `loginLockoutMaxFailures=5` failures for `loginLockoutDuration=15min` (`handlers.go:212-220` using `make_interval(secs => $3)` after a pgx encode bug was caught in integration test `internal/authsvc/lockout_test.go`); password reset token flow (migration 000017, `password_reset.go`).
   - Deviation: `GET /api/v1/roles` returns generic `admin/operator/viewer` (handlers.go:797-800) but spec defines 5 roles: `system_admin, primary_manager, manager, operator, viewer`. Roles endpoint is stale.
 
-- **access-svc** (`backend/internal/access/`) — Access Group management, access point management, spatial zones, managed zone maps, access rule sync, event processing
+- **access-svc** (`backend/internal/access/`) — Access Group management, access point management, spatial zones with type taxonomy, managed zone maps, access rule sync, event processing with JetStream-redelivery dedup, event listing + CSV/Excel export, remote door control
   - Status: ✅ Compliant for current access scope | Risk: Low
-  - Evidence: `backend/pkg/db/migrations/000001_initial.up.sql` + `000009_zone_spatial_ap_placement.up.sql` — `dm3_access.access_points`, `dm3_access.zones`, `dm3_access.access_groups`, `dm3_access.access_group_access_points`, `dm3_access.access_group_users` (with `effective_from`/`effective_to`), `dm3_access.access_times`, `dm3_access.access_time_slots`, `dm3_access.access_events` (hypertable) confirmed; `zone_handlers.go` implements zone CRUD, `GET/PUT /zones/{id}/map`, `POST /zones/{id}/map/upload`, and managed asset serving; NATS consumer in `nats_consumer.go`; `cfg.access_rules` MQTT sync dispatched on AG/AP/user mutations
-  - Implemented: Access Groups CRUD ✅ | AG↔AP assignment ✅ | AG↔User assignment with temporal membership ✅ | Access Time management ✅ | Access rule sync to devices via MQTT ✅ | Spatial zone hierarchy ✅ | Zone-owned indoor map upload + serving ✅ | Zone detail list/map workflows reflected in console ✅ | Passage Time field on access_points (DB) ✅
+  - Evidence: `backend/pkg/db/migrations/000001_initial.up.sql` + `000009_zone_spatial_ap_placement.up.sql` + `000019_zones_add_type.up.sql` + `000021_access_event_idempotency.up.sql` — `dm3_access.access_points`, `dm3_access.zones` (with `type` column: site/building/floor/room/zone), `dm3_access.access_groups`, `dm3_access.access_group_access_points`, `dm3_access.access_group_users` (with `effective_from`/`effective_to`), `dm3_access.access_times`, `dm3_access.access_time_slots`, `dm3_access.access_events` (hypertable with partial unique index on `(tenant_id, time, event_id) WHERE event_id IS NOT NULL` + `ON CONFLICT DO NOTHING` for JetStream redeliveries — verified by `internal/access/idempotency_test.go`); `zone_handlers.go` implements zone CRUD, `GET/PUT /zones/{id}/map`, `POST /zones/{id}/map/upload`, and managed asset serving; NATS consumer in `nats_consumer.go`; `cfg.access_rules` MQTT sync dispatched on AG/AP/user mutations; remote door control + bulk dispatch per MQTT §6.1 (commit `3f5b72f4`); `GET /api/v1/access/events` list with CSV/Excel export (commits `d14519ef`, `62370cb6`) including device fields and human-readable names (commit `8d5839d0`).
+  - Implemented: Access Groups CRUD ✅ | AG↔AP assignment ✅ | AG↔User assignment with temporal membership ✅ | Access Time management ✅ | Access rule sync to devices via MQTT ✅ | Spatial zone hierarchy with type taxonomy ✅ | Zone-owned indoor map upload + serving ✅ | Zone detail list/map workflows reflected in console ✅ | Passage Time field on access_points (DB) ✅ | Access events list + CSV/Excel export ✅ | Remote door control ✅ | Event idempotency against JetStream redelivery ✅
   - Deviation: Passage Time (`access_time_id` on access_points) is stored in DB but not yet exposed in the Access Point UI. Broader site modeling beyond the current zone hierarchy still needs separate verification if reintroduced.
 
 - **identity-svc** (`backend/internal/identity/`) — User/credential management, identity operations
@@ -115,6 +116,10 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Evidence: Access Groups CRUD backed by `access-svc` AG endpoints; AG↔AP assignment via `/api/v1/access/access-groups/{id}/access-points`; AG↔User assignment with `effective_from`/`effective_to` via `/api/v1/access/access-groups/{id}/users`; Access Time management via `/api/v1/access/access-times`; `cfg.access_rules` MQTT sync dispatched on mutations
   - Implemented: Access Groups CRUD ✅ | AG↔AP assignment ✅ | AG↔User assignment with temporal membership ✅ | Access Time management ✅ | Access rule sync to devices via MQTT ✅
   - Partial: Passage Time on Access Points stored in DB but not yet exposed in the AP UI (field present, UI control pending)
+
+- **Access History** (`AccessHistoryPage`)
+  - Status: ✅ Real (backend + frontend working) | Risk: Low
+  - Evidence: New page under SECURE (commit `8e13b75e`); UI in `apps/console/src/features/secure/access-history/AccessHistoryPage.tsx` with searchable dropdown filters (commit `54f2592d`), infinite-refetch bug fix (commit `762c1152`), UUID → human-readable names (commit `8d5839d0`). Backed by `GET /api/v1/access/events` + CSV/Excel export (commit `d14519ef`). API client hooks in `packages/api-client/src/access.ts` (commit `7bed11f4`, path fix `33ba6680`). Integration tests at `automation/tests/api/test_access_history.py`, web tests at `automation/tests/web/test_access_history.py`, tenant isolation at `automation/tests/tenant_isolation/test_access_history_isolation.py`.
 
 - **AI Detection** (`AIDetectionPage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: Medium
@@ -394,8 +399,8 @@ High-level features mentioned in vision documents but lacking detailed specifica
 
 ## Summary
 
-- **✅ Compliant** (fully matches spec): auth-svc (v1), access-svc current scope (including zones + managed map assets), device-gateway, audit-svc, MQTT pipeline, Dashboard, Devices, SystemSettings, IdentityManagement, AccessGroups/AccessControl, VisitorManagement, NATS, Valkey, MinIO, TimescaleDB, shared packages — **~16 items**
-- **⚠️ Partial** (UI shell or missing components): 19+ frontend pages are mock-data-only; AP passage time UI is still missing; EMQX missing TLS; Android terminal unverified; Flutter is placeholder — **~24 items**
+- **✅ Compliant** (fully matches spec): auth-svc (v1 + rate-limit + lockout + password reset), access-svc current scope (including zones with type taxonomy, managed map assets, event idempotency, remote door control, event list/export), device-gateway, audit-svc, MQTT pipeline, Dashboard, Devices, SystemSettings, IdentityManagement, AccessGroups/AccessControl, AccessHistory, VisitorManagement, NATS, Valkey, MinIO, TimescaleDB, shared packages — **~17 items**
+- **⚠️ Partial** (UI shell or missing components): 18+ frontend pages are mock-data-only; AP passage time UI is still missing; EMQX missing TLS; Android terminal unverified; Flutter is placeholder — **~23 items**
 - **❌ Gap** (claimed implemented, not found): Flutter apps, service topology (13 of ~20 services missing) — **~2 items + systemic**
 - **📋 Specified**: ~15 features with detailed specs ready for development
 - **🔮 Vision Only**: ~20 next-generation features awaiting specification
