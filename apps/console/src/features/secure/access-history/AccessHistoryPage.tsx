@@ -1,19 +1,20 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { subDays } from 'date-fns';
 import {
-  Download, History, RotateCcw, X, ImageOff,
+  Download, History, RotateCcw, X, ImageOff, ChevronsUpDown, Check,
 } from 'lucide-react';
 import {
   listAccessEvents,
   exportAccessEvents,
+  listAccessPoints,
+  listPersons,
   type ListAccessEventsParams,
 } from '@dm3/api-client';
 import {
   Button,
-  Input,
   Label,
   Select,
   SelectOption,
@@ -35,7 +36,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   PageHeader,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
 } from '@dm3/ui';
+import { cn } from '@/lib/utils';
 import { assetUrl } from '@/lib/api';
 import { toast } from '@/lib/toast';
 
@@ -166,6 +177,230 @@ function PhotoCell({ photoRef, t }: { photoRef?: string; t: (k: string) => strin
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+// ─── Debounce hook ──────────────────────────────────────────────────────────
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState<T>(value);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    timerRef.current = setTimeout(() => setDebounced(value), delay);
+    return () => {
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+    };
+  }, [value, delay]);
+
+  return debounced;
+}
+
+// ─── Access Point combobox ───────────────────────────────────────────────────
+
+interface AccessPointSelectProps {
+  value: string;
+  onChange: (id: string) => void;
+}
+
+function AccessPointSelect({ value, onChange }: AccessPointSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['access-points-filter'],
+    queryFn: () => listAccessPoints({ limit: 200 }),
+    staleTime: 5 * 60_000,
+  });
+
+  const items = data?.data ?? [];
+
+  const filtered = search.trim()
+    ? items.filter((ap) =>
+        ap.name.toLowerCase().includes(search.toLowerCase()),
+      )
+    : items;
+
+  const selected = items.find((ap) => ap.id === value) ?? null;
+
+  function handleSelect(id: string) {
+    onChange(id === value ? '' : id);
+    setOpen(false);
+    setSearch('');
+  }
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) setSearch('');
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          disabled={isLoading}
+          data-testid="access-history-select-access-point"
+          className="w-[200px] h-9 justify-between text-[13px] font-normal"
+        >
+          <span className="truncate text-left">
+            {selected ? selected.name : 'All access points'}
+          </span>
+          <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[240px] p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Search access points..."
+            value={search}
+            onValueChange={setSearch}
+          />
+          <CommandList>
+            <CommandEmpty>No access points found.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value="__all__"
+                onSelect={() => handleSelect('')}
+                className="text-[13px]"
+              >
+                <Check className={cn('mr-2 size-4', !value ? 'opacity-100' : 'opacity-0')} />
+                All access points
+              </CommandItem>
+              {filtered.map((ap) => (
+                <CommandItem
+                  key={ap.id}
+                  value={ap.id}
+                  onSelect={() => handleSelect(ap.id)}
+                  className="text-[13px]"
+                >
+                  <Check className={cn('mr-2 size-4', value === ap.id ? 'opacity-100' : 'opacity-0')} />
+                  {ap.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── User (person) combobox ──────────────────────────────────────────────────
+
+interface PersonSelectProps {
+  value: string;
+  onChange: (id: string) => void;
+}
+
+function PersonSelect({ value, onChange }: PersonSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['persons-filter', debouncedSearch],
+    queryFn: () =>
+      listPersons({ limit: 100, ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}) }),
+    staleTime: 60_000,
+  });
+
+  const items = data?.data ?? [];
+
+  // Keep selected person visible even when not in the current result set
+  const { data: selectedData } = useQuery({
+    queryKey: ['persons-filter-selected', value],
+    queryFn: () => listPersons({ limit: 1, search: value }),
+    enabled: !!value && !items.find((p) => p.id === value),
+    staleTime: 5 * 60_000,
+  });
+
+  const selectedFromList = items.find((p) => p.id === value);
+  const selectedFromFallback = selectedData?.data?.[0];
+  const selected = selectedFromList ?? (value ? selectedFromFallback ?? null : null);
+
+  function getDisplayName(p: { first_name: string; last_name: string }) {
+    return `${p.first_name} ${p.last_name}`.trim();
+  }
+
+  function handleSelect(id: string) {
+    onChange(id === value ? '' : id);
+    setOpen(false);
+    setSearch('');
+  }
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) setSearch('');
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          data-testid="access-history-select-user"
+          className="w-[200px] h-9 justify-between text-[13px] font-normal"
+        >
+          <span className="truncate text-left">
+            {selected ? getDisplayName(selected) : 'All users'}
+          </span>
+          <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[240px] p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Search users..."
+            value={search}
+            onValueChange={setSearch}
+          />
+          <CommandList>
+            {isLoading ? (
+              <div className="px-3 py-4 text-center text-[13px] text-muted-foreground">
+                Loading...
+              </div>
+            ) : (
+              <>
+                <CommandEmpty>No users found.</CommandEmpty>
+                <CommandGroup>
+                  <CommandItem
+                    value="__all__"
+                    onSelect={() => handleSelect('')}
+                    className="text-[13px]"
+                  >
+                    <Check className={cn('mr-2 size-4', !value ? 'opacity-100' : 'opacity-0')} />
+                    All users
+                  </CommandItem>
+                  {items.map((person) => {
+                    const name = getDisplayName(person);
+                    return (
+                      <CommandItem
+                        key={person.id}
+                        value={person.id}
+                        onSelect={() => handleSelect(person.id)}
+                        className="text-[13px]"
+                      >
+                        <Check className={cn('mr-2 size-4', value === person.id ? 'opacity-100' : 'opacity-0')} />
+                        {name}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              </>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -356,26 +591,18 @@ export function AccessHistoryPage() {
           {/* Access Point */}
           <div className="flex flex-col gap-1">
             <Label className="text-[11px]">{t('accessHistory.filters.accessPoint')}</Label>
-            {/* TODO: replace with a select fetching listAccessPoints() once UX is decided */}
-            <Input
+            <AccessPointSelect
               value={accessPointParam}
-              onChange={(e) => updateParams({ access_point_id: e.target.value, page: '' })}
-              placeholder={t('accessHistory.filters.accessPointPlaceholder')}
-              className="w-[200px] h-9"
-              data-testid="access-history-input-access-point"
+              onChange={(id) => updateParams({ access_point_id: id, page: '' })}
             />
           </div>
 
-          {/* User ID */}
+          {/* User */}
           <div className="flex flex-col gap-1">
             <Label className="text-[11px]">{t('accessHistory.filters.user')}</Label>
-            {/* TODO: support name search in v2 (currently UUID only) */}
-            <Input
+            <PersonSelect
               value={userIdParam}
-              onChange={(e) => updateParams({ user_id: e.target.value, page: '' })}
-              placeholder={t('accessHistory.filters.userPlaceholder')}
-              className="w-[200px] h-9"
-              data-testid="access-history-input-user-id"
+              onChange={(id) => updateParams({ user_id: id, page: '' })}
             />
           </div>
 
