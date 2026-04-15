@@ -415,9 +415,12 @@ func (h *MQTTHandler) handleStatus(ctx context.Context, pt ParsedTopic, env MQTT
 		if !data.Online {
 			status = models.DeviceStatusOffline
 		}
+		// Scope by tenant_id from topic to prevent a rogue device (that learned
+		// another tenant's device_id) from spoofing heartbeats on behalf of a
+		// device it doesn't own. Rogue updates will hit 0 rows and be ignored.
 		tag, err := h.db.Pool.Exec(ctx,
-			`UPDATE dm3_devices.devices SET status = $1, last_seen = $2, firmware_version = COALESCE(NULLIF($3,''), firmware_version), updated_at = $2 WHERE device_id = $4`,
-			status, now, data.Firmware, pt.DeviceID)
+			`UPDATE dm3_devices.devices SET status = $1, last_seen = $2, firmware_version = COALESCE(NULLIF($3,''), firmware_version), updated_at = $2 WHERE device_id = $4 AND tenant_id = $5::uuid`,
+			status, now, data.Firmware, pt.DeviceID, pt.TenantID)
 		if err != nil {
 			slog.Error("failed to update device heartbeat", "error", err, "device", pt.DeviceID)
 			return
@@ -456,9 +459,10 @@ func (h *MQTTHandler) handleStatus(ctx context.Context, pt ParsedTopic, env MQTT
 		}
 
 	case "status.offline":
+		// Tenant-scoped to prevent cross-tenant status spoofing (see heartbeat above).
 		_, err := h.db.Pool.Exec(ctx,
-			`UPDATE dm3_devices.devices SET status = $3, updated_at = $1 WHERE device_id = $2`,
-			now, pt.DeviceID, models.DeviceStatusOffline)
+			`UPDATE dm3_devices.devices SET status = $3, updated_at = $1 WHERE device_id = $2 AND tenant_id = $4::uuid`,
+			now, pt.DeviceID, models.DeviceStatusOffline, pt.TenantID)
 		if err != nil {
 			slog.Error("failed to mark device offline", "error", err, "device", pt.DeviceID)
 		}
