@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Crosshair, Map, MapPin, Network, Save } from 'lucide-react';
-import { Badge, Button, Card, Tabs, TabsContent, TabsList, TabsTrigger } from '@dm3/ui';
+import { ArrowLeft, Crosshair, Map, MapPin, Network, Plus, Save } from 'lucide-react';
+import { AppModal, Badge, Button, Card, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import type { Zone, ZoneMapResponse } from './types';
 
 interface ZonesResponse {
@@ -43,6 +44,13 @@ export function ZoneDetailPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('list');
   const [mapImageFailed, setMapImageFailed] = useState(false);
+  // "Add Access Point" dialog state. Scoped here (rather than a shared hook)
+  // because this page already owns the zone-scoped data refresh.
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createDescription, setCreateDescription] = useState('');
+  const [createSubmitting, setCreateSubmitting] = useState(false);
+  const [createNameError, setCreateNameError] = useState('');
   const draftPositionsRef = useRef<Record<string, { map_x: number; map_y: number }>>({});
 
   useEffect(() => { draftPositionsRef.current = draftPositions; }, [draftPositions]);
@@ -130,6 +138,46 @@ export function ZoneDetailPage() {
     }
   }, [id, dirtyPointIds]);
 
+  const resetCreateForm = useCallback(() => {
+    setCreateName('');
+    setCreateDescription('');
+    setCreateNameError('');
+    setCreateSubmitting(false);
+  }, []);
+
+  const handleCreateOpenChange = useCallback((next: boolean) => {
+    setCreateOpen(next);
+    if (!next) resetCreateForm();
+  }, [resetCreateForm]);
+
+  const handleCreateAccessPoint = useCallback(async () => {
+    if (!id) return;
+    const name = createName.trim();
+    if (!name) {
+      setCreateNameError(t('validation.nameRequired', 'Name is required'));
+      return;
+    }
+    setCreateSubmitting(true);
+    try {
+      await apiFetch('/api/v1/access/access-points', {
+        method: 'POST',
+        body: JSON.stringify({
+          name,
+          zone_id: id,
+          ...(createDescription.trim() && { description: createDescription.trim() }),
+        }),
+      });
+      toast.success(t('detail.createdAccessPoint', 'Access point created'));
+      setCreateOpen(false);
+      resetCreateForm();
+      await fetchData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create access point');
+    } finally {
+      setCreateSubmitting(false);
+    }
+  }, [id, createName, createDescription, fetchData, resetCreateForm, t]);
+
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => updateDraftFromPointer(event.clientX, event.clientY);
     const handlePointerUp = () => {
@@ -203,6 +251,15 @@ export function ZoneDetailPage() {
                 <Badge variant="outline">{t('detail.mapHint', 'Drag markers to reposition access points')}</Badge>
                 <Button
                   size="sm"
+                  variant="outline"
+                  onClick={() => setCreateOpen(true)}
+                  data-testid="zone-detail-add-ap-map"
+                >
+                  <Plus size={14} className="mr-1.5" />
+                  {t('detail.addAccessPoint', 'Add access point')}
+                </Button>
+                <Button
+                  size="sm"
                   onClick={saveAllPositions}
                   disabled={savingAll || dirtyPointIds.length === 0}
                   data-testid="zone-detail-save-all"
@@ -215,7 +272,16 @@ export function ZoneDetailPage() {
                       : t('detail.savePositions', 'Save positions')}
                 </Button>
               </div>
-            ) : null}
+            ) : (
+              <Button
+                size="sm"
+                onClick={() => setCreateOpen(true)}
+                data-testid="zone-detail-add-ap"
+              >
+                <Plus size={14} className="mr-1.5" />
+                {t('detail.addAccessPoint', 'Add access point')}
+              </Button>
+            )}
           </div>
 
           <TabsContent value="list" className="mt-0 min-h-0 flex-1 overflow-auto p-4">
@@ -346,6 +412,51 @@ export function ZoneDetailPage() {
           </Card>
         </div>
       </div>
+
+      <AppModal
+        open={createOpen}
+        onOpenChange={handleCreateOpenChange}
+        title={t('detail.addAccessPointTitle', 'Add access point to {{zone}}', { zone: zone.name })}
+        size="sm"
+        showCancelButton
+        cancelLabel={t('cancel', 'Cancel')}
+        primaryAction={{
+          label: createSubmitting ? t('saving', 'Saving...') : t('save', 'Save'),
+          onClick: handleCreateAccessPoint,
+          disabled: createSubmitting,
+          loading: createSubmitting,
+        }}
+      >
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="zone-ap-name">{t('name', 'Name')} *</Label>
+            <Input
+              id="zone-ap-name"
+              data-testid="zone-detail-ap-name"
+              value={createName}
+              onChange={(e) => { setCreateName(e.target.value); if (createNameError) setCreateNameError(''); }}
+              placeholder={t('namePlaceholder', 'e.g. Main Entrance')}
+              disabled={createSubmitting}
+              className={createNameError ? 'border-destructive' : ''}
+            />
+            {createNameError ? <p className="mt-1 text-[11px] text-destructive">{createNameError}</p> : null}
+          </div>
+          <div>
+            <Label htmlFor="zone-ap-description">{t('description', 'Description')}</Label>
+            <Input
+              id="zone-ap-description"
+              data-testid="zone-detail-ap-description"
+              value={createDescription}
+              onChange={(e) => setCreateDescription(e.target.value)}
+              placeholder={t('descriptionPlaceholder', 'Optional description')}
+              disabled={createSubmitting}
+            />
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {t('detail.addAccessPointHint', 'Position on the map can be set after creation by dragging the marker.')}
+          </p>
+        </div>
+      </AppModal>
     </div>
   );
 }
