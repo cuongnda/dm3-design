@@ -118,15 +118,19 @@ def _make_events_response(events: list[dict] | None = None) -> dict:
 
 
 def _mock_events_api(page, events: list[dict] | None = None) -> None:
-    """Route all GET /api/v1/events requests to return controlled test data.
+    """Route all GET /api/v1/access/events requests to return controlled test data.
 
-    The frontend's listAccessEvents uses BASE = '/api/v1/events' (see
-    packages/api-client/src/events.ts), so mocks target that URL exactly and
-    must exclude the /export subpath (handled by separate handlers).
+    The frontend's listAccessEvents uses BASE = '/api/v1/access/events' (see
+    packages/api-client/src/events.ts matched against backend chi route in
+    backend/cmd/access-svc/main.go). Mocks target that exact URL so that a
+    regression in BASE (e.g. '/api/v1/events' which was the original bug) is
+    NOT silently absorbed by the catch-all '**/api/v1/**' handler in
+    _mock_common_apis — the table would then render zero rows and any
+    assertion on row content will fail.
     """
     body = json.dumps(_make_events_response(events))
     page.route(
-        "**/api/v1/events*",
+        "**/api/v1/access/events*",
         lambda r: r.fulfill(
             status=200,
             content_type="application/json",
@@ -197,6 +201,63 @@ class TestAccessHistoryPageLoad:
             "Neither the events table nor the empty state rendered on /secure/access-history"
         )
 
+    def test_events_render_rows_from_api(self, page):
+        """
+        Regression test for the BASE path bug fixed in
+        packages/api-client/src/events.ts (commit after 7bed11f4).
+
+        Before the fix, BASE was '/api/v1/events' which did not match any
+        backend route, so nginx served the SPA fallback HTML and the UI
+        rendered empty state silently. This test mocks the CORRECT URL
+        ('/api/v1/access/events') with real event rows and asserts that
+        the table renders those rows. If BASE regresses, the frontend
+        will miss this mock, hit the catch-all empty-envelope handler
+        from _mock_common_apis, render zero rows, and this test will fail.
+        """
+        hp = _setup(page)
+        _mock_events_api(page, events=[
+            {
+                "id": "11111111-1111-1111-1111-111111111111",
+                "tenant_id": "00000000-0000-0000-0000-000000000001",
+                "time": "2026-04-15T10:00:00Z",
+                "user_id": "u-1",
+                "user_name": "Alice Test",
+                "credential_type": "card",
+                "direction": "in",
+                "decision": "granted",
+                "reason": "rule_match",
+                "device_id": "DEV-TERM-001",
+                "device_name": "Main Entrance Reader",
+            },
+            {
+                "id": "22222222-2222-2222-2222-222222222222",
+                "tenant_id": "00000000-0000-0000-0000-000000000001",
+                "time": "2026-04-15T10:05:00Z",
+                "user_id": "u-2",
+                "user_name": "Bob Test",
+                "credential_type": "pin",
+                "direction": "out",
+                "decision": "denied",
+                "reason": "schedule_block",
+                "device_id": "DEV-TERM-002",
+                "device_name": "Side Door Reader",
+            },
+        ])
+        hp.open()
+        page.wait_for_timeout(500)
+
+        # Table must render (not empty state)
+        expect(page.locator('[data-testid="access-history-table-events"]')).to_be_visible()
+        expect(page.locator('[data-testid="access-history-empty"]')).to_have_count(0)
+
+        # Each event must produce a row keyed by its id
+        expect(page.locator(
+            '[data-testid="access-history-row-11111111-1111-1111-1111-111111111111"]'
+        )).to_be_visible()
+        expect(page.locator(
+            '[data-testid="access-history-row-22222222-2222-2222-2222-222222222222"]'
+        )).to_be_visible()
+
 
 # ── Filter behaviour ──────────────────────────────────────────
 
@@ -215,7 +276,7 @@ class TestAccessHistoryFilters:
         page.wait_for_timeout(500)
 
         # Mock the filtered response (decision=denied → empty is fine)
-        page.route("**/api/v1/events*", lambda r: r.fulfill(
+        page.route("**/api/v1/access/events*", lambda r: r.fulfill(
             status=200,
             content_type="application/json",
             body=json.dumps({"data": [], "total": 0, "page": 1, "limit": 20}),
@@ -276,7 +337,7 @@ class TestAccessHistoryFilters:
         hp = _setup(page)
 
         # Return empty for any events request
-        page.route("**/api/v1/events*", lambda r: r.fulfill(
+        page.route("**/api/v1/access/events*", lambda r: r.fulfill(
             status=200,
             content_type="application/json",
             body=json.dumps({"data": [], "total": 0, "page": 1, "limit": 20}),
@@ -303,8 +364,8 @@ class TestAccessHistoryExport:
         _mock_events_api(page, events=[])
 
         # Mock the export endpoint to serve a CSV file.
-        # exportAccessEvents hits `${BASE}/export?...` where BASE = '/api/v1/events'.
-        page.route("**/api/v1/events/export*", lambda r: r.fulfill(
+        # exportAccessEvents hits `${BASE}/export?...` where BASE = '/api/v1/access/events'.
+        page.route("**/api/v1/access/events/export*", lambda r: r.fulfill(
             status=200,
             content_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": 'attachment; filename="access-events.csv"'},

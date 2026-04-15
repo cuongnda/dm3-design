@@ -1,8 +1,8 @@
 """
 Tenant Isolation Tests: Access Events
 Verifies that tenant isolation is enforced on the access-events endpoints:
-  GET /api/v1/events
-  GET /api/v1/events/export
+  GET /api/v1/access/events
+  GET /api/v1/access/events/export
 
 Pattern: Mirror the approach used in the broader test suite — use two
 separately-authenticated clients (one per tenant) and assert that each

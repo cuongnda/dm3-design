@@ -1,8 +1,8 @@
 """
 DM3: Access Events API Tests
 Tests for access-svc event log endpoints:
-  GET /api/v1/events          — paginated listing with filters
-  GET /api/v1/events/export   — CSV / XLSX download (50k-row cap)
+  GET /api/v1/access/events          — paginated listing with filters
+  GET /api/v1/access/events/export   — CSV / XLSX download (50k-row cap)
 
 Requires: company admin login (admin_client fixture from root conftest).
 Service: access-svc :8003 (proxied through API_URL).

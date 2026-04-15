@@ -1,7 +1,7 @@
 import { apiFetch, getToken } from './client';
 import type { Paginated } from './types/api';
 
-const BASE = '/api/v1/events';
+const BASE = '/api/v1/access/events';
 
 export interface AccessEventDTO {
   id: string;
