@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Shield, Plus, Trash2, Cpu, Edit } from 'lucide-react';
+import { ArrowLeft, Shield, Plus, Trash2, Cpu, Edit, Unlock, Lock, DoorOpen, DoorClosed } from 'lucide-react';
 import {
     Button,
     Input,
@@ -357,6 +357,16 @@ export function AccessPointDetailPage() {
     // Active tab
     const [activeTab, setActiveTab] = useState<'devices'>('devices');
 
+    // Remote door control
+    const [unlockSeconds, setUnlockSeconds] = useState(3);
+    const [doorCommandInFlight, setDoorCommandInFlight] = useState<string | null>(null);
+    // null = no hold; 'open' = hold_open active; 'close' = hold_close active.
+    // The two modes are mutually exclusive on the device, so a single field
+    // captures the state cleanly.
+    const [doorHoldMode, setDoorHoldMode] = useState<null | 'open' | 'close'>(null);
+    const [confirmHoldOpen, setConfirmHoldOpen] = useState(false);
+    const [confirmHoldClose, setConfirmHoldClose] = useState(false);
+
     // Edit modal
     const [showEditModal, setShowEditModal] = useState(false);
     const [editForm, setEditForm] = useState({ name: '', description: '', zone_id: '', map_x: '', map_y: '', map_rotation: '', map_label: '' });
@@ -407,6 +417,52 @@ export function AccessPointDetailPage() {
             setDevicesLoading(false);
         }
     }, [id]);
+
+    // ── Remote door control ────────────────────────────────────────────────
+
+    const onlineDeviceCount = useMemo(
+        () => devices.filter((d) => d.device?.status === 'online').length,
+        [devices],
+    );
+    const offlineDeviceCount = devices.length - onlineDeviceCount;
+
+    const sendDoorCommand = useCallback(
+        async (action: 'unlock' | 'lock' | 'hold_open' | 'hold_close' | 'release', durationMs?: number) => {
+            if (!id) return;
+            setDoorCommandInFlight(action);
+            try {
+                const body: Record<string, unknown> = { action, reason: 'remote_command' };
+                if (durationMs != null) body.duration_ms = durationMs;
+                await apiFetch(`/api/v1/gateway/access-points/${id}/door-command`, {
+                    method: 'POST',
+                    body: JSON.stringify(body),
+                });
+                if (action === 'hold_open') setDoorHoldMode('open');
+                else if (action === 'hold_close') setDoorHoldMode('close');
+                else if (action === 'release' || action === 'lock') setDoorHoldMode(null);
+                const toastMsg: Record<typeof action, string> = {
+                    unlock: t('door.toast.unlocked', 'Door unlocked for {{s}}s', { s: (durationMs ?? unlockSeconds * 1000) / 1000 }),
+                    lock: t('door.toast.locked', 'Door locked'),
+                    hold_open: t('door.toast.heldOpen', 'Door held open'),
+                    hold_close: t('door.toast.heldClosed', 'Door held closed'),
+                    release: t('door.toast.released', 'Hold released'),
+                };
+                toast(toastMsg[action], 'success');
+            } catch (err) {
+                const message = err instanceof Error ? err.message : 'Door command failed';
+                // The backend returns 409 + structured body when any device is offline;
+                // surface a friendlier message in that case.
+                if (message.includes('409')) {
+                    toast(t('door.toast.offline', 'One or more devices are offline; command aborted'), 'error');
+                } else {
+                    toast(message, 'error');
+                }
+            } finally {
+                setDoorCommandInFlight(null);
+            }
+        },
+        [id, t, unlockSeconds],
+    );
 
     const handleAddDevice = useCallback(
         async (access_device_ids: string[], role: string): Promise<boolean> => {
@@ -631,6 +687,122 @@ export function AccessPointDetailPage() {
                 </div>
             </div>
 
+            {/* Remote door control */}
+            <div className="shrink-0 rounded-xl border border-border bg-card p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
+                            <DoorOpen size={14} className="text-primary" />
+                            {t('door.title', 'Remote door control')}
+                        </h2>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            {devices.length === 0
+                                ? t('door.noDevices', 'No devices linked to this access point')
+                                : offlineDeviceCount > 0
+                                    ? t('door.offline', '{{offline}} of {{total}} device(s) offline — commands disabled', { offline: offlineDeviceCount, total: devices.length })
+                                    : t('door.ready', '{{count}} device(s) online and ready', { count: onlineDeviceCount })}
+                        </p>
+                    </div>
+                    {doorHoldMode === 'open' && (
+                        <Badge variant="outline" className="border-amber-400 text-amber-500">
+                            {t('door.holdOpenActive', 'Hold open active')}
+                        </Badge>
+                    )}
+                    {doorHoldMode === 'close' && (
+                        <Badge variant="outline" className="border-rose-400 text-rose-500">
+                            {t('door.holdCloseActive', 'Hold closed active')}
+                        </Badge>
+                    )}
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5">
+                        <Label htmlFor="ap-unlock-seconds" className="text-[11px] text-muted-foreground">
+                            {t('door.duration', 'Duration (s)')}
+                        </Label>
+                        <Input
+                            id="ap-unlock-seconds"
+                            type="number"
+                            min={1}
+                            max={60}
+                            value={unlockSeconds}
+                            onChange={(e) => setUnlockSeconds(Math.max(1, Math.min(60, Number(e.target.value) || 1)))}
+                            className="h-8 w-16 text-[12px]"
+                            disabled={doorCommandInFlight != null || devices.length === 0 || offlineDeviceCount > 0}
+                        />
+                    </div>
+
+                    <Button
+                        size="sm"
+                        onClick={() => sendDoorCommand('unlock', unlockSeconds * 1000)}
+                        disabled={doorCommandInFlight != null || devices.length === 0 || offlineDeviceCount > 0 || doorHoldMode !== null}
+                        data-testid="access-button-doorUnlock"
+                    >
+                        <Unlock size={14} className="mr-1.5" />
+                        {doorCommandInFlight === 'unlock' ? t('door.sending', 'Sending…') : t('door.unlock', 'Unlock')}
+                    </Button>
+
+                    {doorHoldMode === 'open' ? (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => sendDoorCommand('release')}
+                            disabled={doorCommandInFlight != null}
+                            data-testid="access-button-doorRelease"
+                        >
+                            <DoorClosed size={14} className="mr-1.5" />
+                            {doorCommandInFlight === 'release' ? t('door.sending', 'Sending…') : t('door.release', 'Release')}
+                        </Button>
+                    ) : (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setConfirmHoldOpen(true)}
+                            disabled={doorCommandInFlight != null || devices.length === 0 || offlineDeviceCount > 0 || doorHoldMode === 'close'}
+                            data-testid="access-button-doorHoldOpen"
+                        >
+                            <DoorOpen size={14} className="mr-1.5" />
+                            {t('door.holdOpen', 'Hold open')}
+                        </Button>
+                    )}
+
+                    {doorHoldMode === 'close' ? (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => sendDoorCommand('release')}
+                            disabled={doorCommandInFlight != null}
+                            data-testid="access-button-doorReleaseClose"
+                        >
+                            <DoorOpen size={14} className="mr-1.5" />
+                            {doorCommandInFlight === 'release' ? t('door.sending', 'Sending…') : t('door.release', 'Release')}
+                        </Button>
+                    ) : (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setConfirmHoldClose(true)}
+                            disabled={doorCommandInFlight != null || devices.length === 0 || offlineDeviceCount > 0 || doorHoldMode === 'open'}
+                            data-testid="access-button-doorHoldClose"
+                        >
+                            <DoorClosed size={14} className="mr-1.5" />
+                            {t('door.holdClose', 'Hold closed')}
+                        </Button>
+                    )}
+
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => sendDoorCommand('lock')}
+                        disabled={doorCommandInFlight != null || devices.length === 0 || offlineDeviceCount > 0 || doorHoldMode !== null}
+                        data-testid="access-button-doorLock"
+                    >
+                        <Lock size={14} className="mr-1.5" />
+                        {doorCommandInFlight === 'lock' ? t('door.sending', 'Sending…') : t('door.lock', 'Lock')}
+                    </Button>
+                </div>
+            </div>
+
             {/* Tabs */}
             <Tabs
                 value={activeTab}
@@ -767,6 +939,62 @@ export function AccessPointDetailPage() {
                         </div>
                     </div>
                 </div>
+            </AppModal>
+
+            {/* Hold-open confirmation */}
+            <AppModal
+                open={confirmHoldOpen}
+                onOpenChange={setConfirmHoldOpen}
+                title={t('door.confirmHoldTitle', 'Hold door open?')}
+                footer={(
+                    <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setConfirmHoldOpen(false)}>
+                            {t('cancel', 'Cancel')}
+                        </Button>
+                        <Button
+                            size="sm"
+                            onClick={async () => {
+                                setConfirmHoldOpen(false);
+                                await sendDoorCommand('hold_open');
+                            }}
+                            disabled={doorCommandInFlight != null}
+                        >
+                            {t('door.confirmHoldAction', 'Hold open')}
+                        </Button>
+                    </div>
+                )}
+            >
+                <p className="text-[12px] text-muted-foreground">
+                    {t('door.confirmHoldBody', 'This keeps the door unlocked until someone clicks Release. Use only when you need continuous access.')}
+                </p>
+            </AppModal>
+
+            {/* Hold-closed confirmation */}
+            <AppModal
+                open={confirmHoldClose}
+                onOpenChange={setConfirmHoldClose}
+                title={t('door.confirmHoldCloseTitle', 'Hold door closed?')}
+                footer={(
+                    <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setConfirmHoldClose(false)}>
+                            {t('cancel', 'Cancel')}
+                        </Button>
+                        <Button
+                            size="sm"
+                            onClick={async () => {
+                                setConfirmHoldClose(false);
+                                await sendDoorCommand('hold_close');
+                            }}
+                            disabled={doorCommandInFlight != null}
+                        >
+                            {t('door.confirmHoldCloseAction', 'Hold closed')}
+                        </Button>
+                    </div>
+                )}
+            >
+                <p className="text-[12px] text-muted-foreground">
+                    {t('door.confirmHoldCloseBody', 'This keeps the door locked and refuses every credential read until someone clicks Release. Use for lockdown or emergency closure.')}
+                </p>
             </AppModal>
         </div>
     );

@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Plus, Edit, Trash2, Eye, Trash } from 'lucide-react';
+import { Shield, Plus, Edit, Trash2, Eye, Trash, Unlock, Lock, DoorOpen, DoorClosed, RotateCcw } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
 import {
     Button,
     Input,
@@ -182,6 +183,11 @@ export function AccessPointsPage() {
     const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
     const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
 
+    // Bulk door command state
+    const [bulkDoorAction, setBulkDoorAction] = useState<null | 'unlock' | 'lock' | 'hold_open' | 'hold_close' | 'release'>(null);
+    const [bulkDoorLoading, setBulkDoorLoading] = useState(false);
+    const [bulkUnlockSeconds, setBulkUnlockSeconds] = useState(3);
+
     const zoneMap = useMemo(() => new Map(zones.map((z) => [z.id, z.name])), [zones]);
 
     const handleCreate = async (data: AccessPointFormData) => createAccessPoint(data);
@@ -208,6 +214,52 @@ export function AccessPointsPage() {
             }
         } finally {
             setDeleteLoading(false);
+        }
+    };
+
+    // Send one bulk request to the backend. Server fans out per access point
+    // and returns a per-AP result set so we can report successes + skips in a
+    // single toast without N round-trips.
+    const runBulkDoorCommand = async (
+        action: 'unlock' | 'lock' | 'hold_open' | 'hold_close' | 'release',
+        durationMs?: number,
+    ) => {
+        if (selected.length === 0) return;
+        setBulkDoorLoading(true);
+        try {
+            const body: Record<string, unknown> = {
+                access_point_ids: selected,
+                action,
+                reason: 'bulk_remote_command',
+            };
+            if (durationMs != null) body.duration_ms = durationMs;
+            const res = await apiFetch<{
+                summary: { ok: number; no_devices: number; offline: number; failed: number };
+            }>(`/api/v1/gateway/access-points/door-command/bulk`, {
+                method: 'POST',
+                body: JSON.stringify(body),
+            });
+            const s = res.summary;
+            const ok = s.ok;
+            const skipped = s.no_devices + s.offline;
+            const failed = s.failed;
+            if (ok === selected.length) {
+                toast(t('bulkDoor.toast.allOk', '{{count}} door(s) dispatched', { count: ok }), 'success');
+            } else if (ok === 0) {
+                toast(t('bulkDoor.toast.allFailed', 'All {{count}} door command(s) failed', { count: selected.length }), 'error');
+            } else {
+                toast(
+                    t('bulkDoor.toast.mixed', '{{ok}} dispatched · {{skipped}} skipped · {{failed}} failed', {
+                        ok, skipped, failed,
+                    }),
+                    skipped + failed > ok ? 'error' : 'success',
+                );
+            }
+        } catch (err) {
+            toast(err instanceof Error ? err.message : 'Bulk door command failed', 'error');
+        } finally {
+            setBulkDoorLoading(false);
+            setBulkDoorAction(null);
         }
     };
 
@@ -413,6 +465,36 @@ export function AccessPointsPage() {
                             selectOnRowClick: true,
                             bulkActions: [
                                 {
+                                    icon: <Unlock size={13} />,
+                                    label: t('bulkDoor.unlock', 'Unlock'),
+                                    variant: 'ghost',
+                                    onClick: () => setBulkDoorAction('unlock'),
+                                },
+                                {
+                                    icon: <Lock size={13} />,
+                                    label: t('bulkDoor.lock', 'Lock'),
+                                    variant: 'ghost',
+                                    onClick: () => setBulkDoorAction('lock'),
+                                },
+                                {
+                                    icon: <DoorOpen size={13} />,
+                                    label: t('bulkDoor.holdOpen', 'Hold open'),
+                                    variant: 'ghost',
+                                    onClick: () => setBulkDoorAction('hold_open'),
+                                },
+                                {
+                                    icon: <DoorClosed size={13} />,
+                                    label: t('bulkDoor.holdClose', 'Hold closed'),
+                                    variant: 'ghost',
+                                    onClick: () => setBulkDoorAction('hold_close'),
+                                },
+                                {
+                                    icon: <RotateCcw size={13} />,
+                                    label: t('bulkDoor.release', 'Release'),
+                                    variant: 'ghost',
+                                    onClick: () => setBulkDoorAction('release'),
+                                },
+                                {
                                     icon: <Trash size={13} className="text-destructive" />,
                                     label: t('common:table.deleteSelected'),
                                     variant: 'ghost',
@@ -527,6 +609,68 @@ export function AccessPointsPage() {
                     <span className="font-medium text-foreground">{selected.length}</span>{' '}
                     {t('bulkDeleteSuffix', 'access points? This cannot be undone.')}
                 </p>
+            </AppModal>
+
+            {/* Bulk door command confirmation */}
+            <AppModal
+                open={bulkDoorAction !== null}
+                onOpenChange={(open) => { if (!open) setBulkDoorAction(null); }}
+                title={bulkDoorAction ? (() => {
+                    const count = selected.length;
+                    switch (bulkDoorAction) {
+                        case 'unlock':     return t('bulkDoor.confirmTitle.unlock', 'Unlock {{count}} doors?', { count });
+                        case 'lock':       return t('bulkDoor.confirmTitle.lock', 'Lock {{count}} doors?', { count });
+                        case 'hold_open':  return t('bulkDoor.confirmTitle.holdOpen', 'Hold {{count}} doors open?', { count });
+                        case 'hold_close': return t('bulkDoor.confirmTitle.holdClose', 'Hold {{count}} doors closed?', { count });
+                        case 'release':    return t('bulkDoor.confirmTitle.release', 'Release hold on {{count}} doors?', { count });
+                    }
+                })() : ''}
+                size="xs"
+                showCancelButton
+                cancelLabel={t('cancel', 'Cancel')}
+                cancelDisabled={bulkDoorLoading}
+                primaryAction={{
+                    label: bulkDoorLoading
+                        ? t('bulkDoor.sending', 'Sending…')
+                        : t('bulkDoor.confirm', 'Confirm'),
+                    onClick: () => {
+                        if (!bulkDoorAction) return;
+                        const durationMs = bulkDoorAction === 'unlock' ? bulkUnlockSeconds * 1000 : undefined;
+                        runBulkDoorCommand(bulkDoorAction, durationMs);
+                    },
+                    loading: bulkDoorLoading,
+                    disabled: bulkDoorLoading,
+                }}
+            >
+                <div className="space-y-3 text-[13px]">
+                    <p className="text-muted-foreground">
+                        {t('bulkDoor.confirmBody', 'This will send the command to every selected access point in parallel. Access points with any offline device will be skipped.')}
+                    </p>
+                    {bulkDoorAction === 'unlock' && (
+                        <div className="flex items-center gap-2">
+                            <Label htmlFor="bulk-unlock-seconds" className="text-[12px] text-muted-foreground">
+                                {t('bulkDoor.duration', 'Duration (s)')}
+                            </Label>
+                            <Input
+                                id="bulk-unlock-seconds"
+                                type="number"
+                                min={1}
+                                max={60}
+                                value={bulkUnlockSeconds}
+                                onChange={(e) => setBulkUnlockSeconds(Math.max(1, Math.min(60, Number(e.target.value) || 1)))}
+                                className="h-8 w-20"
+                                disabled={bulkDoorLoading}
+                            />
+                        </div>
+                    )}
+                    {(bulkDoorAction === 'hold_open' || bulkDoorAction === 'hold_close') && (
+                        <p className="rounded-md border border-amber-400/40 bg-amber-500/10 p-2 text-[12px] text-amber-700 dark:text-amber-300">
+                            {bulkDoorAction === 'hold_open'
+                                ? t('bulkDoor.holdOpenWarn', 'Doors will stay unlocked until you send Release.')
+                                : t('bulkDoor.holdCloseWarn', 'Doors will refuse all credentials until you send Release. Use for lockdown only.')}
+                        </p>
+                    )}
+                </div>
             </AppModal>
         </div>
     );

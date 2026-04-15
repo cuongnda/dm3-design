@@ -519,6 +519,316 @@ func (h *GatewayHandlers) SendCommand(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, map[string]string{"status": "sent", "topic": topic})
 }
 
+// ─── Remote Door Control ────────────────────────────────────────────────────
+//
+// Fans out a `cmd.door` MQTT command (as defined in docs/architecture/mqtt-protocol.md §6.1)
+// to every device bound to the given access point. Used by the console's
+// "Remote unlock" action. Rejects the whole request if any bound device is
+// offline so an operator never gets a half-unlocked door.
+
+type doorCommandRequest struct {
+	Action     string `json:"action"`      // unlock | lock | hold_open | hold_close | release
+	DurationMS *int   `json:"duration_ms"` // for unlock / hold_open; ignored for hold_close (indefinite)
+	Reason     string `json:"reason"`      // free-form, e.g. "remote_command"
+}
+
+type doorCommandDispatchedDevice struct {
+	ID       string `json:"id"`        // devices.id (UUID)
+	DeviceID string `json:"device_id"` // devices.device_id (human id)
+	Name     string `json:"name"`
+}
+
+type doorCommandOfflineDevice struct {
+	ID       string `json:"id"`
+	DeviceID string `json:"device_id"`
+	Name     string `json:"name"`
+	Status   string `json:"status"`
+}
+
+// doorCommandResult is the per-access-point outcome in a bulk response, and
+// also drives the single-AP path for consistency. `status` is one of:
+//
+//	ok         — MQTT command published to every bound device
+//	no_devices — AP has no bound devices (treated as skip, not error)
+//	offline    — one or more bound devices is not online; nothing published
+//	failed     — DB or MQTT publish error while dispatching
+type doorCommandResult struct {
+	AccessPointID  string                        `json:"access_point_id"`
+	Status         string                        `json:"status"`
+	Devices        []doorCommandDispatchedDevice `json:"devices,omitempty"`
+	OfflineDevices []doorCommandOfflineDevice    `json:"offline_devices,omitempty"`
+	Error          string                        `json:"error,omitempty"`
+}
+
+// validateDoorAction returns ("", true) on success or an error message + false.
+func validateDoorAction(req doorCommandRequest) (string, bool) {
+	switch req.Action {
+	case "unlock", "lock", "hold_open", "hold_close", "release":
+	default:
+		return "action must be one of: unlock, lock, hold_open, hold_close, release", false
+	}
+	if (req.Action == "unlock" || req.Action == "hold_open") && req.DurationMS != nil && *req.DurationMS <= 0 {
+		return "duration_ms must be positive", false
+	}
+	return "", true
+}
+
+// dispatchDoorCommand runs the full per-AP flow (device lookup → online check
+// → MQTT publish → audit). Returns a structured result; the caller decides how
+// to map it to an HTTP status. Never returns an error — every failure becomes
+// a `Status` value so bulk callers can aggregate cleanly.
+func (h *GatewayHandlers) dispatchDoorCommand(
+	ctx context.Context,
+	tenantID, operatorID, accessPointID string,
+	req doorCommandRequest,
+	reason string,
+	auditor func(accessPointID string, result doorCommandResult),
+) doorCommandResult {
+	result := doorCommandResult{AccessPointID: accessPointID}
+
+	rows, err := h.db.Pool.Query(ctx, `
+		SELECT d.id::text, d.device_id, COALESCE(d.name, ''), COALESCE(d.status, 'offline'), COALESCE(d.open_relay_ms, 3000)
+		FROM dm3_access.access_point_devices apd
+		JOIN dm3_devices.devices d ON d.id::text = apd.access_device_id
+		WHERE apd.access_point_id = $1::uuid
+		  AND apd.tenant_id = $2::uuid
+		  AND d.tenant_id = $2::uuid
+	`, accessPointID, tenantID)
+	if err != nil {
+		slog.Error("dispatchDoorCommand: query bound devices", "error", err, "access_point_id", accessPointID)
+		result.Status = "failed"
+		result.Error = "failed to query bound devices"
+		if auditor != nil {
+			auditor(accessPointID, result)
+		}
+		return result
+	}
+	defer rows.Close()
+
+	type boundDevice struct {
+		ID, DeviceID, Name, Status string
+		OpenRelayMS                int
+	}
+	var bound []boundDevice
+	for rows.Next() {
+		var b boundDevice
+		if err := rows.Scan(&b.ID, &b.DeviceID, &b.Name, &b.Status, &b.OpenRelayMS); err != nil {
+			result.Status = "failed"
+			result.Error = "failed to scan bound devices"
+			if auditor != nil {
+				auditor(accessPointID, result)
+			}
+			return result
+		}
+		bound = append(bound, b)
+	}
+	if len(bound) == 0 {
+		result.Status = "no_devices"
+		if auditor != nil {
+			auditor(accessPointID, result)
+		}
+		return result
+	}
+
+	// Reject the command outright if any bound device is offline.
+	var offline []doorCommandOfflineDevice
+	for _, b := range bound {
+		if b.Status != "online" {
+			offline = append(offline, doorCommandOfflineDevice{
+				ID: b.ID, DeviceID: b.DeviceID, Name: b.Name, Status: b.Status,
+			})
+		}
+	}
+	if len(offline) > 0 {
+		result.Status = "offline"
+		result.OfflineDevices = offline
+		if auditor != nil {
+			auditor(accessPointID, result)
+		}
+		return result
+	}
+
+	dispatched := make([]doorCommandDispatchedDevice, 0, len(bound))
+	for _, b := range bound {
+		data := map[string]any{
+			"action":      req.Action,
+			"door_id":     accessPointID,
+			"reason":      reason,
+			"operator_id": operatorID,
+		}
+		if req.Action == "unlock" || req.Action == "hold_open" {
+			if req.DurationMS != nil {
+				data["duration_ms"] = *req.DurationMS
+			} else {
+				data["duration_ms"] = b.OpenRelayMS
+			}
+		}
+		payload, err := json.Marshal(map[string]any{
+			"type": "cmd.door",
+			"data": data,
+		})
+		if err != nil {
+			result.Status = "failed"
+			result.Error = "failed to marshal payload"
+			if auditor != nil {
+				auditor(accessPointID, result)
+			}
+			return result
+		}
+		topic := fmt.Sprintf("dm/%s/device/%s/cmd", tenantID, b.DeviceID)
+		if err := h.mqtt.Publish(ctx, topic, 2, payload); err != nil {
+			slog.Error("dispatchDoorCommand: mqtt publish failed", "error", err, "topic", topic, "device", b.DeviceID)
+			result.Status = "failed"
+			result.Error = "mqtt publish failed"
+			if auditor != nil {
+				auditor(accessPointID, result)
+			}
+			return result
+		}
+		dispatched = append(dispatched, doorCommandDispatchedDevice{
+			ID: b.ID, DeviceID: b.DeviceID, Name: b.Name,
+		})
+	}
+
+	result.Status = "ok"
+	result.Devices = dispatched
+	if auditor != nil {
+		auditor(accessPointID, result)
+	}
+	return result
+}
+
+func (h *GatewayHandlers) SendDoorCommand(w http.ResponseWriter, r *http.Request) {
+	accessPointID := chi.URLParam(r, "id")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+
+	var req doorCommandRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if msg, ok := validateDoorAction(req); !ok {
+		httputil.Error(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	var operatorID string
+	if claims := authsvc.ClaimsFromContext(r.Context()); claims != nil {
+		operatorID = claims.Sub
+	}
+	reason := req.Reason
+	if reason == "" {
+		reason = "remote_command"
+	}
+
+	auditor := func(apID string, res doorCommandResult) {
+		h.audit.LogFromRequest(r, "access.door.command", "access_point", apID, "", res.Status, nil, map[string]any{
+			"action":      req.Action,
+			"duration_ms": req.DurationMS,
+			"reason":      reason,
+			"result":      res,
+		})
+	}
+
+	result := h.dispatchDoorCommand(r.Context(), cid, operatorID, accessPointID, req, reason, auditor)
+
+	// Preserve the original single-AP error contract: 404 for no devices, 409
+	// for offline, 500 for failure, 202 for dispatched.
+	switch result.Status {
+	case "ok":
+		httputil.JSON(w, http.StatusAccepted, map[string]any{
+			"status":  "dispatched",
+			"action":  req.Action,
+			"devices": result.Devices,
+		})
+	case "no_devices":
+		httputil.Error(w, http.StatusNotFound, "access point has no bound devices")
+	case "offline":
+		httputil.JSON(w, http.StatusConflict, map[string]any{
+			"error":           "Some bound devices are offline",
+			"offline_devices": result.OfflineDevices,
+		})
+	default:
+		httputil.Error(w, http.StatusInternalServerError, "failed to publish door command")
+	}
+}
+
+// BulkDoorCommand runs the same per-AP flow across a list of access points and
+// returns a structured per-AP result set. Always 200 unless the request itself
+// is invalid — individual AP failures are surfaced in the body so the caller
+// can show a per-row outcome without the all-or-nothing of HTTP status codes.
+
+type bulkDoorCommandRequest struct {
+	AccessPointIDs []string `json:"access_point_ids"`
+	Action         string   `json:"action"`
+	DurationMS     *int     `json:"duration_ms"`
+	Reason         string   `json:"reason"`
+}
+
+func (h *GatewayHandlers) BulkDoorCommand(w http.ResponseWriter, r *http.Request) {
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+
+	var req bulkDoorCommandRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(req.AccessPointIDs) == 0 {
+		httputil.Error(w, http.StatusBadRequest, "access_point_ids must not be empty")
+		return
+	}
+	if len(req.AccessPointIDs) > 200 {
+		httputil.Error(w, http.StatusBadRequest, "access_point_ids cannot exceed 200 per request")
+		return
+	}
+	inner := doorCommandRequest{Action: req.Action, DurationMS: req.DurationMS, Reason: req.Reason}
+	if msg, ok := validateDoorAction(inner); !ok {
+		httputil.Error(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	var operatorID string
+	if claims := authsvc.ClaimsFromContext(r.Context()); claims != nil {
+		operatorID = claims.Sub
+	}
+	reason := req.Reason
+	if reason == "" {
+		reason = "remote_command"
+	}
+
+	results := make([]doorCommandResult, 0, len(req.AccessPointIDs))
+	summary := map[string]int{"ok": 0, "no_devices": 0, "offline": 0, "failed": 0}
+	for _, apID := range req.AccessPointIDs {
+		res := h.dispatchDoorCommand(r.Context(), cid, operatorID, apID, inner, reason, nil)
+		results = append(results, res)
+		summary[res.Status]++
+	}
+
+	// One audit entry for the whole batch — avoids flooding the audit log with
+	// N rows per bulk action while still capturing enough to reproduce the op.
+	h.audit.LogFromRequest(r, "access.door.bulk_command", "access_point", "", "", "success", nil, map[string]any{
+		"action":      req.Action,
+		"duration_ms": req.DurationMS,
+		"reason":      reason,
+		"summary":     summary,
+		"results":     results,
+	})
+
+	httputil.JSON(w, http.StatusOK, map[string]any{
+		"action":  req.Action,
+		"summary": summary,
+		"results": results,
+	})
+}
+
 // ─── Events ─────────────────────────────────────────────────────────────────
 
 func (h *GatewayHandlers) GetDeviceEvents(w http.ResponseWriter, r *http.Request) {

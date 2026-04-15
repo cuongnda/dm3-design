@@ -460,9 +460,9 @@ All messages follow a standard envelope format:
   "type": "door.state",
   "data": {
     "door_id": "door-001",
-    "state": "open|closed|locked|unlocked|forced|held_open|tampered",
+    "state": "open|closed|locked|unlocked|forced|held_open|held_closed|tampered",
     "source": "button|schedule|command|sensor|manual",
-    "duration_ms": 0            // How long in current state (for held_open alerts)
+    "duration_ms": 0            // How long in current state (for held_open / held_closed alerts)
   }
 }
 ```
@@ -609,14 +609,23 @@ All messages follow a standard envelope format:
 {
   "type": "cmd.door",
   "data": {
-    "action": "unlock|lock|hold_open|release",
+    "action": "unlock|lock|hold_open|hold_close|release",
     "door_id": "door-001",
-    "duration_ms": 5000,         // For unlock/hold_open
+    "duration_ms": 5000,         // For unlock/hold_open; omit for hold_close (indefinite)
     "reason": "remote_command",
     "operator_id": "user-uuid"   // Who issued the command
   }
 }
 ```
+
+**Actions:**
+- `unlock` — momentary unlock for `duration_ms` (pulse the relay).
+- `lock` — momentary re-lock, returning the door to its default state.
+- `hold_open` — keep the door unlocked until an explicit `release` (lockdown → open).
+- `hold_close` — keep the door locked and refuse all credential reads until an explicit `release` (lockdown → closed). Device reports state as `held_closed` in `door.state` events.
+- `release` — exit either hold mode and return the door to its schedule-driven default.
+
+`hold_open` and `hold_close` are mutually exclusive. Sending one while the other is active replaces the mode; the device should not need a `release` in between.
 
 **Response** (`dm/{tid}/device/{did}/cmd/resp`):
 ```json

@@ -224,6 +224,8 @@ func main() {
 			cr.Put("/devices/{id}", handlers.UpdateDevice)
 			cr.Delete("/devices/{id}", handlers.DeleteDevice)
 			cr.Post("/devices/{id}/command", handlers.SendCommand)
+			cr.Post("/access-points/{id}/door-command", handlers.SendDoorCommand)
+			cr.Post("/access-points/door-command/bulk", handlers.BulkDoorCommand)
 			cr.Get("/devices/{id}/events", handlers.GetDeviceEvents)
 			cr.Get("/events", handlers.ListEvents)
 			// Sync: manager+ only
