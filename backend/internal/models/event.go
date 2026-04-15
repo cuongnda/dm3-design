@@ -10,7 +10,6 @@ type AccessEvent struct {
 	TenantID       string          `json:"tenant_id"`
 	Time           time.Time       `json:"time"`
 	AccessPointID  *string         `json:"access_point_id,omitempty"`
-	DoorID         *string         `json:"door_id,omitempty"`
 	UserID         *string         `json:"user_id,omitempty"`
 	UserName       *string         `json:"user_name,omitempty"`
 	CredentialType *string         `json:"credential_type,omitempty"`
