@@ -106,7 +106,7 @@ docker exec -i dm3-local-timescaledb psql -U dm3 -d dm3 -q <<'EOSQL'
   DELETE FROM dm3_visitor.watchlist;
   DELETE FROM dm3_visitor.visitor_agreements;
   DELETE FROM dm3_visitor.visitor_settings;
-  -- Access
+  -- Access (events + AP-device links must go before devices)
   DELETE FROM dm3_access.access_events;
   DELETE FROM dm3_access.access_group_access_points;
   DELETE FROM dm3_access.access_group_users;
@@ -116,12 +116,15 @@ docker exec -i dm3-local-timescaledb psql -U dm3 -d dm3 -q <<'EOSQL'
   DELETE FROM dm3_access.access_point_devices;
   DELETE FROM dm3_access.access_points;
   DELETE FROM dm3_access.zones;
-  -- Identity
+  -- Devices (FK: dm3_access.access_point_devices.access_device_id → devices.device_id)
+  DELETE FROM dm3_devices.devices;
+  -- Identity (users must be nulled from departments before delete due to FK)
   DELETE FROM dm3_identity.user_group_members;
   DELETE FROM dm3_identity.user_groups;
   DELETE FROM dm3_identity.credentials;
-  DELETE FROM dm3_identity.users;
+  UPDATE dm3_identity.users SET department_id = NULL;
   DELETE FROM dm3_identity.departments;
+  DELETE FROM dm3_identity.users;
   -- Auth (keep sysadmin)
   DELETE FROM dm3_auth.accounts WHERE role != 'system_admin';
   DELETE FROM dm3_auth.tenants;
@@ -210,34 +213,76 @@ ADMIN_TOKEN=$(do_login "$ADMIN_EMAIL" "$ADMIN_PASS" "$TENANT_ID")
 ok "Tenant admin logged in"
 
 # ============================================================
+# 4.5 IDENTITY — Departments (must come before users so users
+#      can reference them via department_id)
+# ============================================================
+echo ""
+echo "Phase 4.5: Identity — Departments..."
+declare -A DEPT_IDS
+for d in \
+  'Engineering|ENG' \
+  'Operations|OPS' \
+  'Security|SEC' \
+  'Sales|SAL' \
+  'Finance|FIN' \
+  'IT|IT'; do
+  IFS='|' read -r dname dnum <<< "$d"
+  resp=$(api_post "/api/v1/identity/departments" "{\"name\":\"$dname\",\"number\":\"$dnum\"}" "$ADMIN_TOKEN")
+  did=$(echo "$resp" | jq -r '.id // empty' 2>/dev/null)
+  if [[ -z "$did" || "$did" == "null" ]]; then
+    did=$(docker exec dm3-local-timescaledb psql -U dm3 -d dm3 -t -A -c "SELECT id FROM dm3_identity.departments WHERE tenant_id='$TENANT_ID' AND number='$dnum' LIMIT 1;" | tr -d '[:space:]')
+  fi
+  DEPT_IDS[$dnum]="$did"
+  ok "Department: $dname ($dnum)"
+done
+
+# ============================================================
 # 5. IDENTITY — Users (employees)
 # ============================================================
 echo ""
 echo "Phase 5: Identity — Users & Credentials..."
 declare -a USER_IDS=()
+# Format: first|last|email|phone|emp|position|dept_key
 USER_DATA=(
-  'Pham|Minh Duc|duc.pham@duali.com|+84901234004|EMP004|Senior Engineer'
-  'Hoang|Thi Em|em.hoang@duali.com|+84901234005|EMP005|Receptionist'
-  'Vo|Van Phuc|phuc.vo@duali.com|+84901234006|EMP006|Junior Engineer'
-  'Dang|Quang Gia|gia.dang@duali.com|+84901234007|EMP007|Security Guard'
-  'Bui|Thi Huong|huong.bui@duali.com|+84901234008|EMP008|Accountant'
-  'Do|Minh Ich|ich.do@duali.com|+84901234009|EMP009|Sales Executive'
-  'Ngo|Van Khanh|khanh.ngo@duali.com|+84901234010|EMP010|IT Admin'
+  'Pham|Minh Duc|duc.pham@duali.com|+84901234004|EMP004|Senior Engineer|ENG'
+  'Hoang|Thi Em|em.hoang@duali.com|+84901234005|EMP005|Receptionist|OPS'
+  'Vo|Van Phuc|phuc.vo@duali.com|+84901234006|EMP006|Junior Engineer|ENG'
+  'Dang|Quang Gia|gia.dang@duali.com|+84901234007|EMP007|Security Guard|SEC'
+  'Bui|Thi Huong|huong.bui@duali.com|+84901234008|EMP008|Accountant|FIN'
+  'Do|Minh Ich|ich.do@duali.com|+84901234009|EMP009|Sales Executive|SAL'
+  'Ngo|Van Khanh|khanh.ngo@duali.com|+84901234010|EMP010|IT Admin|IT'
+  'Nguyen|Van Linh|linh.nguyen@duali.com|+84901234011|EMP011|Tech Lead|ENG'
+  'Tran|Thi Mai|mai.tran@duali.com|+84901234012|EMP012|Frontend Engineer|ENG'
+  'Le|Van Nam|nam.le@duali.com|+84901234013|EMP013|Backend Engineer|ENG'
+  'Pham|Quoc Oanh|oanh.pham@duali.com|+84901234014|EMP014|DevOps Engineer|ENG'
+  'Hoang|Thi Phuong|phuong.hoang@duali.com|+84901234015|EMP015|QA Engineer|ENG'
+  'Vo|Van Quang|quang.vo@duali.com|+84901234016|EMP016|Operations Lead|OPS'
+  'Dang|Thi Rinh|rinh.dang@duali.com|+84901234017|EMP017|Office Manager|OPS'
+  'Bui|Van Son|son.bui@duali.com|+84901234018|EMP018|Facility Coordinator|OPS'
+  'Do|Thi Tuyet|tuyet.do@duali.com|+84901234019|EMP019|Security Lead|SEC'
+  'Ngo|Van Uy|uy.ngo@duali.com|+84901234020|EMP020|Security Officer|SEC'
+  'Ly|Thi Van|van.ly@duali.com|+84901234021|EMP021|Security Officer|SEC'
+  'Trinh|Van Xuan|xuan.trinh@duali.com|+84901234022|EMP022|Sales Director|SAL'
+  'Cao|Thi Yen|yen.cao@duali.com|+84901234023|EMP023|Sales Manager|SAL'
+  'Phan|Van Anh|anh.phan@duali.com|+84901234024|EMP024|Account Executive|SAL'
+  'Mai|Thi Binh|binh.mai@duali.com|+84901234025|EMP025|Finance Manager|FIN'
+  'Lam|Van Chau|chau.lam@duali.com|+84901234026|EMP026|Accountant|FIN'
+  'Thai|Thi Dung|dung.thai@duali.com|+84901234027|EMP027|Payroll Specialist|FIN'
+  'Truong|Van Giap|giap.truong@duali.com|+84901234028|EMP028|IT Support|IT'
+  'Luong|Thi Ha|ha.luong@duali.com|+84901234029|EMP029|System Admin|IT'
+  'Dinh|Van Kien|kien.dinh@duali.com|+84901234030|EMP030|Network Engineer|IT'
 )
 
 for u in "${USER_DATA[@]}"; do
-  IFS='|' read -r first last email phone emp pos <<< "$u"
-  resp=$(api_post "/api/v1/identity/users" "{
-    \"first_name\": \"$first\",
-    \"last_name\": \"$last\",
-    \"email\": \"$email\",
-    \"phone\": \"$phone\",
-    \"emp_number\": \"$emp\",
-    \"position\": \"$pos\"
-  }" "$ADMIN_TOKEN")
-  uid=$(echo "$resp" | jq -r '.id // empty')
+  IFS='|' read -r first last email phone emp pos deptkey <<< "$u"
+  did="${DEPT_IDS[$deptkey]:-}"
+  payload="{\"first_name\":\"$first\",\"last_name\":\"$last\",\"email\":\"$email\",\"phone\":\"$phone\",\"emp_number\":\"$emp\",\"position\":\"$pos\""
+  [[ -n "$did" ]] && payload="$payload,\"department_id\":\"$did\""
+  payload="$payload}"
+  resp=$(api_post "/api/v1/identity/users" "$payload" "$ADMIN_TOKEN")
+  uid=$(echo "$resp" | jq -r '.id // empty' 2>/dev/null)
   USER_IDS+=("$uid")
-  ok "User: $first $last ($emp)"
+  ok "User: $first $last ($emp, $deptkey)"
 done
 
 # Credentials for first 5 users
@@ -345,6 +390,57 @@ for ap_item in \
   AP_IDS+=("$apid")
   ok "Access Point: $apname"
 done
+
+# ============================================================
+# 6.5 DEVICES — Terminals, Cameras, Sensors + AP-device links
+#      Direct SQL for richer fields (model, firmware, last_seen)
+#      not exposed by the public API.
+# ============================================================
+echo ""
+echo "Phase 6.5: Devices..."
+AP_MAIN="${AP_IDS[0]:-}"
+AP_SIDE="${AP_IDS[1]:-}"
+AP_PARK="${AP_IDS[2]:-}"
+AP_SERV="${AP_IDS[3]:-}"
+AP_WARE="${AP_IDS[4]:-}"
+
+docker exec -i dm3-local-timescaledb psql -U dm3 -d dm3 -q <<EOSQL
+INSERT INTO dm3_devices.devices
+  (tenant_id, device_id, name, type, status, model, firmware_version, location, last_seen, provisioned_at)
+VALUES
+  ('$TENANT_ID', 'DEV-TERM-001', 'Main Entrance Reader',    'terminal', 'online',  'ra08',        '2.4.1', 'Lobby - Main Entrance', now() - interval '2 minutes',  now() - interval '30 days'),
+  ('$TENANT_ID', 'DEV-TERM-002', 'Side Door Reader',        'terminal', 'online',  'df970',       '1.8.3', 'Lobby - Side Door',     now() - interval '1 minute',   now() - interval '30 days'),
+  ('$TENANT_ID', 'DEV-TERM-003', 'Parking Gate Reader',     'terminal', 'online',  'ba8300',      '3.0.2', 'Parking B1 - Gate',     now() - interval '3 minutes',  now() - interval '25 days'),
+  ('$TENANT_ID', 'DEV-TERM-004', 'Server Room Reader',      'terminal', 'online',  'dq8500',      '2.1.0', 'Server Room Door',      now() - interval '5 minutes',  now() - interval '20 days'),
+  ('$TENANT_ID', 'DEV-TERM-005', 'Warehouse Reader',        'terminal', 'warning', 'dq200',       '1.5.7', 'Warehouse Entry',       now() - interval '12 hours',   now() - interval '20 days'),
+  ('$TENANT_ID', 'DEV-CAM-001',  'Lobby CCTV Camera',       'camera',   'online',  'cctv',        '4.1.0', 'Main Lobby ceiling',    now() - interval '1 minute',   now() - interval '15 days'),
+  ('$TENANT_ID', 'DEV-CAM-002',  'Parking CCTV Camera',     'camera',   'online',  'camera_dc',   '4.1.0', 'Parking B1 ramp',       now() - interval '2 minutes',  now() - interval '15 days'),
+  ('$TENANT_ID', 'DEV-CAM-003',  'Warehouse CCTV Camera',   'camera',   'offline', 'cctv',        '4.0.5', 'Warehouse entry',       now() - interval '2 days',     now() - interval '15 days'),
+  ('$TENANT_ID', 'DEV-SEN-001',  'Server Room Door Sensor', 'sensor',   'online',  'door_sensor', '1.0.4', 'Server Room frame',     now() - interval '30 seconds', now() - interval '10 days'),
+  ('$TENANT_ID', 'DEV-SEN-002',  'Warehouse Door Sensor',   'sensor',   'online',  'door_sensor', '1.0.4', 'Warehouse frame',       now() - interval '45 seconds', now() - interval '10 days')
+ON CONFLICT (device_id) DO UPDATE SET
+  tenant_id = EXCLUDED.tenant_id,
+  name = EXCLUDED.name,
+  type = EXCLUDED.type,
+  status = EXCLUDED.status,
+  model = EXCLUDED.model,
+  firmware_version = EXCLUDED.firmware_version,
+  location = EXCLUDED.location,
+  last_seen = EXCLUDED.last_seen,
+  updated_at = now();
+
+INSERT INTO dm3_access.access_point_devices (tenant_id, access_point_id, access_device_id, role) VALUES
+  ('$TENANT_ID', '$AP_MAIN', 'DEV-TERM-001', 'reader_in'),
+  ('$TENANT_ID', '$AP_SIDE', 'DEV-TERM-002', 'reader_in'),
+  ('$TENANT_ID', '$AP_PARK', 'DEV-TERM-003', 'reader_in'),
+  ('$TENANT_ID', '$AP_SERV', 'DEV-TERM-004', 'reader_in'),
+  ('$TENANT_ID', '$AP_WARE', 'DEV-TERM-005', 'reader_in'),
+  ('$TENANT_ID', '$AP_SERV', 'DEV-SEN-001',  'door_sensor'),
+  ('$TENANT_ID', '$AP_WARE', 'DEV-SEN-002',  'door_sensor')
+ON CONFLICT (access_point_id, access_device_id) DO NOTHING;
+EOSQL
+ok "Devices: 5 terminals, 3 cameras, 2 sensors"
+ok "AP-device links: 7 mappings"
 
 # ============================================================
 # 7. VISITOR — Settings, Visitors, Visits, Watchlist, Agreements
@@ -596,7 +692,72 @@ api_put "/api/v1/parking/settings" '{
 ok "Parking settings configured"
 
 # ============================================================
-# DONE
+# 9. ACCESS EVENTS — Historical log (~30 days × ~20 events/day)
+#      Uses generate_series into the TimescaleDB hypertable for
+#      realistic Access History / Event Log data.
+# ============================================================
+echo ""
+echo "Phase 9: Historical Access Events..."
+docker exec -i dm3-local-timescaledb psql -U dm3 -d dm3 -q <<EOSQL
+WITH
+  users_num AS (
+    SELECT u.id,
+           (u.first_name || ' ' || u.last_name) AS name,
+           row_number() OVER (ORDER BY u.id) AS rn
+    FROM dm3_identity.users u
+    WHERE u.tenant_id = '$TENANT_ID'
+    LIMIT 20
+  ),
+  aps_num AS (
+    SELECT id, row_number() OVER (ORDER BY id) AS rn
+    FROM dm3_access.access_points WHERE tenant_id = '$TENANT_ID'
+  ),
+  counts AS (
+    SELECT (SELECT count(*) FROM users_num) AS uc,
+           (SELECT count(*) FROM aps_num)   AS apc
+  ),
+  slots AS (
+    SELECT generate_series(
+      now() - interval '30 days',
+      now() - interval '1 hour',
+      interval '1 hour 12 minutes'
+    ) AS ts
+  ),
+  picked AS (
+    SELECT
+      s.ts + (random() * interval '10 minutes') AS t,
+      1 + floor(random() * c.uc)::int  AS urn,
+      1 + floor(random() * c.apc)::int AS arn,
+      (ARRAY['card','pin','face','qr'])[1 + floor(random()*4)::int] AS ctype,
+      (ARRAY['in','out'])[1 + floor(random()*2)::int] AS dir,
+      CASE WHEN random() < 0.92 THEN 'granted' ELSE 'denied' END AS verdict
+    FROM slots s CROSS JOIN counts c
+    WHERE c.uc > 0 AND c.apc > 0
+  )
+INSERT INTO dm3_access.access_events
+  (tenant_id, time, access_point_id, user_id, user_name, credential_type, direction, decision, reason, decided_locally)
+SELECT
+  '$TENANT_ID'::uuid,
+  p.t,
+  a.id,
+  u.id,
+  u.name,
+  p.ctype,
+  p.dir,
+  p.verdict,
+  CASE p.verdict
+    WHEN 'granted' THEN 'rule_match'
+    ELSE (ARRAY['schedule_block','unknown_credential','expired_rule','wrong_direction'])[1 + floor(random()*4)::int]
+  END,
+  true
+FROM picked p
+JOIN users_num u ON u.rn = p.urn
+JOIN aps_num a ON a.rn = p.arn;
+EOSQL
+ok "Access events: ~600 historical entries over 30 days"
+
+# ============================================================
+# DONE — Print row counts for verification
 # ============================================================
 echo ""
 echo "============================================"
@@ -610,4 +771,26 @@ echo "  manager@duali.com   (manager)"
 echo "  operator@duali.com  (operator)"
 echo "  viewer@duali.com    (viewer)"
 echo ""
-echo "Modules seeded: Identity, Access, Visitor, Parking"
+echo "Row counts for tenant:"
+docker exec dm3-local-timescaledb psql -U dm3 -d dm3 -t -A -q -c "
+  SELECT 'departments   = ' || count(*) FROM dm3_identity.departments WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'users         = ' || count(*) FROM dm3_identity.users        WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'credentials   = ' || count(*) FROM dm3_identity.credentials   WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'user_groups   = ' || count(*) FROM dm3_identity.user_groups   WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'devices       = ' || count(*) FROM dm3_devices.devices        WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'zones         = ' || count(*) FROM dm3_access.zones           WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'access_points = ' || count(*) FROM dm3_access.access_points   WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'ap_devices    = ' || count(*) FROM dm3_access.access_point_devices WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'access_groups = ' || count(*) FROM dm3_access.access_groups   WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'access_events = ' || count(*) FROM dm3_access.access_events   WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'visitors      = ' || count(*) FROM dm3_visitor.visitors       WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'visits        = ' || count(*) FROM dm3_visitor.visits         WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'watchlist     = ' || count(*) FROM dm3_visitor.watchlist      WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'parking_lots  = ' || count(*) FROM dm3_parking.parking_lots   WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'parking_zones = ' || count(*) FROM dm3_parking.parking_zones  WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'vehicles      = ' || count(*) FROM dm3_parking.parking_vehicles WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'passes        = ' || count(*) FROM dm3_parking.parking_passes WHERE tenant_id='$TENANT_ID'
+  UNION ALL SELECT 'park_sessions = ' || count(*) FROM dm3_parking.parking_sessions WHERE tenant_id='$TENANT_ID'
+" 2>/dev/null | sed 's/^/  /'
+echo ""
+echo "Modules seeded: Identity, Access, Devices, Events, Visitor, Parking"
