@@ -146,26 +146,61 @@ func (l *Logger) Close() {
 	l.wg.Wait()
 }
 
+// publishBackoff is the delay schedule for retrying a failed audit publish.
+// Three attempts total (initial + 2 retries). Kept short so that a service
+// that can't reach NATS for ~5s surfaces the problem in logs instead of
+// blocking the consumer for a long time — audit entries are still dropped
+// on exhaustion, but the warning is loud, and the buffered channel gives
+// a few seconds of headroom on transient NATS blips (reconnect/leader
+// election).
+var publishBackoff = []time.Duration{200 * time.Millisecond, 1 * time.Second}
+
+// publish tries once immediately, then retries per publishBackoff on
+// transient errors. Each attempt gets its own short context; the caller's
+// ctx is used for overall cancellation (drain during Close()).
+func (l *Logger) publish(ctx context.Context, data []byte) error {
+	var lastErr error
+	for attempt := 0; ; attempt++ {
+		attemptCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		err := l.pub.Publish(attemptCtx, l.subject, data)
+		cancel()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if attempt >= len(publishBackoff) {
+			return lastErr
+		}
+		select {
+		case <-time.After(publishBackoff[attempt]):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
 // run is the background goroutine that publishes entries to NATS.
 func (l *Logger) run() {
 	defer l.wg.Done()
+	ctx := context.Background()
 	for {
 		select {
 		case data := <-l.ch:
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			if err := l.pub.Publish(ctx, l.subject, data); err != nil {
-				slog.Warn("audit: publish failed", "error", err)
+			if err := l.publish(ctx, data); err != nil {
+				slog.Warn("audit: publish failed after retries, dropping entry", "error", err)
 			}
-			cancel()
 		case <-l.done:
-			// Drain remaining entries
+			// Drain remaining entries. Bound the overall drain time so
+			// Close() cannot hang on a dead NATS connection.
+			drainCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			for {
 				select {
 				case data := <-l.ch:
-					ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-					_ = l.pub.Publish(ctx, l.subject, data)
-					cancel()
+					if err := l.publish(drainCtx, data); err != nil {
+						slog.Warn("audit: drain publish failed, dropping entry", "error", err)
+					}
 				default:
+					cancel()
 					return
 				}
 			}
