@@ -27,7 +27,8 @@ export function useDevice(id: string) {
 export function useUpdateDevice() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => updateDevice(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateDevice>[1] }) =>
+      updateDevice(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['device', id] });
       queryClient.invalidateQueries({ queryKey: ['devices'] });
@@ -66,7 +67,8 @@ export function usePendingDevices() {
 export function useApprovePendingDevice() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => approvePendingDevice(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof approvePendingDevice>[1] }) =>
+      approvePendingDevice(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending-devices'] });
       queryClient.invalidateQueries({ queryKey: ['devices'] });
@@ -120,7 +122,8 @@ export function useCreateAccessDevice() {
 export function useUpdateAccessDevice() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => updateAccessDevice(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateAccessDevice>[1] }) =>
+      updateAccessDevice(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['access-device', id] });
       queryClient.invalidateQueries({ queryKey: ['access-devices'] });
@@ -178,7 +181,8 @@ export function useCreateRule() {
 export function useUpdateRule() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => updateRule(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateRule>[1] }) =>
+      updateRule(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['rule', id] });
       queryClient.invalidateQueries({ queryKey: ['rules'] });
@@ -245,7 +249,8 @@ export function useCreatePerson() {
 export function useUpdatePerson() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => updatePerson(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updatePerson>[1] }) =>
+      updatePerson(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['person', id] });
       queryClient.invalidateQueries({ queryKey: ['persons'] });
@@ -276,7 +281,8 @@ export function useCredentials(personId: string) {
 export function useCreateCredential() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ personId, data }: { personId: string; data: any }) => createCredential(personId, data),
+    mutationFn: ({ personId, data }: { personId: string; data: Parameters<typeof createCredential>[1] }) =>
+      createCredential(personId, data),
     onSuccess: (_, { personId }) => {
       queryClient.invalidateQueries({ queryKey: ['credentials', personId] });
       queryClient.invalidateQueries({ queryKey: ['person', personId] });
@@ -336,7 +342,8 @@ export function useCreateGroup() {
 export function useUpdateGroup() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => updateGroup(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateGroup>[1] }) =>
+      updateGroup(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['groups'] });
     },
@@ -379,7 +386,7 @@ export function useRemoveGroupMember() {
 
 export function useSendCommand() {
   return useMutation({
-    mutationFn: ({ deviceId, command, params }: { deviceId: string; command: string; params?: Record<string, any> }) =>
+    mutationFn: ({ deviceId, command, params }: { deviceId: string; command: string; params?: Record<string, unknown> }) =>
       sendDeviceCommand(deviceId, command, params),
   });
 }

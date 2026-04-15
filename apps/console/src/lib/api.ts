@@ -266,7 +266,7 @@ export interface AccessRuleDTO {
     door_ids: string[];
     person_group_ids: string[];
     schedule_id?: string;
-    schedule?: any;
+    schedule?: Record<string, unknown>;
     anti_passback?: boolean;
     multi_factor?: boolean;
     max_failed_attempts?: number;
@@ -285,7 +285,7 @@ export interface ScheduleDTO {
     company_id: string;
     name: string;
     timezone: string;
-    periods: any;
+    periods: Record<string, unknown>;
     holidays_excluded?: boolean;
     holiday_calendar_id?: string;
     created_at: string;
@@ -308,7 +308,7 @@ export interface CreateRuleRequest {
     door_ids: string[];
     person_group_ids: string[];
     schedule_id?: string;
-    schedule_inline?: any;
+    schedule_inline?: Record<string, unknown>;
     anti_passback?: boolean;
     multi_factor?: boolean;
     max_failed_attempts?: number;
@@ -322,7 +322,7 @@ export interface CreateRuleRequest {
 export interface CreateScheduleRequest {
     name: string;
     timezone?: string;
-    periods: any;
+    periods: Record<string, unknown>;
     holidays_excluded?: boolean;
     holiday_calendar_id?: string;
 }
@@ -716,7 +716,7 @@ export async function removeGroupMember(groupId: string, personId: string): Prom
     await apiFetch<void>(`${IDENTITY_URL}/groups/${groupId}/members/${personId}`, { method: 'DELETE' });
 }
 
-export async function sendDeviceCommand(deviceId: string, command: string, params?: Record<string, any>): Promise<void> {
+export async function sendDeviceCommand(deviceId: string, command: string, params?: Record<string, unknown>): Promise<void> {
     await apiFetch<void>(`${GATEWAY_URL}/devices/${deviceId}/command`, {
         method: 'POST',
         // Backend expects { type, data } — map from legacy { command, params }
@@ -1116,7 +1116,7 @@ export async function fetchDevice(id: string): Promise<DeviceDTO> {
     return apiFetch<DeviceDTO>(`${GATEWAY_URL}/devices/${id}`);
 }
 
-export async function updateDevice(id: string, data: Record<string, any>): Promise<DeviceDTO> {
+export async function updateDevice(id: string, data: Record<string, unknown>): Promise<DeviceDTO> {
     return apiFetch<DeviceDTO>(`${GATEWAY_URL}/devices/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
