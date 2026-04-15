@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/httprate"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/config"
@@ -115,12 +116,21 @@ func main() {
 		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "auth-svc"})
 	})
 
-	// Public routes (no auth required)
-	r.Post("/api/v1/auth/login", h.Login)
-	r.Post("/api/v1/auth/login-step2", h.LoginStep2)
-	r.Post("/api/v1/auth/refresh", h.Refresh)
-	r.Post("/api/v1/auth/password/forgot", h.ForgotPassword)
-	r.Post("/api/v1/auth/password/reset", h.ResetPassword)
+	// Public routes (no auth required) — rate-limited per client IP to slow
+	// brute-force credential stuffing and email-enumeration via the password
+	// flow. httprate keys on RemoteAddr by default; behind a proxy/load
+	// balancer, a real-IP middleware should be added upstream so the limiter
+	// keys on the actual client. Each limiter has its own window so a flood on
+	// /login does not exhaust the budget for /refresh.
+	loginLimiter := httprate.LimitByIP(5, 1*time.Minute)
+	refreshLimiter := httprate.LimitByIP(20, 1*time.Minute)
+	passwordResetLimiter := httprate.LimitByIP(3, 10*time.Minute)
+
+	r.With(loginLimiter).Post("/api/v1/auth/login", h.Login)
+	r.With(loginLimiter).Post("/api/v1/auth/login-step2", h.LoginStep2)
+	r.With(refreshLimiter).Post("/api/v1/auth/refresh", h.Refresh)
+	r.With(passwordResetLimiter).Post("/api/v1/auth/password/forgot", h.ForgotPassword)
+	r.With(passwordResetLimiter).Post("/api/v1/auth/password/reset", h.ResetPassword)
 
 	// Protected routes — all under /api/v1/auth/ prefix
 	r.Group(func(pr chi.Router) {
