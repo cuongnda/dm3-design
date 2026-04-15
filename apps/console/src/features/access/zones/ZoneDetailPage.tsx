@@ -167,12 +167,12 @@ export function ZoneDetailPage() {
           ...(createDescription.trim() && { description: createDescription.trim() }),
         }),
       });
-      toast.success(t('detail.createdAccessPoint', 'Access point created'));
+      toast(t('detail.createdAccessPoint', 'Access point created'), 'success');
       setCreateOpen(false);
       resetCreateForm();
       await fetchData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create access point');
+      toast(err instanceof Error ? err.message : 'Failed to create access point', 'error');
     } finally {
       setCreateSubmitting(false);
     }
