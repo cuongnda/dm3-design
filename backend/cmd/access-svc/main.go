@@ -250,6 +250,7 @@ func main() {
 
 		// Events: all roles can read
 		r.Get("/events", handlers.ListEvents)
+		r.Get("/events/export", handlers.ExportEvents)
 
 		// Dashboard stats: all roles can read
 		r.Get("/stats", handlers.GetStats)

@@ -1,6 +1,8 @@
 package access
 
 import (
+	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/xuri/excelize/v2"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/models"
@@ -444,6 +447,310 @@ type eventResponse struct {
 	Confidence     *float64       `json:"confidence,omitempty"`
 	PhotoRef       string         `json:"photo_ref,omitempty"`
 	Metadata       map[string]any `json:"metadata,omitempty"`
+}
+
+// exportRow holds one row of export data.
+type exportRow struct {
+	Time           string
+	AccessPointID  string
+	DeviceName     string
+	UserName       string
+	CredentialType string
+	Direction      string
+	Decision       string
+	Reason         string
+}
+
+// exportColumns are the column headers used in both CSV and XLSX exports.
+var exportColumns = []string{
+	"Time", "Access Point ID", "Device Name", "User Name",
+	"Credential Type", "Direction", "Decision", "Reason",
+}
+
+const exportRowCap = 50_000
+
+// ExportEvents streams access event data as CSV or XLSX.
+// Accepts the same filter params as ListEvents plus format=csv|xlsx (default csv).
+// Returns 413 if the filtered result would exceed exportRowCap rows.
+func (h *AccessHandlers) ExportEvents(w http.ResponseWriter, r *http.Request) {
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+
+	format := r.URL.Query().Get("format")
+	if format == "" {
+		format = "csv"
+	}
+	if format != "csv" && format != "xlsx" {
+		httputil.Error(w, http.StatusBadRequest, "format must be csv or xlsx")
+		return
+	}
+
+	// Build WHERE clause — identical pattern to ListEvents.
+	where := "WHERE e.tenant_id = $1::uuid"
+	args := []any{cid}
+	idx := 2
+
+	if v := r.URL.Query().Get("access_point_id"); v != "" {
+		where += fmt.Sprintf(" AND e.access_point_id = $%d::uuid", idx)
+		args = append(args, v)
+		idx++
+	}
+	if v := r.URL.Query().Get("user_id"); v != "" {
+		where += fmt.Sprintf(" AND e.user_id = $%d::uuid", idx)
+		args = append(args, v)
+		idx++
+	}
+	if v := r.URL.Query().Get("decision"); v != "" {
+		where += fmt.Sprintf(" AND e.decision = $%d", idx)
+		args = append(args, v)
+		idx++
+	}
+	if v := r.URL.Query().Get("credential_type"); v != "" {
+		where += fmt.Sprintf(" AND e.credential_type = $%d", idx)
+		args = append(args, v)
+		idx++
+	}
+
+	var fromTime, toTime time.Time
+	if v := r.URL.Query().Get("from"); v != "" {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			fromTime = t
+			where += fmt.Sprintf(" AND e.time >= $%d", idx)
+			args = append(args, t)
+			idx++
+		}
+	}
+	if v := r.URL.Query().Get("to"); v != "" {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			toTime = t
+			where += fmt.Sprintf(" AND e.time <= $%d", idx)
+			args = append(args, t)
+			_ = idx // idx incremented but not used further
+		}
+	}
+
+	// COUNT check before streaming.
+	countQuery := "SELECT COUNT(*) FROM dm3_access.access_events e " + where
+	countArgs := make([]any, len(args))
+	copy(countArgs, args)
+	var total int64
+	if err := h.db.Pool.QueryRow(r.Context(), countQuery, countArgs...).Scan(&total); err != nil {
+		slog.Error("export count query error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if total > exportRowCap {
+		httputil.Error(w, http.StatusRequestEntityTooLarge,
+			fmt.Sprintf("export too large — narrow filters (%d rows, cap %d)", total, exportRowCap))
+		return
+	}
+
+	// Derive filename dates.
+	from := fromTime.Format("2006-01-02")
+	to := toTime.Format("2006-01-02")
+	if fromTime.IsZero() {
+		from = "all"
+	}
+	if toTime.IsZero() {
+		to = "now"
+	}
+
+	// Data query with LEFT LATERAL JOIN for device name (same pattern as ListEvents).
+	dataQuery := fmt.Sprintf(`
+		SELECT e.time,
+		       COALESCE(e.access_point_id::text,''),
+		       COALESCE(d.name,''),
+		       COALESCE(e.user_name,''),
+		       COALESCE(e.credential_type,''),
+		       COALESCE(e.direction,''),
+		       e.decision,
+		       COALESCE(e.reason,'')
+		FROM dm3_access.access_events e
+		LEFT JOIN LATERAL (
+		    SELECT ad.name
+		    FROM dm3_access.access_point_devices apd
+		    JOIN dm3_access.access_devices ad ON ad.id::text = apd.access_device_id
+		    WHERE apd.access_point_id = e.access_point_id
+		      AND apd.tenant_id = e.tenant_id
+		    ORDER BY apd.created_at
+		    LIMIT 1
+		) d ON true
+		%s ORDER BY e.time DESC`, where)
+
+	rows, err := h.db.Pool.Query(r.Context(), dataQuery, args...)
+	if err != nil {
+		slog.Error("export data query error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	switch format {
+	case "csv":
+		h.streamCSV(w, r, rows, from, to)
+	case "xlsx":
+		h.streamXLSX(w, r, rows, from, to)
+	}
+}
+
+// streamCSV writes access event rows directly to the response as CSV.
+func (h *AccessHandlers) streamCSV(w http.ResponseWriter, r *http.Request, rows interface {
+	Next() bool
+	Scan(...any) error
+	Err() error
+}, from, to string) {
+	filename := fmt.Sprintf("access-history-%s-%s.csv", from, to)
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+
+	cw := csv.NewWriter(w)
+	if err := cw.Write(exportColumns); err != nil {
+		slog.Error("export csv header write error", "error", err)
+		return
+	}
+
+	for rows.Next() {
+		var (
+			evtTime        time.Time
+			accessPointID  string
+			deviceName     string
+			userName       string
+			credentialType string
+			direction      string
+			decision       string
+			reason         string
+		)
+		if err := rows.Scan(&evtTime, &accessPointID, &deviceName, &userName,
+			&credentialType, &direction, &decision, &reason); err != nil {
+			slog.Error("export csv scan error", "error", err)
+			return
+		}
+		record := []string{
+			evtTime.Format(time.RFC3339),
+			accessPointID,
+			deviceName,
+			userName,
+			credentialType,
+			direction,
+			decision,
+			reason,
+		}
+		if err := cw.Write(record); err != nil {
+			slog.Error("export csv row write error", "error", err)
+			return
+		}
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("export csv rows iteration error", "error", err)
+		return
+	}
+	cw.Flush()
+	if err := cw.Error(); err != nil {
+		slog.Error("export csv flush error", "error", err)
+	}
+}
+
+// streamXLSX builds the XLSX in a bytes.Buffer (excelize needs random-access for finalization)
+// then copies the result to the response.
+func (h *AccessHandlers) streamXLSX(w http.ResponseWriter, r *http.Request, rows interface {
+	Next() bool
+	Scan(...any) error
+	Err() error
+}, from, to string) {
+	filename := fmt.Sprintf("access-history-%s-%s.xlsx", from, to)
+
+	f := excelize.NewFile()
+	defer func() { _ = f.Close() }()
+
+	sheet := "Access History"
+	idx, err := f.NewSheet(sheet)
+	if err != nil {
+		slog.Error("export xlsx new sheet error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	f.SetActiveSheet(idx)
+	_ = f.DeleteSheet("Sheet1")
+
+	sw, err := f.NewStreamWriter(sheet)
+	if err != nil {
+		slog.Error("export xlsx stream writer error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Write header row.
+	headerCells := make([]interface{}, len(exportColumns))
+	for i, col := range exportColumns {
+		headerCells[i] = col
+	}
+	if err := sw.SetRow("A1", headerCells); err != nil {
+		slog.Error("export xlsx header write error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	rowNum := 2
+	for rows.Next() {
+		var (
+			evtTime        time.Time
+			accessPointID  string
+			deviceName     string
+			userName       string
+			credentialType string
+			direction      string
+			decision       string
+			reason         string
+		)
+		if err := rows.Scan(&evtTime, &accessPointID, &deviceName, &userName,
+			&credentialType, &direction, &decision, &reason); err != nil {
+			slog.Error("export xlsx scan error", "error", err)
+			return
+		}
+		cell := fmt.Sprintf("A%d", rowNum)
+		rowCells := []interface{}{
+			evtTime.Format(time.RFC3339),
+			accessPointID,
+			deviceName,
+			userName,
+			credentialType,
+			direction,
+			decision,
+			reason,
+		}
+		if err := sw.SetRow(cell, rowCells); err != nil {
+			slog.Error("export xlsx row write error", "error", err)
+			return
+		}
+		rowNum++
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("export xlsx rows iteration error", "error", err)
+		return
+	}
+
+	if err := sw.Flush(); err != nil {
+		slog.Error("export xlsx stream flush error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	var buf bytes.Buffer
+	if _, err := f.WriteTo(&buf); err != nil {
+		slog.Error("export xlsx write buffer error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+	if _, err := buf.WriteTo(w); err != nil {
+		slog.Error("export xlsx response write error", "error", err)
+	}
 }
 
 // ─── Dashboard Stats ─────────────────────────────────────────────────────────
