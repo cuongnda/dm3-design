@@ -17,6 +17,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
+	"github.com/duali/dm3-backend/internal/cctv"
 	"github.com/duali/dm3-backend/internal/config"
 	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/audit"
@@ -27,25 +28,38 @@ import (
 
 // ProvisioningHandlers handles device provisioning endpoints.
 type ProvisioningHandlers struct {
-	db    *db.DB
-	mqtt  *mqtt.Client
-	cfg   *config.Config
-	audit *audit.Logger
+	db           *db.DB
+	mqtt         *mqtt.Client
+	cfg          *config.Config
+	audit        *audit.Logger
+	cameraCipher *cctv.CredentialCipher // optional; required only for type=camera provisioning
 }
 
 func NewProvisioningHandlers(database *db.DB, mqttClient *mqtt.Client, cfg *config.Config, auditLog *audit.Logger) *ProvisioningHandlers {
 	return &ProvisioningHandlers{db: database, mqtt: mqttClient, cfg: cfg, audit: auditLog}
 }
 
+// WithCameraCipher enables `type=camera` provisioning by supplying the AES
+// cipher used to encrypt RTSP passwords at rest. When unset, camera
+// provisioning requests are rejected with a 503.
+func (h *ProvisioningHandlers) WithCameraCipher(c *cctv.CredentialCipher) *ProvisioningHandlers {
+	h.cameraCipher = c
+	return h
+}
+
 // ─── QR Flow ─────────────────────────────────────────────────────────────────
 
 type provisionRequest struct {
-	DeviceID string         `json:"device_id"`
-	Name     string         `json:"name"`
-	Type     string         `json:"type"`
-	TenantID string         `json:"tenant_id"`
-	Location string         `json:"location"`
-	Config   *deviceConfig  `json:"config,omitempty"`
+	DeviceID string        `json:"device_id"`
+	Name     string        `json:"name"`
+	Type     string        `json:"type"`
+	TenantID string        `json:"tenant_id"`
+	Location string        `json:"location"`
+	Config   *deviceConfig `json:"config,omitempty"`
+	// Camera is required when Type == "camera". It carries the RTSP and
+	// recording parameters so the device row and the dm3_cctv.cameras row
+	// are created atomically from a single /provision request.
+	Camera *cameraParams `json:"camera,omitempty"`
 }
 
 // deviceConfig mirrors the "config" object sent by the console
@@ -57,6 +71,19 @@ type deviceConfig struct {
 	Timezone      *string  `json:"timezone,omitempty"`
 	VerifyMethods []string `json:"verify_methods,omitempty"`
 	VerifyLogic   *string  `json:"verify_logic,omitempty"`
+}
+
+// cameraParams carries the CCTV-specific fields supplied when provisioning
+// a type=camera device. Defaults mirror cctv.CreateCamera:
+// recording_mode="event_only", pre_roll_sec=10, post_roll_sec=20.
+type cameraParams struct {
+	RTSPURL       string  `json:"rtsp_url"`
+	RTSPUsername  *string `json:"rtsp_username,omitempty"`
+	RTSPPassword  *string `json:"rtsp_password,omitempty"`
+	Brand         *string `json:"brand,omitempty"`
+	RecordingMode *string `json:"recording_mode,omitempty"`
+	PreRollSec    *int    `json:"pre_roll_sec,omitempty"`
+	PostRollSec   *int    `json:"post_roll_sec,omitempty"`
 }
 
 type qrTokenClaims struct {
@@ -126,9 +153,73 @@ func (h *ProvisioningHandlers) ProvisionDevice(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	// Create device with status=offline (not yet connected)
+	// Validate+encrypt camera params up-front so we fail fast before touching
+	// the DB. For non-camera types this block is a no-op.
+	var (
+		encryptedPass []byte
+		trimmedRTSP   string
+		recordingMode = "event_only"
+		preRoll       = 10
+		postRoll      = 20
+	)
+	if req.Type == "camera" {
+		if h.cameraCipher == nil {
+			httputil.Error(w, http.StatusServiceUnavailable, "camera provisioning is not configured on this server (CCTV_CREDENTIAL_KEY missing)")
+			return
+		}
+		if req.Camera == nil || strings.TrimSpace(req.Camera.RTSPURL) == "" {
+			httputil.Error(w, http.StatusBadRequest, "camera.rtsp_url is required when type=camera")
+			return
+		}
+		trimmedRTSP = strings.TrimSpace(req.Camera.RTSPURL)
+		if err := cctv.ValidateRTSPURL(trimmedRTSP); err != nil {
+			httputil.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if req.Camera.RecordingMode != nil && *req.Camera.RecordingMode != "" {
+			recordingMode = *req.Camera.RecordingMode
+		}
+		if recordingMode != "event_only" && recordingMode != "disabled" {
+			httputil.Error(w, http.StatusBadRequest, "invalid recording_mode; expected one of: event_only, disabled")
+			return
+		}
+		if req.Camera.PreRollSec != nil {
+			preRoll = *req.Camera.PreRollSec
+		}
+		if req.Camera.PostRollSec != nil {
+			postRoll = *req.Camera.PostRollSec
+		}
+		if preRoll < 0 || preRoll > 60 {
+			httputil.Error(w, http.StatusBadRequest, "pre_roll_sec must be between 0 and 60")
+			return
+		}
+		if postRoll < 0 || postRoll > 120 {
+			httputil.Error(w, http.StatusBadRequest, "post_roll_sec must be between 0 and 120")
+			return
+		}
+		if req.Camera.RTSPPassword != nil && *req.Camera.RTSPPassword != "" {
+			var err error
+			encryptedPass, err = h.cameraCipher.Encrypt(*req.Camera.RTSPPassword)
+			if err != nil {
+				slog.Error("ProvisionDevice: encrypt rtsp password failed", "error", err)
+				httputil.Error(w, http.StatusInternalServerError, "internal server error")
+				return
+			}
+		}
+	}
+
+	// Create device (+ optional cctv.cameras row) in a single transaction so
+	// the device and its CCTV extension are atomically linked.
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		slog.Error("ProvisionDevice: begin tx failed", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+	defer tx.Rollback(r.Context())
+
 	var deviceDBID string
-	err := h.db.Pool.QueryRow(r.Context(),
+	err = tx.QueryRow(r.Context(),
 		`INSERT INTO dm3_devices.devices
 		   (device_id, name, type, location, tenant_id, status,
 		    model, open_relay_ms, timezone, verify_methods, verify_logic)
@@ -147,6 +238,27 @@ func (h *ProvisioningHandlers) ProvisionDevice(w http.ResponseWriter, r *http.Re
 			return
 		}
 		slog.Error("ProvisionDevice: insert failed", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	if req.Type == "camera" {
+		_, err = tx.Exec(r.Context(), `
+			INSERT INTO dm3_cctv.cameras
+			(device_id, tenant_id, brand, rtsp_url, rtsp_username, rtsp_password_enc, recording_mode, pre_roll_sec, post_roll_sec)
+			VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9)`,
+			deviceDBID, companyID, req.Camera.Brand, trimmedRTSP, req.Camera.RTSPUsername, encryptedPass,
+			recordingMode, preRoll, postRoll,
+		)
+		if err != nil {
+			slog.Error("ProvisionDevice: insert cctv camera failed", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		slog.Error("ProvisionDevice: commit failed", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}

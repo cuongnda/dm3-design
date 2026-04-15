@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
+	"github.com/duali/dm3-backend/internal/cctv"
 	"github.com/duali/dm3-backend/internal/config"
 	"github.com/duali/dm3-backend/internal/gateway"
 	"github.com/duali/dm3-backend/pkg/audit"
@@ -168,6 +169,21 @@ func main() {
 	handlers := gateway.NewGatewayHandlers(database, mqttClient, auditLog)
 	syncService.AttachHandlers(handlers)
 	provHandlers := gateway.NewProvisioningHandlers(database, mqttClient, cfg, auditLog)
+
+	// Optional: enable type=camera provisioning by wiring the CCTV credential
+	// cipher. When CCTV_CREDENTIAL_KEY is unset, non-camera provisioning still
+	// works — camera requests will be rejected with 503 by the handler.
+	if credKey := os.Getenv("CCTV_CREDENTIAL_KEY"); credKey != "" {
+		camCipher, cipherErr := cctv.NewCredentialCipher(credKey)
+		if cipherErr != nil {
+			slog.Error("failed to init cctv credential cipher; camera provisioning disabled", "error", cipherErr)
+		} else {
+			provHandlers = provHandlers.WithCameraCipher(camCipher)
+			slog.Info("camera provisioning enabled via CCTV_CREDENTIAL_KEY")
+		}
+	} else {
+		slog.Warn("CCTV_CREDENTIAL_KEY not set; type=camera provisioning via /devices/provision will return 503")
+	}
 	firmwareHandlers := gateway.NewFirmwareHandlers(database, objectStore)
 
 	// HTTP routes

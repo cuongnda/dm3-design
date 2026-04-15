@@ -244,6 +244,9 @@ services:
       VALKEY_URL: valkey:6379
       BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET:?BOOTSTRAP_SECRET must be set in .env}
       KNOWN_APP_SIGNATURES: ${KNOWN_APP_SIGNATURES:-}
+      # Shared with cctv-svc: required to provision type=camera devices via
+      # /api/v1/gateway/devices/provision (encrypts RTSP password at rest).
+      CCTV_CREDENTIAL_KEY: ${CCTV_CREDENTIAL_KEY:?CCTV_CREDENTIAL_KEY must be set in .env (32+ chars)}
     depends_on:
       migrate:
         condition: service_completed_successfully

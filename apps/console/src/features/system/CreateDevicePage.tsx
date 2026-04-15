@@ -39,6 +39,22 @@ function defaultConfig(): DeviceConfig {
   return { model: '', open_relay_ms: 3000, timezone: 'Asia/Ho_Chi_Minh', verify_methods: [], verify_logic: 'or' };
 }
 
+// Camera-specific provisioning state. Sent as the top-level `camera` object
+// to the gateway when type === 'camera'. Defaults mirror backend defaults.
+interface CameraState {
+  rtsp_url: string;
+  rtsp_username: string;
+  rtsp_password: string;
+  brand: string;
+  recording_mode: 'event_only' | 'disabled';
+  pre_roll_sec: number;
+  post_roll_sec: number;
+}
+
+function defaultCamera(): CameraState {
+  return { rtsp_url: '', rtsp_username: '', rtsp_password: '', brand: '', recording_mode: 'event_only', pre_roll_sec: 10, post_roll_sec: 20 };
+}
+
 // --- Reusable components ---
 
 function Section({ icon: Icon, title, desc, children }: { icon: React.ElementType; title: string; desc: string; children: React.ReactNode }) {
@@ -112,13 +128,14 @@ function CreateDevicePageContent() {
 
   const [form, setForm] = useState({ device_id: '', name: '', type: 'terminal', tenant_id: '', location: '' });
   const [config, setConfig] = useState<DeviceConfig>(defaultConfig());
+  const [camera, setCamera] = useState<CameraState>(defaultCamera());
 
   useEffect(() => {
     fetchCompanies().then(setCompanies).catch(() => {});
   }, []);
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
-  const handleTypeChange = (type: string) => { setForm(prev => ({ ...prev, type })); setConfig(defaultConfig()); };
+  const handleTypeChange = (type: string) => { setForm(prev => ({ ...prev, type })); setConfig(defaultConfig()); setCamera(defaultCamera()); };
 
   // Models for the selected device type
   const modelsForType = DEVICE_TYPE_MODELS[form.type] ?? [];
@@ -147,19 +164,39 @@ function CreateDevicePageContent() {
     });
   };
 
-  const isFormValid = form.device_id.trim() && form.type && form.tenant_id;
+  const isCamera = form.type === 'camera';
+  const isFormValid = Boolean(
+    form.device_id.trim() && form.type && form.tenant_id &&
+    (!isCamera || camera.rtsp_url.trim()),
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
+      const body: Record<string, unknown> = {
+        device_id: form.device_id.trim(),
+        name: form.name.trim() || undefined,
+        type: form.type,
+        tenant_id: form.tenant_id,
+        location: form.location.trim() || undefined,
+        config,
+      };
+      if (isCamera) {
+        body.camera = {
+          rtsp_url: camera.rtsp_url.trim(),
+          rtsp_username: camera.rtsp_username.trim() || undefined,
+          rtsp_password: camera.rtsp_password || undefined,
+          brand: camera.brand.trim() || undefined,
+          recording_mode: camera.recording_mode,
+          pre_roll_sec: camera.pre_roll_sec,
+          post_roll_sec: camera.post_roll_sec,
+        };
+      }
       await apiFetch('/api/v1/gateway/devices/provision', {
         method: 'POST',
-        body: JSON.stringify({
-          device_id: form.device_id.trim(), name: form.name.trim() || undefined, type: form.type, tenant_id: form.tenant_id,
-          location: form.location.trim() || undefined, config,
-        }),
+        body: JSON.stringify(body),
       });
       setCreatedName(form.name || form.device_id);
       setSuccess(true);
@@ -186,7 +223,7 @@ function CreateDevicePageContent() {
             {t('createDevice.success.offlineHint')}
           </p>
           <div className="flex gap-3">
-            <Button variant="outline" className="flex-1" onClick={() => { setSuccess(false); setForm({ device_id: '', name: '', type: 'terminal', tenant_id: '', location: '' }); setConfig(defaultConfig()); }}>
+            <Button variant="outline" className="flex-1" onClick={() => { setSuccess(false); setForm({ device_id: '', name: '', type: 'terminal', tenant_id: '', location: '' }); setConfig(defaultConfig()); setCamera(defaultCamera()); }}>
               {t('createDevice.success.addAnother')}
             </Button>
             <Button className="flex-1 bg-operate hover:bg-operate/90 text-white" onClick={() => navigate('/system/devices')}>
@@ -268,6 +305,111 @@ function CreateDevicePageContent() {
             </div>
           </div>
         </Section>
+
+        {/* Camera (only when type=camera). Creates the dm3_cctv.cameras row
+            atomically with the device row so Devices and CCTV pages stay in
+            sync — same asymmetry would otherwise leave orphan rows. */}
+        {isCamera && (
+          <Section icon={Camera} title="Camera / RTSP" desc="Connection details for the camera stream. The password is encrypted at rest.">
+            <div className="space-y-4">
+              <div>
+                <Label className="text-[12px]">RTSP URL *</Label>
+                <Input
+                  data-testid="sysdevice-input-rtsp-url"
+                  required
+                  value={camera.rtsp_url}
+                  onChange={(e) => setCamera(c => ({ ...c, rtsp_url: e.target.value }))}
+                  placeholder="rtsp://192.168.1.100:554/Streaming/Channels/101"
+                  disabled={loading}
+                  className="mt-1 font-mono text-[12px]"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Must be an rtsp:// or rtsps:// URL reachable from the cctv-svc container.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-[12px]">RTSP Username</Label>
+                  <Input
+                    data-testid="sysdevice-input-rtsp-username"
+                    value={camera.rtsp_username}
+                    onChange={(e) => setCamera(c => ({ ...c, rtsp_username: e.target.value }))}
+                    placeholder="admin"
+                    disabled={loading}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[12px]">RTSP Password</Label>
+                  <Input
+                    data-testid="sysdevice-input-rtsp-password"
+                    type="password"
+                    value={camera.rtsp_password}
+                    onChange={(e) => setCamera(c => ({ ...c, rtsp_password: e.target.value }))}
+                    placeholder="••••••••"
+                    disabled={loading}
+                    className="mt-1"
+                    autoComplete="new-password"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-[12px]">Brand</Label>
+                  <Input
+                    data-testid="sysdevice-input-camera-brand"
+                    value={camera.brand}
+                    onChange={(e) => setCamera(c => ({ ...c, brand: e.target.value }))}
+                    placeholder="Hikvision, Dahua, …"
+                    disabled={loading}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[12px]">Recording Mode</Label>
+                  <Select
+                    data-testid="sysdevice-select-recording-mode"
+                    value={camera.recording_mode}
+                    onValueChange={(v) => setCamera(c => ({ ...c, recording_mode: v as 'event_only' | 'disabled' }))}
+                    disabled={loading}
+                    className="mt-1"
+                  >
+                    <option value="event_only">Event only</option>
+                    <option value="disabled">Disabled</option>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-[12px]">Pre-roll (s)</Label>
+                    <Input
+                      data-testid="sysdevice-input-pre-roll"
+                      type="number"
+                      min={0}
+                      max={60}
+                      value={camera.pre_roll_sec}
+                      onChange={(e) => setCamera(c => ({ ...c, pre_roll_sec: Number(e.target.value) }))}
+                      disabled={loading}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[12px]">Post-roll (s)</Label>
+                    <Input
+                      data-testid="sysdevice-input-post-roll"
+                      type="number"
+                      min={0}
+                      max={120}
+                      value={camera.post_roll_sec}
+                      onChange={(e) => setCamera(c => ({ ...c, post_roll_sec: Number(e.target.value) }))}
+                      disabled={loading}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Section>
+        )}
 
         {/* Device Config */}
         <Section icon={Settings2} title={t('createDevice.config.title')} desc={t('createDevice.config.desc')}>

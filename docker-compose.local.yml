@@ -350,6 +350,10 @@ services:
       SERVICE_NAME: device-gateway
       HTTP_PORT: "8002"
       DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:-dm3secret}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      # Shared with cctv-svc: required to provision type=camera devices via
+      # /api/v1/gateway/devices/provision (encrypts RTSP password at rest).
+      # When unset, camera provisioning returns 503 but other types still work.
+      CCTV_CREDENTIAL_KEY: ${CCTV_CREDENTIAL_KEY:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
