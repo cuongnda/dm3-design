@@ -4,7 +4,6 @@ export interface Zone {
   parent_id?: string;
   name: string;
   description?: string;
-  timezone?: string;
   latitude?: number;
   longitude?: number;
   geo_lat?: number;
@@ -27,7 +26,6 @@ export interface ZoneFormData {
   name: string;
   description?: string;
   parent_id?: string;
-  timezone?: string;
   latitude?: number;
   longitude?: number;
   geo_lat?: number;

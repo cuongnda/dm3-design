@@ -49,7 +49,13 @@
         "DATABASE_URL": "postgres://dm3:dm3secret@localhost:5433/dm3?sslmode=disable",
         "NATS_URL": "nats://localhost:4222",
         "JWT_SECRET": "dm3-dev-secret-key",
-        "VALKEY_URL": "localhost:6380"
+        "VALKEY_URL": "localhost:6380",
+        "OBJECT_STORE_ENDPOINT": "localhost:9002",
+        "OBJECT_STORE_ACCESS_KEY": "dm3admin",
+        "OBJECT_STORE_SECRET_KEY": "dm3secret123",
+        "OBJECT_STORE_BUCKET": "dm3",
+        "OBJECT_STORE_USE_SSL": "false",
+        "OBJECT_STORE_AUTO_CREATE_BUCKET": "true"
       }
     },
     {

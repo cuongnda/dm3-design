@@ -28,7 +28,7 @@ interface UseZonesReturn {
     fetchZones: () => Promise<void>;
     fetchZone: (id: string) => Promise<Zone | null>;
     createZone: (data: ZoneFormData) => Promise<Zone | null>;
-    updateZone: (id: string, data: ZoneFormData) => Promise<boolean>;
+    updateZone: (id: string, data: ZoneFormData, mapFile?: File | null) => Promise<boolean>;
     deleteZone: (id: string) => Promise<boolean>;
     changePage: (page: number) => void;
     changePageSize: (size: number) => void;
@@ -111,17 +111,41 @@ export function useZones(): UseZonesReturn {
     );
 
     const updateZone = useCallback(
-        async (id: string, data: ZoneFormData): Promise<boolean> => {
+        async (id: string, data: ZoneFormData, mapFile?: File | null): Promise<boolean> => {
             try {
-                const payload: ZoneFormData = {
-                    ...data,
-                    parent_id: data.parent_id || undefined,
-                    description: data.description || undefined,
-                };
-                await apiFetch<Zone>(`/api/v1/access/zones/${id}`, {
-                    method: 'PUT',
-                    body: JSON.stringify(payload),
-                });
+                if (mapFile) {
+                    // Multipart path: zone fields + new map image in one request.
+                    // The backend replaces map_image_url / width / height from the
+                    // decoded image, so we strip them from the form fields here.
+                    const fd = new FormData();
+                    const put = (key: string, value: unknown) => {
+                        if (value === undefined || value === null) return;
+                        fd.append(key, String(value));
+                    };
+                    put('name', data.name);
+                    put('description', data.description ?? '');
+                    put('parent_id', data.parent_id ?? '');
+                    put('address', data.address ?? '');
+                    put('floor', data.floor ?? '');
+                    put('building', data.building ?? '');
+                    if (data.geo_lat != null) put('latitude', data.geo_lat);
+                    if (data.geo_lng != null) put('longitude', data.geo_lng);
+                    fd.append('map', mapFile);
+                    await apiFetch<Zone>(`/api/v1/access/zones/${id}`, {
+                        method: 'PUT',
+                        body: fd,
+                    });
+                } else {
+                    const payload: ZoneFormData = {
+                        ...data,
+                        parent_id: data.parent_id || undefined,
+                        description: data.description || undefined,
+                    };
+                    await apiFetch<Zone>(`/api/v1/access/zones/${id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(payload),
+                    });
+                }
                 await fetchZones();
                 toast(t('toast.updated'), 'success');
                 return true;

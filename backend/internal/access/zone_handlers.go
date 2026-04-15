@@ -233,6 +233,135 @@ type updateZoneRequest struct {
 	MapHeight   *int     `json:"map_height"`
 }
 
+// zoneMapUpload carries a validated, in-memory map image ready to be written
+// to object storage. Built by parseZoneMultipart when the request includes a
+// `map` file part.
+type zoneMapUpload struct {
+	data        []byte
+	contentType string
+	ext         string
+	width       int
+	height      int
+}
+
+// parseZoneMultipart reads a multipart/form-data UpdateZone request. Fields
+// map 1:1 to updateZoneRequest (JSON keys) and are only set when present in
+// the form — an empty string means "clear to empty", an absent key means
+// "leave untouched". The optional `map` file part is decoded + validated in
+// the same way as UploadZoneMap.
+func parseZoneMultipart(r *http.Request) (updateZoneRequest, *zoneMapUpload, error) {
+	if err := r.ParseMultipartForm(20 << 20); err != nil {
+		return updateZoneRequest{}, nil, fmt.Errorf("file too large or invalid multipart")
+	}
+	form := r.MultipartForm
+	var req updateZoneRequest
+	strField := func(key string) *string {
+		if vals, ok := form.Value[key]; ok && len(vals) > 0 {
+			v := vals[0]
+			return &v
+		}
+		return nil
+	}
+	floatField := func(key string) (*float64, error) {
+		if vals, ok := form.Value[key]; ok && len(vals) > 0 && vals[0] != "" {
+			f, err := parseFloatField(vals[0])
+			if err != nil {
+				return nil, fmt.Errorf("%s must be a number", key)
+			}
+			return &f, nil
+		}
+		return nil, nil
+	}
+	req.Name = strField("name")
+	req.Description = strField("description")
+	// parent_id is a UUID column — empty string would fail the ::uuid cast.
+	// Treat "" as "don't touch"; a future dedicated flag can express "clear".
+	if v := strField("parent_id"); v != nil && *v != "" {
+		req.ParentID = v
+	}
+	req.Timezone = strField("timezone")
+	req.Address = strField("address")
+	req.Floor = strField("floor")
+	req.Building = strField("building")
+	if v, err := floatField("latitude"); err != nil {
+		return updateZoneRequest{}, nil, err
+	} else {
+		req.Latitude = v
+	}
+	if v, err := floatField("longitude"); err != nil {
+		return updateZoneRequest{}, nil, err
+	} else {
+		req.Longitude = v
+	}
+
+	files := form.File["map"]
+	if len(files) == 0 {
+		return req, nil, nil
+	}
+	header := files[0]
+	file, err := header.Open()
+	if err != nil {
+		return updateZoneRequest{}, nil, fmt.Errorf("map field required")
+	}
+	defer file.Close()
+
+	ext, ok := zoneMapExtension(header.Header.Get("Content-Type"), header.Filename)
+	if !ok {
+		return updateZoneRequest{}, nil, fmt.Errorf("map must be a PNG, JPEG, or GIF image")
+	}
+
+	data, err := io.ReadAll(io.LimitReader(file, 20<<20+1))
+	if err != nil {
+		return updateZoneRequest{}, nil, fmt.Errorf("failed to read uploaded file")
+	}
+	if len(data) == 0 {
+		return updateZoneRequest{}, nil, fmt.Errorf("uploaded file is empty")
+	}
+	if len(data) > 20<<20 {
+		return updateZoneRequest{}, nil, fmt.Errorf("file too large or invalid multipart")
+	}
+
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return updateZoneRequest{}, nil, fmt.Errorf("invalid image file")
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 {
+		return updateZoneRequest{}, nil, fmt.Errorf("image dimensions are invalid")
+	}
+	if cfg.Width > 20000 || cfg.Height > 20000 {
+		return updateZoneRequest{}, nil, fmt.Errorf("image dimensions exceed maximum (20000x20000)")
+	}
+
+	var safeContentType string
+	switch format {
+	case "png":
+		ext = ".png"
+		safeContentType = "image/png"
+	case "jpeg":
+		ext = ".jpg"
+		safeContentType = "image/jpeg"
+	case "gif":
+		ext = ".gif"
+		safeContentType = "image/gif"
+	default:
+		return updateZoneRequest{}, nil, fmt.Errorf("unsupported image format")
+	}
+
+	return req, &zoneMapUpload{
+		data:        data,
+		contentType: safeContentType,
+		ext:         ext,
+		width:       cfg.Width,
+		height:      cfg.Height,
+	}, nil
+}
+
+func parseFloatField(s string) (float64, error) {
+	var f float64
+	_, err := fmt.Sscanf(s, "%f", &f)
+	return f, err
+}
+
 func (h *AccessHandlers) UpdateZone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
@@ -242,10 +371,43 @@ func (h *AccessHandlers) UpdateZone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Accept both JSON and multipart so the frontend can send zone fields +
+	// an optional map file in a single request. Multipart is detected via
+	// Content-Type; anything else falls through to the original JSON path.
 	var req updateZoneRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var uploadedMap *zoneMapUpload
+	ct := r.Header.Get("Content-Type")
+	if strings.HasPrefix(ct, "multipart/form-data") {
+		parsed, upload, err := parseZoneMultipart(r)
+		if err != nil {
+			httputil.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		req = parsed
+		uploadedMap = upload
+	} else if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
+	}
+
+	// If a new map file was attached, push it to object storage BEFORE the DB
+	// update so map_image_url/width/height reflect the freshly-uploaded asset.
+	if uploadedMap != nil {
+		if h.objects == nil {
+			httputil.Error(w, http.StatusInternalServerError, "object storage is not configured")
+			return
+		}
+		objectKey := buildZoneMapObjectKey(cid, id, uploadedMap.ext)
+		if err := h.objects.PutObject(r.Context(), objectKey, bytes.NewReader(uploadedMap.data), int64(len(uploadedMap.data)), uploadedMap.contentType); err != nil {
+			slog.Error("zone map upload failed", "key", objectKey, "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "failed to save uploaded file")
+			return
+		}
+		publicPath := buildZoneMapPublicPath(objectKey)
+		req.MapImageURL = &publicPath
+		width, height := uploadedMap.width, uploadedMap.height
+		req.MapWidth = &width
+		req.MapHeight = &height
 	}
 
 	var z models.Zone
@@ -592,6 +754,7 @@ func (h *AccessHandlers) UploadZoneMap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.objects.PutObject(r.Context(), objectKey, bytes.NewReader(data), int64(len(data)), safeContentType); err != nil {
+		slog.Error("zone map upload failed", "key", objectKey, "size", len(data), "contentType", safeContentType, "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "failed to save uploaded file")
 		return
 	}

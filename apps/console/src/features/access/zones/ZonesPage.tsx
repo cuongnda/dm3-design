@@ -57,7 +57,6 @@ function filterZoneTree(nodes: ZoneTreeNode[], query: string): ZoneTreeNode[] {
         node.zone.description,
         node.zone.building,
         node.zone.floor,
-        node.zone.timezone,
       ]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(q));
@@ -156,7 +155,6 @@ export function ZonesPage() {
               </div>
               <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 <span>{node.zone.building || '—'} / {node.zone.floor || '—'}</span>
-                <span>{node.zone.timezone || '—'}</span>
                 {parentName ? <span>{t('parentLabel', 'Parent')}: {parentName}</span> : null}
               </div>
               {node.zone.description ? <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{node.zone.description}</p> : null}

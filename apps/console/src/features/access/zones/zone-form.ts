@@ -7,7 +7,6 @@ export interface ZoneFormState {
   name: string;
   description: string;
   parent_id: string;
-  timezone: string;
   address: string;
   building: string;
   floor: string;
@@ -22,7 +21,6 @@ export const emptyZoneForm: ZoneFormState = {
   name: '',
   description: '',
   parent_id: '',
-  timezone: 'Asia/Ho_Chi_Minh',
   address: '',
   building: '',
   floor: '',
@@ -38,7 +36,6 @@ export function zoneToForm(zone: Zone): ZoneFormState {
     name: zone.name,
     description: zone.description ?? '',
     parent_id: zone.parent_id ?? '',
-    timezone: zone.timezone ?? 'Asia/Ho_Chi_Minh',
     address: zone.address ?? '',
     building: zone.building ?? '',
     floor: zone.floor ?? '',
@@ -55,7 +52,6 @@ export function zoneFormToData(form: ZoneFormState): ZoneFormData {
     name: form.name,
     description: form.description || undefined,
     parent_id: form.parent_id || undefined,
-    timezone: form.timezone || undefined,
     address: form.address || undefined,
     building: form.building || undefined,
     floor: form.floor || undefined,

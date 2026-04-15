@@ -23,6 +23,7 @@ export default defineConfig({
             '/cctv/hls/': { target: 'http://localhost:8008', changeOrigin: true },
             '/api/v1/audit/': { target: 'http://localhost:8001', changeOrigin: true },
             '/photos/': { target: 'http://localhost:8004', changeOrigin: true },
+            '/assets/': { target: 'http://localhost:8003', changeOrigin: true },
             '/ws/': { target: 'ws://localhost:8002', ws: true },
         },
     },

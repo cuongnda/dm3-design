@@ -57,8 +57,11 @@ async function tryRefreshToken(): Promise<boolean> {
 export async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<T> {
     const tokenAtRequest = getToken();
     const lang = i18n.language?.split('-')[0] ?? 'en';
+    // For FormData, let the browser set Content-Type (including multipart
+    // boundary). For everything else, default to JSON.
+    const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
     const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
         'Accept-Language': lang,
         ...(opts.headers as Record<string, string>),
     };

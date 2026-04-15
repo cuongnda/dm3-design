@@ -12,6 +12,52 @@ interface ZoneFormPageProps {
   mode: 'create' | 'edit';
 }
 
+// Server-hosted map images (/assets/...) require a JWT. Append it as a query
+// parameter so a plain <img> tag can render the preview. Pass-through for
+// blob:/data:/absolute external URLs.
+function previewUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith('blob:') || url.startsWith('data:')) return url;
+  const token = localStorage.getItem('dm3-token');
+  if (!token) return url;
+  try {
+    const resolved = new URL(url, window.location.origin);
+    if (resolved.origin !== window.location.origin) return resolved.toString();
+    resolved.searchParams.set('token', token);
+    return resolved.toString();
+  } catch {
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}token=${token}`;
+  }
+}
+
+function Section({
+  icon: Icon,
+  title,
+  desc,
+  children,
+}: {
+  icon: React.ElementType;
+  title: string;
+  desc: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border border-border rounded-lg bg-card">
+      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-border">
+        <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
+          <Icon size={16} className="text-primary" />
+        </div>
+        <div>
+          <h3 className="text-[13px] font-semibold text-foreground">{title}</h3>
+          <p className="text-[11px] text-muted-foreground">{desc}</p>
+        </div>
+      </div>
+      <div className="px-5 py-4">{children}</div>
+    </div>
+  );
+}
+
 export function ZoneFormPage({ mode }: ZoneFormPageProps) {
   const { t } = useTranslation('zones');
   const navigate = useNavigate();
@@ -33,6 +79,7 @@ export function ZoneFormPage({ mode }: ZoneFormPageProps) {
   // Holds a file the user picked before the zone exists (create flow). On
   // first save, we POST the zone, then upload the file against the new id.
   const [pendingMapFile, setPendingMapFile] = useState<File | null>(null);
+  const [previewLoadFailed, setPreviewLoadFailed] = useState(false);
   const mapFileInputRef = useRef<HTMLInputElement>(null);
 
   // Load the zone on mount when editing.
@@ -96,30 +143,16 @@ export function ZoneFormPage({ mode }: ZoneFormPageProps) {
     }
   };
 
-  const handleMapFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMapFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!isNew && zone) {
-      // Edit mode: upload immediately so the user sees the new image right away.
-      const updated = await uploadMapToZone(zone.id, file);
-      if (updated) {
-        setZone(updated);
-        setFormData((prev) => ({
-          ...prev,
-          map_image_url: updated.map_image_url ?? '',
-          map_image_width: updated.map_width != null ? String(updated.map_width) : '',
-          map_image_height: updated.map_height != null ? String(updated.map_height) : '',
-        }));
-        toast(t('form.mapUploadSuccess', 'Map image uploaded'), 'success');
-      }
-    } else {
-      // Create mode: stage the file. Show local preview via blob URL so the
-      // operator gets immediate feedback even though the upload is deferred
-      // until the zone is saved.
-      setPendingMapFile(file);
-      const blobUrl = URL.createObjectURL(file);
-      setFormData((prev) => ({ ...prev, map_image_url: blobUrl }));
-    }
+    // Stage the file locally in both create and edit modes. The actual upload
+    // happens in handleSave, so the user can still cancel out without touching
+    // the server copy of the map.
+    setPendingMapFile(file);
+    const blobUrl = URL.createObjectURL(file);
+    setFormData((prev) => ({ ...prev, map_image_url: blobUrl }));
+    setPreviewLoadFailed(false);
     if (mapFileInputRef.current) mapFileInputRef.current.value = '';
   };
 
@@ -127,20 +160,26 @@ export function ZoneFormPage({ mode }: ZoneFormPageProps) {
     if (!validate()) return;
     setSubmitting(true);
     try {
-      // Strip a stray blob: preview URL — it would never resolve server-side.
-      const dataToSend = formData.map_image_url.startsWith('blob:')
-        ? { ...formData, map_image_url: '' }
-        : formData;
+      // A pending blob: URL only exists client-side. When a new file is
+      // staged, the backend replaces map_image_url from the decoded image,
+      // so we strip the blob here to keep the JSON/form payload clean.
+      let dataToSend = formData;
+      if (formData.map_image_url.startsWith('blob:')) {
+        dataToSend = {
+          ...formData,
+          map_image_url: !isNew && zone ? (zone.map_image_url ?? '') : '',
+        };
+      }
 
       if (isNew) {
+        // Create still uses the legacy two-step flow (POST zone, then upload
+        // against the new id) because the backend create endpoint doesn't yet
+        // accept multipart.
         const created = await createZone(zoneFormToData(dataToSend));
         if (!created) {
           setSubmitting(false);
           return;
         }
-        // If the operator picked a file before saving, upload it against the
-        // new zone id now. The success toast above already fired; we just
-        // chain a second toast for the upload.
         if (pendingMapFile) {
           const updated = await uploadMapToZone(created.id, pendingMapFile);
           if (updated) {
@@ -151,42 +190,19 @@ export function ZoneFormPage({ mode }: ZoneFormPageProps) {
         navigate('/access/zones');
       } else {
         if (!id) return;
-        const ok = await updateZone(id, zoneFormToData(dataToSend));
+        // Edit: single multipart PUT that carries both fields and the file.
+        const ok = await updateZone(id, zoneFormToData(dataToSend), pendingMapFile);
         if (!ok) {
           setSubmitting(false);
           return;
         }
+        setPendingMapFile(null);
         navigate('/access/zones');
       }
     } finally {
       setSubmitting(false);
     }
   };
-
-  const Section = ({
-    icon: Icon,
-    title,
-    desc,
-    children,
-  }: {
-    icon: React.ElementType;
-    title: string;
-    desc: string;
-    children: React.ReactNode;
-  }) => (
-    <div className="border border-border rounded-lg bg-card">
-      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-border">
-        <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
-          <Icon size={16} className="text-primary" />
-        </div>
-        <div>
-          <h3 className="text-[13px] font-semibold text-foreground">{title}</h3>
-          <p className="text-[11px] text-muted-foreground">{desc}</p>
-        </div>
-      </div>
-      <div className="px-5 py-4">{children}</div>
-    </div>
-  );
 
   if (loading) {
     return (
@@ -305,30 +321,18 @@ export function ZoneFormPage({ mode }: ZoneFormPageProps) {
           <Section
             icon={Building2}
             title={t('form.section.location', 'Location')}
-            desc={t('form.section.locationDesc', 'Timezone, address, and geographic coordinates')}
+            desc={t('form.section.locationDesc', 'Address and geographic coordinates')}
           >
             <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-[12px]">{t('form.timezone', 'Timezone')}</Label>
-                <Input
-                  value={formData.timezone}
-                  onChange={(e) => handleFieldChange('timezone', e.target.value)}
-                  placeholder={t('form.timezonePlaceholder', 'e.g. Asia/Ho_Chi_Minh')}
-                  className="mt-1"
-                  disabled={submitting}
-                />
-              </div>
-              <div>
-                <Label className="text-[12px]">{t('form.address', 'Address')}</Label>
-                <Input
-                  value={formData.address}
-                  onChange={(e) => handleFieldChange('address', e.target.value)}
-                  placeholder={t('form.addressPlaceholder', 'Street, city')}
-                  className="mt-1"
-                  disabled={submitting}
-                />
-              </div>
+            <div>
+              <Label className="text-[12px]">{t('form.address', 'Address')}</Label>
+              <Input
+                value={formData.address}
+                onChange={(e) => handleFieldChange('address', e.target.value)}
+                placeholder={t('form.addressPlaceholder', 'Street, city')}
+                className="mt-1"
+                disabled={submitting}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -389,7 +393,7 @@ export function ZoneFormPage({ mode }: ZoneFormPageProps) {
             <div className="space-y-4">
             <div>
               <div className="flex items-center justify-between">
-                <Label className="text-[12px]">{t('form.mapImageUrl', 'Map image URL')}</Label>
+                <Label className="text-[12px]">{t('form.mapImage', 'Map image')}</Label>
                 <div className="flex items-center gap-2">
                   <input
                     ref={mapFileInputRef}
@@ -420,45 +424,33 @@ export function ZoneFormPage({ mode }: ZoneFormPageProps) {
                   </Button>
                 </div>
               </div>
-              <Input
-                value={formData.map_image_url}
-                onChange={(e) => handleFieldChange('map_image_url', e.target.value)}
-                placeholder={t('form.mapImageUrlPlaceholder', 'https://… or /maps/floor-3.png')}
-                className="mt-1"
-                disabled={submitting || mapUploading}
-              />
               <p className="mt-1 text-[11px] text-muted-foreground">
                 {pendingMapFile
                   ? t('form.mapUploadPending', 'Image will be uploaded after the zone is saved')
                   : t('form.mapImageUrlHint', 'Floor plan image used in the indoor map view')}
               </p>
               {formData.map_image_url && (
-                <div className="mt-2 flex items-center gap-3 rounded-md border border-border bg-card p-2">
-                  <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded border border-border bg-muted">
-                    <img
-                      src={formData.map_image_url}
-                      alt="map preview"
-                      className="h-full w-full object-contain"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display = 'none';
-                        const sibling = e.currentTarget.nextElementSibling as HTMLElement | null;
-                        if (sibling) sibling.style.display = 'flex';
-                      }}
-                    />
-                    <div className="hidden h-full w-full items-center justify-center text-muted-foreground">
-                      <ImageIcon size={20} />
-                    </div>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[11px] font-mono text-muted-foreground" title={formData.map_image_url}>
-                      {formData.map_image_url}
-                    </div>
-                    {(formData.map_image_width || formData.map_image_height) && (
-                      <div className="mt-0.5 text-[11px] text-muted-foreground">
-                        {formData.map_image_width || '?'} × {formData.map_image_height || '?'} px
+                <div className="mt-2 rounded-md border border-border bg-muted p-2">
+                  <div className="flex min-h-[200px] items-center justify-center overflow-hidden rounded">
+                    {previewLoadFailed ? (
+                      <div className="flex h-[200px] w-full items-center justify-center text-muted-foreground">
+                        <ImageIcon size={32} />
                       </div>
+                    ) : (
+                      <img
+                        key={formData.map_image_url}
+                        src={previewUrl(formData.map_image_url)}
+                        alt="map preview"
+                        className="max-h-[360px] w-full object-contain"
+                        onError={() => setPreviewLoadFailed(true)}
+                      />
                     )}
                   </div>
+                  {(formData.map_image_width || formData.map_image_height) && (
+                    <div className="mt-2 text-center text-[11px] text-muted-foreground">
+                      {formData.map_image_width || '?'} × {formData.map_image_height || '?'} px
+                    </div>
+                  )}
                 </div>
               )}
             </div>
