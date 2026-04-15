@@ -180,13 +180,13 @@ class TestSystemDevices:
     @pytest.mark.api
     def test_global_device_list(self, sysadmin_client, test_device):
         """GET /system/devices should return all devices (system admin)."""
-        resp = sysadmin_client.get("/api/v1/system/devices")
+        resp = sysadmin_client.get("/api/v1/gateway/system/devices")
         assert resp.status_code == 200
 
     @pytest.mark.api
     def test_global_list_requires_sysadmin(self, admin_client):
         """Company admin should not access global device list."""
-        resp = admin_client.get("/api/v1/system/devices")
+        resp = admin_client.get("/api/v1/gateway/system/devices")
         assert resp.status_code in [403, 401]
 
 

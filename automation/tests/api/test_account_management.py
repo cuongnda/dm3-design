@@ -24,7 +24,7 @@ class TestAccountManagementAPI:
             "role": "viewer",
             **overrides,
         }
-        resp = self.client.post("/api/v1/system/accounts", json=data)
+        resp = self.client.post("/api/v1/auth/system/accounts", json=data)
         if resp.status_code != 201:
             pytest.skip(f"Cannot create test account: {resp.status_code} {resp.text[:200]}")
         body = resp.json()
@@ -34,7 +34,7 @@ class TestAccountManagementAPI:
     @pytest.mark.smoke
     def test_list_accounts(self):
         """Should list user accounts with pagination."""
-        response = self.client.get("/api/v1/system/accounts")
+        response = self.client.get("/api/v1/auth/system/accounts")
         assert response.status_code == 200
         
         data = response.json()
@@ -54,7 +54,7 @@ class TestAccountManagementAPI:
     def test_list_accounts_with_search(self):
         """Should filter accounts by search term."""
         # Search by email
-        response = self.client.get("/api/v1/system/accounts", params={"search": "sysadmin"})
+        response = self.client.get("/api/v1/auth/system/accounts", params={"search": "sysadmin"})
         assert response.status_code == 200
         
         data = response.json()
@@ -66,7 +66,7 @@ class TestAccountManagementAPI:
     @pytest.mark.api
     def test_list_accounts_filter_by_role(self):
         """Should filter accounts by role."""
-        response = self.client.get("/api/v1/system/accounts", params={"role": "system_admin"})
+        response = self.client.get("/api/v1/auth/system/accounts", params={"role": "system_admin"})
         assert response.status_code == 200
         
         data = response.json()
@@ -79,7 +79,7 @@ class TestAccountManagementAPI:
     def test_create_account_success(self):
         """Should create new user account."""
         # First get a company to assign
-        companies_resp = self.client.get("/api/v1/system/companies")
+        companies_resp = self.client.get("/api/v1/auth/system/companies")
         assert companies_resp.status_code == 200
         companies_data = companies_resp.json()
         companies = companies_data.get("data", companies_data) if isinstance(companies_data, dict) else companies_data
@@ -98,7 +98,7 @@ class TestAccountManagementAPI:
         assert password  # Generated password
 
         # Cleanup
-        self.client.delete(f"/api/v1/system/accounts/{account['id']}")
+        self.client.delete(f"/api/v1/auth/system/accounts/{account['id']}")
 
     @pytest.mark.api
     def test_create_account_no_company(self):
@@ -111,7 +111,7 @@ class TestAccountManagementAPI:
         assert not account.get("companies")  # No company assignments
 
         # Cleanup
-        self.client.delete(f"/api/v1/system/accounts/{account['id']}")
+        self.client.delete(f"/api/v1/auth/system/accounts/{account['id']}")
 
     @pytest.mark.api
     def test_create_account_missing_fields(self):
@@ -121,7 +121,7 @@ class TestAccountManagementAPI:
             # Missing name
         }
         
-        response = self.client.post("/api/v1/system/accounts", json=account_data)
+        response = self.client.post("/api/v1/auth/system/accounts", json=account_data)
         assert response.status_code == 400
 
     @pytest.mark.api
@@ -132,14 +132,14 @@ class TestAccountManagementAPI:
             "name": "Duplicate User"
         }
         
-        response = self.client.post("/api/v1/system/accounts", json=account_data)
+        response = self.client.post("/api/v1/auth/system/accounts", json=account_data)
         assert response.status_code == 409
 
     @pytest.mark.api
     def test_get_account_success(self):
         """Should get account details with companies."""
         # Get system admin account
-        list_resp = self.client.get("/api/v1/system/accounts", params={"role": "system_admin"})
+        list_resp = self.client.get("/api/v1/auth/system/accounts", params={"role": "system_admin"})
         accounts = list_resp.json()["data"]
         
         if not accounts:
@@ -147,7 +147,7 @@ class TestAccountManagementAPI:
         
         account_id = accounts[0]["id"]
         
-        response = self.client.get(f"/api/v1/system/accounts/{account_id}")
+        response = self.client.get(f"/api/v1/auth/system/accounts/{account_id}")
         assert response.status_code == 200
         
         account = response.json()
@@ -159,7 +159,7 @@ class TestAccountManagementAPI:
     def test_get_account_not_found(self):
         """Should return 404 for non-existent account."""
         fake_id = "00000000-0000-0000-0000-000000000000"
-        response = self.client.get(f"/api/v1/system/accounts/{fake_id}")
+        response = self.client.get(f"/api/v1/auth/system/accounts/{fake_id}")
         assert response.status_code == 404
 
     @pytest.mark.api
@@ -170,13 +170,13 @@ class TestAccountManagementAPI:
 
         try:
             update_data = {"name": "Updated Name", "status": "active"}
-            response = self.client.patch(f"/api/v1/system/accounts/{account_id}", json=update_data)
+            response = self.client.patch(f"/api/v1/auth/system/accounts/{account_id}", json=update_data)
             assert response.status_code == 200
 
             updated_account = response.json()
             assert updated_account["name"] == "Updated Name"
         finally:
-            self.client.delete(f"/api/v1/system/accounts/{account_id}")
+            self.client.delete(f"/api/v1/auth/system/accounts/{account_id}")
 
     @pytest.mark.api
     def test_delete_account_success(self):
@@ -184,11 +184,11 @@ class TestAccountManagementAPI:
         account, _ = self._create_test_account(name="Test Delete User")
         account_id = account["id"]
 
-        response = self.client.delete(f"/api/v1/system/accounts/{account_id}")
+        response = self.client.delete(f"/api/v1/auth/system/accounts/{account_id}")
         assert response.status_code == 200
 
         # Verify account is inactive
-        get_resp = self.client.get(f"/api/v1/system/accounts/{account_id}")
+        get_resp = self.client.get(f"/api/v1/auth/system/accounts/{account_id}")
         if get_resp.status_code == 200:
             account = get_resp.json()
             assert account["status"] == "inactive"
@@ -197,7 +197,7 @@ class TestAccountManagementAPI:
     def test_delete_system_admin_forbidden(self):
         """Should not allow deleting system admin accounts."""
         # Get system admin account
-        list_resp = self.client.get("/api/v1/system/accounts", params={"role": "system_admin"})
+        list_resp = self.client.get("/api/v1/auth/system/accounts", params={"role": "system_admin"})
         accounts = list_resp.json()["data"]
         
         if not accounts:
@@ -205,7 +205,7 @@ class TestAccountManagementAPI:
         
         account_id = accounts[0]["id"]
         
-        response = self.client.delete(f"/api/v1/system/accounts/{account_id}")
+        response = self.client.delete(f"/api/v1/auth/system/accounts/{account_id}")
         assert response.status_code == 404  # Cannot delete system admin
 
     @pytest.mark.api
@@ -215,20 +215,20 @@ class TestAccountManagementAPI:
         account_id = account["id"]
 
         try:
-            response = self.client.post(f"/api/v1/system/accounts/{account_id}/reset-password")
+            response = self.client.post(f"/api/v1/auth/system/accounts/{account_id}/reset-password")
             assert response.status_code == 200
 
             data = response.json()
             assert data["password"]  # New password generated
             assert data["message"]
         finally:
-            self.client.delete(f"/api/v1/system/accounts/{account_id}")
+            self.client.delete(f"/api/v1/auth/system/accounts/{account_id}")
 
     @pytest.mark.api
     def test_reset_password_not_found(self):
         """Should return 404 for non-existent account."""
         fake_id = "00000000-0000-0000-0000-000000000000"
-        response = self.client.post(f"/api/v1/system/accounts/{fake_id}/reset-password")
+        response = self.client.post(f"/api/v1/auth/system/accounts/{fake_id}/reset-password")
         assert response.status_code == 404
 
 
@@ -240,7 +240,7 @@ class TestAccountManagementAuth:
         """Non-system-admin should not access account management."""
         # Try with no auth
         client = DM3Client()
-        response = client.get("/api/v1/system/accounts")
+        response = client.get("/api/v1/auth/system/accounts")
         assert response.status_code == 401
 
         # TODO: Test with regular user when available
