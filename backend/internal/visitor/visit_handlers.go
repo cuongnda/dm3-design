@@ -1428,7 +1428,11 @@ func (h *VisitorHandlers) hostExists(r *http.Request, cid, hostUserID string) bo
 
 // sendVisitorInvitationEmail sends an invitation email to a visitor (runs in a goroutine).
 func (h *VisitorHandlers) sendVisitorInvitationEmail(tenantID, visitorEmail, visitorName, hostUserID, purpose string, expectedArrival time.Time, qrToken string) {
-	ctx := context.Background()
+	// Detached from the request (spawned via `go sendVisitorInvitationEmail`),
+	// so we can't inherit r.Context(). Bound the overall work so a stuck DB
+	// or SMTP call can't leak a goroutine.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	// Get company name
 	var companyName string

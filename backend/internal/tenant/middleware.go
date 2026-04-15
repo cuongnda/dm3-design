@@ -46,7 +46,7 @@ func Middleware(database *db.DB, mode IsolationMode) func(http.Handler) http.Han
 				ctx := r.Context()
 				if companyID != "" {
 					// Load tenant info for system admin scoped requests
-					tenantInfo, err := loadTenantInfo(database, companyID)
+					tenantInfo, err := loadTenantInfo(ctx, database, companyID)
 					if err != nil {
 						writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid tenant_id: %v", err))
 						return
@@ -70,7 +70,7 @@ func Middleware(database *db.DB, mode IsolationMode) func(http.Handler) http.Han
 			}
 
 			// Load complete tenant information
-			tenantInfo, err := loadTenantInfo(database, claims.CID)
+			tenantInfo, err := loadTenantInfo(r.Context(), database, claims.CID)
 			if err != nil {
 				writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load tenant info: %v", err))
 				return
@@ -114,7 +114,7 @@ func SystemAdminTenant(database *db.DB) func(http.Handler) http.Handler {
 // tenants would appear active) in any configuration where the middleware was
 // wired without a DB. That's a latent privilege-escalation vector — fail
 // loudly instead.
-func loadTenantInfo(database *db.DB, companyID string) (*TenantInfo, error) {
+func loadTenantInfo(ctx context.Context, database *db.DB, companyID string) (*TenantInfo, error) {
 	if database == nil || database.Pool == nil {
 		return nil, fmt.Errorf("tenant middleware: database not configured")
 	}
@@ -123,9 +123,9 @@ func loadTenantInfo(database *db.DB, companyID string) (*TenantInfo, error) {
 		FROM dm3_auth.tenants
 		WHERE id = $1::uuid AND status != 'deleted'
 	`
-	
+
 	var info TenantInfo
-	row := database.Pool.QueryRow(context.Background(), query, companyID)
+	row := database.Pool.QueryRow(ctx, query, companyID)
 	err := row.Scan(
 		&info.ID,
 		&info.CompanyName,

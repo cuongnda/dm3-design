@@ -435,15 +435,20 @@ func (h *IdentityHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	// Send welcome email async
 	if h.email != nil && req.Email != "" {
 		go func() {
+			// Detached from the request so r.Context() is unsafe to inherit.
+			// Bound overall work so a stuck DB/SMTP call can't leak a goroutine.
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
 			var companyName string
-			_ = h.db.Pool.QueryRow(context.Background(),
+			_ = h.db.Pool.QueryRow(ctx,
 				`SELECT name FROM dm3_auth.tenants WHERE id = $1::uuid`, companyID,
 			).Scan(&companyName)
 
 			// Check for custom template first
 			var customSubject, customBody string
 			var hasCustom bool
-			err := h.db.Pool.QueryRow(context.Background(),
+			err := h.db.Pool.QueryRow(ctx,
 				`SELECT subject, body_html FROM dm3_identity.email_templates
 				 WHERE tenant_id = $1::uuid AND type = 'account_created' AND is_active = true`,
 				companyID,

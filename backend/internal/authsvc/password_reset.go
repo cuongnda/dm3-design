@@ -61,7 +61,11 @@ func (h *AuthHandlers) processForgotPassword(emailAddr string) {
 		return
 	}
 
-	ctx := context.Background()
+	// Detached from the request (called via `go processForgotPassword`) so we
+	// can't inherit r.Context(). Bound overall work with a timeout so a stuck
+	// DB or SMTP call can't leak a goroutine.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	// Look up the user.
 	var userID, fullName string

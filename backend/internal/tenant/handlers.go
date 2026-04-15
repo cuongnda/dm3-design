@@ -129,7 +129,7 @@ func (h *TenantHandlers) GetTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info, err := loadTenantInfo(h.db, tenantID)
+	info, err := loadTenantInfo(r.Context(), h.db, tenantID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "tenant not found")
 		return
@@ -184,7 +184,7 @@ func (h *TenantHandlers) UpdateTenantStatus(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Return updated tenant info
-	info, err := loadTenantInfo(h.db, tenantID)
+	info, err := loadTenantInfo(r.Context(), h.db, tenantID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to fetch updated tenant")
 		return

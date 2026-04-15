@@ -83,7 +83,7 @@ func (ah *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get tenant information
-	tenantInfo, err := loadTenantInfo(ah.db, req.TenantID)
+	tenantInfo, err := loadTenantInfo(r.Context(), ah.db, req.TenantID)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to load tenant information")
 		return
