@@ -377,10 +377,26 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	copy(countArgs, args)
 	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm3_access.access_events "+where, countArgs...).Scan(&total)
 
-	query := fmt.Sprintf(`SELECT id, tenant_id, time, COALESCE(access_point_id::text,''),
-		COALESCE(user_id::text,''), COALESCE(user_name,''), COALESCE(credential_type,''),
-		COALESCE(direction,''), decision, COALESCE(reason,''), confidence, COALESCE(photo_ref,''), metadata
-		FROM dm3_access.access_events %s ORDER BY time DESC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
+	// LEFT JOIN to pick one device per access point (the one with the earliest junction entry).
+	// access_point_devices.access_device_id is TEXT; access_devices.id is UUID — cast to compare.
+	query := fmt.Sprintf(`
+		SELECT e.id, e.tenant_id, e.time,
+		       COALESCE(e.access_point_id::text,''),
+		       COALESCE(e.user_id::text,''), COALESCE(e.user_name,''), COALESCE(e.credential_type,''),
+		       COALESCE(e.direction,''), e.decision, COALESCE(e.reason,''), e.confidence,
+		       COALESCE(e.photo_ref,''), e.metadata,
+		       COALESCE(d.id::text,''), COALESCE(d.name,'')
+		FROM dm3_access.access_events e
+		LEFT JOIN LATERAL (
+		    SELECT ad.id, ad.name
+		    FROM dm3_access.access_point_devices apd
+		    JOIN dm3_access.access_devices ad ON ad.id::text = apd.access_device_id
+		    WHERE apd.access_point_id = e.access_point_id
+		      AND apd.tenant_id = e.tenant_id
+		    ORDER BY apd.created_at
+		    LIMIT 1
+		) d ON true
+		%s ORDER BY e.time DESC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
 	args = append(args, limit, offset)
 
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)
@@ -396,7 +412,8 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 		var e eventResponse
 		if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.AccessPointID,
 			&e.UserID, &e.UserName, &e.CredentialType, &e.Direction, &e.Decision,
-			&e.Reason, &e.Confidence, &e.PhotoRef, &e.Metadata); err != nil {
+			&e.Reason, &e.Confidence, &e.PhotoRef, &e.Metadata,
+			&e.DeviceID, &e.DeviceName); err != nil {
 			slog.Error("list events scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -416,6 +433,8 @@ type eventResponse struct {
 	TenantID       string         `json:"tenant_id"`
 	Time           time.Time      `json:"time"`
 	AccessPointID  string         `json:"access_point_id,omitempty"`
+	DeviceID       string         `json:"device_id,omitempty"`
+	DeviceName     string         `json:"device_name,omitempty"`
 	UserID         string         `json:"user_id,omitempty"`
 	UserName       string         `json:"user_name,omitempty"`
 	CredentialType string         `json:"credential_type,omitempty"`
