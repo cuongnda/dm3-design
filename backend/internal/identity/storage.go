@@ -82,14 +82,15 @@ func (h *IdentityHandlers) uploadUserImage(r *http.Request, userID, companyID, f
 		return "", &uploadError{status: http.StatusInternalServerError, message: "failed to save uploaded file"}
 	}
 
-	column := "avatar"
-	if variant == identityAvatarVariant {
-		column = "avatar"
-	}
 	assetURL := buildIdentityImagePublicPath(objectKey)
 
+	// Both photo and avatar variants currently write to the `avatar` column —
+	// historical behavior preserved. The column name is a compile-time constant
+	// (not derived from user input) so the query is bound, not interpolated.
+	// If a separate `photo` column is ever introduced, branch on `variant` with
+	// a switch over an allowlist — NEVER fmt.Sprintf a column name into SQL.
 	var previous *string
-	query := fmt.Sprintf(`UPDATE dm3_identity.users SET %s = $2, updated_at = now() WHERE id = $1::uuid AND tenant_id = $3::uuid RETURNING %s`, column, column)
+	const query = `UPDATE dm3_identity.users SET avatar = $2, updated_at = now() WHERE id = $1::uuid AND tenant_id = $3::uuid RETURNING avatar`
 	if err := h.db.Pool.QueryRow(r.Context(), query, userID, assetURL, companyID).Scan(&previous); err != nil {
 		if derr := h.objects.DeleteObject(r.Context(), objectKey); derr != nil {
 			slog.Warn("failed to delete orphaned identity image after DB error", "key", objectKey, "error", derr)
