@@ -213,7 +213,7 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 			`UPDATE dm3_auth.accounts
 			    SET failed_attempts = failed_attempts + 1,
 			        locked_until = CASE
-			            WHEN failed_attempts + 1 >= $2 THEN now() + ($3 || ' seconds')::interval
+			            WHEN failed_attempts + 1 >= $2 THEN now() + make_interval(secs => $3)
 			            ELSE locked_until
 			        END
 			  WHERE email = $1 AND status != 'deleted'`,
