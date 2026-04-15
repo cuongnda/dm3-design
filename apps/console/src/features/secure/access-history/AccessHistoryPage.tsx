@@ -1,0 +1,544 @@
+import { useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { subDays } from 'date-fns';
+import {
+  Download, History, RotateCcw, X, ImageOff,
+} from 'lucide-react';
+import {
+  listAccessEvents,
+  exportAccessEvents,
+  type ListAccessEventsParams,
+} from '@dm3/api-client';
+import {
+  Button,
+  Input,
+  Label,
+  Select,
+  SelectOption,
+  Badge,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TablePaginationFooter,
+  DatetimePicker,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  PageHeader,
+} from '@dm3/ui';
+import { assetUrl } from '@/lib/api';
+import { toast } from '@/lib/toast';
+
+const LIMIT = 50;
+
+const CREDENTIAL_TYPES = ['card', 'pin', 'face', 'plate', 'qr'] as const;
+
+// ─── URL-param helpers ──────────────────────────────────────────────────────
+
+/** Safely parse an ISO string from a URL param; returns null if invalid. */
+function validIso(s: string | null): string | null {
+  if (!s) return null;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : s;
+}
+
+function defaultFromIso(): string {
+  return subDays(new Date(), 7).toISOString();
+}
+
+function defaultToIso(): string {
+  return new Date().toISOString();
+}
+
+// ─── Decision badge ─────────────────────────────────────────────────────────
+
+function DecisionBadge({ decision, t }: { decision: string; t: (k: string) => string }) {
+  const isGranted = decision === 'granted';
+  const cls = isGranted
+    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+    : 'bg-red-500/15 text-red-400 border-red-500/30';
+  const label = isGranted
+    ? t('accessHistory.decision.granted')
+    : t('accessHistory.decision.denied');
+  return (
+    <Badge variant="outline" className={`rounded text-[11px] ${cls}`}>
+      {label}
+    </Badge>
+  );
+}
+
+// ─── Direction badge ────────────────────────────────────────────────────────
+
+function DirectionBadge({ direction, t }: { direction?: string; t: (k: string) => string }) {
+  if (!direction) return <span className="text-muted-foreground">—</span>;
+  const label = direction === 'in'
+    ? t('accessHistory.direction.in')
+    : direction === 'out'
+      ? t('accessHistory.direction.out')
+      : direction;
+  const cls = direction === 'in'
+    ? 'text-blue-400 bg-blue-500/10'
+    : 'text-amber-400 bg-amber-500/10';
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium capitalize ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
+// ─── Skeleton rows ──────────────────────────────────────────────────────────
+
+function SkeletonRows({ count }: { count: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <TableRow key={i} className="animate-pulse">
+          {Array.from({ length: 9 }).map((__, j) => (
+            <TableCell key={j} className="px-4 py-2">
+              <div className="h-4 bg-muted rounded w-full" />
+            </TableCell>
+          ))}
+        </TableRow>
+      ))}
+    </>
+  );
+}
+
+// ─── Photo thumbnail & modal ────────────────────────────────────────────────
+
+function PhotoCell({ photoRef, t }: { photoRef?: string; t: (k: string) => string }) {
+  const [open, setOpen] = useState(false);
+
+  if (!photoRef) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+
+  const url = assetUrl(photoRef);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="h-8 w-8 overflow-hidden rounded border border-border bg-muted flex items-center justify-center hover:opacity-80 transition-opacity"
+        title={t('accessHistory.photo.view')}
+        aria-label={t('accessHistory.photo.view')}
+      >
+        <img
+          src={url}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={(e) => {
+            const el = e.currentTarget as HTMLImageElement;
+            el.style.display = 'none';
+            if (el.nextElementSibling) {
+              (el.nextElementSibling as HTMLElement).style.display = 'flex';
+            }
+          }}
+        />
+        <span className="hidden items-center justify-center text-muted-foreground">
+          <ImageOff size={14} />
+        </span>
+      </button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t('accessHistory.photo.modal')}</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-center bg-muted rounded overflow-hidden">
+            <img
+              src={url}
+              alt={t('accessHistory.photo.modal')}
+              className="max-h-[60vh] object-contain"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// ─── Page ───────────────────────────────────────────────────────────────────
+
+export function AccessHistoryPage() {
+  const { t } = useTranslation('secure');
+
+  // URL search params for shareable filters
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const fromParam = searchParams.get('from');
+  const toParam = searchParams.get('to');
+  const accessPointParam = searchParams.get('access_point_id') ?? '';
+  const userIdParam = searchParams.get('user_id') ?? '';
+  const decisionParam = searchParams.get('decision') ?? '';
+  const credentialTypeParam = searchParams.get('credential_type') ?? '';
+  const pageParam = Number(searchParams.get('page') ?? '1') || 1;
+
+  // ISO strings used directly with DatetimePicker (which takes string | null)
+  const fromIso = validIso(fromParam) ?? defaultFromIso();
+  const toIso = validIso(toParam) ?? defaultToIso();
+
+  function updateParams(patch: Record<string, string>) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      for (const [k, v] of Object.entries(patch)) {
+        if (v) {
+          next.set(k, v);
+        } else {
+          next.delete(k);
+        }
+      }
+      return next;
+    });
+  }
+
+  function setPage(p: number) {
+    updateParams({ page: p > 1 ? String(p) : '' });
+  }
+
+  function clearFilters() {
+    setSearchParams(new URLSearchParams({
+      from: defaultFromIso(),
+      to: defaultToIso(),
+    }));
+  }
+
+  // Build query params for API
+  const queryFilters: ListAccessEventsParams = {
+    page: pageParam,
+    limit: LIMIT,
+    from: fromIso,
+    to: toIso,
+    ...(accessPointParam ? { access_point_id: accessPointParam } : {}),
+    ...(userIdParam ? { user_id: userIdParam } : {}),
+    ...(decisionParam ? { decision: decisionParam } : {}),
+    ...(credentialTypeParam ? { credential_type: credentialTypeParam } : {}),
+  };
+
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['access-events', queryFilters],
+    queryFn: () => listAccessEvents(queryFilters),
+    staleTime: 30_000,
+  });
+
+  const events = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+
+  // ─── Export ───────────────────────────────────────────────────────────────
+
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = useCallback(async (format: 'csv' | 'xlsx') => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const exportParams: ListAccessEventsParams = {
+        from: fromIso,
+        to: toIso,
+        ...(accessPointParam ? { access_point_id: accessPointParam } : {}),
+        ...(userIdParam ? { user_id: userIdParam } : {}),
+        ...(decisionParam ? { decision: decisionParam } : {}),
+        ...(credentialTypeParam ? { credential_type: credentialTypeParam } : {}),
+      };
+      const blob = await exportAccessEvents(exportParams, format);
+      const ext = format === 'csv' ? 'csv' : 'xlsx';
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `access-history.${ext}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg === 'export_too_large') {
+        toast(t('accessHistory.export.tooLarge'), 'error');
+      } else {
+        toast(t('accessHistory.error.title'), 'error');
+      }
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting, fromIso, toIso, accessPointParam, userIdParam, decisionParam, credentialTypeParam, t]);
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+
+  return (
+    <div className="flex-1 min-h-0 flex flex-col p-6 gap-4">
+      {/* Header */}
+      <PageHeader
+        title={t('accessHistory.title')}
+        description={t('accessHistory.subtitle')}
+      >
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={exporting}
+              className="gap-1.5"
+            >
+              {exporting ? (
+                <>
+                  <RotateCcw size={13} className="animate-spin" />
+                  {t('accessHistory.export.exporting')}
+                </>
+              ) : (
+                <>
+                  <Download size={13} />
+                  Export
+                </>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              data-testid="access-history-button-export-csv"
+              onClick={() => handleExport('csv')}
+              disabled={exporting}
+            >
+              {t('accessHistory.export.csv')}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              data-testid="access-history-button-export-xlsx"
+              onClick={() => handleExport('xlsx')}
+              disabled={exporting}
+            >
+              {t('accessHistory.export.xlsx')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </PageHeader>
+
+      {/* Filter bar */}
+      <div className="bg-card border border-border rounded-lg p-3">
+        <div className="flex flex-wrap gap-2 items-end">
+
+          {/* From */}
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px]">{t('accessHistory.filters.from')}</Label>
+            <DatetimePicker
+              value={fromIso}
+              onChange={(v) => {
+                updateParams({ from: v ?? '', page: '' });
+              }}
+              placeholder={t('accessHistory.filters.from')}
+              className="w-[190px]"
+            />
+          </div>
+
+          {/* To */}
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px]">{t('accessHistory.filters.to')}</Label>
+            <DatetimePicker
+              value={toIso}
+              onChange={(v) => {
+                updateParams({ to: v ?? '', page: '' });
+              }}
+              placeholder={t('accessHistory.filters.to')}
+              className="w-[190px]"
+            />
+          </div>
+
+          {/* Access Point */}
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px]">{t('accessHistory.filters.accessPoint')}</Label>
+            {/* TODO: replace with a select fetching listAccessPoints() once UX is decided */}
+            <Input
+              value={accessPointParam}
+              onChange={(e) => updateParams({ access_point_id: e.target.value, page: '' })}
+              placeholder={t('accessHistory.filters.accessPointPlaceholder')}
+              className="w-[200px] h-9"
+              data-testid="access-history-input-access-point"
+            />
+          </div>
+
+          {/* User ID */}
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px]">{t('accessHistory.filters.user')}</Label>
+            {/* TODO: support name search in v2 (currently UUID only) */}
+            <Input
+              value={userIdParam}
+              onChange={(e) => updateParams({ user_id: e.target.value, page: '' })}
+              placeholder={t('accessHistory.filters.userPlaceholder')}
+              className="w-[200px] h-9"
+              data-testid="access-history-input-user-id"
+            />
+          </div>
+
+          {/* Decision */}
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px]">{t('accessHistory.filters.decision')}</Label>
+            <Select
+              value={decisionParam}
+              onChange={(e) => updateParams({ decision: e.target.value, page: '' })}
+              className="w-[140px]"
+              data-testid="access-history-select-decision"
+            >
+              <SelectOption value="">{t('accessHistory.filters.allDecisions')}</SelectOption>
+              <SelectOption value="granted">{t('accessHistory.filters.granted')}</SelectOption>
+              <SelectOption value="denied">{t('accessHistory.filters.denied')}</SelectOption>
+            </Select>
+          </div>
+
+          {/* Credential Type */}
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px]">{t('accessHistory.filters.credentialType')}</Label>
+            <Select
+              value={credentialTypeParam}
+              onChange={(e) => updateParams({ credential_type: e.target.value, page: '' })}
+              className="w-[140px]"
+              data-testid="access-history-select-credential-type"
+            >
+              <SelectOption value="">{t('accessHistory.filters.allCredentials')}</SelectOption>
+              {CREDENTIAL_TYPES.map((ct) => (
+                <SelectOption key={ct} value={ct}>{ct}</SelectOption>
+              ))}
+            </Select>
+          </div>
+
+          {/* Clear */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearFilters}
+            className="gap-1 self-end"
+            data-testid="access-history-button-clear"
+          >
+            <X size={13} />
+            {t('accessHistory.filters.clear')}
+          </Button>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="flex-1 min-h-0 flex flex-col bg-card border border-border rounded-lg overflow-hidden">
+        {isError ? (
+          <div className="flex flex-col items-center justify-center h-40 gap-3 text-muted-foreground">
+            <History size={24} className="opacity-40" />
+            <p className="text-[13px]">{t('accessHistory.error.title')}</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1">
+              <RotateCcw size={13} />
+              {t('accessHistory.error.retry')}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <Table noWrapper data-testid="access-history-table-events">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.time')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.accessPoint')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.device')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.user')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.credential')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.direction')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.decision')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.reason')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.photo')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <SkeletonRows count={10} />
+                ) : events.length === 0 ? (
+                  <TableRow data-testid="access-history-empty">
+                    <TableCell colSpan={9} className="px-4 py-16 text-center">
+                      <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                        <History size={32} className="opacity-30" />
+                        <p className="text-[14px] font-medium">{t('accessHistory.empty.title')}</p>
+                        <p className="text-[12px]">{t('accessHistory.empty.subtitle')}</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  events.map((event) => (
+                    <TableRow
+                      key={event.id}
+                      data-testid={`access-history-row-${event.id}`}
+                      className="hover:bg-muted/30 transition-colors"
+                    >
+                      <TableCell className="px-4 text-[12px] text-muted-foreground whitespace-nowrap font-mono">
+                        {new Date(event.time).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="px-4 text-[12px]">
+                        {event.access_point_id ? (
+                          <span className="font-mono text-[11px] text-muted-foreground">{event.access_point_id}</span>
+                        ) : '—'}
+                      </TableCell>
+                      <TableCell className="px-4 text-[12px]">
+                        {event.device_name || event.device_id ? (
+                          <div className="flex flex-col leading-tight">
+                            <span>{event.device_name || '—'}</span>
+                            {event.device_id && (
+                              <span className="text-[10px] font-mono text-muted-foreground">{event.device_id}</span>
+                            )}
+                          </div>
+                        ) : '—'}
+                      </TableCell>
+                      <TableCell className="px-4 text-[12px]">
+                        {event.user_name || event.user_id ? (
+                          <div className="flex flex-col leading-tight">
+                            <span>{event.user_name || '—'}</span>
+                            {event.user_id && (
+                              <span className="text-[10px] font-mono text-muted-foreground">{event.user_id}</span>
+                            )}
+                          </div>
+                        ) : '—'}
+                      </TableCell>
+                      <TableCell className="px-4 text-[12px]">
+                        {event.credential_type ? (
+                          <span className="inline-block px-2 py-0.5 rounded bg-muted text-[11px] font-medium capitalize">
+                            {event.credential_type}
+                          </span>
+                        ) : '—'}
+                      </TableCell>
+                      <TableCell className="px-4">
+                        <DirectionBadge direction={event.direction} t={t} />
+                      </TableCell>
+                      <TableCell className="px-4">
+                        <DecisionBadge decision={event.decision} t={t} />
+                      </TableCell>
+                      <TableCell className="px-4 text-[12px] text-muted-foreground max-w-[200px] truncate">
+                        {event.reason || '—'}
+                      </TableCell>
+                      <TableCell className="px-4">
+                        <PhotoCell photoRef={event.photo_ref} t={t} />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!isError && total > 0 && (
+          <TablePaginationFooter
+            page={pageParam}
+            pageSize={LIMIT}
+            total={total}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            loading={isLoading}
+            data-testid="access-history-pagination"
+          />
+        )}
+      </div>
+    </div>
+  );
+}

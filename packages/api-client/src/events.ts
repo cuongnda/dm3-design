@@ -43,7 +43,7 @@ export function listEvents(params?: ListEventsParams): Promise<Paginated<AccessE
 
 // ─── Access Events (new paginated API with full field set) ──────────────────
 
-export interface AccessEvent {
+export interface AccessEventRecord {
   id: string;
   tenant_id: string;
   time: string;
@@ -74,7 +74,7 @@ export interface ListAccessEventsParams {
 
 export function listAccessEvents(
   params?: ListAccessEventsParams,
-): Promise<Paginated<AccessEvent>> {
+): Promise<Paginated<AccessEventRecord>> {
   const qs = new URLSearchParams();
   if (params?.page) qs.set('page', String(params.page));
   if (params?.limit) qs.set('limit', String(params.limit));
@@ -85,7 +85,7 @@ export function listAccessEvents(
   if (params?.from) qs.set('from', params.from);
   if (params?.to) qs.set('to', params.to);
   const suffix = qs.toString() ? `?${qs}` : '';
-  return apiFetch<Paginated<AccessEvent>>(`${BASE}${suffix}`);
+  return apiFetch<Paginated<AccessEventRecord>>(`${BASE}${suffix}`);
 }
 
 export async function exportAccessEvents(

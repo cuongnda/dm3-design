@@ -40,6 +40,7 @@ export const ROUTES = {
   intercom: '/secure/intercom',
   aiDetection: '/secure/ai-detection',
   emergency: '/secure/emergency',
+  accessHistory: '/secure/access-history',
   // MANAGE
   users: '/manage/users',
   departments: '/manage/departments',

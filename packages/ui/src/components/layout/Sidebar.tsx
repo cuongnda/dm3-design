@@ -7,7 +7,7 @@ import {
   Settings, ChevronLeft, ChevronRight, LogOut, UserCheck, MapPin,
   Users2, Cpu, User, ClipboardList, Eye, FileText, BarChart3,
   CalendarClock, SlidersHorizontal, CircleDollarSign, Ticket, ParkingSquare,
-  Activity,
+  Activity, History,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -31,15 +31,17 @@ interface NavItemProps {
   label: string;
   badge?: number;
   collapsed: boolean;
+  'data-testid'?: string;
 }
 
-function SidebarNavItem({ to, icon, label, badge, collapsed }: NavItemProps) {
+function SidebarNavItem({ to, icon, label, badge, collapsed, 'data-testid': testId }: NavItemProps) {
   if (collapsed) {
     return (
       <Tooltip delayDuration={0}>
         <TooltipTrigger asChild>
           <NavLink
             to={to}
+            data-testid={testId}
             className={({ isActive }) =>
               cn(
                 ' flex items-center justify-center h-5 w-5 mx-auto rounded-md transition-colors relative overflow-visible',
@@ -67,6 +69,7 @@ function SidebarNavItem({ to, icon, label, badge, collapsed }: NavItemProps) {
   return (
     <NavLink
       to={to}
+      data-testid={testId}
       className={({ isActive }) =>
         cn(
           'flex items-center gap-2.5 px-3 py-1.5 mx-2 rounded-md text-[13px] transition-colors',
@@ -149,6 +152,7 @@ export function Sidebar() {
         <SidebarNavItem to={ROUTES.intercom} icon={<Phone size={iconSize} />} label={t('nav.intercom')} collapsed={c} />
         <SidebarNavItem to={ROUTES.aiDetection} icon={<Bot size={iconSize} />} label={t('nav.aiDetection')} collapsed={c} />
         <SidebarNavItem to={ROUTES.emergency} icon={<AlertTriangle size={iconSize} />} label={t('nav.emergency')} collapsed={c} />
+        <SidebarNavItem to={ROUTES.accessHistory} icon={<History size={iconSize} />} label={t('nav.accessHistory')} collapsed={c} data-testid="sys-link-access-history" />
 
         <SectionLabel label={t('nav.manage')} color="#8B5CF6" collapsed={c} />
         <SidebarNavItem to={ROUTES.users} icon={<UserCheck size={iconSize} />} label={t('nav.users') + ' *'} collapsed={c} />
