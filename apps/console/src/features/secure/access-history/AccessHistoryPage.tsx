@@ -480,6 +480,22 @@ export function AccessHistoryPage() {
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
+  // Resolve access_point_id → human-readable name. Reuses the same queryKey +
+  // staleTime as the filter combobox (`access-points-filter`) so React Query
+  // dedupes to a single fetch per page load.
+  const { data: accessPointsData } = useQuery({
+    queryKey: ['access-points-filter'],
+    queryFn: () => listAccessPoints({ limit: 200 }),
+    staleTime: 5 * 60_000,
+  });
+  const accessPointNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const ap of accessPointsData?.data ?? []) {
+      map.set(ap.id, ap.name);
+    }
+    return map;
+  }, [accessPointsData]);
+
   // ─── Export ───────────────────────────────────────────────────────────────
 
   const [exporting, setExporting] = useState(false);
@@ -711,9 +727,9 @@ export function AccessHistoryPage() {
                         {new Date(event.time).toLocaleString()}
                       </TableCell>
                       <TableCell className="px-4 text-[12px]">
-                        {event.access_point_id ? (
-                          <span className="font-mono text-[11px] text-muted-foreground">{event.access_point_id}</span>
-                        ) : '—'}
+                        {event.access_point_id
+                          ? accessPointNameById.get(event.access_point_id) ?? '—'
+                          : '—'}
                       </TableCell>
                       <TableCell className="px-4 text-[12px]">
                         {event.device_name || event.device_id ? (
@@ -726,14 +742,7 @@ export function AccessHistoryPage() {
                         ) : '—'}
                       </TableCell>
                       <TableCell className="px-4 text-[12px]">
-                        {event.user_name || event.user_id ? (
-                          <div className="flex flex-col leading-tight">
-                            <span>{event.user_name || '—'}</span>
-                            {event.user_id && (
-                              <span className="text-[10px] font-mono text-muted-foreground">{event.user_id}</span>
-                            )}
-                          </div>
-                        ) : '—'}
+                        {event.user_name || '—'}
                       </TableCell>
                       <TableCell className="px-4 text-[12px]">
                         {event.credential_type ? (
