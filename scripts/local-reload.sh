@@ -22,12 +22,22 @@ BACKEND_SERVICES=(auth-svc identity-svc access-svc device-gateway audit-svc visi
 
 # Compose interpolates ${VAR} at parse time — if any required var is unset,
 # every `docker compose ...` call fails before it even looks at the target
-# service. Provide safe local-dev defaults so the reload script works on a
-# fresh checkout without a hand-crafted .env. Real secrets should still come
-# from the developer's .env when present; `:=` only fills in what's missing.
+# service. Source .env.local first so the developer's real local secrets
+# take precedence; then provide safe local-dev defaults (`:=` only fills
+# what's still unset) so the reload script works on a fresh checkout.
+#
+# NOTE: CCTV_CREDENTIAL_KEY must be valid base64 — cctv-svc base64-decodes
+# it at startup and crashes on invalid input. The default below is
+# openssl rand -base64 32 (valid, deterministic, NOT for production).
+if [[ -f .env.local ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source .env.local
+    set +a
+fi
 : "${MEDIAMTX_STREAM_PASS:=dev-stream-pass}"
 : "${MEDIAMTX_API_PASS:=dev-api-pass}"
-: "${CCTV_CREDENTIAL_KEY:=dev-cctv-credential-key-change-me-32b}"
+: "${CCTV_CREDENTIAL_KEY:=ZGV2LWNjdHYta2V5LWRldi1vbmx5LW5vdC1mb3ItcHJvZA==}"
 export MEDIAMTX_STREAM_PASS MEDIAMTX_API_PASS CCTV_CREDENTIAL_KEY
 
 RED='\033[0;31m'
