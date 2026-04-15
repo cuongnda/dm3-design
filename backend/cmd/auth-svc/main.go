@@ -34,16 +34,18 @@ func realIPKey(r *http.Request) (string, error) {
 	return audit.IPFromRequest(r), nil
 }
 
-// bypassLoopback wraps an httprate limiter so loopback callers (127.0.0.1, ::1)
-// skip the limiter entirely. Used to keep local dev + integration tests from
-// tripping the 5/min login cap.
-func bypassLoopback(limiter func(http.Handler) http.Handler) func(http.Handler) http.Handler {
+// bypassPrivate wraps an httprate limiter so callers from private IP space
+// (loopback, RFC1918, link-local, CGNAT) skip the limiter. This covers local
+// dev (curl from host → docker bridge gateway ≈ 192.168.x.x on macOS),
+// integration tests, and internal corporate networks. Production traffic from
+// the public internet always has a public IP and is still limited.
+func bypassPrivate(limiter func(http.Handler) http.Handler) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		limited := limiter(next)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := audit.IPFromRequest(r)
 			parsed := net.ParseIP(ip)
-			if parsed != nil && parsed.IsLoopback() {
+			if parsed != nil && (parsed.IsLoopback() || parsed.IsPrivate() || parsed.IsLinkLocalUnicast()) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -151,9 +153,9 @@ func main() {
 	// limiter has its own window so a flood on /login does not exhaust the
 	// budget for /refresh. Loopback callers bypass the limiter entirely so
 	// local dev and integration tests aren't tripped by their own traffic.
-	loginLimiter := bypassLoopback(httprate.Limit(5, 1*time.Minute, httprate.WithKeyFuncs(realIPKey)))
-	refreshLimiter := bypassLoopback(httprate.Limit(20, 1*time.Minute, httprate.WithKeyFuncs(realIPKey)))
-	passwordResetLimiter := bypassLoopback(httprate.Limit(3, 10*time.Minute, httprate.WithKeyFuncs(realIPKey)))
+	loginLimiter := bypassPrivate(httprate.Limit(5, 1*time.Minute, httprate.WithKeyFuncs(realIPKey)))
+	refreshLimiter := bypassPrivate(httprate.Limit(20, 1*time.Minute, httprate.WithKeyFuncs(realIPKey)))
+	passwordResetLimiter := bypassPrivate(httprate.Limit(3, 10*time.Minute, httprate.WithKeyFuncs(realIPKey)))
 
 	r.With(loginLimiter).Post("/api/v1/auth/login", h.Login)
 	r.With(loginLimiter).Post("/api/v1/auth/login-step2", h.LoginStep2)
