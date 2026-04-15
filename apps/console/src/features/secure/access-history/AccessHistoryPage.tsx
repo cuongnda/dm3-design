@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -420,9 +420,17 @@ export function AccessHistoryPage() {
   const credentialTypeParam = searchParams.get('credential_type') ?? '';
   const pageParam = Number(searchParams.get('page') ?? '1') || 1;
 
-  // ISO strings used directly with DatetimePicker (which takes string | null)
-  const fromIso = validIso(fromParam) ?? defaultFromIso();
-  const toIso = validIso(toParam) ?? defaultToIso();
+  // ISO strings used directly with DatetimePicker (which takes string | null).
+  // Memoize the default window once per mount — calling defaultFromIso() /
+  // defaultToIso() inline produced a fresh `new Date().toISOString()` on every
+  // render, churning the React Query queryKey and causing an infinite refetch
+  // loop (isLoading never settled, so the empty-state never appeared).
+  const defaultRange = useMemo(
+    () => ({ from: defaultFromIso(), to: defaultToIso() }),
+    [],
+  );
+  const fromIso = validIso(fromParam) ?? defaultRange.from;
+  const toIso = validIso(toParam) ?? defaultRange.to;
 
   function updateParams(patch: Record<string, string>) {
     setSearchParams((prev) => {
@@ -443,6 +451,7 @@ export function AccessHistoryPage() {
   }
 
   function clearFilters() {
+    // Recompute a fresh "now-7d..now" window on explicit user action.
     setSearchParams(new URLSearchParams({
       from: defaultFromIso(),
       to: defaultToIso(),
