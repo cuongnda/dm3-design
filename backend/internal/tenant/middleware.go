@@ -105,10 +105,16 @@ func SystemAdminTenant(database *db.DB) func(http.Handler) http.Handler {
 	return Middleware(database, IsolationModeSystemAdmin)
 }
 
-// loadTenantInfo fetches complete tenant/company information from database
+// loadTenantInfo fetches complete tenant/company information from database.
+//
+// Previously this function returned a fake "active" stub when the DB was nil,
+// which would silently bypass tenant status validation (suspended/deleted
+// tenants would appear active) in any configuration where the middleware was
+// wired without a DB. That's a latent privilege-escalation vector — fail
+// loudly instead.
 func loadTenantInfo(database *db.DB, companyID string) (*TenantInfo, error) {
 	if database == nil || database.Pool == nil {
-		return &TenantInfo{ID: companyID, TenantID: companyID, Status: "active"}, nil
+		return nil, fmt.Errorf("tenant middleware: database not configured")
 	}
 	query := `
 		SELECT id, name, code, plan, status, max_devices, max_users
