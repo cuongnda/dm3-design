@@ -288,10 +288,16 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 		}
 	}
 
+	// event_id + ON CONFLICT makes this idempotent against JetStream
+	// redelivery (consumer ack loss, crash, leader election). The unique
+	// index is (tenant_id, time, event_id) WHERE event_id IS NOT NULL, so
+	// events without an id still insert (legacy path), they just won't
+	// dedupe.
 	_, err := c.db.Pool.Exec(dbCtx,
-		`INSERT INTO dm3_access.access_events (time, tenant_id, access_point_id, door_id, user_id, user_name, credential_type, direction, decision, reason, confidence, photo_ref, temperature, decided_locally, metadata)
-		 VALUES ($1, $2::uuid, $3::uuid, $4::uuid, $5::uuid, NULLIF($6,''), NULLIF($7,''), NULLIF($8,''), $9, NULLIF($10,''), $11, NULLIF($12,''), $13, $14, $15)`,
-		evtTime, tenantID, accessPointID, toUUIDPtr(ald.DoorID), resolvedUserID, resolvedUserName, ald.CredentialType,
+		`INSERT INTO dm3_access.access_events (time, tenant_id, event_id, access_point_id, door_id, user_id, user_name, credential_type, direction, decision, reason, confidence, photo_ref, temperature, decided_locally, metadata)
+		 VALUES ($1, $2::uuid, NULLIF($3,''), $4::uuid, $5::uuid, $6::uuid, NULLIF($7,''), NULLIF($8,''), NULLIF($9,''), $10, NULLIF($11,''), $12, NULLIF($13,''), $14, $15, $16)
+		 ON CONFLICT (tenant_id, "time", event_id) WHERE event_id IS NOT NULL DO NOTHING`,
+		evtTime, tenantID, evt.ID, accessPointID, toUUIDPtr(ald.DoorID), resolvedUserID, resolvedUserName, ald.CredentialType,
 		ald.Direction, ald.Decision, ald.Reason, ald.Confidence, ald.PhotoRef, ald.Temperature, decidedLocally, metadataJSON)
 	if err != nil {
 		slog.Error("nats: failed to insert access event", "error", err)
