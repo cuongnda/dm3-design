@@ -3,29 +3,13 @@ import { Link, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Crosshair, Map, MapPin, Network, Plus, Save } from 'lucide-react';
 import { AppModal, Badge, Button, Card, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger } from '@dm3/ui';
+import { authenticatedUrl } from '@dm3/api-client';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import type { Zone, ZoneMapResponse } from './types';
 
 interface ZonesResponse {
   data?: Zone[];
-}
-
-function authenticatedUrl(url: string): string {
-  if (!url) return url;
-
-  const token = localStorage.getItem('dm3-token');
-  if (!token) return url;
-
-  try {
-    const resolved = new URL(url, window.location.origin);
-    if (resolved.origin !== window.location.origin) return resolved.toString();
-    resolved.searchParams.set('token', token);
-    return resolved.toString();
-  } catch {
-    const sep = url.includes('?') ? '&' : '?';
-    return `${url}${sep}token=${token}`;
-  }
 }
 
 export function ZoneDetailPage() {

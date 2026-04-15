@@ -17,6 +17,33 @@ export function clearToken(): void {
   localStorage.removeItem('dm3-refresh');
 }
 
+// authenticatedUrl appends the JWT as a `?token=` query param for endpoints
+// that are fetched outside of apiFetch — typically <img src>/<video src> where
+// the browser can't attach an Authorization header. Rules:
+//   - blob:/data: URLs are returned untouched (they don't round-trip the server).
+//   - Cross-origin URLs are returned untouched so the token isn't leaked to
+//     third-parties.
+//   - Only same-origin URLs receive the token.
+export function authenticatedUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith('blob:') || url.startsWith('data:')) return url;
+
+  const token = getToken();
+  if (!token) return url;
+
+  try {
+    const resolved = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
+    if (typeof window !== 'undefined' && resolved.origin !== window.location.origin) {
+      return resolved.toString();
+    }
+    resolved.searchParams.set('token', token);
+    return resolved.toString();
+  } catch {
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}token=${encodeURIComponent(token)}`;
+  }
+}
+
 let _refreshing: Promise<boolean> | null = null;
 
 async function tryRefreshToken(): Promise<boolean> {

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Building2, ImageIcon, Info, Map, MapPin, Save, Upload, X } from 'lucide-react';
 import { Button, Input, Label, Select, SelectOption } from '@dm3/ui';
+import { authenticatedUrl, getToken } from '@dm3/api-client';
 import { toast } from '@/lib/toast';
 import { useZones } from './hooks/useZones';
 import { emptyZoneForm, zoneFormToData, zoneToForm, type ZoneFormState } from './zone-form';
@@ -12,24 +13,9 @@ interface ZoneFormPageProps {
   mode: 'create' | 'edit';
 }
 
-// Server-hosted map images (/assets/...) require a JWT. Append it as a query
-// parameter so a plain <img> tag can render the preview. Pass-through for
-// blob:/data:/absolute external URLs.
-function previewUrl(url: string): string {
-  if (!url) return url;
-  if (url.startsWith('blob:') || url.startsWith('data:')) return url;
-  const token = localStorage.getItem('dm3-token');
-  if (!token) return url;
-  try {
-    const resolved = new URL(url, window.location.origin);
-    if (resolved.origin !== window.location.origin) return resolved.toString();
-    resolved.searchParams.set('token', token);
-    return resolved.toString();
-  } catch {
-    const sep = url.includes('?') ? '&' : '?';
-    return `${url}${sep}token=${token}`;
-  }
-}
+// Alias authenticatedUrl as previewUrl locally to keep JSX call sites readable.
+// Shared implementation handles blob:/data:/cross-origin pass-through.
+const previewUrl = authenticatedUrl;
 
 function Section({
   icon: Icon,
@@ -123,7 +109,7 @@ export function ZoneFormPage({ mode }: ZoneFormPageProps) {
     try {
       const fd = new FormData();
       fd.append('map', file);
-      const token = localStorage.getItem('dm3-token') ?? '';
+      const token = getToken() ?? '';
       const res = await fetch(`/api/v1/access/zones/${zoneID}/map/upload`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
