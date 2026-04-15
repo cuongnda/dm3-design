@@ -1,6 +1,48 @@
+# Dependencies & build output
 node_modules/
 dist/
+build/
+out/
+.turbo/
+
+# Env files (secrets)
 .env
 .env.local
 .env.*.local
-.claude/settings.local.json
+
+# Test output
+apps/*/playwright-report/
+apps/*/test-results/
+playwright-report/
+test-results/
+coverage/
+export/
+
+# Go build artifacts (binaries produced by `go run` / `go build` at repo root)
+backend/auth-svc
+backend/identity-svc
+backend/access-svc
+backend/device-gateway
+backend/audit-svc
+backend/visitor-svc
+backend/parking-svc
+backend/cctv-svc
+backend/bin/
+
+# Editor & OS
+.DS_Store
+*.swp
+*.swo
+
+# draw.io auto-backup files
+diagrams/.$*.drawio.bkp
+
+# AI / agent tool state (per-user, not shared)
+.claude/
+.learnings/
+.omc/
+**/.omc/
+
+# Knowledge-graph caches (the tracked `graphify-out/` root stays; ignore caches & per-subpackage graphs)
+graphify-out/cache/
+backend/graphify-out/
