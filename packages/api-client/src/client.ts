@@ -59,13 +59,17 @@ export async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<
       const newToken = getToken();
       if (newToken) headers['Authorization'] = `Bearer ${newToken}`;
       const retry = await fetch(url, { ...opts, headers });
-      if (retry.ok) {
-        if (retry.status === 204) return undefined as T;
-        try {
-          return await retry.json();
-        } catch {
-          throw new Error(`API ${retry.status}: invalid JSON response`);
-        }
+      if (retry.ok) return parseApiBody<T>(retry);
+
+      // After a successful refresh, a non-ok retry means the server
+      // rejected the *request* — not the token. Only keep the forced
+      // logout path for another 401 (refresh produced a token the
+      // server still rejects). For any other status, surface the error
+      // so the caller can handle it; logging the user out here would
+      // mask real bugs (e.g. a 400 from a bad payload).
+      if (retry.status !== 401) {
+        const text = await retry.text().catch(() => '');
+        throw new Error(`API ${retry.status}: ${text}`);
       }
     }
 
@@ -81,9 +85,19 @@ export async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<
     throw new Error(`API ${res.status}: ${text}`);
   }
 
+  return parseApiBody<T>(res);
+}
+
+// parseApiBody treats 204 No Content and an empty 200 body as T=undefined.
+// A 200 with body "" happens for some framework-default PUT/DELETE paths;
+// without the empty-body guard, res.json() throws SyntaxError and the call
+// fails even though the operation succeeded.
+async function parseApiBody<T>(res: Response): Promise<T> {
   if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  if (text === '') return undefined as T;
   try {
-    return await res.json();
+    return JSON.parse(text) as T;
   } catch {
     throw new Error(`API ${res.status}: invalid JSON response`);
   }
