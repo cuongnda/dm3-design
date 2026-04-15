@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -360,7 +361,7 @@ func (h *IdentityHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 		WHERE email = $1 AND tenant_id = $2::uuid AND status != 'deleted'
 	`, req.Email, companyID).Scan(&accountID)
 
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		// Create a new account (random password — manager must set via change-password)
 		randomBytes := make([]byte, 16)
 		_, _ = rand.Read(randomBytes)

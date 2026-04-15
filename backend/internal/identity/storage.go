@@ -2,6 +2,7 @@ package identity
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -95,7 +96,7 @@ func (h *IdentityHandlers) uploadUserImage(r *http.Request, userID, companyID, f
 		if derr := h.objects.DeleteObject(r.Context(), objectKey); derr != nil {
 			slog.Warn("failed to delete orphaned identity image after DB error", "key", objectKey, "error", derr)
 		}
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return "", &uploadError{status: http.StatusNotFound, message: "user not found"}
 		}
 		return "", &uploadError{status: http.StatusInternalServerError, message: "failed to update user image"}

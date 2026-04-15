@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -169,7 +170,7 @@ func (h *FirmwareHandlers) GetFirmware(w http.ResponseWriter, r *http.Request) {
 		&fw.CreatedAt, &fw.UpdatedAt,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			i18n.ErrorResponse(w, r, http.StatusNotFound, "firmware.not_found")
 			return
 		}
@@ -341,7 +342,7 @@ func (h *FirmwareHandlers) UpdateFirmware(w http.ResponseWriter, r *http.Request
 		&fw.CreatedAt, &fw.UpdatedAt,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			i18n.ErrorResponse(w, r, http.StatusNotFound, "firmware.not_found")
 			return
 		}
@@ -370,7 +371,7 @@ func (h *FirmwareHandlers) DeleteFirmware(w http.ResponseWriter, r *http.Request
 			`SELECT file_path FROM dm3_devices.firmwares WHERE id = $1::uuid`, id,
 		).Scan(&filePath)
 		if err != nil {
-			if err == pgx.ErrNoRows {
+			if errors.Is(err, pgx.ErrNoRows) {
 				i18n.ErrorResponse(w, r, http.StatusNotFound, "firmware.not_found")
 				return
 			}
@@ -448,7 +449,7 @@ func (h *FirmwareHandlers) DeployFirmware(w http.ResponseWriter, r *http.Request
 		`SELECT version, device_type FROM dm3_devices.firmwares WHERE id = $1::uuid AND is_active = true`, id,
 	).Scan(&version, &deviceType)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			i18n.ErrorResponse(w, r, http.StatusNotFound, "firmware.not_found")
 			return
 		}
@@ -485,7 +486,7 @@ func (h *FirmwareHandlers) DownloadFirmware(w http.ResponseWriter, r *http.Reque
 		`SELECT file_path, version || '_' || device_type FROM dm3_devices.firmwares WHERE id = $1::uuid`, id,
 	).Scan(&filePath, &fileName)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			i18n.ErrorResponse(w, r, http.StatusNotFound, "firmware.not_found")
 			return
 		}

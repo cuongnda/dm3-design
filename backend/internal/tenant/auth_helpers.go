@@ -6,11 +6,14 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
-	"github.com/duali/dm3-backend/pkg/db"
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/duali/dm3-backend/pkg/db"
 )
 
 // AccountInfo represents a user account in the consolidated auth schema
@@ -89,7 +92,7 @@ func (as *AuthService) GetAccountByEmailAndCompany(ctx context.Context, email st
 	)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("account not found")
 		}
 		return nil, err
@@ -208,7 +211,7 @@ func (as *AuthService) ValidateSession(ctx context.Context, token string) (*Sess
 	)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil, fmt.Errorf("invalid or expired session")
 		}
 		return nil, nil, err

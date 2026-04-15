@@ -2,10 +2,12 @@ package tenant
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/pkg/db"
@@ -135,7 +137,7 @@ func loadTenantInfo(database *db.DB, companyID string) (*TenantInfo, error) {
 	)
 	
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("company not found")
 		}
 		return nil, err

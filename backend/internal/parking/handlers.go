@@ -4,6 +4,7 @@ import (
 	"github.com/duali/dm3-backend/internal/models"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -1386,7 +1387,7 @@ func (h *ParkingHandlers) lookupVehicleByPlate(ctx context.Context, cid, normali
 	row := h.db.Pool.QueryRow(ctx, vehicleLookupSelect+` WHERE tenant_id = $1::uuid AND normalized_plate = $2`, cid, normalizedPlate)
 	v, err := scanVehicleLookup(row)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return models.ParkingVehicle{}, nil
 		}
 		return models.ParkingVehicle{}, err
@@ -1401,7 +1402,7 @@ func (h *ParkingHandlers) lookupVehicleByRFID(ctx context.Context, cid, rfidTag 
 	row := h.db.Pool.QueryRow(ctx, vehicleLookupSelect+` WHERE tenant_id = $1::uuid AND rfid_tag = $2`, cid, rfidTag)
 	v, err := scanVehicleLookup(row)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return models.ParkingVehicle{}, nil
 		}
 		return models.ParkingVehicle{}, err
@@ -1416,7 +1417,7 @@ func (h *ParkingHandlers) lookupVehicleByNFC(ctx context.Context, cid, nfcCardID
 	row := h.db.Pool.QueryRow(ctx, vehicleLookupSelect+` WHERE tenant_id = $1::uuid AND nfc_card_id = $2`, cid, nfcCardID)
 	v, err := scanVehicleLookup(row)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return models.ParkingVehicle{}, nil
 		}
 		return models.ParkingVehicle{}, err
@@ -1532,7 +1533,7 @@ func (h *ParkingHandlers) lookupActiveParkingPass(ctx context.Context, cid, vehi
 		ORDER BY valid_until DESC LIMIT 1`, cid, vehicleID, zoneID, now)
 	pass, err := scanParkingPass(row)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return models.ParkingPass{}, nil
 		}
 		return models.ParkingPass{}, err
@@ -1553,7 +1554,7 @@ func (h *ParkingHandlers) zoneHasCapacity(ctx context.Context, cid, zoneID strin
 		WHERE z.tenant_id = $1::uuid AND z.id = $2::uuid
 		GROUP BY z.id`, cid, zoneID).Scan(&totalSpaces, &activeSessions)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return true, nil
 		}
 		return false, err

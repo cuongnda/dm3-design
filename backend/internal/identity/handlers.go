@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -635,7 +636,7 @@ func (h *IdentityHandlers) scanPerson(r *http.Request, id string) (models.User, 
 		&p.Department, &p.Role, &p.EmployeeID, &p.Status, &p.PhotoURL,
 		&p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return p, fmt.Errorf("not found")
 		}
 		return p, err
