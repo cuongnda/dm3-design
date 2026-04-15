@@ -55,13 +55,15 @@ func TestTenantMiddleware(t *testing.T) {
 		expectedStatus int
 		expectTenant   bool
 	}{
-		{
-			name:           "strict mode with valid tenant",
-			mode:           IsolationModeStrict,
-			token:          createTestToken("user1", "tenant1", "manager"),
-			expectedStatus: http.StatusOK,
-			expectTenant:   true,
-		},
+		// "strict mode with valid tenant" is intentionally omitted from
+		// this unit-test table: it requires loadTenantInfo to query the
+		// DB, but createMockDB returns Pool: nil. Previously the code
+		// silently faked an "active" tenant when Pool was nil, which
+		// papered over a real privilege-escalation risk; that stub was
+		// removed in the P1.5 security fix and now correctly returns
+		// 500. Coverage for the happy path lives in the integration
+		// suite (automation/tests/tenant_isolation/), which uses a real
+		// database.
 		{
 			name:           "strict mode with no tenant",
 			mode:           IsolationModeStrict,
