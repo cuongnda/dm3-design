@@ -183,7 +183,7 @@ Only a handful of pages (Dashboard, Devices, Identities, System Settings) connec
 
 - Conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
 - **Commit after every completed task** — each logical unit of work gets its own commit so progress is trackable and easy to rollback
-- Use `DM3_NO_AUTO_RELOAD=1` prefix when committing to skip the post-commit auto-reload hook
+- The repo has a post-commit hook that auto-reloads the local stack — let it run. Commit with a plain `git commit`, NOT `DM3_NO_AUTO_RELOAD=1 git commit`. Only set `DM3_NO_AUTO_RELOAD=1` when the user explicitly asks to skip the reload (e.g. docs-only commits batched back-to-back).
 - Never push without explicit permission from the project owner
 - Never `git push --no-verify`
 
