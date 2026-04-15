@@ -3,5 +3,6 @@ from .base_page import BasePage
 from .login_page import LoginPage
 from .dashboard_page import DashboardPage
 from .department_page import DepartmentPage
+from .access_history_page import AccessHistoryPage
 
-__all__ = ["BasePage", "LoginPage", "DashboardPage", "DepartmentPage"]
+__all__ = ["BasePage", "LoginPage", "DashboardPage", "DepartmentPage", "AccessHistoryPage"]
