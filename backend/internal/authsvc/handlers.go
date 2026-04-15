@@ -1015,9 +1015,13 @@ type roleInfo struct {
 }
 
 func (h *AuthHandlers) ListRoles(w http.ResponseWriter, r *http.Request) {
+	// Mirrors the CHECK constraint on dm3_auth.accounts.role (migration 000001).
+	// Ordered high → low privilege.
 	roles := []roleInfo{
-		{Name: "admin", Description: "Full system access", Permissions: []string{"users:read", "users:write", "users:delete", "devices:read", "devices:write", "access:read", "access:write", "identity:read", "identity:write"}},
-		{Name: "operator", Description: "Operational access", Permissions: []string{"devices:read", "devices:write", "access:read", "access:write", "identity:read"}},
+		{Name: "system_admin", Description: "Cross-tenant platform administrator", Permissions: []string{"system:*", "tenant:*", "users:*", "devices:*", "access:*", "identity:*", "audit:read"}},
+		{Name: "primary_manager", Description: "Tenant owner — full access within tenant", Permissions: []string{"users:*", "devices:*", "access:*", "identity:*", "audit:read"}},
+		{Name: "manager", Description: "Tenant manager — user + access management", Permissions: []string{"users:read", "users:write", "devices:read", "devices:write", "access:read", "access:write", "identity:read", "identity:write"}},
+		{Name: "operator", Description: "Day-to-day operational access", Permissions: []string{"devices:read", "devices:write", "access:read", "access:write", "identity:read"}},
 		{Name: "viewer", Description: "Read-only access", Permissions: []string{"devices:read", "access:read", "identity:read"}},
 	}
 	httputil.JSON(w, http.StatusOK, roles)
