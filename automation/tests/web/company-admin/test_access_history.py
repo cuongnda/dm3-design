@@ -21,18 +21,25 @@ from common import constants
 # ── Shared helpers ────────────────────────────────────────────
 
 def _inject_auth(page) -> None:
-    """Inject Zustand auth state into localStorage before page load."""
-    page.add_init_script("""() => {
+    """Inject Zustand auth state + token into localStorage before page load.
+
+    Matches the real shape in apps/console/src/stores/authStore.ts (persist key
+    "dm3-auth") and the token helpers in apps/console/src/lib/api.ts (keys
+    "dm3-token" / "dm3-refresh"). The token itself is NOT part of the zustand
+    slice — it lives in its own localStorage key.
+    """
+    page.add_init_script("""
+        localStorage.setItem('dm3-token', 'dm3-test-token');
+        localStorage.setItem('dm3-refresh', 'dm3-test-refresh');
+        localStorage.setItem('dm3-lang', 'en');
         const state = {
             state: {
-                token: 'dm3-test-token',
-                refreshToken: 'dm3-test-refresh',
                 user: {
                     id: 'test-user-id',
                     email: 'admin@duali.com',
                     name: 'Test Admin',
                     role: 'primary_manager',
-                    tenant_id: '00000000-0000-0000-0000-000000000001',
+                    initials: 'TA',
                 },
                 isAuthenticated: true,
                 enabledPlugins: ['visitors', 'parking', 'attendance'],
@@ -40,11 +47,42 @@ def _inject_auth(page) -> None:
             version: 0,
         };
         localStorage.setItem('dm3-auth', JSON.stringify(state));
-    }""")
+    """)
 
 
 def _mock_common_apis(page) -> None:
-    """Mock shared API calls that the shell/layout components make on every page."""
+    """Mock shared API calls that the shell/layout components make on every page.
+
+    Strategy: register a broad ``**/api/v1/**`` catch-all FIRST so that any
+    endpoint we don't care about returns a benign 200 (prevents unhandled 401s
+    from real backend from triggering `apiFetch`'s redirect-to-login path).
+    Then register more specific overrides AFTER — Playwright resolves
+    overlapping routes in reverse registration order, so later registrations
+    win.
+    """
+    # 1) Catch-all — any unmocked /api/v1/* returns an empty paginated envelope.
+    page.route("**/api/v1/**", lambda r: r.fulfill(
+        status=200,
+        content_type="application/json",
+        body=json.dumps({"data": [], "total": 0, "page": 1, "limit": 20}),
+    ))
+
+    # 2) Specific endpoints whose shape must match consumer expectations.
+    page.route("**/api/v1/access/stats", lambda r: r.fulfill(
+        status=200,
+        content_type="application/json",
+        body=json.dumps({
+            "doors_online": 0, "doors_offline": 0, "doors_alarm": 0,
+            "doors_total": 0, "events_today": 0, "granted_today": 0,
+            "denied_today": 0, "recent_events": [],
+        }),
+    ))
+    page.route("**/api/v1/gateway/devices", lambda r: r.fulfill(
+        status=200, content_type="application/json", body=json.dumps([]),
+    ))
+    page.route("**/api/v1/notifications/unread-count", lambda r: r.fulfill(
+        status=200, content_type="application/json", body=json.dumps({"count": 0}),
+    ))
     page.route("**/api/v1/auth/tenant/**", lambda r: r.fulfill(
         status=200,
         content_type="application/json",
@@ -55,13 +93,20 @@ def _mock_common_apis(page) -> None:
             }
         }),
     ))
-    page.route("**/api/v1/access/stats", lambda r: r.fulfill(
+
+    # 3) /auth/me MUST succeed with a valid MeResponse or `checkAuth()` will
+    # clear the token and `ProtectedRoute` will redirect to /login.
+    page.route("**/api/v1/auth/me", lambda r: r.fulfill(
         status=200,
         content_type="application/json",
         body=json.dumps({
-            "doors_online": 0, "doors_offline": 0, "doors_alarm": 0,
-            "doors_total": 0, "events_today": 0, "granted_today": 0,
-            "denied_today": 0, "recent_events": [],
+            "id": "test-user-id",
+            "email": "admin@duali.com",
+            "name": "Test Admin",
+            "role": "primary_manager",
+            "company_id": "00000000-0000-0000-0000-000000000001",
+            "preferred_language": "en",
+            "enabled_plugins": ["visitors", "parking", "attendance"],
         }),
     ))
 
@@ -73,7 +118,12 @@ def _make_events_response(events: list[dict] | None = None) -> dict:
 
 
 def _mock_events_api(page, events: list[dict] | None = None) -> None:
-    """Route all GET /api/v1/events requests to return controlled test data."""
+    """Route all GET /api/v1/events requests to return controlled test data.
+
+    The frontend's listAccessEvents uses BASE = '/api/v1/events' (see
+    packages/api-client/src/events.ts), so mocks target that URL exactly and
+    must exclude the /export subpath (handled by separate handlers).
+    """
     body = json.dumps(_make_events_response(events))
     page.route(
         "**/api/v1/events*",
@@ -81,7 +131,7 @@ def _mock_events_api(page, events: list[dict] | None = None) -> None:
             status=200,
             content_type="application/json",
             body=body,
-        ) if "export" not in r.request.url else r.continue_(),
+        ) if "/export" not in r.request.url else r.continue_(),
     )
 
 
@@ -102,18 +152,12 @@ class TestAccessHistorySidebarLink:
     def test_sidebar_link_visible(self, page):
         """
         After login, the sidebar must contain the testid 'sys-link-access-history'
-        and it must be visible.
+        and it must be visible. We navigate to the access-history page itself —
+        the sidebar is part of MainLayout and renders on every secure route.
         """
         hp = _setup(page)
-        # Mock events so the page itself loads cleanly
-        _mock_events_api(page)
-        # Navigate to a landing page first so the sidebar renders
-        page.route("**/api/v1/**", lambda r: r.fulfill(
-            status=200,
-            content_type="application/json",
-            body=json.dumps({"data": [], "total": 0}),
-        ))
-        hp.goto("/")
+        _mock_events_api(page, events=[])
+        hp.open()
         hp.expect_visible("sys-link-access-history")
 
 
@@ -146,7 +190,7 @@ class TestAccessHistoryPageLoad:
         assert "Application error" not in body_text
 
         # Either the table or empty state must render
-        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(500)
         table_count = page.locator('[data-testid="access-history-table-events"]').count()
         empty_count = page.locator('[data-testid="access-history-empty"]').count()
         assert table_count > 0 or empty_count > 0, (
@@ -168,18 +212,18 @@ class TestAccessHistoryFilters:
         hp = _setup(page)
         _mock_events_api(page, events=[])
         hp.open()
-        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(500)
 
         # Mock the filtered response (decision=denied → empty is fine)
         page.route("**/api/v1/events*", lambda r: r.fulfill(
             status=200,
             content_type="application/json",
             body=json.dumps({"data": [], "total": 0, "page": 1, "limit": 20}),
-        ) if "export" not in r.request.url else r.continue_())
+        ) if "/export" not in r.request.url else r.continue_())
 
-        # Interact with the Decision filter
+        # Interact with the Decision filter (native <select>)
         hp.select_decision("denied")
-        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(500)
 
         # URL must reflect the selected filter
         current_url = page.url
@@ -196,7 +240,7 @@ class TestAccessHistoryFilters:
 
         # Open the page with an existing filter in the URL
         hp.goto(f"{AccessHistoryPage.PATH}?decision=denied")
-        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(500)
 
         hp.click_clear_filters()
 
@@ -214,7 +258,7 @@ class TestAccessHistoryFilters:
 
         # Navigate with filter already in URL (simulates user having applied it)
         hp.goto(f"{AccessHistoryPage.PATH}?decision=granted")
-        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(500)
 
         # Reload the page — auth is re-injected via init_script
         hp.reload()
@@ -236,10 +280,10 @@ class TestAccessHistoryFilters:
             status=200,
             content_type="application/json",
             body=json.dumps({"data": [], "total": 0, "page": 1, "limit": 20}),
-        ) if "export" not in r.request.url else r.continue_())
+        ) if "/export" not in r.request.url else r.continue_())
 
         hp.goto(f"{AccessHistoryPage.PATH}?access_point_id={impossible_uuid}")
-        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(500)
 
         hp.expect_visible("access-history-empty")
 
@@ -258,7 +302,8 @@ class TestAccessHistoryExport:
         hp = _setup(page)
         _mock_events_api(page, events=[])
 
-        # Mock the export endpoint to serve a CSV file
+        # Mock the export endpoint to serve a CSV file.
+        # exportAccessEvents hits `${BASE}/export?...` where BASE = '/api/v1/events'.
         page.route("**/api/v1/events/export*", lambda r: r.fulfill(
             status=200,
             content_type="text/csv; charset=utf-8",
@@ -267,7 +312,11 @@ class TestAccessHistoryExport:
         ))
 
         hp.open()
-        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(500)
+
+        # The CSV item lives inside a DropdownMenu — the trigger button has
+        # no testid, so open the menu by its visible "Export" label first.
+        page.get_by_role("button", name="Export").click()
 
         with page.expect_download() as download_info:
             hp.click_export_csv()
@@ -293,8 +342,10 @@ class TestAccessHistoryDropdowns:
         hp = _setup(page)
         _mock_events_api(page, events=[])
 
-        # Mock the access points list endpoint
-        page.route("**/api/v1/access-points*", lambda r: r.fulfill(
+        # Mock the access points list endpoint.
+        # listAccessPoints hits `/api/v1/access/access-points` (see
+        # packages/api-client/src/access-points.ts).
+        page.route("**/api/v1/access/access-points*", lambda r: r.fulfill(
             status=200,
             content_type="application/json",
             body=json.dumps({
@@ -307,7 +358,7 @@ class TestAccessHistoryDropdowns:
         ))
 
         hp.open()
-        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(500)
 
         # Open the access point dropdown
         hp.filter_access_point.click()

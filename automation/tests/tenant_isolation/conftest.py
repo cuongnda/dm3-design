@@ -7,50 +7,44 @@ Shared fixtures and configuration for tenant isolation tests.
 import pytest
 import os
 from typing import Generator
-from automation.common.api_client import ApiClient
-from automation.common.database import DatabaseClient
+
+# NOTE: The legacy fixtures below referenced `automation.common.api_client.ApiClient`
+# and `automation.common.database.DatabaseClient`, which don't exist in the current
+# `common/` package (the project uses `DM3Client` instead). The legacy fixtures are
+# preserved behind an import guard so test files that do not depend on them can run.
+try:
+    from automation.common.api_client import ApiClient  # type: ignore[attr-defined]
+    from automation.common.database import DatabaseClient  # type: ignore[attr-defined]
+    _LEGACY_FIXTURES_AVAILABLE = True
+except ImportError:
+    _LEGACY_FIXTURES_AVAILABLE = False
 
 
-@pytest.fixture(scope="session")
-def api_client() -> Generator[ApiClient, None, None]:
-    """Create API client for testing"""
-    base_url = os.getenv("DM3_API_URL", "http://localhost:8000")
-    client = ApiClient(base_url=base_url)
-    yield client
-    client.close()
+if _LEGACY_FIXTURES_AVAILABLE:
+    @pytest.fixture(scope="session")
+    def api_client() -> Generator["ApiClient", None, None]:
+        base_url = os.getenv("DM3_API_URL", "http://localhost:8000")
+        client = ApiClient(base_url=base_url)
+        yield client
+        client.close()
 
+    @pytest.fixture(scope="session")
+    def db_client() -> Generator["DatabaseClient", None, None]:
+        db_url = os.getenv("DM3_DATABASE_URL", "postgresql://dm3:dm3secret@localhost:5433/dm3")
+        client = DatabaseClient(db_url=db_url)
+        yield client
+        client.close()
 
-@pytest.fixture(scope="session")
-def db_client() -> Generator[DatabaseClient, None, None]:
-    """Create database client for direct database testing"""
-    db_url = os.getenv("DM3_DATABASE_URL", "postgresql://dm3:dm3secret@localhost:5433/dm3")
-    client = DatabaseClient(db_url=db_url)
-    yield client
-    client.close()
+    @pytest.fixture(autouse=True)
+    def cleanup_test_data(api_client):
+        yield
+        api_client.cleanup_test_data()
 
-
-@pytest.fixture(autouse=True)
-def cleanup_test_data(api_client: ApiClient):
-    """Automatically cleanup test data after each test"""
-    yield
-    # Cleanup any test data that might have been created
-    # This runs after each test
-    api_client.cleanup_test_data()
-
-
-@pytest.fixture(scope="function")
-def isolated_test_env(api_client: ApiClient, db_client: DatabaseClient):
-    """Create an isolated test environment for each test"""
-    # Create a transaction savepoint for database isolation
-    db_client.begin_transaction()
-    
-    yield {
-        'api_client': api_client,
-        'db_client': db_client
-    }
-    
-    # Rollback transaction to cleanup
-    db_client.rollback_transaction()
+    @pytest.fixture(scope="function")
+    def isolated_test_env(api_client, db_client):
+        db_client.begin_transaction()
+        yield {'api_client': api_client, 'db_client': db_client}
+        db_client.rollback_transaction()
 
 
 # Test marks for categorizing tests

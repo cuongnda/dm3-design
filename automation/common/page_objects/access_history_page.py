@@ -78,15 +78,40 @@ class AccessHistoryPage(BasePage):
         self.filter_user.click()
         self.page.get_by_role("option", name=name).click()
 
+    def _select_from_custom_select(self, testid: str, option_label: str) -> None:
+        """Select an option in the custom @dm3/ui <Select> component.
+
+        The component renders a <div data-testid="..."> wrapping a trigger
+        <button> and a portaled panel of option <button>s. Options are plain
+        buttons (no role="option", no testid) whose accessible name is their
+        visible label. Open the panel by clicking the trigger, then click
+        the option button by exact name.
+        """
+        container = self.by_testid(testid)
+        container.locator("button").first.click()
+        # Option buttons live in a React portal (not inside container).
+        self.page.get_by_role("button", name=option_label, exact=True).click()
+
+    # Decision option labels — keep in sync with
+    # apps/console/src/i18n/locales/en/secure.json accessHistory.filters.*
+    _DECISION_LABELS = {
+        "": "All decisions",
+        "granted": "Granted",
+        "denied": "Denied",
+    }
+
     def select_decision(self, value: str) -> None:
-        """Select a decision value (e.g. 'granted', 'denied') from the dropdown."""
-        self.filter_decision.click()
-        self.page.get_by_role("option", name=value).click()
+        """Select a decision value. ``value`` is the backing value
+        ('granted'/'denied'/''); internally mapped to the visible label.
+        """
+        label = self._DECISION_LABELS.get(value, value.capitalize())
+        self._select_from_custom_select("access-history-select-decision", label)
 
     def select_credential_type(self, value: str) -> None:
-        """Select a credential type (e.g. 'card', 'pin', 'face') from the dropdown."""
-        self.filter_credential_type.click()
-        self.page.get_by_role("option", name=value).click()
+        """Select a credential type by value (e.g. 'card', 'pin', 'face').
+        Credential-type labels are the raw value, so pass the value as label.
+        """
+        self._select_from_custom_select("access-history-select-credential-type", value)
 
     def set_date_range(self, from_date: str, to_date: str) -> None:
         """
@@ -110,9 +135,12 @@ class AccessHistoryPage(BasePage):
         self.export_xlsx_button.click()
 
     def click_clear_filters(self) -> None:
-        """Click the Clear filters button."""
+        """Click the Clear filters button.
+
+        Avoid networkidle — the app runs a WS reconnect loop that never settles.
+        """
         self.clear_button.click()
-        self.page.wait_for_load_state("networkidle")
+        self.page.wait_for_timeout(300)
 
     # ── Assertions / Queries ──────────────────────────────────
 
@@ -151,7 +179,7 @@ class AccessHistoryPage(BasePage):
                 }),
             )
 
-        self.page.route("**/api/v1/events*", handler)
+        self.page.route("**/api/v1/access/events*", handler)
 
     def mock_empty(self) -> None:
         """Mock the events API to return an empty list."""
@@ -166,4 +194,4 @@ class AccessHistoryPage(BasePage):
                 headers={"Content-Disposition": 'attachment; filename="events.csv"'},
                 body=content,
             )
-        self.page.route("**/api/v1/events/export*", handler)
+        self.page.route("**/api/v1/access/events/export*", handler)

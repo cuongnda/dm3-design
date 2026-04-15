@@ -21,8 +21,8 @@ import pytest
 from common.api_client import DM3Client
 from common import constants
 
-EVENTS_URL = "/api/v1/events"
-EXPORT_URL = "/api/v1/events/export"
+EVENTS_URL = "/api/v1/access/events"
+EXPORT_URL = "/api/v1/access/events/export"
 
 
 # ── Module-level client fixture ────────────────────────────────

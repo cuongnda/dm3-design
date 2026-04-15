@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from playwright.sync_api import Page, expect
 
+from common import constants
+
 
 class BasePage:
     """Common navigation, wait, and assertion helpers."""
@@ -16,12 +18,17 @@ class BasePage:
     # ── Navigation ────────────────────────────────────────────
 
     def goto(self, path: str) -> None:
-        self.page.goto(path)
-        self.page.wait_for_load_state("networkidle")
+        # Accept absolute or relative paths; prepend WEB_URL for relative ones.
+        if path.startswith(("http://", "https://")):
+            url = path
+        else:
+            url = f"{constants.WEB_URL.rstrip('/')}{path if path.startswith('/') else '/' + path}"
+        # Use domcontentloaded — the app keeps a WS reconnect loop running, so
+        # networkidle never settles in this environment.
+        self.page.goto(url, wait_until="domcontentloaded")
 
     def reload(self) -> None:
-        self.page.reload()
-        self.page.wait_for_load_state("networkidle")
+        self.page.reload(wait_until="domcontentloaded")
 
     # ── Selectors ─────────────────────────────────────────────
 
