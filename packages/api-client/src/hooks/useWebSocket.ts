@@ -74,12 +74,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         onConnect: () => {
           setConnectionStatus(true, false);
           options.onConnect?.();
-          console.log('[useWebSocket] Connected');
+          console.debug('[useWebSocket] Connected');
         },
         onDisconnect: () => {
           setConnectionStatus(false, false);
           options.onDisconnect?.();
-          console.log('[useWebSocket] Disconnected');
+          console.debug('[useWebSocket] Disconnected');
         },
         onError: (error) => {
           setConnectionStatus(false, false);

@@ -233,7 +233,9 @@ function CreatePersonModal({ open, onClose }: { open: boolean; onClose: () => vo
   });
 
   const save = () => {
-    console.log('Creating person:', formData);
+    // TODO: wire to POST /api/v1/identity/users once this modal is promoted
+    // from mock to real. See docs/IMPLEMENTATION_STATUS.md for the status of
+    // the Identities screen.
     onClose();
   };
 
