@@ -29,6 +29,7 @@ type Zone struct {
 	TenantID         string    `json:"tenant_id"`
 	ParentID         *string   `json:"parent_id,omitempty"`
 	Name             string    `json:"name"`
+	Type             string    `json:"type"`
 	Description      *string   `json:"description,omitempty"`
 	Timezone         *string   `json:"timezone,omitempty"`
 	Latitude         *float64  `json:"latitude,omitempty"`

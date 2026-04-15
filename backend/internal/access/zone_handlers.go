@@ -45,18 +45,28 @@ func (h *AccessHandlers) publishEvent(subject string, data any) {
 // ─── Zones ───────────────────────────────────────────────────────────────────
 
 // zoneSelectCols is the column list used across all zone queries.
-const zoneSelectCols = `z.id, z.tenant_id, z.parent_id, z.name, z.description,
+const zoneSelectCols = `z.id, z.tenant_id, z.parent_id, z.name, z.type, z.description,
 	z.timezone, z.latitude, z.longitude, z.address, z.floor, z.building,
 	z.map_image_url, z.map_width, z.map_height`
 
-const zoneReturningCols = `id, tenant_id, parent_id, name, description,
+const zoneReturningCols = `id, tenant_id, parent_id, name, type, description,
 	timezone, latitude, longitude, address, floor, building,
 	map_image_url, map_width, map_height`
+
+// validZoneTypes mirrors the CHECK constraint on dm3_access.zones.type
+// (migration 000019). Keep these in sync.
+var validZoneTypes = map[string]bool{
+	"site":     true,
+	"building": true,
+	"floor":    true,
+	"room":     true,
+	"zone":     true,
+}
 
 // scanZone scans all zone columns (including spatial fields) from a row.
 func scanZone(row interface{ Scan(dest ...any) error }, z *models.Zone) error {
 	return row.Scan(
-		&z.ID, &z.TenantID, &z.ParentID, &z.Name, &z.Description,
+		&z.ID, &z.TenantID, &z.ParentID, &z.Name, &z.Type, &z.Description,
 		&z.Timezone, &z.Latitude, &z.Longitude, &z.Address, &z.Floor, &z.Building,
 		&z.MapImageURL, &z.MapWidth, &z.MapHeight,
 		&z.AccessPointCount, &z.CreatedAt, &z.UpdatedAt,
@@ -138,6 +148,7 @@ func (h *AccessHandlers) ListZones(w http.ResponseWriter, r *http.Request) {
 
 type createZoneRequest struct {
 	Name        string   `json:"name"`
+	Type        *string  `json:"type"`
 	Description *string  `json:"description"`
 	ParentID    *string  `json:"parent_id"`
 	Timezone    *string  `json:"timezone"`
@@ -161,19 +172,27 @@ func (h *AccessHandlers) CreateZone(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusBadRequest, "name is required")
 		return
 	}
+	zoneType := "zone"
+	if req.Type != nil && *req.Type != "" {
+		if !validZoneTypes[*req.Type] {
+			httputil.Error(w, http.StatusBadRequest, "type must be one of: site, building, floor, room, zone")
+			return
+		}
+		zoneType = *req.Type
+	}
 
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	var z models.Zone
 	err := scanZone(h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO dm3_access.zones
-		   (tenant_id, parent_id, name, description, timezone, latitude, longitude,
+		   (tenant_id, parent_id, name, type, description, timezone, latitude, longitude,
 		    address, floor, building, map_image_url, map_width, map_height)
-		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-		 RETURNING id, tenant_id, parent_id, name, description,
+		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		 RETURNING id, tenant_id, parent_id, name, type, description,
 		           timezone, latitude, longitude, address, floor, building,
 		           map_image_url, map_width, map_height,
 		           0, created_at, updated_at`,
-		cid, req.ParentID, req.Name, req.Description,
+		cid, req.ParentID, req.Name, zoneType, req.Description,
 		req.Timezone, req.Latitude, req.Longitude,
 		req.Address, req.Floor, req.Building,
 		req.MapImageURL, req.MapWidth, req.MapHeight,
@@ -220,6 +239,7 @@ func (h *AccessHandlers) GetZone(w http.ResponseWriter, r *http.Request) {
 
 type updateZoneRequest struct {
 	Name        *string  `json:"name"`
+	Type        *string  `json:"type"`
 	Description *string  `json:"description"`
 	ParentID    *string  `json:"parent_id"`
 	Timezone    *string  `json:"timezone"`
@@ -273,6 +293,7 @@ func parseZoneMultipart(r *http.Request) (updateZoneRequest, *zoneMapUpload, err
 		return nil, nil
 	}
 	req.Name = strField("name")
+	req.Type = strField("type")
 	req.Description = strField("description")
 	// parent_id is a UUID column — empty string would fail the ::uuid cast.
 	// Treat "" as "don't touch"; a future dedicated flag can express "clear".
@@ -410,28 +431,36 @@ func (h *AccessHandlers) UpdateZone(w http.ResponseWriter, r *http.Request) {
 		req.MapHeight = &height
 	}
 
+	if req.Type != nil {
+		if *req.Type == "" || !validZoneTypes[*req.Type] {
+			httputil.Error(w, http.StatusBadRequest, "type must be one of: site, building, floor, room, zone")
+			return
+		}
+	}
+
 	var z models.Zone
 	err := scanZone(h.db.Pool.QueryRow(r.Context(),
 		`UPDATE dm3_access.zones
 		 SET name          = COALESCE($2, name),
-		     description   = COALESCE($3, description),
-		     parent_id     = COALESCE($4::uuid, parent_id),
-		     timezone      = COALESCE($5, timezone),
-		     latitude      = COALESCE($6, latitude),
-		     longitude     = COALESCE($7, longitude),
-		     address       = COALESCE($8, address),
-		     floor         = COALESCE($9, floor),
-		     building      = COALESCE($10, building),
-		     map_image_url = COALESCE($11, map_image_url),
-		     map_width     = COALESCE($12, map_width),
-		     map_height    = COALESCE($13, map_height),
+		     type          = COALESCE($3, type),
+		     description   = COALESCE($4, description),
+		     parent_id     = COALESCE($5::uuid, parent_id),
+		     timezone      = COALESCE($6, timezone),
+		     latitude      = COALESCE($7, latitude),
+		     longitude     = COALESCE($8, longitude),
+		     address       = COALESCE($9, address),
+		     floor         = COALESCE($10, floor),
+		     building      = COALESCE($11, building),
+		     map_image_url = COALESCE($12, map_image_url),
+		     map_width     = COALESCE($13, map_width),
+		     map_height    = COALESCE($14, map_height),
 		     updated_at    = now()
-		 WHERE id = $1::uuid AND ($14::uuid IS NULL OR tenant_id = $14::uuid)
-		 RETURNING id, tenant_id, parent_id, name, description,
+		 WHERE id = $1::uuid AND ($15::uuid IS NULL OR tenant_id = $15::uuid)
+		 RETURNING id, tenant_id, parent_id, name, type, description,
 		           timezone, latitude, longitude, address, floor, building,
 		           map_image_url, map_width, map_height,
 		           0, created_at, updated_at`,
-		id, req.Name, req.Description, req.ParentID,
+		id, req.Name, req.Type, req.Description, req.ParentID,
 		req.Timezone, req.Latitude, req.Longitude,
 		req.Address, req.Floor, req.Building,
 		req.MapImageURL, req.MapWidth, req.MapHeight,

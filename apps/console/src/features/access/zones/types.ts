@@ -1,8 +1,13 @@
+export type ZoneType = 'site' | 'building' | 'floor' | 'room' | 'zone';
+
+export const ZONE_TYPES: ZoneType[] = ['site', 'building', 'floor', 'room', 'zone'];
+
 export interface Zone {
   id: string;
   tenant_id: string;
   parent_id?: string;
   name: string;
+  type: ZoneType;
   description?: string;
   latitude?: number;
   longitude?: number;
@@ -24,6 +29,7 @@ export interface Zone {
 
 export interface ZoneFormData {
   name: string;
+  type?: ZoneType;
   description?: string;
   parent_id?: string;
   latitude?: number;

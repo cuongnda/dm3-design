@@ -6,7 +6,7 @@ import { Button, Input, Label, Select, SelectOption } from '@dm3/ui';
 import { toast } from '@/lib/toast';
 import { useZones } from './hooks/useZones';
 import { emptyZoneForm, zoneFormToData, zoneToForm, type ZoneFormState } from './zone-form';
-import type { Zone } from './types';
+import { ZONE_TYPES, type Zone, type ZoneType } from './types';
 
 interface ZoneFormPageProps {
   mode: 'create' | 'edit';
@@ -289,6 +289,21 @@ export function ZoneFormPage({ mode }: ZoneFormPageProps) {
                 disabled={submitting}
               />
               {formErrors.name && <p className="mt-1 text-[12px] text-destructive">{formErrors.name}</p>}
+            </div>
+            <div>
+              <Label className="text-[12px]">{t('form.type', 'Type')}</Label>
+              <Select
+                value={formData.type}
+                onValueChange={(value) => handleFieldChange('type', value as ZoneType)}
+                disabled={submitting}
+                className="mt-1"
+              >
+                {ZONE_TYPES.map((zt) => (
+                  <SelectOption key={zt} value={zt}>
+                    {zt.charAt(0).toUpperCase() + zt.slice(1)}
+                  </SelectOption>
+                ))}
+              </Select>
             </div>
             <div>
               <Label htmlFor="zone-description" className="text-[12px]">{t('form.description', 'Description')}</Label>

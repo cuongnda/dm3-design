@@ -1,10 +1,11 @@
-import type { Zone, ZoneFormData } from './types';
+import type { Zone, ZoneFormData, ZoneType } from './types';
 
 // Plain-string form state used by the zone create/edit page. Numeric fields
 // are kept as strings so empty inputs round-trip cleanly; conversion happens
 // in zoneFormToData / zoneToForm at the API boundary.
 export interface ZoneFormState {
   name: string;
+  type: ZoneType;
   description: string;
   parent_id: string;
   address: string;
@@ -19,6 +20,7 @@ export interface ZoneFormState {
 
 export const emptyZoneForm: ZoneFormState = {
   name: '',
+  type: 'zone',
   description: '',
   parent_id: '',
   address: '',
@@ -34,6 +36,7 @@ export const emptyZoneForm: ZoneFormState = {
 export function zoneToForm(zone: Zone): ZoneFormState {
   return {
     name: zone.name,
+    type: zone.type ?? 'zone',
     description: zone.description ?? '',
     parent_id: zone.parent_id ?? '',
     address: zone.address ?? '',
@@ -50,6 +53,7 @@ export function zoneToForm(zone: Zone): ZoneFormState {
 export function zoneFormToData(form: ZoneFormState): ZoneFormData {
   return {
     name: form.name,
+    type: form.type,
     description: form.description || undefined,
     parent_id: form.parent_id || undefined,
     address: form.address || undefined,
