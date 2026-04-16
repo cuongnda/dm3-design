@@ -254,6 +254,16 @@ func main() {
 
 		// Dashboard stats: all roles can read
 		r.Get("/stats", handlers.GetStats)
+
+		// Emergency plans & incidents
+		r.Get("/emergency/plans", handlers.ListEmergencyPlans)
+		r.Post("/emergency/plans", handlers.CreateEmergencyPlan)
+		r.Put("/emergency/plans/{id}", handlers.UpdateEmergencyPlan)
+		r.Delete("/emergency/plans/{id}", handlers.DeleteEmergencyPlan)
+		r.Post("/emergency/activate", handlers.ActivateEmergency)
+		r.Post("/emergency/incidents/{id}/all-clear", handlers.AllClearEmergency)
+		r.Get("/emergency/incidents", handlers.ListEmergencyIncidents)
+		r.Get("/emergency/incidents/active", handlers.ListActiveEmergencies)
 	})
 
 	// Start server

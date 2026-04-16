@@ -349,6 +349,102 @@ export async function sendDoorCommand(accessPointId: string, action: string, dur
     });
 }
 
+export async function sendBulkDoorCommand(accessPointIds: string[], action: string, durationMs?: number): Promise<unknown> {
+    return apiFetch(`${GATEWAY_URL}/access-points/door-command/bulk`, {
+        method: 'POST',
+        body: JSON.stringify({ access_point_ids: accessPointIds, action, duration_ms: durationMs, reason: 'emergency' }),
+    });
+}
+
+// ─── Emergency API ──────────────────────────────────────────
+
+export interface EmergencyPlanDTO {
+    id: string;
+    tenant_id: string;
+    name: string;
+    description: string;
+    icon: string;
+    color: string;
+    action: string;      // unlock | lock | hold_open | hold_close
+    target_type: string;  // all | zone | access_point | device
+    target_ids: string[];
+    countdown_seconds: number;
+    enabled: boolean;
+    sort_order: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface EmergencyIncidentDTO {
+    id: string;
+    plan_id: string;
+    plan_name: string;
+    action: string;
+    status: string; // active | all_clear | cancelled
+    triggered_by_email: string;
+    all_clear_by_email: string;
+    activated_at: string;
+    resolved_at?: string;
+    duration_seconds?: number;
+    target_summary: string;
+    notes: string;
+}
+
+export interface ActivateEmergencyResponse {
+    incident: EmergencyIncidentDTO;
+    access_point_ids: string[];
+    action: string;
+}
+
+export async function fetchEmergencyPlans(): Promise<EmergencyPlanDTO[]> {
+    return apiFetch<EmergencyPlanDTO[]>(`${ACCESS_URL}/emergency/plans`);
+}
+
+export async function createEmergencyPlan(data: Partial<EmergencyPlanDTO>): Promise<EmergencyPlanDTO> {
+    return apiFetch<EmergencyPlanDTO>(`${ACCESS_URL}/emergency/plans`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+    });
+}
+
+export async function updateEmergencyPlan(id: string, data: Partial<EmergencyPlanDTO>): Promise<EmergencyPlanDTO> {
+    return apiFetch<EmergencyPlanDTO>(`${ACCESS_URL}/emergency/plans/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+    });
+}
+
+export async function deleteEmergencyPlan(id: string): Promise<void> {
+    await apiFetch(`${ACCESS_URL}/emergency/plans/${id}`, { method: 'DELETE' });
+}
+
+export async function activateEmergency(planId: string, notes?: string): Promise<ActivateEmergencyResponse> {
+    return apiFetch<ActivateEmergencyResponse>(`${ACCESS_URL}/emergency/activate`, {
+        method: 'POST',
+        body: JSON.stringify({ plan_id: planId, notes: notes || '' }),
+    });
+}
+
+export interface AllClearResponse {
+    incident: EmergencyIncidentDTO;
+    access_point_ids: string[];
+}
+
+export async function allClearEmergency(incidentId: string, notes?: string): Promise<AllClearResponse> {
+    return apiFetch<AllClearResponse>(`${ACCESS_URL}/emergency/incidents/${incidentId}/all-clear`, {
+        method: 'POST',
+        body: JSON.stringify({ notes: notes || '' }),
+    });
+}
+
+export async function fetchEmergencyIncidents(page = 1, limit = 20): Promise<Paginated<EmergencyIncidentDTO>> {
+    return apiFetch<Paginated<EmergencyIncidentDTO>>(`${ACCESS_URL}/emergency/incidents?page=${page}&limit=${limit}`);
+}
+
+export async function fetchActiveEmergencies(): Promise<EmergencyIncidentDTO[]> {
+    return apiFetch<EmergencyIncidentDTO[]>(`${ACCESS_URL}/emergency/incidents/active`);
+}
+
 export interface AccessPointStats {
     online: number;
     offline: number;
@@ -358,6 +454,17 @@ export interface AccessPointStats {
 
 export interface AccessPointListResponse extends Paginated<AccessPointDTO> {
     stats?: AccessPointStats;
+}
+
+export interface ZoneDTO {
+    id: string;
+    name: string;
+    tenant_id: string;
+}
+
+export async function fetchZones(): Promise<ZoneDTO[]> {
+    const res = await apiFetch<Paginated<ZoneDTO>>(`${ACCESS_URL}/zones?limit=200`);
+    return res.data || [];
 }
 
 export async function fetchAccessPoints(page = 1, limit = 50, params?: Record<string, string>): Promise<AccessPointListResponse> {
