@@ -2,9 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHeader, Button, Select, SelectOption, DataTable, type Column, AppModal, TablePaginationFooter } from '@dm3/ui';
-import { fetchSystemDevices, fetchCompanies, apiFetch, type CompanyDTO } from '@/lib/api';
-import { RefreshCw, Plus, Pencil, Trash2, Monitor, Wifi, WifiOff, AlertTriangle, Terminal, Cpu, Camera, Gauge, History, Power, PowerOff, RotateCcw, ShieldAlert, Zap, Send, MessageSquare, DoorOpen } from 'lucide-react';
+import { fetchSystemDevices, fetchCompanies, fetchEMQXClients, apiFetch, type CompanyDTO, type EMQXClientDTO } from '@/lib/api';
+import { RefreshCw, Plus, Pencil, Trash2, Monitor, Wifi, WifiOff, AlertTriangle, Terminal, Cpu, Camera, Gauge, History, Power, PowerOff, RotateCcw, ShieldAlert, Zap, Send, MessageSquare, DoorOpen, Lock, Shield } from 'lucide-react';
 import { fetchDeviceHistory, type DeviceHistoryEvent } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
 interface SystemDevice {
   id: string;
@@ -155,6 +156,9 @@ export function SystemDevicesPage() {
   // History modal
   const [historyDevice, setHistoryDevice] = useState<SystemDevice | null>(null);
 
+  // EMQX client map: device_id → EMQXClientDTO
+  const [emqxMap, setEmqxMap] = useState<Map<string, EMQXClientDTO>>(new Map());
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -165,15 +169,35 @@ export function SystemDevicesPage() {
 
       const hasFilters = filterCompany || filterStatus || filterType;
 
-      const [filteredDevs, allDevs, comps] = await Promise.all([
+      const [filteredDevs, allDevs, comps, emqxClients] = await Promise.all([
         fetchSystemDevices(filterParams),
         hasFilters ? fetchSystemDevices({}) : Promise.resolve(null),
         companies.length ? Promise.resolve(companies) : fetchCompanies(),
+        fetchEMQXClients().catch(() => [] as EMQXClientDTO[]),
       ]);
 
       setDevices(filteredDevs);
       setAllDevices(allDevs ?? filteredDevs);
       if (!companies.length) setCompanies(comps);
+
+      // Build lookup map: match EMQX clients to device_id.
+      // Client ID format: "DQMiniPlus_840107", username: "device:840107"
+      const map = new Map<string, EMQXClientDTO>();
+      for (const c of emqxClients) {
+        // Direct match
+        map.set(c.client_id, c);
+        if (c.username) map.set(c.username, c);
+        // Extract device_id from username "device:840107" → "840107"
+        if (c.username?.startsWith('device:')) {
+          map.set(c.username.slice(7), c);
+        }
+        // Extract device_id from clientid suffix "_840107" → "840107"
+        const underscoreIdx = c.client_id.lastIndexOf('_');
+        if (underscoreIdx > 0) {
+          map.set(c.client_id.slice(underscoreIdx + 1), c);
+        }
+      }
+      setEmqxMap(map);
     } catch {
       // ignore
     } finally {
@@ -256,6 +280,28 @@ export function SystemDevicesPage() {
       render: (d) => d.last_seen ? new Date(d.last_seen).toLocaleString() : '—',
     },
     {
+      key: 'mqtt' as keyof SystemDevice,
+      header: 'MQTT',
+      width: '110px',
+      render: (d) => {
+        const client = emqxMap.get(d.device_id) || emqxMap.get(d.name);
+        if (!client || !client.connected) {
+          return <span className="text-[11px] text-muted-foreground">—</span>;
+        }
+        const isSsl = client.conn_type === 'ssl';
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className={cn('inline-flex items-center gap-1 text-[11px] font-medium',
+              isSsl ? 'text-success' : 'text-warning')}>
+              {isSsl ? <Lock size={11} /> : <Shield size={11} />}
+              {isSsl ? 'SSL' : 'TCP'}
+            </span>
+            <span className="text-[10px] text-muted-foreground font-mono">{client.ip_address}</span>
+          </div>
+        );
+      },
+    },
+    {
       key: 'actions' as keyof SystemDevice,
       header: '',
       render: (d) => (
@@ -272,7 +318,7 @@ export function SystemDevicesPage() {
         </div>
       ),
     },
-  ], [tSystem, tDevices]);
+  ], [tSystem, tDevices, emqxMap]);
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden p-6">

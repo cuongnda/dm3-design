@@ -1030,7 +1030,68 @@ func (h *BootstrapMQTTHandler) Handle(topic string, payload []byte) {
 		}
 	}
 
-	// 4. Check RID not already registered
+	// 4a. Check if device is already provisioned in devices table.
+	// Devices re-bootstrap after OTA or factory reset — recognize them and
+	// respond with full credentials so they resume normal MQTT operation.
+	var existingDBID, existingTenantID, existingDeviceID, existingType string
+	err := h.db.Pool.QueryRow(ctx,
+		`SELECT id, tenant_id, device_id, type FROM dm3_devices.devices WHERE device_id = $1`, msg.RID,
+	).Scan(&existingDBID, &existingTenantID, &existingDeviceID, &existingType)
+	if err == nil {
+		// Device already exists — update firmware_version and mark online.
+		if msg.FirmwareVersion != "" {
+			_, _ = h.db.Pool.Exec(ctx,
+				`UPDATE dm3_devices.devices SET firmware_version = $1, status = 'online', last_seen = now(), updated_at = now()
+				  WHERE device_id = $2`,
+				msg.FirmwareVersion, msg.RID)
+		}
+		slog.Info("bootstrap: device already provisioned, sending credentials",
+			"rid", msg.RID, "tenant_id", existingTenantID, "firmware", msg.FirmwareVersion)
+
+		// Generate fresh device JWT
+		deviceJWT, jwtErr := generateDeviceJWT(existingDBID, existingTenantID, existingType, h.cfg.JWTSecret)
+		if jwtErr != nil {
+			slog.Error("bootstrap: failed to generate JWT for re-bootstrap", "error", jwtErr, "rid", msg.RID)
+			h.publishResponse(ctx, msg.RID, "device.register_nack", "error", "Failed to generate credentials")
+			return
+		}
+
+		// Publish full credentials (same format as ApprovePending)
+		responsePayload, _ := json.Marshal(map[string]any{
+			"type":   "device.approved",
+			"rid":    msg.RID,
+			"status": "approved",
+			"credentials": map[string]any{
+				"mqtt_username":    fmt.Sprintf("device:%s", msg.RID),
+				"mqtt_token":       deviceJWT,
+				"token_expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
+				"refresh_url":      "/api/v1/devices/refresh-token",
+			},
+			"company": map[string]any{
+				"id": existingTenantID,
+			},
+			"config": map[string]any{
+				"heartbeat_interval_sec": 30,
+				"sync_url":               "/api/v1",
+				"tenant_id":              existingTenantID,
+			},
+		})
+		topic := fmt.Sprintf("dm/bootstrap/%s/response", msg.RID)
+		if pubErr := h.mqtt.Publish(ctx, topic, 1, responsePayload); pubErr != nil {
+			slog.Error("bootstrap: failed to publish re-approval credentials", "error", pubErr, "rid", msg.RID)
+		}
+
+		// Record device event
+		go InsertDeviceEvent(h.appCtx, h.db.Pool, DeviceEvent{
+			TenantID:    existingTenantID,
+			DeviceID:    existingDeviceID,
+			EventType:   "online",
+			Description: fmt.Sprintf("Device re-bootstrapped — credentials re-issued (firmware: %s)", msg.FirmwareVersion),
+		})
+		return
+	}
+
+	// 4b. Check RID not already pending
 	var existingCount int
 	_ = h.db.Pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM dm3_devices.pending_registrations WHERE rid = $1 AND status = 'pending'`, msg.RID,
@@ -1043,7 +1104,7 @@ func (h *BootstrapMQTTHandler) Handle(topic string, payload []byte) {
 
 	// 5. Create pending registration
 	fpJSON, _ := json.Marshal(msg.HardwareFingerprint)
-	_, err := h.db.Pool.Exec(ctx,
+	_, err = h.db.Pool.Exec(ctx,
 		`INSERT INTO dm3_devices.pending_registrations (rid, device_type, firmware_version, hardware_fingerprint, hmac_verified, signature_verified, nonce)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		msg.RID, msg.DeviceType, msg.FirmwareVersion, fpJSON, hmacValid, sigVerified, msg.Nonce,

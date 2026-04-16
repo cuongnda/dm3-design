@@ -189,6 +189,7 @@ func main() {
 		fwDownloadURL = fmt.Sprintf("http://localhost:%d", cfg.HTTPPort)
 	}
 	firmwareHandlers := gateway.NewFirmwareHandlers(database, objectStore, mqttClient, auditLog, fwDownloadURL)
+	emqxHandlers := gateway.NewEMQXHandlers(cfg.EMQXApiURL, cfg.EMQXApiUser, cfg.EMQXApiPassword)
 
 	// HTTP routes
 	r := httputil.NewRouter()
@@ -236,6 +237,9 @@ func main() {
 			sr.Post("/system/firmware/{id}/deploy", firmwareHandlers.DeployFirmware)
 			sr.Get("/system/firmware/{id}/download", firmwareHandlers.DownloadFirmware)
 			sr.Get("/system/firmware/{id}/deployments", firmwareHandlers.ListDeployments)
+
+			// EMQX proxy
+			sr.Get("/system/emqx/clients", emqxHandlers.ListClients)
 		})
 
 		// Company-scoped endpoints

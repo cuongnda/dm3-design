@@ -47,6 +47,11 @@ type Config struct {
 	ObjectStoreUseSSL           bool
 	ObjectStoreAutoCreateBucket bool
 
+	// EMQX Dashboard API
+	EMQXApiURL      string
+	EMQXApiUser     string
+	EMQXApiPassword string
+
 	// Email / SMTP
 	SMTPHost     string
 	SMTPPort     string
@@ -96,6 +101,10 @@ func Load() *Config {
 		ObjectStoreBucket:           env("OBJECT_STORE_BUCKET", "dm3"),
 		ObjectStoreUseSSL:           env("OBJECT_STORE_USE_SSL", "") == "true",
 		ObjectStoreAutoCreateBucket: env("OBJECT_STORE_AUTO_CREATE_BUCKET", "false") == "true",
+
+		EMQXApiURL:      env("EMQX_API_URL", "http://localhost:18084"),
+		EMQXApiUser:     env("EMQX_API_USER", "admin"),
+		EMQXApiPassword: env("EMQX_API_PASSWORD", "dm3public123"),
 
 		SMTPHost:     env("SMTP_HOST", "smtp.gmail.com"),
 		SMTPPort:     env("SMTP_PORT", "587"),

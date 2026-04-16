@@ -80,7 +80,10 @@
         "OBJECT_STORE_BUCKET": "dm3",
         "OBJECT_STORE_USE_SSL": "false",
         "OBJECT_STORE_AUTO_CREATE_BUCKET": "true",
-        "FIRMWARE_DOWNLOAD_URL": "http://192.168.1.254:8002"
+        "FIRMWARE_DOWNLOAD_URL": "http://192.168.1.254:8002",
+        "EMQX_API_URL": "http://localhost:18084",
+        "EMQX_API_USER": "admin",
+        "EMQX_API_PASSWORD": "dm3public123"
       }
     },
     {

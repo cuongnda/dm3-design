@@ -146,7 +146,7 @@ export function DeviceDetailPage() {
   ];
 
   return (
-    <div>
+    <div className="p-6">
       <Button variant="ghost" size="sm" onClick={() => navigate('/devices')} className="mb-4 gap-1">
         <ArrowLeft size={14} /> Back to Devices
       </Button>

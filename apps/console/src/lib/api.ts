@@ -1173,6 +1173,28 @@ export async function fetchSystemDevices(params?: Record<string, string>): Promi
     return apiFetch<any[]>(`${GATEWAY_URL}/system/devices${qs}`);
 }
 
+export interface EMQXClientDTO {
+    client_id: string;
+    username: string;
+    ip_address: string;
+    port: number;
+    listener: string;
+    conn_type: string; // "tcp" or "ssl"
+    connected: boolean;
+    connected_at: string;
+    proto_ver: number;
+    keepalive: number;
+    recv_msg: number;
+    send_msg: number;
+    recv_oct: number;
+    send_oct: number;
+    subscriptions_cnt: number;
+}
+
+export async function fetchEMQXClients(): Promise<EMQXClientDTO[]> {
+    return apiFetch<EMQXClientDTO[]>(`${GATEWAY_URL}/system/emqx/clients`);
+}
+
 export async function fetchSystemDevice(id: string): Promise<any> {
     return apiFetch<any>(`${GATEWAY_URL}/system/devices/${id}`);
 }

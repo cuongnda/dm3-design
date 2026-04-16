@@ -217,7 +217,7 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
   const companyName = companies.find(c => c.id === identity.tenant_id)?.name ?? identity.tenant_id;
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col overflow-hidden p-6">
       {/* Pinned header — stays put while the form body scrolls below.
           Lives inside the parent <main> p-6, so we use minimal internal
           padding to avoid stacking margins. */}
