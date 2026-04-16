@@ -15,11 +15,10 @@ LABEL maintainer="DUALi Inc."
 LABEL description="DM3 Automation Test Runner"
 
 # ── System deps ──────────────────────────────────────────────────────────────
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        cron \
-        ffmpeg \
-        git \
-        curl \
+# Note: ffmpeg, git, curl are already in the Playwright base image.
+# Only cron needs to be installed. Retry apt-get update for transient network issues.
+RUN for i in 1 2 3; do apt-get update && break || sleep 5; done \
+    && apt-get install -y --no-install-recommends cron \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Python deps ──────────────────────────────────────────────────────────────
