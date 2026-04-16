@@ -226,7 +226,7 @@ function CreateDevicePageContent() {
             <Button variant="outline" className="flex-1" onClick={() => { setSuccess(false); setForm({ device_id: '', name: '', type: 'terminal', tenant_id: '', location: '' }); setConfig(defaultConfig()); setCamera(defaultCamera()); }}>
               {t('createDevice.success.addAnother')}
             </Button>
-            <Button className="flex-1 bg-operate hover:bg-operate/90 text-white" onClick={() => navigate('/system/devices')}>
+            <Button className="flex-1" onClick={() => navigate('/system/devices')}>
               {t('createDevice.success.goToDevices')}
             </Button>
           </div>
@@ -544,7 +544,7 @@ function CreateDevicePageContent() {
 
         {/* Submit */}
         <div className="pt-2 pb-8">
-          <Button data-testid="sysdevice-button-submit" type="submit" disabled={loading || !isFormValid} className="w-full h-11 bg-operate hover:bg-operate/90 text-white font-medium text-[14px]">
+          <Button data-testid="sysdevice-button-submit" type="submit" disabled={loading || !isFormValid} className="w-full h-11 font-medium text-[14px]">
             {loading ? (
               <span className="flex items-center gap-2">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />

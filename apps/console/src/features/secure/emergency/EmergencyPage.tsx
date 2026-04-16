@@ -128,11 +128,11 @@ export function EmergencyPage() {
       if (res.access_point_ids?.length > 0) {
         await sendBulkDoorCommand(res.access_point_ids, res.action);
       }
-      toast(`Emergency activated: ${plan.name}`, 'success');
+      toast(t('emergency.toast.activated', { name: plan.name }), 'success');
       setActivatingPlan(null);
       loadAll(true);
     } catch {
-      toast(`Failed to activate: ${plan.name}`, 'error');
+      toast(t('emergency.toast.activateFailed', { name: plan.name }), 'error');
     } finally {
       setActivating(false);
     }
@@ -145,10 +145,10 @@ export function EmergencyPage() {
       if (res.access_point_ids?.length > 0) {
         await sendBulkDoorCommand(res.access_point_ids, 'release');
       }
-      toast('All clear — release sent to all devices', 'success');
+      toast(t('emergency.toast.allClear'), 'success');
       loadAll(true);
     } catch {
-      toast('Failed to declare all clear', 'error');
+      toast(t('emergency.toast.allClearFailed'), 'error');
     }
   };
 
@@ -177,11 +177,11 @@ export function EmergencyPage() {
     if (!deletingPlan) return;
     try {
       await deleteEmergencyPlan(deletingPlan.id);
-      toast('Plan deleted', 'success');
+      toast(t('emergency.toast.planDeleted'), 'success');
       setDeletingPlan(null);
       loadPlans();
     } catch {
-      toast('Failed to delete plan', 'error');
+      toast(t('emergency.toast.planDeleteFailed'), 'error');
     }
   };
 

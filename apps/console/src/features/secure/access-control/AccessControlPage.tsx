@@ -132,9 +132,9 @@ export function AccessControlPage() {
 
     try {
       await sendDoorCommand(ap.id, action, durationMs);
-      toast(`${action} sent to ${ap.name}`, 'success');
+      toast(t('accessControl.toast.commandSent', { action, name: ap.name }), 'success');
     } catch {
-      toast(`Failed to ${action} ${ap.name}`, 'error');
+      toast(t('accessControl.toast.commandFailed', { action, name: ap.name }), 'error');
       pauseUntilRef.current = 0;
       load(true);
     }

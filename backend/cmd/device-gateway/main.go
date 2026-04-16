@@ -184,7 +184,11 @@ func main() {
 	} else {
 		slog.Warn("CCTV_CREDENTIAL_KEY not set; type=camera provisioning via /devices/provision will return 503")
 	}
-	firmwareHandlers := gateway.NewFirmwareHandlers(database, objectStore)
+	fwDownloadURL := os.Getenv("FIRMWARE_DOWNLOAD_URL")
+	if fwDownloadURL == "" {
+		fwDownloadURL = fmt.Sprintf("http://localhost:%d", cfg.HTTPPort)
+	}
+	firmwareHandlers := gateway.NewFirmwareHandlers(database, objectStore, mqttClient, auditLog, fwDownloadURL)
 
 	// HTTP routes
 	r := httputil.NewRouter()
@@ -202,6 +206,10 @@ func main() {
 		}
 		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
+
+	// Token-based firmware download — no JWT required (the token IS the auth).
+	// Must be outside the auth middleware group.
+	r.Get("/api/v1/gateway/firmware/download/{token}", firmwareHandlers.DownloadFirmwareByToken)
 
 	r.Route("/api/v1/gateway", func(r chi.Router) {
 		r.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
@@ -227,6 +235,7 @@ func main() {
 			sr.Delete("/system/firmware/{id}", firmwareHandlers.DeleteFirmware)
 			sr.Post("/system/firmware/{id}/deploy", firmwareHandlers.DeployFirmware)
 			sr.Get("/system/firmware/{id}/download", firmwareHandlers.DownloadFirmware)
+			sr.Get("/system/firmware/{id}/deployments", firmwareHandlers.ListDeployments)
 		})
 
 		// Company-scoped endpoints

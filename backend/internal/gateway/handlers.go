@@ -148,6 +148,11 @@ func (h *GatewayHandlers) ListDevicesGlobal(w http.ResponseWriter, r *http.Reque
 		args = append(args, t)
 		argIdx++
 	}
+	if m := r.URL.Query().Get("model"); m != "" {
+		query += fmt.Sprintf(" AND d.model = $%d", argIdx)
+		args = append(args, m)
+		argIdx++
+	}
 
 	query += " ORDER BY d.created_at DESC LIMIT 200"
 
@@ -973,14 +978,16 @@ func (h *GatewayHandlers) GetDeviceHistory(w http.ResponseWriter, r *http.Reques
 	deviceDBID := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
-	var deviceID string
-	dq := `SELECT device_id FROM dm3_devices.devices WHERE id = $1::uuid`
+	// Look up device_id and tenant_id from the device row.
+	// System admins don't have a company context, so we resolve tenant from the device.
+	var deviceID, tenantID string
+	dq := `SELECT device_id, tenant_id FROM dm3_devices.devices WHERE id = $1::uuid`
 	dqArgs := []any{deviceDBID}
 	if cid != "" {
 		dq += " AND tenant_id = $2::uuid"
 		dqArgs = append(dqArgs, cid)
 	}
-	if err := h.db.Pool.QueryRow(r.Context(), dq, dqArgs...).Scan(&deviceID); err != nil {
+	if err := h.db.Pool.QueryRow(r.Context(), dq, dqArgs...).Scan(&deviceID, &tenantID); err != nil {
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
 	}
@@ -993,7 +1000,7 @@ func (h *GatewayHandlers) GetDeviceHistory(w http.ResponseWriter, r *http.Reques
 		   FROM dm3_devices.device_events
 		  WHERE device_id = $1 AND tenant_id = $2::uuid
 		  ORDER BY time DESC LIMIT $3 OFFSET $4`,
-		deviceID, cid, limit, (page-1)*limit)
+		deviceID, tenantID, limit, (page-1)*limit)
 	if err != nil {
 		slog.Error("GetDeviceHistory: query failed", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal server error")
@@ -1004,7 +1011,7 @@ func (h *GatewayHandlers) GetDeviceHistory(w http.ResponseWriter, r *http.Reques
 	var countTotal int
 	_ = h.db.Pool.QueryRow(r.Context(),
 		`SELECT count(*) FROM dm3_devices.device_events WHERE device_id = $1 AND tenant_id = $2::uuid`,
-		deviceID, cid).Scan(&countTotal)
+		deviceID, tenantID).Scan(&countTotal)
 
 	events := []map[string]any{}
 	for rows.Next() {

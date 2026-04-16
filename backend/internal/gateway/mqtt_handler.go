@@ -373,20 +373,32 @@ func (h *MQTTHandler) handleDoorState(_ context.Context, pt ParsedTopic, env MQT
 	}
 	state := data.State
 	if state == "" {
-		state = "open" // fallback if device only sends the event without explicit state
+		state = "open"
 	}
-	slog.Info("door state event", "device", pt.DeviceID, "state", state)
 
-	// Persist door state on the device row.
-	_, err := h.db.Pool.Exec(h.appCtx,
-		`UPDATE dm3_devices.devices SET door_state = $1, updated_at = now()
-		  WHERE device_id = $2 AND tenant_id = $3::uuid`,
-		state, pt.DeviceID, pt.TenantID)
+	// Only update + record event if state actually changed.
+	var prevState *string
+	err := h.db.Pool.QueryRow(h.appCtx,
+		`WITH old AS (
+			SELECT door_state FROM dm3_devices.devices WHERE device_id = $2 AND tenant_id = $3::uuid
+		)
+		UPDATE dm3_devices.devices SET door_state = $1, updated_at = now()
+		 WHERE device_id = $2 AND tenant_id = $3::uuid
+		 RETURNING (SELECT door_state FROM old)`,
+		state, pt.DeviceID, pt.TenantID,
+	).Scan(&prevState)
 	if err != nil {
 		slog.Error("failed to update door_state", "error", err, "device", pt.DeviceID)
+		return
 	}
 
-	// Record device history event.
+	// Skip event if state unchanged
+	if prevState != nil && *prevState == state {
+		return
+	}
+
+	slog.Info("door state changed", "device", pt.DeviceID, "from", prevState, "to", state)
+
 	var meta map[string]any
 	_ = json.Unmarshal(env.Data, &meta)
 	go InsertDeviceEvent(h.appCtx, h.db.Pool, DeviceEvent{
@@ -616,6 +628,84 @@ func (h *MQTTHandler) handleConfigAck(_ context.Context, pt ParsedTopic, env MQT
 			"ref", env.Ref,
 			"status", env.Status,
 		)
+
+	case "cfg.firmware.ack":
+		// Device reports firmware update progress/result.
+		// Expected statuses: downloading, installing, success, failed
+		var fwAck struct {
+			DeploymentID    string `json:"deployment_id"`
+			Status          string `json:"status"`           // downloading | installing | success | failed | rolled_back
+			ProgressPct     int    `json:"progress_pct"`     // 0-100
+			Error           string `json:"error"`
+			Version         string `json:"version"`          // current version (rolled-back version when status=rolled_back)
+			PreviousVersion string `json:"previous_version"` // version before update attempt
+		}
+		if err := json.Unmarshal(env.Data, &fwAck); err == nil && fwAck.DeploymentID != "" {
+			slog.Info("firmware ack", "device", pt.DeviceID, "deployment", fwAck.DeploymentID, "status", fwAck.Status, "progress", fwAck.ProgressPct)
+
+			// Update deployment status
+			switch fwAck.Status {
+			case "downloading":
+				_, _ = h.db.Pool.Exec(h.appCtx,
+					`UPDATE dm3_devices.firmware_deployments SET status='downloading', download_started_at=COALESCE(download_started_at,now()), progress_pct=$2, updated_at=now() WHERE id=$1::uuid`,
+					fwAck.DeploymentID, fwAck.ProgressPct)
+			case "installing":
+				_, _ = h.db.Pool.Exec(h.appCtx,
+					`UPDATE dm3_devices.firmware_deployments SET status='installing', install_started_at=COALESCE(install_started_at,now()), progress_pct=$2, updated_at=now() WHERE id=$1::uuid`,
+					fwAck.DeploymentID, fwAck.ProgressPct)
+			case "success":
+				_, _ = h.db.Pool.Exec(h.appCtx,
+					`UPDATE dm3_devices.firmware_deployments SET status='success', completed_at=now(), progress_pct=100, updated_at=now() WHERE id=$1::uuid`,
+					fwAck.DeploymentID)
+			case "failed":
+				_, _ = h.db.Pool.Exec(h.appCtx,
+					`UPDATE dm3_devices.firmware_deployments SET status='failed', completed_at=now(), error_message=$2, updated_at=now() WHERE id=$1::uuid`,
+					fwAck.DeploymentID, fwAck.Error)
+			case "rolled_back":
+				_, _ = h.db.Pool.Exec(h.appCtx,
+					`UPDATE dm3_devices.firmware_deployments SET status='rolled_back', completed_at=now(), error_message=$2, progress_pct=0, updated_at=now() WHERE id=$1::uuid`,
+					fwAck.DeploymentID, fwAck.Error)
+			default:
+				_, _ = h.db.Pool.Exec(h.appCtx,
+					`UPDATE dm3_devices.firmware_deployments SET progress_pct=$2, updated_at=now() WHERE id=$1::uuid`,
+					fwAck.DeploymentID, fwAck.ProgressPct)
+			}
+
+			// Update device firmware_version on success or rolled_back
+			if (fwAck.Status == "success" || fwAck.Status == "rolled_back") && fwAck.Version != "" {
+				_, _ = h.db.Pool.Exec(h.appCtx,
+					`UPDATE dm3_devices.devices SET firmware_version=$1, updated_at=now()
+					  WHERE device_id=$2 AND tenant_id=$3::uuid`,
+					fwAck.Version, pt.DeviceID, pt.TenantID)
+			}
+
+			// Device history event
+			evtType := "firmware_update"
+			var desc string
+			switch fwAck.Status {
+			case "rolled_back":
+				desc = fmt.Sprintf("Firmware rollback: %s → %s", fwAck.PreviousVersion, fwAck.Version)
+				if fwAck.Error != "" {
+					desc += " (" + fwAck.Error + ")"
+				}
+			default:
+				desc = fmt.Sprintf("Firmware update %s", fwAck.Status)
+				if fwAck.Error != "" {
+					desc += ": " + fwAck.Error
+				}
+			}
+			go InsertDeviceEvent(h.appCtx, h.db.Pool, DeviceEvent{
+				TenantID:  pt.TenantID,
+				DeviceID:  pt.DeviceID,
+				EventType: evtType,
+				Description: desc,
+				Metadata: map[string]any{
+					"deployment_id": fwAck.DeploymentID, "status": fwAck.Status,
+					"progress_pct": fwAck.ProgressPct, "version": fwAck.Version,
+					"previous_version": fwAck.PreviousVersion,
+				},
+			})
+		}
 
 	default:
 		slog.Info("config ack", "device", pt.DeviceID, "type", env.Type, "ref", env.Ref, "status", env.Status)

@@ -1,15 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Package, Plus, Search } from 'lucide-react';
+import { Package, Plus, Search, CheckCircle2, XCircle } from 'lucide-react';
 import { fetchFirmwares, type FirmwareDTO } from '@/lib/api';
 import { ALL_DEVICE_MODELS } from '@/lib/device-models';
-import { Button, DataTable, Input, Select, SelectOption } from '@dm3/ui';
-
-const statusColors: Record<string, string> = {
-  active: 'bg-success/10 text-success',
-  inactive: 'bg-error/10 text-error',
-};
+import { Button, DataTable, Input, Select, SelectOption, Badge } from '@dm3/ui';
+import { cn } from '@/lib/utils';
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -24,13 +20,14 @@ export function FirmwareListPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [deviceTypeFilter, setDeviceTypeFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('active');
+  const [statusFilter, setStatusFilter] = useState('');
+
   useEffect(() => {
     setLoading(true);
     const params: Record<string, string> = {};
     if (search) params.search = search;
     if (deviceTypeFilter) params.device_type = deviceTypeFilter;
-    if (statusFilter === 'active') params.is_active = 'true';
+    if (statusFilter) params.is_active = statusFilter;
 
     fetchFirmwares(params)
       .then((r) => setFirmwares(r.firmwares))
@@ -50,7 +47,7 @@ export function FirmwareListPage() {
         <Button
           data-testid="fw-button-upload"
           onClick={() => navigate('/system/firmware/upload')}
-          className="gap-2 bg-operate hover:bg-operate/90 text-white"
+          className="gap-2"
         >
           <Plus size={15} />
           {t('firmware.upload')}
@@ -88,7 +85,8 @@ export function FirmwareListPage() {
           className="w-36"
         >
           <SelectOption value="">{t('firmware.allStatuses')}</SelectOption>
-          <SelectOption value="active">{t('firmware.statusActive')}</SelectOption>
+          <SelectOption value="true">{t('firmware.statusActive')}</SelectOption>
+          <SelectOption value="false">{t('firmware.statusInactive')}</SelectOption>
         </Select>
       </div>
 
@@ -101,7 +99,7 @@ export function FirmwareListPage() {
         <div className="rounded-lg border border-border bg-card py-12 text-center">
           <Package size={32} className="mx-auto text-muted-foreground/40 mb-2" />
           <p className="text-[13px] text-muted-foreground">
-            {search || deviceTypeFilter ? t('firmware.noResults') : t('firmware.empty')}
+            {search || deviceTypeFilter || statusFilter ? t('firmware.noResults') : t('firmware.empty')}
           </p>
         </div>
       ) : (
@@ -113,7 +111,22 @@ export function FirmwareListPage() {
               key: 'version',
               header: t('firmware.table.version'),
               sortable: true,
-              render: (fw) => <span className="font-medium font-mono">{fw.version}</span>,
+              render: (fw) => (
+                <div className="flex items-center gap-2">
+                  <span className={cn('font-medium font-mono', !fw.is_active && 'text-muted-foreground line-through')}>
+                    {fw.version}
+                  </span>
+                  {fw.is_active ? (
+                    <Badge variant="outline" className="text-[10px] border-success/30 bg-success/10 text-success gap-1">
+                      <CheckCircle2 size={10} /> {t('firmware.statusActive')}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] border-muted-foreground/30 text-muted-foreground gap-1">
+                      <XCircle size={10} /> {t('firmware.statusInactive')}
+                    </Badge>
+                  )}
+                </div>
+              ),
             },
             {
               key: 'device_type',
@@ -138,20 +151,6 @@ export function FirmwareListPage() {
               header: t('firmware.table.size'),
               sortable: true,
               render: (fw) => <span className="tabular-nums">{formatSize(fw.file_size)}</span>,
-            },
-            {
-              key: 'is_active',
-              header: t('firmware.table.status'),
-              sortable: true,
-              render: (fw) => (
-                <span
-                  className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium ${
-                    fw.is_active ? statusColors.active : statusColors.inactive
-                  }`}
-                >
-                  {fw.is_active ? t('firmware.statusActive') : t('firmware.statusInactive')}
-                </span>
-              ),
             },
             {
               key: 'created_at',

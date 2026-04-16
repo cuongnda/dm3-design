@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   PageHeader, Button, Input, Label, Select, SelectOption, Badge, Checkbox,
 } from '@dm3/ui';
@@ -34,6 +35,7 @@ const ACTION_OPTIONS = [
 
 export function EmergencyPlanFormPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation('secure');
   const { id } = useParams<{ id: string }>();
   const isEdit = !!id;
 
@@ -94,7 +96,7 @@ export function EmergencyPlanFormPage() {
           }
         }
       } catch {
-        toast('Failed to load data', 'error');
+        toast(t('emergency.toast.loadFailed'), 'error');
       } finally {
         setLoading(false);
       }
@@ -162,8 +164,8 @@ export function EmergencyPlanFormPage() {
 
   // Save
   const handleSave = async () => {
-    if (!form.name.trim()) { toast('Name is required', 'error'); return; }
-    if (selectedAPIds.size === 0) { toast('Select at least one access point', 'error'); return; }
+    if (!form.name.trim()) { toast(t('emergency.toast.nameRequired'), 'error'); return; }
+    if (selectedAPIds.size === 0) { toast(t('emergency.toast.selectAP'), 'error'); return; }
 
     setSaving(true);
     try {
@@ -182,14 +184,14 @@ export function EmergencyPlanFormPage() {
 
       if (isEdit && id) {
         await updateEmergencyPlan(id, data);
-        toast('Plan updated', 'success');
+        toast(t('emergency.toast.planUpdated'), 'success');
       } else {
         await createEmergencyPlan(data);
-        toast('Plan created', 'success');
+        toast(t('emergency.toast.planCreated'), 'success');
       }
       navigate('/secure/emergency');
     } catch {
-      toast('Failed to save plan', 'error');
+      toast(t('emergency.toast.planSaveFailed'), 'error');
     } finally {
       setSaving(false);
     }

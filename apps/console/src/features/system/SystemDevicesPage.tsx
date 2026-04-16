@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHeader, Button, Select, SelectOption, DataTable, type Column, AppModal } from '@dm3/ui';
 import { fetchSystemDevices, fetchCompanies, apiFetch, type CompanyDTO } from '@/lib/api';
-import { RefreshCw, Plus, Pencil, Trash2, Monitor, Wifi, WifiOff, AlertTriangle, Terminal, Cpu, Camera, Gauge } from 'lucide-react';
+import { RefreshCw, Plus, Pencil, Trash2, Monitor, Wifi, WifiOff, AlertTriangle, Terminal, Cpu, Camera, Gauge, History, Power, PowerOff, RotateCcw, ShieldAlert, Zap, Send, MessageSquare, DoorOpen } from 'lucide-react';
+import { fetchDeviceHistory, type DeviceHistoryEvent } from '@/lib/api';
 
 interface SystemDevice {
   id: string;
@@ -48,6 +49,85 @@ function StatCard({ icon: Icon, iconBg, iconColor, value, label, sub }: {
   );
 }
 
+// --- Device History Config ---
+
+const historyEventConfig: Record<string, { icon: typeof Power; color: string; label: string }> = {
+  online:           { icon: Power,         color: 'text-success',          label: 'Online' },
+  offline:          { icon: PowerOff,      color: 'text-muted-foreground', label: 'Offline' },
+  restart:          { icon: RotateCcw,     color: 'text-operate',          label: 'Restart' },
+  emergency:        { icon: ShieldAlert,   color: 'text-error',            label: 'Emergency' },
+  sync:             { icon: RefreshCw,     color: 'text-secure',           label: 'Data Sync' },
+  config_ack:       { icon: Zap,           color: 'text-manage',           label: 'Config Ack' },
+  error:            { icon: AlertTriangle, color: 'text-warning',          label: 'Error' },
+  command:          { icon: Terminal,       color: 'text-secure',           label: 'Command' },
+  command_response: { icon: MessageSquare, color: 'text-success',          label: 'Response' },
+  door_command:     { icon: Send,          color: 'text-operate',          label: 'Door Command' },
+  door_state:       { icon: DoorOpen,      color: 'text-operate',          label: 'Door State' },
+  firmware_update:  { icon: RefreshCw,     color: 'text-secure',           label: 'Firmware' },
+};
+const defaultEventCfg = { icon: Zap, color: 'text-muted-foreground', label: 'Event' };
+
+function DeviceHistoryModal({ device, onClose }: { device: SystemDevice; onClose: () => void }) {
+  const { t } = useTranslation('devices');
+  const [events, setEvents] = useState<DeviceHistoryEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 10;
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchDeviceHistory(device.id, page, pageSize)
+      .then((res) => { if (!cancelled) { setEvents(res.data || []); setTotal(res.total ?? 0); } })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [device.id, page]);
+
+  return (
+    <AppModal open onOpenChange={(v) => { if (!v) onClose(); }}
+      title={<span className="inline-flex items-center gap-2"><History size={16} /> Device History — {device.name || device.device_id}</span>}
+      description="Lifecycle events: on/off, restarts, commands, firmware, syncs"
+      size="2xl" showCancelButton cancelLabel="Close">
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="w-5 h-5 border-2 border-secure/30 border-t-secure rounded-full animate-spin" />
+        </div>
+      ) : events.length === 0 ? (
+        <div className="py-12 text-center text-[13px] text-muted-foreground">No history events</div>
+      ) : (
+        <div className="space-y-1">
+          {events.map((evt) => {
+            const cfg = historyEventConfig[evt.event_type] || defaultEventCfg;
+            const Icon = cfg.icon;
+            return (
+              <div key={evt.id} className="flex items-start gap-3 rounded-lg border border-border/60 bg-background/40 px-3 py-2.5">
+                <div className={`mt-0.5 shrink-0 ${cfg.color}`}><Icon size={16} /></div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[11px] font-medium uppercase tracking-wider ${cfg.color}`}>{cfg.label}</span>
+                    {evt.actor_email && <span className="text-[11px] text-muted-foreground">by {evt.actor_email}</span>}
+                  </div>
+                  <p className="text-[13px] text-foreground mt-0.5">{evt.description}</p>
+                </div>
+                <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{new Date(evt.time).toLocaleString()}</span>
+              </div>
+            );
+          })}
+          <div className="flex items-center justify-between pt-3 mt-3 border-t border-border">
+            <span className="text-[11px] text-muted-foreground">Page {page} of {Math.ceil(total / pageSize) || 1} · {total} total</span>
+            <div className="flex gap-1">
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="h-7 text-[11px] px-2">Previous</Button>
+              <Button variant="outline" size="sm" disabled={page >= Math.ceil(total / pageSize)} onClick={() => setPage((p) => p + 1)} className="h-7 text-[11px] px-2">Next</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </AppModal>
+  );
+}
+
 // --- Main ---
 
 export function SystemDevicesPage() {
@@ -69,6 +149,9 @@ export function SystemDevicesPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingDevice, setDeletingDevice] = useState<SystemDevice | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // History modal
+  const [historyDevice, setHistoryDevice] = useState<SystemDevice | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -181,6 +264,9 @@ export function SystemDevicesPage() {
           <Button variant="ghost" size="sm" title="Delete" onClick={() => handleDeleteOpen(d)} data-testid={`sysdevice-button-delete-${d.device_id}`}>
             <Trash2 size={14} className="text-destructive" />
           </Button>
+          <Button variant="ghost" size="sm" title="History" onClick={() => setHistoryDevice(d)} data-testid={`sysdevice-button-history-${d.device_id}`}>
+            <History size={14} />
+          </Button>
         </div>
       ),
     },
@@ -267,6 +353,11 @@ export function SystemDevicesPage() {
           <p className="text-xs text-muted-foreground">{tSystem('createDevice.delete.warning')}</p>
         </div>
       </AppModal>
+
+      {/* History Modal */}
+      {historyDevice && (
+        <DeviceHistoryModal device={historyDevice} onClose={() => setHistoryDevice(null)} />
+      )}
     </div>
   );
 }

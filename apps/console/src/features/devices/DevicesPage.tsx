@@ -523,16 +523,19 @@ function TerminalConfigSection({ config, onChange, disabled }: {
 function DeviceHistoryModal({ device, onClose, t }: { device: Device; onClose: () => void; t: (key: string) => string }) {
   const [events, setEvents] = useState<DeviceHistoryEvent[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const historyPageSize = 10;
 
   useEffect(() => {
     let cancelled = false;
     setHistoryLoading(true);
-    fetchDeviceHistory(device.id, 1, 50)
-      .then((res) => { if (!cancelled) setEvents(res.data || []); })
+    fetchDeviceHistory(device.id, historyPage, historyPageSize)
+      .then((res) => { if (!cancelled) { setEvents(res.data || []); setHistoryTotal(res.total ?? 0); } })
       .catch(() => { /* ignore */ })
       .finally(() => { if (!cancelled) setHistoryLoading(false); });
     return () => { cancelled = true; };
-  }, [device.id]);
+  }, [device.id, historyPage]);
 
   return (
     <AppModal
@@ -589,6 +592,22 @@ function DeviceHistoryModal({ device, onClose, t }: { device: Device; onClose: (
               </div>
             );
           })}
+          {/* Pagination */}
+          <div className="flex items-center justify-between pt-3 mt-3 border-t border-border">
+            <span className="text-[11px] text-muted-foreground">
+              Page {historyPage} of {Math.ceil(historyTotal / historyPageSize) || 1} · {historyTotal} total
+            </span>
+            <div className="flex gap-1">
+              <Button variant="outline" size="sm" disabled={historyPage <= 1}
+                onClick={() => setHistoryPage((p) => p - 1)} className="h-7 text-[11px] px-2">
+                Previous
+              </Button>
+              <Button variant="outline" size="sm" disabled={historyPage >= Math.ceil(historyTotal / historyPageSize)}
+                onClick={() => setHistoryPage((p) => p + 1)} className="h-7 text-[11px] px-2">
+                Next
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </AppModal>

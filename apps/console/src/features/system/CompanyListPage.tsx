@@ -52,7 +52,7 @@ export function CompanyListPage() {
         <Button
           data-testid="company-button-create"
           onClick={() => navigate('/system/companies/new')}
-          className="gap-2 bg-operate hover:bg-operate/90 text-white"
+          className="gap-2"
         >
           <Plus size={15} />
           {t('companies.createCompany')}

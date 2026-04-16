@@ -1026,22 +1026,164 @@ Device logic: if `passage_time` is active for the current time → open for all 
 }
 ```
 
-### 7.7 Firmware Update
+### 7.7 Firmware OTA Update
+
+#### Flow
+
+```
+Admin uploads firmware → clicks Deploy → selects devices
+    ↓
+Server creates deployment record per device
+    ↓
+Server generates time-limited download token (5 min expiry)
+    ↓
+Server publishes cfg.firmware MQTT message (QoS 2) to each device
+    ↓
+Device receives message, downloads binary via token URL
+    ↓
+Device sends cfg.firmware.ack (status: downloading → installing → success/failed)
+    ↓
+Server updates deployment status, device firmware_version, device_event history
+    ↓
+Frontend shows real-time progress (3s polling)
+```
+
+#### Server → Device: `cfg.firmware`
+
+Topic: `dm/{tenant_id}/device/{device_id}/cfg` (QoS 2)
 
 ```json
 {
+  "v": 1,
   "type": "cfg.firmware",
   "data": {
     "version": "3.3.0",
-    "url": "https://ota.duallmaster.com/firmware/term/3.3.0.bin",
+    "url": "http://server:8002/api/v1/gateway/firmware/download/{token}",
     "checksum": "sha256:def456...",
     "size_bytes": 52428800,
-    "release_notes": "Bug fixes, improved face recognition",
-    "force": false,              // true = update immediately
-    "schedule": "02:00"          // Preferred update time (device local)
+    "deployment_id": "uuid",
+    "force": false
   }
 }
 ```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `version` | string | Target firmware version |
+| `url` | string | Time-limited download URL (token-authenticated, no JWT needed, 5 min expiry) |
+| `checksum` | string | `sha256:{hex}` — device must verify after download |
+| `size_bytes` | int | Expected file size in bytes |
+| `deployment_id` | string | Server-side deployment tracking ID — device must echo this in ack messages |
+| `force` | bool | `true` = update immediately; `false` = device may schedule (e.g. 02:00 local) |
+
+#### Device → Server: `cfg.firmware.ack`
+
+Topic: `dm/{tenant_id}/device/{device_id}/cfg/ack` (QoS 1)
+
+The device reports progress at each stage:
+
+```json
+{
+  "v": 1,
+  "type": "cfg.firmware.ack",
+  "data": {
+    "deployment_id": "uuid",
+    "status": "downloading",
+    "progress_pct": 45,
+    "version": "3.3.0",
+    "error": ""
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `deployment_id` | string | Must match the ID from the `cfg.firmware` message |
+| `status` | string | One of: `downloading`, `installing`, `success`, `failed`, `rolled_back` |
+| `progress_pct` | int | 0-100, updated during download/install |
+| `version` | string | Firmware version being installed (or rolled-back-to version when `status=rolled_back`) |
+| `error` | string | Error/reason message (set when `status=failed` or `status=rolled_back`) |
+| `previous_version` | string | (optional) Previous firmware version before the update attempt. Set on `failed` and `rolled_back` |
+
+**Status transitions:**
+
+```
+sent → downloading (device started download)
+     → installing  (download complete, checksum verified, flashing to partition B)
+     → success     (rebooted into new firmware, watchdog confirmed stable)
+     → failed      (download/checksum/flash error — device stays on current firmware)
+     → rolled_back (watchdog detected crash loop after reboot — auto-reverted to previous firmware)
+```
+
+#### Watchdog & Rollback
+
+Devices implement a **hardware/software watchdog** that protects against bad firmware updates:
+
+1. **Dual partition (A/B):** Device maintains two firmware partitions. The active partition runs the current firmware; OTA writes to the inactive partition.
+2. **Install phase:** After download + checksum verification, the device flashes the new firmware to the inactive partition and sets a `pending_verification` boot flag.
+3. **Reboot:** Device reboots into the new partition. The watchdog timer starts (typically 60–120s).
+4. **Verification window:** The new firmware must call `watchdog_confirm()` (mark the new partition as "good") before the watchdog timer expires. This confirms basic functionality: MQTT connected, reader responsive, local DB accessible.
+5. **Success path:** If `watchdog_confirm()` is called in time → the new partition becomes the active partition permanently. Device sends `cfg.firmware.ack` with `status: success`.
+6. **Rollback path:** If the new firmware crashes, hangs, or fails to call `watchdog_confirm()` before the watchdog timer expires → the watchdog triggers a hard reset → bootloader reverts to the previous partition (A). Device boots with the old firmware and sends `cfg.firmware.ack` with `status: rolled_back`.
+
+**Rollback ack message example:**
+
+```json
+{
+  "v": 1,
+  "type": "cfg.firmware.ack",
+  "data": {
+    "deployment_id": "uuid",
+    "status": "rolled_back",
+    "progress_pct": 0,
+    "version": "3.2.1",
+    "previous_version": "3.2.1",
+    "error": "Watchdog timeout — new firmware failed to confirm within 120s. Reverted to v3.2.1."
+  }
+}
+```
+
+**Server handling on `rolled_back`:**
+- Deployment status is set to `rolled_back`
+- `devices.firmware_version` is updated to the rolled-back version (from `version` field, which now reports the old version)
+- A `device_event` is recorded: `"Firmware rollback: v3.3.0 → v3.2.1 (watchdog timeout)"`
+- An audit log entry is created with the rollback details
+- The deployment is considered **terminal** (no retry without a new deploy action)
+
+**Failure scenarios and device behavior:**
+
+| Failure point | Device behavior | Status sent |
+|---------------|----------------|-------------|
+| Download fails (network/timeout) | Stays on current firmware, no reboot | `failed` (error: download reason) |
+| Checksum mismatch after download | Discards downloaded file, no reboot | `failed` (error: checksum mismatch) |
+| Flash write fails | Stays on current firmware, no reboot | `failed` (error: flash write failed) |
+| New firmware boots but crashes within watchdog window | Watchdog hard-resets → boots old partition | `rolled_back` |
+| New firmware boots but can't connect MQTT within watchdog window | Watchdog hard-resets → boots old partition | `rolled_back` (sent after reconnect) |
+| New firmware boots and runs stable | Calls `watchdog_confirm()` | `success` |
+
+If the device does not download within the token expiry (5 min), the server marks the deployment as `expired`.
+
+#### Download endpoint
+
+```
+GET /api/v1/gateway/firmware/download/{token}
+```
+
+- **No JWT required** — the token itself is the authentication
+- Server validates token exists + not expired + deployment status is `sent` or `downloading`
+- On first access: marks deployment as `downloading`, records `download_started_at`
+- Returns 410 Gone if token expired
+- Streams the firmware binary as `application/octet-stream`
+
+#### Deployment tracking
+
+All deployments are stored in `dm3_devices.firmware_deployments` with per-device status, progress percentage, and timestamps for each phase (sent → download_started → install_started → completed).
+
+Each status change also creates:
+- A `device_event` record (type: `firmware_update`) in `dm3_devices.device_events`
+- An audit log entry via `dm3.audit.device-gateway`
+
+On `success`: the device's `firmware_version` in `dm3_devices.devices` is updated automatically.
 
 ---
 

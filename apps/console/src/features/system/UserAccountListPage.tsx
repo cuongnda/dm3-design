@@ -62,7 +62,7 @@ export function UserAccountListPage() {
         <Button
           data-testid="user-button-create"
           onClick={() => navigate('/system/accounts/new')}
-          className="gap-2 bg-operate hover:bg-operate/90 text-white"
+          className="gap-2"
         >
           <Plus size={15} />
           Create User Account

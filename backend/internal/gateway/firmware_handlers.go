@@ -2,6 +2,8 @@ package gateway
 
 import (
 	"bytes"
+	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -20,9 +22,11 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
+	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/i18n"
+	"github.com/duali/dm3-backend/pkg/mqtt"
 	"github.com/duali/dm3-backend/pkg/objectstore"
 )
 
@@ -67,12 +71,15 @@ type FirmwareDTO struct {
 // ─── Firmware Handlers ──────────────────────────────────────────────────────
 
 type FirmwareHandlers struct {
-	db      *db.DB
-	objects objectstore.Store
+	db          *db.DB
+	objects     objectstore.Store
+	mqtt        *mqtt.Client
+	audit       *audit.Logger
+	downloadURL string // base URL for firmware download (e.g. http://192.168.1.100:8002)
 }
 
-func NewFirmwareHandlers(database *db.DB, objects objectstore.Store) *FirmwareHandlers {
-	return &FirmwareHandlers{db: database, objects: objects}
+func NewFirmwareHandlers(database *db.DB, objects objectstore.Store, mqttClient *mqtt.Client, auditLog *audit.Logger, downloadBaseURL string) *FirmwareHandlers {
+	return &FirmwareHandlers{db: database, objects: objects, mqtt: mqttClient, audit: auditLog, downloadURL: downloadBaseURL}
 }
 
 // ListFirmwares handles GET /api/v1/system/firmware
@@ -109,7 +116,8 @@ func (h *FirmwareHandlers) ListFirmwares(w http.ResponseWriter, r *http.Request)
 
 	query := fmt.Sprintf(`
 		SELECT f.id, f.version, f.device_type, f.description, f.file_path,
-			   f.file_size, f.checksum, f.is_active, f.uploaded_by,
+			   f.file_size, f.checksum, f.is_active,
+			   COALESCE((SELECT a.email FROM dm3_auth.accounts a WHERE a.id = f.uploaded_by), f.uploaded_by::text),
 			   f.created_at, f.updated_at
 		FROM dm3_devices.firmwares f
 		%s
@@ -159,7 +167,8 @@ func (h *FirmwareHandlers) GetFirmware(w http.ResponseWriter, r *http.Request) {
 	var fw FirmwareDTO
 	query := `
 		SELECT id, version, device_type, description, file_path,
-			   file_size, checksum, is_active, uploaded_by,
+			   file_size, checksum, is_active,
+			   COALESCE((SELECT a.email FROM dm3_auth.accounts a WHERE a.id = uploaded_by), uploaded_by::text),
 			   created_at, updated_at
 		FROM dm3_devices.firmwares
 		WHERE id = $1::uuid
@@ -332,7 +341,9 @@ func (h *FirmwareHandlers) UpdateFirmware(w http.ResponseWriter, r *http.Request
 		SET %s, updated_at = now()
 		WHERE id = $1::uuid
 		RETURNING id, version, device_type, description, file_path, file_size,
-				  checksum, is_active, uploaded_by, created_at, updated_at
+				  checksum, is_active,
+				  COALESCE((SELECT a.email FROM dm3_auth.accounts a WHERE a.id = uploaded_by), uploaded_by::text),
+				  created_at, updated_at
 	`, strings.Join(setParts, ", "))
 
 	var fw FirmwareDTO
@@ -362,66 +373,48 @@ func (h *FirmwareHandlers) UpdateFirmware(w http.ResponseWriter, r *http.Request
 func (h *FirmwareHandlers) DeleteFirmware(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	hard := r.URL.Query().Get("hard") == "true"
-
-	if hard {
-		// Get file path before deleting
-		var filePath string
-		err := h.db.Pool.QueryRow(r.Context(),
-			`SELECT file_path FROM dm3_devices.firmwares WHERE id = $1::uuid`, id,
-		).Scan(&filePath)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				i18n.ErrorResponse(w, r, http.StatusNotFound, "firmware.not_found")
-				return
-			}
-			slog.Error("failed to get firmware for delete", "error", err)
-			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.database_error")
-			return
-		}
-
-		result, err := h.db.Pool.Exec(r.Context(),
-			`DELETE FROM dm3_devices.firmwares WHERE id = $1::uuid`, id,
-		)
-		if err != nil {
-			slog.Error("failed to hard delete firmware", "error", err)
-			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.database_error")
-			return
-		}
-		if result.RowsAffected() == 0 {
+	// Get file path before deleting
+	var filePath string
+	err := h.db.Pool.QueryRow(r.Context(),
+		`SELECT file_path FROM dm3_devices.firmwares WHERE id = $1::uuid`, id,
+	).Scan(&filePath)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
 			i18n.ErrorResponse(w, r, http.StatusNotFound, "firmware.not_found")
 			return
 		}
-
-		// Remove file from disk
-		if filePath != "" && h.objects != nil {
-			if err := h.objects.DeleteObject(r.Context(), filePath); err != nil {
-				slog.Warn("failed to remove firmware object", "key", filePath, "error", err)
-			}
-		}
-
-		slog.Info("firmware hard deleted", "id", id)
-	} else {
-		// Soft delete: set is_active = false
-		result, err := h.db.Pool.Exec(r.Context(),
-			`UPDATE dm3_devices.firmwares SET is_active = false, updated_at = now() WHERE id = $1::uuid`, id,
-		)
-		if err != nil {
-			slog.Error("failed to soft delete firmware", "error", err)
-			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.database_error")
-			return
-		}
-		if result.RowsAffected() == 0 {
-			i18n.ErrorResponse(w, r, http.StatusNotFound, "firmware.not_found")
-			return
-		}
-
-		slog.Info("firmware soft deleted", "id", id)
+		slog.Error("failed to get firmware for delete", "error", err)
+		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.database_error")
+		return
 	}
 
-	httputil.JSON(w, http.StatusOK, map[string]string{
-		"message": "Firmware deleted successfully",
-	})
+	// Delete deployments referencing this firmware first
+	_, _ = h.db.Pool.Exec(r.Context(),
+		`DELETE FROM dm3_devices.firmware_deployments WHERE firmware_id = $1::uuid`, id)
+
+	result, err := h.db.Pool.Exec(r.Context(),
+		`DELETE FROM dm3_devices.firmwares WHERE id = $1::uuid`, id,
+	)
+	if err != nil {
+		slog.Error("failed to delete firmware", "error", err)
+		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.database_error")
+		return
+	}
+	if result.RowsAffected() == 0 {
+		i18n.ErrorResponse(w, r, http.StatusNotFound, "firmware.not_found")
+		return
+	}
+
+	// Remove file from object store
+	if filePath != "" && h.objects != nil {
+		if err := h.objects.DeleteObject(r.Context(), filePath); err != nil {
+			slog.Warn("failed to remove firmware object", "key", filePath, "error", err)
+		}
+	}
+
+	h.audit.LogFromRequest(r, "firmware.delete", "firmware", id, "", "success", nil, nil)
+	slog.Info("firmware deleted", "id", id)
+	httputil.JSON(w, http.StatusOK, map[string]string{"message": "Firmware deleted successfully"})
 }
 
 // ListDeviceTypes handles GET /api/v1/system/firmware/device-types
@@ -432,48 +425,142 @@ func (h *FirmwareHandlers) ListDeviceTypes(w http.ResponseWriter, r *http.Reques
 }
 
 // DeployFirmware handles POST /api/v1/system/firmware/{id}/deploy
+// Creates deployment records, generates time-limited download tokens,
+// and publishes cfg.firmware MQTT messages to target devices.
 func (h *FirmwareHandlers) DeployFirmware(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	firmwareID := chi.URLParam(r, "id")
 
 	var req struct {
-		DeviceID string `json:"device_id"`
+		DeviceIDs []string `json:"device_ids"` // device UUID(s)
+		Force     bool     `json:"force"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "validation.invalid_json")
 		return
 	}
+	if len(req.DeviceIDs) == 0 {
+		httputil.Error(w, http.StatusBadRequest, "device_ids is required")
+		return
+	}
 
-	// Verify firmware exists
-	var version, deviceType string
+	// Load firmware
+	var fw FirmwareDTO
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT version, device_type FROM dm3_devices.firmwares WHERE id = $1::uuid AND is_active = true`, id,
-	).Scan(&version, &deviceType)
+		`SELECT id, version, device_type, COALESCE(file_path,''), file_size, checksum, is_active
+		   FROM dm3_devices.firmwares WHERE id = $1::uuid AND is_active = true`, firmwareID,
+	).Scan(&fw.ID, &fw.Version, &fw.DeviceType, &fw.FilePath, &fw.FileSize, &fw.Checksum, &fw.IsActive)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			i18n.ErrorResponse(w, r, http.StatusNotFound, "firmware.not_found")
 			return
 		}
-		slog.Error("failed to get firmware for deploy", "error", err)
-		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "system.database_error")
+		slog.Error("DeployFirmware: firmware lookup failed", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	// Placeholder: just log the deploy request
-	slog.Info("firmware deploy requested",
-		"firmware_id", id,
-		"version", version,
-		"device_type", deviceType,
-		"target_device", req.DeviceID,
-	)
+	actorID, actorEmail := audit.ActorFromContext(r.Context())
+	expiresAt := time.Now().Add(5 * time.Minute)
 
-	httputil.JSON(w, http.StatusAccepted, map[string]string{
-		"message":     "Firmware deploy initiated",
-		"firmware_id": id,
-		"version":     version,
-		"device_type": deviceType,
-		"device_id":   req.DeviceID,
-		"status":      "pending",
+	type deployResult struct {
+		DeploymentID string `json:"deployment_id"`
+		DeviceID     string `json:"device_id"`
+		Status       string `json:"status"`
+		Error        string `json:"error,omitempty"`
+	}
+	results := make([]deployResult, 0, len(req.DeviceIDs))
+
+	for _, deviceDBID := range req.DeviceIDs {
+		var tenantID, deviceID string
+		if lookupErr := h.db.Pool.QueryRow(r.Context(),
+			`SELECT tenant_id, device_id FROM dm3_devices.devices WHERE id = $1::uuid`, deviceDBID,
+		).Scan(&tenantID, &deviceID); lookupErr != nil {
+			results = append(results, deployResult{DeviceID: deviceDBID, Status: "failed", Error: "device not found"})
+			continue
+		}
+
+		// Secure download token (hex, 32 bytes = 64 chars)
+		tokenBytes := make([]byte, 32)
+		_, _ = io.ReadFull(rand.Reader, tokenBytes)
+		token := hex.EncodeToString(tokenBytes)
+
+		downloadURL := fmt.Sprintf("%s/api/v1/gateway/firmware/download/%s", h.downloadURL, token)
+
+		var deployID string
+		if insertErr := h.db.Pool.QueryRow(r.Context(),
+			`INSERT INTO dm3_devices.firmware_deployments
+				(tenant_id, firmware_id, device_id, device_db_id, version, device_type,
+				 status, download_token, download_url, expires_at,
+				 deployed_by, deployed_by_email, sent_at)
+			 VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5, $6,
+				 'sent', $7, $8, $9, $10::uuid, $11, now())
+			 RETURNING id`,
+			tenantID, firmwareID, deviceID, deviceDBID, fw.Version, fw.DeviceType,
+			token, downloadURL, expiresAt,
+			nullableStrFw(actorID), actorEmail,
+		).Scan(&deployID); insertErr != nil {
+			slog.Error("DeployFirmware: insert failed", "error", insertErr, "device", deviceID)
+			results = append(results, deployResult{DeviceID: deviceID, Status: "failed", Error: "db error"})
+			continue
+		}
+
+		// Publish cfg.firmware MQTT message
+		checksumStr := ""
+		if fw.Checksum != nil {
+			checksumStr = *fw.Checksum
+		}
+		topic := fmt.Sprintf("dm/%s/device/%s/cfg", tenantID, deviceID)
+		payload, _ := json.Marshal(MQTTEnvelope{
+			Version: 1,
+			Type:    "cfg.firmware",
+			Data: mustMarshalRaw(map[string]any{
+				"version":       fw.Version,
+				"url":           downloadURL,
+				"checksum":      "sha256:" + checksumStr,
+				"size_bytes":    fw.FileSize,
+				"deployment_id": deployID,
+				"force":         req.Force,
+			}),
+		})
+		slog.Info("DeployFirmware: publishing MQTT", "topic", topic, "payload", string(payload))
+		if pubErr := h.mqtt.Publish(r.Context(), topic, 2, payload); pubErr != nil {
+			slog.Error("DeployFirmware: MQTT publish failed", "error", pubErr, "device", deviceID)
+			_, _ = h.db.Pool.Exec(r.Context(),
+				`UPDATE dm3_devices.firmware_deployments SET status='failed', error_message=$2, updated_at=now() WHERE id=$1::uuid`,
+				deployID, "mqtt publish failed")
+			results = append(results, deployResult{DeploymentID: deployID, DeviceID: deviceID, Status: "failed", Error: "mqtt failed"})
+			continue
+		}
+
+		// Audit + device history
+		h.audit.LogFromRequest(r, "firmware.deploy", "firmware_deployment", deployID, deviceID, "success", nil,
+			map[string]any{"firmware_id": firmwareID, "version": fw.Version})
+		go InsertDeviceEvent(context.Background(), h.db.Pool, DeviceEvent{
+			TenantID: tenantID, DeviceID: deviceID, EventType: "firmware_update",
+			Description: fmt.Sprintf("Firmware deploy: %s v%s", fw.DeviceType, fw.Version),
+			ActorID: strPtr(actorID), ActorEmail: strPtr(actorEmail),
+			Metadata: map[string]any{"deployment_id": deployID, "version": fw.Version},
+		})
+
+		results = append(results, deployResult{DeploymentID: deployID, DeviceID: deviceID, Status: "sent"})
+	}
+
+	httputil.JSON(w, http.StatusAccepted, map[string]any{
+		"firmware_id": firmwareID, "version": fw.Version,
+		"device_type": fw.DeviceType, "expires_at": expiresAt, "results": results,
 	})
+}
+
+func mustMarshalRaw(v any) json.RawMessage {
+	b, _ := json.Marshal(v)
+	return b
+}
+
+func nullableStrFw(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // DownloadFirmware handles GET /api/v1/system/firmware/{id}/download
@@ -519,6 +606,123 @@ func (h *FirmwareHandlers) DownloadFirmware(w http.ResponseWriter, r *http.Reque
 	if _, err := io.Copy(w, reader); err != nil {
 		slog.Warn("failed to stream firmware object", "key", filePath, "error", err)
 	}
+}
+
+// DownloadFirmwareByToken handles GET /api/v1/gateway/firmware/download/{token}
+// This endpoint requires NO JWT auth — the token itself is the credential.
+// Called by devices during OTA to fetch the firmware binary.
+func (h *FirmwareHandlers) DownloadFirmwareByToken(w http.ResponseWriter, r *http.Request) {
+	token := chi.URLParam(r, "token")
+	if token == "" {
+		httputil.Error(w, http.StatusBadRequest, "missing token")
+		return
+	}
+
+	// Look up deployment by token
+	var filePath, deviceID, deployID string
+	var expiresAt time.Time
+	err := h.db.Pool.QueryRow(r.Context(),
+		`SELECT d.id, d.device_id, d.expires_at, f.file_path
+		   FROM dm3_devices.firmware_deployments d
+		   JOIN dm3_devices.firmwares f ON f.id = d.firmware_id
+		  WHERE d.download_token = $1
+		    AND d.status IN ('sent', 'downloading')`, token,
+	).Scan(&deployID, &deviceID, &expiresAt, &filePath)
+	if err != nil {
+		slog.Warn("firmware download: invalid token", "token", token[:8]+"...")
+		httputil.Error(w, http.StatusNotFound, "invalid or expired token")
+		return
+	}
+
+	// Check expiry
+	if time.Now().After(expiresAt) {
+		_, _ = h.db.Pool.Exec(r.Context(),
+			`UPDATE dm3_devices.firmware_deployments SET status='expired', updated_at=now() WHERE id=$1::uuid`, deployID)
+		httputil.Error(w, http.StatusGone, "download token expired")
+		return
+	}
+
+	// Mark as downloading
+	_, _ = h.db.Pool.Exec(r.Context(),
+		`UPDATE dm3_devices.firmware_deployments SET status='downloading', download_started_at=now(), updated_at=now()
+		  WHERE id=$1::uuid AND status='sent'`, deployID)
+
+	// Stream the binary
+	reader, info, err := h.objects.GetObject(r.Context(), filePath)
+	if err != nil {
+		slog.Error("firmware download: object not found", "error", err, "key", filePath)
+		httputil.Error(w, http.StatusNotFound, "firmware file not found")
+		return
+	}
+	defer reader.Close()
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if info.Size >= 0 {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size))
+	}
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(filePath)))
+	if _, err := io.Copy(w, reader); err != nil {
+		slog.Warn("firmware download: stream error", "error", err, "device", deviceID)
+	}
+}
+
+// ListDeployments handles GET /api/v1/system/firmware/{id}/deployments
+func (h *FirmwareHandlers) ListDeployments(w http.ResponseWriter, r *http.Request) {
+	firmwareID := chi.URLParam(r, "id")
+	page, limit := parsePagination(r)
+
+	var total int64
+	_ = h.db.Pool.QueryRow(r.Context(),
+		`SELECT COUNT(*) FROM dm3_devices.firmware_deployments WHERE firmware_id = $1::uuid`, firmwareID).Scan(&total)
+
+	rows, err := h.db.Pool.Query(r.Context(),
+		`SELECT id, tenant_id, firmware_id, device_id, version, device_type, status,
+		        download_url, error_message, progress_pct,
+		        COALESCE(deployed_by_email,''), sent_at, download_started_at,
+		        install_started_at, completed_at, created_at, updated_at
+		   FROM dm3_devices.firmware_deployments
+		  WHERE firmware_id = $1::uuid
+		  ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+		firmwareID, limit, (page-1)*limit)
+	if err != nil {
+		slog.Error("ListDeployments: query failed", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	type deploymentDTO struct {
+		ID              string     `json:"id"`
+		TenantID        string     `json:"tenant_id"`
+		FirmwareID      string     `json:"firmware_id"`
+		DeviceID        string     `json:"device_id"`
+		Version         string     `json:"version"`
+		DeviceType      string     `json:"device_type"`
+		Status          string     `json:"status"`
+		DownloadURL     string     `json:"download_url"`
+		ErrorMessage    string     `json:"error_message"`
+		ProgressPct     int        `json:"progress_pct"`
+		DeployedByEmail string     `json:"deployed_by_email"`
+		SentAt          *time.Time `json:"sent_at"`
+		DownloadStarted *time.Time `json:"download_started_at"`
+		InstallStarted  *time.Time `json:"install_started_at"`
+		CompletedAt     *time.Time `json:"completed_at"`
+		CreatedAt       time.Time  `json:"created_at"`
+		UpdatedAt       time.Time  `json:"updated_at"`
+	}
+	deployments := []deploymentDTO{}
+	for rows.Next() {
+		var d deploymentDTO
+		if err := rows.Scan(&d.ID, &d.TenantID, &d.FirmwareID, &d.DeviceID, &d.Version, &d.DeviceType,
+			&d.Status, &d.DownloadURL, &d.ErrorMessage, &d.ProgressPct,
+			&d.DeployedByEmail, &d.SentAt, &d.DownloadStarted,
+			&d.InstallStarted, &d.CompletedAt, &d.CreatedAt, &d.UpdatedAt); err != nil {
+			slog.Error("ListDeployments: scan failed", "error", err)
+			continue
+		}
+		deployments = append(deployments, d)
+	}
+	httputil.Paginated(w, deployments, total, page, limit)
 }
 
 func buildFirmwareObjectKey(deviceType, filename string) string {

@@ -1410,15 +1410,52 @@ export async function updateFirmware(id: string, data: { version?: string; descr
     });
 }
 
-export async function deleteFirmware(id: string, hard = false): Promise<void> {
-    await apiFetch<void>(`${FIRMWARE_URL}/${id}${hard ? '?hard=true' : ''}`, { method: 'DELETE' });
+export async function deleteFirmware(id: string): Promise<void> {
+    await apiFetch<void>(`${FIRMWARE_URL}/${id}`, { method: 'DELETE' });
 }
 
-export async function deployFirmware(firmwareId: string, deviceId: string): Promise<{ message: string; status: string }> {
-    return apiFetch<{ message: string; status: string }>(`${FIRMWARE_URL}/${firmwareId}/deploy`, {
+export interface FirmwareDeployResult {
+    deployment_id: string;
+    device_id: string;
+    status: string;
+    error?: string;
+}
+
+export interface FirmwareDeployResponse {
+    firmware_id: string;
+    version: string;
+    device_type: string;
+    expires_at: string;
+    results: FirmwareDeployResult[];
+}
+
+export async function deployFirmware(firmwareId: string, deviceIds: string[], force = false): Promise<FirmwareDeployResponse> {
+    return apiFetch<FirmwareDeployResponse>(`${FIRMWARE_URL}/${firmwareId}/deploy`, {
         method: 'POST',
-        body: JSON.stringify({ device_id: deviceId }),
+        body: JSON.stringify({ device_ids: deviceIds, force }),
     });
+}
+
+export interface FirmwareDeploymentDTO {
+    id: string;
+    firmware_id: string;
+    device_id: string;
+    version: string;
+    device_type: string;
+    status: string; // pending | sent | downloading | installing | success | failed | expired
+    error_message: string;
+    progress_pct: number;
+    deployed_by_email: string;
+    sent_at?: string;
+    download_started_at?: string;
+    install_started_at?: string;
+    completed_at?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export async function fetchFirmwareDeployments(firmwareId: string, page = 1, limit = 20): Promise<Paginated<FirmwareDeploymentDTO>> {
+    return apiFetch<Paginated<FirmwareDeploymentDTO>>(`${FIRMWARE_URL}/${firmwareId}/deployments?page=${page}&limit=${limit}`);
 }
 
 export async function fetchFirmwareDeviceTypes(): Promise<{ device_types: string[] }> {

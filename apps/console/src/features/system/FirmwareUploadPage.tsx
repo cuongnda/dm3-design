@@ -1,10 +1,11 @@
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Upload, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Upload } from 'lucide-react';
 import { uploadFirmware } from '@/lib/api';
 import { Button, Input, Select, SelectOption, Label } from '@dm3/ui';
 import { ALL_DEVICE_MODELS } from '@/lib/device-models';
+import { toast } from '@/lib/toast';
 
 export function FirmwareUploadPage() {
   const navigate = useNavigate();
@@ -12,7 +13,6 @@ export function FirmwareUploadPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(0);
-  const [result, setResult] = useState<{ id: string; checksum: string; size: number } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -54,38 +54,15 @@ export function FirmwareUploadPage() {
     setProgress(0);
 
     try {
-      const res = await uploadFirmware(form.file, form.version, form.device_type, form.description, setProgress);
-      setResult(res);
+      await uploadFirmware(form.file, form.version, form.device_type, form.description, setProgress);
+      toast(t('firmware.toast.uploadSuccess'), 'success');
+      navigate('/system/firmware');
     } catch (err: any) {
-      setError(err.message || 'Upload failed');
+      setError(err.message || t('firmware.toast.uploadFailed'));
     } finally {
       setLoading(false);
     }
   };
-
-  if (result) {
-    return (
-      <div className="p-6 max-w-2xl">
-        <div className="rounded-lg border border-success/30 bg-success/5 p-6 text-center">
-          <CheckCircle size={48} className="mx-auto text-success mb-3" />
-          <h2 className="text-[18px] font-semibold text-foreground mb-2">{t('firmware.uploadSuccess')}</h2>
-          <div className="text-[13px] text-muted-foreground space-y-1">
-            <p>
-              <span className="font-medium">SHA-256:</span>{' '}
-              <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded">{result.checksum}</code>
-            </p>
-            <p>
-              <span className="font-medium">{t('firmware.table.size')}:</span>{' '}
-              {(result.size / (1024 * 1024)).toFixed(2)} MB
-            </p>
-          </div>
-          <Button onClick={() => navigate('/system/firmware')} className="mt-4 bg-operate hover:bg-operate/90 text-white">
-            {t('firmware.backToList')}
-          </Button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="p-6 max-w-2xl">
@@ -202,7 +179,7 @@ export function FirmwareUploadPage() {
           data-testid="upload-button-submit"
           type="submit"
           disabled={loading || !form.file || !form.version || !form.device_type}
-          className="w-full bg-operate hover:bg-operate/90 text-white"
+          className="w-full"
         >
           {loading ? t('firmware.uploading') : t('firmware.upload')}
         </Button>
