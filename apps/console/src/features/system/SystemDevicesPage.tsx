@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { PageHeader, Button, Select, SelectOption, DataTable, type Column, AppModal } from '@dm3/ui';
+import { PageHeader, Button, Select, SelectOption, DataTable, type Column, AppModal, TablePaginationFooter } from '@dm3/ui';
 import { fetchSystemDevices, fetchCompanies, apiFetch, type CompanyDTO } from '@/lib/api';
 import { RefreshCw, Plus, Pencil, Trash2, Monitor, Wifi, WifiOff, AlertTriangle, Terminal, Cpu, Camera, Gauge, History, Power, PowerOff, RotateCcw, ShieldAlert, Zap, Send, MessageSquare, DoorOpen } from 'lucide-react';
 import { fetchDeviceHistory, type DeviceHistoryEvent } from '@/lib/api';
@@ -144,6 +144,8 @@ export function SystemDevicesPage() {
   const [filterCompany, setFilterCompany] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
 
   // Delete modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -273,27 +275,29 @@ export function SystemDevicesPage() {
   ], [tSystem, tDevices]);
 
   return (
-    <div className="p-6">
-      <PageHeader title={tSystem('systemDevices.title')} description={tSystem('systemDevices.description')}>
-        <div className="flex gap-2">
-          <Button data-testid="sysdevice-button-create" size="sm" onClick={() => navigate('/system/devices/new')} className="gap-1">
-            <Plus size={13} /> {tSystem('createDevice.title')}
-          </Button>
-          <Button data-testid="sysdevice-button-refresh" variant="outline" size="sm" onClick={loadData} className="gap-1">
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
-          </Button>
-        </div>
-      </PageHeader>
+    <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden p-6">
+      <div className="shrink-0">
+        <PageHeader title={tSystem('systemDevices.title')} description={tSystem('systemDevices.description')}>
+          <div className="flex gap-2">
+            <Button data-testid="sysdevice-button-create" size="sm" onClick={() => navigate('/system/devices/new')} className="gap-1">
+              <Plus size={13} /> {tSystem('createDevice.title')}
+            </Button>
+            <Button data-testid="sysdevice-button-refresh" variant="outline" size="sm" onClick={loadData} className="gap-1">
+              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
+            </Button>
+          </div>
+        </PageHeader>
+      </div>
 
       {/* Stats Dashboard */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="shrink-0 grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard icon={Monitor} iconBg="bg-operate/10" iconColor="text-operate" value={stats.total} label={tSystem('systemDevices.stats.total')} />
         <StatCard icon={Wifi} iconBg="bg-success/10" iconColor="text-success" value={stats.online} label={tSystem('systemDevices.stats.online')} />
         <StatCard icon={WifiOff} iconBg="bg-muted" iconColor="text-muted-foreground" value={stats.offline} label={tSystem('systemDevices.stats.offline')} />
         <StatCard icon={AlertTriangle} iconBg="bg-warning/10" iconColor="text-warning" value={stats.warning} label={tSystem('systemDevices.stats.warning')} />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="shrink-0 grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard icon={Terminal} iconBg="bg-cyan-500/10" iconColor="text-cyan-500" value={stats.terminals} label={tSystem('systemDevices.type.terminal')} />
         <StatCard icon={Cpu} iconBg="bg-purple-500/10" iconColor="text-purple-500" value={stats.controllers} label={tSystem('systemDevices.type.controller')} />
         <StatCard icon={Camera} iconBg="bg-blue-500/10" iconColor="text-blue-500" value={stats.cameras} label={tSystem('systemDevices.type.camera')} />
@@ -301,18 +305,18 @@ export function SystemDevicesPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-4">
-        <Select value={filterCompany} onChange={(e) => setFilterCompany(e.target.value)} className="w-48 h-8 text-[12px]">
+      <div className="shrink-0 flex gap-3">
+        <Select value={filterCompany} onChange={(e) => { setFilterCompany(e.target.value); setPage(1); }} className="w-48 h-8 text-[12px]">
           <SelectOption value="">{tDevices('devices.filter.allCompanies')}</SelectOption>
           {companies.map((c) => <SelectOption key={c.id} value={c.id}>{c.name}</SelectOption>)}
         </Select>
-        <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-36 h-8 text-[12px]">
+        <Select value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }} className="w-36 h-8 text-[12px]">
           <SelectOption value="">{tSystem('systemDevices.filter.allStatus')}</SelectOption>
           <SelectOption value="online">{tSystem('systemDevices.status.online')}</SelectOption>
           <SelectOption value="offline">{tSystem('systemDevices.status.offline')}</SelectOption>
           <SelectOption value="warning">{tSystem('systemDevices.status.warning')}</SelectOption>
         </Select>
-        <Select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="w-36 h-8 text-[12px]">
+        <Select value={filterType} onChange={(e) => { setFilterType(e.target.value); setPage(1); }} className="w-36 h-8 text-[12px]">
           <SelectOption value="">{tSystem('systemDevices.filter.allTypes')}</SelectOption>
           <SelectOption value="terminal">{tSystem('systemDevices.type.terminal')}</SelectOption>
           <SelectOption value="controller">{tSystem('systemDevices.type.controller')}</SelectOption>
@@ -321,14 +325,31 @@ export function SystemDevicesPage() {
         </Select>
       </div>
 
-      <DataTable
-        data-testid="sysdevice-table-list"
-        columns={columns}
-        data={devices}
-        rowKey={(d) => d.id}
-        rowTestId={(d) => `sysdevice-row-${d.id}`}
-        paginate={false}
-      />
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+        <div className="min-h-0 flex-1 overflow-auto">
+          <DataTable
+            embedded
+            stickyHeader
+            paginate={false}
+            loading={loading}
+            data-testid="sysdevice-table-list"
+            columns={columns}
+            data={devices.slice((page - 1) * pageSize, page * pageSize)}
+            rowKey={(d) => d.id}
+            rowTestId={(d) => `sysdevice-row-${d.id}`}
+            emptyMessage="No devices found"
+            emptyIcon={<Monitor size={32} strokeWidth={1.2} />}
+          />
+        </div>
+        <TablePaginationFooter
+          page={page}
+          pageSize={pageSize}
+          total={devices.length}
+          totalPages={Math.ceil(devices.length / pageSize)}
+          onPageChange={setPage}
+          loading={loading}
+        />
+      </div>
 
       {/* Delete Device Modal */}
       <AppModal

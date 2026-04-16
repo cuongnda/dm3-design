@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Building2, Plus, Search } from 'lucide-react';
 import { fetchCompanies, type CompanyDTO } from '@/lib/api';
-import { Button, DataTable, Input } from '@dm3/ui';
+import { Button, DataTable, Input, TablePaginationFooter } from '@dm3/ui';
 
 const planColors: Record<string, string> = {
   trial: 'bg-warning/10 text-warning',
@@ -23,6 +23,8 @@ export function CompanyListPage() {
   const [companies, setCompanies] = useState<CompanyDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -40,9 +42,12 @@ export function CompanyListPage() {
     );
   }, [companies, search]);
 
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden p-6">
+      <div className="shrink-0 flex items-center justify-between">
         <div>
           <h1 className="text-[20px] font-semibold text-foreground">{t('companies.title')}</h1>
           <p className="text-[13px] text-muted-foreground mt-0.5">
@@ -60,66 +65,70 @@ export function CompanyListPage() {
       </div>
 
       {/* Search */}
-      <div className="relative mb-4 max-w-sm">
+      <div className="shrink-0 relative max-w-sm">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
           data-testid="company-input-search"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           placeholder={t('companies.searchPlaceholder')}
           className="pl-9"
         />
       </div>
 
       {/* Table */}
-      {loading ? (
-        <div className="rounded-lg border border-border bg-card py-12 text-center">
-          <div className="w-5 h-5 border-2 border-ring/30 border-t-ring rounded-full animate-spin mx-auto" />
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+        <div className="min-h-0 flex-1 overflow-auto">
+          <DataTable
+            embedded
+            stickyHeader
+            paginate={false}
+            loading={loading}
+            data-testid="company-table-list"
+            rowTestId={(c) => `company-row-${c.id}`}
+            columns={[
+              { key: 'name', header: t('companies.table.name'), sortable: true, render: (c) => <span className="font-medium">{c.name}</span> },
+              { key: 'code', header: t('companies.table.code'), sortable: true, render: (c) => <span className="font-mono">{c.code}</span> },
+              {
+                key: 'plan',
+                header: t('companies.table.plan'),
+                sortable: true,
+                render: (c) => (
+                  <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium capitalize ${planColors[c.plan] || planColors.trial}`}>
+                    {c.plan}
+                  </span>
+                ),
+              },
+              {
+                key: 'status',
+                header: t('companies.table.status'),
+                sortable: true,
+                render: (c) => (
+                  <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium capitalize ${statusColors[c.status] || statusColors.active}`}>
+                    {c.status}
+                  </span>
+                ),
+              },
+              { key: 'user_count', header: t('companies.table.users'), sortable: true, render: (c) => <span className="tabular-nums">{c.user_count ?? 0}</span> },
+              { key: 'device_count', header: t('companies.table.devices'), sortable: true, render: (c) => <span className="tabular-nums">{c.device_count ?? 0}</span> },
+              { key: 'created_at', header: t('companies.table.created'), sortable: true, render: (c) => new Date(c.created_at).toLocaleDateString() },
+            ]}
+            data={paged}
+            rowKey={(c) => c.id}
+            onRowClick={(c) => navigate(`/system/companies/${c.id}`)}
+            emptyMessage={search ? 'No companies match your search' : 'No companies yet'}
+            emptyIcon={<Building2 size={32} strokeWidth={1.2} />}
+          />
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card py-12 text-center">
-          <Building2 size={32} className="mx-auto text-muted-foreground/40 mb-2" />
-          <p className="text-[13px] text-muted-foreground">
-            {search ? 'No companies match your search' : 'No companies yet'}
-          </p>
-        </div>
-      ) : (
-        <DataTable
-          data-testid="company-table-list"
-          rowTestId={(c) => `company-row-${c.id}`}
-          columns={[
-            { key: 'name', header: t('companies.table.name'), sortable: true, render: (c) => <span className="font-medium">{c.name}</span> },
-            { key: 'code', header: t('companies.table.code'), sortable: true, render: (c) => <span className="font-mono">{c.code}</span> },
-            {
-              key: 'plan',
-              header: t('companies.table.plan'),
-              sortable: true,
-              render: (c) => (
-                <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium capitalize ${planColors[c.plan] || planColors.trial}`}>
-                  {c.plan}
-                </span>
-              ),
-            },
-            {
-              key: 'status',
-              header: t('companies.table.status'),
-              sortable: true,
-              render: (c) => (
-                <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium capitalize ${statusColors[c.status] || statusColors.active}`}>
-                  {c.status}
-                </span>
-              ),
-            },
-            { key: 'user_count', header: t('companies.table.users'), sortable: true, render: (c) => <span className="tabular-nums">{c.user_count ?? 0}</span> },
-            { key: 'device_count', header: t('companies.table.devices'), sortable: true, render: (c) => <span className="tabular-nums">{c.device_count ?? 0}</span> },
-            { key: 'created_at', header: t('companies.table.created'), sortable: true, render: (c) => new Date(c.created_at).toLocaleDateString() },
-          ]}
-          data={filtered}
-          rowKey={(c) => c.id}
-          onRowClick={(c) => navigate(`/system/companies/${c.id}`)}
-          pageSize={15}
+        <TablePaginationFooter
+          page={page}
+          pageSize={pageSize}
+          total={filtered.length}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          loading={loading}
         />
-      )}
+      </div>
     </div>
   );
 }

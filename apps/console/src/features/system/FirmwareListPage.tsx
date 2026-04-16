@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Package, Plus, Search, CheckCircle2, XCircle } from 'lucide-react';
 import { fetchFirmwares, type FirmwareDTO } from '@/lib/api';
 import { ALL_DEVICE_MODELS } from '@/lib/device-models';
-import { Button, DataTable, Input, Select, SelectOption, Badge } from '@dm3/ui';
+import { Button, DataTable, Input, Select, SelectOption, Badge, TablePaginationFooter } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 
 function formatSize(bytes: number): string {
@@ -21,6 +21,8 @@ export function FirmwareListPage() {
   const [search, setSearch] = useState('');
   const [deviceTypeFilter, setDeviceTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
 
   useEffect(() => {
     setLoading(true);
@@ -35,9 +37,12 @@ export function FirmwareListPage() {
       .finally(() => setLoading(false));
   }, [search, deviceTypeFilter, statusFilter]);
 
+  const totalPages = Math.ceil(firmwares.length / pageSize);
+  const paged = firmwares.slice((page - 1) * pageSize, page * pageSize);
+
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden p-6">
+      <div className="shrink-0 flex items-center justify-between">
         <div>
           <h1 className="text-[20px] font-semibold text-foreground">{t('firmware.title')}</h1>
           <p className="text-[13px] text-muted-foreground mt-0.5">
@@ -55,13 +60,13 @@ export function FirmwareListPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="shrink-0 flex items-center gap-3">
         <div className="relative max-w-sm flex-1">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             data-testid="fw-input-search"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder={t('firmware.searchPlaceholder')}
             className="pl-9"
           />
@@ -69,7 +74,7 @@ export function FirmwareListPage() {
         <Select
           data-testid="fw-select-device-type"
           value={deviceTypeFilter}
-          onChange={(e) => setDeviceTypeFilter(e.target.value)}
+          onChange={(e) => { setDeviceTypeFilter(e.target.value); setPage(1); }}
           className="w-48"
         >
           <SelectOption value="">{t('firmware.allDeviceTypes')}</SelectOption>
@@ -81,7 +86,7 @@ export function FirmwareListPage() {
         </Select>
         <Select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           className="w-36"
         >
           <SelectOption value="">{t('firmware.allStatuses')}</SelectOption>
@@ -91,80 +96,84 @@ export function FirmwareListPage() {
       </div>
 
       {/* Table */}
-      {loading ? (
-        <div className="rounded-lg border border-border bg-card py-12 text-center">
-          <div className="w-5 h-5 border-2 border-ring/30 border-t-ring rounded-full animate-spin mx-auto" />
-        </div>
-      ) : firmwares.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card py-12 text-center">
-          <Package size={32} className="mx-auto text-muted-foreground/40 mb-2" />
-          <p className="text-[13px] text-muted-foreground">
-            {search || deviceTypeFilter || statusFilter ? t('firmware.noResults') : t('firmware.empty')}
-          </p>
-        </div>
-      ) : (
-        <DataTable
-          data-testid="fw-table-list"
-          rowTestId={(fw) => `fw-row-${fw.id}`}
-          columns={[
-            {
-              key: 'version',
-              header: t('firmware.table.version'),
-              sortable: true,
-              render: (fw) => (
-                <div className="flex items-center gap-2">
-                  <span className={cn('font-medium font-mono', !fw.is_active && 'text-muted-foreground line-through')}>
-                    {fw.version}
-                  </span>
-                  {fw.is_active ? (
-                    <Badge variant="outline" className="text-[10px] border-success/30 bg-success/10 text-success gap-1">
-                      <CheckCircle2 size={10} /> {t('firmware.statusActive')}
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-[10px] border-muted-foreground/30 text-muted-foreground gap-1">
-                      <XCircle size={10} /> {t('firmware.statusInactive')}
-                    </Badge>
-                  )}
-                </div>
-              ),
-            },
-            {
-              key: 'device_type',
-              header: t('firmware.table.deviceType'),
-              sortable: true,
-              render: (fw) => {
-                const model = ALL_DEVICE_MODELS.find(m => m.value === fw.device_type);
-                return <span className="font-mono text-[12px]">{model?.label ?? fw.device_type}</span>;
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+        <div className="min-h-0 flex-1 overflow-auto">
+          <DataTable
+            embedded
+            stickyHeader
+            paginate={false}
+            loading={loading}
+            data-testid="fw-table-list"
+            rowTestId={(fw) => `fw-row-${fw.id}`}
+            columns={[
+              {
+                key: 'version',
+                header: t('firmware.table.version'),
+                sortable: true,
+                render: (fw) => (
+                  <div className="flex items-center gap-2">
+                    <span className={cn('font-medium font-mono', !fw.is_active && 'text-muted-foreground line-through')}>
+                      {fw.version}
+                    </span>
+                    {fw.is_active ? (
+                      <Badge variant="outline" className="text-[10px] border-success/30 bg-success/10 text-success gap-1">
+                        <CheckCircle2 size={10} /> {t('firmware.statusActive')}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] border-muted-foreground/30 text-muted-foreground gap-1">
+                        <XCircle size={10} /> {t('firmware.statusInactive')}
+                      </Badge>
+                    )}
+                  </div>
+                ),
               },
-            },
-            {
-              key: 'description',
-              header: t('firmware.table.description'),
-              render: (fw) => (
-                <span className="text-muted-foreground truncate max-w-[200px] inline-block">
-                  {fw.description || '—'}
-                </span>
-              ),
-            },
-            {
-              key: 'file_size',
-              header: t('firmware.table.size'),
-              sortable: true,
-              render: (fw) => <span className="tabular-nums">{formatSize(fw.file_size)}</span>,
-            },
-            {
-              key: 'created_at',
-              header: t('firmware.table.uploadedAt'),
-              sortable: true,
-              render: (fw) => new Date(fw.created_at).toLocaleDateString(),
-            },
-          ]}
-          data={firmwares}
-          rowKey={(fw) => fw.id}
-          onRowClick={(fw) => navigate(`/system/firmware/${fw.id}`)}
-          pageSize={15}
+              {
+                key: 'device_type',
+                header: t('firmware.table.deviceType'),
+                sortable: true,
+                render: (fw) => {
+                  const model = ALL_DEVICE_MODELS.find(m => m.value === fw.device_type);
+                  return <span className="font-mono text-[12px]">{model?.label ?? fw.device_type}</span>;
+                },
+              },
+              {
+                key: 'description',
+                header: t('firmware.table.description'),
+                render: (fw) => (
+                  <span className="text-muted-foreground truncate max-w-[200px] inline-block">
+                    {fw.description || '—'}
+                  </span>
+                ),
+              },
+              {
+                key: 'file_size',
+                header: t('firmware.table.size'),
+                sortable: true,
+                render: (fw) => <span className="tabular-nums">{formatSize(fw.file_size)}</span>,
+              },
+              {
+                key: 'created_at',
+                header: t('firmware.table.uploadedAt'),
+                sortable: true,
+                render: (fw) => new Date(fw.created_at).toLocaleDateString(),
+              },
+            ]}
+            data={paged}
+            rowKey={(fw) => fw.id}
+            onRowClick={(fw) => navigate(`/system/firmware/${fw.id}`)}
+            emptyMessage={search || deviceTypeFilter || statusFilter ? t('firmware.noResults') : t('firmware.empty')}
+            emptyIcon={<Package size={32} strokeWidth={1.2} />}
+          />
+        </div>
+        <TablePaginationFooter
+          page={page}
+          pageSize={pageSize}
+          total={firmwares.length}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          loading={loading}
         />
-      )}
+      </div>
     </div>
   );
 }

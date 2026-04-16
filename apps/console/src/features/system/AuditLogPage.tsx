@@ -16,6 +16,7 @@ import {
   TableHead,
   TableCell,
   DatetimePicker,
+  TablePaginationFooter,
 } from '@dm3/ui';
 import {
   fetchAuditLogs,
@@ -46,19 +47,10 @@ function serviceBadgeClass(service: string) {
 }
 
 function formatTime(iso: string) {
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
+  try { return new Date(iso).toLocaleString(); } catch { return iso; }
 }
 
-interface RowDetailProps {
-  entry: AuditEntryDTO;
-  t: (key: string) => string;
-}
-
-function RowDetail({ entry, t }: RowDetailProps) {
+function RowDetail({ entry, t }: { entry: AuditEntryDTO; t: (key: string) => string }) {
   return (
     <TableRow className="hover:bg-transparent">
       <TableCell colSpan={7} className="px-4 py-3 bg-card/30">
@@ -111,7 +103,7 @@ export function AuditLogPage() {
   const [entries, setEntries] = useState<AuditEntryDTO[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [limit] = useState(50);
+  const pageSize = 50;
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -120,42 +112,27 @@ export function AuditLogPage() {
 
   const load = useCallback((p: number, f: AuditFilters) => {
     setLoading(true);
-    fetchAuditLogs(p, limit, f)
-      .then((res) => {
-        setEntries(res.data);
-        setTotal(res.total);
-      })
+    fetchAuditLogs(p, pageSize, f)
+      .then((res) => { setEntries(res.data); setTotal(res.total); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [limit]);
+  }, []);
 
-  useEffect(() => {
-    load(page, filters);
-  }, [page, filters, load]);
+  useEffect(() => { load(page, filters); }, [page, filters, load]);
 
-  const applyFilters = () => {
-    setFilters({ ...draftFilters });
-    setPage(1);
-  };
-
-  const clearFilters = () => {
-    setDraftFilters({});
-    setFilters({});
-    setPage(1);
-  };
-
+  const applyFilters = () => { setFilters({ ...draftFilters }); setPage(1); };
+  const clearFilters = () => { setDraftFilters({}); setFilters({}); setPage(1); };
   const hasFilters = Object.values(draftFilters).some((v) => v !== undefined && v !== '');
-
-  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const datePresets = [
     { label: t('audit.presets.today'), value: startOfDay(new Date()) },
   ];
 
   return (
-    <div className="p-6 space-y-4 h-full overflow-auto">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden p-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="shrink-0 flex items-start justify-between">
         <div>
           <h1 className="text-[18px] font-semibold text-foreground">{t('audit.title')}</h1>
           <p className="text-[13px] text-muted-foreground mt-0.5">{t('audit.description')}</p>
@@ -169,116 +146,59 @@ export function AuditLogPage() {
       </div>
 
       {/* Filters */}
-      <div className="bg-card border border-border rounded-lg p-3">
+      <div className="shrink-0 bg-card border border-border rounded-lg p-3">
         <div className="flex flex-wrap gap-2 items-end">
-          {/* Service */}
           <div className="flex flex-col gap-1">
             <Label className="text-[11px]">{t('audit.filters.service')}</Label>
-            <Select
-              value={draftFilters.service ?? ''}
-              onValueChange={(v) => setDraftFilters((prev) => ({ ...prev, service: v || undefined }))}
-              className="w-[160px]"
-              data-testid="sys-select-auditService"
-            >
+            <Select value={draftFilters.service ?? ''} onValueChange={(v) => setDraftFilters((prev) => ({ ...prev, service: v || undefined }))}
+              className="w-[160px]" data-testid="sys-select-auditService">
               <SelectOption value="">{t('audit.filters.allServices')}</SelectOption>
               {SERVICES.map((s) => <SelectOption key={s} value={s}>{s}</SelectOption>)}
             </Select>
           </div>
-
-          {/* Action */}
           <div className="flex flex-col gap-1">
             <Label className="text-[11px]">{t('audit.filters.action')}</Label>
-            <Input
-              value={draftFilters.action ?? ''}
-              onChange={(e) => setDraftFilters((prev) => ({ ...prev, action: e.target.value || undefined }))}
-              placeholder={t('audit.filters.action')}
-              className="w-[140px] h-9"
-              data-testid="sys-input-auditAction"
-            />
+            <Input value={draftFilters.action ?? ''} onChange={(e) => setDraftFilters((prev) => ({ ...prev, action: e.target.value || undefined }))}
+              placeholder={t('audit.filters.action')} className="w-[140px] h-9" data-testid="sys-input-auditAction" />
           </div>
-
-          {/* Entity Type */}
           <div className="flex flex-col gap-1">
             <Label className="text-[11px]">{t('audit.filters.entityType')}</Label>
-            <Select
-              value={draftFilters.entity_type ?? ''}
-              onValueChange={(v) => setDraftFilters((prev) => ({ ...prev, entity_type: v || undefined }))}
-              className="w-[160px]"
-              data-testid="sys-select-auditEntity"
-            >
+            <Select value={draftFilters.entity_type ?? ''} onValueChange={(v) => setDraftFilters((prev) => ({ ...prev, entity_type: v || undefined }))}
+              className="w-[160px]" data-testid="sys-select-auditEntity">
               <SelectOption value="">{t('audit.filters.allEntities')}</SelectOption>
               {ENTITY_TYPES.map((et) => <SelectOption key={et} value={et}>{et}</SelectOption>)}
             </Select>
           </div>
-
-          {/* Status */}
           <div className="flex flex-col gap-1">
             <Label className="text-[11px]">{t('audit.filters.status')}</Label>
-            <Select
-              value={draftFilters.status ?? ''}
-              onValueChange={(v) => setDraftFilters((prev) => ({ ...prev, status: v || undefined }))}
-              className="w-[140px]"
-              data-testid="sys-select-auditStatus"
-            >
+            <Select value={draftFilters.status ?? ''} onValueChange={(v) => setDraftFilters((prev) => ({ ...prev, status: v || undefined }))}
+              className="w-[140px]" data-testid="sys-select-auditStatus">
               <SelectOption value="">{t('audit.filters.allStatuses')}</SelectOption>
               {STATUSES.map((s) => <SelectOption key={s} value={s}>{s}</SelectOption>)}
             </Select>
           </div>
-
-          {/* From */}
           <div className="flex flex-col gap-1">
             <Label className="text-[11px]">{t('audit.filters.from')}</Label>
-            <DatetimePicker
-              value={draftFilters.from ?? null}
-              onChange={(v) => setDraftFilters((prev) => ({ ...prev, from: v || undefined }))}
-              placeholder={t('audit.filters.from')}
-              className="w-[200px]"
-              presets={datePresets}
-            />
+            <DatetimePicker value={draftFilters.from ?? null} onChange={(v) => setDraftFilters((prev) => ({ ...prev, from: v || undefined }))}
+              placeholder={t('audit.filters.from')} className="w-[200px]" presets={datePresets} />
           </div>
-
-          {/* To */}
           <div className="flex flex-col gap-1">
             <Label className="text-[11px]">{t('audit.filters.to')}</Label>
-            <DatetimePicker
-              value={draftFilters.to ?? null}
-              onChange={(v) => setDraftFilters((prev) => ({ ...prev, to: v || undefined }))}
-              placeholder={t('audit.filters.to')}
-              className="w-[200px]"
-              presets={datePresets}
-            />
+            <DatetimePicker value={draftFilters.to ?? null} onChange={(v) => setDraftFilters((prev) => ({ ...prev, to: v || undefined }))}
+              placeholder={t('audit.filters.to')} className="w-[200px]" presets={datePresets} />
           </div>
-
-          {/* Search */}
           <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
             <Label className="text-[11px]">{t('audit.filters.search')}</Label>
-            <Input
-              value={draftFilters.search ?? ''}
-              onChange={(e) => setDraftFilters((prev) => ({ ...prev, search: e.target.value || undefined }))}
-              placeholder={t('audit.filters.search')}
-              className="h-9"
-              data-testid="sys-input-auditSearch"
-            />
+            <Input value={draftFilters.search ?? ''} onChange={(e) => setDraftFilters((prev) => ({ ...prev, search: e.target.value || undefined }))}
+              placeholder={t('audit.filters.search')} className="h-9" data-testid="sys-input-auditSearch" />
           </div>
-
           <div className="flex gap-1 self-end">
             {hasFilters && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={clearFilters}
-                data-testid="sys-button-auditClear"
-              >
-                <X size={14} />
-                {t('audit.filters.clear')}
+              <Button size="sm" variant="ghost" onClick={clearFilters} data-testid="sys-button-auditClear">
+                <X size={14} /> {t('audit.filters.clear')}
               </Button>
             )}
-            <Button
-              size="sm"
-              onClick={applyFilters}
-              className=""
-              data-testid="sys-button-auditApply"
-            >
+            <Button size="sm" onClick={applyFilters} data-testid="sys-button-auditApply">
               {t('audit.filters.apply')}
             </Button>
           </div>
@@ -286,112 +206,73 @@ export function AuditLogPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-card border border-border rounded-lg overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center h-40">
-            <div className="w-5 h-5 border-2 border-operate/30 border-t-operate rounded-full animate-spin" />
-          </div>
-        ) : (
-          <Table noWrapper>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.time')}</TableHead>
-                <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.actor')}</TableHead>
-                <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.service')}</TableHead>
-                <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.action')}</TableHead>
-                <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.entity')}</TableHead>
-                <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.status')}</TableHead>
-                <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.details')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {entries.length === 0 ? (
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+        <div className="min-h-0 flex-1 overflow-auto">
+          {loading ? (
+            <div className="flex items-center justify-center h-40">
+              <div className="w-5 h-5 border-2 border-operate/30 border-t-operate rounded-full animate-spin" />
+            </div>
+          ) : (
+            <Table noWrapper>
+              <TableHeader className="sticky top-0 z-10 bg-muted/30">
                 <TableRow>
-                  <TableCell colSpan={7} className="px-4 py-10 text-center text-[13px] text-muted-foreground">
-                    {t('audit.empty')}
-                  </TableCell>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.time')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.actor')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.service')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.action')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.entity')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.status')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.details')}</TableHead>
                 </TableRow>
-              ) : (
-                entries.map((entry) => (
-                  <>
-                    <TableRow
-                      key={entry.id}
-                      className="cursor-pointer"
-                      onClick={() => setExpandedId(expandedId === entry.id ? null : entry.id)}
-                    >
-                      <TableCell className="px-4 text-[12px] text-muted-foreground">
-                        {formatTime(entry.time)}
-                      </TableCell>
-                      <TableCell className="px-4 text-[13px]">
-                        {entry.actor_email ?? entry.actor_id ?? '—'}
-                      </TableCell>
-                      <TableCell className="px-4">
-                        <Badge variant="outline" className={`rounded text-[11px] ${serviceBadgeClass(entry.service)}`}>
-                          {entry.service}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="px-4 text-[13px] font-mono">
-                        {entry.action}
-                      </TableCell>
-                      <TableCell className="px-4 text-[13px] text-muted-foreground">
-                        <div>{entry.entity_type}</div>
-                        {entry.entity_name && (
-                          <div className="text-[11px] text-muted-foreground/70 truncate max-w-[140px]">{entry.entity_name}</div>
-                        )}
-                      </TableCell>
-                      <TableCell className="px-4">
-                        <Badge variant="outline" className={`rounded text-[11px] ${statusBadgeClass(entry.status)}`}>
-                          {entry.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="px-4">
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setExpandedId(expandedId === entry.id ? null : entry.id);
-                          }}
-                        >
-                          {expandedId === entry.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                    {expandedId === entry.id && (
-                      <RowDetail key={`${entry.id}-detail`} entry={entry} t={t} />
-                    )}
-                  </>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        )}
-      </div>
-
-      {/* Pagination */}
-      <div className="flex items-center justify-between text-[13px] text-muted-foreground">
-        <span>{t('audit.pagination.entries', { count: total })}</span>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
-            data-testid="sys-button-auditPrev"
-          >
-            {t('audit.pagination.prev')}
-          </Button>
-          <span className="px-2">{t('audit.pagination.pageOf', { page, total: totalPages })}</span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-            data-testid="sys-button-auditNext"
-          >
-            {t('audit.pagination.next')}
-          </Button>
+              </TableHeader>
+              <TableBody>
+                {entries.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="px-4 py-10 text-center text-[13px] text-muted-foreground">
+                      {t('audit.empty')}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  entries.map((entry) => (
+                    <>
+                      <TableRow key={entry.id} className="cursor-pointer"
+                        onClick={() => setExpandedId(expandedId === entry.id ? null : entry.id)}>
+                        <TableCell className="px-4 text-[12px] text-muted-foreground font-mono">{formatTime(entry.time)}</TableCell>
+                        <TableCell className="px-4 text-[13px]">{entry.actor_email ?? entry.actor_id ?? '—'}</TableCell>
+                        <TableCell className="px-4">
+                          <Badge variant="outline" className={`rounded text-[11px] ${serviceBadgeClass(entry.service)}`}>{entry.service}</Badge>
+                        </TableCell>
+                        <TableCell className="px-4 text-[13px] font-mono">{entry.action}</TableCell>
+                        <TableCell className="px-4 text-[13px] text-muted-foreground">
+                          <div>{entry.entity_type}</div>
+                          {entry.entity_name && <div className="text-[11px] text-muted-foreground/70 truncate max-w-[140px]">{entry.entity_name}</div>}
+                        </TableCell>
+                        <TableCell className="px-4">
+                          <Badge variant="outline" className={`rounded text-[11px] ${statusBadgeClass(entry.status)}`}>{entry.status}</Badge>
+                        </TableCell>
+                        <TableCell className="px-4">
+                          <Button variant="ghost" size="icon-xs"
+                            onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === entry.id ? null : entry.id); }}>
+                            {expandedId === entry.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                      {expandedId === entry.id && <RowDetail key={`${entry.id}-detail`} entry={entry} t={t} />}
+                    </>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </div>
+        <TablePaginationFooter
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          loading={loading}
+        />
       </div>
     </div>
   );
