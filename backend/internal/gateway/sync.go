@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/duali/dm3-backend/internal/models"
+	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/mqtt"
@@ -254,6 +255,17 @@ func (s *SyncService) HandleSyncRequest(w http.ResponseWriter, r *http.Request) 
 	// message is published and acked.
 	job := s.Jobs.Create(companyID, deviceID, types)
 	results, _ := s.pushSyncTypes(r.Context(), companyID, id, deviceID, types, true, job)
+
+	actorID, actorEmail := audit.ActorFromContext(r.Context())
+	go InsertDeviceEvent(context.Background(), s.db.Pool, DeviceEvent{
+		TenantID:    companyID,
+		DeviceID:    deviceID,
+		EventType:   "sync",
+		Description: fmt.Sprintf("Data synced: %s", strings.Join(types, ", ")),
+		ActorID:     strPtr(actorID),
+		ActorEmail:  strPtr(actorEmail),
+		Metadata:    map[string]any{"types": types, "results": results, "job_id": job.ID},
+	})
 
 	httputil.JSON(w, http.StatusOK, map[string]any{
 		"status":    "sync_pushed",

@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Search, Monitor, Camera, Cpu, Settings, Terminal, Gauge, Edit, Send } from 'lucide-react';
+import { Search, Monitor, Camera, Cpu, Settings, Terminal, Gauge, Edit, Send, History, Power, PowerOff, RotateCcw, ShieldAlert, Wifi, WifiOff, AlertTriangle, Zap, RefreshCw, MessageSquare, DoorOpen } from 'lucide-react';
 import { Button, Card, CardContent, Input, AppModal, Label, Select, Tabs, TabsList, TabsTrigger, TabsContent, DataTable, type Column, TablePaginationFooter, Checkbox } from '@dm3/ui';
 import { useRealtimeStore } from '@dm3/api-client';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, fetchDeviceHistory, type DeviceHistoryEvent } from '@/lib/api';
 import { toast } from '@/lib/toast';
 
 // --- Types ---
@@ -54,6 +54,7 @@ interface Device {
   name: string;
   type: string;
   status: string;
+  door_state?: string; // closed, open, held_open, forced, alarm
   location?: string;
   device_id?: string;
   firmware_version?: string;
@@ -71,6 +72,33 @@ interface DeviceFormData {
   location: string;
   site_id: string;
 }
+
+// --- Device history event type rendering config ---
+
+const historyEventConfig: Record<string, { icon: typeof Power; color: string; label: string }> = {
+  online:           { icon: Power,          color: 'text-success',          label: 'Online' },
+  offline:          { icon: PowerOff,       color: 'text-muted-foreground', label: 'Offline' },
+  restart:          { icon: RotateCcw,      color: 'text-operate',          label: 'Restart' },
+  emergency:        { icon: ShieldAlert,    color: 'text-error',            label: 'Emergency' },
+  sync:             { icon: RefreshCw,      color: 'text-secure',           label: 'Data Sync' },
+  config_ack:       { icon: Zap,            color: 'text-manage',           label: 'Config Ack' },
+  error:            { icon: AlertTriangle,  color: 'text-warning',          label: 'Error' },
+  command:          { icon: Terminal,        color: 'text-secure',           label: 'Command' },
+  command_response: { icon: MessageSquare,  color: 'text-success',          label: 'Response' },
+  door_command:     { icon: Send,           color: 'text-operate',          label: 'Door Command' },
+  door_state:       { icon: DoorOpen,       color: 'text-operate',          label: 'Door State' },
+};
+
+const defaultEventCfg = { icon: Zap, color: 'text-muted-foreground', label: 'Event' };
+
+const doorStateConfig: Record<string, { color: string; label: string }> = {
+  closed:     { color: 'text-success bg-success/10',          label: 'Closed' },
+  open:       { color: 'text-warning bg-warning/10',          label: 'Open' },
+  held_open:  { color: 'text-operate bg-operate/10',          label: 'Held Open' },
+  held_close: { color: 'text-error bg-error/10',              label: 'Held Close' },
+  forced:     { color: 'text-error bg-error/10',              label: 'Forced' },
+  alarm:      { color: 'text-error bg-error/10 animate-pulse', label: 'Alarm' },
+};
 
 const DEVICE_TYPES = [
   { value: 'terminal', label: 'Terminal', icon: Terminal, color: 'text-cyan-600' },
@@ -490,6 +518,83 @@ function TerminalConfigSection({ config, onChange, disabled }: {
   );
 }
 
+// --- Device History Modal ---
+
+function DeviceHistoryModal({ device, onClose, t }: { device: Device; onClose: () => void; t: (key: string) => string }) {
+  const [events, setEvents] = useState<DeviceHistoryEvent[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setHistoryLoading(true);
+    fetchDeviceHistory(device.id, 1, 50)
+      .then((res) => { if (!cancelled) setEvents(res.data || []); })
+      .catch(() => { /* ignore */ })
+      .finally(() => { if (!cancelled) setHistoryLoading(false); });
+    return () => { cancelled = true; };
+  }, [device.id]);
+
+  return (
+    <AppModal
+      open
+      onOpenChange={(open) => { if (!open) onClose(); }}
+      title={
+        <span className="inline-flex items-center gap-2">
+          <History size={16} /> {t('devices.history.title')} — {device.name || device.device_id || ''}
+        </span>
+      }
+      description={t('devices.history.description')}
+      size="2xl"
+      showCancelButton
+      cancelLabel={t('devices.history.close')}
+    >
+      {historyLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="w-5 h-5 border-2 border-secure/30 border-t-secure rounded-full animate-spin" />
+        </div>
+      ) : events.length === 0 ? (
+        <div className="py-12 text-center text-[13px] text-muted-foreground">
+          No history events recorded yet
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {events.map((evt) => {
+            const cfg = historyEventConfig[evt.event_type] || defaultEventCfg;
+            const Icon = cfg.icon;
+            return (
+              <div
+                key={evt.id}
+                className="flex items-start gap-3 rounded-lg border border-border/60 bg-background/40 px-3 py-2.5"
+                data-testid={`device-row-history-${evt.id}`}
+              >
+                <div className={`mt-0.5 shrink-0 ${cfg.color}`}>
+                  <Icon size={16} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[11px] font-medium uppercase tracking-wider ${cfg.color}`}>
+                      {cfg.label}
+                    </span>
+                    {evt.actor_email && (
+                      <span className="text-[11px] text-muted-foreground">
+                        by {evt.actor_email}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[13px] text-foreground mt-0.5">{evt.description}</p>
+                </div>
+                <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                  {new Date(evt.time).toLocaleString()}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </AppModal>
+  );
+}
+
 // --- Main Page ---
 
 export function DevicesPage() {
@@ -514,6 +619,9 @@ export function DevicesPage() {
   const [editConfig, setEditConfig] = useState<DeviceConfig>({});
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+
+  // History modal state
+  const [historyDevice, setHistoryDevice] = useState<Device | null>(null);
 
   // Transmit Data modal state — manual on-demand sync push.
   const [transmitDevice, setTransmitDevice] = useState<Device | null>(null);
@@ -680,6 +788,21 @@ export function DevicesPage() {
         ),
       },
       {
+        key: 'door_state',
+        header: t('devices.column.doorState'),
+        width: '110px',
+        sortable: true,
+        render: (d) => {
+          if (!d.door_state) return <span className="text-[11px] text-muted-foreground">—</span>;
+          const cfg = doorStateConfig[d.door_state] || { color: 'text-muted-foreground bg-muted/60', label: d.door_state };
+          return (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${cfg.color}`}>
+              {cfg.label}
+            </span>
+          );
+        },
+      },
+      {
         key: 'firmware_version',
         header: t('devices.column.firmware'),
         width: '120px',
@@ -689,7 +812,7 @@ export function DevicesPage() {
       {
         key: 'actions',
         header: t('devices.column.actions'),
-        width: '120px',
+        width: '160px',
         render: (d) => (
           <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
             <Button
@@ -709,6 +832,15 @@ export function DevicesPage() {
               data-testid={`device-button-edit-${d.device_id || d.id}`}
             >
               <Edit size={14} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              title={t('devices.action.history')}
+              onClick={() => setHistoryDevice(d)}
+              data-testid={`device-button-history-${d.device_id || d.id}`}
+            >
+              <History size={14} />
             </Button>
           </div>
         ),
@@ -1144,6 +1276,15 @@ export function DevicesPage() {
           })()}
         </div>
       </AppModal>
+
+      {/* ── Device History Modal ──────────────────────────────── */}
+      {historyDevice && (
+        <DeviceHistoryModal
+          device={historyDevice}
+          onClose={() => setHistoryDevice(null)}
+          t={t}
+        />
+      )}
 
     </div>
   );

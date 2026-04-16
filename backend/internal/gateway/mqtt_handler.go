@@ -363,12 +363,59 @@ func (h *MQTTHandler) handleAccessEvent(ctx context.Context, pt ParsedTopic, env
 	slog.Info("access event received", "device", pt.DeviceID, "type", env.Type, "msg_id", env.ID)
 }
 
-func (h *MQTTHandler) handleDoorState(ctx context.Context, pt ParsedTopic, env MQTTEnvelope) {
-	slog.Info("door state event", "device", pt.DeviceID, "type", env.Type)
+func (h *MQTTHandler) handleDoorState(_ context.Context, pt ParsedTopic, env MQTTEnvelope) {
+	var data struct {
+		State string `json:"state"` // closed, open, held_open, forced, alarm
+	}
+	if err := json.Unmarshal(env.Data, &data); err != nil {
+		slog.Warn("mqtt: bad door.state data", "error", err)
+		return
+	}
+	state := data.State
+	if state == "" {
+		state = "open" // fallback if device only sends the event without explicit state
+	}
+	slog.Info("door state event", "device", pt.DeviceID, "state", state)
+
+	// Persist door state on the device row.
+	_, err := h.db.Pool.Exec(h.appCtx,
+		`UPDATE dm3_devices.devices SET door_state = $1, updated_at = now()
+		  WHERE device_id = $2 AND tenant_id = $3::uuid`,
+		state, pt.DeviceID, pt.TenantID)
+	if err != nil {
+		slog.Error("failed to update door_state", "error", err, "device", pt.DeviceID)
+	}
+
+	// Record device history event.
+	var meta map[string]any
+	_ = json.Unmarshal(env.Data, &meta)
+	go InsertDeviceEvent(h.appCtx, h.db.Pool, DeviceEvent{
+		TenantID:    pt.TenantID,
+		DeviceID:    pt.DeviceID,
+		EventType:   "door_state",
+		Description: fmt.Sprintf("Door state: %s", state),
+		Metadata:    meta,
+	})
 }
 
-func (h *MQTTHandler) handleAlarm(ctx context.Context, pt ParsedTopic, env MQTTEnvelope) {
+func (h *MQTTHandler) handleAlarm(_ context.Context, pt ParsedTopic, env MQTTEnvelope) {
 	slog.Warn("alarm event", "device", pt.DeviceID, "type", env.Type)
+
+	// Set door_state to alarm on the device.
+	_, _ = h.db.Pool.Exec(h.appCtx,
+		`UPDATE dm3_devices.devices SET door_state = 'alarm', updated_at = now()
+		  WHERE device_id = $1 AND tenant_id = $2::uuid`,
+		pt.DeviceID, pt.TenantID)
+
+	var data map[string]any
+	_ = json.Unmarshal(env.Data, &data)
+	go InsertDeviceEvent(h.appCtx, h.db.Pool, DeviceEvent{
+		TenantID:    pt.TenantID,
+		DeviceID:    pt.DeviceID,
+		EventType:   "emergency",
+		Description: fmt.Sprintf("Alarm triggered: %s", env.Type),
+		Metadata:    data,
+	})
 }
 
 type heartbeatNetwork struct {
@@ -418,16 +465,48 @@ func (h *MQTTHandler) handleStatus(ctx context.Context, pt ParsedTopic, env MQTT
 		// Scope by tenant_id from topic to prevent a rogue device (that learned
 		// another tenant's device_id) from spoofing heartbeats on behalf of a
 		// device it doesn't own. Rogue updates will hit 0 rows and be ignored.
-		tag, err := h.db.Pool.Exec(ctx,
-			`UPDATE dm3_devices.devices SET status = $1, last_seen = $2, firmware_version = COALESCE(NULLIF($3,''), firmware_version), updated_at = $2 WHERE device_id = $4 AND tenant_id = $5::uuid`,
-			status, now, data.Firmware, pt.DeviceID, pt.TenantID)
+		//
+		// CTE captures old status before the UPDATE so we only record a
+		// device_event on actual transitions (offline→online), not every 30s
+		// heartbeat.
+		var prevStatus string
+		err := h.db.Pool.QueryRow(ctx,
+			`WITH old AS (
+				SELECT status FROM dm3_devices.devices WHERE device_id = $4 AND tenant_id = $5::uuid
+			)
+			UPDATE dm3_devices.devices
+			   SET status = $1, last_seen = $2,
+			       firmware_version = COALESCE(NULLIF($3,''), firmware_version),
+			       updated_at = $2
+			 WHERE device_id = $4 AND tenant_id = $5::uuid
+			 RETURNING (SELECT status FROM old)`,
+			status, now, data.Firmware, pt.DeviceID, pt.TenantID,
+		).Scan(&prevStatus)
 		if err != nil {
-			slog.Error("failed to update device heartbeat", "error", err, "device", pt.DeviceID)
+			if err.Error() == "no rows in result set" {
+				slog.Debug("ignoring heartbeat from unprovisioned device", "device", pt.DeviceID)
+			} else {
+				slog.Error("failed to update device heartbeat", "error", err, "device", pt.DeviceID)
+			}
 			return
 		}
-		if tag.RowsAffected() == 0 {
-			// Unknown device — not provisioned. Ignore heartbeat.
-			slog.Debug("ignoring heartbeat from unprovisioned device", "device", pt.DeviceID)
+
+		// Record event only on status transitions.
+		if data.Online && prevStatus != string(models.DeviceStatusOnline) {
+			go InsertDeviceEvent(h.appCtx, h.db.Pool, DeviceEvent{
+				TenantID:    pt.TenantID,
+				DeviceID:    pt.DeviceID,
+				EventType:   "online",
+				Description: "Device came online",
+				Metadata:    map[string]any{"firmware": data.Firmware, "ip": data.IP},
+			})
+		} else if !data.Online && prevStatus == string(models.DeviceStatusOnline) {
+			go InsertDeviceEvent(h.appCtx, h.db.Pool, DeviceEvent{
+				TenantID:    pt.TenantID,
+				DeviceID:    pt.DeviceID,
+				EventType:   "offline",
+				Description: "Device reported offline via heartbeat",
+			})
 		}
 		slog.Debug("heartbeat processed", "device", pt.DeviceID, "status", status)
 
@@ -460,18 +539,37 @@ func (h *MQTTHandler) handleStatus(ctx context.Context, pt ParsedTopic, env MQTT
 
 	case "status.offline":
 		// Tenant-scoped to prevent cross-tenant status spoofing (see heartbeat above).
-		_, err := h.db.Pool.Exec(ctx,
-			`UPDATE dm3_devices.devices SET status = $3, updated_at = $1 WHERE device_id = $2 AND tenant_id = $4::uuid`,
+		tag, err := h.db.Pool.Exec(ctx,
+			`UPDATE dm3_devices.devices SET status = $3, updated_at = $1 WHERE device_id = $2 AND tenant_id = $4::uuid AND status != $3`,
 			now, pt.DeviceID, models.DeviceStatusOffline, pt.TenantID)
 		if err != nil {
 			slog.Error("failed to mark device offline", "error", err, "device", pt.DeviceID)
+		} else if tag.RowsAffected() > 0 {
+			go InsertDeviceEvent(h.appCtx, h.db.Pool, DeviceEvent{
+				TenantID:    pt.TenantID,
+				DeviceID:    pt.DeviceID,
+				EventType:   "offline",
+				Description: "Device disconnected (LWT)",
+			})
 		}
 		slog.Info("device offline (LWT)", "device", pt.DeviceID)
 	}
 }
 
-func (h *MQTTHandler) handleCommandResponse(ctx context.Context, pt ParsedTopic, env MQTTEnvelope) {
+func (h *MQTTHandler) handleCommandResponse(_ context.Context, pt ParsedTopic, env MQTTEnvelope) {
 	slog.Info("command response", "device", pt.DeviceID, "type", env.Type, "ref", env.Ref, "status", env.Status)
+
+	desc := fmt.Sprintf("Command response: %s — %s", env.Type, env.Status)
+	if env.Error != "" {
+		desc = fmt.Sprintf("Command response: %s — %s (%s)", env.Type, env.Status, env.Error)
+	}
+	go InsertDeviceEvent(h.appCtx, h.db.Pool, DeviceEvent{
+		TenantID:    pt.TenantID,
+		DeviceID:    pt.DeviceID,
+		EventType:   "command_response",
+		Description: desc,
+		Metadata:    map[string]any{"type": env.Type, "ref": env.Ref, "status": env.Status, "error": env.Error},
+	})
 }
 
 func (h *MQTTHandler) handleConfigAck(_ context.Context, pt ParsedTopic, env MQTTEnvelope) {
@@ -522,4 +620,23 @@ func (h *MQTTHandler) handleConfigAck(_ context.Context, pt ParsedTopic, env MQT
 	default:
 		slog.Info("config ack", "device", pt.DeviceID, "type", env.Type, "ref", env.Ref, "status", env.Status)
 	}
+
+	// Record config ack as device history event.
+	var meta map[string]any
+	_ = json.Unmarshal(env.Data, &meta)
+	if meta == nil {
+		meta = map[string]any{}
+	}
+	meta["ack_type"] = env.Type
+	meta["status"] = env.Status
+	if env.JobID != "" {
+		meta["job_id"] = env.JobID
+	}
+	go InsertDeviceEvent(h.appCtx, h.db.Pool, DeviceEvent{
+		TenantID:    pt.TenantID,
+		DeviceID:    pt.DeviceID,
+		EventType:   "config_ack",
+		Description: fmt.Sprintf("Config acknowledged: %s — %s", env.Type, env.Status),
+		Metadata:    meta,
+	})
 }

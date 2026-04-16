@@ -1,230 +1,366 @@
-import { useState } from 'react';
-import { Plus, Search, DoorOpen, Lock, Unlock, Settings } from 'lucide-react';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@dm3/ui';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import {
+  Search,
+  DoorOpen,
+  Lock,
+  Unlock,
+  ShieldAlert,
+  AlertTriangle,
+  Play,
+  MapPin,
+} from 'lucide-react';
+import {
+  PageHeader,
+  StatCard,
+  DataTable,
+  type Column,
+  Input,
+  Badge,
+  Button,
+  TablePaginationFooter,
+  AppModal,
+  Label,
+} from '@dm3/ui';
+import { cn } from '@/lib/utils';
+import { fetchAccessPoints, sendDoorCommand, type AccessPointDTO, type AccessPointStats } from '@/lib/api';
+import { toast } from '@/lib/toast';
 
-interface Door {
-  id: string;
-  name: string;
-  location: string;
-  type: string;
-  status: 'online' | 'offline' | 'locked' | 'unlocked';
-  last_activity: string;
-}
+/* ── Door state config ─────────────────────────────────────── */
 
-const mockDoors: Door[] = [
-  {
-    id: '1',
-    name: 'Main Entrance',
-    location: 'Ground Floor',
-    type: 'door',
-    status: 'locked',
-    last_activity: '2026-04-04 18:30:00'
-  },
-  {
-    id: '2',
-    name: 'Server Room',
-    location: 'Floor 2',
-    type: 'door',
-    status: 'locked',
-    last_activity: '2026-04-04 18:25:00'
-  },
-  {
-    id: '3',
-    name: 'Emergency Exit',
-    location: 'Ground Floor',
-    type: 'door',
-    status: 'unlocked',
-    last_activity: '2026-04-04 17:15:00'
-  },
-  {
-    id: '4',
-    name: 'Parking Gate',
-    location: 'Basement',
-    type: 'gate',
-    status: 'online',
-    last_activity: '2026-04-04 18:45:00'
-  }
-];
+const doorStateConfig: Record<string, { color: string; label: string; icon: typeof Lock }> = {
+  closed:     { color: 'border-success/30 bg-success/10 text-success',           label: 'Closed',      icon: Lock },
+  open:       { color: 'border-warning/30 bg-warning/10 text-warning',           label: 'Open',        icon: Unlock },
+  held_open:  { color: 'border-operate/30 bg-operate/10 text-operate',           label: 'Held Open',   icon: DoorOpen },
+  held_close: { color: 'border-error/30 bg-error/10 text-error',                label: 'Held Close',  icon: ShieldAlert },
+  forced:     { color: 'border-error/30 bg-error/10 text-error',                label: 'Forced',      icon: AlertTriangle },
+  alarm:      { color: 'border-error/30 bg-error/10 text-error animate-pulse',  label: 'Alarm',       icon: ShieldAlert },
+};
+
+const POLL_INTERVAL = 3000;
+
+/* ── Main page ─────────────────────────────────────────────── */
 
 export function AccessControlPage() {
-  const [doors] = useState<Door[]>(mockDoors);
+  const { t } = useTranslation('secure');
+  const navigate = useNavigate();
+  const [accessPoints, setAccessPoints] = useState<AccessPointDTO[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState<AccessPointStats>({ online: 0, offline: 0, alarm: 0 });
+  const pageSize = 20;
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pauseUntilRef = useRef(0); // skip polls until this timestamp
 
-  const filteredDoors = doors.filter(door =>
-    door.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    door.location.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  /* ── Fetch ───────────────────────────────────────────────── */
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'online': return 'bg-green-100 text-green-800';
-      case 'offline': return 'bg-gray-100 text-gray-800';
-      case 'locked': return 'bg-blue-100 text-blue-800';
-      case 'unlocked': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const params: Record<string, string> = {};
+      if (searchTerm) params.search = searchTerm;
+      const res = await fetchAccessPoints(page, pageSize, params);
+      // Always update stats (dashboard)
+      setTotal(res.total ?? 0);
+      if (res.stats) setStats(res.stats);
+      // During pause window, preserve optimistic door_state on rows
+      if (silent && Date.now() < pauseUntilRef.current) {
+        setAccessPoints((prev) => {
+          const serverMap = new Map((res.data || []).map((ap) => [ap.id, ap]));
+          return prev.map((ap) => {
+            const fresh = serverMap.get(ap.id);
+            return fresh ? { ...fresh, door_state: ap.door_state } : ap;
+          });
+        });
+      } else {
+        setAccessPoints(res.data || []);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setLoading(false);
+    }
+  }, [page, searchTerm]);
+
+  // Initial load + polling every 5s for real-time status
+  useEffect(() => {
+    load();
+    pollRef.current = setInterval(() => load(true), POLL_INTERVAL);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [load]);
+
+  const totalPages = Math.ceil(total / pageSize);
+
+  /* ── Door command dialog ──────────────────────────────────── */
+
+  const [cmdDialog, setCmdDialog] = useState<{ ap: AccessPointDTO; action: string } | null>(null);
+  const [cmdDuration, setCmdDuration] = useState(5);
+  const [cmdSending, setCmdSending] = useState(false);
+
+  const actionToState: Record<string, string> = {
+    unlock: 'open', lock: 'closed', hold_open: 'held_open', hold_close: 'held_close', release: 'closed',
+  };
+
+  const cmdLabels: Record<string, { title: string; desc: string; variant: 'default' | 'destructive'; showDuration: boolean }> = {
+    unlock:     { title: 'Unlock Door',     desc: 'Door will unlock for the specified duration then re-lock automatically.',  variant: 'default',      showDuration: true },
+    lock:       { title: 'Lock Door',       desc: 'Door will lock for the specified duration then return to normal mode.',    variant: 'default',      showDuration: true },
+    hold_open:  { title: 'Hold Open',       desc: 'Door will remain open until manually released. Are you sure?',            variant: 'destructive',  showDuration: false },
+    hold_close: { title: 'Hold Close',      desc: 'Door will remain locked and deny all access until manually released. This is a critical action.', variant: 'destructive', showDuration: false },
+  };
+
+  const openCmdDialog = (ap: AccessPointDTO, action: string) => {
+    if (action === 'release') {
+      // Release is instant — no dialog
+      executeDoorAction(ap, action);
+      return;
+    }
+    setCmdDuration(5);
+    setCmdDialog({ ap, action });
+  };
+
+  const executeDoorAction = async (ap: AccessPointDTO, action: string, durationMs?: number) => {
+    const newState = actionToState[action];
+    if (newState) {
+      setAccessPoints((prev) =>
+        prev.map((p) => p.id === ap.id ? { ...p, door_state: newState } : p),
+      );
+    }
+    pauseUntilRef.current = Date.now() + 5000;
+
+    try {
+      await sendDoorCommand(ap.id, action, durationMs);
+      toast(`${action} sent to ${ap.name}`, 'success');
+    } catch {
+      toast(`Failed to ${action} ${ap.name}`, 'error');
+      pauseUntilRef.current = 0;
+      load(true);
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'locked': return <Lock size={20} className="text-blue-600" />;
-      case 'unlocked': return <Unlock size={20} className="text-yellow-600" />;
-      default: return <DoorOpen size={20} className="text-green-600" />;
-    }
+  const handleCmdConfirm = async () => {
+    if (!cmdDialog) return;
+    setCmdSending(true);
+    const { ap, action } = cmdDialog;
+    const label = cmdLabels[action];
+    const durationMs = label?.showDuration ? cmdDuration * 1000 : undefined;
+    await executeDoorAction(ap, action, durationMs);
+    setCmdSending(false);
+    setCmdDialog(null);
   };
 
-  const onlineCount = doors.filter(d => d.status === 'online').length;
-  const lockedCount = doors.filter(d => d.status === 'locked').length;
-  const unlockedCount = doors.filter(d => d.status === 'unlocked').length;
+  /* ── Columns ─────────────────────────────────────────────── */
+
+  const columns: Column<AccessPointDTO>[] = [
+    {
+      key: 'name',
+      header: t('accessControl.table.name'),
+      sortable: true,
+      render: (ap) => (
+        <div>
+          <span className="text-[13px] font-medium text-foreground">{ap.name}</span>
+          {ap.description && (
+            <span className="block text-[11px] text-muted-foreground mt-0.5 truncate max-w-[200px]">{ap.description}</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'zone_name',
+      header: t('accessControl.table.zone'),
+      width: '140px',
+      sortable: true,
+      render: (ap) => (
+        ap.zone_name
+          ? <span className="inline-flex items-center gap-1 text-[12px] text-muted-foreground"><MapPin size={11} />{ap.zone_name}</span>
+          : <span className="text-[11px] text-muted-foreground">—</span>
+      ),
+    },
+    {
+      key: 'device_status',
+      header: t('accessControl.table.status'),
+      width: '100px',
+      sortable: true,
+      render: (ap) => {
+        const s = ap.device_status;
+        const color = s === 'online' ? 'text-success' : s === 'warning' ? 'text-warning' : 'text-muted-foreground';
+        const dot = s === 'online' ? 'bg-success animate-pulse' : s === 'warning' ? 'bg-warning animate-pulse' : 'bg-muted-foreground';
+        const label = s === 'online' ? 'Online' : s === 'warning' ? 'Warning' : 'Offline';
+        return (
+          <span className={cn('inline-flex items-center gap-1.5 text-[12px] font-medium', color)}>
+            <span className={cn('h-1.5 w-1.5 rounded-full', dot)} />
+            {label}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'door_state',
+      header: t('accessControl.table.doorState'),
+      width: '120px',
+      sortable: true,
+      render: (ap) => {
+        if (!ap.door_state) return <span className="text-[11px] text-muted-foreground">—</span>;
+        const cfg = doorStateConfig[ap.door_state] || { color: 'text-muted-foreground', label: ap.door_state, icon: Lock };
+        const Icon = cfg.icon;
+        return (
+          <Badge variant="outline" className={cn('text-[11px] gap-1', cfg.color)}>
+            <Icon size={11} /> {cfg.label}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: 'access_device_count',
+      header: t('accessControl.table.devices'),
+      width: '80px',
+      render: (ap) => (
+        <span className="text-[12px] font-mono text-muted-foreground">{ap.access_device_count}</span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      width: '200px',
+      render: (ap) => {
+        const disabled = ap.device_status !== 'online';
+        return (
+          <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+            <Button variant="ghost" size="sm" title="Unlock" disabled={disabled}
+              onClick={() => openCmdDialog(ap, 'unlock')} data-testid={`access-button-unlock-${ap.id}`}>
+              <Unlock size={14} className="text-success" />
+            </Button>
+            <Button variant="ghost" size="sm" title="Lock" disabled={disabled}
+              onClick={() => openCmdDialog(ap, 'lock')} data-testid={`access-button-lock-${ap.id}`}>
+              <Lock size={14} className="text-secure" />
+            </Button>
+            <Button variant="ghost" size="sm" title="Hold Open" disabled={disabled}
+              onClick={() => openCmdDialog(ap, 'hold_open')} data-testid={`access-button-holdopen-${ap.id}`}>
+              <DoorOpen size={14} className="text-operate" />
+            </Button>
+            <Button variant="ghost" size="sm" title="Hold Close" disabled={disabled}
+              onClick={() => openCmdDialog(ap, 'hold_close')} data-testid={`access-button-holdclose-${ap.id}`}>
+              <ShieldAlert size={14} className="text-error" />
+            </Button>
+            <Button variant="ghost" size="sm" title="Release" disabled={disabled}
+              onClick={() => openCmdDialog(ap, 'release')} data-testid={`access-button-release-${ap.id}`}>
+              <Play size={14} className="text-muted-foreground" />
+            </Button>
+          </div>
+        );
+      },
+    },
+  ];
+
+  /* ── Render ──────────────────────────────────────────────── */
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Access Control</h1>
-          <p className="text-muted-foreground">Monitor and control door access systems</p>
-        </div>
-        <Button>
-          <Plus size={16} className="mr-2" />
-          Add Door
-        </Button>
-      </div>
+    <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden">
+      <PageHeader title={t('accessControl.title')} description={t('accessControl.description')}>
+        <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+          Live · {POLL_INTERVAL / 1000}s
+        </span>
+      </PageHeader>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                <DoorOpen size={20} className="text-primary" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-primary">{doors.length}</div>
-                <div className="text-sm text-muted-foreground">Total Doors</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <DoorOpen size={20} className="text-green-600" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-green-600">{onlineCount}</div>
-                <div className="text-sm text-muted-foreground">Online</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Lock size={20} className="text-blue-600" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-blue-600">{lockedCount}</div>
-                <div className="text-sm text-muted-foreground">Locked</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-                <Unlock size={20} className="text-yellow-600" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-yellow-600">{unlockedCount}</div>
-                <div className="text-sm text-muted-foreground">Unlocked</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Stats */}
+      <div className="shrink-0 grid grid-cols-5 gap-3">
+        <StatCard label={t('accessControl.stats.total')} value={String(total)} icon="🚪" domain="secure" sub={t('accessControl.stats.accessPoints')} />
+        <StatCard label={t('accessControl.stats.online')} value={String(stats.online)} icon="🟢" domain="secure" sub={t('accessControl.stats.connected')} />
+        <StatCard label={t('accessControl.stats.warning')} value={String(stats.warning)} icon="🟡" domain={stats.warning > 0 ? 'error' : 'default'} sub={t('accessControl.stats.partial')} />
+        <StatCard label={t('accessControl.stats.offline')} value={String(stats.offline)} icon="⚫" domain={stats.offline > 0 ? 'error' : 'default'} sub={t('accessControl.stats.disconnected')} />
+        <StatCard label={t('accessControl.stats.alerts')} value={String(stats.alarm)} icon="🚨" domain={stats.alarm > 0 ? 'error' : 'default'} sub={t('accessControl.stats.forcedAlarm')} />
       </div>
 
       {/* Search */}
-      <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+      <div className="relative shrink-0">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
-          type="text"
-          placeholder="Search doors by name or location..."
+          placeholder={t('accessControl.searchPlaceholder')}
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
+          onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+          className="pl-9 h-9 text-[13px]"
+          data-testid="access-input-search"
         />
       </div>
 
-      {/* Doors Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredDoors.map((door) => (
-          <Card key={door.id} className="hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                    {getStatusIcon(door.status)}
-                  </div>
-                  <div>
-                    <CardTitle className="text-base">{door.name}</CardTitle>
-                    <p className="text-sm text-muted-foreground">{door.location}</p>
-                  </div>
-                </div>
-                <Button variant="ghost" size="sm">
-                  <Settings size={16} />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Type</span>
-                  <span className="text-sm font-medium capitalize">{door.type}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Status</span>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(door.status)}`}>
-                    {door.status}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Last Activity</span>
-                  <span className="text-sm text-muted-foreground">{door.last_activity}</span>
-                </div>
-                <div className="flex gap-2 mt-4">
-                  <Button variant="outline" size="sm" className="flex-1">
-                    <Lock size={16} className="mr-1" />
-                    Lock
-                  </Button>
-                  <Button variant="outline" size="sm" className="flex-1">
-                    <Unlock size={16} className="mr-1" />
-                    Unlock
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-
-        {filteredDoors.length === 0 && (
-          <div className="col-span-full">
-            <Card>
-              <CardContent className="text-center py-12">
-                <DoorOpen size={48} className="mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No doors found</h3>
-                <p className="text-muted-foreground">No doors match your search criteria</p>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+      {/* Table */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+        <div className="min-h-0 flex-1 overflow-auto">
+          <DataTable
+            embedded
+            stickyHeader
+            paginate={false}
+            loading={loading}
+            columns={columns}
+            data={accessPoints}
+            rowKey={(ap) => ap.id}
+            emptyMessage="No access points found"
+            emptyIcon={<DoorOpen size={32} strokeWidth={1.2} />}
+          />
+        </div>
+        <TablePaginationFooter
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          loading={loading}
+        />
       </div>
+
+      {/* ── Door Command Dialog ────────────────────────────── */}
+      {cmdDialog && (() => {
+        const label = cmdLabels[cmdDialog.action];
+        if (!label) return null;
+        const Icon = cmdDialog.action === 'unlock' ? Unlock
+          : cmdDialog.action === 'lock' ? Lock
+          : cmdDialog.action === 'hold_open' ? DoorOpen
+          : ShieldAlert;
+        return (
+          <AppModal
+            open
+            onOpenChange={(open) => { if (!open) setCmdDialog(null); }}
+            title={
+              <span className="inline-flex items-center gap-2">
+                <Icon size={16} /> {label.title} — {cmdDialog.ap.name}
+              </span>
+            }
+            description={label.desc}
+            size="sm"
+            showCancelButton
+            cancelLabel="Cancel"
+            primaryAction={{
+              label: cmdSending ? 'Sending...' : label.title,
+              onClick: handleCmdConfirm,
+              variant: label.variant,
+              disabled: cmdSending,
+              loading: cmdSending,
+            }}
+          >
+            {label.showDuration && (
+              <div className="space-y-2">
+                <Label htmlFor="cmd-duration" className="text-[12px]">Duration (seconds)</Label>
+                <Input
+                  id="cmd-duration"
+                  type="number"
+                  min={1}
+                  max={3600}
+                  value={cmdDuration}
+                  onChange={(e) => setCmdDuration(Math.max(1, Number(e.target.value)))}
+                  className="w-full"
+                  data-testid="access-input-duration"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Door will {cmdDialog.action} for {cmdDuration}s then return to normal mode.
+                </p>
+              </div>
+            )}
+          </AppModal>
+        );
+      })()}
     </div>
   );
 }

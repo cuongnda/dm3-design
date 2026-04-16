@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Plus, Edit, Trash2, Eye, Trash, Unlock, Lock, DoorOpen, DoorClosed, RotateCcw } from 'lucide-react';
+import { Shield, Plus, Edit, Trash2, Eye, Trash, Unlock, Lock, DoorOpen, DoorClosed, RotateCcw, ShieldAlert, AlertTriangle, MapPin } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import {
     Button,
@@ -19,6 +19,15 @@ import {
 import { useAccessPoints } from './hooks/useAccessPoints';
 import { toast } from '@/lib/toast';
 import type { AccessPoint, AccessPointFormData, Zone } from './types';
+
+const doorStateConfig: Record<string, { color: string; label: string; icon: typeof Lock }> = {
+    closed:     { color: 'border-success/30 bg-success/10 text-success',         label: 'Closed',      icon: Lock },
+    open:       { color: 'border-warning/30 bg-warning/10 text-warning',         label: 'Open',        icon: Unlock },
+    held_open:  { color: 'border-operate/30 bg-operate/10 text-operate',         label: 'Held Open',   icon: DoorOpen },
+    held_close: { color: 'border-error/30 bg-error/10 text-error',              label: 'Held Close',  icon: ShieldAlert },
+    forced:     { color: 'border-error/30 bg-error/10 text-error',              label: 'Forced',      icon: AlertTriangle },
+    alarm:      { color: 'border-error/30 bg-error/10 text-error animate-pulse',label: 'Alarm',       icon: ShieldAlert },
+};
 
 // ---------------------------------------------------------------------------
 // Inline modal for create / edit
@@ -315,12 +324,46 @@ export function AccessPointsPage() {
             key: 'zone_id',
             header: t('columns.zone', 'Zone'),
             sortable: true,
-            render: (ap) =>
-                ap.zone_id && zoneMap.get(ap.zone_id) ? (
-                    <Badge variant="outline">{zoneMap.get(ap.zone_id)}</Badge>
-                ) : (
-                    <span className="text-[13px] text-muted-foreground/50">—</span>
-                ),
+            render: (ap) => {
+                const name = ap.zone_name || (ap.zone_id && zoneMap.get(ap.zone_id));
+                return name
+                    ? <span className="inline-flex items-center gap-1 text-[12px] text-muted-foreground"><MapPin size={11} />{name}</span>
+                    : <span className="text-[13px] text-muted-foreground/50">—</span>;
+            },
+        },
+        {
+            key: 'device_status',
+            header: t('columns.status', 'Status'),
+            width: '100px',
+            sortable: true,
+            render: (ap) => {
+                const s = ap.device_status;
+                const color = s === 'online' ? 'text-success' : s === 'warning' ? 'text-warning' : 'text-muted-foreground';
+                const dot = s === 'online' ? 'bg-success animate-pulse' : s === 'warning' ? 'bg-warning animate-pulse' : 'bg-muted-foreground';
+                const label = s === 'online' ? 'Online' : s === 'warning' ? 'Warning' : 'Offline';
+                return (
+                    <span className={`inline-flex items-center gap-1.5 text-[12px] font-medium ${color}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+                        {label}
+                    </span>
+                );
+            },
+        },
+        {
+            key: 'door_state',
+            header: t('columns.doorState', 'Door State'),
+            width: '120px',
+            sortable: true,
+            render: (ap) => {
+                if (!ap.door_state) return <span className="text-[11px] text-muted-foreground">—</span>;
+                const cfg = doorStateConfig[ap.door_state] || { color: 'text-muted-foreground', label: ap.door_state, icon: Lock };
+                const Icon = cfg.icon;
+                return (
+                    <Badge variant="outline" className={`text-[11px] gap-1 ${cfg.color}`}>
+                        <Icon size={11} /> {cfg.label}
+                    </Badge>
+                );
+            },
         },
         {
             key: 'access_device_count',

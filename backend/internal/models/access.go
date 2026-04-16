@@ -88,6 +88,9 @@ type AccessPoint struct {
 	MapY              *float64    `json:"map_y,omitempty"`
 	MapRotation       *float64    `json:"map_rotation,omitempty"`
 	AccessDeviceCount int         `json:"access_device_count,omitempty"`
+	DeviceStatus      *string     `json:"device_status,omitempty"`  // online/offline — worst-case from bound devices
+	DoorState         *string     `json:"door_state,omitempty"`     // closed/open/held_open/forced/alarm — worst-case from bound devices
+	ZoneName          *string     `json:"zone_name,omitempty"`
 	Zone              *Zone       `json:"zone,omitempty"`
 	AccessTime        *AccessTime `json:"access_time,omitempty"`
 	CreatedAt         time.Time   `json:"created_at"`

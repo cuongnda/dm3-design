@@ -39,7 +39,7 @@ const deviceColumns = `id, tenant_id, device_id, COALESCE(name,''), type, status
 	ip_address, mac_address,
 	COALESCE(timezone,'Asia/Ho_Chi_Minh'), COALESCE(open_relay_ms,3000),
 	verify_methods, COALESCE(verify_logic,'or'),
-	last_seen, created_at, updated_at`
+	door_state, last_seen, created_at, updated_at`
 
 func scanDevice(row pgx.Row) (models.Device, error) {
 	var d models.Device
@@ -49,7 +49,7 @@ func scanDevice(row pgx.Row) (models.Device, error) {
 		&d.IPAddress, &d.MACAddress,
 		&d.Timezone, &d.OpenRelayMs,
 		&d.VerifyMethods, &d.VerifyLogic,
-		&d.LastSeen, &d.CreatedAt, &d.UpdatedAt,
+		&d.DoorState, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt,
 	)
 	return d, err
 }
@@ -64,7 +64,7 @@ func scanDeviceRows(rows pgx.Rows) ([]models.Device, error) {
 			&d.IPAddress, &d.MACAddress,
 			&d.Timezone, &d.OpenRelayMs,
 			&d.VerifyMethods, &d.VerifyLogic,
-			&d.LastSeen, &d.CreatedAt, &d.UpdatedAt,
+			&d.DoorState, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -127,7 +127,7 @@ func (h *GatewayHandlers) ListDevicesGlobal(w http.ResponseWriter, r *http.Reque
 		d.ip_address, d.mac_address,
 		COALESCE(d.timezone,'Asia/Ho_Chi_Minh'), COALESCE(d.open_relay_ms,3000),
 		d.verify_methods, COALESCE(d.verify_logic,'or'),
-		d.last_seen, d.created_at, d.updated_at,
+		d.door_state, d.last_seen, d.created_at, d.updated_at,
 		COALESCE(c.name,'') as company_name
 	FROM dm3_devices.devices d LEFT JOIN dm3_auth.tenants c ON c.id = d.tenant_id WHERE 1=1`
 	args := []any{}
@@ -172,7 +172,7 @@ func (h *GatewayHandlers) ListDevicesGlobal(w http.ResponseWriter, r *http.Reque
 			&d.IPAddress, &d.MACAddress,
 			&d.Timezone, &d.OpenRelayMs,
 			&d.VerifyMethods, &d.VerifyLogic,
-			&d.LastSeen, &d.CreatedAt, &d.UpdatedAt,
+			&d.DoorState, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt,
 			&d.CompanyName,
 		); err != nil {
 			slog.Error("ListDevicesGlobal: scan failed", "error", err)
@@ -516,6 +516,17 @@ func (h *GatewayHandlers) SendCommand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.audit.LogFromRequest(r, "device.command", "device", id, deviceID, "success", nil, map[string]any{"command": req.Type})
+
+	actorID, actorEmail := audit.ActorFromContext(r.Context())
+	go InsertDeviceEvent(context.Background(), h.db.Pool, DeviceEvent{
+		TenantID:    tenantID,
+		DeviceID:    deviceID,
+		EventType:   "command",
+		Description: fmt.Sprintf("Command sent: %s", req.Type),
+		ActorID:     strPtr(actorID),
+		ActorEmail:  strPtr(actorEmail),
+		Metadata:    map[string]any{"command": req.Type},
+	})
 	httputil.JSON(w, http.StatusOK, map[string]string{"status": "sent", "topic": topic})
 }
 
@@ -692,6 +703,30 @@ func (h *GatewayHandlers) dispatchDoorCommand(
 
 	result.Status = "ok"
 	result.Devices = dispatched
+
+	// Update door_state on dispatched devices based on the action.
+	var newState string
+	switch req.Action {
+	case "unlock":
+		newState = "open"
+	case "lock":
+		newState = "closed"
+	case "hold_open":
+		newState = "held_open"
+	case "hold_close":
+		newState = "held_close"
+	case "release":
+		newState = "closed"
+	}
+	if newState != "" {
+		for _, d := range dispatched {
+			_, _ = h.db.Pool.Exec(ctx,
+				`UPDATE dm3_devices.devices SET door_state = $1, updated_at = now()
+				  WHERE device_id = $2 AND tenant_id = $3::uuid`,
+				newState, d.DeviceID, tenantID)
+		}
+	}
+
 	if auditor != nil {
 		auditor(accessPointID, result)
 	}
@@ -735,6 +770,22 @@ func (h *GatewayHandlers) SendDoorCommand(w http.ResponseWriter, r *http.Request
 	}
 
 	result := h.dispatchDoorCommand(r.Context(), cid, operatorID, accessPointID, req, reason, auditor)
+
+	// Record device history for each device that received the command.
+	if result.Status == "ok" {
+		actorID, actorEmail := audit.ActorFromContext(r.Context())
+		for _, dev := range result.Devices {
+			go InsertDeviceEvent(context.Background(), h.db.Pool, DeviceEvent{
+				TenantID:    cid,
+				DeviceID:    dev.DeviceID,
+				EventType:   "door_command",
+				Description: fmt.Sprintf("Door %s command", req.Action),
+				ActorID:     strPtr(actorID),
+				ActorEmail:  strPtr(actorEmail),
+				Metadata:    map[string]any{"action": req.Action, "duration_ms": req.DurationMS, "reason": reason},
+			})
+		}
+	}
 
 	// Preserve the original single-AP error contract: 404 for no devices, 409
 	// for offline, 500 for failure, 202 for dispatched.
@@ -810,6 +861,25 @@ func (h *GatewayHandlers) BulkDoorCommand(w http.ResponseWriter, r *http.Request
 		res := h.dispatchDoorCommand(r.Context(), cid, operatorID, apID, inner, reason, nil)
 		results = append(results, res)
 		summary[res.Status]++
+	}
+
+	// Record device history for each successfully dispatched device.
+	actorID, actorEmail := audit.ActorFromContext(r.Context())
+	for _, res := range results {
+		if res.Status != "ok" {
+			continue
+		}
+		for _, dev := range res.Devices {
+			go InsertDeviceEvent(context.Background(), h.db.Pool, DeviceEvent{
+				TenantID:    cid,
+				DeviceID:    dev.DeviceID,
+				EventType:   "door_command",
+				Description: fmt.Sprintf("Door %s command (bulk)", req.Action),
+				ActorID:     strPtr(actorID),
+				ActorEmail:  strPtr(actorEmail),
+				Metadata:    map[string]any{"action": req.Action, "duration_ms": req.DurationMS, "reason": reason},
+			})
+		}
 	}
 
 	// One audit entry for the whole batch — avoids flooding the audit log with
@@ -895,6 +965,78 @@ func (h *GatewayHandlers) GetDeviceEvents(w http.ResponseWriter, r *http.Request
 		})
 	}
 	httputil.JSON(w, http.StatusOK, events)
+}
+
+// GetDeviceHistory returns lifecycle events (on/off, commands, syncs, errors)
+// from dm3_devices.device_events for a single device.
+func (h *GatewayHandlers) GetDeviceHistory(w http.ResponseWriter, r *http.Request) {
+	deviceDBID := chi.URLParam(r, "id")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+
+	var deviceID string
+	dq := `SELECT device_id FROM dm3_devices.devices WHERE id = $1::uuid`
+	dqArgs := []any{deviceDBID}
+	if cid != "" {
+		dq += " AND tenant_id = $2::uuid"
+		dqArgs = append(dqArgs, cid)
+	}
+	if err := h.db.Pool.QueryRow(r.Context(), dq, dqArgs...).Scan(&deviceID); err != nil {
+		httputil.Error(w, http.StatusNotFound, "device not found")
+		return
+	}
+
+	page, limit := parsePagination(r)
+
+	rows, err := h.db.Pool.Query(r.Context(),
+		`SELECT id, tenant_id, time, device_id, event_type, description,
+		        COALESCE(actor_id::text,''), COALESCE(actor_email,''), metadata
+		   FROM dm3_devices.device_events
+		  WHERE device_id = $1 AND tenant_id = $2::uuid
+		  ORDER BY time DESC LIMIT $3 OFFSET $4`,
+		deviceID, cid, limit, (page-1)*limit)
+	if err != nil {
+		slog.Error("GetDeviceHistory: query failed", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+	defer rows.Close()
+
+	var countTotal int
+	_ = h.db.Pool.QueryRow(r.Context(),
+		`SELECT count(*) FROM dm3_devices.device_events WHERE device_id = $1 AND tenant_id = $2::uuid`,
+		deviceID, cid).Scan(&countTotal)
+
+	events := []map[string]any{}
+	for rows.Next() {
+		var (
+			id, tenantID, devID, eventType, description string
+			actorID, actorEmail                         string
+			ts                                          time.Time
+			metadata                                    json.RawMessage
+		)
+		if err := rows.Scan(&id, &tenantID, &ts, &devID, &eventType, &description,
+			&actorID, &actorEmail, &metadata); err != nil {
+			slog.Error("GetDeviceHistory: scan failed", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
+		events = append(events, map[string]any{
+			"id":          id,
+			"time":        ts,
+			"device_id":   devID,
+			"event_type":  eventType,
+			"description": description,
+			"actor_id":    actorID,
+			"actor_email": actorEmail,
+			"metadata":    json.RawMessage(metadata),
+		})
+	}
+	httputil.JSON(w, http.StatusOK, map[string]any{
+		"data":  events,
+		"total": countTotal,
+		"page":  page,
+		"limit": limit,
+	})
 }
 
 func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {

@@ -67,6 +67,7 @@ type Device struct {
 	OpenRelayMs     int            `json:"open_relay_ms,omitempty"`
 	VerifyMethods   []string       `json:"verify_methods,omitempty"`
 	VerifyLogic     string         `json:"verify_logic,omitempty"`
+	DoorState       *string        `json:"door_state,omitempty"`
 	LastSeen        *time.Time     `json:"last_seen,omitempty"`
 	Config          map[string]any `json:"config,omitempty"`
 	CreatedAt       time.Time      `json:"created_at"`

@@ -25,11 +25,16 @@ cd apps/console && npm run dev      # Console at http://localhost:3000
 ### Backend (Go — run from `backend/`)
 
 ```bash
-make build            # build all 5 binaries → bin/
+make build            # build all 8 binaries → bin/
 make test             # go test ./... -v -race
 make lint             # golangci-lint run ./...
 make migrate          # apply DB migrations (TimescaleDB :5433)
 make seed             # seed test data
+make seed-all         # comprehensive seed (all modules)
+make dev              # docker-up + migrate + start device-gateway
+make clean            # remove bin/ + tear down docker volumes
+make docker-up        # start infra containers
+make docker-down      # stop infra containers
 ```
 
 Run a single service:
@@ -49,10 +54,12 @@ go test ./internal/authsvc/... -v -run TestName
 ### Infrastructure
 
 ```bash
-docker compose -f docker-compose.local.yml up -d postgres-db-timescale nats emqx
+docker compose -f docker-compose.local.yml up -d timescaledb nats emqx valkey minio
 ```
 
-Required services: TimescaleDB `:5433`, NATS+JetStream `:4222`, EMQX MQTT `:1884`.
+Required services: TimescaleDB `:5433`, NATS+JetStream `:4222`, EMQX MQTT `:1884`, Valkey (Redis-compatible, used by device-gateway), MinIO (object storage, used by identity-svc and access-svc).  
+Backend env vars for Docker Compose are loaded from `deploy/env/local.env`.  
+For CCTV features, also start `mediamtx` (RTSP/WebRTC streaming).
 
 ### Automation tests (pytest — single test location for all black-box tests)
 
@@ -131,9 +138,7 @@ packages/
 
 apps/
   console/      # Master app with ALL modules (reference implementation, 24+ pages)
-  school/       # Fork: attendance + identity, terminology Student/Parent
-  factory/      # Fork: attendance + maintenance, shift management
-  apartment/    # Fork: visitor + parking + intercom, resident portal
+  # Planned verticals (not yet created): school, factory, apartment
 ```
 
 **Strategy:** One backend, N frontend verticals. Fix shared logic in `packages/`; fix vertical-specific UI in the app only. New verticals fork from `console/`.
@@ -151,6 +156,7 @@ Migrations live in `backend/pkg/db/migrations/` (numbered `000001_*` … `000013
 
 ## Frontend Conventions
 
+- **System components first**: always use `@dm3/ui` components (`Button`, `Input`, `Select`, `Dialog`, `DataTable`, etc.) over raw HTML elements. Use semantic tokens (`text-foreground`, `bg-card`, `text-secure`, `bg-operate`) over hardcoded colors.
 - Every interactive UI element **must** have `data-testid` in format `{module}-{element}-{name}`.
   - Modules: `login`, `sys`, `company`, `user`, `device`, `identity`, `access`, `settings`
   - Elements: `input`, `button`, `select`, `table`, `row`, `card`, `modal`, `badge`, `link`

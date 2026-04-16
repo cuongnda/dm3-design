@@ -19,6 +19,14 @@ import (
 func scanAccessPoint(row interface{ Scan(dest ...any) error }, ap *models.AccessPoint) error {
 	return row.Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
 		&ap.Name, &ap.Description, &ap.MapX, &ap.MapY, &ap.MapRotation,
+		&ap.AccessDeviceCount, &ap.DeviceStatus, &ap.DoorState,
+		&ap.ZoneName, &ap.CreatedAt, &ap.UpdatedAt)
+}
+
+// scanAccessPointBasic scans a row without aggregated device/zone columns (for CREATE/UPDATE RETURNING).
+func scanAccessPointBasic(row interface{ Scan(dest ...any) error }, ap *models.AccessPoint) error {
+	return row.Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
+		&ap.Name, &ap.Description, &ap.MapX, &ap.MapY, &ap.MapRotation,
 		&ap.AccessDeviceCount, &ap.CreatedAt, &ap.UpdatedAt)
 }
 
@@ -59,9 +67,24 @@ func (h *AccessHandlers) ListAccessPoints(w http.ResponseWriter, r *http.Request
 		SELECT ap.id, ap.tenant_id, ap.zone_id, ap.access_time_id,
 		       ap.name, ap.description, ap.map_x, ap.map_y, ap.map_rotation,
 		       COUNT(DISTINCT apd.access_device_id) AS access_device_count,
+		       -- Device status: all online → online, all offline → offline, mixed → warning
+		       CASE WHEN COUNT(DISTINCT d.device_id) = 0 THEN 'offline'
+		            WHEN bool_and(d.status = 'online') THEN 'online'
+		            WHEN bool_and(d.status = 'offline' OR d.status IS NULL) THEN 'offline'
+		            ELSE 'warning' END AS device_status,
+		       -- Worst-case door state: alarm > forced > held_open > open > closed
+		       CASE MAX(CASE d.door_state
+		               WHEN 'alarm' THEN 6 WHEN 'forced' THEN 5
+		               WHEN 'held_close' THEN 4 WHEN 'held_open' THEN 3
+		               WHEN 'open' THEN 2 WHEN 'closed' THEN 1 ELSE NULL END)
+		            WHEN 6 THEN 'alarm' WHEN 5 THEN 'forced'
+		            WHEN 4 THEN 'held_close' WHEN 3 THEN 'held_open'
+		            WHEN 2 THEN 'open' WHEN 1 THEN 'closed' ELSE NULL END AS door_state,
+		       (SELECT z.name FROM dm3_access.zones z WHERE z.id = ap.zone_id) AS zone_name,
 		       ap.created_at, ap.updated_at
 		FROM dm3_access.access_points ap
 		LEFT JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
+		LEFT JOIN dm3_devices.devices d ON d.id::text = apd.access_device_id AND d.tenant_id = ap.tenant_id
 		%s
 		GROUP BY ap.id
 		ORDER BY %s %s
@@ -91,7 +114,46 @@ func (h *AccessHandlers) ListAccessPoints(w http.ResponseWriter, r *http.Request
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	httputil.Paginated(w, aps, total, page, limit)
+	// Aggregate stats across ALL access points (not just current page).
+	var statsOnline, statsOffline, statsWarning, statsAlarm int64
+	_ = h.db.Pool.QueryRow(r.Context(), `
+		SELECT
+			COUNT(*) FILTER (WHERE sub.device_status = 'online'),
+			COUNT(*) FILTER (WHERE sub.device_status = 'offline'),
+			COUNT(*) FILTER (WHERE sub.device_status = 'warning'),
+			COUNT(*) FILTER (WHERE sub.door_state IN ('alarm','forced','held_open','held_close'))
+		FROM (
+			SELECT ap.id,
+			       CASE WHEN COUNT(DISTINCT d.device_id) = 0 THEN 'offline'
+			            WHEN bool_and(d.status = 'online') THEN 'online'
+			            WHEN bool_and(d.status = 'offline' OR d.status IS NULL) THEN 'offline'
+			            ELSE 'warning' END AS device_status,
+			       CASE MAX(CASE d.door_state
+			               WHEN 'alarm' THEN 5 WHEN 'forced' THEN 4
+			               WHEN 'held_open' THEN 3 WHEN 'open' THEN 2
+			               WHEN 'closed' THEN 1 ELSE NULL END)
+			            WHEN 5 THEN 'alarm' WHEN 4 THEN 'forced'
+			            WHEN 3 THEN 'held_open' WHEN 2 THEN 'open'
+			            WHEN 1 THEN 'closed' ELSE NULL END AS door_state
+			FROM dm3_access.access_points ap
+			LEFT JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
+			LEFT JOIN dm3_devices.devices d ON d.id::text = apd.access_device_id AND d.tenant_id = ap.tenant_id
+			WHERE ap.tenant_id = $1::uuid
+			GROUP BY ap.id
+		) sub`, cid).Scan(&statsOnline, &statsOffline, &statsWarning, &statsAlarm)
+
+	httputil.JSON(w, http.StatusOK, map[string]any{
+		"data":  aps,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+		"stats": map[string]int64{
+			"online":  statsOnline,
+			"offline": statsOffline,
+			"warning": statsWarning,
+			"alarm":   statsAlarm,
+		},
+	})
 }
 
 func (h *AccessHandlers) GetAccessPoint(w http.ResponseWriter, r *http.Request) {
@@ -103,9 +165,21 @@ func (h *AccessHandlers) GetAccessPoint(w http.ResponseWriter, r *http.Request) 
 		`SELECT ap.id, ap.tenant_id, ap.zone_id, ap.access_time_id,
 		        ap.name, ap.description, ap.map_x, ap.map_y, ap.map_rotation,
 		        COUNT(DISTINCT apd.access_device_id) AS access_device_count,
+		        CASE WHEN COUNT(DISTINCT d.device_id) = 0 THEN NULL
+		             WHEN bool_or(d.status = 'offline') THEN 'offline'
+		             ELSE 'online' END AS device_status,
+		        CASE MAX(CASE d.door_state
+		                WHEN 'alarm' THEN 5 WHEN 'forced' THEN 4
+		                WHEN 'held_open' THEN 3 WHEN 'open' THEN 2
+		                WHEN 'closed' THEN 1 ELSE NULL END)
+		             WHEN 5 THEN 'alarm' WHEN 4 THEN 'forced'
+		             WHEN 3 THEN 'held_open' WHEN 2 THEN 'open'
+		             WHEN 1 THEN 'closed' ELSE NULL END AS door_state,
+		        (SELECT z.name FROM dm3_access.zones z WHERE z.id = ap.zone_id) AS zone_name,
 		        ap.created_at, ap.updated_at
 		 FROM dm3_access.access_points ap
 		 LEFT JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
+		 LEFT JOIN dm3_devices.devices d ON d.id::text = apd.access_device_id AND d.tenant_id = ap.tenant_id
 		 WHERE ap.id = $1::uuid AND ap.tenant_id = $2::uuid
 		 GROUP BY ap.id`,
 		id, cid,
@@ -140,7 +214,7 @@ func (h *AccessHandlers) CreateAccessPoint(w http.ResponseWriter, r *http.Reques
 
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	var ap models.AccessPoint
-	err := scanAccessPoint(h.db.Pool.QueryRow(r.Context(),
+	err := scanAccessPointBasic(h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO dm3_access.access_points (tenant_id, zone_id, access_time_id, name, description, map_x, map_y, map_rotation)
 		 VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8)
 		 RETURNING id, tenant_id, zone_id, access_time_id, name, description, map_x, map_y, map_rotation, 0, created_at, updated_at`,
@@ -176,7 +250,7 @@ func (h *AccessHandlers) UpdateAccessPoint(w http.ResponseWriter, r *http.Reques
 	}
 
 	var ap models.AccessPoint
-	err := scanAccessPoint(h.db.Pool.QueryRow(r.Context(),
+	err := scanAccessPointBasic(h.db.Pool.QueryRow(r.Context(),
 		`UPDATE dm3_access.access_points
 		 SET name           = COALESCE($2, name),
 		     description    = COALESCE($3, description),

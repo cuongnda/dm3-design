@@ -327,6 +327,44 @@ export interface CreateScheduleRequest {
     holiday_calendar_id?: string;
 }
 
+export interface AccessPointDTO {
+    id: string;
+    tenant_id: string;
+    zone_id?: string;
+    access_time_id?: string;
+    name: string;
+    description?: string;
+    access_device_count: number;
+    device_status?: string;  // online | offline
+    door_state?: string;     // closed | open | held_open | forced | alarm
+    zone_name?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export async function sendDoorCommand(accessPointId: string, action: string, durationMs?: number): Promise<unknown> {
+    return apiFetch(`${GATEWAY_URL}/access-points/${accessPointId}/door-command`, {
+        method: 'POST',
+        body: JSON.stringify({ action, duration_ms: durationMs }),
+    });
+}
+
+export interface AccessPointStats {
+    online: number;
+    offline: number;
+    warning: number;
+    alarm: number;
+}
+
+export interface AccessPointListResponse extends Paginated<AccessPointDTO> {
+    stats?: AccessPointStats;
+}
+
+export async function fetchAccessPoints(page = 1, limit = 50, params?: Record<string, string>): Promise<AccessPointListResponse> {
+    const qs = params ? '&' + new URLSearchParams(params).toString() : '';
+    return apiFetch<AccessPointListResponse>(`${ACCESS_URL}/access-points?page=${page}&limit=${limit}${qs}`);
+}
+
 export async function fetchStats(): Promise<StatsDTO> {
     return apiFetch<StatsDTO>(`${ACCESS_URL}/stats`);
 }
@@ -726,6 +764,21 @@ export async function sendDeviceCommand(deviceId: string, command: string, param
 
 export async function fetchDeviceEvents(deviceId: string, page = 1, limit = 20): Promise<Paginated<EventDTO>> {
     return apiFetch<Paginated<EventDTO>>(`${GATEWAY_URL}/devices/${deviceId}/events?page=${page}&limit=${limit}`);
+}
+
+export interface DeviceHistoryEvent {
+    id: string;
+    time: string;
+    device_id: string;
+    event_type: string; // online, offline, command, door_command, sync, emergency, config_ack, error
+    description: string;
+    actor_id: string;
+    actor_email: string;
+    metadata: Record<string, unknown>;
+}
+
+export async function fetchDeviceHistory(deviceId: string, page = 1, limit = 50): Promise<Paginated<DeviceHistoryEvent>> {
+    return apiFetch<Paginated<DeviceHistoryEvent>>(`${GATEWAY_URL}/devices/${deviceId}/history?page=${page}&limit=${limit}`);
 }
 
 // ─── System Admin API (auth-svc :8005) ──────────────────────

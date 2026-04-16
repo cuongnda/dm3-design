@@ -243,6 +243,7 @@ func main() {
 			cr.Post("/access-points/{id}/door-command", handlers.SendDoorCommand)
 			cr.Post("/access-points/door-command/bulk", handlers.BulkDoorCommand)
 			cr.Get("/devices/{id}/events", handlers.GetDeviceEvents)
+			cr.Get("/devices/{id}/history", handlers.GetDeviceHistory)
 			cr.Get("/events", handlers.ListEvents)
 			// Sync: manager+ only
 			cr.Group(func(mr chi.Router) {
