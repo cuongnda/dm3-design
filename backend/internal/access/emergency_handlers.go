@@ -404,7 +404,10 @@ func (h *AccessHandlers) AllClearEmergency(w http.ResponseWriter, r *http.Reques
 	cid := authsvc.CompanyIDFromContext(r.Context())
 
 	var req allClearRequest
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
 
 	actorID, actorEmail := audit.ActorFromContext(r.Context())
 
