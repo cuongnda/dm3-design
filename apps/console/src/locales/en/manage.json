@@ -85,6 +85,7 @@
   "personDetail.credential.pin": "PIN",
   "personDetail.credential.mobile": "Mobile",
   "personDetail.credential.qr": "QR Code",
+  "personDetail.credential.uhf": "UHF",
   "personDetail.credential.form.title": "Add New Credential",
   "personDetail.credential.form.description": "Create a new credential for {{name}}",
   "personDetail.credential.form.type": "Type",

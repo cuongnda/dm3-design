@@ -52,7 +52,7 @@ import { toast } from '@/lib/toast';
 
 const LIMIT = 50;
 
-const CREDENTIAL_TYPES = ['card', 'pin', 'face', 'plate', 'qr'] as const;
+const CREDENTIAL_TYPES = ['card', 'pin', 'face', 'plate', 'qr', 'uhf'] as const;
 
 // ─── URL-param helpers ──────────────────────────────────────────────────────
 

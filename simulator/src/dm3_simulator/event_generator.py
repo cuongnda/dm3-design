@@ -48,6 +48,11 @@ def generate_pin() -> str:
     return "".join(str(random.randint(0, 9)) for _ in range(length))
 
 
+def generate_uhf_uid() -> str:
+    """Generate a random UHF RFID tag UID (24 hex chars / 96-bit EPC)."""
+    return uuid.uuid4().hex[:24].upper()
+
+
 def generate_mock_persons(count: int = 50) -> list[dict[str, Any]]:
     """Generate mock person records with credentials.
 
@@ -69,6 +74,11 @@ def generate_mock_persons(count: int = 50) -> list[dict[str, Any]]:
         if random.random() < 0.6:
             credentials.append(
                 {"id": f"{person_id}-pin", "type": "pin", "value": generate_pin()}
+            )
+        # ~30% of people have a UHF tag (for LPR Desktop / UHF reader scenarios)
+        if random.random() < 0.3:
+            credentials.append(
+                {"id": f"{person_id}-uhf", "type": "uhf", "value": generate_uhf_uid()}
             )
 
         persons.append({

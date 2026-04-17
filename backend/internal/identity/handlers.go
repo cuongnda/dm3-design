@@ -127,7 +127,7 @@ func (h *IdentityHandlers) ListCredentials(w http.ResponseWriter, r *http.Reques
 }
 
 type createCredentialRequest struct {
-	Type       string     `json:"type"`  // face, card, pin, qr, fingerprint
+	Type       string     `json:"type"`  // face, card, pin, qr, fingerprint, uhf
 	Value      string     `json:"value"` // NOTE: would be encrypted in production
 	Status     string     `json:"status"`
 	ValidFrom  *time.Time `json:"valid_from"`
@@ -154,9 +154,9 @@ func (h *IdentityHandlers) CreateCredential(w http.ResponseWriter, r *http.Reque
 		httputil.Error(w, http.StatusBadRequest, "type and value are required")
 		return
 	}
-	validTypes := map[string]bool{"face": true, "card": true, "pin": true, "qr": true, "fingerprint": true}
+	validTypes := map[string]bool{"face": true, "card": true, "pin": true, "qr": true, "fingerprint": true, "uhf": true}
 	if !validTypes[req.Type] {
-		httputil.Error(w, http.StatusBadRequest, "type must be one of: face, card, pin, qr, fingerprint")
+		httputil.Error(w, http.StatusBadRequest, "type must be one of: face, card, pin, qr, fingerprint, uhf")
 		return
 	}
 	if req.Status == "" {

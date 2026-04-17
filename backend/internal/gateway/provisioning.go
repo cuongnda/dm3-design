@@ -562,6 +562,7 @@ var validDeviceModels = []struct{ Model, Type string }{
 	{"dq200", "terminal"},
 	{"dq8500", "terminal"},
 	{"icu970", "terminal"},
+	{"lpr_desktop", "terminal"},
 	// controller (face + nfc + qr + pin)
 	{"icu300n", "controller"},
 	{"ipopx", "controller"},

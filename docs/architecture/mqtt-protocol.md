@@ -140,6 +140,7 @@ Source of truth:
 | `de960` | terminal |
 | `de950` | terminal |
 | `dqmini_plus` | terminal |
+| `lpr_desktop` | terminal |
 | `camera_dc` | camera |
 | `cctv` | camera |
 | `door_sensor` | sensor |

@@ -107,7 +107,7 @@ const DEVICE_TYPES = [
   { value: 'sensor', label: 'Sensor', icon: Gauge, color: 'text-orange-600' },
 ] as const;
 
-const RECOGNITION_METHODS = ['face', 'card', 'qr', 'fingerprint', 'pin'];
+const RECOGNITION_METHODS = ['face', 'card', 'qr', 'fingerprint', 'pin', 'uhf'];
 
 // --- Helpers ---
 

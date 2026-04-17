@@ -74,6 +74,7 @@ class CredentialType(str, enum.Enum):
     PIN = "pin"
     QR = "qr"
     FINGERPRINT = "fingerprint"
+    UHF = "uhf"
 
 
 class AccessDecision(BaseModel):

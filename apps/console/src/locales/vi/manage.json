@@ -85,6 +85,7 @@
   "personDetail.credential.pin": "Mã PIN",
   "personDetail.credential.mobile": "Di động",
   "personDetail.credential.qr": "Mã QR",
+  "personDetail.credential.uhf": "UHF",
   "personDetail.credential.form.title": "Thêm thông tin xác thực mới",
   "personDetail.credential.form.description": "Tạo thông tin xác thực mới cho {{name}}",
   "personDetail.credential.form.type": "Loại",

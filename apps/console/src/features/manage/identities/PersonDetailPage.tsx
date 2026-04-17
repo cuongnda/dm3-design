@@ -369,6 +369,7 @@ export function PersonDetailPage() {
               <SelectOption value="pin">{t('personDetail.credential.pin')}</SelectOption>
               <SelectOption value="mobile">{t('personDetail.credential.mobile')}</SelectOption>
               <SelectOption value="qr">{t('personDetail.credential.qr')}</SelectOption>
+              <SelectOption value="uhf">{t('personDetail.credential.uhf')}</SelectOption>
             </Select>
           </div>
 

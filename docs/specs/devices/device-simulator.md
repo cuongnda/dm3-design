@@ -566,7 +566,7 @@ CREATE TABLE users (
 CREATE TABLE credentials (
     id          TEXT PRIMARY KEY,
     user_id   TEXT NOT NULL REFERENCES users(user_id),
-    type        TEXT NOT NULL,             -- face | card | pin | qr | fingerprint
+    type        TEXT NOT NULL,             -- face | card | pin | qr | fingerprint | uhf
     value       TEXT NOT NULL,
     status      TEXT DEFAULT 'active',
     valid_from  INTEGER,

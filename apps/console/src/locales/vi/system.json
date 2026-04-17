@@ -132,6 +132,7 @@
   "createDevice.verify.method.plate_number": "Biển số xe",
   "createDevice.verify.method.iris": "Mống mắt",
   "createDevice.verify.method.nfc_phone": "NFC Điện thoại",
+  "createDevice.verify.method.uhf": "UHF",
   "createDevice.verify.notSupported": "Không hỗ trợ",
   "createDevice.verify.summary": "Yêu cầu xác thực:",
   "createDevice.verify.noMethods": "Model thiết bị này không hỗ trợ phương thức xác thực.",

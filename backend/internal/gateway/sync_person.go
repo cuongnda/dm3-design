@@ -37,7 +37,7 @@ type syncPersonUser struct {
 }
 
 type syncPersonCred struct {
-	Type       string `json:"type"`                   // card, face, fingerprint, qr, pin
+	Type       string `json:"type"`                   // card, face, fingerprint, qr, pin, uhf
 	UID        string `json:"uid,omitempty"`          // for card type
 	Template   string `json:"template,omitempty"`     // for face/fingerprint (base64)
 	Code       string `json:"code,omitempty"`         // for qr/pin
@@ -62,6 +62,8 @@ func buildSyncCred(credType, credValue string, validFrom, validUntil *time.Time)
 		c.Code = credValue
 	case "pin":
 		c.Code = credValue
+	case "uhf":
+		c.UID = credValue
 	default:
 		c.UID = credValue // fallback
 	}

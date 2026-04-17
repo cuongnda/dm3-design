@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft, Trash2, User, Camera, CreditCard, Plus, ShieldCheck,
   KeyRound, Fingerprint, QrCode, Save, X, Info, DoorOpen, Car,
-  ScanLine, Search, Unlink, Mail, Phone, Hash, Pencil,
+  ScanLine, Search, Unlink, Mail, Phone, Hash, Pencil, Radio,
   Building2, Calendar, Shield, Clock, Briefcase, MapPin,
 } from 'lucide-react';
 import {
@@ -21,7 +21,7 @@ import type { User as UserType } from './types';
 interface Credential {
   id: string;
   user_id: string;
-  type: 'card' | 'pin' | 'qr' | 'fingerprint' | 'face';
+  type: 'card' | 'pin' | 'qr' | 'fingerprint' | 'face' | 'uhf';
   value: string;
   status: string;
   valid_from?: string | null;
@@ -76,6 +76,7 @@ const CREDENTIAL_ICON_MAP: Record<string, { icon: React.ReactNode; color: string
   qr:          { icon: <QrCode size={18} />,       color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/20' },
   fingerprint: { icon: <Fingerprint size={18} />,  color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20' },
   face:        { icon: <ScanLine size={18} />,     color: 'text-cyan-400',   bg: 'bg-cyan-500/10 border-cyan-500/20' },
+  uhf:         { icon: <Radio size={18} />,        color: 'text-pink-400',   bg: 'bg-pink-500/10 border-pink-500/20' },
 };
 
 // ─── Add Credential Modal ─────────────────────────────────────────────────────

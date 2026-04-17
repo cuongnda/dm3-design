@@ -132,6 +132,7 @@
   "createDevice.verify.method.plate_number": "Plate Number",
   "createDevice.verify.method.iris": "Iris",
   "createDevice.verify.method.nfc_phone": "NFC Phone",
+  "createDevice.verify.method.uhf": "UHF",
   "createDevice.verify.notSupported": "Not supported",
   "createDevice.verify.summary": "Access requires:",
   "createDevice.verify.noMethods": "This device model does not support verification methods.",

@@ -1,8 +1,8 @@
-import { ScanFace, CreditCard, QrCode, KeyRound, FingerprintPattern, IdCard, CarFront, Eye, SmartphoneNfc, type LucideIcon } from 'lucide-react';
+import { ScanFace, CreditCard, QrCode, KeyRound, FingerprintPattern, IdCard, CarFront, Eye, SmartphoneNfc, Radio, type LucideIcon } from 'lucide-react';
 
 // --- Verify methods ---
 
-export type VerifyMethodValue = 'face' | 'nfc' | 'qr' | 'pin' | 'fingerprint' | 'vnid' | 'plate_number' | 'iris' | 'nfc_phone';
+export type VerifyMethodValue = 'face' | 'nfc' | 'qr' | 'pin' | 'fingerprint' | 'vnid' | 'plate_number' | 'iris' | 'nfc_phone' | 'uhf';
 
 export const VERIFY_METHODS: readonly { value: VerifyMethodValue; label: string; icon: LucideIcon }[] = [
   { value: 'face', label: 'Face', icon: ScanFace },
@@ -13,6 +13,7 @@ export const VERIFY_METHODS: readonly { value: VerifyMethodValue; label: string;
   { value: 'pin', label: 'PIN', icon: KeyRound },
   { value: 'plate_number', label: 'Plate Number', icon: CarFront },
   { value: 'qr', label: 'QR', icon: QrCode },
+  { value: 'uhf', label: 'UHF', icon: Radio },
   { value: 'vnid', label: 'VNID', icon: IdCard },
 ];
 
@@ -27,6 +28,7 @@ export const MODEL_CAPABILITIES: Record<string, VerifyMethodValue[]> = {
   dq200:         ['face', 'nfc', 'qr', 'pin', 'fingerprint', 'vnid', 'plate_number', 'iris', 'nfc_phone'],
   dq8500:        ['face', 'nfc', 'qr', 'pin', 'fingerprint', 'vnid', 'plate_number', 'iris', 'nfc_phone'],
   icu970:        ['face', 'nfc', 'qr', 'pin', 'fingerprint', 'vnid', 'plate_number', 'iris', 'nfc_phone'],
+  lpr_desktop:   ['face', 'nfc', 'qr', 'pin', 'fingerprint', 'vnid', 'plate_number', 'iris', 'nfc_phone', 'uhf'],
   // Controller — face, nfc, qr, pin
   icu300n:       ['face', 'nfc', 'qr', 'pin'],
   ipopx:         ['face', 'nfc', 'qr', 'pin'],
@@ -58,6 +60,7 @@ export const DEVICE_TYPE_MODELS: Record<string, { value: string; label: string }
     { value: 'dq200', label: 'DQ-200' },
     { value: 'dq8500', label: 'DQ-8500' },
     { value: 'icu970', label: 'ICU-970' },
+    { value: 'lpr_desktop', label: 'LPR Desktop' },
   ],
   controller: [
     { value: 'icu300n', label: 'ICU-300N' },

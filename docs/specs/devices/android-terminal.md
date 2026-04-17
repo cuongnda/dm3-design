@@ -184,7 +184,7 @@ data class PersonEntity(
 data class CredentialEntity(
     @PrimaryKey val id: String,
     val personId: String,
-    val type: String,                  // face | card | pin | qr | fingerprint
+    val type: String,                  // face | card | pin | qr | fingerprint | uhf
     val value: String,                 // face: template bytes (Base64), card: UID hex, pin: hash
     val templateVersion: String? = null, // e.g., "arcface_v3"
     val status: String = "active",
