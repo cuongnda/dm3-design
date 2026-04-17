@@ -1,7 +1,32 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
+import { createBrowserRouter, Navigate, useLocation } from 'react-router-dom';
+import { Suspense } from 'react';
 import { MainLayout } from '@dm3/ui';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
+
+/**
+ * Retry wrapper for React.lazy — retries failed dynamic imports up to 3 times
+ * with exponential backoff. Handles intermittent network failures and stale
+ * chunk hashes after deployments.
+ */
+function lazyWithRetry<T extends React.ComponentType<unknown>>(
+  factory: () => Promise<{ default: T }>,
+  retries = 3,
+): React.LazyExoticComponent<T> {
+  return lazy(async () => {
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        return await factory();
+      } catch (err) {
+        if (attempt === retries - 1) throw err;
+        // Exponential backoff: 1s, 2s, 4s
+        await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+      }
+    }
+    // Unreachable, but satisfies TS
+    return factory();
+  });
+}
 import { LoginPage } from '@/features/auth/LoginPage';
 import { ForgotPasswordPage } from '@/features/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage';
@@ -24,266 +49,270 @@ import { RoleBasedRoute } from './RoleBasedRoute';
 import { PluginGuard } from '@/components/common/PluginGuard';
 
 // Essential Security Features (legacy)
-const AccessControlPage = lazy(() =>
+const AccessControlPage = lazyWithRetry(() =>
   import('@/features/secure/access-control/AccessControlPage').then((m) => ({ default: m.AccessControlPage }))
 );
-const DoorDetailPage = lazy(() =>
+const DoorDetailPage = lazyWithRetry(() =>
   import('@/features/secure/access-control/DoorDetailPage').then((m) => ({ default: m.DoorDetailPage }))
 );
-const AccessRulesPage = lazy(() =>
+const AccessRulesPage = lazyWithRetry(() =>
   import('@/features/secure/access-control/AccessRulesPage').then((m) => ({ default: m.AccessRulesPage }))
 );
-const AccessTimeListPage = lazy(() =>
+const AccessTimeListPage = lazyWithRetry(() =>
   import('@/features/secure/access-control/access-time/AccessTimeListPage').then((m) => ({ default: m.AccessTimeListPage }))
 );
-const AccessTimeFormPage = lazy(() =>
+const AccessTimeFormPage = lazyWithRetry(() =>
   import('@/features/secure/access-control/access-time/AccessTimeFormPage').then((m) => ({ default: m.AccessTimeFormPage }))
 );
 
-const CCTVPage = lazy(() =>
+const CCTVPage = lazyWithRetry(() =>
   import('@/features/secure/cctv/CCTVPage').then((m) => ({ default: m.CCTVPage }))
 );
-const CameraDetailPage = lazy(() =>
+const CameraDetailPage = lazyWithRetry(() =>
   import('@/features/secure/cctv/CameraDetailPage').then((m) => ({ default: m.CameraDetailPage }))
 );
-const IntrusionPage = lazy(() =>
+const IntrusionPage = lazyWithRetry(() =>
   import('@/features/secure/intrusion/IntrusionPage').then((m) => ({ default: m.IntrusionPage }))
 );
-const IntercomPage = lazy(() =>
+const IntercomPage = lazyWithRetry(() =>
   import('@/features/secure/intercom/IntercomPage').then((m) => ({ default: m.IntercomPage }))
 );
-const AIDetectionPage = lazy(() =>
+const AIDetectionPage = lazyWithRetry(() =>
   import('@/features/secure/ai-detection/AIDetectionPage').then((m) => ({ default: m.AIDetectionPage }))
 );
-const EmergencyPage = lazy(() =>
+const EmergencyPage = lazyWithRetry(() =>
   import('@/features/secure/emergency/EmergencyPage').then((m) => ({ default: m.EmergencyPage }))
 );
-const EmergencyPlanFormPage = lazy(() =>
+const EmergencyPlanFormPage = lazyWithRetry(() =>
   import('@/features/secure/emergency/EmergencyPlanFormPage').then((m) => ({ default: m.EmergencyPlanFormPage }))
 );
-const AccessHistoryPage = lazy(() =>
+const AccessHistoryPage = lazyWithRetry(() =>
   import('@/features/secure/access-history/AccessHistoryPage').then((m) => ({ default: m.AccessHistoryPage }))
 );
 
 // ACCESS
-const ZonesPage = lazy(() =>
+const ZonesPage = lazyWithRetry(() =>
   import('@/features/access/zones/ZonesPage').then((m) => ({ default: m.ZonesPage }))
 );
-const ZoneDetailPage = lazy(() =>
+const ZoneDetailPage = lazyWithRetry(() =>
   import('@/features/access/zones/ZoneDetailPage').then((m) => ({ default: m.ZoneDetailPage }))
 );
-const ZoneFormPage = lazy(() =>
+const ZoneFormPage = lazyWithRetry(() =>
   import('@/features/access/zones/ZoneFormPage').then((m) => ({ default: m.ZoneFormPage }))
 );
-const AccessPointsPage = lazy(() =>
+const AccessPointsPage = lazyWithRetry(() =>
   import('@/features/access/access-points/AccessPointsPage').then((m) => ({ default: m.AccessPointsPage }))
 );
-const AccessPointDetailPage = lazy(() =>
+const AccessPointDetailPage = lazyWithRetry(() =>
   import('@/features/access/access-points/AccessPointDetailPage').then((m) => ({ default: m.AccessPointDetailPage }))
 );
-const AccessGroupsPage = lazy(() =>
+const AccessGroupsPage = lazyWithRetry(() =>
   import('@/features/access/access-groups/AccessGroupsPage').then((m) => ({ default: m.AccessGroupsPage }))
 );
-const AccessGroupDetailPage = lazy(() =>
+const AccessGroupDetailPage = lazyWithRetry(() =>
   import('@/features/access/access-groups/AccessGroupDetailPage').then((m) => ({ default: m.AccessGroupDetailPage }))
 );
-const AccessTimesPage = lazy(() =>
+const AccessTimesPage = lazyWithRetry(() =>
   import('@/features/access/access-times/AccessTimesPage').then((m) => ({ default: m.AccessTimesPage }))
 );
-const AccessTimeFormPage2 = lazy(() =>
+const AccessTimeFormPage2 = lazyWithRetry(() =>
   import('@/features/access/access-times/AccessTimeFormPage').then((m) => ({ default: m.AccessTimeFormPage }))
 );
 
 // MANAGE
-const IdentitiesPage = lazy(() =>
+const IdentitiesPage = lazyWithRetry(() =>
   import('@/features/manage/identities/IdentitiesPage').then((m) => ({ default: m.IdentitiesPage }))
 );
-const PersonDetailPage = lazy(() =>
+const PersonDetailPage = lazyWithRetry(() =>
   import('@/features/manage/identities/PersonDetailPage').then((m) => ({ default: m.PersonDetailPage }))
 );
-const UserManagementPage = lazy(() =>
+const UserManagementPage = lazyWithRetry(() =>
   import('@/features/user-management/UserManagementPage').then((m) => ({ default: m.UserManagementPage }))
 );
-const UserDetailPage = lazy(() =>
+const UserDetailPage = lazyWithRetry(() =>
   import('@/features/user-management/UserDetailPage').then((m) => ({ default: m.UserDetailPage }))
 );
-const DepartmentManagementPage = lazy(() =>
+const DepartmentManagementPage = lazyWithRetry(() =>
   import('@/features/department-management/DepartmentManagementPage').then((m) => ({ default: m.DepartmentManagementPage }))
 );
 
-const VisitorsPage = lazy(() =>
+const VisitorsPage = lazyWithRetry(() =>
   import('@/features/manage/visitors/VisitorsPage').then((m) => ({ default: m.VisitorsPage }))
 );
-const VisitorPreRegisterPage = lazy(() =>
+const VisitorPreRegisterPage = lazyWithRetry(() =>
   import('@/features/visitors/VisitorPreRegisterPage').then((m) => ({ default: m.VisitorPreRegisterPage }))
 );
-const VisitorGroupsPage = lazy(() =>
+const VisitorGroupsPage = lazyWithRetry(() =>
   import('@/features/visitors/VisitorGroupsPage').then((m) => ({ default: m.VisitorGroupsPage }))
 );
-const VisitorWatchlistPage = lazy(() =>
+const VisitorWatchlistPage = lazyWithRetry(() =>
   import('@/features/visitors/VisitorWatchlistPage').then((m) => ({ default: m.VisitorWatchlistPage }))
 );
-const VisitorAgreementsPage = lazy(() =>
+const VisitorAgreementsPage = lazyWithRetry(() =>
   import('@/features/visitors/VisitorAgreementsPage').then((m) => ({ default: m.VisitorAgreementsPage }))
 );
-const VisitorAccessHistoryPage = lazy(() =>
+const VisitorAccessHistoryPage = lazyWithRetry(() =>
   import('@/features/visitors/VisitorAccessHistoryPage').then((m) => ({ default: m.VisitorAccessHistoryPage }))
 );
-const VisitorAnalyticsPage = lazy(() =>
+const VisitorAnalyticsPage = lazyWithRetry(() =>
   import('@/features/visitors/VisitorAnalyticsPage').then((m) => ({ default: m.VisitorAnalyticsPage }))
 );
-const VisitorRecurringPage = lazy(() =>
+const VisitorRecurringPage = lazyWithRetry(() =>
   import('@/features/visitors/VisitorRecurringPage').then((m) => ({ default: m.VisitorRecurringPage }))
 );
-const VisitorSettingsPage = lazy(() =>
+const VisitorSettingsPage = lazyWithRetry(() =>
   import('@/features/visitors/VisitorSettingsPage').then((m) => ({ default: m.VisitorSettingsPage }))
 );
-const ContractorsPage = lazy(() =>
+const ContractorsPage = lazyWithRetry(() =>
   import('@/features/manage/contractors/ContractorsPage').then((m) => ({ default: m.ContractorsPage }))
 );
-const AttendancePage = lazy(() =>
+const AttendancePage = lazyWithRetry(() =>
   import('@/features/manage/attendance/AttendancePage').then((m) => ({ default: m.AttendancePage }))
 );
-const DeliveriesPage = lazy(() =>
+const DeliveriesPage = lazyWithRetry(() =>
   import('@/features/manage/deliveries/DeliveriesPage').then((m) => ({ default: m.DeliveriesPage }))
 );
-const GroupsPage = lazy(() =>
+const GroupsPage = lazyWithRetry(() =>
   import('@/features/manage/identities/GroupsPage').then((m) => ({ default: m.GroupsPage }))
 );
-const ProvisioningPage = lazy(() =>
+const ProvisioningPage = lazyWithRetry(() =>
   import('@/features/manage/provisioning/ProvisioningPage').then((m) => ({ default: m.ProvisioningPage }))
 );
 
 // CCTV
-const CCTVDashboardPage = lazy(() =>
+const CCTVDashboardPage = lazyWithRetry(() =>
   import('@/features/cctv/CCTVDashboardPage').then((m) => ({ default: m.CCTVDashboardPage }))
 );
-const CCTVCamerasPage = lazy(() =>
+const CCTVCamerasPage = lazyWithRetry(() =>
   import('@/features/cctv/CCTVCamerasPage').then((m) => ({ default: m.CCTVCamerasPage }))
 );
-const CCTVLiveViewPage = lazy(() =>
+const CCTVLiveViewPage = lazyWithRetry(() =>
   import('@/features/cctv/CCTVLiveViewPage').then((m) => ({ default: m.CCTVLiveViewPage }))
 );
-const CCTVClipsPage = lazy(() =>
+const CCTVClipsPage = lazyWithRetry(() =>
   import('@/features/cctv/CCTVClipsPage').then((m) => ({ default: m.CCTVClipsPage }))
 );
-const CCTVSettingsPage = lazy(() =>
+const CCTVSettingsPage = lazyWithRetry(() =>
   import('@/features/cctv/CCTVSettingsPage').then((m) => ({ default: m.CCTVSettingsPage }))
 );
 
 // OPERATE
-const RoomBookingPage = lazy(() =>
+const RoomBookingPage = lazyWithRetry(() =>
   import('@/features/operate/room-booking/RoomBookingPage').then((m) => ({ default: m.RoomBookingPage }))
 );
-const ParkingDashboardPage = lazy(() =>
+const ParkingDashboardPage = lazyWithRetry(() =>
   import('@/features/parking/ParkingDashboardPage').then((m) => ({ default: m.ParkingDashboardPage }))
 );
-const ParkingSessionsPage = lazy(() =>
+const ParkingSessionsPage = lazyWithRetry(() =>
   import('@/features/parking/ParkingSessionsPage').then((m) => ({ default: m.ParkingSessionsPage }))
 );
-const ParkingVehiclesPage = lazy(() =>
+const ParkingVehiclesPage = lazyWithRetry(() =>
   import('@/features/parking/ParkingVehiclesPage').then((m) => ({ default: m.ParkingVehiclesPage }))
 );
-const ParkingZonesPage = lazy(() =>
+const ParkingZonesPage = lazyWithRetry(() =>
   import('@/features/parking/ParkingZonesPage').then((m) => ({ default: m.ParkingZonesPage }))
 );
-const ParkingPassesPage = lazy(() =>
+const ParkingPassesPage = lazyWithRetry(() =>
   import('@/features/parking/ParkingPassesPage').then((m) => ({ default: m.ParkingPassesPage }))
 );
-const ParkingFeeRulesPage = lazy(() =>
+const ParkingFeeRulesPage = lazyWithRetry(() =>
   import('@/features/parking/ParkingFeeRulesPage').then((m) => ({ default: m.ParkingFeeRulesPage }))
 );
-const ParkingAnalyticsPage2 = lazy(() =>
+const ParkingAnalyticsPage2 = lazyWithRetry(() =>
   import('@/features/parking/ParkingAnalyticsPage').then((m) => ({ default: m.ParkingAnalyticsPage }))
 );
-const ParkingSettingsPage = lazy(() =>
+const ParkingSettingsPage = lazyWithRetry(() =>
   import('@/features/parking/ParkingSettingsPage').then((m) => ({ default: m.ParkingSettingsPage }))
 );
-const MaintenancePage = lazy(() =>
+const MaintenancePage = lazyWithRetry(() =>
   import('@/features/operate/maintenance/MaintenancePage').then((m) => ({ default: m.MaintenancePage }))
 );
-const GuardTourPage = lazy(() =>
+const GuardTourPage = lazyWithRetry(() =>
   import('@/features/operate/guard-tour/GuardTourPage').then((m) => ({ default: m.GuardTourPage }))
 );
-const KeyManagementPage = lazy(() =>
+const KeyManagementPage = lazyWithRetry(() =>
   import('@/features/operate/keys/KeyManagementPage').then((m) => ({ default: m.KeyManagementPage }))
 );
-const IoTEnergyPage = lazy(() =>
+const IoTEnergyPage = lazyWithRetry(() =>
   import('@/features/operate/iot-energy/IoTEnergyPage').then((m) => ({ default: m.IoTEnergyPage }))
 );
 
 // SMART
-const AIAssistantPage = lazy(() =>
+const AIAssistantPage = lazyWithRetry(() =>
   import('@/features/smart/ai-assistant/AIAssistantPage').then((m) => ({ default: m.AIAssistantPage }))
 );
-const AnalyticsPage = lazy(() =>
+const AnalyticsPage = lazyWithRetry(() =>
   import('@/features/smart/analytics/AnalyticsPage').then((m) => ({ default: m.AnalyticsPage }))
 );
-const AutomationPage = lazy(() =>
+const AutomationPage = lazyWithRetry(() =>
   import('@/features/smart/automation/AutomationPage').then((m) => ({ default: m.AutomationPage }))
 );
 
 // DEVICES
-const LiveEventsPage = lazy(() =>
+const LiveEventsPage = lazyWithRetry(() =>
   import('@/features/monitoring/LiveEventsPage').then((m) => ({ default: m.LiveEventsPage }))
 );
-const DevicesPage = lazy(() =>
+const DevicesPage = lazyWithRetry(() =>
   import('@/features/devices/DevicesPage').then((m) => ({ default: m.DevicesPage }))
 );
-const DeviceDetailPage = lazy(() =>
+const DeviceDetailPage = lazyWithRetry(() =>
   import('@/features/devices/DeviceDetailPage').then((m) => ({ default: m.DeviceDetailPage }))
 );
-const ProvisionDevicePage = lazy(() =>
+const ProvisionDevicePage = lazyWithRetry(() =>
   import('@/features/devices/ProvisionDevicePage').then((m) => ({ default: m.ProvisionDevicePage }))
 );
-const PendingDevicesPage = lazy(() =>
+const PendingDevicesPage = lazyWithRetry(() =>
   import('@/features/devices/PendingDevicesPage').then((m) => ({ default: m.PendingDevicesPage }))
 );
 
 // PROFILE
-const ProfilePage = lazy(() =>
+const ProfilePage = lazyWithRetry(() =>
   import('@/features/profile/ProfilePage').then((m) => ({ default: m.ProfilePage }))
 );
 
 // SETTINGS
-const SettingsPage = lazy(() =>
+const SettingsPage = lazyWithRetry(() =>
   import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage }))
 );
-const TenantAuditLogPage = lazy(() =>
+const TenantAuditLogPage = lazyWithRetry(() =>
   import('@/features/settings/AuditLogPage').then((m) => ({ default: m.TenantAuditLogPage }))
 );
-const EmailTemplatesPage = lazy(() =>
+const EmailTemplatesPage = lazyWithRetry(() =>
   import('@/features/settings/EmailTemplatesPage').then((m) => ({ default: m.EmailTemplatesPage }))
 );
 
 // SYSTEM AUDIT
-const AuditLogPage = lazy(() =>
+const AuditLogPage = lazyWithRetry(() =>
   import('@/features/system/AuditLogPage').then((m) => ({ default: m.AuditLogPage }))
 );
 
 // ALERTS
-const AlertsPage = lazy(() =>
+const AlertsPage = lazyWithRetry(() =>
   import('@/features/alerts/AlertsPage').then((m) => ({ default: m.AlertsPage }))
 );
 
 // SYSTEM SETTINGS
-const SystemSettingsPage = lazy(() =>
+const SystemSettingsPage = lazyWithRetry(() =>
   import('@/features/system/SystemSettingsPage').then((m) => ({ default: m.SystemSettingsPage }))
 );
 
-/** Suspense renders no DOM node; this wrapper keeps flex height so pages can min-h-0 + flex-1 into the viewport. */
+/** Suspense renders no DOM node; this wrapper keeps flex height so pages can min-h-0 + flex-1 into the viewport.
+ *  ErrorBoundary resets automatically on navigation (key changes with pathname). */
 export function LazyWrap({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-      <Suspense
-        fallback={
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#3B82F6]/30 border-t-[#3B82F6]" />
-          </div>
-        }
-      >
-        {children}
-      </Suspense>
+      <ErrorBoundary key={pathname}>
+        <Suspense
+          fallback={
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#3B82F6]/30 border-t-[#3B82F6]" />
+            </div>
+          }
+        >
+          {children}
+        </Suspense>
+      </ErrorBoundary>
     </div>
   );
 }

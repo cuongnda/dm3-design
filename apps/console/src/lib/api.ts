@@ -94,9 +94,10 @@ export async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<
         }
 
         clearToken();
-        if (window.location.pathname !== '/login') {
-            window.location.href = '/login';
-        }
+        // Dispatch a custom event so the auth layer can redirect via the
+        // SPA router instead of a hard page reload. This avoids interrupting
+        // in-flight navigations and losing client-side state.
+        window.dispatchEvent(new CustomEvent('dm3:auth-expired'));
         throw new Error('Unauthorized');
     }
 
