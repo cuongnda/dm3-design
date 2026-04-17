@@ -458,6 +458,7 @@ func (h *AccessHandlers) ListAccessPointGroups(w http.ResponseWriter, r *http.Re
 		 LEFT JOIN dm3_access.access_group_users agu ON agu.access_group_id = ag.id
 		   AND (agu.effective_to IS NULL OR agu.effective_to > now())
 		 WHERE agap.access_point_id = $1::uuid
+		   AND ag.is_deleted = false
 		 GROUP BY ag.id, ag.tenant_id, ag.name
 		 ORDER BY ag.name ASC`,
 		apID,
