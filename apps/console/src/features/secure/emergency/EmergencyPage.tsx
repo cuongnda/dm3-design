@@ -276,7 +276,7 @@ export function EmergencyPage() {
                 </p>
               </div>
             </div>
-            <Button variant="outline" className="border-success/30 bg-success/10 text-success"
+            <Button data-testid={`emergency-button-all-clear-${inc.id}`} variant="outline" className="border-success/30 bg-success/10 text-success"
               onClick={() => handleAllClear(inc)}>
               <CheckCircle2 size={14} className="mr-1.5" /> All Clear
             </Button>
@@ -299,12 +299,13 @@ export function EmergencyPage() {
       {plans.filter((p) => p.enabled).length > 0 && (
         <div className="shrink-0">
           <h2 className="text-[14px] font-semibold text-foreground mb-3 flex items-center gap-1.5">
-            <Zap size={14} className="text-warning" /> Quick Activate
+            <Zap size={14} className="text-warning" /> {t('emergency.quickActivate')}
           </h2>
           <div className="grid grid-cols-4 gap-3">
             {plans.filter((p) => p.enabled).map((plan) => (
               <button
                 key={plan.id}
+                data-testid={`emergency-button-quick-activate-${plan.id}`}
                 onClick={() => setActivatingPlan(plan)}
                 className="group relative flex flex-col items-center gap-2 rounded-xl border-2 p-5 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                 style={{
@@ -327,7 +328,7 @@ export function EmergencyPage() {
       {/* Plans list */}
       <div className="shrink-0">
         <h2 className="text-[14px] font-semibold text-foreground mb-3 flex items-center gap-1.5">
-          <Settings2 size={14} /> Plans
+          <Settings2 size={14} /> {t('emergency.plans')}
         </h2>
         <div className="space-y-2">
           {plans.map((plan) => (
@@ -343,12 +344,12 @@ export function EmergencyPage() {
                 </span>
               </div>
               <Badge variant="outline" className={cn('text-[10px]', plan.enabled ? 'text-success border-success/30' : 'text-muted-foreground')}>
-                {plan.enabled ? 'Active' : 'Disabled'}
+                {plan.enabled ? t('emergency.statusActive') : t('emergency.statusDisabled')}
               </Badge>
-              <Button variant="ghost" size="sm" onClick={() => navigate(`/secure/emergency/plans/${plan.id}/edit`)}>
+              <Button data-testid={`emergency-button-edit-${plan.id}`} variant="ghost" size="sm" onClick={() => navigate(`/secure/emergency/plans/${plan.id}/edit`)}>
                 <Edit size={14} />
               </Button>
-              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setDeletingPlan(plan)}>
+              <Button data-testid={`emergency-button-delete-${plan.id}`} variant="ghost" size="sm" className="text-destructive" onClick={() => setDeletingPlan(plan)}>
                 <Trash2 size={14} />
               </Button>
             </div>
@@ -362,7 +363,7 @@ export function EmergencyPage() {
       {/* Incident history */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
         <div className="px-4 py-3 border-b border-border shrink-0">
-          <h2 className="text-[14px] font-semibold text-foreground">Incident History</h2>
+          <h2 className="text-[14px] font-semibold text-foreground">{t('emergency.incidentHistory')}</h2>
         </div>
         <div className="min-h-0 flex-1 overflow-auto">
           <DataTable embedded stickyHeader paginate={false} loading={loading}
@@ -386,6 +387,7 @@ export function EmergencyPage() {
             onClick: () => handleActivate(activatingPlan),
             loading: activating,
             variant: 'destructive',
+            'data-testid': 'emergency-button-confirm-activate',
           }}>
           <div className="text-center">
             <p className="text-[13px] text-muted-foreground mb-2">

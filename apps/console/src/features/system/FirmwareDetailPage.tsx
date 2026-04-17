@@ -261,7 +261,7 @@ export function FirmwareDetailPage() {
           <Button data-testid="detail-button-download" variant="outline" size="sm" onClick={handleDownload} className="gap-1">
             <Download size={14} /> {t('firmware.download')}
           </Button>
-          <Button variant="outline" size="sm" onClick={openDeployDialog}
+          <Button data-testid="detail-button-deploy" variant="outline" size="sm" onClick={openDeployDialog}
             className="gap-1 border-operate/30 text-operate hover:bg-operate/10" disabled={!firmware.is_active}>
             <Rocket size={14} /> {t('firmware.deploy')}
           </Button>
@@ -295,7 +295,7 @@ export function FirmwareDetailPage() {
           {editing ? (
             <div className="flex gap-2">
               <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>{t('firmware.cancel')}</Button>
-              <Button data-testid="detail-button-edit" size="sm" onClick={handleSave} disabled={saving}>
+              <Button data-testid="detail-button-save" size="sm" onClick={handleSave} disabled={saving}>
                 <Save size={12} /> {saving ? t('firmware.saving') : t('firmware.save')}
               </Button>
             </div>

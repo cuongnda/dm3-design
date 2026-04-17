@@ -43,6 +43,7 @@ export interface AppModalAction {
   /** When set, overrides internal busy state from awaiting `onClick`. */
   loading?: boolean
   className?: string
+  "data-testid"?: string
 }
 
 export interface AppModalProps {
@@ -189,6 +190,7 @@ function AppModal({
             size={primaryAction.size ?? "sm"}
             disabled={primaryDisabled}
             className={primaryClassName}
+            data-testid={primaryAction["data-testid"]}
             onClick={() => void runPrimary()}
           >
             {primaryLoading ? (

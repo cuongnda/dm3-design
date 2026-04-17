@@ -206,12 +206,12 @@ export function EmergencyPlanFormPage() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/secure/emergency')} className="gap-1 mb-2">
-        <ArrowLeft size={14} /> Back to Emergency
+      <Button data-testid="emergency-button-back" variant="ghost" size="sm" onClick={() => navigate('/secure/emergency')} className="gap-1 mb-2">
+        <ArrowLeft size={14} /> {t('emergency.form.back')}
       </Button>
 
       <PageHeader
-        title={isEdit ? 'Edit Emergency Plan' : 'New Emergency Plan'}
+        title={isEdit ? t('emergency.form.titleEdit') : t('emergency.form.titleNew')}
         description="Configure quick-activate emergency action with target access points"
       />
 
@@ -219,19 +219,19 @@ export function EmergencyPlanFormPage() {
         {/* ── Left: Form fields ──────────────────────────────── */}
         <div className="col-span-1 space-y-4">
           <div>
-            <Label>Name *</Label>
-            <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            <Label>{t('emergency.form.name')} *</Label>
+            <Input data-testid="emergency-input-name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               placeholder="e.g. Fire Evacuation" />
           </div>
 
           <div>
-            <Label>Description</Label>
-            <Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+            <Label>{t('emergency.form.description')}</Label>
+            <Input data-testid="emergency-input-description" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               placeholder="Optional" />
           </div>
 
           <div>
-            <Label>Icon</Label>
+            <Label>{t('emergency.form.icon')}</Label>
             <div className="flex flex-wrap gap-2 mt-1">
               {ICON_OPTIONS.map((ic) => (
                 <button key={ic} type="button" onClick={() => setForm((f) => ({ ...f, icon: ic }))}
@@ -245,9 +245,9 @@ export function EmergencyPlanFormPage() {
           </div>
 
           <div>
-            <Label>Color</Label>
+            <Label>{t('emergency.form.color')}</Label>
             <div className="flex items-center gap-2 mt-1">
-              <input type="color" value={form.color}
+              <input data-testid="emergency-input-color" type="color" value={form.color}
                 onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
                 className="h-9 w-12 rounded border border-border cursor-pointer" />
               <Input value={form.color} onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
@@ -256,22 +256,22 @@ export function EmergencyPlanFormPage() {
           </div>
 
           <div>
-            <Label>Action (door command)</Label>
-            <Select value={form.action} onValueChange={(v) => setForm((f) => ({ ...f, action: v }))}>
+            <Label>{t('emergency.form.action')}</Label>
+            <Select data-testid="emergency-select-action" value={form.action} onValueChange={(v) => setForm((f) => ({ ...f, action: v }))}>
               {ACTION_OPTIONS.map((a) => <SelectOption key={a.value} value={a.value}>{a.label}</SelectOption>)}
             </Select>
           </div>
 
           <div>
-            <Label>Countdown (seconds)</Label>
-            <Input type="number" min={0} max={60} value={form.countdown_seconds}
+            <Label>{t('emergency.form.countdown')}</Label>
+            <Input data-testid="emergency-input-countdown" type="number" min={0} max={60} value={form.countdown_seconds}
               onChange={(e) => setForm((f) => ({ ...f, countdown_seconds: Number(e.target.value) }))} />
           </div>
 
           <div className="flex items-center gap-2">
-            <Checkbox id="plan-enabled" checked={form.enabled}
+            <Checkbox data-testid="emergency-checkbox-enabled" id="plan-enabled" checked={form.enabled}
               onCheckedChange={(v) => setForm((f) => ({ ...f, enabled: !!v }))} />
-            <Label htmlFor="plan-enabled">Enabled</Label>
+            <Label htmlFor="plan-enabled">{t('emergency.form.enabled')}</Label>
           </div>
 
           {/* Preview */}
@@ -289,13 +289,13 @@ export function EmergencyPlanFormPage() {
         {/* ── Right: Zone → Access Point tree ────────────────── */}
         <div className="col-span-2">
           <div className="flex items-center justify-between mb-3">
-            <Label className="text-[14px] font-semibold">Target Access Points</Label>
+            <Label className="text-[14px] font-semibold">{t('emergency.form.targetAccessPoints')}</Label>
             <div className="flex items-center gap-2">
               <Badge variant="secondary" className="text-[11px]">
                 {selectedAPIds.size} / {accessPoints.length} selected
               </Badge>
               <Button variant="outline" size="sm" className="text-[12px]" onClick={selectAll}>
-                {selectedAPIds.size === accessPoints.length ? 'Deselect All' : 'Select All'}
+                {selectedAPIds.size === accessPoints.length ? t('emergency.form.deselectAll') : t('emergency.form.selectAll')}
               </Button>
             </div>
           </div>
@@ -305,6 +305,7 @@ export function EmergencyPlanFormPage() {
               <ZoneGroup
                 key={group.zone?.id ?? '__no_zone__'}
                 zone={group.zone}
+                noZoneLabel={t('emergency.form.noZone')}
                 accessPoints={group.aps}
                 selectedIds={selectedAPIds}
                 onToggleAP={toggleAP}
@@ -312,7 +313,7 @@ export function EmergencyPlanFormPage() {
               />
             ))}
             {tree.length === 0 && (
-              <p className="py-8 text-center text-[13px] text-muted-foreground">No access points found</p>
+              <p className="py-8 text-center text-[13px] text-muted-foreground">{t('emergency.form.noAccessPoints')}</p>
             )}
           </div>
         </div>
@@ -320,9 +321,9 @@ export function EmergencyPlanFormPage() {
 
       {/* Save bar */}
       <div className="flex justify-end gap-3 pt-4 border-t border-border">
-        <Button variant="outline" onClick={() => navigate('/secure/emergency')}>Cancel</Button>
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving...' : isEdit ? 'Update Plan' : 'Create Plan'}
+        <Button data-testid="emergency-button-cancel" variant="outline" onClick={() => navigate('/secure/emergency')}>{t('emergency.form.cancel')}</Button>
+        <Button data-testid="emergency-button-save" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving...' : isEdit ? t('emergency.form.update') : t('emergency.form.create')}
         </Button>
       </div>
     </div>
@@ -334,9 +335,10 @@ export function EmergencyPlanFormPage() {
 /* ═══════════════════════════════════════════════════════════════ */
 
 function ZoneGroup({
-  zone, accessPoints, selectedIds, onToggleAP, onToggleZone,
+  zone, noZoneLabel, accessPoints, selectedIds, onToggleAP, onToggleZone,
 }: {
   zone: { id: string; name: string } | null;
+  noZoneLabel: string;
   accessPoints: AccessPointDTO[];
   selectedIds: Set<string>;
   onToggleAP: (id: string) => void;
@@ -358,7 +360,7 @@ function ZoneGroup({
           onClick={(e) => e.stopPropagation()}
         />
         <MapPin size={13} className="text-muted-foreground" />
-        <span className="text-[13px] font-medium text-foreground">{zone?.name ?? 'No Zone'}</span>
+        <span className="text-[13px] font-medium text-foreground">{zone?.name ?? noZoneLabel}</span>
         <Badge variant="secondary" className="ml-auto text-[10px]">{accessPoints.length}</Badge>
       </div>
 
