@@ -36,7 +36,7 @@ func StartHeartbeatChecker(ctx context.Context, database *db.DB, hub *EventHub) 
 				`WITH expired AS (
 					UPDATE dm3_devices.devices
 					   SET status = $2, updated_at = now()
-					 WHERE status = $3 AND last_seen < $1
+					 WHERE status = $3 AND (last_seen IS NULL OR last_seen < $1)
 					 RETURNING tenant_id, device_id
 				) SELECT tenant_id::text, device_id FROM expired`,
 				threshold, models.DeviceStatusOffline, models.DeviceStatusOnline)
