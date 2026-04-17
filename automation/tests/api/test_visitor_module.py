@@ -52,6 +52,7 @@ class TestVisitorSettings:
             "approval_required": True,
             "auto_checkout_hour": 20,
             "max_duration_hours": 12,
+            "no_show_grace_minutes": 30,
             "notify_method": "email",
             "badge_enabled": True,
             "badge_prefix": "VIS",

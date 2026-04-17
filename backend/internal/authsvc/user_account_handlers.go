@@ -103,7 +103,7 @@ func (h *AuthHandlers) ListUserAccounts(w http.ResponseWriter, r *http.Request) 
 
 	// Get accounts.
 	query := fmt.Sprintf(`
-		SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
+		SELECT id, tenant_id::text, email, COALESCE(full_name, first_name, email), ARRAY[role], role, status,
 		       last_login, created_at, updated_at
 		FROM dm3_auth.accounts
 		%s
@@ -163,7 +163,7 @@ func (h *AuthHandlers) GetUserAccount(w http.ResponseWriter, r *http.Request) {
 	var u userAccountResponse
 	var name string
 	err := h.db.Pool.QueryRow(r.Context(), `
-		SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
+		SELECT id, tenant_id::text, email, COALESCE(full_name, first_name, email), ARRAY[role], role, status,
 		       last_login, created_at, updated_at
 		FROM dm3_auth.accounts
 		WHERE id = $1::uuid AND status != 'deleted'`, id,
@@ -233,7 +233,7 @@ func (h *AuthHandlers) CreateUserAccount(w http.ResponseWriter, r *http.Request)
 	var u userAccountResponse
 	var name string
 	_ = h.db.Pool.QueryRow(r.Context(), `
-		SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
+		SELECT id, tenant_id::text, email, COALESCE(full_name, first_name, email), ARRAY[role], role, status,
 		       last_login, created_at, updated_at
 		FROM dm3_auth.accounts
 		WHERE id = $1::uuid`, userID,
@@ -289,7 +289,7 @@ func (h *AuthHandlers) UpdateUserAccount(w http.ResponseWriter, r *http.Request)
 	var u userAccountResponse
 	var name string
 	_ = h.db.Pool.QueryRow(r.Context(), `
-		SELECT id, tenant_id::text, email, COALESCE(full_name, email), ARRAY[role], role, status,
+		SELECT id, tenant_id::text, email, COALESCE(full_name, first_name, email), ARRAY[role], role, status,
 		       last_login, created_at, updated_at
 		FROM dm3_auth.accounts
 		WHERE id = $1::uuid`, id,
@@ -470,7 +470,7 @@ func (h *AuthHandlers) GetUserCompanyMatrix(w http.ResponseWriter, r *http.Reque
 	// Get base account info.
 	var userName, userEmail string
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT COALESCE(full_name, email), email FROM dm3_auth.accounts WHERE id = $1::uuid AND status != 'deleted'`,
+		`SELECT COALESCE(full_name, first_name, email), email FROM dm3_auth.accounts WHERE id = $1::uuid AND status != 'deleted'`,
 		userID).Scan(&userName, &userEmail)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "user not found")

@@ -925,10 +925,10 @@ func (h *GatewayHandlers) GetDeviceEvents(w http.ResponseWriter, r *http.Request
 	page, limit := parsePagination(r)
 
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, tenant_id, device_id, event_type, COALESCE(user_id,''), COALESCE(user_name,''),
-			COALESCE(method,''), COALESCE(door_id,''), COALESCE(direction,''), COALESCE(decision,''),
-			COALESCE(reason,''), confidence, time
-		 FROM dm3_access.access_events
+		`SELECT id, tenant_id, device_id, event_type,
+			COALESCE(description,''), COALESCE(actor_id::text,''), COALESCE(actor_email,''),
+			COALESCE(metadata,'{}'), time
+		 FROM dm3_devices.device_events
 		 WHERE device_id = $1 AND tenant_id = $2::uuid
 		 ORDER BY time DESC LIMIT $3 OFFSET $4`,
 		deviceID, cid, limit, (page-1)*limit)
@@ -942,31 +942,26 @@ func (h *GatewayHandlers) GetDeviceEvents(w http.ResponseWriter, r *http.Request
 	events := []map[string]any{}
 	for rows.Next() {
 		var e struct {
-			ID, TenantID, DeviceID, EventType, UserID, UserName string
-			Method, DoorID, Direction, Decision, Reason         string
-			Confidence                                          float64
-			Time                                                interface{}
+			ID, TenantID, DeviceID, EventType string
+			Description, ActorID, ActorEmail   string
+			Metadata                           []byte
+			Time                               interface{}
 		}
-		if err := rows.Scan(&e.ID, &e.TenantID, &e.DeviceID, &e.EventType, &e.UserID, &e.UserName,
-			&e.Method, &e.DoorID, &e.Direction, &e.Decision, &e.Reason, &e.Confidence, &e.Time); err != nil {
+		if err := rows.Scan(&e.ID, &e.TenantID, &e.DeviceID, &e.EventType,
+			&e.Description, &e.ActorID, &e.ActorEmail, &e.Metadata, &e.Time); err != nil {
 			slog.Error("GetDeviceEvents: scan failed", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		events = append(events, map[string]any{
-			"id":         e.ID,
-			"tenant_id":  e.TenantID,
-			"device_id":  e.DeviceID,
-			"event_type": e.EventType,
-			"user_id":    e.UserID,
-			"user_name":  e.UserName,
-			"method":     e.Method,
-			"door_id":    e.DoorID,
-			"direction":  e.Direction,
-			"decision":   e.Decision,
-			"reason":     e.Reason,
-			"confidence": e.Confidence,
-			"time":       e.Time,
+			"id":          e.ID,
+			"tenant_id":   e.TenantID,
+			"device_id":   e.DeviceID,
+			"event_type":  e.EventType,
+			"description": e.Description,
+			"actor_id":    e.ActorID,
+			"actor_email": e.ActorEmail,
+			"time":        e.Time,
 		})
 	}
 	httputil.JSON(w, http.StatusOK, events)

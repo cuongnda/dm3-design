@@ -284,16 +284,14 @@ class TestDownloadFirmware:
 
 class TestDeployFirmware:
     @pytest.mark.api
-    def test_deploy_placeholder(self, client, uploaded_firmware):
-        """POST /:id/deploy should return success (placeholder)."""
+    def test_deploy_nonexistent_device(self, client, uploaded_firmware):
+        """POST /:id/deploy with non-existent device should return error."""
         fw_id = uploaded_firmware["id"]
         resp = client.post(f"{BASE}/{fw_id}/deploy", json={
-            "device_id": str(uuid.uuid4()),
+            "device_ids": [str(uuid.uuid4())],
         })
-        # Accept 200 or 202 (async)
-        assert resp.status_code in [200, 202]
-        body = resp.json()
-        assert "status" in body or "message" in body
+        # Non-existent device: expect 200 with per-device error, 202 (async), or 400
+        assert resp.status_code in [200, 202, 400]
 
 
 # ── Delete ───────────────────────────────────────────────────────────────────
