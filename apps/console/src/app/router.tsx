@@ -1,5 +1,5 @@
 import { createBrowserRouter, Navigate, useLocation } from 'react-router-dom';
-import { Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import { MainLayout } from '@dm3/ui';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
