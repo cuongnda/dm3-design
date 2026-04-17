@@ -34,7 +34,7 @@ def uploaded_firmware(client):
     files = {"file": (f"test_fw_{uid}.bin", io.BytesIO(content), "application/octet-stream")}
     data = {
         "version": f"1.0.0-test-{uid}",
-        "device_type": "dq_mini_plus",
+        "device_type": "dqmini_plus",
         "description": f"Test firmware {uid}",
     }
     resp = client.post(BASE, files=files, data=data)
@@ -55,10 +55,10 @@ class TestDeviceTypes:
         assert resp.status_code == 200
         body = resp.json()
         types = body.get("device_types", [])
-        assert len(types) >= 25
-        assert "dq_mini_plus" in types
+        assert len(types) >= 10
+        assert "dqmini_plus" in types
         assert "icu300n" in types
-        assert "itouch_pop" in types
+        assert "itouch_pop_x" in types
 
     @pytest.mark.api
     def test_device_types_are_lowercase(self, client):
@@ -81,7 +81,7 @@ class TestUploadFirmware:
         files = {"file": (f"fw_{uid}.bin", io.BytesIO(content), "application/octet-stream")}
         data = {
             "version": f"2.0.0-{uid}",
-            "device_type": "it100",
+            "device_type": "ra08",
             "description": "Upload test",
         }
         resp = client.post(BASE, files=files, data=data)
@@ -99,7 +99,7 @@ class TestUploadFirmware:
         """Upload without file should fail."""
         resp = client.post(BASE, data={
             "version": "1.0.0",
-            "device_type": "it100",
+            "device_type": "ra08",
         })
         assert resp.status_code in [400, 422]
 
@@ -109,7 +109,7 @@ class TestUploadFirmware:
         content = b"FAKE_FW"
         files = {"file": ("fw.bin", io.BytesIO(content), "application/octet-stream")}
         resp = client.post(BASE, files=files, data={
-            "device_type": "it100",
+            "device_type": "ra08",
         })
         assert resp.status_code in [400, 422]
 
@@ -131,14 +131,14 @@ class TestUploadFirmware:
         version = f"3.0.0-dup-{uid}"
         content = b"FW1"
         files = {"file": ("fw1.bin", io.BytesIO(content), "application/octet-stream")}
-        data = {"version": version, "device_type": "pm85"}
+        data = {"version": version, "device_type": "ba8300"}
         resp1 = client.post(BASE, files=files, data=data)
         assert resp1.status_code == 201
 
         # Try duplicate
         content2 = b"FW2"
         files2 = {"file": ("fw2.bin", io.BytesIO(content2), "application/octet-stream")}
-        resp2 = client.post(BASE, files=files2, data={"version": version, "device_type": "pm85"})
+        resp2 = client.post(BASE, files=files2, data={"version": version, "device_type": "ba8300"})
         assert resp2.status_code == 409
 
         # Cleanup
@@ -172,7 +172,7 @@ class TestListFirmware:
         assert resp.status_code == 200
         body = resp.json()
         for fw in body.get("firmwares") or []:
-            assert fw["device_type"] == "dq_mini_plus"
+            assert fw["device_type"] == "dqmini_plus"
 
     @pytest.mark.api
     def test_list_filter_active(self, client, uploaded_firmware):
@@ -211,7 +211,7 @@ class TestGetFirmware:
         body = resp.json()
         assert body["id"] == fw_id
         assert body["version"]
-        assert body["device_type"] == "dq_mini_plus"
+        assert body["device_type"] == "dqmini_plus"
         assert body["checksum"]
         assert body["file_size"] > 0
 

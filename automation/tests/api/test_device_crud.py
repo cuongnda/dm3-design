@@ -8,7 +8,7 @@ import uuid
 from common.api_client import DM3Client
 from common import constants
 
-BASE = "/api/v1/devices"
+BASE = "/api/v1/gateway/devices"
 
 
 @pytest.fixture(scope="module")

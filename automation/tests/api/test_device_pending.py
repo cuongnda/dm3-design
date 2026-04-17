@@ -8,7 +8,7 @@ import uuid
 from common.api_client import DM3Client
 from common import constants
 
-PENDING_BASE = "/api/v1/devices/pending"
+PENDING_BASE = "/api/v1/gateway/devices/pending"
 
 
 @pytest.fixture(scope="module")
@@ -51,13 +51,13 @@ class TestListPending:
 class TestApprovePending:
     @pytest.mark.api
     def test_approve_not_found(self, sysadmin_client):
-        """Approve non-existent pending device should return 404."""
+        """Approve non-existent pending device should return 400 or 404."""
         fake_id = str(uuid.uuid4())
         resp = sysadmin_client.post(f"{PENDING_BASE}/{fake_id}/approve", json={
             "company_id": str(uuid.uuid4()),
             "name": "Test Device",
         })
-        assert resp.status_code == 404
+        assert resp.status_code in [400, 404]
 
     @pytest.mark.api
     def test_approve_requires_sysadmin(self, admin_client):

@@ -237,7 +237,7 @@ class TestUserManagement:
     @pytest.mark.api
     def test_list_users(self, sysadmin_client):
         """GET /users should return paginated list."""
-        resp = sysadmin_client.get(f"{constants.API_URL}/api/v1/users")
+        resp = sysadmin_client.get(f"{constants.API_URL}/api/v1/auth/system/accounts")
         assert resp.status_code == 200
         data = resp.json()
         assert "data" in data
@@ -246,10 +246,10 @@ class TestUserManagement:
     @pytest.mark.api
     def test_list_roles(self, sysadmin_client):
         """GET /roles should return available roles."""
-        resp = sysadmin_client.get(f"{constants.API_URL}/api/v1/roles")
+        resp = sysadmin_client.get(f"{constants.API_URL}/api/v1/auth/roles")
         assert resp.status_code == 200
         roles = resp.json()
         assert isinstance(roles, list)
         assert len(roles) > 0
         role_names = [r["name"] for r in roles]
-        assert "admin" in role_names
+        assert "primary_manager" in role_names

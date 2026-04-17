@@ -7,7 +7,7 @@ import pytest
 import uuid
 from common.api_client import APIClient
 
-BASE = "/api/v1/system"
+BASE = "/api/v1/auth/system"
 
 
 @pytest.fixture(scope="module")
