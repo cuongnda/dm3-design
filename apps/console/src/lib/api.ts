@@ -235,7 +235,7 @@ export interface AccessDeviceDTO {
     config_version: number;
     user_db_version: number;
     rules_version: number;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
     created_at: string;
     updated_at: string;
 }
@@ -254,7 +254,7 @@ export interface EventDTO {
     reason?: string;
     confidence?: number;
     photo_ref?: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
 }
 
 export interface AccessRuleDTO {
@@ -398,6 +398,10 @@ export interface ActivateEmergencyResponse {
 
 export async function fetchEmergencyPlans(): Promise<EmergencyPlanDTO[]> {
     return apiFetch<EmergencyPlanDTO[]>(`${ACCESS_URL}/emergency/plans`);
+}
+
+export async function fetchEmergencyPlan(id: string): Promise<EmergencyPlanDTO> {
+    return apiFetch<EmergencyPlanDTO>(`${ACCESS_URL}/emergency/plans/${id}`);
 }
 
 export async function createEmergencyPlan(data: Partial<EmergencyPlanDTO>): Promise<EmergencyPlanDTO> {
@@ -1195,12 +1199,21 @@ export async function fetchEMQXClients(): Promise<EMQXClientDTO[]> {
     return apiFetch<EMQXClientDTO[]>(`${GATEWAY_URL}/system/emqx/clients`);
 }
 
-export async function fetchSystemDevice(id: string): Promise<any> {
-    return apiFetch<any>(`${GATEWAY_URL}/system/devices/${id}`);
+export interface SystemDeviceDTO {
+    id: string;
+    device_id: string;
+    name: string;
+    model: string;
+    tenant_id: string;
+    status: string;
 }
 
-export async function updateSystemDevice(id: string, data: Record<string, any>): Promise<any> {
-    return apiFetch<any>(`${GATEWAY_URL}/system/devices/${id}`, {
+export async function fetchSystemDevice(id: string): Promise<SystemDeviceDTO> {
+    return apiFetch<SystemDeviceDTO>(`${GATEWAY_URL}/system/devices/${id}`);
+}
+
+export async function updateSystemDevice(id: string, data: Partial<Pick<SystemDeviceDTO, 'name' | 'model' | 'status'>>): Promise<SystemDeviceDTO> {
+    return apiFetch<SystemDeviceDTO>(`${GATEWAY_URL}/system/devices/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
     });

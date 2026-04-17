@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { startOfDay } from 'date-fns';
 import { ChevronDown, ChevronRight, Download, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -234,8 +234,8 @@ export function AuditLogPage() {
                   </TableRow>
                 ) : (
                   entries.map((entry) => (
-                    <>
-                      <TableRow key={entry.id} className="cursor-pointer"
+                    <React.Fragment key={entry.id}>
+                      <TableRow className="cursor-pointer"
                         onClick={() => setExpandedId(expandedId === entry.id ? null : entry.id)}>
                         <TableCell className="px-4 text-[12px] text-muted-foreground font-mono">{formatTime(entry.time)}</TableCell>
                         <TableCell className="px-4 text-[13px]">{entry.actor_email ?? entry.actor_id ?? '—'}</TableCell>
@@ -258,7 +258,7 @@ export function AuditLogPage() {
                         </TableCell>
                       </TableRow>
                       {expandedId === entry.id && <RowDetail key={`${entry.id}-detail`} entry={entry} t={t} />}
-                    </>
+                    </React.Fragment>
                   ))
                 )}
               </TableBody>

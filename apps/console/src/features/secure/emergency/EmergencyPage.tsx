@@ -120,13 +120,17 @@ export function EmergencyPage() {
 
   /* ── Activate ────────────────────────────────────────────── */
 
-  const handleActivate = async (plan: EmergencyPlanDTO) => {
+  const handleActivate = useCallback(async (plan: EmergencyPlanDTO) => {
     setActivating(true);
     try {
       const res = await activateEmergency(plan.id);
       // Send the actual door command via gateway
       if (res.access_point_ids?.length > 0) {
-        await sendBulkDoorCommand(res.access_point_ids, res.action);
+        try {
+          await sendBulkDoorCommand(res.access_point_ids, res.action);
+        } catch {
+          toast('Emergency activated but door command failed — check device connectivity', 'error');
+        }
       }
       toast(t('emergency.toast.activated', { name: plan.name }), 'success');
       setActivatingPlan(null);
@@ -136,14 +140,18 @@ export function EmergencyPage() {
     } finally {
       setActivating(false);
     }
-  };
+  }, [loadAll, t]);
 
   const handleAllClear = async (incident: EmergencyIncidentDTO) => {
     try {
       const res = await allClearEmergency(incident.id);
       // Send release command to restore all affected devices to normal
       if (res.access_point_ids?.length > 0) {
-        await sendBulkDoorCommand(res.access_point_ids, 'release');
+        try {
+          await sendBulkDoorCommand(res.access_point_ids, 'release');
+        } catch {
+          toast('All clear issued but door command failed — check device connectivity', 'error');
+        }
       }
       toast(t('emergency.toast.allClear'), 'success');
       loadAll(true);
@@ -169,7 +177,7 @@ export function EmergencyPage() {
     if (activatingPlan && countdown === 0 && !activating) {
       handleActivate(activatingPlan);
     }
-  }, [countdown, activatingPlan, activating]);
+  }, [countdown, activatingPlan, activating, handleActivate]);
 
   /* ── Delete plan ─────────────────────────────────────────── */
 

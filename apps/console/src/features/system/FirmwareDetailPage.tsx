@@ -4,10 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Package, Save, Trash2, Download, Rocket, CheckCircle2, XCircle, Loader2, Clock, Monitor } from 'lucide-react';
 import {
   fetchFirmware, updateFirmware, deleteFirmware, downloadFirmware,
-  deployFirmware, fetchFirmwareDeployments,
+  deployFirmware, fetchFirmwareDeployments, apiFetch,
   type FirmwareDTO, type FirmwareDeploymentDTO,
 } from '@/lib/api';
-import { apiFetch } from '@/lib/api';
 import { ALL_DEVICE_MODELS } from '@/lib/device-models';
 import { Button, Input, Label, Badge, AppModal, Checkbox, DataTable, type Column, TablePaginationFooter } from '@dm3/ui';
 import { cn } from '@/lib/utils';
@@ -102,7 +101,9 @@ export function FirmwareDetailPage() {
       const updated = await updateFirmware(id, { version: form.version, description: form.description, is_active: form.is_active });
       setFirmware(updated);
       setEditing(false);
-    } catch { /* */ }
+    } catch {
+      toast(t('firmware.toast.saveFailed'), 'error');
+    }
     setSaving(false);
   };
 

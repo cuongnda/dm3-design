@@ -10,7 +10,7 @@ import {
   DoorOpen, Zap, AlertTriangle, ChevronRight, ChevronDown, MapPin,
 } from 'lucide-react';
 import {
-  fetchEmergencyPlans, createEmergencyPlan, updateEmergencyPlan,
+  fetchEmergencyPlan, createEmergencyPlan, updateEmergencyPlan,
   fetchZones, fetchAccessPoints,
   type EmergencyPlanDTO, type ZoneDTO, type AccessPointDTO,
 } from '@/lib/api';
@@ -69,8 +69,7 @@ export function EmergencyPlanFormPage() {
         setAccessPoints(apRes.data || []);
 
         if (isEdit) {
-          const plans = await fetchEmergencyPlans();
-          const plan = plans.find((p) => p.id === id);
+          const plan = await fetchEmergencyPlan(id);
           if (plan) {
             setForm({
               name: plan.name,
