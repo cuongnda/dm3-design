@@ -389,8 +389,12 @@ func (h *FirmwareHandlers) DeleteFirmware(w http.ResponseWriter, r *http.Request
 	}
 
 	// Delete deployments referencing this firmware first
-	_, _ = h.db.Pool.Exec(r.Context(),
-		`DELETE FROM dm3_devices.firmware_deployments WHERE firmware_id = $1::uuid`, id)
+	if _, err := h.db.Pool.Exec(r.Context(),
+		`DELETE FROM dm3_devices.firmware_deployments WHERE firmware_id = $1::uuid`, id); err != nil {
+		slog.Error("delete firmware deployments error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "failed to delete firmware deployments")
+		return
+	}
 
 	result, err := h.db.Pool.Exec(r.Context(),
 		`DELETE FROM dm3_devices.firmwares WHERE id = $1::uuid`, id,
@@ -471,13 +475,26 @@ func (h *FirmwareHandlers) DeployFirmware(w http.ResponseWriter, r *http.Request
 	results := make([]deployResult, 0, len(req.DeviceIDs))
 
 	for _, deviceDBID := range req.DeviceIDs {
-		var tenantID, deviceID string
+		// NOTE: This endpoint is under the system_admin route group. The device lookup
+		// intentionally has no tenant_id filter — system admins manage firmware across
+		// all tenants for global firmware management. The tenant_id is still captured
+		// in the deployment record and audit trail for traceability.
+		var tenantID, deviceID, deviceModel string
 		if lookupErr := h.db.Pool.QueryRow(r.Context(),
-			`SELECT tenant_id, device_id FROM dm3_devices.devices WHERE id = $1::uuid`, deviceDBID,
-		).Scan(&tenantID, &deviceID); lookupErr != nil {
+			`SELECT tenant_id, device_id, COALESCE(type,'') FROM dm3_devices.devices WHERE id = $1::uuid`, deviceDBID,
+		).Scan(&tenantID, &deviceID, &deviceModel); lookupErr != nil {
 			results = append(results, deployResult{DeviceID: deviceDBID, Status: "failed", Error: "device not found"})
 			continue
 		}
+
+		// H-7: Skip devices whose type doesn't match the firmware's device_type.
+		if deviceModel != "" && deviceModel != fw.DeviceType {
+			slog.Info("DeployFirmware: skipping device_type mismatch", "device", deviceID, "device_type", deviceModel, "firmware_type", fw.DeviceType)
+			results = append(results, deployResult{DeviceID: deviceID, Status: "skipped", Error: "device_type_mismatch"})
+			continue
+		}
+
+		slog.Info("DeployFirmware: deploying to device", "device", deviceID, "tenant_id", tenantID, "firmware", firmwareID)
 
 		// Secure download token (hex, 32 bytes = 64 chars)
 		tokenBytes := make([]byte, 32)
@@ -618,34 +635,42 @@ func (h *FirmwareHandlers) DownloadFirmwareByToken(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Look up deployment by token
-	var filePath, deviceID, deployID string
+	// Look up deployment by token.
+	// NOTE: This query intentionally has no tenant_id filter. The download token is a
+	// random 32-byte hex (64 chars) meant to be unguessable and single-use — security
+	// relies on token entropy (bearer-token pattern), not tenant scoping. Devices
+	// download firmware using just the token without any tenant context.
+	var filePath, deviceID, deployID, deployTenantID string
 	var expiresAt time.Time
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT d.id, d.device_id, d.expires_at, f.file_path
+		`SELECT d.id, d.device_id, d.expires_at, f.file_path, d.tenant_id
 		   FROM dm3_devices.firmware_deployments d
 		   JOIN dm3_devices.firmwares f ON f.id = d.firmware_id
 		  WHERE d.download_token = $1
 		    AND d.status IN ('sent', 'downloading')`, token,
-	).Scan(&deployID, &deviceID, &expiresAt, &filePath)
+	).Scan(&deployID, &deviceID, &expiresAt, &filePath, &deployTenantID)
 	if err != nil {
-		slog.Warn("firmware download: invalid token", "token", token[:8]+"...")
+		preview := token
+		if len(token) > 8 {
+			preview = token[:8] + "..."
+		}
+		slog.Warn("firmware download: invalid token", "token", preview)
 		httputil.Error(w, http.StatusNotFound, "invalid or expired token")
 		return
 	}
 
-	// Check expiry
+	// Check expiry — scope the status UPDATE by tenant_id from the fetched record.
 	if time.Now().After(expiresAt) {
 		_, _ = h.db.Pool.Exec(r.Context(),
-			`UPDATE dm3_devices.firmware_deployments SET status='expired', updated_at=now() WHERE id=$1::uuid`, deployID)
+			`UPDATE dm3_devices.firmware_deployments SET status='expired', updated_at=now() WHERE id=$1::uuid AND tenant_id=$2::uuid`, deployID, deployTenantID)
 		httputil.Error(w, http.StatusGone, "download token expired")
 		return
 	}
 
-	// Mark as downloading
+	// Mark as downloading — scope by tenant_id from the fetched record.
 	_, _ = h.db.Pool.Exec(r.Context(),
 		`UPDATE dm3_devices.firmware_deployments SET status='downloading', download_started_at=now(), updated_at=now()
-		  WHERE id=$1::uuid AND status='sent'`, deployID)
+		  WHERE id=$1::uuid AND tenant_id=$2::uuid AND status='sent'`, deployID, deployTenantID)
 
 	// Stream the binary
 	reader, info, err := h.objects.GetObject(r.Context(), filePath)
@@ -667,6 +692,10 @@ func (h *FirmwareHandlers) DownloadFirmwareByToken(w http.ResponseWriter, r *htt
 }
 
 // ListDeployments handles GET /api/v1/system/firmware/{id}/deployments
+// NOTE: This endpoint is under the system_admin route group. The query intentionally
+// has no tenant_id filter — system admins need cross-tenant visibility for global
+// firmware management. The download_url is redacted from the response to prevent
+// token leakage through the admin UI.
 func (h *FirmwareHandlers) ListDeployments(w http.ResponseWriter, r *http.Request) {
 	firmwareID := chi.URLParam(r, "id")
 	page, limit := parsePagination(r)
@@ -720,6 +749,8 @@ func (h *FirmwareHandlers) ListDeployments(w http.ResponseWriter, r *http.Reques
 			slog.Error("ListDeployments: scan failed", "error", err)
 			continue
 		}
+		// Redact download_url to prevent token leakage in admin list responses.
+		d.DownloadURL = ""
 		deployments = append(deployments, d)
 	}
 	httputil.Paginated(w, deployments, total, page, limit)

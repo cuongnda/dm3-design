@@ -30,15 +30,20 @@ func NewEMQXHandlers(apiURL, user, password string) *EMQXHandlers {
 }
 
 // login gets a bearer token from EMQX dashboard. Cached until expiry.
+// Uses a double-check pattern to avoid holding the mutex during the HTTP round-trip.
+// Two concurrent callers may both fetch a token if the cache is stale; the second
+// write simply overwrites, which is harmless for a bearer token.
 func (h *EMQXHandlers) login() (string, error) {
+	// Step 1: Check cached token under lock.
 	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	// Return cached token if still valid (with 60s margin)
 	if h.token != "" && time.Now().Before(h.expAt.Add(-60*time.Second)) {
-		return h.token, nil
+		tok := h.token
+		h.mu.Unlock()
+		return tok, nil
 	}
+	h.mu.Unlock()
 
+	// Step 2: Fetch a new token without holding the lock.
 	body, _ := json.Marshal(map[string]string{"username": h.user, "password": h.password})
 	resp, err := http.Post(h.apiURL+"/api/v5/login", "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -58,9 +63,13 @@ func (h *EMQXHandlers) login() (string, error) {
 		return "", fmt.Errorf("emqx login decode failed: %w", err)
 	}
 
+	// Step 3: Write the new token under lock.
+	h.mu.Lock()
 	h.token = result.Token
 	h.expAt = time.Now().Add(2 * time.Hour) // EMQX tokens are valid for ~8h, refresh every 2h
-	return h.token, nil
+	h.mu.Unlock()
+
+	return result.Token, nil
 }
 
 // emqxClient is the simplified client info returned to the frontend.

@@ -3,12 +3,14 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/duali/dm3-backend/internal/models"
@@ -495,7 +497,7 @@ func (h *MQTTHandler) handleStatus(ctx context.Context, pt ParsedTopic, env MQTT
 			status, now, data.Firmware, pt.DeviceID, pt.TenantID,
 		).Scan(&prevStatus)
 		if err != nil {
-			if err.Error() == "no rows in result set" {
+			if errors.Is(err, pgx.ErrNoRows) {
 				slog.Debug("ignoring heartbeat from unprovisioned device", "device", pt.DeviceID)
 			} else {
 				slog.Error("failed to update device heartbeat", "error", err, "device", pt.DeviceID)
@@ -643,32 +645,33 @@ func (h *MQTTHandler) handleConfigAck(_ context.Context, pt ParsedTopic, env MQT
 		if err := json.Unmarshal(env.Data, &fwAck); err == nil && fwAck.DeploymentID != "" {
 			slog.Info("firmware ack", "device", pt.DeviceID, "deployment", fwAck.DeploymentID, "status", fwAck.Status, "progress", fwAck.ProgressPct)
 
-			// Update deployment status
+			// Update deployment status — always scoped by tenant_id from the MQTT topic
+			// to prevent a rogue device from updating another tenant's deployment.
 			switch fwAck.Status {
 			case "downloading":
 				_, _ = h.db.Pool.Exec(h.appCtx,
-					`UPDATE dm3_devices.firmware_deployments SET status='downloading', download_started_at=COALESCE(download_started_at,now()), progress_pct=$2, updated_at=now() WHERE id=$1::uuid`,
-					fwAck.DeploymentID, fwAck.ProgressPct)
+					`UPDATE dm3_devices.firmware_deployments SET status='downloading', download_started_at=COALESCE(download_started_at,now()), progress_pct=$2, updated_at=now() WHERE id=$1::uuid AND tenant_id=$3::uuid`,
+					fwAck.DeploymentID, fwAck.ProgressPct, pt.TenantID)
 			case "installing":
 				_, _ = h.db.Pool.Exec(h.appCtx,
-					`UPDATE dm3_devices.firmware_deployments SET status='installing', install_started_at=COALESCE(install_started_at,now()), progress_pct=$2, updated_at=now() WHERE id=$1::uuid`,
-					fwAck.DeploymentID, fwAck.ProgressPct)
+					`UPDATE dm3_devices.firmware_deployments SET status='installing', install_started_at=COALESCE(install_started_at,now()), progress_pct=$2, updated_at=now() WHERE id=$1::uuid AND tenant_id=$3::uuid`,
+					fwAck.DeploymentID, fwAck.ProgressPct, pt.TenantID)
 			case "success":
 				_, _ = h.db.Pool.Exec(h.appCtx,
-					`UPDATE dm3_devices.firmware_deployments SET status='success', completed_at=now(), progress_pct=100, updated_at=now() WHERE id=$1::uuid`,
-					fwAck.DeploymentID)
+					`UPDATE dm3_devices.firmware_deployments SET status='success', completed_at=now(), progress_pct=100, updated_at=now() WHERE id=$1::uuid AND tenant_id=$2::uuid`,
+					fwAck.DeploymentID, pt.TenantID)
 			case "failed":
 				_, _ = h.db.Pool.Exec(h.appCtx,
-					`UPDATE dm3_devices.firmware_deployments SET status='failed', completed_at=now(), error_message=$2, updated_at=now() WHERE id=$1::uuid`,
-					fwAck.DeploymentID, fwAck.Error)
+					`UPDATE dm3_devices.firmware_deployments SET status='failed', completed_at=now(), error_message=$2, updated_at=now() WHERE id=$1::uuid AND tenant_id=$3::uuid`,
+					fwAck.DeploymentID, fwAck.Error, pt.TenantID)
 			case "rolled_back":
 				_, _ = h.db.Pool.Exec(h.appCtx,
-					`UPDATE dm3_devices.firmware_deployments SET status='rolled_back', completed_at=now(), error_message=$2, progress_pct=0, updated_at=now() WHERE id=$1::uuid`,
-					fwAck.DeploymentID, fwAck.Error)
+					`UPDATE dm3_devices.firmware_deployments SET status='rolled_back', completed_at=now(), error_message=$2, progress_pct=0, updated_at=now() WHERE id=$1::uuid AND tenant_id=$3::uuid`,
+					fwAck.DeploymentID, fwAck.Error, pt.TenantID)
 			default:
 				_, _ = h.db.Pool.Exec(h.appCtx,
-					`UPDATE dm3_devices.firmware_deployments SET progress_pct=$2, updated_at=now() WHERE id=$1::uuid`,
-					fwAck.DeploymentID, fwAck.ProgressPct)
+					`UPDATE dm3_devices.firmware_deployments SET progress_pct=$2, updated_at=now() WHERE id=$1::uuid AND tenant_id=$3::uuid`,
+					fwAck.DeploymentID, fwAck.ProgressPct, pt.TenantID)
 			}
 
 			// Update device firmware_version on success or rolled_back

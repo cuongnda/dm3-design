@@ -104,7 +104,7 @@ func Load() *Config {
 
 		EMQXApiURL:      env("EMQX_API_URL", "http://localhost:18084"),
 		EMQXApiUser:     env("EMQX_API_USER", "admin"),
-		EMQXApiPassword: env("EMQX_API_PASSWORD", "dm3public123"),
+		EMQXApiPassword: env("EMQX_API_PASSWORD", ""),
 
 		SMTPHost:     env("SMTP_HOST", "smtp.gmail.com"),
 		SMTPPort:     env("SMTP_PORT", "587"),
@@ -144,6 +144,11 @@ func (c *Config) Validate() error {
 	if c.ObjectStoreSecretAccessKey == "dm3secret123" {
 		insecure = append(insecure, "OBJECT_STORE_SECRET_KEY is using the insecure development default")
 	}
+	// Warn if EMQX API URL is configured but password is missing (EMQX integration is optional).
+	if c.EMQXApiPassword == "" && c.EMQXApiURL != "" {
+		slog.Warn("[SECURITY] EMQX_API_PASSWORD is empty but EMQX_API_URL is configured; EMQX dashboard API calls will fail until a password is set")
+	}
+
 	for _, msg := range insecure {
 		slog.Warn("[SECURITY] " + msg + "; set a strong value via environment variable before deploying to production")
 	}

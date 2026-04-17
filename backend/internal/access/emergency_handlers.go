@@ -2,6 +2,7 @@ package access
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -124,6 +125,17 @@ func (h *AccessHandlers) CreateEmergencyPlan(w http.ResponseWriter, r *http.Requ
 	if req.TargetType == "" {
 		req.TargetType = "all"
 	}
+
+	validActions := map[string]bool{"unlock": true, "lock": true, "hold_open": true, "hold_close": true}
+	validTargets := map[string]bool{"all": true, "zone": true, "access_point": true, "device": true}
+	if !validActions[req.Action] {
+		httputil.Error(w, http.StatusBadRequest, "invalid action")
+		return
+	}
+	if !validTargets[req.TargetType] {
+		httputil.Error(w, http.StatusBadRequest, "invalid target_type")
+		return
+	}
 	if req.TargetIDs == nil {
 		req.TargetIDs = []string{}
 	}
@@ -186,6 +198,17 @@ func (h *AccessHandlers) UpdateEmergencyPlan(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	validActions := map[string]bool{"unlock": true, "lock": true, "hold_open": true, "hold_close": true}
+	validTargets := map[string]bool{"all": true, "zone": true, "access_point": true, "device": true}
+	if req.Action != "" && !validActions[req.Action] {
+		httputil.Error(w, http.StatusBadRequest, "invalid action")
+		return
+	}
+	if req.TargetType != "" && !validTargets[req.TargetType] {
+		httputil.Error(w, http.StatusBadRequest, "invalid target_type")
+		return
+	}
+
 	var p emergencyPlan
 	err := h.db.Pool.QueryRow(r.Context(),
 		`UPDATE dm3_access.emergency_plans
@@ -210,7 +233,7 @@ func (h *AccessHandlers) UpdateEmergencyPlan(w http.ResponseWriter, r *http.Requ
 		&p.Action, &p.TargetType, &p.TargetIDs, &p.CountdownSeconds, &p.Enabled,
 		&p.SortOrder, &p.CreatedBy, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			httputil.Error(w, http.StatusNotFound, "plan not found")
 			return
 		}
@@ -278,7 +301,7 @@ func (h *AccessHandlers) ActivateEmergency(w http.ResponseWriter, r *http.Reques
 		req.PlanID, cid,
 	).Scan(&plan.ID, &plan.TenantID, &plan.Name, &plan.Action, &plan.TargetType, &plan.TargetIDs)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			httputil.Error(w, http.StatusNotFound, "plan not found or disabled")
 			return
 		}
@@ -346,13 +369,13 @@ func (h *AccessHandlers) ActivateEmergency(w http.ResponseWriter, r *http.Reques
 		     target_summary, notes, metadata)
 		 VALUES ($1::uuid, $2::uuid, $3, $4, 'active', $5::uuid, $6, $7, $8, $9)
 		 RETURNING id, tenant_id, time, plan_id, plan_name, action, status,
-		           triggered_by, triggered_by_email, '', '',
+		           triggered_by, triggered_by_email, all_clear_by, COALESCE(all_clear_by_email,''),
 		           activated_at, resolved_at, duration_seconds, target_summary, notes`,
 		cid, plan.ID, plan.Name, plan.Action, nullStr(actorID), actorEmail,
 		targetSummary, req.Notes,
 		marshalJSON(map[string]any{"access_point_ids": accessPointIDs, "target_type": plan.TargetType, "target_ids": plan.TargetIDs}),
 	).Scan(&inc.ID, &inc.TenantID, &inc.Time, &inc.PlanID, &inc.PlanName, &inc.Action, &inc.Status,
-		&inc.TriggeredBy, &inc.TriggeredByEmail, &inc.AllClearByEmail, &inc.AllClearByEmail,
+		&inc.TriggeredBy, &inc.TriggeredByEmail, &inc.AllClearBy, &inc.AllClearByEmail,
 		&inc.ActivatedAt, &inc.ResolvedAt, &inc.DurationSeconds, &inc.TargetSummary, &inc.Notes)
 	if err != nil {
 		slog.Error("ActivateEmergency: insert incident failed", "error", err)
@@ -408,7 +431,7 @@ func (h *AccessHandlers) AllClearEmergency(w http.ResponseWriter, r *http.Reques
 		&inc.ActivatedAt, &inc.ResolvedAt, &inc.DurationSeconds, &inc.TargetSummary, &inc.Notes,
 		&metadataRaw)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			httputil.Error(w, http.StatusNotFound, "no active incident found")
 			return
 		}
