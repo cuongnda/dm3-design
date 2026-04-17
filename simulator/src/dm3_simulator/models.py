@@ -43,9 +43,28 @@ class DoorState(str, enum.Enum):
     LOCKED = "locked"
     UNLOCKED = "unlocked"
     OPEN = "open"
+    CLOSED = "closed"
     HELD_OPEN = "held_open"
+    HELD_CLOSE = "held_close"
     FORCED = "forced"
     TAMPERED = "tampered"
+    ALARM = "alarm"
+
+
+class LockdownLevel(str, enum.Enum):
+    """Lockdown severity levels."""
+    FULL = "full"
+    ZONE = "zone"
+
+
+class FirmwareStatus(str, enum.Enum):
+    """Firmware OTA update status."""
+    IDLE = "idle"
+    DOWNLOADING = "downloading"
+    INSTALLING = "installing"
+    SUCCESS = "success"
+    FAILED = "failed"
+    ROLLED_BACK = "rolled_back"
 
 
 class CredentialType(str, enum.Enum):
@@ -114,6 +133,32 @@ class MqttMessage(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict)
     ref: str | None = None
     status: str | None = None
+
+
+class DeviceConfig(BaseModel):
+    """Runtime device configuration received via cfg.device_update."""
+    device_id: str = ""
+    name: str = ""
+    location: str = ""
+    model: str = ""
+    open_relay_ms: int = 3000
+    timezone: str = "Asia/Ho_Chi_Minh"
+    verify_methods: list[str] = Field(default_factory=lambda: ["face", "nfc", "pin"])
+    verify_logic: str = "or"
+
+
+class FirmwareInfo(BaseModel):
+    """Firmware OTA deployment info."""
+    deployment_id: str = ""
+    version: str = ""
+    url: str = ""
+    checksum: str = ""
+    size_bytes: int = 0
+    force: bool = False
+    status: FirmwareStatus = FirmwareStatus.IDLE
+    progress_pct: int = 0
+    previous_version: str = "sim-0.1.0"
+    error: str | None = None
 
 
 class SimulationConfig(BaseModel):

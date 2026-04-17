@@ -38,6 +38,35 @@ def evaluate_schedule(schedule_json: dict, now_ms: int) -> bool:
     return False
 
 
+def evaluate_passage_time(passage_time: dict, now_ms: int) -> bool:
+    """Check if current time falls within passage_time slots (AP-level free access).
+
+    Passage time uses day-of-week 0=Sunday convention (different from isoweekday).
+
+    Args:
+        passage_time: {"timezone": "Asia/Ho_Chi_Minh", "slots": [{"day": 1, "start": "08:00", "end": "18:00"}]}
+        now_ms: Current time in Unix milliseconds.
+
+    Returns:
+        True if current time is within any passage_time slot.
+    """
+    slots = passage_time.get("slots", [])
+    if not slots:
+        return False
+
+    tz = pytz.timezone(passage_time.get("timezone", "UTC"))
+    now_local = datetime.fromtimestamp(now_ms / 1000, tz=tz)
+    # Convert to 0=Sunday convention: isoweekday() gives 1=Mon..7=Sun → 0=Sun,1=Mon..6=Sat
+    weekday = now_local.isoweekday() % 7  # 7(Sun)->0, 1(Mon)->1, ..., 6(Sat)->6
+    current_time = now_local.strftime("%H:%M")
+
+    for slot in slots:
+        if slot.get("day") == weekday:
+            if slot.get("start", "00:00") <= current_time <= slot.get("end", "23:59"):
+                return True
+    return False
+
+
 class AccessEngine:
     """Offline-first access decision engine.
 
@@ -71,6 +100,17 @@ class AccessEngine:
         """
         start_ns = time.monotonic_ns()
         now_ms = timestamp or int(time.time() * 1000)
+
+        # Step 0: Check passage time — if active, grant access to everyone
+        passage_time = await self.db.get_config("passage_time")
+        if passage_time and evaluate_passage_time(passage_time, now_ms):
+            # Passage time active: door is freely open, still identify the person if possible
+            person = await self.db.lookup_credential(credential_type, credential_value)
+            return self._decision(
+                True, "passage_time", start_ns,
+                person_id=person.person_id if person else None,
+                person_name=person.name if person else None,
+            )
 
         # Step 1: Check lockdown
         if self.lockdown_active:

@@ -62,6 +62,16 @@ class SimulatorAPI:
         self.app.router.add_post("/api/devices/{device_id}/activate", self.activate_qr)
         self.app.router.add_post("/api/simulate/activate", self.simulate_activate)
         self.app.router.add_post("/api/simulate/bootstrap", self.simulate_bootstrap)
+        # New workflow endpoints
+        self.app.router.add_post("/api/devices/{device_id}/door", self.door_command)
+        self.app.router.add_post("/api/devices/{device_id}/lockdown", self.lockdown_command)
+        self.app.router.add_post("/api/devices/{device_id}/reboot", self.reboot_command)
+        self.app.router.add_post("/api/devices/{device_id}/display", self.display_command)
+        self.app.router.add_post("/api/devices/{device_id}/snapshot", self.snapshot_command)
+        self.app.router.add_post("/api/devices/{device_id}/alarm", self.trigger_alarm)
+        self.app.router.add_post("/api/devices/{device_id}/firmware", self.firmware_command)
+        self.app.router.add_get("/api/devices/{device_id}/firmware", self.get_firmware_status)
+        self.app.router.add_post("/api/lockdown/broadcast", self.broadcast_lockdown)
         # Serve index.html at root
         self.app.router.add_get("/", self.serve_index)
         # Serve static files
@@ -725,6 +735,203 @@ class SimulatorAPI:
         secret = body.get("bootstrap_secret", "dm3-bootstrap-v1-dev-secret")
         result = await device.start_bootstrap(bootstrap_secret=secret)
         return web.json_response({"device_id": rid, **result})
+
+    # ─── New Workflow Endpoints ─────────────────────────────────────────────
+
+    async def door_command(self, request: web.Request) -> web.Response:
+        """Send a door command (unlock/lock/hold_open/hold_close/release) to a device."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+
+        body = await request.json() if request.body_exists else {}
+        action = body.get("action", "unlock")
+        door_id = body.get("door_id", device.door_ids[0])
+        duration_ms = body.get("duration_ms")
+
+        # Simulate receiving the command via MQTT
+        payload = {
+            "id": f"api-cmd-{int(time.time())}",
+            "type": "cmd.door",
+            "data": {"action": action, "door_id": door_id},
+        }
+        if duration_ms is not None:
+            payload["data"]["duration_ms"] = duration_ms
+
+        await device._handle_door_command(payload)
+        return web.json_response({
+            "status": "ok", "device_id": device_id,
+            "action": action, "door_state": device.door_state.value,
+        })
+
+    async def lockdown_command(self, request: web.Request) -> web.Response:
+        """Activate/deactivate lockdown on a device."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+
+        body = await request.json() if request.body_exists else {}
+        payload = {
+            "id": f"api-lockdown-{int(time.time())}",
+            "type": "cmd.lockdown",
+            "data": {
+                "action": body.get("action", "activate"),
+                "level": body.get("level", "full"),
+                "zone_ids": body.get("zone_ids", []),
+            },
+        }
+        await device._handle_lockdown(payload)
+        return web.json_response({
+            "status": "ok", "device_id": device_id,
+            "lockdown_active": device.lockdown_active,
+            "lockdown_level": device.lockdown_level.value if device.lockdown_level else None,
+        })
+
+    async def broadcast_lockdown(self, request: web.Request) -> web.Response:
+        """Broadcast lockdown to all devices."""
+        body = await request.json() if request.body_exists else {}
+        action = body.get("action", "activate")
+        level = body.get("level", "full")
+        zone_ids = body.get("zone_ids", [])
+
+        affected = []
+        for device in self.devices.values():
+            if device._running:
+                payload = {
+                    "id": f"api-broadcast-{int(time.time())}",
+                    "type": "cmd.lockdown",
+                    "data": {"action": action, "level": level, "zone_ids": zone_ids},
+                }
+                await device._handle_lockdown(payload)
+                affected.append(device.device_id)
+
+        return web.json_response({
+            "status": "ok", "action": action,
+            "affected_devices": len(affected), "device_ids": affected,
+        })
+
+    async def reboot_command(self, request: web.Request) -> web.Response:
+        """Trigger a reboot on a device."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+
+        body = await request.json() if request.body_exists else {}
+        import asyncio
+        payload = {
+            "id": f"api-reboot-{int(time.time())}",
+            "type": "cmd.reboot",
+            "data": {
+                "delay_ms": body.get("delay_ms", 5000),
+                "reason": body.get("reason", "remote"),
+            },
+        }
+        asyncio.create_task(device._handle_reboot(payload))
+        return web.json_response({"status": "rebooting", "device_id": device_id})
+
+    async def display_command(self, request: web.Request) -> web.Response:
+        """Send a display message to a device."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+
+        body = await request.json() if request.body_exists else {}
+        payload = {
+            "id": f"api-display-{int(time.time())}",
+            "type": "cmd.display",
+            "data": {
+                "message": body.get("message", ""),
+                "duration_ms": body.get("duration_ms", 30000),
+                "priority": body.get("priority", "normal"),
+                "color": body.get("color", "blue"),
+            },
+        }
+        await device._handle_display(payload)
+        return web.json_response({
+            "status": "ok", "device_id": device_id,
+            "display_message": device.display_message,
+        })
+
+    async def snapshot_command(self, request: web.Request) -> web.Response:
+        """Request a snapshot from a device camera."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+
+        body = await request.json() if request.body_exists else {}
+        payload = {
+            "id": f"api-snapshot-{int(time.time())}",
+            "type": "cmd.snapshot",
+            "data": {"camera": body.get("camera", "main")},
+        }
+        await device._handle_snapshot(payload)
+        return web.json_response({"status": "ok", "device_id": device_id, "message": "Snapshot captured and sent via MQTT"})
+
+    async def trigger_alarm(self, request: web.Request) -> web.Response:
+        """Trigger an alarm event on a device."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+
+        body = await request.json() if request.body_exists else {}
+        alarm_type = body.get("alarm_type", "forced_entry")
+        zone_id = body.get("zone_id")
+
+        await device.trigger_alarm(alarm_type, zone_id)
+        self.record_event({
+            "device_id": device_id, "timestamp": time.time(),
+            "type": "alarm", "alarm_type": alarm_type,
+            "door_state": device.door_state.value,
+        })
+        return web.json_response({
+            "status": "ok", "device_id": device_id,
+            "alarm_type": alarm_type, "door_state": device.door_state.value,
+        })
+
+    async def firmware_command(self, request: web.Request) -> web.Response:
+        """Simulate a firmware OTA update on a device."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+
+        body = await request.json() if request.body_exists else {}
+        import asyncio
+        payload = {
+            "id": f"api-firmware-{int(time.time())}",
+            "type": "cfg.firmware",
+            "data": {
+                "version": body.get("version", "sim-0.2.0"),
+                "url": body.get("url", "http://localhost:8002/api/v1/gateway/firmware/download/simulated"),
+                "checksum": body.get("checksum", "sha256:simulated"),
+                "size_bytes": body.get("size_bytes", 52428800),
+                "deployment_id": body.get("deployment_id", f"deploy-{int(time.time())}"),
+                "force": body.get("force", False),
+            },
+        }
+        asyncio.create_task(device._handle_firmware_update(payload))
+        return web.json_response({
+            "status": "started", "device_id": device_id,
+            "version": payload["data"]["version"],
+        })
+
+    async def get_firmware_status(self, request: web.Request) -> web.Response:
+        """Get firmware OTA status for a device."""
+        device_id = request.match_info["device_id"]
+        device = self.devices.get(device_id)
+        if not device:
+            return web.json_response({"error": "Device not found"}, status=404)
+
+        return web.json_response({
+            "device_id": device_id,
+            "firmware": device.firmware.model_dump(),
+        })
 
     def record_event(self, event: dict[str, Any]) -> None:
         """Record an event for the recent events feed."""

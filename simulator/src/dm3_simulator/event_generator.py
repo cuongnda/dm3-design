@@ -148,3 +148,58 @@ def pick_denial_reason() -> str:
     """Pick a random denial reason based on distribution."""
     reasons, weights = zip(*DENIAL_REASONS)
     return random.choices(reasons, weights=weights, k=1)[0]
+
+
+ALARM_TYPES = [
+    ("forced_entry", 40),
+    ("tamper", 25),
+    ("door_held_open", 20),
+    ("sensor_fault", 10),
+    ("communication_lost", 5),
+]
+
+
+def pick_alarm_type() -> str:
+    """Pick a random alarm type based on distribution."""
+    types, weights = zip(*ALARM_TYPES)
+    return random.choices(types, weights=weights, k=1)[0]
+
+
+DOOR_STATES = [
+    ("open", 30),
+    ("closed", 30),
+    ("held_open", 15),
+    ("forced", 10),
+    ("tampered", 10),
+    ("alarm", 5),
+]
+
+
+def pick_door_state() -> str:
+    """Pick a random door state for simulation."""
+    states, weights = zip(*DOOR_STATES)
+    return random.choices(states, weights=weights, k=1)[0]
+
+
+def generate_alarm_event(device_id: str, door_id: str, zone_id: str = "zone-001") -> dict[str, Any]:
+    """Generate a random alarm event."""
+    alarm_type = pick_alarm_type()
+    return {
+        "type": "alarm.triggered",
+        "device_id": device_id,
+        "door_id": door_id,
+        "alarm_type": alarm_type,
+        "zone_id": zone_id,
+        "severity": "critical" if alarm_type in ("forced_entry", "tamper") else "warning",
+    }
+
+
+def generate_door_state_event(device_id: str, door_id: str) -> dict[str, Any]:
+    """Generate a random door state change event."""
+    return {
+        "type": "door.state",
+        "device_id": device_id,
+        "door_id": door_id,
+        "state": pick_door_state(),
+        "trigger": random.choice(["access_granted", "remote_command", "manual", "timeout", "sensor"]),
+    }

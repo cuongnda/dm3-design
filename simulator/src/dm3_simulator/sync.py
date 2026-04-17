@@ -104,7 +104,7 @@ class SyncHandler:
 
         Server payload (§7.3):
         {
-          "action": "full_sync|upsert|delete",
+          "action": "full_sync|clear|upsert|delete",
           "users": [{ "user_id", "name", "credentials": [{type, uid/template/code}],
                        "access_zones", "schedule_id", "valid_from", "valid_until", "active" }],
           "sync_token": "...", "total_count": N, "batch": 1, "batch_total": 1
@@ -114,11 +114,23 @@ class SyncHandler:
         action = data.get("action", "upsert")
         users = data.get("users", [])
         sync_token = data.get("sync_token")
+        batch = data.get("batch", 1)
+        batch_total = data.get("batch_total", 1)
 
-        if action == "full_sync":
-            # For full sync, we could clear existing data first
-            # but for simplicity we just upsert all
-            pass
+        # Clear action: wipe all users (first step of manual replace flow)
+        if action == "clear":
+            await self.db.db.execute("DELETE FROM credentials")
+            await self.db.db.execute("DELETE FROM persons")
+            await self.db.db.commit()
+            await self.db.set_sync_state("person_db_version", "0")
+            logger.info("sync_persons_cleared", device_id=self.device_id)
+            return {"synced_count": 0, "failed_count": 0, "local_total": 0, "sync_token": sync_token or ""}
+
+        # Full sync on batch 1: clear existing data before loading
+        if action == "full_sync" and batch == 1:
+            await self.db.db.execute("DELETE FROM credentials")
+            await self.db.db.execute("DELETE FROM persons")
+            await self.db.db.commit()
 
         synced = 0
         failed = 0
@@ -151,13 +163,19 @@ class SyncHandler:
         db_version = int(await self.db.get_sync_state("person_db_version") or "0") + 1
         await self.db.set_sync_state("person_db_version", str(db_version))
 
+        # Track batch progress
+        await self.db.set_sync_state("sync_batch", str(batch))
+        await self.db.set_sync_state("sync_batch_total", str(batch_total))
+
         logger.info(
             "sync_persons_applied", device_id=self.device_id,
             action=action, synced=synced, failed=failed, total=total,
+            batch=f"{batch}/{batch_total}",
         )
         return {
             "synced_count": synced, "failed_count": failed,
             "local_total": total, "sync_token": sync_token or "",
+            "batch": batch, "batch_total": batch_total,
         }
 
     async def handle_access_rules(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -253,3 +271,33 @@ class SyncHandler:
             action=action, count=len(entries), version=version,
         )
         return {"blacklist_version": version}
+
+    async def handle_device_update(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Handle cfg.device_update message — device settings from server.
+
+        Server payload:
+        {
+          "device_id": "840107",
+          "name": "DQ Mini+ Demo",
+          "location": "Office Staff",
+          "model": "dqmini_plus",
+          "open_relay_ms": 3000,
+          "timezone": "Asia/Ho_Chi_Minh",
+          "verify_methods": ["face", "nfc", "pin"],
+          "verify_logic": "or"
+        }
+        """
+        import time as _time
+        data = payload.get("data", {})
+
+        # Store all config fields
+        for key, value in data.items():
+            await self.db.set_config(f"device_{key}", value)
+
+        await self.db.set_sync_state("last_config_update", str(int(_time.time() * 1000)))
+
+        logger.info(
+            "device_config_updated", device_id=self.device_id,
+            name=data.get("name"), location=data.get("location"),
+        )
+        return {"applied_at": int(_time.time() * 1000)}

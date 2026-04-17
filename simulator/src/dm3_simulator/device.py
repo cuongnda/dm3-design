@@ -15,8 +15,12 @@ from dm3_simulator.access_engine import AccessEngine
 from dm3_simulator.database import DeviceDatabase
 from dm3_simulator.models import (
     AccessDecision,
+    DeviceConfig,
     DeviceState,
     DoorState,
+    FirmwareInfo,
+    FirmwareStatus,
+    LockdownLevel,
     MqttMessage,
     ProvisioningStatus,
     SimulationConfig,
@@ -51,6 +55,8 @@ class VirtualDevice:
         self.start_time = time.time()
         self.events_published = 0
         self.lockdown_active = False
+        self.lockdown_level: LockdownLevel | None = None
+        self.lockdown_zone_ids: list[str] = []
         self.current_direction = "entry"
         self.event_callback: Any = None  # Set by API to capture events
         self._network_disabled = False
@@ -58,6 +64,10 @@ class VirtualDevice:
         self.provisioning_status = ProvisioningStatus.PROVISIONED  # default for existing devices
         self.mqtt_token: str | None = None  # JWT token from provisioning
         self._bootstrap_mqtt: DeviceMqttClient | None = None  # separate client for bootstrap
+        self.device_config = DeviceConfig()  # runtime config from server
+        self.firmware = FirmwareInfo()  # firmware OTA state
+        self.display_message: str | None = None  # current display message
+        self._door_relock_task: asyncio.Task | None = None  # auto-relock timer
 
         # Components
         db_path = ":memory:" if config.db_mode == "memory" else f"/tmp/dm3-sim/{device_id}.db"
@@ -115,7 +125,7 @@ class VirtualDevice:
     async def stop(self) -> None:
         """Stop the virtual device."""
         self._running = False
-        for task in [self._heartbeat_task, self._event_task, self._listen_task, self._queue_drain_task]:
+        for task in [self._heartbeat_task, self._event_task, self._listen_task, self._queue_drain_task, self._door_relock_task]:
             if task:
                 task.cancel()
                 try:
@@ -472,14 +482,28 @@ class VirtualDevice:
             elif msg_type == "cfg.blacklist":
                 ack_data = await self.sync_handler.handle_blacklist(payload)
 
+            elif msg_type == "cfg.device_update":
+                ack_data = await self.sync_handler.handle_device_update(payload)
+                self._apply_device_config(payload.get("data", {}))
+                await self.mqtt.publish_ack("cfg.device_update.ack", msg_id, ack_data)
+
+            elif msg_type == "cfg.firmware":
+                asyncio.create_task(self._handle_firmware_update(payload))
+
             elif msg_type == "cmd.lockdown":
-                action = payload.get("data", {}).get("action", "activate")
-                self.lockdown_active = action == "activate"
-                self.access_engine.lockdown_active = self.lockdown_active
-                logger.info("lockdown_changed", device_id=self.device_id, active=self.lockdown_active)
+                await self._handle_lockdown(payload)
 
             elif msg_type == "cmd.door":
                 await self._handle_door_command(payload)
+
+            elif msg_type == "cmd.reboot":
+                await self._handle_reboot(payload)
+
+            elif msg_type == "cmd.display":
+                await self._handle_display(payload)
+
+            elif msg_type == "cmd.snapshot":
+                await self._handle_snapshot(payload)
 
             else:
                 logger.debug("unhandled_message", device_id=self.device_id, type=msg_type)
@@ -488,19 +512,36 @@ class VirtualDevice:
             logger.error("message_handler_error", device_id=self.device_id, type=msg_type, error=str(e))
 
     async def _handle_door_command(self, payload: dict[str, Any]) -> None:
-        """Handle door control commands."""
+        """Handle door control commands: unlock, lock, hold_open, hold_close, release."""
         data = payload.get("data", {})
         action = data.get("action", "unlock")
         door_id = data.get("door_id", self.door_ids[0])
+        duration_ms = data.get("duration_ms", self.device_config.open_relay_ms)
+
+        prev_state = self.door_state
 
         if action == "unlock":
             self.door_state = DoorState.UNLOCKED
+            # Auto-relock after duration
+            if self._door_relock_task:
+                self._door_relock_task.cancel()
+            self._door_relock_task = asyncio.create_task(
+                self._auto_relock(door_id, duration_ms)
+            )
         elif action == "lock":
             self.door_state = DoorState.LOCKED
         elif action == "hold_open":
             self.door_state = DoorState.HELD_OPEN
+        elif action == "hold_close":
+            self.door_state = DoorState.HELD_CLOSE
+        elif action == "release":
+            self.door_state = DoorState.LOCKED
 
-        # Send response
+        # Publish door.state event if state changed
+        if self.door_state != prev_state:
+            await self._publish_door_state(door_id, action)
+
+        # Send command response
         resp = MqttMessage(
             src=f"device:{self.device_id}",
             type="cmd.door.resp",
@@ -509,6 +550,250 @@ class VirtualDevice:
             data={"door_id": door_id, "current_state": self.door_state.value, "executed_at": int(time.time() * 1000)},
         )
         await self.mqtt.publish(f"{self.mqtt.topic_prefix}/cmd/resp", resp.model_dump_json(), qos=2)
+        logger.info("door_command", device_id=self.device_id, action=action, door=door_id, state=self.door_state.value)
+
+    async def _auto_relock(self, door_id: str, duration_ms: int) -> None:
+        """Auto-relock door after unlock duration."""
+        try:
+            await asyncio.sleep(duration_ms / 1000.0)
+            if self.door_state == DoorState.UNLOCKED:
+                self.door_state = DoorState.LOCKED
+                await self._publish_door_state(door_id, "auto_relock")
+                logger.info("door_auto_relocked", device_id=self.device_id, door=door_id)
+        except asyncio.CancelledError:
+            pass
+
+    async def _publish_door_state(self, door_id: str, trigger: str) -> None:
+        """Publish a door.state event to the server."""
+        msg = MqttMessage(
+            src=f"device:{self.device_id}",
+            type="door.state",
+            data={
+                "door_id": door_id,
+                "state": self.door_state.value,
+                "trigger": trigger,
+                "timestamp": int(time.time() * 1000),
+            },
+        )
+        if self.mqtt.connected:
+            await self.mqtt.publish(f"{self.mqtt.topic_prefix}/evt", msg.model_dump_json(), qos=1)
+
+    async def _handle_lockdown(self, payload: dict[str, Any]) -> None:
+        """Handle emergency lockdown with level and zone support."""
+        data = payload.get("data", {})
+        action = data.get("action", "activate")
+        level = data.get("level", "full")
+        zone_ids = data.get("zone_ids", [])
+
+        if action == "activate":
+            self.lockdown_active = True
+            self.lockdown_level = LockdownLevel(level) if level in ("full", "zone") else LockdownLevel.FULL
+            self.lockdown_zone_ids = zone_ids
+            self.access_engine.lockdown_active = True
+            # Lock all doors
+            for door_id in self.door_ids:
+                self.door_state = DoorState.HELD_CLOSE
+                await self._publish_door_state(door_id, "lockdown")
+        elif action == "deactivate":
+            self.lockdown_active = False
+            self.lockdown_level = None
+            self.lockdown_zone_ids = []
+            self.access_engine.lockdown_active = False
+            # Restore doors to locked (normal)
+            for door_id in self.door_ids:
+                self.door_state = DoorState.LOCKED
+                await self._publish_door_state(door_id, "lockdown_released")
+
+        logger.info(
+            "lockdown_changed", device_id=self.device_id,
+            active=self.lockdown_active, level=level, zones=zone_ids,
+        )
+
+    async def _handle_reboot(self, payload: dict[str, Any]) -> None:
+        """Handle reboot command — simulate device restart cycle."""
+        data = payload.get("data", {})
+        delay_ms = data.get("delay_ms", 5000)
+        reason = data.get("reason", "remote")
+
+        # Send response acknowledging reboot
+        resp = MqttMessage(
+            src=f"device:{self.device_id}",
+            type="cmd.reboot.resp",
+            ref=payload.get("id"),
+            status="ok",
+            data={"reason": reason, "delay_ms": delay_ms},
+        )
+        await self.mqtt.publish(f"{self.mqtt.topic_prefix}/cmd/resp", resp.model_dump_json(), qos=2)
+
+        logger.info("reboot_requested", device_id=self.device_id, reason=reason, delay_ms=delay_ms)
+
+        # Simulate reboot: disconnect → wait → reconnect
+        await asyncio.sleep(delay_ms / 1000.0)
+        self.state = DeviceState.OFFLINE
+        await self.mqtt.disconnect()
+
+        # Simulate boot time
+        await asyncio.sleep(3.0)
+
+        # Reconnect
+        self.start_time = time.time()
+        connected = await self.mqtt.connect_with_retry(max_retries=5)
+        if connected:
+            self.state = DeviceState.READY
+            self._listen_task = asyncio.create_task(self.mqtt.listen())
+            logger.info("reboot_complete", device_id=self.device_id)
+        else:
+            self.state = DeviceState.ERROR
+            logger.error("reboot_reconnect_failed", device_id=self.device_id)
+
+    async def _handle_display(self, payload: dict[str, Any]) -> None:
+        """Handle display message command."""
+        data = payload.get("data", {})
+        message = data.get("message", "")
+        duration_ms = data.get("duration_ms", 30000)
+
+        self.display_message = message
+        logger.info("display_message", device_id=self.device_id, message=message, duration_ms=duration_ms)
+
+        # Send response
+        resp = MqttMessage(
+            src=f"device:{self.device_id}",
+            type="cmd.display.resp",
+            ref=payload.get("id"),
+            status="ok",
+            data={"message": message, "displayed_at": int(time.time() * 1000)},
+        )
+        await self.mqtt.publish(f"{self.mqtt.topic_prefix}/cmd/resp", resp.model_dump_json(), qos=2)
+
+        # Clear display after duration
+        async def _clear_display():
+            await asyncio.sleep(duration_ms / 1000.0)
+            self.display_message = None
+        asyncio.create_task(_clear_display())
+
+    async def _handle_snapshot(self, payload: dict[str, Any]) -> None:
+        """Handle snapshot command — return a simulated placeholder image."""
+        import base64
+        data = payload.get("data", {})
+        camera = data.get("camera", "main")
+
+        # Generate a minimal 1x1 JPEG placeholder (simulated snapshot)
+        # Real device would capture from camera
+        placeholder_jpeg = base64.b64encode(
+            bytes([
+                0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01,
+                0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xD9,
+            ])
+        ).decode()
+
+        resp = MqttMessage(
+            src=f"device:{self.device_id}",
+            type="cmd.snapshot.resp",
+            ref=payload.get("id"),
+            status="ok",
+            data={
+                "camera": camera,
+                "format": "jpeg",
+                "image_base64": placeholder_jpeg,
+                "width": 1,
+                "height": 1,
+                "captured_at": int(time.time() * 1000),
+            },
+        )
+        await self.mqtt.publish(f"{self.mqtt.topic_prefix}/cmd/resp", resp.model_dump_json(), qos=2)
+        logger.info("snapshot_captured", device_id=self.device_id, camera=camera)
+
+    async def _handle_firmware_update(self, payload: dict[str, Any]) -> None:
+        """Handle firmware OTA: download, verify, install with progress acks."""
+        data = payload.get("data", {})
+        msg_id = payload.get("id", "")
+        deployment_id = data.get("deployment_id", "")
+        version = data.get("version", "")
+        url = data.get("url", "")
+        checksum = data.get("checksum", "")
+        size_bytes = data.get("size_bytes", 0)
+        force = data.get("force", False)
+
+        self.firmware = FirmwareInfo(
+            deployment_id=deployment_id, version=version, url=url,
+            checksum=checksum, size_bytes=size_bytes, force=force,
+            previous_version="sim-0.1.0",
+        )
+
+        logger.info("firmware_update_started", device_id=self.device_id, version=version)
+
+        async def _send_firmware_ack(status: str, progress: int, error: str | None = None):
+            ack_data: dict[str, Any] = {
+                "deployment_id": deployment_id,
+                "status": status,
+                "progress_pct": progress,
+                "version": version,
+            }
+            if error:
+                ack_data["error"] = error
+                ack_data["previous_version"] = self.firmware.previous_version
+            await self.mqtt.publish_ack("cfg.firmware.ack", msg_id, ack_data)
+
+        try:
+            # Phase 1: Downloading (simulate with progress)
+            self.firmware.status = FirmwareStatus.DOWNLOADING
+            for pct in (10, 30, 50, 70, 90, 100):
+                self.firmware.progress_pct = pct
+                await _send_firmware_ack("downloading", pct)
+                await asyncio.sleep(0.5)
+
+            # Phase 2: Verify checksum (simulated)
+            logger.info("firmware_download_complete", device_id=self.device_id, version=version)
+
+            # Phase 3: Installing
+            self.firmware.status = FirmwareStatus.INSTALLING
+            self.firmware.progress_pct = 0
+            await _send_firmware_ack("installing", 0)
+            await asyncio.sleep(2.0)
+
+            # Phase 4: Success
+            self.firmware.status = FirmwareStatus.SUCCESS
+            self.firmware.progress_pct = 100
+            await _send_firmware_ack("success", 100)
+            logger.info("firmware_update_complete", device_id=self.device_id, version=version)
+
+        except Exception as e:
+            self.firmware.status = FirmwareStatus.FAILED
+            self.firmware.error = str(e)
+            await _send_firmware_ack("failed", self.firmware.progress_pct, str(e))
+            logger.error("firmware_update_failed", device_id=self.device_id, error=str(e))
+
+    def _apply_device_config(self, data: dict[str, Any]) -> None:
+        """Apply cfg.device_update settings to the running device."""
+        self.device_config = DeviceConfig(
+            device_id=data.get("device_id", self.device_id),
+            name=data.get("name", self.device_config.name),
+            location=data.get("location", self.device_config.location),
+            model=data.get("model", self.device_config.model),
+            open_relay_ms=data.get("open_relay_ms", self.device_config.open_relay_ms),
+            timezone=data.get("timezone", self.device_config.timezone),
+            verify_methods=data.get("verify_methods", self.device_config.verify_methods),
+            verify_logic=data.get("verify_logic", self.device_config.verify_logic),
+        )
+        logger.info("device_config_applied", device_id=self.device_id, name=self.device_config.name)
+
+    async def trigger_alarm(self, alarm_type: str = "forced_entry", zone_id: str | None = None) -> None:
+        """Trigger an alarm event."""
+        self.door_state = DoorState.ALARM
+        msg = MqttMessage(
+            src=f"device:{self.device_id}",
+            type="alarm.triggered",
+            data={
+                "alarm_type": alarm_type,
+                "zone_id": zone_id or self.site_id,
+                "door_id": self.door_ids[0],
+                "severity": "critical" if alarm_type in ("forced_entry", "tamper") else "warning",
+                "timestamp": int(time.time() * 1000),
+            },
+        )
+        if self.mqtt.connected:
+            await self.mqtt.publish(f"{self.mqtt.topic_prefix}/evt", msg.model_dump_json(), qos=1)
+        logger.info("alarm_triggered", device_id=self.device_id, type=alarm_type)
 
     async def _heartbeat_loop(self) -> None:
         """Send periodic heartbeat messages."""
@@ -597,10 +882,16 @@ class VirtualDevice:
             "events_published": self.events_published,
             "uptime_s": int(time.time() - self.start_time),
             "lockdown_active": self.lockdown_active,
+            "lockdown_level": self.lockdown_level.value if self.lockdown_level else None,
+            "lockdown_zone_ids": self.lockdown_zone_ids,
             "network_disabled": self.network_disabled,
             "auto_trigger": self.auto_trigger,
             "running": self._running,
             "provisioning_status": self.provisioning_status.value,
+            "display_message": self.display_message,
+            "firmware_status": self.firmware.status.value,
+            "firmware_version": self.firmware.version or "sim-0.1.0",
+            "device_name": self.device_config.name,
         }
 
     async def to_dict_full(self) -> dict[str, Any]:
