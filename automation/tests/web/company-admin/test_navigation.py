@@ -18,13 +18,13 @@ PAGES = [
     ("/secure/ai-detection", "AI Detection"),
     ("/secure/emergency", "Emergency"),
     ("/manage/identities", "Identities"),
-    ("/manage/visitors", "Visitors"),
+    ("/visitors", "Visitors"),
     ("/manage/contractors", "Contractors"),
     ("/manage/attendance", "Attendance"),
     ("/manage/deliveries", "Deliveries"),
     ("/manage/provisioning", "Provisioning"),
     ("/operate/room-booking", "Room Booking"),
-    ("/operate/parking", "Parking"),
+    ("/parking", "Parking"),
     ("/operate/maintenance", "Maintenance"),
     ("/operate/guard-tour", "Guard Tour"),
     ("/operate/keys", "Key Management"),
@@ -38,34 +38,45 @@ PAGES = [
 
 
 def _inject_auth(page) -> None:
-    """Inject Zustand auth state into localStorage."""
-    page.add_init_script("""() => {
+    """Inject Zustand auth state + token keys into localStorage.
+
+    The token lives in its own localStorage keys (dm3-token / dm3-refresh),
+    separate from the Zustand persist slice (dm3-auth).
+    """
+    page.add_init_script("""
+        localStorage.setItem('dm3-token', 'dm3-test-token');
+        localStorage.setItem('dm3-refresh', 'dm3-test-refresh');
+        localStorage.setItem('dm3-lang', 'en');
         const state = {
             state: {
-                token: 'dm3-test-token',
-                refreshToken: 'dm3-test-refresh',
                 user: {
                     id: 'test-user-id',
                     email: 'admin@duali.com',
                     name: 'Test Admin',
                     role: 'primary_manager',
-                    tenant_id: '00000000-0000-0000-0000-000000000001',
+                    initials: 'TA',
                 },
                 isAuthenticated: true,
-                enabledPlugins: ['visitors', 'parking', 'attendance'],
+                enabledPlugins: ['visitor', 'parking', 'cctv', 'attendance'],
             },
             version: 0,
         };
         localStorage.setItem('dm3-auth', JSON.stringify(state));
-    }""")
+    """)
 
 
 def _mock_common_apis(page) -> None:
-    """Mock common API endpoints that many pages call."""
-    page.route("**/api/v1/auth/tenant/**", lambda r: r.fulfill(
+    """Mock common API endpoints that many pages call.
+
+    Playwright matches routes in reverse registration order (last wins),
+    so register the catch-all FIRST, then specific endpoints AFTER.
+    """
+    # 1) Catch-all — any unmocked /api/v1/* returns an empty paginated envelope.
+    page.route("**/api/v1/**", lambda r: r.fulfill(
         status=200, content_type="application/json",
-        body=json.dumps({"tenant": {"id": "00000000-0000-0000-0000-000000000001", "status": "active"}}),
+        body=json.dumps({"data": [], "total": 0, "page": 1, "limit": 20}),
     ))
+    # 2) Specific endpoints whose shape must match consumer expectations.
     page.route("**/api/v1/access/stats", lambda r: r.fulfill(
         status=200, content_type="application/json",
         body=json.dumps({
@@ -74,10 +85,26 @@ def _mock_common_apis(page) -> None:
             "denied_today": 0, "recent_events": [],
         }),
     ))
-    # Catch-all for other API calls — return empty 200
-    page.route("**/api/v1/**", lambda r: r.fulfill(
+    page.route("**/api/v1/gateway/devices", lambda r: r.fulfill(
+        status=200, content_type="application/json", body=json.dumps([]),
+    ))
+    page.route("**/api/v1/notifications/unread-count", lambda r: r.fulfill(
+        status=200, content_type="application/json", body=json.dumps({"count": 0}),
+    ))
+    page.route("**/api/v1/auth/tenant/**", lambda r: r.fulfill(
         status=200, content_type="application/json",
-        body=json.dumps({"data": [], "total": 0}),
+        body=json.dumps({"tenant": {"id": "00000000-0000-0000-0000-000000000001", "status": "active"}}),
+    ))
+    # 3) /auth/me MUST succeed or checkAuth() will clear tokens.
+    page.route("**/api/v1/auth/me", lambda r: r.fulfill(
+        status=200, content_type="application/json",
+        body=json.dumps({
+            "id": "test-user-id", "email": "admin@duali.com",
+            "name": "Test Admin", "role": "primary_manager",
+            "company_id": "00000000-0000-0000-0000-000000000001",
+            "preferred_language": "en",
+            "enabled_plugins": ["visitor", "parking", "cctv", "attendance"],
+        }),
     ))
 
 
