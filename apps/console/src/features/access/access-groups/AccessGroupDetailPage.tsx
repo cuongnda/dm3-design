@@ -2,13 +2,12 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  ArrowLeft, Shield, Edit, Trash2, Plus, Users, UserCircle, Clock,
+  ArrowLeft, Shield, Edit, Trash2, Plus, Users, UserCircle, Clock, DoorOpen,
 } from 'lucide-react';
 import {
   Button, Input, Label,
   Badge, AppModal,
   DataTable, type Column,
-  Tabs, TabsContent, TabsList, TabsTrigger,
   TablePaginationFooter, Checkbox,
 } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
@@ -17,6 +16,8 @@ import { useBreadcrumbStore } from '@dm3/ui';
 import type { AccessGroup, AccessGroupAccessPoint, AccessGroupFormData, AccessTime } from './types';
 import type { User } from '@/features/user-management/types';
 import { buildZonePathMap, ZonePathLabel, type ZoneRef } from '../shared/zone-path';
+import { WeekdayStrip } from '../access-times/components/WeekdayStrip';
+import type { AccessTimeSlot as AccessTimeSlotFull } from '../access-times/types';
 
 interface GroupUser {
   id: string;
@@ -553,7 +554,6 @@ export function AccessGroupDetailPage() {
 
   const [users, setUsers] = useState<GroupUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
-  const [activeTab, setActiveTab] = useState<'access-points' | 'users'>('access-points');
 
   const [showAddAPModal, setShowAddAPModal] = useState(false);
   const [removingAPId, setRemovingAPId] = useState<string | null>(null);
@@ -608,7 +608,7 @@ export function AccessGroupDetailPage() {
 
   const fetchAccessTimes = useCallback(async () => {
     try {
-      const data = await apiFetch<{ data?: AccessTime[] }>('/api/v1/access/access-times?limit=100');
+      const data = await apiFetch<{ data?: AccessTime[] }>('/api/v1/access/access-times?limit=100&include_slots=true');
       setAccessTimes(data.data ?? []);
     } catch {
       // access times are optional; errors are non-fatal
@@ -931,100 +931,230 @@ export function AccessGroupDetailPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as typeof activeTab)}
-        className="flex flex-col flex-1 min-h-0 overflow-hidden rounded-xl border border-border bg-card shadow-sm"
-      >
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2">
-          <TabsList variant="line">
-            <TabsTrigger value="access-points" className="text-[12px] px-3 whitespace-nowrap" data-testid="access-tab-accessPoints">
-              <Shield size={13} className="mr-1.5" />
-              {t('tabs.accessPoints', 'Access Points')} ({accessPoints.length})
-            </TabsTrigger>
-            <TabsTrigger value="users" className="text-[12px] px-3 whitespace-nowrap" data-testid="access-tab-users">
-              <Users size={13} className="mr-1.5" />
-              {t('tabs.users', 'Users')} ({users.length})
-            </TabsTrigger>
-          </TabsList>
-
-          {activeTab === 'access-points' && (
-            <Button size="sm" onClick={() => setShowAddAPModal(true)} data-testid="access-button-addAccessPoint">
-              <Plus size={14} className="mr-1.5" />
-              {t('addAccessPoint', 'Add Access Point')}
-            </Button>
-          )}
-          {activeTab === 'users' && (
-            <Button size="sm" onClick={() => setShowAddUserModal(true)} data-testid="access-button-addUser">
-              <Plus size={14} className="mr-1.5" />
-              {t('addUser', 'Add User')}
-            </Button>
-          )}
-        </div>
-
-        {/* Access Points Tab */}
-        <TabsContent value="access-points" className="min-h-0 flex-1 overflow-auto">
-          {loadingAPs ? (
-            <div className="flex justify-center py-12">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-            </div>
-          ) : accessPoints.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Shield size={36} className="mb-3 text-muted-foreground/40" />
-              <p className="text-[13px] font-medium text-foreground">
-                {t('noAccessPoints', 'No access points assigned to this group yet.')}
-              </p>
-              <p className="mt-1 text-[12px] text-muted-foreground">
-                {t('noAccessPointsHint', 'Click "Add Access Point" to assign one.')}
-              </p>
-            </div>
-          ) : (
-            <DataTable
-              embedded
-              stickyHeader
-              paginate={false}
-              columns={apColumns}
-              data={accessPoints}
-              rowKey={(ap) => ap.id}
-              onRowDoubleClick={(ap) => navigate(`/access/access-points/${ap.access_point_id}`)}
-            />
-          )}
-        </TabsContent>
-
-        {/* Users Tab */}
-        <TabsContent value="users" className="min-h-0 flex-1 overflow-auto">
-          {loadingUsers ? (
-            <div className="flex justify-center py-12">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-            </div>
-          ) : users.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Users size={36} className="mb-3 text-muted-foreground/40" />
-              <p className="text-[13px] font-medium text-foreground">
-                {t('noUsers', 'No users in this group yet.')}
-              </p>
-              <p className="mt-1 text-[12px] text-muted-foreground">
-                {t('noUsersHint', 'Assign users via User Management.')}
-              </p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate('/manage/users')}>
-                <Users size={14} className="mr-1.5" />
-                {t('members.goToUsers', 'Go to User Management')}
+      {/* Who / Where / When regions */}
+      <div className="flex-1 min-h-0 overflow-auto pr-0.5">
+        <div className="flex flex-col gap-4">
+          {/* WHO — users in this group */}
+          <section
+            data-testid="access-section-who"
+            className="rounded-xl border border-border bg-card shadow-sm flex flex-col"
+          >
+            <header className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+              <div className="flex items-start gap-2.5">
+                <span className="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-md bg-secure/10 text-secure">
+                  <Users size={14} />
+                </span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-[14px] font-semibold text-foreground">
+                      {t('detail.who', 'Who')}
+                    </h2>
+                    <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
+                      {users.length}
+                    </Badge>
+                  </div>
+                  <p className="text-[12px] text-muted-foreground">
+                    {t('detail.whoSubtitle', 'Users assigned to this group.')}
+                  </p>
+                </div>
+              </div>
+              <Button size="sm" onClick={() => setShowAddUserModal(true)} data-testid="access-button-addUser">
+                <Plus size={14} className="mr-1.5" />
+                {t('addUser', 'Add User')}
               </Button>
+            </header>
+            <div className="max-h-[320px] overflow-auto">
+              {loadingUsers ? (
+                <div className="flex justify-center py-12">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                </div>
+              ) : users.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
+                  <Users size={28} className="text-muted-foreground/40" />
+                  <p className="text-[13px] font-medium text-foreground">
+                    {t('detail.whoEmpty', 'No users in this group yet.')}
+                  </p>
+                  <p className="text-[12px] text-muted-foreground">
+                    {t('noUsersHint', 'Click "Add User" to assign users to this group.')}
+                  </p>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button size="sm" onClick={() => setShowAddUserModal(true)}>
+                      <Plus size={14} className="mr-1.5" />
+                      {t('addUser', 'Add User')}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => navigate('/manage/users')}>
+                      <Users size={14} className="mr-1.5" />
+                      {t('members.goToUsers', 'Go to User Management')}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <DataTable
+                  embedded
+                  stickyHeader
+                  paginate={false}
+                  columns={userColumns}
+                  data={users}
+                  rowKey={(u) => u.id}
+                  onRowDoubleClick={(u) => navigate(`/manage/users/${u.id}`)}
+                />
+              )}
             </div>
-          ) : (
-            <DataTable
-              embedded
-              stickyHeader
-              paginate={false}
-              columns={userColumns}
-              data={users}
-              rowKey={(u) => u.id}
-              onRowDoubleClick={(u) => navigate(`/manage/users/${u.id}`)}
-            />
-          )}
-        </TabsContent>
-      </Tabs>
+          </section>
+
+          {/* WHERE — access points bound to this group */}
+          <section
+            data-testid="access-section-where"
+            className="rounded-xl border border-border bg-card shadow-sm flex flex-col"
+          >
+            <header className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+              <div className="flex items-start gap-2.5">
+                <span className="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-md bg-manage/10 text-manage">
+                  <DoorOpen size={14} />
+                </span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-[14px] font-semibold text-foreground">
+                      {t('detail.where', 'Where')}
+                    </h2>
+                    <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
+                      {accessPoints.length}
+                    </Badge>
+                  </div>
+                  <p className="text-[12px] text-muted-foreground">
+                    {t('detail.whereSubtitle', 'Access points members of this group can enter.')}
+                  </p>
+                </div>
+              </div>
+              <Button size="sm" onClick={() => setShowAddAPModal(true)} data-testid="access-button-addAccessPoint">
+                <Plus size={14} className="mr-1.5" />
+                {t('addAccessPoint', 'Add Access Point')}
+              </Button>
+            </header>
+            <div className="max-h-[320px] overflow-auto">
+              {loadingAPs ? (
+                <div className="flex justify-center py-12">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                </div>
+              ) : accessPoints.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
+                  <DoorOpen size={28} className="text-muted-foreground/40" />
+                  <p className="text-[13px] font-medium text-foreground">
+                    {t('detail.whereEmpty', 'No access points assigned to this group yet.')}
+                  </p>
+                  <p className="text-[12px] text-muted-foreground">
+                    {t('noAccessPointsHint', 'Click "Add Access Point" to assign one.')}
+                  </p>
+                  <div className="pt-1">
+                    <Button size="sm" onClick={() => setShowAddAPModal(true)}>
+                      <Plus size={14} className="mr-1.5" />
+                      {t('addAccessPoint', 'Add Access Point')}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <DataTable
+                  embedded
+                  stickyHeader
+                  paginate={false}
+                  columns={apColumns}
+                  data={accessPoints}
+                  rowKey={(ap) => ap.id}
+                  onRowDoubleClick={(ap) => navigate(`/access/access-points/${ap.access_point_id}`)}
+                />
+              )}
+            </div>
+          </section>
+
+          {/* WHEN — access time schedule */}
+          <section
+            data-testid="access-section-when"
+            className="rounded-xl border border-border bg-card shadow-sm"
+          >
+            <header className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+              <div className="flex items-start gap-2.5">
+                <span className="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-md bg-operate/10 text-operate">
+                  <Clock size={14} />
+                </span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-[14px] font-semibold text-foreground">
+                      {t('detail.when', 'When')}
+                    </h2>
+                    {group.access_time?.name && (
+                      <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
+                        {group.access_time.name}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-[12px] text-muted-foreground">
+                    {t('detail.whenSubtitle', 'Schedule that restricts when this group grants access.')}
+                  </p>
+                </div>
+              </div>
+              <Button size="sm" variant="outline" onClick={openEditModal} data-testid="access-button-editSchedule">
+                <Edit size={14} className="mr-1.5" />
+                {t('edit', 'Edit')}
+              </Button>
+            </header>
+            <div className="px-4 py-4">
+              {(() => {
+                const at = group.access_time_id
+                  ? accessTimes.find((a) => a.id === group.access_time_id) ?? group.access_time
+                  : null;
+                if (!at) {
+                  return (
+                    <div className="flex items-center gap-3 rounded-md border border-dashed border-border bg-muted/20 px-3 py-3">
+                      <Clock size={18} className="text-muted-foreground shrink-0" />
+                      <div>
+                        <p className="text-[13px] font-medium text-foreground">
+                          {t('detail.whenUnrestricted', '24/7 unrestricted access')}
+                        </p>
+                        <p className="text-[12px] text-muted-foreground">
+                          {t('detail.whenUnrestrictedHint', 'Members can enter at any time. Assign an access time to restrict hours.')}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+                const slots = (at.slots ?? []) as unknown as AccessTimeSlotFull[];
+                return (
+                  <div className="flex flex-col gap-3">
+                    <WeekdayStrip slots={slots} size="md" />
+                    {slots.length === 0 ? (
+                      <p className="text-[12px] text-muted-foreground">
+                        {t('detail.whenNoSlots', 'This access time has no active slots — nobody can enter.')}
+                      </p>
+                    ) : (
+                      <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2 md:grid-cols-3">
+                        {slots
+                          .filter((s) => s.is_active)
+                          .sort((a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time))
+                          .map((s) => {
+                            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                            return (
+                              <li
+                                key={s.id}
+                                className="flex items-center justify-between rounded-md border border-border/60 bg-muted/20 px-2.5 py-1.5 text-[12px]"
+                              >
+                                <span className="font-medium text-foreground">
+                                  {dayNames[s.day_of_week] ?? `Day ${s.day_of_week}`}
+                                </span>
+                                <span className="text-muted-foreground">
+                                  {s.start_time.slice(0, 5)} – {s.end_time.slice(0, 5)}
+                                </span>
+                              </li>
+                            );
+                          })}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </section>
+        </div>
+      </div>
 
       {/* Edit Group Modal */}
       <AppModal

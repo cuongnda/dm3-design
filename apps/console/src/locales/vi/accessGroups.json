@@ -104,5 +104,17 @@
   "bulkDelete": "Xóa đã chọn",
   "bulkDeleteTitle": "Xóa nhóm truy cập",
   "bulkDeleteConfirm": "Bạn có chắc muốn xóa",
-  "bulkDeleteSuffix": "nhóm truy cập? Thao tác này không thể hoàn tác."
+  "bulkDeleteSuffix": "nhóm truy cập? Thao tác này không thể hoàn tác.",
+  "detail.who": "Ai",
+  "detail.where": "Ở đâu",
+  "detail.when": "Khi nào",
+  "detail.whoSubtitle": "Người dùng được gán vào nhóm này.",
+  "detail.whereSubtitle": "Các điểm ra vào mà thành viên nhóm này có thể đi qua.",
+  "detail.whenSubtitle": "Khung giờ giới hạn khi nào nhóm này có quyền.",
+  "detail.whoEmpty": "Chưa có người dùng nào trong nhóm này.",
+  "detail.whereEmpty": "Chưa có điểm ra vào nào được gán cho nhóm này.",
+  "detail.whenUnrestricted": "Truy cập 24/7 không giới hạn",
+  "detail.whenUnrestrictedHint": "Thành viên có thể ra vào bất cứ lúc nào. Gán khung giờ để giới hạn.",
+  "detail.whenNoSlots": "Khung giờ này không có khoảng nào đang hoạt động — không ai có thể vào.",
+  "noRestriction": "24/7 Không giới hạn"
 }

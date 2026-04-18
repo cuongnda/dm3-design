@@ -104,5 +104,17 @@
   "bulkDelete": "Delete selected",
   "bulkDeleteTitle": "Delete Access Groups",
   "bulkDeleteConfirm": "Are you sure you want to delete",
-  "bulkDeleteSuffix": "access groups? This cannot be undone."
+  "bulkDeleteSuffix": "access groups? This cannot be undone.",
+  "detail.who": "Who",
+  "detail.where": "Where",
+  "detail.when": "When",
+  "detail.whoSubtitle": "Users assigned to this group.",
+  "detail.whereSubtitle": "Access points members of this group can enter.",
+  "detail.whenSubtitle": "Schedule that restricts when this group grants access.",
+  "detail.whoEmpty": "No users in this group yet.",
+  "detail.whereEmpty": "No access points assigned to this group yet.",
+  "detail.whenUnrestricted": "24/7 unrestricted access",
+  "detail.whenUnrestrictedHint": "Members can enter at any time. Assign an access time to restrict hours.",
+  "detail.whenNoSlots": "This access time has no active slots — nobody can enter.",
+  "noRestriction": "24/7 Unrestricted"
 }
