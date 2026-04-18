@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Zero-Trust Security Architecture — Duall Master 3.0</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: Helvetica, Arial, sans-serif; background: #FAFBFC; padding: 24px; }
+.diagram { width: 1500px; margin: 0 auto; }
+h1 { text-align: center; color: #1E293B; font-size: 20px; margin-bottom: 4px; }
+.sub { text-align: center; color: #64748B; font-size: 12px; margin-bottom: 24px; }
+.layers { position: relative; }
+.layer { border: 3px solid; border-radius: 18px; padding: 18px; margin-bottom: 16px; position: relative; background: #fff; }
+.layer-label { position: absolute; top: -13px; left: 20px; background: #fff; padding: 0 10px; font-weight: 700; font-size: 13px; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; align-items: center; }
+.box { border-radius: 10px; padding: 10px 14px; text-align: center; font-size: 11px; font-weight: 600; color: #fff; min-width: 130px; box-shadow: 0 2px 6px rgba(0,0,0,.1); line-height: 1.3; }
+.box small { display: block; font-weight: 400; font-size: 9px; opacity: .8; margin-top: 2px; }
+.red { background: #DC2626; border: 2px solid #B91C1C; }
+.blue { background: #3B82F6; border: 2px solid #1D4ED8; }
+.purple { background: #8B5CF6; border: 2px solid #6D28D9; }
+.green { background: #059669; border: 2px solid #047857; }
+.dark { background: #1E293B; border: 2px solid #0F172A; }
+.gray { background: #6B7280; border: 2px solid #4B5563; }
+.orange { background: #EA580C; border: 2px solid #C2410C; }
+.teal { background: #0891B2; border: 2px solid #0E7490; }
+.arr-down { text-align: center; color: #94A3B8; font-size: 16px; padding: 4px 0; letter-spacing: 6px; }
+.arr-down span { font-size: 10px; letter-spacing: 0; color: #64748B; display: block; }
+.flow-section { margin-top: 24px; }
+.flow-title { font-size: 13px; font-weight: 700; color: #1E293B; margin-bottom: 10px; }
+.flow-h { display: flex; align-items: center; gap: 0; justify-content: center; margin: 8px 0; }
+.a { padding: 0 6px; min-width: 70px; text-align: center; }
+.a .ln { height: 2px; background: #94A3B8; position: relative; }
+.a .ln::after { content: '▶'; position: absolute; right: -6px; top: -8px; font-size: 14px; color: #64748B; }
+.a .lb { font-size: 9px; color: #64748B; }
+.shield { font-size: 18px; margin-right: 6px; }
+.principles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
+.principle { background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 10px; padding: 12px; font-size: 11px; color: #166534; }
+.principle h4 { font-size: 12px; color: #15803D; margin-bottom: 4px; }
+</style></head><body>
+<div class="diagram">
+<h1>🛡️ Zero-Trust Security Architecture — Duall Master 3.0</h1>
+<p class="sub">Defense in depth · Never trust, always verify · TLS everywhere · mTLS between services</p>
+
+<div class="layers">
+  <!-- External -->
+  <div class="layer" style="border-color:#DC2626;">
+    <span class="layer-label" style="color:#DC2626;"><span class="shield">🌐</span>UNTRUSTED ZONE</span>
+    <div class="row">
+      <div class="box orange">🌐 Internet<small>Users · Attackers</small></div>
+      <div class="box orange">📱 Mobile Apps<small>Certificate pinning</small></div>
+      <div class="box orange">🖥️ Web Console<small>CSP · CORS · SRI</small></div>
+      <div class="box orange">📶 IoT Devices<small>MQTT + TLS · X.509 cert</small></div>
+    </div>
+  </div>
+
+  <div class="arr-down">▼ ▼ ▼ ▼<span>TLS 1.3 · Certificate Pinning · WAF Rules</span></div>
+
+  <!-- DMZ -->
+  <div class="layer" style="border-color:#F59E0B;">
+    <span class="layer-label" style="color:#D97706;"><span class="shield">🔶</span>DMZ — API GATEWAY (Traefik)</span>
+    <div class="row">
+      <div class="box red">🔒 TLS Termination<small>Let's Encrypt / Custom CA</small></div>
+      <div class="box red">🛡️ WAF Rules<small>OWASP Top 10</small></div>
+      <div class="box red">⏱️ Rate Limiting<small>Token bucket per tenant</small></div>
+      <div class="box blue">🎫 JWT Validation<small>Verify signature + claims</small></div>
+      <div class="box blue">🔑 RBAC Check<small>Permission enforcement</small></div>
+      <div class="box gray">📊 Request Logging<small>Audit trail</small></div>
+    </div>
+  </div>
+
+  <div class="arr-down">▼ ▼ ▼<span>Validated JWT · Tenant context · Stripped headers</span></div>
+
+  <!-- Auth -->
+  <div class="layer" style="border-color:#8B5CF6;">
+    <span class="layer-label" style="color:#6D28D9;"><span class="shield">🔐</span>IDENTITY PROVIDER</span>
+    <div class="row">
+      <div class="box purple">🏛️ Keycloak<small>OAuth2 / OIDC / SAML</small></div>
+      <div class="box purple">🔑 auth-svc<small>Go shim · Token mgmt</small></div>
+      <div class="box purple">👥 RBAC Engine<small>Roles · Permissions · Sites</small></div>
+      <div class="box purple">📲 MFA<small>TOTP · WebAuthn · SMS</small></div>
+      <div class="box purple">🏢 LDAP/AD Sync<small>Enterprise SSO</small></div>
+    </div>
+  </div>
+
+  <div class="arr-down">▼ ▼ ▼<span>mTLS · Service mesh · Encrypted gRPC</span></div>
+
+  <!-- Services -->
+  <div class="layer" style="border-color:#3B82F6;">
+    <span class="layer-label" style="color:#1D4ED8;"><span class="shield">🔒</span>TRUSTED ZONE — MICROSERVICES</span>
+    <div class="row">
+      <div class="box blue">🔐 mTLS<small>Service-to-service</small></div>
+      <div class="box blue">🎫 JWT Propagation<small>Claims forwarded</small></div>
+      <div class="box teal">🏷️ Tenant Isolation<small>Schema-per-tenant</small></div>
+      <div class="box teal">🔍 Row-Level Security<small>PostgreSQL RLS</small></div>
+      <div class="box green">📝 Audit Logging<small>Every state change</small></div>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <div class="box dark">🗄️ Encrypted at Rest<small>AES-256 · Database TDE</small></div>
+      <div class="box dark">🔑 Secret Management<small>HashiCorp Vault / K8s Secrets</small></div>
+      <div class="box dark">🔒 Network Policies<small>K8s NetworkPolicy · Calico</small></div>
+    </div>
+  </div>
+</div>
+
+<!-- JWT Auth Flow -->
+<div class="flow-section">
+  <div class="flow-title">🔑 JWT Authentication Flow</div>
+  <div class="flow-h">
+    <div class="box green" style="min-width:100px;">👤 User<small>Login</small></div>
+    <div class="a"><span class="lb">Credentials</span><div class="ln"></div></div>
+    <div class="box purple">auth-svc<small>Validate</small></div>
+    <div class="a"><span class="lb">Auth request</span><div class="ln"></div></div>
+    <div class="box purple">Keycloak<small>Issue tokens</small></div>
+    <div class="a"><span class="lb">JWT + Refresh</span><div class="ln"></div></div>
+    <div class="box green">👤 User<small>Store tokens</small></div>
+    <div class="a"><span class="lb">Bearer JWT</span><div class="ln"></div></div>
+    <div class="box red">Traefik<small>Verify JWT</small></div>
+    <div class="a"><span class="lb">Forward + claims</span><div class="ln"></div></div>
+    <div class="box blue">Service<small>Authorized</small></div>
+  </div>
+</div>
+
+<!-- Audit Flow -->
+<div class="flow-section">
+  <div class="flow-title">📋 Immutable Audit Trail</div>
+  <div class="flow-h">
+    <div class="box blue">Any Service<small>State change</small></div>
+    <div class="a"><span class="lb">NATS event</span><div class="ln"></div></div>
+    <div class="box dark">audit-svc<small>Append-only log</small></div>
+    <div class="a"><span class="lb">Write</span><div class="ln"></div></div>
+    <div class="box dark" style="border-radius:20px;">TimescaleDB<small>Immutable hypertable</small></div>
+    <div class="a"><span class="lb">Replicate</span><div class="ln"></div></div>
+    <div class="box dark" style="border-radius:20px;">MinIO<small>Signed exports</small></div>
+  </div>
+</div>
+
+<!-- Principles -->
+<div class="principles">
+  <div class="principle"><h4>🔒 Never Trust</h4>Every request authenticated. No implicit trust between services. mTLS everywhere.</div>
+  <div class="principle"><h4>🎯 Least Privilege</h4>RBAC with granular permissions. Site-scoped access. Schema isolation.</div>
+  <div class="principle"><h4>📊 Always Audit</h4>Every action logged. Immutable audit trail. Tamper-evident hash chain.</div>
+  <div class="principle"><h4>🔐 Encrypt Everything</h4>TLS 1.3 in transit. AES-256 at rest. Secrets in Vault. No plaintext.</div>
+</div>
+</div>
+</body></html>

@@ -1,0 +1,2027 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Duall Master 3.0 Vision v2</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Duall Master 3.0 Vision v2</h1>
+</header>
+<h1 id="duall-master-3.0-product-vision">Duall Master 3.0 — Product
+Vision</h1>
+<p><strong>Document Type:</strong> Product Vision<br />
+<strong>Version:</strong> 2.0<br />
+<strong>Date:</strong> February 2026<br />
+<strong>Owner:</strong> Duali Vietnam</p>
+<hr />
+<h2 id="vision-statement">1. Vision Statement</h2>
+<blockquote>
+<p><strong>Duall Master 3.0 is the unified platform for building
+security and facility management — the operating system that connects,
+monitors, and automates everything in a building.</strong></p>
+</blockquote>
+<p>From a single office to a military campus, from a residential tower
+to a hospital — one platform to manage it all.</p>
+<hr />
+<h2 id="the-transformation">2. The Transformation</h2>
+<pre><code>┌─────────────────────────────────────────────────────────────────────┐
+│                                                                     │
+│     TODAY                                    TOMORROW               │
+│                                                                     │
+│   ┌─────────────┐                        ┌─────────────────┐       │
+│   │   Access    │                        │   DUALL MASTER  │       │
+│   │   Control   │          →→→           │       3.0       │       │
+│   │   System    │                        │                 │       │
+│   └─────────────┘                        │  Building OS    │       │
+│                                          └─────────────────┘       │
+│   • Single function                      • Unified platform        │
+│   • Hardware-centric                     • Software + services     │
+│   • One-time sales                       • Recurring revenue       │
+│   • Easy to replace                      • Mission-critical        │
+│   • Desktop-first                        • Mobile-first            │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘</code></pre>
+<hr />
+<h2 id="target-markets">3. Target Markets</h2>
+<p>Duall Master 3.0 serves any facility that needs security and
+operational management:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 25%" />
+<col style="width: 40%" />
+</colgroup>
+<thead>
+<tr>
+<th>Segment</th>
+<th>Scale</th>
+<th>Key Needs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Office Buildings</strong></td>
+<td>50 – 5,000 people</td>
+<td>Access control, visitor, attendance, CCTV</td>
+</tr>
+<tr>
+<td><strong>Residential (Apartments)</strong></td>
+<td>100 – 2,000 units</td>
+<td>Intercom, parking, visitor, resident app</td>
+</tr>
+<tr>
+<td><strong>Industrial (Factories)</strong></td>
+<td>500 – 10,000 people</td>
+<td>Access, attendance, parking, CCTV, safety</td>
+</tr>
+<tr>
+<td><strong>Government &amp; Military</strong></td>
+<td>Varies</td>
+<td>High security, audit trails, centralized mgmt, data sovereignty</td>
+</tr>
+<tr>
+<td><strong>Education (Schools)</strong></td>
+<td>500 – 5,000 students</td>
+<td>Attendance, access, emergency, parent alerts</td>
+</tr>
+<tr>
+<td><strong>Healthcare (Hospitals)</strong></td>
+<td>200 – 2,000 staff</td>
+<td>Access control, visitor, pharmacy security</td>
+</tr>
+<tr>
+<td><strong>Mixed-Use Complexes</strong></td>
+<td>Multiple buildings</td>
+<td>Multi-site, diverse needs, unified control</td>
+</tr>
+<tr>
+<td><strong>Commercial Real Estate</strong></td>
+<td>Multiple tenants</td>
+<td>Tenant portal, shared amenities, ESG reporting</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="platform-architecture">4. Platform Architecture</h2>
+<p>Duall Master 3.0 is organized into <strong>three core
+domains</strong>, a <strong>cross-cutting intelligence layer</strong>,
+and a <strong>technical platform foundation</strong>.</p>
+<pre><code>╔═══════════════════════════════════════════════════════════════════╗
+║                       DUALL MASTER 3.0                           ║
+╠═══════════════════════════════════════════════════════════════════╣
+║                                                                   ║
+║  🧠 SMART ─────────────────────────────────────────────────────  ║
+║  Unified Dashboard · Analytics · AI Assistant · Automation        ║
+║  Predictive Intelligence · Emergency Management                   ║
+║  (enriches everything below)                                      ║
+║                                                                   ║
+║  ┌─────────────────┬──────────────────┬─────────────────────┐    ║
+║  │  🔒 SECURE       │  👤 MANAGE        │  🏢 OPERATE          │    ║
+║  │                 │                  │                     │    ║
+║  │  Protect the    │  Handle all      │  Run the            │    ║
+║  │  building       │  people          │  facility           │    ║
+║  │                 │                  │                     │    ║
+║  │  Access Control │  Identity Mgmt   │  Room Booking       │    ║
+║  │  CCTV / Video   │  Visitor Mgmt    │  Parking Mgmt       │    ║
+║  │  Intrusion Det. │  Contractor Mgmt │  Maintenance        │    ║
+║  │  Intercom       │  Time &amp; Attend.  │  Guard Tour         │    ║
+║  │  AI Threat Det. │  Delivery Mgmt   │  Key Management     │    ║
+║  │  Emergency      │  Access Provis.  │  IoT &amp; Energy       │    ║
+║  └─────────────────┴──────────────────┴─────────────────────┘    ║
+║                                                                   ║
+║  ⚙️ PLATFORM ──────────────────────────────────────────────────  ║
+║  Cybersecurity · API &amp; Integrations · Mobile App · SSO            ║
+║  Multi-site Management · Cloud / Multi-tenancy                    ║
+║  (powers everything above)                                        ║
+║                                                                   ║
+║  ┌─────────────────────────────────────────────────────────────┐ ║
+║  │                      DEVICE LAYER                            │ ║
+║  │  Readers · Cameras · Intercoms · Sensors · Barriers · Lifts  │ ║
+║  └─────────────────────────────────────────────────────────────┘ ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝</code></pre>
+<h3 id="why-this-architecture">Why This Architecture?</h3>
+<table>
+<colgroup>
+<col style="width: 45%" />
+<col style="width: 54%" />
+</colgroup>
+<thead>
+<tr>
+<th>Principle</th>
+<th>Explanation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Three domains map to three buyers</strong></td>
+<td>SECURE → Security Director · MANAGE → HR/Admin · OPERATE → Facility
+Manager</td>
+</tr>
+<tr>
+<td><strong>SMART is cross-cutting</strong></td>
+<td>AI and analytics enrich all domains — not siloed in one layer</td>
+</tr>
+<tr>
+<td><strong>PLATFORM is foundational</strong></td>
+<td>Cybersecurity, APIs, and mobile aren’t features — they’re
+infrastructure</td>
+</tr>
+<tr>
+<td><strong>Clean separation</strong></td>
+<td>Threats (Secure) vs People (Manage) vs Spaces &amp; Assets (Operate)
+— no overlap</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="domain-secure-protect-the-building">5. Domain: 🔒 SECURE —
+Protect the Building</h2>
+<p>Everything that detects, prevents, or responds to physical security
+threats.</p>
+<h3 id="access-control-system">5.1 Access Control System</h3>
+<p>The foundation — controlling who goes where.</p>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Multi-point Control</strong></td>
+<td>Doors, gates, turnstiles, lifts, barriers</td>
+</tr>
+<tr>
+<td><strong>Multi-credential Support</strong></td>
+<td>Face, fingerprint, card, PIN, QR code, mobile BLE</td>
+</tr>
+<tr>
+<td><strong>Access Rules</strong></td>
+<td>Time-based, zone-based, anti-passback, interlocking</td>
+</tr>
+<tr>
+<td><strong>Real-time Monitoring</strong></td>
+<td>Live door status, access events, alerts</td>
+</tr>
+<tr>
+<td><strong>Emergency Modes</strong></td>
+<td>Fire unlock, lockdown, evacuation</td>
+</tr>
+<tr>
+<td><strong>Mobile Unlock</strong></td>
+<td>BLE/NFC phone-as-credential — primary access method</td>
+</tr>
+</tbody>
+</table>
+<h3 id="cctv-video-surveillance">5.2 CCTV / Video Surveillance</h3>
+<p>Unified video surveillance management.</p>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Multi-brand Support</strong></td>
+<td>Hikvision, Dahua, Hanwha, ONVIF-compatible</td>
+</tr>
+<tr>
+<td><strong>Live View</strong></td>
+<td>Multi-camera grid, PTZ control, digital zoom</td>
+</tr>
+<tr>
+<td><strong>Playback &amp; Search</strong></td>
+<td>Timeline, event-based, smart search</td>
+</tr>
+<tr>
+<td><strong>Event Linking</strong></td>
+<td>Access events linked to video clips</td>
+</tr>
+<tr>
+<td><strong>Recording Management</strong></td>
+<td>NVR status, storage alerts, health monitoring</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ai-threat-detection">5.3 AI Threat Detection</h3>
+<p>Intelligent video analytics via 3rd party AI integration.</p>
+<table>
+<colgroup>
+<col style="width: 54%" />
+<col style="width: 45%" />
+</colgroup>
+<thead>
+<tr>
+<th>Event Type</th>
+<th>Examples</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Intrusion</strong></td>
+<td>Perimeter breach, restricted area entry</td>
+</tr>
+<tr>
+<td><strong>Behavior</strong></td>
+<td>Loitering, fighting, running, falling</td>
+</tr>
+<tr>
+<td><strong>Object</strong></td>
+<td>Abandoned bag, missing object, vehicle</td>
+</tr>
+<tr>
+<td><strong>Counting</strong></td>
+<td>People counting, crowd detection, queue length</td>
+</tr>
+<tr>
+<td><strong>Recognition</strong></td>
+<td>Face match, license plate, uniform detection</td>
+</tr>
+<tr>
+<td><strong>Anomaly</strong> 🆕</td>
+<td>Unusual access patterns, off-hours activity, tailgating
+detection</td>
+</tr>
+</tbody>
+</table>
+<h3 id="intrusion-detection">5.4 Intrusion Detection</h3>
+<p>Alarm system integration and perimeter protection.</p>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Alarm Zones</strong></td>
+<td>Arm/disarm zones, scheduled arming</td>
+</tr>
+<tr>
+<td><strong>Sensor Integration</strong></td>
+<td>Motion, door contact, glass break, vibration</td>
+</tr>
+<tr>
+<td><strong>Alarm Response</strong></td>
+<td>Auto-alert guards, trigger CCTV recording, lockdown</td>
+</tr>
+<tr>
+<td><strong>Perimeter Protection</strong></td>
+<td>Fence sensors, beam detectors, thermal cameras</td>
+</tr>
+</tbody>
+</table>
+<h3 id="intercom-communications">5.5 Intercom &amp; Communications</h3>
+<p>Communication between entrance and resident/staff.</p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Features</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Door Station</strong></td>
+<td>Video call, unlock, PIN pad, card reader</td>
+</tr>
+<tr>
+<td><strong>Indoor Monitor</strong></td>
+<td>Answer calls, view CCTV, control doors</td>
+</tr>
+<tr>
+<td><strong>Guard Station</strong></td>
+<td>Multi-call handling, building-wide announcements</td>
+</tr>
+<tr>
+<td><strong>Mobile App</strong></td>
+<td>Answer anywhere, remote unlock, call history</td>
+</tr>
+<tr>
+<td><strong>SIP Integration</strong></td>
+<td>Works with existing phone/PBX systems</td>
+</tr>
+</tbody>
+</table>
+<h3 id="emergency-lockdown">5.6 Emergency &amp; Lockdown</h3>
+<p>Coordinated emergency response.</p>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 60%" />
+</colgroup>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Fire Evacuation</strong></td>
+<td>Unlock exits, recall lifts, audio announcement, mobile alerts</td>
+</tr>
+<tr>
+<td><strong>Lockdown</strong></td>
+<td>Lock all perimeter, disable normal access, alert security</td>
+</tr>
+<tr>
+<td><strong>Medical Emergency</strong></td>
+<td>Unlock path to medical room, alert first-aiders</td>
+</tr>
+<tr>
+<td><strong>Intruder Alert</strong></td>
+<td>Lock specific zones, silent alarm, video tracking</td>
+</tr>
+<tr>
+<td><strong>Custom Scenarios</strong></td>
+<td>Configurable response plans per emergency type</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="domain-manage-handle-all-people">6. Domain: 👤 MANAGE — Handle
+All People</h2>
+<p>Managing every person who enters the building — employees, visitors,
+contractors, delivery personnel.</p>
+<h3 id="identity-management">6.1 Identity Management</h3>
+<p>Central registry for all people in the system.</p>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Unified Identity</strong></td>
+<td>One profile per person across all modules</td>
+</tr>
+<tr>
+<td><strong>Credential Management</strong></td>
+<td>Assign/revoke cards, biometrics, mobile credentials</td>
+</tr>
+<tr>
+<td><strong>Role-based Access</strong></td>
+<td>Template-based access provisioning per role</td>
+</tr>
+<tr>
+<td><strong>HR Integration</strong></td>
+<td>Auto-sync from HR systems — hire/transfer/terminate</td>
+</tr>
+<tr>
+<td><strong>Self-service Portal</strong></td>
+<td>Users manage their own profile, credentials, requests</td>
+</tr>
+</tbody>
+</table>
+<h3 id="visitor-management">6.2 Visitor Management</h3>
+<p>Professional visitor handling from pre-registration to departure.</p>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Pre-registration</strong></td>
+<td>Invite via email/SMS with QR code</td>
+</tr>
+<tr>
+<td><strong>Check-in Options</strong></td>
+<td>Android Terminal, reception, self-service tablet</td>
+</tr>
+<tr>
+<td><strong>Badge Printing</strong></td>
+<td>Photo badges, visitor type, expiry</td>
+</tr>
+<tr>
+<td><strong>Host Notification</strong></td>
+<td>Auto-notify host when visitor arrives</td>
+</tr>
+<tr>
+<td><strong>Watchlist</strong></td>
+<td>Blacklist, VIP list, alerts</td>
+</tr>
+<tr>
+<td><strong>Visitor Log</strong></td>
+<td>Full audit trail, reports, compliance</td>
+</tr>
+</tbody>
+</table>
+<h3 id="contractor-management">6.3 Contractor Management</h3>
+<p>Temporary workers with compliance requirements.</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Contractor Registration</strong></td>
+<td>Company, workers, validity period</td>
+</tr>
+<tr>
+<td><strong>Compliance Tracking</strong></td>
+<td>Safety training, certifications, insurance</td>
+</tr>
+<tr>
+<td><strong>Temporary Access</strong></td>
+<td>Time-limited credentials, zone restrictions</td>
+</tr>
+<tr>
+<td><strong>Check-in/out</strong></td>
+<td>Daily logging, time tracking</td>
+</tr>
+</tbody>
+</table>
+<h3 id="time-attendance">6.4 Time &amp; Attendance</h3>
+<p>Employee time and attendance tracking.</p>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Clock-in Methods</strong></td>
+<td>Face, fingerprint, card, mobile</td>
+</tr>
+<tr>
+<td><strong>Shift Management</strong></td>
+<td>Shift schedules, rotation, assignment</td>
+</tr>
+<tr>
+<td><strong>Overtime Tracking</strong></td>
+<td>Auto-calculation, approval workflow</td>
+</tr>
+<tr>
+<td><strong>Leave Integration</strong></td>
+<td>Sync with leave system</td>
+</tr>
+<tr>
+<td><strong>Reports</strong></td>
+<td>Daily, monthly, custom reports</td>
+</tr>
+<tr>
+<td><strong>Mobile Clock-in</strong> 🆕</td>
+<td>GPS-verified mobile attendance for field workers</td>
+</tr>
+</tbody>
+</table>
+<h3 id="delivery-management">6.5 Delivery Management</h3>
+<p>Package and delivery tracking (for residential/office).</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Delivery Logging</strong></td>
+<td>Photo capture, recipient info</td>
+</tr>
+<tr>
+<td><strong>Notification</strong></td>
+<td>Alert resident/staff of arrival</td>
+</tr>
+<tr>
+<td><strong>Locker Integration</strong></td>
+<td>Smart parcel locker support</td>
+</tr>
+<tr>
+<td><strong>Collection Tracking</strong></td>
+<td>Pickup confirmation, uncollected alerts</td>
+</tr>
+</tbody>
+</table>
+<h3 id="access-provisioning">6.6 Access Provisioning</h3>
+<p>Who gets access to what — the policy engine.</p>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Role Templates</strong></td>
+<td>Pre-defined access profiles per job role</td>
+</tr>
+<tr>
+<td><strong>Request &amp; Approval</strong></td>
+<td>Self-service access requests with manager approval</td>
+</tr>
+<tr>
+<td><strong>Temporary Access</strong></td>
+<td>Time-bound access for projects, events</td>
+</tr>
+<tr>
+<td><strong>Auto-provisioning</strong></td>
+<td>New hire → automatic access based on department/role</td>
+</tr>
+<tr>
+<td><strong>Auto-deprovision</strong></td>
+<td>Termination → instant revocation across all systems</td>
+</tr>
+<tr>
+<td><strong>Audit Trail</strong></td>
+<td>Complete history of who approved what access when</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="domain-operate-run-the-facility">7. Domain: 🏢 OPERATE — Run the
+Facility</h2>
+<p>Day-to-day building operations, spaces, and assets.</p>
+<h3 id="room-resource-booking">7.1 Room &amp; Resource Booking</h3>
+<p>Meeting room and facility reservations.</p>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Room Booking</strong></td>
+<td>Meeting rooms, training rooms</td>
+</tr>
+<tr>
+<td><strong>Resource Booking</strong></td>
+<td>Equipment, vehicles, amenities</td>
+</tr>
+<tr>
+<td><strong>Calendar Integration</strong></td>
+<td>Outlook, Google Calendar sync</td>
+</tr>
+<tr>
+<td><strong>Access Link</strong></td>
+<td>Auto-grant access for booking period</td>
+</tr>
+<tr>
+<td><strong>Display Integration</strong></td>
+<td>Room status on door displays</td>
+</tr>
+<tr>
+<td><strong>No-show Detection</strong> 🆕</td>
+<td>Auto-release rooms if no one shows up (via sensors)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="parking-management">7.2 Parking Management</h3>
+<p>Vehicle access and parking control.</p>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Vehicle Types</strong></td>
+<td>Cars, motorbikes, bicycles</td>
+</tr>
+<tr>
+<td><strong>Access Methods</strong></td>
+<td>LPR (license plate), card, QR, monthly pass</td>
+</tr>
+<tr>
+<td><strong>Barrier Control</strong></td>
+<td>Entry/exit barriers, boom gates</td>
+</tr>
+<tr>
+<td><strong>Space Management</strong></td>
+<td>Occupancy tracking, guidance, reservations</td>
+</tr>
+<tr>
+<td><strong>Payment Integration</strong></td>
+<td>Fee calculation, payment gateways, invoicing</td>
+</tr>
+<tr>
+<td><strong>EV Charging</strong> 🆕</td>
+<td>Electric vehicle charger management &amp; billing</td>
+</tr>
+</tbody>
+</table>
+<h3 id="maintenance-work-orders">7.3 Maintenance &amp; Work Orders</h3>
+<p>Work orders and asset maintenance.</p>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Work Orders</strong></td>
+<td>Create, assign, track, close</td>
+</tr>
+<tr>
+<td><strong>Preventive Maintenance</strong></td>
+<td>Scheduled maintenance tasks</td>
+</tr>
+<tr>
+<td><strong>Asset Registry</strong></td>
+<td>Equipment database, service history</td>
+</tr>
+<tr>
+<td><strong>Vendor Management</strong></td>
+<td>Service provider contacts, contracts</td>
+</tr>
+<tr>
+<td><strong>Mobile Work Orders</strong> 🆕</td>
+<td>Technicians receive and update from phone</td>
+</tr>
+<tr>
+<td><strong>AI Predictive Maintenance</strong> 🆕</td>
+<td>Predict device failures before they happen</td>
+</tr>
+</tbody>
+</table>
+<h3 id="guard-tour-patrol">7.4 Guard Tour &amp; Patrol</h3>
+<p>Security patrol management.</p>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Route Planning</strong></td>
+<td>Define patrol routes, checkpoints</td>
+</tr>
+<tr>
+<td><strong>Tour Execution</strong></td>
+<td>NFC/QR checkpoint scanning via mobile</td>
+</tr>
+<tr>
+<td><strong>Real-time Tracking</strong></td>
+<td>GPS/indoor location tracking</td>
+</tr>
+<tr>
+<td><strong>Incident Reporting</strong></td>
+<td>Log incidents during patrol with photo/video</td>
+</tr>
+<tr>
+<td><strong>Compliance Reports</strong></td>
+<td>Missed checkpoints, late patrols</td>
+</tr>
+</tbody>
+</table>
+<h3 id="key-management">7.5 Key Management</h3>
+<p>Physical key and asset checkout.</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Key Cabinet Integration</strong></td>
+<td>Electronic key cabinets</td>
+</tr>
+<tr>
+<td><strong>Checkout/Return</strong></td>
+<td>Log who has which key</td>
+</tr>
+<tr>
+<td><strong>Overdue Alerts</strong></td>
+<td>Keys not returned on time</td>
+</tr>
+<tr>
+<td><strong>Audit Trail</strong></td>
+<td>Complete key movement history</td>
+</tr>
+</tbody>
+</table>
+<h3 id="iot-sensors-energy-management">7.6 IoT Sensors &amp; Energy
+Management</h3>
+<p>Environmental monitoring and smart building capabilities.</p>
+<table>
+<thead>
+<tr>
+<th>Sensor Type</th>
+<th>Application</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Temperature</strong></td>
+<td>HVAC monitoring, cold room alerts</td>
+</tr>
+<tr>
+<td><strong>Humidity</strong></td>
+<td>Server room, storage areas</td>
+</tr>
+<tr>
+<td><strong>Air Quality (AQI)</strong></td>
+<td>CO2, PM2.5, VOC levels</td>
+</tr>
+<tr>
+<td><strong>Water Leak</strong></td>
+<td>Server room, basement, bathroom</td>
+</tr>
+<tr>
+<td><strong>Smoke/Fire</strong></td>
+<td>Fire alarm integration</td>
+</tr>
+<tr>
+<td><strong>Motion/Occupancy</strong></td>
+<td>Energy saving, room utilization</td>
+</tr>
+</tbody>
+</table>
+<h4 id="energy-management">Energy Management 🆕</h4>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Energy Monitoring</strong></td>
+<td>Real-time power consumption per zone/floor</td>
+</tr>
+<tr>
+<td><strong>Smart Scheduling</strong></td>
+<td>HVAC/lighting automation based on occupancy</td>
+</tr>
+<tr>
+<td><strong>Usage Reports</strong></td>
+<td>Energy cost allocation per tenant/department</td>
+</tr>
+<tr>
+<td><strong>ESG Reporting</strong></td>
+<td>Sustainability metrics, carbon footprint tracking</td>
+</tr>
+<tr>
+<td><strong>Alert Thresholds</strong></td>
+<td>Abnormal consumption alerts</td>
+</tr>
+<tr>
+<td><strong>Green Building Score</strong></td>
+<td>Dashboard widget for sustainability KPIs</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="layer-smart-intelligence-ai">8. Layer: 🧠 SMART — Intelligence
+&amp; AI</h2>
+<p>Cross-cutting AI and analytics that enriches all three domains.</p>
+<h3 id="unified-dashboard">8.1 Unified Dashboard</h3>
+<p>Single pane of glass for building operations.</p>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Real-time Overview</strong></td>
+<td>Live status of all systems</td>
+</tr>
+<tr>
+<td><strong>Alert Management</strong></td>
+<td>Prioritized alerts, acknowledgment, escalation</td>
+</tr>
+<tr>
+<td><strong>Custom Widgets</strong></td>
+<td>Drag-drop dashboard builder</td>
+</tr>
+<tr>
+<td><strong>Role-based Views</strong></td>
+<td>Different dashboards per role</td>
+</tr>
+<tr>
+<td><strong>Multi-site View</strong></td>
+<td>Aggregate view of all locations</td>
+</tr>
+<tr>
+<td><strong>Mobile Dashboard</strong> 🆕</td>
+<td>Full dashboard experience on phone/tablet</td>
+</tr>
+</tbody>
+</table>
+<h3 id="analytics-reports">8.2 Analytics &amp; Reports</h3>
+<p>Turn data into insights.</p>
+<table>
+<colgroup>
+<col style="width: 56%" />
+<col style="width: 43%" />
+</colgroup>
+<thead>
+<tr>
+<th>Report Type</th>
+<th>Examples</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Access Analytics</strong></td>
+<td>Peak hours, door utilization, denied access trends</td>
+</tr>
+<tr>
+<td><strong>Visitor Analytics</strong></td>
+<td>Visitor volume, average visit duration, host ranking</td>
+</tr>
+<tr>
+<td><strong>Attendance Analytics</strong></td>
+<td>Punctuality, absenteeism, overtime patterns</td>
+</tr>
+<tr>
+<td><strong>Occupancy Analytics</strong></td>
+<td>Space utilization, peak occupancy times</td>
+</tr>
+<tr>
+<td><strong>Security Analytics</strong></td>
+<td>Incident trends, alarm frequency, response times</td>
+</tr>
+<tr>
+<td><strong>Energy Analytics</strong> 🆕</td>
+<td>Consumption patterns, cost trends, sustainability metrics</td>
+</tr>
+<tr>
+<td><strong>Device Health</strong> 🆕</td>
+<td>Uptime, failure predictions, maintenance needs</td>
+</tr>
+</tbody>
+</table>
+<h3 id="on-premise-ai-assistant">8.3 On-Premise AI Assistant 🆕</h3>
+<p>Natural language interface for operating the entire system.</p>
+<table>
+<colgroup>
+<col style="width: 54%" />
+<col style="width: 45%" />
+</colgroup>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Examples</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Query &amp; Search</strong></td>
+<td>“Who entered Building A today?” “Show visitors waiting”</td>
+</tr>
+<tr>
+<td><strong>Commands</strong></td>
+<td>“Open Gate 2” “Lock down Floor 3” “Approve the visitor”</td>
+</tr>
+<tr>
+<td><strong>Reports</strong></td>
+<td>“Generate attendance report for last week”</td>
+</tr>
+<tr>
+<td><strong>Troubleshooting</strong></td>
+<td>“Door 5 is not responding, what should I check?”</td>
+</tr>
+<tr>
+<td><strong>Voice Control</strong></td>
+<td>“Hey Duall, show camera 5 on main screen” (Guard Station)</td>
+</tr>
+</tbody>
+</table>
+<table>
+<colgroup>
+<col style="width: 48%" />
+<col style="width: 52%" />
+</colgroup>
+<thead>
+<tr>
+<th>Deployment</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>On-Premise</strong></td>
+<td>LLM runs locally — no cloud dependency, data stays private</td>
+</tr>
+<tr>
+<td><strong>Multi-interface</strong></td>
+<td>Web Console, Guard Station (voice), Mobile App</td>
+</tr>
+<tr>
+<td><strong>Multi-language</strong></td>
+<td>Vietnamese and English natural language support</td>
+</tr>
+<tr>
+<td><strong>Permission-aware</strong></td>
+<td>AI respects user roles — guards can’t do admin actions</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Why On-Premise AI?</strong> - 🔒 Data privacy — access logs,
+faces, visitor data never leave the building - ⚡ Low latency —
+real-time responses without internet dependency - 🏛️ Compliance — meets
+government/military data sovereignty requirements - 💰 Predictable cost
+— no per-query API fees</p>
+<h3 id="ai-powered-anomaly-detection">8.4 AI-Powered Anomaly Detection
+🆕</h3>
+<p>Proactive threat detection using machine learning.</p>
+<table>
+<colgroup>
+<col style="width: 48%" />
+<col style="width: 52%" />
+</colgroup>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Access Anomalies</strong></td>
+<td>Unusual patterns — wrong time, wrong zone, frequency spikes</td>
+</tr>
+<tr>
+<td><strong>Behavioral Patterns</strong></td>
+<td>Detect deviations from normal routines</td>
+</tr>
+<tr>
+<td><strong>Insider Threat Signals</strong></td>
+<td>After-hours access, unusual data room visits</td>
+</tr>
+<tr>
+<td><strong>Auto-escalation</strong></td>
+<td>Anomalies auto-generate alerts for security review</td>
+</tr>
+</tbody>
+</table>
+<h3 id="predictive-intelligence">8.5 Predictive Intelligence 🆕</h3>
+<p>AI that predicts and prevents before problems occur.</p>
+<table>
+<colgroup>
+<col style="width: 48%" />
+<col style="width: 52%" />
+</colgroup>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Device Failure Prediction</strong></td>
+<td>Predict reader/camera failures before they happen</td>
+</tr>
+<tr>
+<td><strong>Occupancy Forecasting</strong></td>
+<td>Predict building load for resource planning</td>
+</tr>
+<tr>
+<td><strong>Security Risk Scoring</strong></td>
+<td>Dynamic risk scores for zones and time periods</td>
+</tr>
+<tr>
+<td><strong>Maintenance Scheduling</strong></td>
+<td>AI-optimized preventive maintenance timing</td>
+</tr>
+</tbody>
+</table>
+<h3 id="automation-engine">8.6 Automation Engine</h3>
+<p>If-this-then-that rules for building automation.</p>
+<table>
+<colgroup>
+<col style="width: 45%" />
+<col style="width: 15%" />
+<col style="width: 40%" />
+</colgroup>
+<thead>
+<tr>
+<th>Trigger</th>
+<th>→</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fire alarm activated</td>
+<td>→</td>
+<td>Unlock all exit doors, recall lifts, alert all</td>
+</tr>
+<tr>
+<td>VIP face detected</td>
+<td>→</td>
+<td>Open fast lane, notify reception</td>
+</tr>
+<tr>
+<td>After-hours access</td>
+<td>→</td>
+<td>Capture photo, alert security guard</td>
+</tr>
+<tr>
+<td>Temperature &gt; threshold</td>
+<td>→</td>
+<td>Alert maintenance, log event</td>
+</tr>
+<tr>
+<td>Parking 90% full</td>
+<td>→</td>
+<td>Display “ALMOST FULL” on signage</td>
+</tr>
+<tr>
+<td>Stranger loitering &gt; 5min</td>
+<td>→</td>
+<td>Alert guard, record video clip</td>
+</tr>
+<tr>
+<td>Energy consumption spike</td>
+<td>→</td>
+<td>Alert facility manager, auto-adjust HVAC</td>
+</tr>
+<tr>
+<td>Device offline &gt; 10min</td>
+<td>→</td>
+<td>Alert IT, create work order</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="layer-platform-technical-foundation">9. Layer: ⚙️ PLATFORM —
+Technical Foundation</h2>
+<p>The infrastructure that powers everything.</p>
+<h3 id="cybersecurity">9.1 Cybersecurity 🆕</h3>
+<p>Enterprise-grade security for the platform itself.</p>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>End-to-end Encryption</strong></td>
+<td>TLS 1.3 for all communications, AES-256 at rest</td>
+</tr>
+<tr>
+<td><strong>Zero-Trust Architecture</strong></td>
+<td>Verify every request, least-privilege access</td>
+</tr>
+<tr>
+<td><strong>Audit Logging</strong></td>
+<td>Immutable logs for all admin actions</td>
+</tr>
+<tr>
+<td><strong>Vulnerability Management</strong></td>
+<td>Regular security scanning, patch management</td>
+</tr>
+<tr>
+<td><strong>Compliance Roadmap</strong></td>
+<td>SOC2 Type II, ISO 27001 certification path</td>
+</tr>
+<tr>
+<td><strong>Penetration Testing</strong></td>
+<td>Annual 3rd-party security audits</td>
+</tr>
+<tr>
+<td><strong>Data Sovereignty</strong></td>
+<td>Data residency controls — stays in-country</td>
+</tr>
+</tbody>
+</table>
+<h3 id="api-integrations">9.2 API &amp; Integrations</h3>
+<h4 id="device-protocols">Device Protocols</h4>
+<table>
+<thead>
+<tr>
+<th>Protocol</th>
+<th>Devices</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>ONVIF</strong></td>
+<td>IP cameras, NVRs</td>
+</tr>
+<tr>
+<td><strong>SIP</strong></td>
+<td>Video intercom</td>
+</tr>
+<tr>
+<td><strong>Wiegand/OSDP</strong></td>
+<td>Access readers</td>
+</tr>
+<tr>
+<td><strong>RS-485/TCP</strong></td>
+<td>Controllers, barriers</td>
+</tr>
+<tr>
+<td><strong>Zigbee/Z-Wave</strong></td>
+<td>IoT sensors</td>
+</tr>
+<tr>
+<td><strong>BACnet/Modbus</strong></td>
+<td>BMS systems</td>
+</tr>
+</tbody>
+</table>
+<h4 id="enterprise-integrations">Enterprise Integrations</h4>
+<table>
+<thead>
+<tr>
+<th>System</th>
+<th>Integration</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>HR Systems</strong></td>
+<td>Auto-provision/deprovision users</td>
+</tr>
+<tr>
+<td><strong>ERP</strong></td>
+<td>Asset management sync</td>
+</tr>
+<tr>
+<td><strong>Active Directory / LDAP</strong></td>
+<td>User authentication &amp; sync</td>
+</tr>
+<tr>
+<td><strong>Calendar</strong></td>
+<td>Room booking sync (Outlook, Google)</td>
+</tr>
+<tr>
+<td><strong>Messaging</strong></td>
+<td>Telegram, Zalo, SMS alerts</td>
+</tr>
+<tr>
+<td><strong>Payment</strong></td>
+<td>Parking fees, facility charges</td>
+</tr>
+<tr>
+<td><strong>BMS</strong></td>
+<td>Building management system integration</td>
+</tr>
+</tbody>
+</table>
+<h4 id="open-api">Open API</h4>
+<p>RESTful API for custom integrations: - Authentication (OAuth 2.0) -
+User &amp; access management - Event streaming (webhooks) - Device
+control - Report generation - Rate limiting &amp; usage tracking</p>
+<h3 id="mobile-app-primary-interface">9.3 Mobile App — Primary Interface
+📱</h3>
+<p>In 2026, guards, managers, and residents live on their phones. Mobile
+is the <strong>primary</strong> interface, not secondary.</p>
+<h4 id="admin-security-mobile-app">Admin / Security Mobile App</h4>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Real-time Alerts</strong></td>
+<td>Push notifications for all events</td>
+</tr>
+<tr>
+<td><strong>Remote Door Control</strong></td>
+<td>Open/lock doors from anywhere</td>
+</tr>
+<tr>
+<td><strong>Visitor Approval</strong></td>
+<td>Approve/deny visitors on the go</td>
+</tr>
+<tr>
+<td><strong>Live Camera View</strong></td>
+<td>View cameras from phone</td>
+</tr>
+<tr>
+<td><strong>Incident Logging</strong></td>
+<td>Report incidents with photo/location</td>
+</tr>
+<tr>
+<td><strong>Guard Tour</strong></td>
+<td>Complete patrols using phone</td>
+</tr>
+<tr>
+<td><strong>Dashboard</strong></td>
+<td>Full dashboard on mobile</td>
+</tr>
+<tr>
+<td><strong>AI Assistant</strong></td>
+<td>Voice/text commands on mobile</td>
+</tr>
+</tbody>
+</table>
+<h4 id="resident-tenant-mobile-app">Resident / Tenant Mobile App</h4>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Digital Keys</strong></td>
+<td>BLE/QR unlock — phone replaces card</td>
+</tr>
+<tr>
+<td><strong>Visitor Invitations</strong></td>
+<td>Invite visitors, share QR codes</td>
+</tr>
+<tr>
+<td><strong>Intercom Calls</strong></td>
+<td>Answer door calls from anywhere</td>
+</tr>
+<tr>
+<td><strong>Package Notifications</strong></td>
+<td>Delivery alerts and pickup</td>
+</tr>
+<tr>
+<td><strong>Facility Booking</strong></td>
+<td>Book rooms, amenities</td>
+</tr>
+<tr>
+<td><strong>Maintenance Requests</strong></td>
+<td>Submit and track requests</td>
+</tr>
+<tr>
+<td><strong>Building Announcements</strong></td>
+<td>News, alerts, community updates</td>
+</tr>
+<tr>
+<td><strong>Parking</strong></td>
+<td>Find spot, pay fees, EV charging</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sso-authentication">9.4 SSO &amp; Authentication</h3>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Single Sign-On</strong></td>
+<td>SAML 2.0, OAuth 2.0, OpenID Connect</td>
+</tr>
+<tr>
+<td><strong>Active Directory</strong></td>
+<td>LDAP / Azure AD integration</td>
+</tr>
+<tr>
+<td><strong>Multi-factor Auth</strong></td>
+<td>MFA for admin and web access</td>
+</tr>
+<tr>
+<td><strong>API Keys</strong></td>
+<td>Secure tokens for system integrations</td>
+</tr>
+</tbody>
+</table>
+<h3 id="multi-site-management">9.5 Multi-site Management</h3>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Centralized Control</strong></td>
+<td>Manage all sites from one console</td>
+</tr>
+<tr>
+<td><strong>Site Hierarchy</strong></td>
+<td>Region → City → Building → Floor → Zone</td>
+</tr>
+<tr>
+<td><strong>Cross-site Access</strong></td>
+<td>Employees access multiple buildings</td>
+</tr>
+<tr>
+<td><strong>Aggregated Reporting</strong></td>
+<td>Portfolio-wide analytics</td>
+</tr>
+<tr>
+<td><strong>Per-site Configuration</strong></td>
+<td>Local policies with global overrides</td>
+</tr>
+</tbody>
+</table>
+<h3 id="cloud-multi-tenancy">9.6 Cloud &amp; Multi-tenancy 🆕</h3>
+<p>SaaS-specific capabilities for cloud deployments.</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Multi-tenancy</strong></td>
+<td>Complete data isolation between tenants</td>
+</tr>
+<tr>
+<td><strong>Tenant Self-service</strong></td>
+<td>Onboarding, configuration, billing portal</td>
+</tr>
+<tr>
+<td><strong>Auto-scaling</strong></td>
+<td>Handle load spikes without manual intervention</td>
+</tr>
+<tr>
+<td><strong>Geo-redundancy</strong></td>
+<td>Data replicated across availability zones</td>
+</tr>
+<tr>
+<td><strong>SLA Monitoring</strong></td>
+<td>Uptime dashboard, SLA compliance tracking</td>
+</tr>
+<tr>
+<td><strong>White-labeling</strong></td>
+<td>Custom branding per tenant/reseller</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="user-interfaces">10. User Interfaces</h2>
+<h3 id="web-console">10.1 Web Console</h3>
+<p>Full-featured management for administrators.</p>
+<ul>
+<li>Dashboard &amp; monitoring</li>
+<li>Configuration &amp; settings</li>
+<li>User &amp; access management</li>
+<li>Reports &amp; analytics</li>
+<li>System administration</li>
+<li><strong>🤖 AI Assistant chat panel</strong> — ask questions, execute
+commands in natural language</li>
+</ul>
+<h3 id="mobile-app-primary-interface-1">10.2 Mobile App (Primary
+Interface) 📱</h3>
+<p>See Section 9.3 for full details. The mobile app is the
+<strong>primary interface</strong> for day-to-day operations.</p>
+<h3 id="android-terminal-interface">10.3 Android Terminal Interface</h3>
+<p>Self-service terminals for visitors and staff.</p>
+<ul>
+<li>Visitor self check-in</li>
+<li>Attendance clock-in</li>
+<li>Directory lookup</li>
+<li>Wayfinding</li>
+</ul>
+<h3 id="guard-station">10.4 Guard Station</h3>
+<p>Dedicated interface for security personnel.</p>
+<ul>
+<li>Multi-camera live view</li>
+<li>Intercom call handling</li>
+<li>Access event monitoring</li>
+<li>Incident management</li>
+<li>Patrol dispatch</li>
+<li><strong>🎤 AI Voice Assistant</strong> — “Hey Duall, open the main
+gate” / “Show camera 5”</li>
+</ul>
+<hr />
+<h2 id="deployment-options">11. Deployment Options</h2>
+<table>
+<colgroup>
+<col style="width: 23%" />
+<col style="width: 43%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Model</th>
+<th>Description</th>
+<th>Best For</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>On-Premise</strong></td>
+<td>Installed on customer’s server</td>
+<td>High security (govt, military, banks)</td>
+</tr>
+<tr>
+<td><strong>Cloud (SaaS)</strong></td>
+<td>Hosted by Duali, multi-tenant</td>
+<td>SMB, residential, fast deployment</td>
+</tr>
+<tr>
+<td><strong>Hybrid</strong></td>
+<td>Local server + cloud backup &amp; analytics</td>
+<td>Large enterprise, data sovereignty with cloud benefits</td>
+</tr>
+</tbody>
+</table>
+<h3 id="cloud-saas-details">Cloud (SaaS) Details 🆕</h3>
+<ul>
+<li>Multi-tenant architecture with complete data isolation</li>
+<li>Auto-provisioning — new customers live in hours, not weeks</li>
+<li>Automatic updates — all tenants get latest features</li>
+<li>Usage-based billing — pay for what you use</li>
+<li>99.9% uptime SLA with geo-redundant infrastructure</li>
+</ul>
+<hr />
+<h2 id="competitive-differentiation">12. Competitive
+Differentiation</h2>
+<h3 id="what-makes-duall-master-3.0-different">What Makes Duall Master
+3.0 Different</h3>
+<table>
+<colgroup>
+<col style="width: 43%" />
+<col style="width: 56%" />
+</colgroup>
+<thead>
+<tr>
+<th>Traditional Approach</th>
+<th>Duall Master 3.0 Approach</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Hardware-centric vendors</td>
+<td><strong>Software platform</strong> that works with multiple
+hardware</td>
+</tr>
+<tr>
+<td>Siloed point solutions</td>
+<td><strong>Unified platform</strong> — one system for everything</td>
+</tr>
+<tr>
+<td>Complex enterprise tools</td>
+<td><strong>Mid-market simplicity</strong> with enterprise features</td>
+</tr>
+<tr>
+<td>Rigid configurations</td>
+<td><strong>Flexible automation</strong> — customers build their own
+rules</td>
+</tr>
+<tr>
+<td>Closed ecosystems</td>
+<td><strong>Open integrations</strong> — works with existing
+systems</td>
+</tr>
+<tr>
+<td>Western premium pricing</td>
+<td><strong>Built in Vietnam, proven in Korea</strong> — quality at
+competitive price</td>
+</tr>
+<tr>
+<td>Cloud-only or on-prem-only</td>
+<td><strong>Any deployment</strong> — on-prem, cloud, or hybrid</td>
+</tr>
+<tr>
+<td>Basic reporting</td>
+<td><strong>AI-powered intelligence</strong> — anomaly detection,
+predictions, natural language</td>
+</tr>
+</tbody>
+</table>
+<h3 id="competitive-positioning">Competitive Positioning</h3>
+<table>
+<colgroup>
+<col style="width: 30%" />
+<col style="width: 25%" />
+<col style="width: 43%" />
+</colgroup>
+<thead>
+<tr>
+<th>Competitor Category</th>
+<th>Their Weakness</th>
+<th>Duall Master 3.0 Advantage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Global enterprise</strong> (access + video)</td>
+<td>Expensive, complex, requires consultants</td>
+<td>Simpler to deploy, local support, lower TCO</td>
+</tr>
+<tr>
+<td><strong>Cloud-native startups</strong> (access only)</td>
+<td>Limited scope — access control only, no video</td>
+<td>Full platform — security + people + facilities</td>
+</tr>
+<tr>
+<td><strong>Chinese hardware brands</strong></td>
+<td>Trust issues, data sovereignty concerns, limited software</td>
+<td>Software-first, transparent security, local ownership</td>
+</tr>
+<tr>
+<td><strong>Building management systems</strong></td>
+<td>Weak security features, not security-first</td>
+<td>Security DNA with facility operations built in</td>
+</tr>
+<tr>
+<td><strong>Point solution vendors</strong></td>
+<td>Customer needs 5+ systems to cover what we do in one</td>
+<td>Single platform, single vendor, single pane of glass</td>
+</tr>
+</tbody>
+</table>
+<h3 id="unique-value-propositions">Unique Value Propositions</h3>
+<ol type="1">
+<li><strong>All-in-One Platform</strong> — No need to buy 5 different
+systems</li>
+<li><strong>Flexible &amp; Customizable</strong> — Adapts to any
+building type</li>
+<li><strong>Open Architecture</strong> — Integrates with existing
+investments</li>
+<li><strong>Local Support</strong> — Vietnam-based team, Vietnamese
+interface</li>
+<li><strong>Growing with Customers</strong> — Start simple, add modules
+as needed</li>
+<li><strong>🤖 AI-Powered Operations</strong> — On-premise AI assistant,
+anomaly detection, predictive intelligence</li>
+<li><strong>📱 Mobile-First</strong> — Guards and managers run buildings
+from their phones</li>
+<li><strong>🔒 Cybersecurity Built-in</strong> — Zero-trust, encryption,
+compliance-ready</li>
+<li><strong>🌱 Green Building Ready</strong> — Energy monitoring and ESG
+reporting included</li>
+</ol>
+<hr />
+<h2 id="business-model">13. Business Model</h2>
+<h3 id="revenue-streams">Revenue Streams</h3>
+<table>
+<colgroup>
+<col style="width: 53%" />
+<col style="width: 46%" />
+</colgroup>
+<thead>
+<tr>
+<th>Stream</th>
+<th>Model</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Software License</strong></td>
+<td>Per-door or per-user licensing</td>
+</tr>
+<tr>
+<td><strong>Device License</strong> 🆕</td>
+<td>Per-camera, per-sensor licensing for connected devices</td>
+</tr>
+<tr>
+<td><strong>Hardware</strong></td>
+<td>Readers, controllers, intercom devices</td>
+</tr>
+<tr>
+<td><strong>Implementation</strong></td>
+<td>Installation, configuration, training</td>
+</tr>
+<tr>
+<td><strong>Support &amp; Maintenance</strong></td>
+<td>Annual maintenance contracts</td>
+</tr>
+<tr>
+<td><strong>Cloud Subscription</strong></td>
+<td>Monthly SaaS fee (cloud deployments)</td>
+</tr>
+<tr>
+<td><strong>Resident App</strong></td>
+<td>Per-unit monthly fee (apartments)</td>
+</tr>
+<tr>
+<td><strong>AI Features</strong> 🆕</td>
+<td>Usage-based pricing for AI Assistant &amp; analytics</td>
+</tr>
+<tr>
+<td><strong>API Usage</strong></td>
+<td>High-volume API access fees</td>
+</tr>
+</tbody>
+</table>
+<h3 id="pricing-tiers">Pricing Tiers</h3>
+<table>
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 42%" />
+<col style="width: 19%" />
+<col style="width: 23%" />
+</colgroup>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Modules Included</th>
+<th>Target</th>
+<th>AI Level</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Starter</strong></td>
+<td>Access + Attendance</td>
+<td>Small offices</td>
+<td>Basic analytics</td>
+</tr>
+<tr>
+<td><strong>Professional</strong></td>
+<td>+ Visitor + Parking + Intercom</td>
+<td>Medium buildings</td>
+<td>Standard reports</td>
+</tr>
+<tr>
+<td><strong>Enterprise</strong></td>
+<td>Full suite + AI Assistant + Predictive Intelligence</td>
+<td>Large complexes</td>
+<td><strong>Full AI-powered</strong> 🆕</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Enterprise tier differentiator:</strong> AI is the premium
+feature — anomaly detection, predictive maintenance, natural language
+assistant, and automation engine are Enterprise-only capabilities.</p>
+<hr />
+<h2 id="success-metrics">14. Success Metrics</h2>
+<h3 id="platform-adoption">Platform Adoption</h3>
+<ul>
+<li>Number of buildings deployed</li>
+<li>Number of active users</li>
+<li>Modules per building (land &amp; expand)</li>
+<li>Monthly active users (mobile app)</li>
+<li>Mobile vs web usage ratio (target: 60%+ mobile)</li>
+</ul>
+<h3 id="technical-excellence">Technical Excellence</h3>
+<ul>
+<li>Platform uptime (target: 99.5%+ on-prem, 99.9% cloud)</li>
+<li>API response time (&lt; 200ms p95)</li>
+<li>Mobile app rating (target: 4.5+ stars)</li>
+<li>Support ticket resolution time</li>
+<li>Zero critical security vulnerabilities</li>
+</ul>
+<h3 id="business-impact">Business Impact</h3>
+<ul>
+<li>Revenue per building</li>
+<li>Customer retention rate</li>
+<li>Net Promoter Score (NPS)</li>
+<li>Recurring revenue percentage (target: 40%+)</li>
+<li>AI feature adoption rate</li>
+</ul>
+<hr />
+<h2 id="roadmap">15. Roadmap</h2>
+<h3 id="phase-1-foundation-2026-h1">Phase 1: Foundation (2026 H1)</h3>
+<ul>
+<li>Core SECURE domain (Access, CCTV, Intercom)</li>
+<li>Core MANAGE domain (Visitors, Identity, Attendance)</li>
+<li>Mobile app v1 (Admin + Resident)</li>
+<li>Web console with dashboard</li>
+<li>On-premise deployment</li>
+</ul>
+<h3 id="phase-2-expansion-2026-h2">Phase 2: Expansion (2026 H2)</h3>
+<ul>
+<li>Full OPERATE domain (Parking, Maintenance, Guard Tour, IoT)</li>
+<li>Cloud SaaS launch with multi-tenancy</li>
+<li>AI Assistant (on-premise)</li>
+<li>Automation engine</li>
+<li>Energy monitoring</li>
+</ul>
+<h3 id="phase-3-intelligence-2027-h1">Phase 3: Intelligence (2027
+H1)</h3>
+<ul>
+<li>AI anomaly detection</li>
+<li>Predictive maintenance</li>
+<li>Advanced analytics &amp; BI</li>
+<li>Cybersecurity certifications (SOC2/ISO27001)</li>
+<li>Multi-site management</li>
+</ul>
+<h3 id="phase-4-future-vision-2027">Phase 4: Future Vision (2027+)</h3>
+<ul>
+<li><strong>Digital Twin</strong> 🆕 — 3D building visualization with
+real-time device status overlay</li>
+<li><strong>Tenant Portal</strong> 🆕 — Self-service portal for
+commercial building tenants</li>
+<li><strong>Marketplace</strong> — 3rd-party integrations and
+plugins</li>
+<li><strong>Edge AI</strong> — AI processing on local devices for
+instant response</li>
+<li><strong>Robotics Integration</strong> — Patrol robots, delivery
+robots</li>
+<li><strong>ESG Compliance Suite</strong> — Full sustainability
+reporting and carbon tracking</li>
+</ul>
+<hr />
+<h2 id="summary">16. Summary</h2>
+<p><strong>Duall Master 3.0</strong> transforms Duali from an access
+control vendor into a <strong>building technology platform
+company</strong>.</p>
+<pre><code>┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  🔒 SECURE it.  👤 MANAGE them.  🏢 OPERATE it.  🧠 SMART. │
+│                                                             │
+│  One platform. Any building. Intelligent by default.        │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</code></pre>
+<p>The platform vision: - 🔒 <strong>SECURE</strong> — Protect buildings
+with unified security - 👤 <strong>MANAGE</strong> — Handle all people
+through one identity system - 🏢 <strong>OPERATE</strong> — Run
+facilities efficiently with smart automation - 🧠 <strong>SMART</strong>
+— AI-powered intelligence across everything - ⚙️
+<strong>PLATFORM</strong> — Enterprise-grade foundation with
+cybersecurity built-in - 📱 <strong>Mobile-first</strong> — Guards and
+managers run buildings from their phones - 🌱
+<strong>Sustainable</strong> — Energy management and ESG reporting for
+green buildings</p>
+<p>This is the future of building management. This is Duall Master
+3.0.</p>
+<hr />
+<p><em>Document prepared by Cuong Nguyen — February 2026</em><br />
+<em>Version 2.0 — Architecture restructured to Three Domains
+model</em></p>
+</body>
+</html>

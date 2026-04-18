@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Real-Time Data Flow — Duall Master 3.0</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: Helvetica, Arial, sans-serif; background: #FAFBFC; padding: 24px; }
+.diagram { width: 1500px; margin: 0 auto; }
+h1 { text-align: center; color: #1E293B; font-size: 20px; margin-bottom: 4px; }
+.sub { text-align: center; color: #64748B; font-size: 12px; margin-bottom: 24px; }
+.flow-section { margin-bottom: 30px; }
+.flow-title { font-size: 14px; font-weight: 700; color: #1E293B; margin-bottom: 12px; padding: 8px 16px; background: #F1F5F9; border-radius: 8px; display: inline-block; }
+.flow-row { display: flex; align-items: center; gap: 0; justify-content: center; flex-wrap: nowrap; }
+.node { border-radius: 10px; padding: 12px 16px; text-align: center; font-size: 12px; font-weight: 600; color: #fff; min-width: 120px; box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+.node small { display: block; font-weight: 400; font-size: 10px; opacity: .8; margin-top: 2px; }
+.arrow-h { display: flex; align-items: center; padding: 0 4px; color: #64748B; font-size: 11px; flex-direction: column; min-width: 80px; }
+.arrow-h .line { width: 100%; height: 2px; background: #94A3B8; position: relative; }
+.arrow-h .line::after { content: '▶'; position: absolute; right: -6px; top: -8px; font-size: 14px; color: #64748B; }
+.arrow-h .label { font-size: 9px; color: #64748B; margin-bottom: 2px; white-space: nowrap; }
+.device { background: #EA580C; }
+.mqtt { background: #1E293B; }
+.service { background: #3B82F6; }
+.nats { background: #7C3AED; }
+.cache { background: #DC2626; }
+.db { background: #374151; border-radius: 20px; }
+.ui { background: #059669; }
+.video { background: #0891B2; }
+.ai { background: #06B6D4; }
+.step-num { background: #3B82F6; color: #fff; border-radius: 50%; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; margin-right: 6px; }
+.timeline { border-left: 3px solid #3B82F6; margin-left: 40px; padding-left: 20px; }
+.timeline-item { margin-bottom: 10px; padding: 10px 14px; background: #fff; border-radius: 8px; border: 1px solid #E2E8F0; font-size: 12px; color: #334155; position: relative; }
+.timeline-item::before { content: ''; position: absolute; left: -27px; top: 14px; width: 10px; height: 10px; background: #3B82F6; border-radius: 50%; }
+.timeline-item strong { color: #1E293B; }
+.latency { color: #059669; font-weight: 600; font-size: 11px; }
+</style></head><body>
+<div class="diagram">
+<h1>Real-Time Data Flow — Duall Master 3.0</h1>
+<p class="sub">Three-tier messaging · Access event flow · Video streaming pipeline</p>
+
+<div class="flow-section">
+  <div class="flow-title">🔒 ACCESS EVENT FLOW — Card Tap to Dashboard (< 200ms end-to-end)</div>
+  <div class="flow-row">
+    <div class="node device">🔒 Card Reader<small>OSDP / Wiegand</small></div>
+    <div class="arrow-h"><span class="label">MQTT</span><div class="line"></div></div>
+    <div class="node mqtt">📶 EMQX<small>MQTT 5.0 Broker</small></div>
+    <div class="arrow-h"><span class="label">Bridge</span><div class="line"></div></div>
+    <div class="node service">⚙️ device-gateway<small>Protocol Adapter</small></div>
+    <div class="arrow-h"><span class="label">NATS pub</span><div class="line"></div></div>
+    <div class="node nats">📡 NATS JetStream<small>Event Bus</small></div>
+    <div class="arrow-h"><span class="label">Subscribe</span><div class="line"></div></div>
+    <div class="node service">🔒 access-svc<small>Decision Engine</small></div>
+    <div class="arrow-h"><span class="label">gRPC</span><div class="line"></div></div>
+    <div class="node cache">⚡ Valkey<small>Rules Cache</small></div>
+  </div>
+  <div style="height:10px;"></div>
+  <div class="flow-row">
+    <div style="min-width:120px;"></div>
+    <div style="min-width:80px;"></div>
+    <div style="min-width:120px;"></div>
+    <div style="min-width:80px;"></div>
+    <div style="min-width:120px;"></div>
+    <div style="min-width:80px;"></div>
+    <div class="node nats" style="opacity:.7;">📡 NATS<small>access.granted</small></div>
+    <div class="arrow-h"><span class="label">Fan-out</span><div class="line"></div></div>
+    <div class="node service" style="background:#8B5CF6;">📋 audit-svc<small>Immutable Log</small></div>
+    <div class="arrow-h"><span class="label">+ notif</span><div class="line"></div></div>
+    <div class="node ui">🖥️ WebSocket<small>→ Dashboard</small></div>
+  </div>
+
+  <div style="margin-top: 16px;">
+    <div class="flow-title" style="font-size:12px;">⏱️ Latency Breakdown</div>
+    <div class="timeline">
+      <div class="timeline-item"><span class="step-num">1</span><strong>Card Reader → EMQX:</strong> <span class="latency">~5ms</span> (local MQTT publish)</div>
+      <div class="timeline-item"><span class="step-num">2</span><strong>EMQX → device-gateway:</strong> <span class="latency">~2ms</span> (MQTT bridge rule)</div>
+      <div class="timeline-item"><span class="step-num">3</span><strong>device-gateway → NATS:</strong> <span class="latency">~1ms</span> (NATS publish)</div>
+      <div class="timeline-item"><span class="step-num">4</span><strong>access-svc decision:</strong> <span class="latency">~15ms</span> (Valkey cache hit → rule eval)</div>
+      <div class="timeline-item"><span class="step-num">5</span><strong>Door unlock command:</strong> <span class="latency">~10ms</span> (NATS → device-gateway → MQTT → reader)</div>
+      <div class="timeline-item"><span class="step-num">6</span><strong>Event fan-out → UI:</strong> <span class="latency">~5ms</span> (NATS → WebSocket push)</div>
+      <div class="timeline-item"><strong>Total end-to-end:</strong> <span class="latency">~38ms typical, < 200ms P99</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="flow-section">
+  <div class="flow-title">📷 VIDEO STREAMING FLOW</div>
+  <div class="flow-row">
+    <div class="node device">📷 IP Camera<small>ONVIF / RTSP</small></div>
+    <div class="arrow-h"><span class="label">RTSP</span><div class="line"></div></div>
+    <div class="node video">🎥 go2rtc<small>Media Server</small></div>
+    <div class="arrow-h"><span class="label">WebRTC</span><div class="line"></div></div>
+    <div class="node ui">🌐 Browser<small>WebRTC Player</small></div>
+  </div>
+  <div style="height:8px;"></div>
+  <div class="flow-row">
+    <div style="min-width:120px;"></div>
+    <div style="min-width:80px;"></div>
+    <div class="node video" style="opacity:.7;">🎥 go2rtc<small>Frame Extract</small></div>
+    <div class="arrow-h"><span class="label">RTSP frame</span><div class="line"></div></div>
+    <div class="node ai">🧠 vision-svc<small>ONNX · YOLO · Face</small></div>
+    <div class="arrow-h"><span class="label">NATS event</span><div class="line"></div></div>
+    <div class="node nats">📡 NATS<small>vision.face_detected</small></div>
+    <div class="arrow-h"><span class="label">Subscribe</span><div class="line"></div></div>
+    <div class="node service">🔒 access-svc<small>Face → Grant</small></div>
+  </div>
+</div>
+
+<div class="flow-section">
+  <div class="flow-title">🌡️ IoT SENSOR FLOW</div>
+  <div class="flow-row">
+    <div class="node device" style="background:#D97706;">🌡️ Sensor<small>Zigbee / BLE</small></div>
+    <div class="arrow-h"><span class="label">MQTT</span><div class="line"></div></div>
+    <div class="node mqtt">📶 EMQX<small>MQTT Broker</small></div>
+    <div class="arrow-h"><span class="label">Bridge</span><div class="line"></div></div>
+    <div class="node service" style="background:#F59E0B;color:#1E293B;">📊 iot-svc<small>Sensor Handler</small></div>
+    <div class="arrow-h"><span class="label">Insert</span><div class="line"></div></div>
+    <div class="node db">🗄️ TimescaleDB<small>Hypertable</small></div>
+    <div class="arrow-h"><span class="label">Query</span><div class="line"></div></div>
+    <div class="node ai">📈 anomaly-svc<small>PyOD Detection</small></div>
+    <div class="arrow-h"><span class="label">NATS alert</span><div class="line"></div></div>
+    <div class="node service" style="background:#6B7280;">🔔 notif-svc<small>Push / SMS</small></div>
+  </div>
+</div>
+
+</div>
+</body></html>

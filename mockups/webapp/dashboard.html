@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duall Master 3.0 — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', -apple-system, sans-serif; background: #0B1120; color: #F8FAFC; font-size: 13px; line-height: 1.5; display: flex; height: 100vh; overflow: hidden; font-variant-numeric: tabular-nums; }
+
+/* Sidebar */
+.sidebar { width: 240px; background: #111827; border-right: 1px solid #1E293B; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+.sidebar-logo { padding: 16px; font-size: 14px; font-weight: 600; color: #F8FAFC; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #1E293B; }
+.sidebar-logo .diamond { width: 20px; height: 20px; background: #3B82F6; transform: rotate(45deg); border-radius: 4px; flex-shrink: 0; }
+.sidebar-section { padding: 16px 12px 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748B; }
+.sidebar-section.secure { color: #3B82F6; }
+.sidebar-section.manage { color: #8B5CF6; }
+.sidebar-section.operate { color: #F59E0B; }
+.sidebar-section.smart { color: #06B6D4; }
+.nav-item { display: flex; align-items: center; padding: 6px 12px; margin: 1px 8px; border-radius: 6px; color: #94A3B8; font-size: 13px; font-weight: 400; cursor: pointer; text-decoration: none; gap: 10px; }
+.nav-item:hover { background: #1E293B; color: #F8FAFC; }
+.nav-item.active { background: #1E3A5F; color: #3B82F6; border-left: 2px solid #3B82F6; }
+.nav-item .badge { margin-left: auto; background: #EF4444; color: white; font-size: 10px; padding: 1px 6px; border-radius: 9999px; font-weight: 600; }
+.sidebar-bottom { margin-top: auto; border-top: 1px solid #1E293B; padding: 8px; }
+
+/* Main */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.topbar { height: 48px; background: #111827; border-bottom: 1px solid #1E293B; display: flex; align-items: center; padding: 0 24px; gap: 12px; flex-shrink: 0; }
+.breadcrumb { font-size: 13px; color: #94A3B8; }
+.breadcrumb span { color: #F8FAFC; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.search-trigger { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: #1E293B; border: 1px solid #334155; border-radius: 6px; color: #64748B; font-size: 12px; cursor: pointer; }
+.search-trigger kbd { background: #334155; padding: 1px 5px; border-radius: 4px; font-size: 10px; }
+.topbar-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer; color: #94A3B8; position: relative; }
+.topbar-icon:hover { background: #1E293B; color: #F8FAFC; }
+.notif-dot { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; background: #EF4444; border-radius: 50%; border: 2px solid #111827; }
+.user-avatar { width: 28px; height: 28px; background: #3B82F6; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+
+.content { flex: 1; overflow-y: auto; padding: 24px; }
+.content::-webkit-scrollbar { width: 6px; }
+.content::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+/* Page header */
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.page-title { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+.header-controls { display: flex; gap: 8px; }
+.select-control { padding: 6px 12px; background: #1E293B; border: 1px solid #334155; border-radius: 6px; color: #F8FAFC; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+
+/* Stat Cards */
+.stat-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: #1E293B; border: 1px solid #334155; border-radius: 8px; padding: 16px; }
+.stat-label { font-size: 12px; font-weight: 500; color: #94A3B8; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.stat-value { font-size: 24px; font-weight: 600; letter-spacing: -0.025em; margin-bottom: 4px; }
+.stat-value.secure { color: #3B82F6; }
+.stat-value.manage { color: #8B5CF6; }
+.stat-value.operate { color: #F59E0B; }
+.stat-value.smart { color: #06B6D4; }
+.stat-value.error { color: #EF4444; }
+.stat-sub { font-size: 12px; color: #64748B; }
+.stat-trend { font-size: 11px; }
+.stat-trend.up { color: #22C55E; }
+.stat-trend.down { color: #EF4444; }
+
+/* Grid layouts */
+.grid-2col { display: grid; grid-template-columns: 1.8fr 1fr; gap: 16px; margin-bottom: 24px; }
+.grid-3col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+/* Cards */
+.card { background: #1E293B; border: 1px solid #334155; border-radius: 8px; overflow: hidden; }
+.card-header { padding: 12px 16px; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
+.card-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.card-body { padding: 16px; }
+.card-link { font-size: 12px; color: #3B82F6; cursor: pointer; }
+.card-link:hover { text-decoration: underline; }
+
+/* Live dot */
+.live-dot { width: 6px; height: 6px; background: #22C55E; border-radius: 50%; animation: pulse 2s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* Sparkline placeholder */
+.sparkline { height: 40px; background: linear-gradient(transparent 20%, rgba(59,130,246,0.1) 100%); border-radius: 4px; margin-bottom: 12px; position: relative; overflow: hidden; }
+.sparkline-line { position: absolute; bottom: 0; left: 0; right: 0; height: 100%; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cpath d='M0,35 Q20,30 40,28 T80,20 T120,25 T160,15 T200,10 T240,18 T280,8 T320,12 T360,6 T400,10' fill='none' stroke='%233B82F6' stroke-width='2'/%3E%3C/svg%3E") no-repeat; background-size: 100% 100%; }
+
+/* Event list */
+.event-item { display: flex; align-items: center; padding: 6px 0; gap: 12px; border-bottom: 1px solid rgba(30,41,59,0.5); font-size: 12px; }
+.event-item:last-child { border-bottom: none; }
+.event-time { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #64748B; min-width: 40px; }
+.event-person { color: #F8FAFC; font-weight: 500; min-width: 100px; }
+.event-point { color: #94A3B8; min-width: 80px; }
+.event-status { font-weight: 600; }
+.event-status.granted { color: #22C55E; }
+.event-status.denied { color: #EF4444; }
+
+/* Alert items */
+.alert-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid rgba(30,41,59,0.5); }
+.alert-item:last-child { border-bottom: none; }
+.alert-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+.alert-dot.critical { background: #EF4444; }
+.alert-dot.warning { background: #EAB308; }
+.alert-dot.info { background: #3B82F6; }
+.alert-text { font-size: 13px; color: #F8FAFC; font-weight: 500; }
+.alert-meta { font-size: 11px; color: #64748B; margin-top: 2px; }
+
+/* Domain health */
+.domain-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.domain-icon { font-size: 16px; }
+.domain-name { font-weight: 600; font-size: 14px; }
+.domain-name.secure { color: #3B82F6; }
+.domain-name.manage { color: #8B5CF6; }
+.domain-name.operate { color: #F59E0B; }
+.health-item { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; font-size: 12px; }
+.health-status { font-size: 11px; }
+.health-status.ok { color: #22C55E; }
+.health-status.warn { color: #EAB308; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="diamond"></div>
+    DUALL MASTER
+  </div>
+  
+  <div class="sidebar-section">Overview</div>
+  <a class="nav-item active">📊 Dashboard</a>
+  <a class="nav-item">🔔 Alerts <span class="badge">3</span></a>
+  
+  <div class="sidebar-section secure">🔒 SECURE</div>
+  <a class="nav-item">🚪 Access Control</a>
+  <a class="nav-item">📹 CCTV</a>
+  <a class="nav-item">🚨 Intrusion</a>
+  <a class="nav-item">📞 Intercom</a>
+  <a class="nav-item">🤖 AI Detection</a>
+  <a class="nav-item">🆘 Emergency</a>
+  
+  <div class="sidebar-section manage">👤 MANAGE</div>
+  <a class="nav-item">🪪 Identities</a>
+  <a class="nav-item">🧑‍💼 Visitors</a>
+  <a class="nav-item">🔧 Contractors</a>
+  <a class="nav-item">⏰ Attendance</a>
+  <a class="nav-item">📦 Deliveries</a>
+  
+  <div class="sidebar-section operate">🏢 OPERATE</div>
+  <a class="nav-item">🏠 Room Booking</a>
+  <a class="nav-item">🅿️ Parking</a>
+  <a class="nav-item">🔩 Maintenance</a>
+  <a class="nav-item">🛡️ Guard Tour</a>
+  <a class="nav-item">🔑 Keys</a>
+  <a class="nav-item">⚡ IoT & Energy</a>
+  
+  <div class="sidebar-bottom">
+    <a class="nav-item" style="color: #06B6D4;">🧠 AI Assistant</a>
+    <a class="nav-item">⚙️ Settings</a>
+    <div class="nav-item" style="gap: 8px;">
+      <div class="user-avatar">CN</div>
+      <span style="color: #F8FAFC; font-size: 12px; font-weight: 500;">Cuong N.</span>
+      <span style="margin-left: auto; color: #64748B;">▾</span>
+    </div>
+  </div>
+</nav>
+
+<!-- Main -->
+<div class="main">
+  <header class="topbar">
+    <div class="breadcrumb">Overview / <span>Dashboard</span></div>
+    <div class="topbar-right">
+      <div class="search-trigger">🔍 Search... <kbd>⌘K</kbd></div>
+      <div class="topbar-icon">🔔<div class="notif-dot"></div></div>
+      <div class="user-avatar">CN</div>
+    </div>
+  </header>
+  
+  <div class="content">
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="page-title">Dashboard</h1>
+      <div class="header-controls">
+        <div class="select-control">🏢 Landmark 81 ▾</div>
+        <div class="select-control">📅 Today ▾</div>
+      </div>
+    </div>
+
+    <!-- Stat Cards -->
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">👥 People in Building</div>
+        <div class="stat-value" style="color: #F8FAFC;">1,247</div>
+        <div class="stat-sub">currently inside</div>
+        <div class="stat-trend up">↑ 12% from yesterday</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">🔒 Doors Online</div>
+        <div class="stat-value secure">48/52</div>
+        <div class="stat-sub">access points</div>
+        <div class="stat-trend down">4 offline</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">📹 Cameras</div>
+        <div class="stat-value secure">31/32</div>
+        <div class="stat-sub">streaming</div>
+        <div class="stat-trend down">1 offline</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">⚠️ Active Alerts</div>
+        <div class="stat-value error">3</div>
+        <div class="stat-sub">need attention</div>
+        <div class="stat-trend down">2 critical</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">🅿️ Parking</div>
+        <div class="stat-value operate">78%</div>
+        <div class="stat-sub">312 / 400 spots</div>
+        <div class="stat-trend up">↑ 5% from last week</div>
+      </div>
+    </div>
+
+    <!-- Middle Section -->
+    <div class="grid-2col">
+      <!-- Live Events -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><div class="live-dot"></div> Access Events (Live)</div>
+          <div class="card-link">View All →</div>
+        </div>
+        <div class="card-body">
+          <div class="sparkline"><div class="sparkline-line"></div></div>
+          <div class="event-item">
+            <span class="event-time">09:15</span>
+            <span class="event-person">Nguyen Van A</span>
+            <span class="event-point">→ Door 3</span>
+            <span class="event-status granted">✓ Granted</span>
+          </div>
+          <div class="event-item">
+            <span class="event-time">09:14</span>
+            <span class="event-person">Tran Thi B</span>
+            <span class="event-point">→ Gate 1</span>
+            <span class="event-status granted">✓ Granted</span>
+          </div>
+          <div class="event-item">
+            <span class="event-time">09:12</span>
+            <span class="event-person">UNKNOWN</span>
+            <span class="event-point">→ Door 7</span>
+            <span class="event-status denied">✗ Denied</span>
+          </div>
+          <div class="event-item">
+            <span class="event-time">09:11</span>
+            <span class="event-person">Le Van C</span>
+            <span class="event-point">→ Lift 2</span>
+            <span class="event-status granted">✓ Granted</span>
+          </div>
+          <div class="event-item">
+            <span class="event-time">09:10</span>
+            <span class="event-person">Pham Thi D</span>
+            <span class="event-point">→ Door 1</span>
+            <span class="event-status granted">✓ Granted</span>
+          </div>
+          <div class="event-item">
+            <span class="event-time">09:09</span>
+            <span class="event-person">Visitor #42</span>
+            <span class="event-point">→ Gate 1</span>
+            <span class="event-status granted">✓ Granted</span>
+          </div>
+          <div class="event-item">
+            <span class="event-time">09:08</span>
+            <span class="event-person">Ho Van E</span>
+            <span class="event-point">→ Turnstile 1</span>
+            <span class="event-status granted">✓ Granted</span>
+          </div>
+          <div class="event-item">
+            <span class="event-time">09:06</span>
+            <span class="event-person">Vu Thi F</span>
+            <span class="event-point">→ Door 5</span>
+            <span class="event-status granted">✓ Granted</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alerts -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">⚠️ Active Alerts</div>
+          <div class="card-link">View All →</div>
+        </div>
+        <div class="card-body">
+          <div class="alert-item">
+            <div class="alert-dot critical"></div>
+            <div>
+              <div class="alert-text">Door 5 forced open</div>
+              <div class="alert-meta">Building A, Floor 3 · 2m ago</div>
+            </div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-dot critical"></div>
+            <div>
+              <div class="alert-text">Intrusion alarm — Zone B</div>
+              <div class="alert-meta">Perimeter sensor · 5m ago</div>
+            </div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-dot warning"></div>
+            <div>
+              <div class="alert-text">NVR-02 storage at 90%</div>
+              <div class="alert-meta">Camera storage · 12m ago</div>
+            </div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-dot info"></div>
+            <div>
+              <div class="alert-text">Door 12 reader offline</div>
+              <div class="alert-meta">Building B, Floor 1 · 28m ago</div>
+            </div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-dot info"></div>
+            <div>
+              <div class="alert-text">Scheduled maintenance due</div>
+              <div class="alert-meta">Turnstile 3 · 1h ago</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Domain Health -->
+    <div class="grid-3col">
+      <div class="card">
+        <div class="card-body">
+          <div class="domain-header">
+            <span class="domain-icon">🔒</span>
+            <span class="domain-name secure">SECURE</span>
+          </div>
+          <div class="health-item"><span>Access Control</span><span class="health-status ok">✓ Online</span></div>
+          <div class="health-item"><span>CCTV</span><span class="health-status warn">⚠ 1 offline</span></div>
+          <div class="health-item"><span>Intrusion Detection</span><span class="health-status ok">✓ Armed</span></div>
+          <div class="health-item"><span>Intercom</span><span class="health-status ok">✓ Online</span></div>
+          <div class="health-item"><span>AI Detection</span><span class="health-status ok">✓ Active</span></div>
+          <div style="margin-top: 12px;"><span class="card-link">View Security →</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <div class="domain-header">
+            <span class="domain-icon">👤</span>
+            <span class="domain-name manage">MANAGE</span>
+          </div>
+          <div class="health-item"><span>Identities</span><span class="health-status ok">✓ 1,247 active</span></div>
+          <div class="health-item"><span>Visitors</span><span class="health-status ok">✓ 3 waiting</span></div>
+          <div class="health-item"><span>Attendance</span><span class="health-status ok">✓ 892 checked in</span></div>
+          <div class="health-item"><span>Contractors</span><span class="health-status ok">✓ 34 on-site</span></div>
+          <div class="health-item"><span>Deliveries</span><span class="health-status warn">⚠ 2 uncollected</span></div>
+          <div style="margin-top: 12px;"><span class="card-link">View People →</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <div class="domain-header">
+            <span class="domain-icon">🏢</span>
+            <span class="domain-name operate">OPERATE</span>
+          </div>
+          <div class="health-item"><span>Room Booking</span><span class="health-status ok">✓ 3/12 in use</span></div>
+          <div class="health-item"><span>Parking</span><span class="health-status ok">✓ 78% full</span></div>
+          <div class="health-item"><span>Maintenance</span><span class="health-status warn">⚠ 2 overdue</span></div>
+          <div class="health-item"><span>Guard Tour</span><span class="health-status ok">✓ On schedule</span></div>
+          <div class="health-item"><span>IoT & Energy</span><span class="health-status ok">✓ 142 kWh today</span></div>
+          <div style="margin-top: 12px;"><span class="card-link">View Facility →</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,62 @@
+plugins {
+    id 'com.android.library'
+}
+
+android {
+    namespace 'com.duali.serial_port'
+    compileSdk 31
+    
+
+    defaultConfig {
+        minSdk 21
+        targetSdk 31
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles "consumer-rules.pro"
+
+        ndk {
+            moduleName "DualWatchdog"
+            abiFilters "armeabi-v7a","arm64-v8a"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    externalNativeBuild {
+        ndkBuild {
+            path file('src/main/jni/Android.mk')
+        }
+    }
+
+    //Task to delete the old jar
+    task deleteOldJar(type:Delete){
+        delete 'release/serial_port.jar'
+    }
+
+//Task to export contents as jar
+    task exportJar(type:Copy){
+        from('build/intermediates/aar_main_jar/release/')
+        into('release/')
+        include('classes.jar')
+    rename('classes.jar', 'serial_port.jar')
+    }
+
+    exportJar.dependsOn(deleteOldJar, build)
+
+    lintOptions {
+        abortOnError false
+    }
+}
+
+dependencies {
+}

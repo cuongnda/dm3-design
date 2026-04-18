@@ -1,0 +1,76 @@
+{
+  "title": "Vehicles",
+  "description": "Manage vehicle plate numbers linked to users",
+  "addVehicle": "Add Vehicle",
+
+  "stat.total": "Total",
+  "stat.cars": "Cars",
+  "stat.motorbikes": "Motorbikes",
+  "stat.blacklisted": "Blacklisted",
+
+  "searchPlaceholder": "Search plate number, brand, owner…",
+
+  "col.plate": "Plate Number",
+  "col.type": "Type",
+  "col.brandModel": "Brand / Model",
+  "col.color": "Color",
+  "col.owner": "Owner",
+  "col.status": "Status",
+
+  "sort.plate": "Plate",
+  "sort.type": "Type",
+  "sort.brand": "Brand",
+  "sort.owner": "Owner",
+  "sort.status": "Status",
+
+  "empty.search": "No vehicles match your search",
+  "empty.default": "No vehicles registered yet",
+
+  "modal.addTitle": "Add Vehicle",
+  "modal.editTitle": "Edit Vehicle",
+  "modal.plateNumber": "Plate Number",
+  "modal.vehicleType": "Vehicle Type",
+  "modal.color": "Color",
+  "modal.brand": "Brand",
+  "modal.model": "Model",
+  "modal.owner": "Owner",
+  "modal.ownerNone": "— No owner —",
+  "modal.description": "Description",
+  "modal.status": "Status",
+  "modal.cancel": "Cancel",
+  "modal.save": "Save",
+  "modal.saving": "Saving…",
+
+  "type.car": "Car",
+  "type.motorbike": "Motorbike",
+  "type.bicycle": "Bicycle",
+  "type.truck": "Truck",
+  "type.other": "Other",
+
+  "status.active": "Active",
+  "status.inactive": "Inactive",
+  "status.blacklisted": "Blacklisted",
+
+  "delete.title": "Delete Vehicle",
+  "delete.confirm": "Delete vehicle",
+  "delete.confirmSuffix": "? This cannot be undone.",
+  "delete.cancel": "Cancel",
+  "delete.submit": "Delete",
+  "delete.deleting": "Deleting…",
+  "delete.bulkTitle": "Delete Vehicles",
+  "delete.bulkConfirm": "Delete",
+  "delete.bulkSuffix": "vehicle(s)? This cannot be undone.",
+
+  "toast.created": "Vehicle created",
+  "toast.updated": "Vehicle updated",
+  "toast.deleted": "Vehicle deleted",
+  "toast.createFailed": "Failed to create",
+  "toast.updateFailed": "Failed to update",
+  "toast.deleteFailed": "Failed to delete",
+  "toast.bulkDeleted": "{{count}} vehicle(s) deleted",
+  "toast.bulkDeleteFailed": "Bulk delete failed",
+  "toast.plateRequired": "Plate number is required",
+
+  "action.edit": "Edit",
+  "action.delete": "Delete"
+}

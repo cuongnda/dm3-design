@@ -1,0 +1,511 @@
+# docker-compose.local.yml — Full DM3 stack for local testing
+#
+# Usage:
+#   docker compose -f docker-compose.local.yml up -d
+#   docker compose -f docker-compose.local.yml --profile test up -d   # with automation
+#   docker compose -f docker-compose.local.yml down -v                # clean teardown
+#
+# All backend env vars are in deploy/env/local.env (committed to repo).
+#
+# Ports exposed on host:
+#   3000  — Web UI (via nginx)
+#   5433  — TimescaleDB (for direct DB access)
+#   1884  — EMQX MQTT
+#   8083  — EMQX WebSocket
+#   9091  — Simulator API
+
+services:
+  # ── Infrastructure ─────────────────────────────────────────────────────────
+
+  timescaledb:
+    image: timescale/timescaledb:2.17.2-pg16
+    container_name: dm3-local-timescaledb
+    environment:
+      POSTGRES_DB: dm3
+      POSTGRES_USER: dm3
+      POSTGRES_PASSWORD: dm3secret
+    ports:
+      - "5433:5432"
+    volumes:
+      - dm3_local_pgdata:/var/lib/postgresql/data
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dm3"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  emqx:
+    image: emqx/emqx:5.8.3
+    container_name: dm3-local-emqx
+    environment:
+      EMQX_NAME: dm3
+    ports:
+      - "1884:1883"
+      - "8083:8083"
+    volumes:
+      - dm3_local_emqx:/opt/emqx/data
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "emqx", "ctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: dm3-local-nats
+    command: ["--jetstream", "--store_dir=/data", "-m", "8222"]
+    volumes:
+      - dm3_local_nats:/data
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  valkey:
+    image: valkey/valkey:8.0-alpine
+    container_name: dm3-local-valkey
+    volumes:
+      - dm3_local_valkey:/data
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: dm3-local-minio
+    environment:
+      MINIO_ROOT_USER: dm3admin
+      MINIO_ROOT_PASSWORD: dm3secret123
+    command: server /data --console-address ":9001"
+    volumes:
+      - dm3_local_minio:/data
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Migration ──────────────────────────────────────────────────────────────
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-migrate
+    env_file: ./deploy/env/local.env
+    environment:
+      SERVICE_NAME: migrate
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:-dm3secret}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    restart: "no"
+
+  # ── Backend ────────────────────────────────────────────────────────────────
+
+  auth-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-auth-svc
+    restart: unless-stopped
+    env_file: ./deploy/env/local.env
+    environment:
+      SERVICE_NAME: auth-svc
+      HTTP_PORT: "8005"
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:-dm3secret}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+      emqx:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8005/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  identity-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-identity-svc
+    restart: unless-stopped
+    env_file: ./deploy/env/local.env
+    environment:
+      SERVICE_NAME: identity-svc
+      HTTP_PORT: "8004"
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:-dm3secret}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      OBJECT_STORE_ENDPOINT: minio:9000
+      OBJECT_STORE_ACCESS_KEY: ${MINIO_ROOT_USER:-dm3admin}
+      OBJECT_STORE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-dm3secret123}
+      OBJECT_STORE_BUCKET: ${OBJECT_STORE_BUCKET:-dm3}
+      OBJECT_STORE_USE_SSL: "false"
+      OBJECT_STORE_AUTO_CREATE_BUCKET: "true"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8004/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  access-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-access-svc
+    restart: unless-stopped
+    env_file: ./deploy/env/local.env
+    environment:
+      SERVICE_NAME: access-svc
+      HTTP_PORT: "8003"
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:-dm3secret}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+      emqx:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8003/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  audit-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-audit-svc
+    restart: unless-stopped
+    env_file: ./deploy/env/local.env
+    environment:
+      SERVICE_NAME: audit-svc
+      HTTP_PORT: "8001"
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:-dm3secret}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8001/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  visitor-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-visitor-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: visitor-svc
+      HTTP_PORT: "8006"
+      DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
+      JWT_SECRET: dm3-local-jwt-secret-change-me
+      NATS_URL: nats://nats:4222
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8006/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  parking-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-parking-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: parking-svc
+      HTTP_PORT: "8007"
+      DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
+      JWT_SECRET: dm3-local-jwt-secret-change-me
+      NATS_URL: nats://nats:4222
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8007/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── MediaMTX — RTSP ingest + WebRTC/WHEP + LL-HLS egress ───────────────────
+  mediamtx:
+    image: bluenviron/mediamtx:1.9.3
+    container_name: dm3-local-mediamtx
+    restart: unless-stopped
+    environment:
+      MEDIAMTX_STREAM_USER: ${MEDIAMTX_STREAM_USER:-dm3stream}
+      MEDIAMTX_STREAM_PASS: ${MEDIAMTX_STREAM_PASS:?MEDIAMTX_STREAM_PASS must be set}
+      MEDIAMTX_API_USER: ${MEDIAMTX_API_USER:-dm3admin}
+      MEDIAMTX_API_PASS: ${MEDIAMTX_API_PASS:?MEDIAMTX_API_PASS must be set}
+    volumes:
+      - ./deploy/mediamtx/mediamtx.yml:/mediamtx.yml:ro
+    ports:
+      # expose LL-HLS + WHEP for local browser testing
+      - "8888:8888"
+      - "8889:8889"
+      # WebRTC RTP over UDP — without this the ICE candidate at 127.0.0.1
+      # is unreachable and video stays at readyState 0.
+      - "8189:8189/udp"
+    networks:
+      - dm3-local
+    # mediamtx image is distroless (no wget/curl). We rely on the service
+    # starting (port binding is visible in logs) plus cctv-svc's own retries
+    # against the :9997 API instead of a docker healthcheck.
+
+  cctv-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-cctv-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: cctv-svc
+      HTTP_PORT: "8008"
+      DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
+      JWT_SECRET: dm3-local-jwt-secret-change-me
+      NATS_URL: nats://nats:4222
+      # Must be 32 random bytes base64-encoded. Never commit. Generate with: openssl rand -base64 32
+      CCTV_CREDENTIAL_KEY: ${CCTV_CREDENTIAL_KEY:?CCTV_CREDENTIAL_KEY must be set in .env}
+      MEDIAMTX_API_URL: "http://mediamtx:9997"
+      MEDIAMTX_WHEP_BASE: "http://localhost:8889"
+      MEDIAMTX_HLS_BASE: "http://localhost:8888"
+      MEDIAMTX_STREAM_USER: ${MEDIAMTX_STREAM_USER:-dm3stream}
+      MEDIAMTX_STREAM_PASS: ${MEDIAMTX_STREAM_PASS:?MEDIAMTX_STREAM_PASS must be set}
+      MEDIAMTX_API_USER: ${MEDIAMTX_API_USER:-dm3admin}
+      MEDIAMTX_API_PASS: ${MEDIAMTX_API_PASS:?MEDIAMTX_API_PASS must be set}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+      mediamtx:
+        condition: service_started
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8008/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  device-gateway:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-local-device-gateway
+    restart: unless-stopped
+    env_file: ./deploy/env/local.env
+    environment:
+      SERVICE_NAME: device-gateway
+      HTTP_PORT: "8002"
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:-dm3secret}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      # Shared with cctv-svc: required to provision type=camera devices via
+      # /api/v1/gateway/devices/provision (encrypts RTSP password at rest).
+      # When unset, camera provisioning returns 503 but other types still work.
+      CCTV_CREDENTIAL_KEY: ${CCTV_CREDENTIAL_KEY:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      emqx:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8002/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Frontend ───────────────────────────────────────────────────────────────
+
+  webapp:
+    build:
+      context: .
+      dockerfile: apps/console/Dockerfile
+      args:
+        VITE_API_BASE_URL: ""
+        VITE_MQTT_WS_URL: "ws://localhost:8083/mqtt"
+    container_name: dm3-local-webapp
+    restart: unless-stopped
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:80"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Nginx reverse proxy ────────────────────────────────────────────────────
+
+  nginx:
+    image: nginx:alpine
+    container_name: dm3-local-nginx
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    volumes:
+      - ./deploy/nginx/nginx.local.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      webapp:
+        condition: service_healthy
+      auth-svc:
+        condition: service_healthy
+      identity-svc:
+        condition: service_healthy
+      access-svc:
+        condition: service_healthy
+      device-gateway:
+        condition: service_healthy
+      audit-svc:
+        condition: service_healthy
+      visitor-svc:
+        condition: service_healthy
+      parking-svc:
+        condition: service_healthy
+    networks:
+      - dm3-local
+
+  # ── Simulator ──────────────────────────────────────────────────────────────
+
+  simulator:
+    build:
+      context: ./simulator
+      dockerfile: Dockerfile
+    container_name: dm3-local-simulator
+    restart: unless-stopped
+    environment:
+      DM3_BROKER: mqtt://emqx:1883
+      DM3_DEVICES: 5
+      DM3_API_PORT: 9090
+      DM3_BOOTSTRAP_SECRET: dm3-bootstrap-v1-dev-secret
+    ports:
+      - "9091:9090"
+    depends_on:
+      emqx:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    command: ["run", "--broker", "mqtt://emqx:1883", "--devices", "5"]
+
+  # ── Automation (test profile) ──────────────────────────────────────────────
+
+  automation:
+    build:
+      context: .
+      dockerfile: automation/Dockerfile
+    container_name: dm3-local-automation
+    environment:
+      # ── Service URLs (Docker internal) ──
+      API_BASE_URL: http://nginx:80
+      API_URL: http://nginx:80
+      API_AUTH: http://nginx:80
+      API_IDENTITY: http://nginx:80
+      API_ACCESS: http://nginx:80
+      API_GATEWAY: http://nginx:80
+      WEB_URL: http://nginx:80
+      WEB_BASE_URL: http://nginx:80
+      HOST_WEB: http://nginx:80
+      BASE_URL: http://nginx:80
+      # ── Auth ──
+      SYSADMIN_EMAIL: sysadmin@duali.com
+      SYSADMIN_PASSWORD: sysadmin123
+      ADMIN_EMAIL: admin@duali.com
+      ADMIN_PASSWORD: admin123
+      # ── Report ──
+      REPORT_UPLOAD_URL: https://tasks.duali.vn/api/automation/upload
+      REPORT_UPLOAD_TOKEN: ""
+      REPORT_PREFIX: dm3-local
+      # ── Options ──
+      HEADLESS: "true"
+      GENERATE_VIDEO: "true"
+      TZ: Asia/Bangkok
+      HEALTH_TIMEOUT: "180"
+      RUN_ON_STARTUP: full
+      CRON_SCHEDULE: "0 0 * * *"
+      # ── MQTT ──
+      MQTT_HOST: emqx
+      MQTT_PORT: "1883"
+    volumes:
+      - dm3_local_automation:/app/automation/export
+    depends_on:
+      nginx:
+        condition: service_started
+      auth-svc:
+        condition: service_healthy
+      access-svc:
+        condition: service_healthy
+      device-gateway:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    profiles:
+      - test
+
+volumes:
+  dm3_local_pgdata:
+  dm3_local_emqx:
+  dm3_local_nats:
+  dm3_local_valkey:
+  dm3_local_minio:
+  dm3_local_automation:
+
+networks:
+  dm3-local:
+    driver: bridge

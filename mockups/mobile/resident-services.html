@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=375">
+<title>Resident Services — Duall Master 3.0</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1E293B; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Inter', -apple-system, sans-serif; }
+.phone-frame { width: 375px; height: 812px; background: #0A0E1A; border-radius: 44px; overflow: hidden; position: relative; border: 3px solid #334155; box-shadow: 0 0 40px rgba(0,0,0,0.5); }
+.notch { width: 150px; height: 28px; background: #000; border-radius: 0 0 18px 18px; position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 100; }
+.status-bar { height: 54px; padding: 30px 24px 0; display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: #F8FAFC; }
+.screen { height: calc(812px - 54px - 56px); overflow-y: auto; padding: 0 16px 16px; }
+.screen::-webkit-scrollbar { display: none; }
+.bottom-nav { height: 56px; background: #111827; border-top: 1px solid #1E293B; display: flex; align-items: center; justify-content: space-around; position: absolute; bottom: 0; left: 0; right: 0; padding-bottom: 4px; }
+.nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10px; font-weight: 500; color: #64748B; }
+.nav-item.active { color: #3B82F6; }
+.nav-item svg { width: 24px; height: 24px; }
+
+.top-app-bar { height: 48px; display: flex; align-items: center; }
+.top-app-bar h1 { font-size: 18px; font-weight: 600; color: #F8FAFC; }
+
+.section-title { font-size: 12px; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin: 16px 0 10px; }
+
+.service-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 8px; }
+.service-card { background: #1E293B; border-radius: 8px; border: 1px solid #334155; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.service-icon { font-size: 28px; }
+.service-name { font-size: 14px; font-weight: 600; color: #F8FAFC; }
+.service-desc { font-size: 12px; color: #94A3B8; line-height: 1.4; }
+.service-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 9999px; width: fit-content; }
+.badge-alert { background: #7F1D1D; color: #EF4444; }
+.badge-info { background: #1E3A5F; color: #60A5FA; }
+.badge-success { background: #166534; color: #22C55E; }
+.badge-warn { background: #713F12; color: #EAB308; }
+
+.quick-access { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 8px; }
+.qa-item { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 4px; background: #1E293B; border-radius: 8px; border: 1px solid #334155; }
+.qa-icon { font-size: 22px; }
+.qa-label { font-size: 10px; color: #94A3B8; font-weight: 500; text-align: center; }
+
+.announce-banner { background: #1E293B; border-radius: 8px; border: 1px solid #334155; border-left: 3px solid #EAB308; padding: 12px; margin-bottom: 12px; }
+.announce-pin { font-size: 11px; color: #EAB308; font-weight: 600; margin-bottom: 4px; }
+.announce-title { font-size: 14px; color: #F8FAFC; font-weight: 500; }
+.announce-sub { font-size: 12px; color: #94A3B8; margin-top: 4px; }
+
+.recent-activity { margin-top: 4px; }
+.activity-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #1E293B; }
+.activity-icon { font-size: 16px; width: 32px; height: 32px; background: #111827; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.activity-info { flex: 1; }
+.activity-title { font-size: 13px; color: #F8FAFC; }
+.activity-meta { font-size: 11px; color: #64748B; margin-top: 1px; }
+.activity-action { font-size: 11px; color: #3B82F6; font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="phone-frame">
+  <div class="notch"></div>
+  <div class="status-bar"><span>9:41</span><span style="display:flex;gap:6px;align-items:center;"><svg width="25" height="12" viewBox="0 0 25 12" fill="#F8FAFC"><rect x="0" y="1" width="21" height="10" rx="2" stroke="#F8FAFC" stroke-width="1" fill="none"/><rect x="22" y="4" width="2" height="4" rx="0.5"/><rect x="2" y="3" width="15" height="6" rx="1" fill="#22C55E"/></svg></span></div>
+
+  <div class="screen">
+    <div class="top-app-bar"><h1>Services</h1></div>
+
+    <div class="announce-banner">
+      <div class="announce-pin">📌 PINNED</div>
+      <div class="announce-title">Water Shutdown — Feb 20, 9-11AM</div>
+      <div class="announce-sub">Floors 10-15 • Posted by Management</div>
+    </div>
+
+    <div class="section-title">Quick Access</div>
+    <div class="quick-access">
+      <div class="qa-item"><span class="qa-icon">📦</span><span class="qa-label">Packages</span></div>
+      <div class="qa-item"><span class="qa-icon">🔧</span><span class="qa-label">Maintain</span></div>
+      <div class="qa-item"><span class="qa-icon">🅿️</span><span class="qa-label">Parking</span></div>
+      <div class="qa-item"><span class="qa-icon">📢</span><span class="qa-label">News</span></div>
+    </div>
+
+    <div class="section-title">Building Services</div>
+    <div class="service-grid">
+      <div class="service-card">
+        <span class="service-icon">🏋️</span>
+        <span class="service-name">Facility Booking</span>
+        <span class="service-desc">Gym, pool, BBQ, tennis, meeting rooms</span>
+        <span class="service-badge badge-info">3 slots today</span>
+      </div>
+      <div class="service-card">
+        <span class="service-icon">🔧</span>
+        <span class="service-name">Maintenance</span>
+        <span class="service-desc">Submit repair requests for your unit</span>
+        <span class="service-badge badge-warn">1 in progress</span>
+      </div>
+      <div class="service-card">
+        <span class="service-icon">📦</span>
+        <span class="service-name">Packages</span>
+        <span class="service-desc">Track deliveries & confirm pickup</span>
+        <span class="service-badge badge-alert">2 waiting</span>
+      </div>
+      <div class="service-card">
+        <span class="service-icon">🅿️</span>
+        <span class="service-name">Parking</span>
+        <span class="service-desc">Vehicles, passes, visitor parking</span>
+        <span class="service-badge badge-success">2 registered</span>
+      </div>
+      <div class="service-card">
+        <span class="service-icon">📢</span>
+        <span class="service-name">Announcements</span>
+        <span class="service-desc">Building news, events & notices</span>
+        <span class="service-badge badge-info">3 unread</span>
+      </div>
+      <div class="service-card">
+        <span class="service-icon">💬</span>
+        <span class="service-name">Contact Mgmt</span>
+        <span class="service-desc">Chat with building management</span>
+      </div>
+      <div class="service-card">
+        <span class="service-icon">💳</span>
+        <span class="service-name">Payments</span>
+        <span class="service-desc">Service fees, parking, amenity charges</span>
+        <span class="service-badge badge-warn">Due Feb 28</span>
+      </div>
+      <div class="service-card">
+        <span class="service-icon">👥</span>
+        <span class="service-name">Community</span>
+        <span class="service-desc">Neighbor board, marketplace, events</span>
+      </div>
+    </div>
+
+    <div class="section-title">Recent Activity</div>
+    <div class="recent-activity">
+      <div class="activity-item">
+        <div class="activity-icon">📦</div>
+        <div class="activity-info">
+          <div class="activity-title">Package from Shopee</div>
+          <div class="activity-meta">At reception · 2:30 PM</div>
+        </div>
+        <span class="activity-action">Pick up →</span>
+      </div>
+      <div class="activity-item">
+        <div class="activity-icon">🔧</div>
+        <div class="activity-info">
+          <div class="activity-title">Faucet repair — In Progress</div>
+          <div class="activity-meta">Technician assigned · ETA Feb 21</div>
+        </div>
+        <span class="activity-action">Track →</span>
+      </div>
+      <div class="activity-item">
+        <div class="activity-icon">🏊</div>
+        <div class="activity-info">
+          <div class="activity-title">Pool booked — Saturday</div>
+          <div class="activity-meta">8:00 - 10:00 AM</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Home</span></div>
+    <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg><span>Keys</span></div>
+    <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg><span>Visitors</span></div>
+    <div class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Services</span></div>
+    <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>Profile</span></div>
+  </div>
+</div>
+</body>
+</html>

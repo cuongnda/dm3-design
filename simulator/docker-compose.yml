@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  emqx:
+    image: emqx/emqx:5.8
+    container_name: dm3-emqx
+    ports:
+      - "1884:1883"     # MQTT (1884 external, 1883 internal — avoids Roombox RabbitMQ on 1883)
+      - "8083:8083"     # WebSocket
+      - "8084:8084"     # WSS
+      - "18083:18083"   # EMQX Dashboard
+    environment:
+      - EMQX_ALLOW_ANONYMOUS=true
+      - EMQX_LISTENER__TCP__EXTERNAL=1883
+    volumes:
+      - emqx-data:/opt/emqx/data
+    healthcheck:
+      test: ["CMD", "emqx", "ctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  simulator:
+    build: .
+    container_name: dm3-simulator
+    ports:
+      - "9090:9090"
+    depends_on:
+      emqx:
+        condition: service_healthy
+    command: run --devices 0 --broker mqtt://emqx:1883 --site-id site-001 --company-id 00000000-0000-0000-0000-000000000001
+    restart: unless-stopped
+    environment:
+      - DM3_BROKER_URL=mqtt://emqx:1883
+
+volumes:
+  emqx-data:

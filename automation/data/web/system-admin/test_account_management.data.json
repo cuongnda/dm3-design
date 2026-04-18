@@ -1,0 +1,345 @@
+{
+  "test_account_list_page": {
+    "description": "Verify account list page loads with table, search, and create button",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/accounts"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "user-table-list"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "user-button-create"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "user-input-search"
+      },
+      {
+        "action": "assert_visible",
+        "css": "[data-testid^='user-row-']",
+        "first": true
+      }
+    ]
+  },
+  "test_account_search": {
+    "description": "Search for accounts by email/name",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/accounts"
+      },
+      {
+        "action": "fill",
+        "testid": "user-input-search",
+        "value": "sysadmin"
+      },
+      {
+        "action": "wait",
+        "ms": 800
+      },
+      {
+        "action": "assert_text_contains",
+        "testid": "user-table-list",
+        "value": "sysadmin@duali.com"
+      }
+    ]
+  },
+  "test_account_filter_role": {
+    "description": "Filter accounts by role — uses custom Select dropdown",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/accounts"
+      },
+      {
+        "action": "select_option",
+        "testid": "user-select-role",
+        "value": "System Admin"
+      },
+      {
+        "action": "wait",
+        "ms": 800
+      },
+      {
+        "action": "assert_visible",
+        "testid": "user-table-list"
+      }
+    ]
+  },
+  "test_account_filter_status": {
+    "description": "Filter accounts by status — uses custom Select dropdown",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/accounts"
+      },
+      {
+        "action": "select_option",
+        "testid": "user-select-status",
+        "value": "Active"
+      },
+      {
+        "action": "wait",
+        "ms": 800
+      },
+      {
+        "action": "assert_visible",
+        "testid": "user-table-list"
+      }
+    ]
+  },
+  "test_navigate_to_create": {
+    "description": "Navigate from account list to create account page",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/accounts"
+      },
+      {
+        "action": "click",
+        "testid": "user-button-create"
+      },
+      {
+        "action": "assert_url_contains",
+        "value": "/system/accounts/new"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "create-input-name"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "create-input-email"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "create-button-submit"
+      }
+    ]
+  },
+  "test_create_form_validation": {
+    "description": "Test create account form - submit button disabled when fields empty",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/accounts/new"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "create-input-name"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "create-input-email"
+      },
+      {
+        "action": "assert_disabled",
+        "testid": "create-button-submit"
+      }
+    ]
+  },
+  "test_create_account_success": {
+    "description": "Create a new user account successfully",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/accounts/new"
+      },
+      {
+        "action": "fill",
+        "testid": "create-input-name",
+        "value": "Test User {{timestamp}}"
+      },
+      {
+        "action": "fill",
+        "testid": "create-input-email",
+        "value": "test-{{timestamp}}@example.com"
+      },
+      {
+        "action": "click",
+        "testid": "create-button-submit"
+      },
+      {
+        "action": "wait",
+        "ms": 1000
+      },
+      {
+        "action": "assert_visible",
+        "testid": "create-label-gen-email"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "create-label-gen-password"
+      }
+    ]
+  },
+  "test_create_system_admin": {
+    "description": "Create system admin account (no company)",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/accounts/new"
+      },
+      {
+        "action": "fill",
+        "testid": "create-input-name",
+        "value": "Test SysAdmin {{timestamp}}"
+      },
+      {
+        "action": "fill",
+        "testid": "create-input-email",
+        "value": "sysadmin-{{timestamp}}@example.com"
+      },
+      {
+        "action": "click",
+        "testid": "create-button-submit"
+      },
+      {
+        "action": "wait",
+        "ms": 1000
+      },
+      {
+        "action": "assert_visible",
+        "testid": "create-label-gen-email"
+      }
+    ]
+  },
+  "test_account_detail_page": {
+    "description": "Navigate to account detail page",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/accounts"
+      },
+      {
+        "action": "click",
+        "css": "[data-testid^='user-row-']",
+        "first": true
+      },
+      {
+        "action": "wait",
+        "ms": 500
+      },
+      {
+        "action": "assert_url_contains",
+        "value": "/system/accounts/"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "user-text-name"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "user-badge-status"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "user-badge-role"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "user-button-edit"
+      }
+    ]
+  },
+  "test_account_edit_mode": {
+    "description": "Enter edit mode and verify form fields",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/accounts"
+      },
+      {
+        "action": "click",
+        "css": "[data-testid^='user-row-']",
+        "first": true
+      },
+      {
+        "action": "wait",
+        "ms": 500
+      },
+      {
+        "action": "click",
+        "testid": "user-button-edit"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "user-input-editName"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "user-button-save"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "user-button-cancel"
+      }
+    ]
+  },
+  "test_reset_password": {
+    "description": "Test reset password button is present on detail page",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/accounts"
+      },
+      {
+        "action": "click",
+        "css": "[data-testid^='user-row-']",
+        "first": true
+      },
+      {
+        "action": "wait",
+        "ms": 500
+      },
+      {
+        "action": "assert_visible",
+        "testid": "user-button-reset-password"
+      }
+    ]
+  },
+  "test_toggle_account_status": {
+    "description": "Test toggle status button is present",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/accounts"
+      },
+      {
+        "action": "click",
+        "css": "[data-testid^='user-row-']",
+        "first": true
+      },
+      {
+        "action": "wait",
+        "ms": 500
+      },
+      {
+        "action": "assert_visible",
+        "testid": "user-button-toggle-status"
+      }
+    ]
+  },
+  "test_pagination": {
+    "description": "Verify account list loads successfully (pagination visible when enough data)",
+    "steps": [
+      {
+        "action": "navigate",
+        "url": "/system/accounts"
+      },
+      {
+        "action": "assert_visible",
+        "testid": "user-table-list"
+      },
+      {
+        "action": "assert_visible",
+        "css": "[data-testid^='user-row-']",
+        "first": true
+      }
+    ]
+  }
+}

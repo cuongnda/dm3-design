@@ -1,0 +1,472 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  fetchDevices, fetchDevice, updateDevice, deleteDevice, fetchStats, fetchAccessDevices, fetchAccessDevice, fetchEvents, fetchPersons, fetchPerson,
+  fetchRules, fetchRule, fetchCredentials, fetchGroups, fetchGroupMembers, fetchSchedules,
+  createPerson, updatePerson, deletePerson, createCredential, deleteCredential, uploadPhoto,
+  createGroup, updateGroup, deleteGroup, addGroupMember, removeGroupMember,
+  createAccessDevice, updateAccessDevice, deleteAccessDevice, createRule, updateRule, deleteRule, createSchedule,
+  sendDeviceCommand, provisionDevice, fetchPendingDevices, approvePendingDevice, rejectPendingDevice,
+  fetchAccessTimeTemplates, fetchAccessTimeTemplate, createAccessTimeTemplate, updateAccessTimeTemplate, deleteAccessTimeTemplate,
+  assignAccessTime, fetchUserAccessTime, validateAccessTime, fetchAccessTimeStats,
+  type CreateAccessTimeTemplateRequest, type UpdateAccessTimeTemplateRequest, type AssignAccessTimeRequest, type ValidateAccessTimeRequest,
+} from './api';
+
+export function useDevices() {
+  return useQuery({ queryKey: ['devices'], queryFn: fetchDevices, refetchInterval: 15_000 });
+}
+
+export function useDevice(id: string) {
+  return useQuery({ 
+    queryKey: ['device', id], 
+    queryFn: () => fetchDevice(id), 
+    enabled: !!id,
+    refetchInterval: 10_000
+  });
+}
+
+export function useUpdateDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateDevice>[1] }) =>
+      updateDevice(id, data),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['device', id] });
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+    },
+  });
+}
+
+export function useDeleteDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteDevice,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+    },
+  });
+}
+
+export function useProvisionDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: provisionDevice,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+    },
+  });
+}
+
+export function usePendingDevices() {
+  return useQuery({ 
+    queryKey: ['pending-devices'], 
+    queryFn: fetchPendingDevices, 
+    refetchInterval: 30_000 
+  });
+}
+
+export function useApprovePendingDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof approvePendingDevice>[1] }) =>
+      approvePendingDevice(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-devices'] });
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+    },
+  });
+}
+
+export function useRejectPendingDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: rejectPendingDevice,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-devices'] });
+    },
+  });
+}
+
+export function useStats() {
+  return useQuery({ queryKey: ['stats'], queryFn: fetchStats, refetchInterval: 10_000 });
+}
+
+// ─── Access Devices ──────────────────────────────────────────────────────────
+
+export function useAccessDevices(page = 1, params?: Record<string, string>, limit = 50) {
+  return useQuery({
+    queryKey: ['access-devices', page, params, limit],
+    queryFn: () => fetchAccessDevices(page, limit, params),
+    refetchInterval: 15_000,
+  });
+}
+
+export function useAccessDevice(id: string) {
+  return useQuery({
+    queryKey: ['access-device', id],
+    queryFn: () => fetchAccessDevice(id),
+    enabled: !!id,
+    refetchInterval: 10_000
+  });
+}
+
+export function useCreateAccessDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createAccessDevice,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['access-devices'] });
+    },
+  });
+}
+
+export function useUpdateAccessDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateAccessDevice>[1] }) =>
+      updateAccessDevice(id, data),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['access-device', id] });
+      queryClient.invalidateQueries({ queryKey: ['access-devices'] });
+    },
+  });
+}
+
+export function useDeleteAccessDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteAccessDevice,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['access-devices'] });
+    },
+  });
+}
+
+// ─── Events ──────────────────────────────────────────────────────────────────
+
+export function useEvents(page = 1, params?: Record<string, string>) {
+  return useQuery({ 
+    queryKey: ['events', page, params], 
+    queryFn: () => fetchEvents(page, 50, params), 
+    refetchInterval: 10_000 
+  });
+}
+
+// ─── Access Rules ────────────────────────────────────────────────────────────
+
+export function useRules(page = 1, params?: Record<string, string>) {
+  return useQuery({ 
+    queryKey: ['rules', page, params], 
+    queryFn: () => fetchRules(page, 50, params) 
+  });
+}
+
+export function useRule(id: string) {
+  return useQuery({ 
+    queryKey: ['rule', id], 
+    queryFn: () => fetchRule(id), 
+    enabled: !!id 
+  });
+}
+
+export function useCreateRule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createRule,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rules'] });
+    },
+  });
+}
+
+export function useUpdateRule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateRule>[1] }) =>
+      updateRule(id, data),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['rule', id] });
+      queryClient.invalidateQueries({ queryKey: ['rules'] });
+    },
+  });
+}
+
+export function useDeleteRule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteRule,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rules'] });
+    },
+  });
+}
+
+// ─── Schedules ───────────────────────────────────────────────────────────────
+
+export function useSchedules(page = 1) {
+  return useQuery({ 
+    queryKey: ['schedules', page], 
+    queryFn: () => fetchSchedules(page) 
+  });
+}
+
+export function useCreateSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createSchedule,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['schedules'] });
+    },
+  });
+}
+
+// ─── Persons ─────────────────────────────────────────────────────────────────
+
+export function usePersons(page = 1, params?: Record<string, string>) {
+  return useQuery({ 
+    queryKey: ['persons', page, params], 
+    queryFn: () => fetchPersons(page, 50, params) 
+  });
+}
+
+export function usePerson(id: string) {
+  return useQuery({ 
+    queryKey: ['person', id], 
+    queryFn: () => fetchPerson(id), 
+    enabled: !!id 
+  });
+}
+
+export function useCreatePerson() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createPerson,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['persons'] });
+    },
+  });
+}
+
+export function useUpdatePerson() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updatePerson>[1] }) =>
+      updatePerson(id, data),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['person', id] });
+      queryClient.invalidateQueries({ queryKey: ['persons'] });
+    },
+  });
+}
+
+export function useDeletePerson() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deletePerson,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['persons'] });
+    },
+  });
+}
+
+// ─── Credentials ─────────────────────────────────────────────────────────────
+
+export function useCredentials(personId: string) {
+  return useQuery({ 
+    queryKey: ['credentials', personId], 
+    queryFn: () => fetchCredentials(personId),
+    enabled: !!personId
+  });
+}
+
+export function useCreateCredential() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ personId, data }: { personId: string; data: Parameters<typeof createCredential>[1] }) =>
+      createCredential(personId, data),
+    onSuccess: (_, { personId }) => {
+      queryClient.invalidateQueries({ queryKey: ['credentials', personId] });
+      queryClient.invalidateQueries({ queryKey: ['person', personId] });
+    },
+  });
+}
+
+export function useDeleteCredential() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ personId, credId }: { personId: string; credId: string }) => deleteCredential(personId, credId),
+    onSuccess: (_, { personId }) => {
+      queryClient.invalidateQueries({ queryKey: ['credentials', personId] });
+      queryClient.invalidateQueries({ queryKey: ['person', personId] });
+    },
+  });
+}
+
+export function useUploadPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ personId, file }: { personId: string; file: File }) => uploadPhoto(personId, file),
+    onSuccess: (_, { personId }) => {
+      queryClient.invalidateQueries({ queryKey: ['person', personId] });
+      queryClient.invalidateQueries({ queryKey: ['persons'] });
+    },
+  });
+}
+
+// ─── Groups ──────────────────────────────────────────────────────────────────
+
+export function useGroups(page = 1, limit = 50) {
+  return useQuery({
+    queryKey: ['groups', page, limit],
+    queryFn: () => fetchGroups(page, limit),
+  });
+}
+
+export function useGroupMembers(groupId: string) {
+  return useQuery({ 
+    queryKey: ['group-members', groupId], 
+    queryFn: () => fetchGroupMembers(groupId),
+    enabled: !!groupId
+  });
+}
+
+export function useCreateGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createGroup,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+    },
+  });
+}
+
+export function useUpdateGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateGroup>[1] }) =>
+      updateGroup(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+    },
+  });
+}
+
+export function useDeleteGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteGroup,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+    },
+  });
+}
+
+export function useAddGroupMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ groupId, personId }: { groupId: string; personId: string }) => addGroupMember(groupId, personId),
+    onSuccess: (_, { groupId }) => {
+      queryClient.invalidateQueries({ queryKey: ['group-members', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+    },
+  });
+}
+
+export function useRemoveGroupMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ groupId, personId }: { groupId: string; personId: string }) => removeGroupMember(groupId, personId),
+    onSuccess: (_, { groupId }) => {
+      queryClient.invalidateQueries({ queryKey: ['group-members', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+    },
+  });
+}
+
+// ─── Device Commands ──────────────────────────────────────────────────────────
+
+export function useSendCommand() {
+  return useMutation({
+    mutationFn: ({ deviceId, command, params }: { deviceId: string; command: string; params?: Record<string, unknown> }) =>
+      sendDeviceCommand(deviceId, command, params),
+  });
+}
+
+// ─── Access Time ──────────────────────────────────────────────────────────────
+
+export function useAccessTimeTemplates(page = 1, params?: Record<string, string>) {
+  return useQuery({
+    queryKey: ['access-time-templates', page, params],
+    queryFn: () => fetchAccessTimeTemplates(page, 50, params),
+  });
+}
+
+export function useAccessTimeTemplate(id: string) {
+  return useQuery({
+    queryKey: ['access-time-template', id],
+    queryFn: () => fetchAccessTimeTemplate(id),
+    enabled: !!id,
+  });
+}
+
+export function useCreateAccessTimeTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateAccessTimeTemplateRequest) => createAccessTimeTemplate(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['access-time-templates'] });
+    },
+  });
+}
+
+export function useUpdateAccessTimeTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateAccessTimeTemplateRequest }) => updateAccessTimeTemplate(id, data),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['access-time-template', id] });
+      queryClient.invalidateQueries({ queryKey: ['access-time-templates'] });
+    },
+  });
+}
+
+export function useDeleteAccessTimeTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteAccessTimeTemplate,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['access-time-templates'] });
+    },
+  });
+}
+
+export function useAssignAccessTime() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: AssignAccessTimeRequest) => assignAccessTime(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['access-time-templates'] });
+    },
+  });
+}
+
+export function useUserAccessTime(userId: string) {
+  return useQuery({
+    queryKey: ['user-access-time', userId],
+    queryFn: () => fetchUserAccessTime(userId),
+    enabled: !!userId,
+  });
+}
+
+export function useValidateAccessTime() {
+  return useMutation({
+    mutationFn: (data: ValidateAccessTimeRequest) => validateAccessTime(data),
+  });
+}
+
+export function useAccessTimeStats() {
+  return useQuery({
+    queryKey: ['access-time-stats'],
+    queryFn: fetchAccessTimeStats,
+    refetchInterval: 30_000,
+  });
+}
