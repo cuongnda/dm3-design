@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Building2, Plus, Search } from 'lucide-react';
 import { fetchCompanies, type CompanyDTO } from '@/lib/api';
 import { Button, DataTable, Input, TablePaginationFooter } from '@dm3/ui';
+import { CreateCompanyModal } from './CreateCompanyModal';
 
 const planColors: Record<string, string> = {
   trial: 'bg-warning/10 text-warning',
@@ -24,15 +25,21 @@ export function CompanyListPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const pageSize = 20;
   const navigate = useNavigate();
 
-  useEffect(() => {
+  const loadCompanies = useCallback(() => {
+    setLoading(true);
     fetchCompanies()
       .then(setCompanies)
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadCompanies();
+  }, [loadCompanies]);
 
   const filtered = useMemo(() => {
     if (!search) return companies;
@@ -56,7 +63,7 @@ export function CompanyListPage() {
         </div>
         <Button
           data-testid="company-button-create"
-          onClick={() => navigate('/system/companies/new')}
+          onClick={() => setShowCreateModal(true)}
           className="gap-2"
         >
           <Plus size={15} />
@@ -129,6 +136,12 @@ export function CompanyListPage() {
           loading={loading}
         />
       </div>
+
+      <CreateCompanyModal
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
+        onCreated={loadCompanies}
+      />
     </div>
   );
 }

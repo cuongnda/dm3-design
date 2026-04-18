@@ -33,7 +33,6 @@ import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage';
 import { SystemLayout } from '@/features/system/SystemLayout';
 import { SystemDashboardPage } from '@/features/system/SystemDashboardPage';
 import { CompanyListPage } from '@/features/system/CompanyListPage';
-import { CreateCompanyPage } from '@/features/system/CreateCompanyPage';
 import { CompanyDetailPage } from '@/features/system/CompanyDetailPage';
 import { SystemDevicesPage } from '@/features/system/SystemDevicesPage';
 import { EditDevicePage } from '@/features/system/EditDevicePage';
@@ -337,7 +336,6 @@ export const Router = createBrowserRouter([
         children: [
           { index: true, element: <SystemDashboardPage /> },
           { path: 'companies', element: <CompanyListPage /> },
-          { path: 'companies/new', element: <CreateCompanyPage /> },
           { path: 'companies/:id', element: <CompanyDetailPage /> },
           { path: 'accounts', element: <UserAccountListPage /> },
           { path: 'accounts/:id', element: <UserAccountDetailPage /> },
