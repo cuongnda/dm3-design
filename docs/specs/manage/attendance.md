@@ -2,9 +2,63 @@
 
 > Domain: MANAGE | Color: #8B5CF6 | Priority: P0
 > Status: Draft | Owner: attend-svc team
+> Plugin: `attendance` | Service: `attend-svc` | Schema: `dm3_attendance`
+> Plugin Architecture: Follows `docs/architecture/module-isolation.md` (Active, 2026-04-12)
 
 ## Overview
-Time & Attendance derives employee working hours from access control events — clock-in/out from face readers, card readers, fingerprint terminals, and mobile check-in. It manages shift schedules, calculates overtime, tracks lateness and absences, integrates with leave systems, and generates department-level and monthly summary reports. Since access decisions happen on devices, attendance records are constructed server-side from the stream of access events.
+Time & Attendance derives employee working hours from access control events, clock-in/out from face readers, card readers, fingerprint terminals, and mobile check-in. It manages shift schedules, calculates overtime, tracks lateness and absences, integrates with leave systems, and generates department-level and monthly summary reports. Since access decisions happen on devices, attendance records are constructed server-side from the stream of access events.
+
+Attendance is implemented as an **optional tenant-gated plugin**, not as part of core access control. It follows the DM3 plugin isolation architecture:
+- Own PostgreSQL schema: `dm3_attendance`
+- Own microservice: `attend-svc`
+- Own Go package: `internal/attendance/`
+- Own frontend feature directory: `apps/console/src/features/attendance/`
+- Own API client: `packages/api-client/src/attendance.ts`
+- Own NATS stream for attendance domain events
+- Enabled per tenant via `enabled_plugins` including `attendance`
+
+This plugin is a **derived-data / event-driven plugin**. It consumes access events from core services and may cache identity/department metadata locally for read performance, but it does not mutate core access tables.
+
+## Plugin Architecture Alignment
+
+### Plugin Type
+Attendance follows the **isolated plugin with event-driven integration** pattern, closest to Visitor/Parking style in `module-isolation.md`, rather than the CCTV device-extension pattern.
+
+### Backend Components
+Attendance plugin should include:
+- `backend/cmd/attend-svc/main.go`
+- `backend/internal/attendance/models.go`
+- `backend/internal/attendance/handlers.go`
+- `backend/internal/attendance/events.go`
+- `backend/internal/attendance/consumers.go`
+- `backend/internal/attendance/cron.go`
+- `backend/pkg/db/migrations/*attendance*.sql`
+
+### Frontend Components
+Attendance plugin should include:
+- `apps/console/src/features/attendance/`
+- daily attendance pages
+- shift management pages
+- overtime pages
+- reports pages
+- settings/configuration pages
+- conditional route loading based on `enabled_plugins`
+
+### Isolation Rules
+- All attendance tables live in `dm3_attendance`
+- No hard foreign keys to `dm3_identity`, `dm3_access`, `dm3_devices`, or other core/plugin schemas
+- Cross-domain references use UUID columns only, enforced by application logic
+- Attendance may build local read-only caches from events for display performance
+- Attendance never mutates core access records, it only derives records from events and publishes attendance domain events
+
+### Tenant Gating
+Attendance is enabled when `attendance` is present in `dm3_auth.companies.enabled_plugins`.
+
+Backend APIs must be guarded with:
+- `RequirePlugin("attendance")`
+
+Frontend routes and sidebar items must load only when:
+- `auth.company?.enabled_plugins?.includes('attendance')`
 
 ## Data Models
 
@@ -13,8 +67,8 @@ Time & Attendance derives employee working hours from access control events — 
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | — | Tenant isolation |
-| site_id | uuid | yes | — | Site |
-| user_id | uuid | yes | — | FK to User |
+| site_id | uuid | yes | — | Site (soft reference to core site entity) |
+| user_id | uuid | yes | — | Soft reference to User |
 | date | date | yes | — | Working date |
 | shift_id | uuid | no | — | FK to Shift (null = flexible) |
 | clock_in | timestamp | no | — | First entry event |
@@ -72,8 +126,8 @@ Time & Attendance derives employee working hours from access control events — 
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | — | Tenant isolation |
-| user_id | uuid | yes | — | FK to User |
-| shift_id | uuid | yes | — | FK to Shift |
+| user_id | uuid | yes | — | Soft reference to User |
+| shift_id | uuid | yes | — | FK to Shift within `dm3_attendance` |
 | effective_from | date | yes | — | Start date |
 | effective_until | date | no | — | End date (null = indefinite) |
 | created_at | timestamp | yes | now() | Creation time |
@@ -83,7 +137,7 @@ Time & Attendance derives employee working hours from access control events — 
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | — | Tenant isolation |
-| user_id | uuid | yes | — | Employee requesting |
+| user_id | uuid | yes | — | Employee requesting (soft reference to User) |
 | date | date | yes | — | OT date |
 | planned_hours | decimal(3,1) | yes | — | Planned OT hours |
 | actual_hours | decimal(3,1) | no | — | Actual OT (from attendance) |
@@ -98,8 +152,8 @@ Time & Attendance derives employee working hours from access control events — 
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | — | Tenant isolation |
-| site_id | uuid | yes | — | Site |
-| user_id | uuid | yes | — | FK to User |
+| site_id | uuid | yes | — | Site (soft reference) |
+| user_id | uuid | yes | — | Soft reference to User |
 | month | date | yes | — | First day of month |
 | total_working_days | int | yes | — | Days with attendance |
 | total_absent_days | int | yes | — | Days absent (no leave) |
@@ -117,8 +171,8 @@ Time & Attendance derives employee working hours from access control events — 
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
 | tenant_id | uuid | yes | — | Tenant isolation |
-| site_id | uuid | yes | — | Site |
-| device_id | uuid | yes | — | FK to Device |
+| site_id | uuid | yes | — | Site (soft reference) |
+| device_id | uuid | yes | — | Soft reference to Device |
 | function | DeviceFunctionEnum | yes | — | clock_in, clock_out, both |
 | location_name | string(200) | no | — | "Sảnh chính — Tầng 1" |
 | is_primary | boolean | no | false | Primary attendance device |
@@ -287,6 +341,43 @@ DeviceFunctionEnum: clock_in | clock_out | both
   }
   ```
 
+## Service Topology
+
+| Component | Value |
+|---|---|
+| Plugin name | `attendance` |
+| Service | `attend-svc` |
+| Schema | `dm3_attendance` |
+| Suggested port | `8010` (reserve, confirm against backend port map before implementation) |
+| NATS stream | `ATTENDANCE` |
+| Frontend feature dir | `apps/console/src/features/attendance/` |
+| API client | `packages/api-client/src/attendance.ts` |
+
+## Event Integration
+
+Attendance does not ingest device MQTT directly. It follows the plugin isolation model and consumes normalized event streams from core services.
+
+### Consumes
+- access events from access-svc via NATS
+- user / department / company metadata changes from identity/auth event streams
+- optional leave sync events from HR/ERP integration services
+
+### Publishes
+- attendance clock-in / clock-out domain events
+- attendance marked late / absent events
+- overtime workflow events
+- summary recalculation events
+
+### Subject Convention
+Suggested attendance subjects:
+- `dm3.attendance.{tenant_id}.record.created`
+- `dm3.attendance.{tenant_id}.record.updated`
+- `dm3.attendance.{tenant_id}.record.adjusted`
+- `dm3.attendance.{tenant_id}.summary.recalculated`
+- `dm3.attendance.{tenant_id}.overtime.requested`
+- `dm3.attendance.{tenant_id}.overtime.approved`
+- `dm3.attendance.{tenant_id}.overtime.rejected`
+
 ## MQTT Topics
 
 | Topic | Direction | QoS | Payload Schema | Description |
@@ -385,21 +476,51 @@ Note: attend-svc subscribes to access events via NATS (`dm.{tenant}.access.log.*
 ## Integration Points
 
 - **Depends on:**
-  - `identity-svc` — user data (name, department, status)
-  - `access-svc` — access event stream via NATS (primary data source)
-  - `device-gw` — access events originate from devices via MQTT→NATS bridge
-  - `auth-svc` — JWT validation
+  - `identity-svc` — user data (name, department, status), preferably via event-driven local cache
+  - `access-svc` — access event stream via NATS (primary source of truth for attendance derivation)
+  - `device-gw` — origin of access events via MQTT→NATS bridge, not consumed directly by attendance
+  - `auth-svc` — JWT validation, tenant context, `enabled_plugins`
 - **Consumed by:**
   - `report-svc` — attendance analytics, department reports
   - `notif-svc` — late/absent notifications, OT approval notifications
+  - payroll / HR exports — monthly summaries and compliance reporting
 - **External:**
   - HR/ERP systems — leave data sync (bi-directional)
   - Payroll systems — monthly attendance summary export
   - Vietnamese labor compliance reporting
 
+## Plugin Enablement & Frontend Loading
+
+### Backend
+Attendance APIs must be mounted behind plugin gating middleware:
+
+```go
+r.With(RequirePlugin("attendance")).Get("/api/v1/attendance/records", h.ListRecords)
+r.With(RequirePlugin("attendance")).Post("/api/v1/attendance/shifts", h.CreateShift)
+```
+
+### Frontend
+Attendance routes and navigation must only load when the tenant has `attendance` enabled:
+
+```ts
+...(auth.company?.enabled_plugins?.includes('attendance') ? [
+  { path: '/manage/attendance', element: <AttendanceDailyPage /> },
+  { path: '/manage/attendance/:personId', element: <AttendancePersonPage /> },
+  { path: '/manage/attendance/shifts', element: <AttendanceShiftsPage /> },
+  { path: '/manage/attendance/overtime', element: <AttendanceOvertimePage /> },
+  { path: '/manage/attendance/reports', element: <AttendanceReportsPage /> },
+  { path: '/manage/attendance/settings', element: <AttendanceSettingsPage /> },
+] : [])
+```
+
+Sidebar visibility must follow the same plugin flag.
+
 ## Notes
 
-- Attendance is a derived feature — it has no direct device interaction. All data comes from access events processed by access-svc and forwarded via NATS.
+- Attendance is a derived plugin feature, not a core access feature. It has no direct device interaction. All source data comes from access events processed by access-svc and forwarded via NATS.
+- This spec must follow the active plugin isolation architecture in `docs/architecture/module-isolation.md`. If implementation differs, the plugin architecture doc wins.
+- Attendance should use soft references to users, sites, devices, departments, and leave records. No hard foreign keys to core schemas.
+- Frontend labels should present Attendance as a tenant-enabled module under MANAGE.
 - Vietnamese shift names: "Hành chính" (office hours 8-17), "Ca sáng" (morning 6-14), "Ca chiều" (afternoon 14-22), "Ca đêm" (night 22-6).
 - For factories with rotating shifts, the ShiftAssignment model supports date-range assignments. A user can have different shifts for different weeks.
 - The monthly report format follows Vietnamese HR standards: employee name, department, each day status (✓=present, L=late, V=absent, P=leave), total days, total hours, OT hours.
