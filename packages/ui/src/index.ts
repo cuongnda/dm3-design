@@ -42,6 +42,7 @@ export * from './components/common/LanguageSwitcher';
 export * from './components/common/DataTableCard';
 export * from './components/common/TablePaginationFooter';
 export * from './components/common/AppModal';
+export * from './components/common/WizardModal';
 
 // Charts
 export * from './components/charts/AreaChart';
