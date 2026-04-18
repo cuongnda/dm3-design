@@ -232,6 +232,7 @@ func main() {
 			agr.Post("/access-groups/{id}/access-points", handlers.AddAccessGroupAccessPoint)
 			agr.Delete("/access-groups/{id}/access-points/{apId}", handlers.RemoveAccessGroupAccessPoint)
 			agr.Get("/access-groups/by-user/{userId}", handlers.ListUserAccessGroups)
+			agr.Get("/access-groups/effective-access/{userId}", handlers.ListUserEffectiveAccess)
 			agr.Get("/access-groups/{id}/users", handlers.ListAccessGroupUsers)
 			agr.Post("/access-groups/{id}/users", handlers.AssignUsersToGroup)
 			agr.Put("/access-groups/{id}/users/{userId}", handlers.UpdateUserMembership)

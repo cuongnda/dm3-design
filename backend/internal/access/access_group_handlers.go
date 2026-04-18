@@ -721,6 +721,81 @@ func (h *AccessHandlers) ListUserAccessGroups(w http.ResponseWriter, r *http.Req
 	httputil.JSON(w, http.StatusOK, map[string]any{"data": groups, "total": len(groups)})
 }
 
+// GET /access-groups/effective-access/:userId — resolved per-access-point access
+// for a user, flattened across all groups they belong to. One row per
+// (access_point × source group) pair. The frontend aggregates by access point
+// to show "Main Gate ← via Engineers 24/7, via VIP Weekdays 08:00–18:00".
+func (h *AccessHandlers) ListUserEffectiveAccess(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "userId")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+
+	type row struct {
+		AccessPointID   string  `json:"access_point_id"`
+		AccessPointName string  `json:"access_point_name"`
+		ZoneID          *string `json:"zone_id,omitempty"`
+		ZoneName        *string `json:"zone_name,omitempty"`
+		AccessGroupID   string  `json:"access_group_id"`
+		AccessGroupName string  `json:"access_group_name"`
+		IsDefaultGroup  bool    `json:"is_default_group"`
+		AccessTimeID    *string `json:"access_time_id,omitempty"`
+		AccessTimeName  *string `json:"access_time_name,omitempty"`
+		EffectiveFrom   *string `json:"effective_from,omitempty"`
+		EffectiveTo     *string `json:"effective_to,omitempty"`
+	}
+
+	rows, err := h.db.Pool.Query(r.Context(),
+		`SELECT ap.id::text, ap.name,
+		        ap.zone_id::text, z.name,
+		        ag.id::text, ag.name, ag.is_default,
+		        ag.access_time_id::text, at.name,
+		        agu.effective_from::text, agu.effective_to::text
+		 FROM dm3_access.access_group_users agu
+		 JOIN dm3_access.access_groups ag ON ag.id = agu.access_group_id
+		 JOIN dm3_access.access_group_access_points agap ON agap.access_group_id = ag.id
+		 JOIN dm3_access.access_points ap ON ap.id = agap.access_point_id
+		 LEFT JOIN dm3_access.zones z ON z.id = ap.zone_id
+		 LEFT JOIN dm3_access.access_times at ON at.id = ag.access_time_id
+		 WHERE agu.user_id = $1::uuid
+		   AND agu.tenant_id = $2::uuid
+		   AND ag.is_deleted = false
+		   AND (ap.is_deleted = false OR ap.is_deleted IS NULL)
+		   AND (agu.effective_to IS NULL OR agu.effective_to > now())
+		 ORDER BY z.name ASC NULLS LAST, ap.name ASC, ag.name ASC`,
+		userID, cid,
+	)
+	if err != nil {
+		slog.Error("list user effective access error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	out := []row{}
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.AccessPointID, &r.AccessPointName,
+			&r.ZoneID, &r.ZoneName,
+			&r.AccessGroupID, &r.AccessGroupName, &r.IsDefaultGroup,
+			&r.AccessTimeID, &r.AccessTimeName,
+			&r.EffectiveFrom, &r.EffectiveTo); err != nil {
+			slog.Error("list user effective access scan error", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("list user effective access rows iteration error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	httputil.JSON(w, http.StatusOK, map[string]any{"data": out, "total": len(out)})
+}
+
 // ─── NATS event publishing ────────────────────────────────────────────────────
 
 // publishAGEvent fires a NATS notification for access group mutations.

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Fragment, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -6,6 +6,7 @@ import {
   KeyRound, Fingerprint, QrCode, Save, X, Info, DoorOpen, Car,
   ScanLine, Search, Unlink, Mail, Phone, Hash, Pencil, Radio,
   Building2, Calendar, Shield, Clock, Briefcase, MapPin, FileText,
+  ChevronDown, ChevronRight,
 } from 'lucide-react';
 import {
   Button, Input, Label, Badge, AppModal, Select, SelectOption,
@@ -63,6 +64,34 @@ interface UserAccessGroup {
   access_point_count: number;
   effective_from?: string | null;
   effective_to?: string | null;
+}
+
+interface EffectiveAccessRow {
+  access_point_id: string;
+  access_point_name: string;
+  zone_id?: string | null;
+  zone_name?: string | null;
+  access_group_id: string;
+  access_group_name: string;
+  is_default_group: boolean;
+  access_time_id?: string | null;
+  access_time_name?: string | null;
+  effective_from?: string | null;
+  effective_to?: string | null;
+}
+
+interface ResolvedAccessPoint {
+  access_point_id: string;
+  access_point_name: string;
+  zone_name?: string | null;
+  via: {
+    access_group_id: string;
+    access_group_name: string;
+    is_default_group: boolean;
+    access_time_id?: string | null;
+    access_time_name?: string | null;
+  }[];
+  is_always: boolean; // true if any source grants 24/7 (null access_time)
 }
 
 interface Department {
@@ -568,6 +597,9 @@ export function UserDetailPage() {
   const [loadingCreds, setLoadingCreds] = useState(true);
   const [userGroups, setUserGroups] = useState<UserAccessGroup[]>([]);
   const [loadingUserGroups, setLoadingUserGroups] = useState(false);
+  const [effectiveAccess, setEffectiveAccess] = useState<EffectiveAccessRow[]>([]);
+  const [loadingEffective, setLoadingEffective] = useState(false);
+  const [expandedAP, setExpandedAP] = useState<Set<string>>(new Set());
   const [showAddToGroupModal, setShowAddToGroupModal] = useState(false);
   const [removingGroupId, setRemovingGroupId] = useState<string | null>(null);
   const [userVehicles, setUserVehicles] = useState<Vehicle[]>([]);
@@ -676,17 +708,28 @@ export function UserDetailPage() {
     finally { setLoadingUserGroups(false); }
   }, [id]);
 
+  const fetchEffectiveAccess = useCallback(async () => {
+    if (!id) return;
+    setLoadingEffective(true);
+    try {
+      const data = await apiFetch<{ data?: EffectiveAccessRow[] }>(`/api/v1/access/access-groups/effective-access/${id}`);
+      setEffectiveAccess(data.data ?? []);
+    } catch { setEffectiveAccess([]); }
+    finally { setLoadingEffective(false); }
+  }, [id]);
+
   useEffect(() => {
     if (!isNew) {
       fetchUser();
       fetchCredentials();
       fetchUserVehicles();
       fetchUserGroups();
+      fetchEffectiveAccess();
     }
     apiFetch<{ departments: Department[] }>('/api/v1/identity/departments?limit=200')
       .then((d) => setDepartments(d.departments || []))
       .catch(() => {});
-  }, [isNew, fetchUser, fetchCredentials, fetchUserVehicles, fetchUserGroups]);
+  }, [isNew, fetchUser, fetchCredentials, fetchUserVehicles, fetchUserGroups, fetchEffectiveAccess]);
 
   // ─── Handlers ────────────────────────────────────────────────────────────
 
@@ -811,7 +854,7 @@ export function UserDetailPage() {
     setRemovingGroupId(groupId);
     try {
       await apiFetch(`/api/v1/access/access-groups/${groupId}/users/${id}`, { method: 'DELETE' });
-      await fetchUserGroups();
+      await Promise.all([fetchUserGroups(), fetchEffectiveAccess()]);
       toast(t('toast.accessGroupUpdated'), 'success');
     } catch (err) {
       toast(err instanceof Error ? err.message : t('toast.accessGroupFailed'), 'error');
@@ -819,6 +862,41 @@ export function UserDetailPage() {
   };
 
   const userGroupIds = useMemo(() => new Set(userGroups.map((g) => g.id)), [userGroups]);
+
+  const resolvedAccessPoints = useMemo<ResolvedAccessPoint[]>(() => {
+    const byAP = new Map<string, ResolvedAccessPoint>();
+    for (const row of effectiveAccess) {
+      const existing = byAP.get(row.access_point_id);
+      const viaEntry = {
+        access_group_id: row.access_group_id,
+        access_group_name: row.access_group_name,
+        is_default_group: row.is_default_group,
+        access_time_id: row.access_time_id ?? null,
+        access_time_name: row.access_time_name ?? null,
+      };
+      if (existing) {
+        existing.via.push(viaEntry);
+        if (!row.access_time_id) existing.is_always = true;
+      } else {
+        byAP.set(row.access_point_id, {
+          access_point_id: row.access_point_id,
+          access_point_name: row.access_point_name,
+          zone_name: row.zone_name ?? null,
+          via: [viaEntry],
+          is_always: !row.access_time_id,
+        });
+      }
+    }
+    return Array.from(byAP.values());
+  }, [effectiveAccess]);
+
+  const toggleAPExpanded = (apId: string) => {
+    setExpandedAP((prev) => {
+      const next = new Set(prev);
+      if (next.has(apId)) next.delete(apId); else next.add(apId);
+      return next;
+    });
+  };
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setEditForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -1164,68 +1242,206 @@ export function UserDetailPage() {
               </Button>
             </div>
           ) : (
-            <div className="rounded-md border border-border overflow-hidden" data-testid="user-table-access-groups">
-              <table className="w-full text-[13px]">
-                <thead className="bg-muted/60 border-b border-border">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.name', 'Name')}</th>
-                    <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.description', 'Description')}</th>
-                    <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.accessPoints')}</th>
-                    <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.accessTime', 'Access Time')}</th>
-                    <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.effective', 'Effective')}</th>
-                    <th className="px-3 py-2 text-right font-medium text-foreground">{t('actions.actions', 'Actions')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {userGroups.map((g) => (
-                    <tr key={g.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors" data-testid={`user-row-group-${g.id}`}>
-                      <td className="px-3 py-2">
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/access/access-groups/${g.id}`)}
-                          className="flex items-center gap-2 font-medium text-left hover:text-primary transition-colors"
-                        >
-                          <Shield size={13} className="text-primary shrink-0" />
-                          {g.name}
-                          {g.is_default && <Badge variant="secondary" className="text-[10px]">{t('accessGroup.default', 'Default')}</Badge>}
-                        </button>
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">{g.description || '—'}</td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        <span className="inline-flex items-center gap-1">
-                          <DoorOpen size={12} className="text-muted-foreground/70" />
-                          {g.access_point_count}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {g.access_time_name ? (
-                          <span className="inline-flex items-center gap-1">
-                            <Clock size={12} className="text-muted-foreground/70" />
-                            {g.access_time_name}
-                          </span>
-                        ) : '—'}
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground text-[12px]">
-                        {g.effective_from ? new Date(g.effective_from).toLocaleDateString() : '—'}
-                        {g.effective_to && <> → {new Date(g.effective_to).toLocaleDateString()}</>}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-[12px] text-destructive hover:text-destructive"
-                          onClick={() => handleRemoveFromGroup(g.id)}
-                          disabled={removingGroupId === g.id}
-                          data-testid={`user-button-remove-group-${g.id}`}
-                        >
-                          <Unlink size={13} className="mr-1" />
-                          {removingGroupId === g.id ? t('actions.removing', 'Removing…') : t('actions.remove', 'Remove')}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-6">
+              {/* ── Access Groups table ── */}
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-[13px] font-semibold text-foreground">{t('accessGroup.memberOf', 'Member of Access Groups')}</h3>
+                    <p className="text-[11px] text-muted-foreground">{t('accessGroup.memberOfHint', 'Groups this user belongs to')}</p>
+                  </div>
+                  <Badge variant="secondary" className="text-[11px]">{userGroups.length}</Badge>
+                </div>
+                <div className="rounded-md border border-border overflow-hidden" data-testid="user-table-access-groups">
+                  <table className="w-full text-[13px]">
+                    <thead className="bg-muted/60 border-b border-border">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.name', 'Name')}</th>
+                        <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.description', 'Description')}</th>
+                        <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.accessPoints')}</th>
+                        <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.accessTime', 'Access Time')}</th>
+                        <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.effective', 'Effective')}</th>
+                        <th className="px-3 py-2 text-right font-medium text-foreground">{t('actions.actions', 'Actions')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {userGroups.map((g) => (
+                        <tr key={g.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors" data-testid={`user-row-group-${g.id}`}>
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/access/access-groups/${g.id}`)}
+                              className="flex items-center gap-2 font-medium text-left hover:text-primary transition-colors"
+                            >
+                              <Shield size={13} className="text-primary shrink-0" />
+                              {g.name}
+                              {g.is_default && <Badge variant="secondary" className="text-[10px]">{t('accessGroup.default', 'Default')}</Badge>}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">{g.description || '—'}</td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            <span className="inline-flex items-center gap-1">
+                              <DoorOpen size={12} className="text-muted-foreground/70" />
+                              {g.access_point_count}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            {g.access_time_name ? (
+                              <span className="inline-flex items-center gap-1">
+                                <Clock size={12} className="text-muted-foreground/70" />
+                                {g.access_time_name}
+                              </span>
+                            ) : '—'}
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground text-[12px]">
+                            {g.effective_from ? new Date(g.effective_from).toLocaleDateString() : '—'}
+                            {g.effective_to && <> → {new Date(g.effective_to).toLocaleDateString()}</>}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-[12px] text-destructive hover:text-destructive"
+                              onClick={() => handleRemoveFromGroup(g.id)}
+                              disabled={removingGroupId === g.id}
+                              data-testid={`user-button-remove-group-${g.id}`}
+                            >
+                              <Unlink size={13} className="mr-1" />
+                              {removingGroupId === g.id ? t('actions.removing', 'Removing…') : t('actions.remove', 'Remove')}
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* ── Effective Access (resolved per access point) ── */}
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-[13px] font-semibold text-foreground">{t('accessGroup.effectiveAccess', 'Effective Access')}</h3>
+                    <p className="text-[11px] text-muted-foreground">{t('accessGroup.effectiveAccessHint', 'Access points this user can open, combined from all groups')}</p>
+                  </div>
+                  <Badge variant="secondary" className="text-[11px]">{resolvedAccessPoints.length}</Badge>
+                </div>
+                {loadingEffective ? (
+                  <div className="flex justify-center py-8 rounded-md border border-border">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                  </div>
+                ) : resolvedAccessPoints.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 rounded-md border border-dashed border-border text-center">
+                    <DoorOpen size={28} className="mb-2 text-muted-foreground/40" />
+                    <p className="text-[12px] font-medium text-foreground">{t('accessGroup.effectiveEmpty', 'No access points resolved')}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">{t('accessGroup.effectiveEmptyHint', 'Groups grant no access points, or effective dates have expired')}</p>
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-border overflow-hidden" data-testid="user-table-effective-access">
+                    <table className="w-full text-[13px]">
+                      <thead className="bg-muted/60 border-b border-border">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium text-foreground w-8"></th>
+                          <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.accessPoint', 'Access Point')}</th>
+                          <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.zone', 'Zone')}</th>
+                          <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.effectiveSchedule', 'Effective Schedule')}</th>
+                          <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.sources', 'Sources')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {resolvedAccessPoints.map((ap) => {
+                          const isExpanded = expandedAP.has(ap.access_point_id);
+                          const scheduleNames = Array.from(
+                            new Set(ap.via.map((v) => v.access_time_name ?? t('accessGroup.always', '24/7'))),
+                          );
+                          return (
+                            <Fragment key={ap.access_point_id}>
+                              <tr
+                                className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors cursor-pointer"
+                                onClick={() => toggleAPExpanded(ap.access_point_id)}
+                                data-testid={`user-row-effective-${ap.access_point_id}`}
+                              >
+                                <td className="px-3 py-2">
+                                  {isExpanded ? (
+                                    <ChevronDown size={14} className="text-muted-foreground" />
+                                  ) : (
+                                    <ChevronRight size={14} className="text-muted-foreground" />
+                                  )}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <span className="inline-flex items-center gap-2 font-medium">
+                                    <DoorOpen size={13} className="text-secure shrink-0" />
+                                    {ap.access_point_name}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-muted-foreground">
+                                  {ap.zone_name ? (
+                                    <span className="inline-flex items-center gap-1">
+                                      <MapPin size={11} className="text-muted-foreground/70" />
+                                      {ap.zone_name}
+                                    </span>
+                                  ) : '—'}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {ap.is_always ? (
+                                    <Badge variant="secondary" className="text-[10px] bg-secure/15 text-secure border-secure/30">
+                                      <Clock size={10} className="mr-1" />
+                                      {t('accessGroup.always', '24/7')}
+                                    </Badge>
+                                  ) : (
+                                    <div className="flex flex-wrap gap-1">
+                                      {scheduleNames.map((name, i) => (
+                                        <Badge key={`${ap.access_point_id}-sch-${i}`} variant="outline" className="text-[10px]">
+                                          <Clock size={10} className="mr-1" />
+                                          {name}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-muted-foreground text-[12px]">
+                                  {ap.via.length === 1
+                                    ? t('accessGroup.viaOneGroup', 'via 1 group')
+                                    : t('accessGroup.viaNGroups', { count: ap.via.length, defaultValue: 'via {{count}} groups' })}
+                                </td>
+                              </tr>
+                              {isExpanded && (
+                                <tr className="bg-muted/30 border-b border-border last:border-0">
+                                  <td></td>
+                                  <td colSpan={4} className="px-3 py-2">
+                                    <div className="space-y-1.5">
+                                      {ap.via.map((v, i) => (
+                                        <div key={`${ap.access_point_id}-via-${i}`} className="flex items-center gap-2 text-[12px]">
+                                          <Shield size={11} className="text-primary/70 shrink-0" />
+                                          <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); navigate(`/access/access-groups/${v.access_group_id}`); }}
+                                            className="font-medium hover:text-primary transition-colors"
+                                          >
+                                            {v.access_group_name}
+                                          </button>
+                                          {v.is_default_group && (
+                                            <Badge variant="secondary" className="text-[9px] h-4 px-1">{t('accessGroup.default', 'Default')}</Badge>
+                                          )}
+                                          <span className="text-muted-foreground/70">·</span>
+                                          <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                            <Clock size={10} />
+                                            {v.access_time_name ?? t('accessGroup.always', '24/7')}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </TabsContent>
@@ -1478,7 +1694,7 @@ export function UserDetailPage() {
           onOpenChange={setShowAddToGroupModal}
           userId={id}
           currentGroupIds={userGroupIds}
-          onAdded={fetchUserGroups}
+          onAdded={() => { fetchUserGroups(); fetchEffectiveAccess(); }}
         />
       )}
 
