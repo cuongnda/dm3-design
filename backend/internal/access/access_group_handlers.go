@@ -762,7 +762,6 @@ func (h *AccessHandlers) ListUserEffectiveAccess(w http.ResponseWriter, r *http.
 		 WHERE agu.user_id = $1::uuid
 		   AND agu.tenant_id = $2::uuid
 		   AND ag.is_deleted = false
-		   AND (ap.is_deleted = false OR ap.is_deleted IS NULL)
 		   AND (agu.effective_to IS NULL OR agu.effective_to > now())
 		 ORDER BY z.name ASC NULLS LAST, ap.name ASC, ag.name ASC`,
 		userID, cid,
