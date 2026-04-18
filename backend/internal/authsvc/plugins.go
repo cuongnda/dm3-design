@@ -17,6 +17,7 @@ var AvailablePlugins = []PluginInfo{
 	{ID: "intercom", Name: "Intercom", Description: "Video intercom, remote door unlock, call routing", Category: "smart", IsCore: false},
 	{ID: "cctv", Name: "CCTV", Description: "IP camera registry, live view, event-linked clip recording", Category: "secure", IsCore: false},
 	{ID: "smart_building", Name: "Smart Building", Description: "HVAC, lighting, occupancy analytics", Category: "smart", IsCore: false},
+	{ID: "attendance", Name: "Attendance", Description: "Employee attendance derived from access events, shifts, overtime, leave", Category: "manage", IsCore: false},
 }
 
 // validPluginIDs is a lookup set built from the registry.

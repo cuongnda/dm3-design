@@ -18,7 +18,7 @@ cd "$PROJECT_DIR"
 
 # Backend Go services built from backend/Dockerfile. Add new services here
 # (and only here) so build/restart/health-check lists stay in sync.
-BACKEND_SERVICES=(auth-svc identity-svc access-svc device-gateway audit-svc visitor-svc parking-svc cctv-svc)
+BACKEND_SERVICES=(auth-svc identity-svc access-svc device-gateway audit-svc visitor-svc parking-svc cctv-svc attend-svc)
 
 # Compose interpolates ${VAR} at parse time — if any required var is unset,
 # every `docker compose ...` call fails before it even looks at the target

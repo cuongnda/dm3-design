@@ -1,0 +1,91 @@
+package attendance
+
+import "time"
+
+// Status values for AttendanceRecord.
+const (
+	StatusPending  = "pending"
+	StatusOnTime   = "on_time"
+	StatusLate     = "late"
+	StatusAbsent   = "absent"
+	StatusOnLeave  = "on_leave"
+	StatusHalfDay  = "half_day"
+	StatusHoliday  = "holiday"
+)
+
+// Clock-in/out methods.
+const (
+	MethodFace    = "face"
+	MethodCard    = "card"
+	MethodPin     = "pin"
+	MethodMobile  = "mobile"
+	MethodUnknown = "unknown"
+)
+
+// AttendanceRecord mirrors dm3_attendance.attendance_records.
+// Fields that can be NULL in the DB are exposed as pointers so callers can
+// distinguish "not set" from "zero value".
+type AttendanceRecord struct {
+	ID                 string     `json:"id"`
+	TenantID           string     `json:"tenant_id"`
+	SiteID             *string    `json:"site_id,omitempty"`
+	UserID             string     `json:"user_id"`
+	Date               time.Time  `json:"date"`
+	ShiftID            *string    `json:"shift_id,omitempty"`
+	ClockIn            *time.Time `json:"clock_in,omitempty"`
+	ClockInDeviceID    *string    `json:"clock_in_device_id,omitempty"`
+	ClockInMethod      *string    `json:"clock_in_method,omitempty"`
+	ClockInPhotoRef    *string    `json:"clock_in_photo_ref,omitempty"`
+	ClockOut           *time.Time `json:"clock_out,omitempty"`
+	ClockOutDeviceID   *string    `json:"clock_out_device_id,omitempty"`
+	ClockOutMethod     *string    `json:"clock_out_method,omitempty"`
+	ClockOutPhotoRef   *string    `json:"clock_out_photo_ref,omitempty"`
+	Status             string     `json:"status"`
+	TotalHours         *float64   `json:"total_hours,omitempty"`
+	RegularHours       *float64   `json:"regular_hours,omitempty"`
+	OvertimeHours      *float64   `json:"overtime_hours,omitempty"`
+	LateMinutes        int        `json:"late_minutes"`
+	EarlyLeaveMinutes  int        `json:"early_leave_minutes"`
+	BreakMinutes       *int       `json:"break_minutes,omitempty"`
+	OvertimeApproved   bool       `json:"overtime_approved"`
+	OvertimeApprovedBy *string    `json:"overtime_approved_by,omitempty"`
+	ManualAdjustment   bool       `json:"manual_adjustment"`
+	AdjustedBy         *string    `json:"adjusted_by,omitempty"`
+	AdjustmentReason   *string    `json:"adjustment_reason,omitempty"`
+	LeaveType          *string    `json:"leave_type,omitempty"`
+	LeaveReferenceID   *string    `json:"leave_reference_id,omitempty"`
+	Notes              *string    `json:"notes,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+
+	// Joined/denormalised fields exposed to the UI (populated by ListRecords).
+	UserName   string `json:"user_name,omitempty"`
+	UserEmail  string `json:"user_email,omitempty"`
+	ShiftName  string `json:"shift_name,omitempty"`
+	ShiftStart string `json:"shift_start,omitempty"`
+	ShiftEnd   string `json:"shift_end,omitempty"`
+}
+
+// Shift mirrors dm3_attendance.shifts.
+type Shift struct {
+	ID                       string    `json:"id"`
+	TenantID                 string    `json:"tenant_id"`
+	SiteID                   *string   `json:"site_id,omitempty"`
+	Name                     string    `json:"name"`
+	Code                     *string   `json:"code,omitempty"`
+	StartTime                string    `json:"start_time"` // HH:MM:SS
+	EndTime                  string    `json:"end_time"`
+	GracePeriodMinutes       int       `json:"grace_period_minutes"`
+	EarlyLeaveThreshold      int       `json:"early_leave_threshold"`
+	BreakStart               *string   `json:"break_start,omitempty"`
+	BreakEnd                 *string   `json:"break_end,omitempty"`
+	BreakDeducted            bool      `json:"break_deducted"`
+	OvertimeThresholdMinutes int       `json:"overtime_threshold_minutes"`
+	MaxOvertimeHours         float64   `json:"max_overtime_hours"`
+	WorkingDays              []int32   `json:"working_days"`
+	Color                    string    `json:"color"`
+	IsDefault                bool      `json:"is_default"`
+	Status                   string    `json:"status"`
+	CreatedAt                time.Time `json:"created_at"`
+	UpdatedAt                time.Time `json:"updated_at"`
+}

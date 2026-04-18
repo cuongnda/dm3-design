@@ -157,8 +157,8 @@ const VisitorSettingsPage = lazyWithRetry(() =>
 const ContractorsPage = lazyWithRetry(() =>
   import('@/features/manage/contractors/ContractorsPage').then((m) => ({ default: m.ContractorsPage }))
 );
-const AttendancePage = lazyWithRetry(() =>
-  import('@/features/manage/attendance/AttendancePage').then((m) => ({ default: m.AttendancePage }))
+const AttendanceDailyPage = lazyWithRetry(() =>
+  import('@/features/attendance/AttendanceDailyPage').then((m) => ({ default: m.AttendanceDailyPage }))
 );
 const DeliveriesPage = lazyWithRetry(() =>
   import('@/features/manage/deliveries/DeliveriesPage').then((m) => ({ default: m.DeliveriesPage }))
@@ -396,7 +396,7 @@ export const Router = createBrowserRouter([
               { path: 'visitors/analytics', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorAnalyticsPage /></LazyWrap></PluginGuard> },
               { path: 'visitors/recurring', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorRecurringPage /></LazyWrap></PluginGuard> },
               { path: 'visitors/settings', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorSettingsPage /></LazyWrap></PluginGuard> },
-              { path: 'manage/attendance', element: <LazyWrap><AttendancePage /></LazyWrap> },
+              { path: 'manage/attendance', element: <PluginGuard plugin="attendance"><LazyWrap><AttendanceDailyPage /></LazyWrap></PluginGuard> },
               { path: 'manage/deliveries', element: <LazyWrap><DeliveriesPage /></LazyWrap> },
               { path: 'manage/provisioning', element: <LazyWrap><ProvisioningPage /></LazyWrap> },
 

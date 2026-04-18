@@ -15,3 +15,4 @@ export * from './visitors';
 export * from './parking';
 export * from './cctv';
 export * from './access-points';
+export * from './attendance';
