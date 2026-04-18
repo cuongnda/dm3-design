@@ -16,6 +16,7 @@ import {
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useZones } from './hooks/useZones';
+import { ZoneFormModal } from './ZoneFormModal';
 import type { Zone } from './types';
 
 interface ZoneTreeNode {
@@ -100,6 +101,7 @@ export function ZonesPage() {
 
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [zoneToDelete, setZoneToDelete] = useState<Zone | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -193,7 +195,7 @@ export function ZonesPage() {
     }
   };
 
-  const openCreate = () => navigate('/access/zones/new');
+  const openCreate = () => setShowCreateModal(true);
   const openEdit = (zone: Zone) => navigate(`/access/zones/${zone.id}/edit`);
 
   const openDelete = (zone: Zone) => {
@@ -364,6 +366,12 @@ export function ZonesPage() {
           <div className="space-y-2">{visibleTree.map(renderNode)}</div>
         )}
       </Card>
+
+      <ZoneFormModal
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
+        onCreated={() => fetchZones()}
+      />
 
       <AppModal open={showDeleteDialog} onOpenChange={(open) => { if (!open) { setShowDeleteDialog(false); setZoneToDelete(null); setDeleteError(null); } }} title={<span className="flex items-center gap-2 text-destructive"><Trash2 size={16} />{t('deleteZone', 'Delete Zone')}</span>} size="xs" style={{ maxWidth: '22rem' }} showCancelButton cancelLabel={t('cancel', 'Cancel')} cancelDisabled={deleteLoading} errorMessage={deleteError ?? undefined} primaryAction={{ label: deleteLoading ? t('deleting', 'Deleting...') : t('delete', 'Delete'), variant: 'destructive', onClick: handleDeleteConfirm, loading: deleteLoading, disabled: deleteLoading }}>
         <p className="text-[13px] text-muted-foreground">{t('deleteConfirm', 'Are you sure you want to delete')} <span className="font-medium text-foreground">"{zoneToDelete?.name}"</span>?</p>

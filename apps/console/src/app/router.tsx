@@ -385,7 +385,6 @@ export const Router = createBrowserRouter([
 
               // ACCESS (new)
               { path: 'access/zones', element: <LazyWrap><ZonesPage /></LazyWrap> },
-              { path: 'access/zones/new', element: <LazyWrap><ZoneFormPage mode="create" /></LazyWrap> },
               { path: 'access/zones/:id/edit', element: <LazyWrap><ZoneFormPage mode="edit" /></LazyWrap> },
               { path: 'access/zones/:id', element: <LazyWrap><ZoneDetailPage /></LazyWrap> },
               { path: 'access/access-points', element: <LazyWrap><AccessPointsPage /></LazyWrap> },
