@@ -42,7 +42,6 @@ import { FirmwareUploadPage } from '@/features/system/FirmwareUploadPage';
 import { FirmwareDetailPage } from '@/features/system/FirmwareDetailPage';
 import { UserAccountListPage } from '@/features/system/UserAccountListPage';
 import { UserAccountDetailPage } from '@/features/system/UserAccountDetailPage';
-import { CreateUserAccountPage } from '@/features/system/CreateUserAccountPage';
 import { ProtectedRoute } from './ProtectedRoute';
 import { RoleBasedRoute } from './RoleBasedRoute';
 import { PluginGuard } from '@/components/common/PluginGuard';
@@ -341,7 +340,6 @@ export const Router = createBrowserRouter([
           { path: 'companies/new', element: <CreateCompanyPage /> },
           { path: 'companies/:id', element: <CompanyDetailPage /> },
           { path: 'accounts', element: <UserAccountListPage /> },
-          { path: 'accounts/new', element: <CreateUserAccountPage /> },
           { path: 'accounts/:id', element: <UserAccountDetailPage /> },
           { path: 'devices/pending', element: <LazyWrap><PendingDevicesPage isSystemAdmin={true} /></LazyWrap> },
           { path: 'devices', element: <SystemDevicesPage /> },

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Users, Plus, Search, Shield, Building2 } from 'lucide-react';
 import { fetchUserAccounts, type UserAccountDTO } from '@/lib/api-users';
 import { Button, Input, Select, SelectOption, DataTable, type Column, TablePaginationFooter } from '@dm3/ui';
+import { CreateUserAccountModal } from './CreateUserAccountModal';
 
 const statusColors: Record<string, string> = {
   active: 'bg-success/10 text-success border-success/20',
@@ -28,6 +29,7 @@ export function UserAccountListPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const pageSize = 20;
 
   const loadUsers = useCallback(() => {
@@ -149,7 +151,7 @@ export function UserAccountListPage() {
         </div>
         <Button
           data-testid="user-button-create"
-          onClick={() => navigate('/system/accounts/new')}
+          onClick={() => setShowCreateModal(true)}
           className="gap-2"
         >
           <Plus size={15} />
@@ -221,6 +223,12 @@ export function UserAccountListPage() {
           loading={loading}
         />
       </div>
+
+      <CreateUserAccountModal
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
+        onCreated={loadUsers}
+      />
     </div>
   );
 }
