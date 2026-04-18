@@ -2,14 +2,14 @@
 
 > Domain: PLATFORM | Color: #6B7280 | Priority: P0
 > Status: **Implementing** | Owner: Platform Team
-> Updated: 2026-02-19 — Company-based multi-tenancy, role changes
+> Updated: 2026-04-18 — RBAC canonicalized into company-rbac.md
 
 ## Current Implementation (v1)
 
 The v1 auth system is a lightweight Go service (auth-svc) with:
 - **JWT access tokens** (15min, HS256) + **refresh tokens** (7d, stored in DB with rotation + replay detection)
 - **Company-scoped users** — every user belongs to a Company (except system_admin)
-- **Role-based access**: system_admin, primary_manager, manager, operator, viewer
+- **Role-based access**: see canonical role model in `docs/specs/platform/company-rbac.md`
 - **Device tokens** for MQTT authentication (24h, scoped to company + device)
 - **bcrypt** password hashing
 - No Keycloak dependency yet (planned for v2 SSO/MFA)
@@ -21,11 +21,13 @@ The v1 auth system is a lightweight Go service (auth-svc) with:
   "cid": "company-uuid",        // null for system_admin
   "email": "user@company.com",
   "name": "User Name",
-  "role": "primary_manager",     // single role per user
+  "role": "primary_manager",
   "exp": 1740000000,
   "iat": 1739900000
 }
 ```
+
+Canonical role definitions and migration rules now live in `docs/specs/platform/company-rbac.md`.
 
 ### Device JWT Claims (v1)
 ```json
@@ -44,6 +46,8 @@ The v1 auth system is a lightweight Go service (auth-svc) with:
 |-------|----------|------|---------|
 | sysadmin@duali.com | sysadmin123 | system_admin | — (none) |
 | admin@duali.com | admin123 | primary_manager | Duali Demo |
+
+Role semantics are defined in `docs/specs/platform/company-rbac.md`.
 
 ### v1 API Endpoints (auth-svc, port 8005)
 | Method | Path | Auth | Description |
@@ -79,7 +83,7 @@ The Authentication & Authorization system is the security foundation of DM3 — 
 | phone | string(20) | no | null | Phone for SMS MFA |
 | phone_verified | boolean | yes | false | Phone verification status |
 | status | UserStatusEnum | yes | active | Account status |
-| roles | string[] | yes | ["viewer"] | Assigned roles |
+| roles | string[] | yes | ["viewer"] | Assigned canonical roles from `company-rbac.md` |
 | sites | uuid[] | yes | [] | Accessible sites |
 | mfa_enabled | boolean | yes | false | MFA active |
 | mfa_methods | string[] | no | [] | Active MFA methods |
@@ -144,7 +148,7 @@ The Authentication & Authorization system is the security foundation of DM3 — 
 | history_count | int | yes | 5 | Cannot reuse last N passwords |
 | max_failed_attempts | int | yes | 5 | Lock after N failures |
 | lockout_duration_minutes | int | yes | 30 | Lockout duration |
-| mfa_required_roles | string[] | yes | ["admin","site_admin","super_admin"] | Roles requiring MFA |
+| mfa_required_roles | string[] | yes | ["primary_manager","admin","system_admin"] | Roles requiring MFA |
 | session_max_age_hours | int | yes | 24 | Max session duration |
 | session_idle_timeout_minutes | int | yes | 60 | Idle timeout |
 | updated_at | timestamp | yes | now() | Last update |
@@ -387,27 +391,29 @@ MFAMethodEnum: totp | sms | webauthn
 9. **BR-AUTH-009 — SSO Integration:** SAML 2.0 and OIDC providers are configured per tenant. SSO users are auto-provisioned on first login (JIT provisioning) with roles mapped from IdP attributes.
 10. **BR-AUTH-010 — API Token Scoping:** API tokens have fine-grained scopes (e.g., `access:read`, `identity:write`). Requests outside the token's scope are rejected with 403.
 11. **BR-AUTH-011 — Rate Limiting:** Tier-based rate limits (see architecture doc §3.4). Login endpoint is additionally limited to 10 attempts per IP per minute to prevent brute force.
-12. **BR-AUTH-012 — Tenant Isolation:** Tokens are scoped to a single tenant. A token from tenant A cannot access tenant B's resources. Cross-tenant access requires super_admin role.
+12. **BR-AUTH-012 — Tenant Isolation:** Tokens are scoped to a single tenant. A token from tenant A cannot access tenant B's resources. Cross-tenant access requires `system_admin` role.
 13. **BR-AUTH-013 — Concurrent Session Limit:** Configurable max concurrent sessions per user (default: 5). When exceeded, oldest session is revoked.
 14. **BR-AUTH-014 — Device Authorization Flow:** Android terminals and guard stations use the OAuth2 Device Authorization flow (RFC 8628) — display a code, user authorizes on their phone/computer.
 
 ## Permissions Matrix
 
-| Action | viewer | operator | admin | site_admin | super_admin |
-|--------|--------|----------|-------|------------|-------------|
-| Login/logout | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Change own password | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Manage own MFA | ✅ | ✅ | ✅ | ✅ | ✅ |
-| View own sessions | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Revoke own sessions | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Create API tokens | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Revoke others' sessions | ❌ | ❌ | ✅ | ✅ | ✅ |
-| View password policy | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Edit password policy | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Manage OAuth clients | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Force password reset (others) | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Disable MFA (others) | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Cross-tenant access | ❌ | ❌ | ❌ | ❌ | ✅ |
+Auth-specific permissions must follow the canonical role model in `docs/specs/platform/company-rbac.md`.
+
+| Action | viewer | operator | manager | admin | primary_manager | system_admin |
+|--------|--------|----------|---------|-------|-----------------|-------------|
+| Login/logout | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Change own password | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Manage own MFA | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| View own sessions | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Revoke own sessions | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Create API tokens | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Revoke others' sessions | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| View password policy | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Edit password policy | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Manage OAuth clients | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Force password reset (others) | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Disable MFA (others) | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Cross-tenant access | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 ## Offline Behavior
 

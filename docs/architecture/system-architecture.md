@@ -1450,35 +1450,39 @@ Data partitioning (TimescaleDB):
 
 ### 11.2 RBAC Model
 
-```
-Roles (hierarchical):
-  super_admin          — Duali staff, system-wide
-  tenant_admin         — Tenant owner, full tenant access
-  security_admin       — Security configuration
-  security_operator    — Guard / operator (monitor + respond)
-  hr_admin             — People management
-  facility_admin       — Facility operations
-  reception            — Visitor management
-  resident             — Self-service (mobile app)
-  api_integration      — Machine-to-machine (limited scope)
+Canonical company-level RBAC is defined in:
+- `docs/specs/platform/company-rbac.md`
+
+Architecture-level summary:
+
+```text
+System role:
+  system_admin
+
+Company roles:
+  primary_manager
+  admin
+  manager
+  operator
+  viewer
 
 Permission structure:
   {domain}.{resource}.{action}
-
-  access.door.view           access.door.unlock
-  access.door.configure      access.rule.manage
-  video.camera.view          video.camera.ptz
-  video.camera.playback      video.clip.export
-  identity.user.view       identity.user.manage
-  identity.credential.issue  identity.credential.revoke
-  visitor.manage             visitor.approve
-  alarm.zone.view            alarm.zone.arm
-  parking.manage             parking.view
-  report.view                report.export
-  system.configure           system.audit.view
-  ai.assistant.use           ai.assistant.admin
-  automation.rule.manage     automation.rule.view
 ```
+
+Examples:
+- `access.door.read`
+- `access.rule.manage`
+- `video.camera.read`
+- `video.camera.control`
+- `identity.user.read`
+- `identity.user.manage`
+- `visitor.visit.manage`
+- `attendance.leave.approve`
+- `report.export`
+- `system.company.manage`
+
+Older brainstorming labels such as `super_admin`, `tenant_admin`, `security_admin`, or `reception` are not canonical top-level RBAC roles for the current product model.
 
 ### 11.3 Audit Logging
 

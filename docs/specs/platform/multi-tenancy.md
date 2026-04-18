@@ -2,7 +2,7 @@
 
 > Domain: PLATFORM | Color: #6B7280 | Priority: P0
 > Status: **Implementing** | Owner: Platform Team
-> Updated: 2026-02-19 — Renamed Tenant → Company per CEO directive
+> Updated: 2026-04-18 — company RBAC moved to canonical company-rbac.md
 
 ## Overview
 
@@ -15,7 +15,7 @@ The Multi-Tenancy system enables DM3 to serve multiple **Companies** (organizati
 | Level | Role | Scope | UI |
 |-------|------|-------|----|
 | **System Admin** | `system_admin` | All companies | System Admin Panel (`/system`) |
-| **Company Admin** | `primary_manager` + other roles | One company | Main App (`/`) |
+| **Company Users** | see `docs/specs/platform/company-rbac.md` | One company | Main App (`/`) |
 
 - **System Admins** are not tied to any company. They manage the platform itself.
 - **Company users** are always scoped to their company. They never see other companies' data.
@@ -63,7 +63,7 @@ When a Company is created:
 | email | string(255) | yes | - | Unique login email |
 | password_hash | string(255) | yes | - | bcrypt hash |
 | name | string(255) | no | null | Display name |
-| role | RoleEnum | yes | viewer | Role within company |
+| role | RoleEnum | yes | viewer | Canonical role within company, defined in `company-rbac.md` |
 | status | UserStatusEnum | yes | active | Account status |
 | last_login | timestamptz | no | null | Last successful login |
 | created_at | timestamptz | yes | now() | Creation time |
@@ -87,25 +87,17 @@ When a Company is created:
 ```
 PlanEnum: starter | professional | enterprise
 CompanyStatusEnum: active | suspended | deactivated
-RoleEnum: system_admin | primary_manager | manager | operator | viewer
+RoleEnum: system_admin | primary_manager | admin | manager | operator | viewer
 UserStatusEnum: active | inactive | locked
 SiteStatusEnum: active | inactive | maintenance
 ```
 
 ### Role Permissions Matrix
 
-| Permission | system_admin | primary_manager | manager | operator | viewer |
-|------------|:---:|:---:|:---:|:---:|:---:|
-| Manage companies | ✅ | ❌ | ❌ | ❌ | ❌ |
-| View all companies | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Manage company users | ❌ | ✅ | ❌ | ❌ | ❌ |
-| Manage devices | ❌ | ✅ | ✅ | ❌ | ❌ |
-| Manage doors/rules | ❌ | ✅ | ✅ | ❌ | ❌ |
-| Manage users | ❌ | ✅ | ✅ | ✅ | ❌ |
-| View dashboards | ❌ | ✅ | ✅ | ✅ | ✅ |
-| View events | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Send commands | ❌ | ✅ | ✅ | ✅ | ❌ |
-| System settings | ❌ | ✅ | ❌ | ❌ | ❌ |
+Canonical company-level RBAC is defined in:
+- `docs/specs/platform/company-rbac.md`
+
+This file focuses on company isolation and lifecycle, not the full RBAC definition.
 
 ---
 
@@ -239,6 +231,8 @@ ID: 00000000-0000-0000-0000-000000000001
 |-------|----------|------|---------|
 | sysadmin@duali.com | sysadmin123 | system_admin | — (none) |
 | admin@duali.com | admin123 | primary_manager | Duali Demo |
+
+Role semantics are defined in `docs/specs/platform/company-rbac.md`.
 
 ---
 
