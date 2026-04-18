@@ -4,7 +4,7 @@ import {
   Building2, Car, Hammer, Shield, Key, Zap,
   UserCheck, MapPin, Users2, Cpu, ClipboardList, Eye, FileText,
   BarChart3, CalendarClock, SlidersHorizontal, CircleDollarSign,
-  Ticket, ParkingSquare, Activity, History,
+  Ticket, ParkingSquare, Activity, History, Plane, Timer,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { NavStatus } from '../lib/navStatus';
@@ -67,7 +67,6 @@ export const NAV_CONFIG: NavSection[] = [
       { to: '/manage/users', icon: UserCheck, labelKey: 'nav.users', labelFallback: 'Users', status: 'setup' },
       { to: '/manage/departments', icon: Building2, labelKey: 'nav.departments', labelFallback: 'Departments', status: 'setup' },
       { to: '/manage/contractors', icon: Wrench, labelKey: 'nav.contractors', labelFallback: 'Contractors', status: 'coming-soon' },
-      { to: '/manage/attendance', icon: Clock, labelKey: 'nav.attendance', labelFallback: 'Attendance', status: 'ready', pluginGate: 'attendance' },
       { to: '/manage/deliveries', icon: Package, labelKey: 'nav.deliveries', labelFallback: 'Deliveries', status: 'coming-soon' },
     ],
   },
@@ -118,6 +117,21 @@ export const NAV_CONFIG: NavSection[] = [
       { to: '/cctv/live', icon: Eye, labelKey: 'nav.cctvLive', labelFallback: 'Live', status: 'ready' },
       { to: '/cctv/clips', icon: ClipboardList, labelKey: 'nav.cctvClips', labelFallback: 'Clips', status: 'ready' },
       { to: '/cctv/settings', icon: SlidersHorizontal, labelKey: 'nav.cctvSettings', labelFallback: 'Settings', status: 'ready' },
+    ],
+  },
+  {
+    key: 'attendance',
+    labelKey: 'nav.attendanceSection',
+    labelFallback: 'ATTENDANCE',
+    color: '#14B8A6',
+    pluginGate: 'attendance',
+    items: [
+      { to: '/manage/attendance', icon: ClipboardList, labelKey: 'nav.attendanceDaily', labelFallback: 'Daily', status: 'ready' },
+      { to: '/manage/attendance/shifts', icon: Clock, labelKey: 'nav.attendanceShifts', labelFallback: 'Shifts', status: 'coming-soon' },
+      { to: '/manage/attendance/overtime', icon: Timer, labelKey: 'nav.attendanceOvertime', labelFallback: 'Overtime', status: 'coming-soon' },
+      { to: '/manage/attendance/leave', icon: Plane, labelKey: 'nav.attendanceLeave', labelFallback: 'Leave', status: 'coming-soon' },
+      { to: '/manage/attendance/reports', icon: BarChart3, labelKey: 'nav.attendanceReports', labelFallback: 'Reports', status: 'coming-soon' },
+      { to: '/manage/attendance/settings', icon: SlidersHorizontal, labelKey: 'nav.attendanceSettings', labelFallback: 'Settings', status: 'coming-soon' },
     ],
   },
   {
