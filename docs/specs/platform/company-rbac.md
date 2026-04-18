@@ -2,69 +2,288 @@
 
 > Domain: PLATFORM | Color: #6B7280 | Priority: P0
 > Status: Draft | Owner: Platform Team
-> Source of Truth: Canonical RBAC definition for company-scoped roles and permissions
-> Updated: 2026-04-18 — consolidated from auth, multi-tenancy, and architecture docs
-> Related recommendation: `docs/specs/platform/company-rbac-recommendation.md`
+> Source of Truth: Canonical RBAC definition for company-scoped authorization
+> Updated: 2026-04-18 — rewritten for custom company roles + scoped assignments
+> Related docs:
+> - `docs/specs/platform/company-rbac-recommendation.md`
+> - `docs/specs/platform/company-rbac-admin-guide.md`
 
 ## Overview
 
-This document is the **single source of truth** for DM3 company-level RBAC.
+This document is the **single source of truth** for DM3 company-level authorization.
 
-For the newer recommended product direction, including custom company-defined roles, scoped assignments, MVP phasing, and manual UX guidance, see:
-- `docs/specs/platform/company-rbac-recommendation.md`
+The canonical model is:
+- fixed platform roles for top-level ownership only
+- company-defined custom roles for normal business usage
+- scope-aware assignments to control where permissions apply
 
-It defines:
-- the canonical role model for DM3
-- which roles are system-wide vs company-scoped
-- the base permission structure
-- company-level role capabilities
-- how feature specs should reference authorization
+This replaces the older fixed-role model that tried to hardcode many company roles globally.
 
-If other documents conflict with this file, **this file wins**.
+## Canonical Model
 
-## Scope
+### Fixed human roles
+Only these fixed human roles are canonical:
+- `system_admin`
+- `primary_manager`
 
-This spec covers:
-- platform-level roles
-- company-scoped human user roles
-- permission naming conventions
-- role inheritance and intended usage
-- how feature specs should express authorization
+### Company-defined roles
+All other company access should be modeled as **custom company roles** created by the Primary Manager or an authorized company admin.
 
-This spec does **not** define every per-feature permission matrix. Feature specs may narrow access further, but they must build on the canonical role model here.
+Examples:
+- Viewer
+- Receptionist
+- Security Supervisor
+- HR Manager
+- Department Head
+- Zone Technician
+- Parking Operator
+- Company Admin
+
+These names are company-facing labels, not platform-wide built-in global roles.
 
 ## Design Principles
 
-1. **Company is the top-level isolation boundary.** All non-system users belong to exactly one company.
-2. **System administration is separate from company administration.** Duali staff platform operators are not mixed with tenant/company users.
-3. **Roles are stable, permissions are extensible.** Avoid inventing new global roles per feature.
-4. **Feature modules should authorize by permission, not by hard-coded role names, when implementation matures.**
-5. **Specs may use role shorthand for readability**, but the underlying model is permission-based.
+1. **Company is the top-level tenant boundary.**
+2. **Primary Manager has full authority inside a company.**
+3. **All normal company roles should be customizable.**
+4. **Permissions define what can be done.**
+5. **Scope defines where it can be done.**
+6. **Multiple role assignments per user are allowed and expected.**
+7. **MVP should stay allow-only and avoid deny rules.**
 
-## Canonical Role Model
+## Role and Scope Mental Model
 
-### System-wide Role
+Use this sentence everywhere:
 
-| Role | Scope | Description |
-|---|---|---|
-| `system_admin` | Global | Duali/internal platform operator with access to all companies and system administration functions |
+> A role answers **what this person can do**. Scope answers **where they can do it**.
 
-### Company-Scoped Roles
+This is the core mental model for the product, documentation, and UI.
 
-| Role | Scope | Description |
-|---|---|---|
-| `primary_manager` | Single company | Company owner / highest authority inside one company. Full company administration. Default first user created with a new company |
-| `admin` | Single company | Company administrator with broad configuration and operational control, but not system-wide powers |
-| `manager` | Single company | Team or department manager with approval and oversight responsibilities |
-| `operator` | Single company | Operational staff handling day-to-day workflows |
-| `viewer` | Single company | Read-only user |
+## Fixed Roles
 
-## Deprecated / Non-Canonical Role Names
+### `system_admin`
+- global platform role
+- used by Duali/internal operators
+- can access all companies and platform-level administration
+- outside company hierarchy
+- not a customer/company staff role
 
-The following names exist in older docs or architecture brainstorming and are **not canonical application roles** for current DM3 company RBAC:
+### `primary_manager`
+- highest authority inside a company
+- has full access to all company data and configuration
+- can create, edit, archive, and assign company roles
+- can manage all scopes within that company
+- is the default first user created when a company is created
+
+## Company-Defined Roles
+
+A company-defined role is a reusable permission bundle owned by one company.
+
+It should contain:
+- name
+- description
+- permission set
+- optional template origin
+- lifecycle status
+
+### Examples
+- Viewer
+- Receptionist
+- Department Manager
+- Zone Operator
+- HR Manager
+- Company Admin
+- Self-Service User
+
+## Scope Model
+
+### Supported scope types (canonical)
+- `company`
+- `site`
+- `department`
+- `zone`
+- `self`
+
+These are the canonical scope types for the current model.
+
+### Scope meanings
+
+#### `company`
+Permissions apply across the whole company.
+
+#### `site`
+Permissions apply only to one site/building/branch.
+
+#### `department`
+Permissions apply only to users and workflows associated with a department.
+
+#### `zone`
+Permissions apply only to physical-area resources such as devices, access points, cameras, and zone-bound operations.
+
+#### `self`
+Permissions apply only to the acting user's own records.
+
+## Permission Model
+
+Permissions use the canonical key format:
+
+```text
+{domain}.{resource}.{action}
+```
+
+Examples:
+- `identity.user.read`
+- `identity.user.update`
+- `attendance.record.read`
+- `attendance.leave.approve`
+- `device.read`
+- `device.manage`
+- `access.point.read`
+- `access.point.manage`
+- `visitor.visit.manage`
+- `report.export`
+- `company.settings.manage`
+
+### Standard actions
+Use these actions consistently where possible:
+- `read`
+- `create`
+- `update`
+- `delete`
+- `manage`
+- `approve`
+- `execute`
+- `export`
+- `configure`
+
+## Canonical Data Model
+
+### CompanyRole
+| Field | Type | Required | Description |
+|---|---|---|---|
+| id | uuid | yes | Primary key |
+| company_id | uuid | yes | Owning company |
+| name | string(150) | yes | Display name |
+| description | text | no | Human-readable explanation |
+| template_key | string(100) | no | Template origin if role was created from template |
+| is_system_template_copy | boolean | yes | Whether created from a built-in template |
+| status | string(20) | yes | active or archived |
+| created_by | uuid | yes | Creator |
+| updated_by | uuid | no | Last editor |
+| created_at | timestamp | yes | Creation time |
+| updated_at | timestamp | yes | Last update |
+
+### CompanyRolePermission
+| Field | Type | Required | Description |
+|---|---|---|---|
+| id | uuid | yes | Primary key |
+| role_id | uuid | yes | Role reference |
+| permission_key | string(150) | yes | Canonical permission key |
+
+### UserRoleAssignment
+| Field | Type | Required | Description |
+|---|---|---|---|
+| id | uuid | yes | Primary key |
+| company_id | uuid | yes | Tenant boundary |
+| user_id | uuid | yes | Assigned user |
+| role_id | uuid | yes | Assigned company role |
+| scope_type | ScopeTypeEnum | yes | company, site, department, zone, self |
+| scope_id | uuid | no | Required for site/department/zone |
+| effective_from | timestamp | no | Optional start time |
+| effective_to | timestamp | no | Optional expiry time |
+| created_by | uuid | yes | Actor who assigned role |
+| created_at | timestamp | yes | Creation time |
+
+### Enums
+```text
+FixedRoleEnum: system_admin | primary_manager
+ScopeTypeEnum: company | site | department | zone | self
+RoleStatusEnum: active | archived
+```
+
+## Role Templates
+
+The system should provide starter templates for fast manual setup.
+
+Recommended built-in templates:
+- Viewer
+- Receptionist
+- Department Manager
+- Zone Operator
+- Company Admin
+- Self-Service User
+- Blank Custom Role
+
+Templates are not canonical global roles.
+They are only starting points that companies can copy and modify.
+
+## Authorization Evaluation Rules
+
+Access is allowed when:
+1. the acting user is `system_admin`, or
+2. the acting user is `primary_manager` of the same company, or
+3. the acting user has at least one valid role assignment that grants the required permission within the target scope
+
+### Additional rules
+- company boundary is always enforced first
+- no company-scoped user may access another company's data
+- multiple role assignments are additive
+- no explicit deny rules in MVP
+- if no permission+scope match exists, access is denied
+
+## Scope Matching Rules
+
+### Company-scoped resources
+A `company` assignment matches any resource within the same company.
+
+### Site-scoped resources
+A `site` assignment matches resources belonging to that site.
+
+### Department-scoped resources
+A `department` assignment matches:
+- users in that department
+- workflows attached to that department
+- department-filtered reports and approvals
+
+### Zone-scoped resources
+A `zone` assignment matches:
+- devices in that zone
+- access points in that zone
+- cameras/resources mapped to that zone
+- zone-based operational workflows
+
+### Self-scoped resources
+A `self` assignment matches only the current user's own records.
+
+## Multiple Role Assignments
+
+A user may have more than one role assignment.
+
+Examples:
+- Viewer at company scope
+- Department Manager for HR department
+- Zone Operator for Main Lobby
+
+This is canonical behavior and should be supported directly.
+
+## What is canonical vs non-canonical
+
+### Canonical
+- `system_admin`
+- `primary_manager`
+- company-defined custom roles
+- scoped assignments
+- permission keys in `{domain}.{resource}.{action}` format
+
+### Non-canonical old global role names
+The following should not be treated as fixed global RBAC roles anymore:
+- `admin`
+- `manager`
+- `operator`
+- `viewer`
+- `site_admin`
 - `super_admin`
 - `tenant_admin`
-- `site_admin`
 - `security_admin`
 - `security_operator`
 - `hr_admin`
@@ -73,279 +292,88 @@ The following names exist in older docs or architecture brainstorming and are **
 - `resident`
 - `api_integration`
 
-### How to interpret them now
-- `super_admin` → use `system_admin`
-- `tenant_admin` / `site_admin` → use `primary_manager` or `admin` depending on scope
-- domain-specific labels like `security_admin`, `hr_admin`, `reception` → model these as **job functions / permission bundles / future custom roles**, not canonical global roles
-- `api_integration` is not a human RBAC role, it should be modeled via API tokens/scopes
+Interpretation:
+- some of these may remain useful as **template names** or **custom company role names**
+- but they are not canonical built-in global roles
 
-## Role Hierarchy
+## API / UI Guidance
 
-```text
-system_admin
-  └─ outside company hierarchy
+### UI guidance
+The admin UX should guide setup in this order:
+1. choose role template
+2. name the role
+3. review permissions
+4. assign role to user
+5. choose scope
+6. save
 
-primary_manager
-  └─ admin
-      └─ manager
-          └─ operator
-              └─ viewer
-```
+### Feature spec guidance
+Feature specs should prefer permission-based auth language.
 
-### Notes
-- `system_admin` is separate and not part of company inheritance.
-- `primary_manager` is the highest role inside a company.
-- `admin` exists to avoid overusing `primary_manager` for normal company administrators.
-- `manager` is for approval + supervisory workflows.
-- `operator` is for execution workflows.
-- `viewer` is read-only.
+Recommended examples:
+- `Auth: requires permission attendance.record.read within matching scope`
+- `Auth: requires permission attendance.leave.approve within matching department or company scope`
+- `Auth: requires permission device.manage within matching zone/site/company scope`
 
-## Identity & Scoping Rules
+Temporary shorthand is allowed in product docs/manuals, but implementation specs should converge on permission + scope language.
 
-### User scope
-- `system_admin` has no company binding
-- all other users must have `company_id` / `tenant_id`
-- a company-scoped token must never access another company
-
-### JWT claims
-Current and future tokens should express company scope clearly.
-
-Minimum required claims:
-```json
-{
-  "sub": "user-uuid",
-  "cid": "company-uuid",
-  "role": "admin",
-  "permissions": ["identity.user.read", "access.rule.manage"]
-}
-```
-
-Notes:
-- `cid` is null only for `system_admin`
-- `role` is the primary canonical role
-- `permissions` is the normalized enforcement layer
-
-## Permission Model
-
-### Permission naming convention
-Permissions follow:
-
-```text
-{domain}.{resource}.{action}
-```
-
-Examples:
-- `identity.user.read`
-- `identity.user.manage`
-- `access.point.read`
-- `access.rule.manage`
-- `attendance.record.read`
-- `attendance.leave.approve`
-- `visitor.visit.manage`
-- `system.company.manage`
-
-### Action vocabulary
-Use these standard actions where possible:
-- `read`
-- `create`
-- `update`
-- `delete`
-- `manage` (full CRUD + admin action)
-- `approve`
-- `issue`
-- `revoke`
-- `execute`
-- `export`
-- `configure`
-
-## Base Company Permission Bundles
-
-These are the canonical default bundles.
-
-### `viewer`
-- read-only access to permitted company modules
-- no approval actions
-- no destructive changes
-
-Typical permissions:
-- `dashboard.read`
-- `event.read`
-- `identity.user.read`
-- `access.point.read`
-- `access.rule.read`
-- `visitor.visit.read`
-- `report.read`
-
-### `operator`
-- operational execution within company
-- can process workflows but not own global/company settings
-
-Typical permissions:
-- all `viewer` permissions
-- `visitor.visit.manage`
-- `delivery.package.manage`
-- `parking.session.manage`
-- `attendance.record.update`
-- `access.command.execute`
-- selected create/update actions in operational modules
-
-### `manager`
-- supervisory role over teams/departments
-- can approve workflow items and view broader operational data
-
-Typical permissions:
-- all `operator` permissions
-- `attendance.leave.approve`
-- `attendance.overtime.approve`
-- `report.export`
-- `identity.user.read` across managed scope
-- broader analytics / staffing visibility
-
-### `admin`
-- broad company administration
-- can manage company users, configuration, devices, and modules inside one company
-
-Typical permissions:
-- all `manager` permissions
-- `identity.user.manage`
-- `auth.user.manage`
-- `access.rule.manage`
-- `access.point.manage`
-- `device.manage`
-- `company.settings.manage`
-- `plugin.manage`
-- policy/configuration permissions within company scope
-
-### `primary_manager`
-- highest authority inside one company
-- effectively full company control
-- reserved for company owner / designated top administrator
-
-Typical permissions:
-- all `admin` permissions
-- company ownership actions
-- billing/subscription-sensitive company actions (if exposed in product)
-- promote/demote company admins
-- irreversible company-level approval actions
-
-### `system_admin`
-- global platform role only
-- manages all companies and platform settings
-
-Typical permissions:
-- `system.company.manage`
-- `system.company.read`
-- `system.user.support`
-- `system.audit.read`
-- `system.config.manage`
-- cross-company diagnostics/support
-
-## Canonical Role Permissions Matrix
-
-| Capability | system_admin | primary_manager | admin | manager | operator | viewer |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| View own company data | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| View other companies' data | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Manage platform companies | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Manage own company profile/settings | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Manage company users | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Assign company roles | ❌ | ✅ | ✅* | ❌ | ❌ | ❌ |
-| Manage devices / access config | ❌ | ✅ | ✅ | ✅** | ❌ | ❌ |
-| Approve workflows (leave, OT, etc.) | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ |
-| Execute daily operations | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ |
-| Read dashboards / events / reports | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Export reports | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
-| Cross-company support/debugging | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-
-Notes:
-- `admin` role assignment may be limited from assigning/removing `primary_manager`
-- `manager` device/access changes should be limited to operational scope, not full company-wide structural administration
-
-## Company Lifecycle + Default User
+## Default Company Bootstrap
 
 When a company is created:
-1. create company record
-2. create first company user with role `primary_manager`
+1. create company
+2. create first user with fixed role `primary_manager`
 3. require password change on first login
-4. all future company users are scoped under that company
+4. optionally suggest starter templates for role setup
 
-`primary_manager` is therefore the canonical bootstrap company role.
+This is the canonical bootstrap process.
 
-## Authorization Rules for Feature Specs
+## MVP Boundaries
 
-### Required rule
-Feature specs must reference only canonical roles from this file when using role shorthand:
-- `system_admin`
-- `primary_manager`
+The current canonical model intentionally excludes:
+- deny rules
+- advanced boolean policy expressions
+- unlimited custom scope types
+- contextual ABAC rules
+- raw policy-engine UX
+
+These may be added later only if justified by real customer demand.
+
+## Migration Notes
+
+### From older fixed-role docs
+Old docs may mention:
 - `admin`
 - `manager`
 - `operator`
 - `viewer`
 
-### Preferred writing style
-For readability in specs today:
-- `Auth: role >= viewer`
-- `Auth: role >= operator`
-- `Auth: role >= manager`
-- `Auth: role >= admin`
-- `Auth: role = system_admin`
+These should now be interpreted as:
+- common template names, or
+- common company custom roles, not built-in platform roles
 
-### Avoid
-Do not introduce new global role names in feature specs like:
-- `site_admin`
+### From older architecture docs
+Old labels like:
 - `super_admin`
 - `tenant_admin`
+- `site_admin`
+- `security_admin`
 
-If a feature needs finer access control, define **permissions**, not a new top-level role.
-
-## API Tokens and Service Access
-
-API tokens are not human roles.
-They should use scopes, not company RBAC roles.
-
-Examples:
-- `identity.user.read`
-- `visitor.visit.write`
-- `attendance.record.read`
-
-A machine client may act within one company scope, but it is not modeled as `operator` or `admin`.
-
-## Migration / Cleanup Guidance
-
-### From old docs using v1-only roles
-Old roles:
+should be replaced by either:
 - `system_admin`
 - `primary_manager`
-- `manager`
-- `operator`
-- `viewer`
-
-These remain valid, but add `admin` as canonical company administrator role moving forward.
-
-### From old docs using v2/spec-template roles
-Old roles:
-- `viewer`, `operator`, `admin`, `site_admin`, `super_admin`
-
-Replace with:
-- `viewer` → `viewer`
-- `operator` → `operator`
-- `admin` → `admin`
-- `site_admin` → usually `primary_manager` or `admin` depending on intended scope
-- `super_admin` → `system_admin`
-
-### From architecture brainstorming roles
-Map them into permissions or custom bundles, not canonical roles.
+- permission bundles inside custom company roles
 
 ## References
 
-This file consolidates and supersedes role-model inconsistencies previously spread across:
+Supporting documents:
+- `docs/specs/platform/company-rbac-recommendation.md`
+- `docs/specs/platform/company-rbac-admin-guide.md`
 - `docs/specs/platform/auth.md`
 - `docs/specs/platform/multi-tenancy.md`
-- `docs/architecture/system-architecture.md`
-- generic role matrices in feature specs / `docs/specs/SPEC_TEMPLATE.md`
 
 ## Notes
 
-- The platform should evolve toward permission-first enforcement with role bundles defined centrally.
-- If DM3 later supports custom roles per company, those custom roles must still derive from the permission model here.
-- Until then, this file is the canonical RBAC baseline for all company-scoped authorization.
+- This document is the canonical RBAC source of truth for DM3 company authorization.
+- If other docs conflict with this one, this document wins.
+- The recommendation doc explains why this direction was chosen.
+- The admin guide explains how humans should actually use it.
