@@ -51,16 +51,16 @@ interface AccessGroupOption {
   access_point_count?: number;
 }
 
-interface AccessGroupAccessPoint {
+interface UserAccessGroup {
   id: string;
-  access_point_id: string;
-  access_point?: {
-    id: string;
-    name: string;
-    description?: string;
-    zone_id?: string;
-    zone?: { id: string; name: string };
-  };
+  name: string;
+  description?: string | null;
+  is_default: boolean;
+  access_time_id?: string | null;
+  access_time_name?: string | null;
+  access_point_count: number;
+  effective_from?: string | null;
+  effective_to?: string | null;
 }
 
 interface Department {
@@ -388,6 +388,160 @@ function AssignVehicleModal({ open, onOpenChange, userId, alreadyAssignedIds, on
   );
 }
 
+// ─── Add To Access Group Modal ────────────────────────────────────────────────
+// Inverse of AccessGroupDetailPage's AddUserModal: given a user, pick one or
+// more groups to add the user to. Excludes groups the user is already in so the
+// user can't accidentally re-POST to the same group.
+
+interface AddToGroupModalProps {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  userId: string;
+  currentGroupIds: Set<string>;
+  onAdded: () => void;
+}
+
+function AddToGroupModal({ open, onOpenChange, userId, currentGroupIds, onAdded }: AddToGroupModalProps) {
+  const { t } = useTranslation('users');
+  const [groups, setGroups] = useState<AccessGroupOption[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) { setSelected(new Set()); setSearch(''); return; }
+    setLoading(true);
+    apiFetch<{ data: AccessGroupOption[] }>('/api/v1/access/access-groups?limit=500')
+      .then((d) => setGroups(d.data || []))
+      .catch(() => setGroups([]))
+      .finally(() => setLoading(false));
+  }, [open]);
+
+  const available = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return groups.filter((g) => {
+      if (currentGroupIds.has(g.id)) return false;
+      if (!term) return true;
+      return g.name.toLowerCase().includes(term) || (g.description ?? '').toLowerCase().includes(term);
+    });
+  }, [groups, search, currentGroupIds]);
+
+  const toggle = (gid: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(gid)) next.delete(gid); else next.add(gid);
+      return next;
+    });
+  };
+
+  const handleSubmit = async () => {
+    if (selected.size === 0) return;
+    setSaving(true);
+    try {
+      for (const gid of selected) {
+        await apiFetch(`/api/v1/access/access-groups/${gid}/users`, {
+          method: 'POST',
+          body: JSON.stringify([{ user_id: userId }]),
+        });
+      }
+      toast(t('toast.accessGroupUpdated'), 'success');
+      onAdded();
+      onOpenChange(false);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : t('toast.accessGroupFailed'), 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <AppModal
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('accessGroup.addToGroup', 'Add to Access Group')}
+      size="lg"
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
+            {t('actions.cancel')}
+          </Button>
+          <Button onClick={handleSubmit} disabled={selected.size === 0 || saving} data-testid="user-button-add-to-groups-confirm">
+            {saving ? t('actions.saving') : t('actions.add', 'Add')}{selected.size > 0 ? ` (${selected.size})` : ''}
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-3">
+        <div className="relative">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="pl-8"
+            placeholder={t('accessGroup.searchGroups', 'Search groups…')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            data-testid="user-input-search-groups"
+          />
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+          </div>
+        ) : available.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <ShieldCheck size={28} className="mb-2 text-muted-foreground/40" />
+            <p className="text-[13px] text-muted-foreground">
+              {groups.length === 0
+                ? t('accessGroup.noGroups', 'No access groups available')
+                : t('accessGroup.allGroupsAssigned', 'User is already in all groups')}
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-md border border-border overflow-hidden max-h-[380px] overflow-y-auto">
+            <table className="w-full text-[13px]">
+              <thead className="bg-muted/60 border-b border-border sticky top-0">
+                <tr>
+                  <th className="w-10 px-3 py-2" />
+                  <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.name', 'Name')}</th>
+                  <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.description', 'Description')}</th>
+                  <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.accessPoints')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {available.map((g) => (
+                  <tr
+                    key={g.id}
+                    className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors cursor-pointer"
+                    onClick={() => toggle(g.id)}
+                  >
+                    <td className="w-10 px-3 py-2">
+                      <Checkbox
+                        checked={selected.has(g.id)}
+                        onCheckedChange={() => toggle(g.id)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Shield size={13} className="text-primary shrink-0" />
+                        <span className="font-medium">{g.name}</span>
+                        {g.is_default && <Badge variant="secondary" className="text-[10px]">{t('accessGroup.default', 'Default')}</Badge>}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">{g.description || '—'}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{g.access_point_count ?? 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </AppModal>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // UserDetailPage
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -408,11 +562,12 @@ export function UserDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [accessGroupOptions, setAccessGroupOptions] = useState<AccessGroupOption[]>([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [loadingCreds, setLoadingCreds] = useState(true);
-  const [accessPoints, setAccessPoints] = useState<AccessGroupAccessPoint[]>([]);
-  const [loadingAPs, setLoadingAPs] = useState(false);
+  const [userGroups, setUserGroups] = useState<UserAccessGroup[]>([]);
+  const [loadingUserGroups, setLoadingUserGroups] = useState(false);
+  const [showAddToGroupModal, setShowAddToGroupModal] = useState(false);
+  const [removingGroupId, setRemovingGroupId] = useState<string | null>(null);
   const [userVehicles, setUserVehicles] = useState<Vehicle[]>([]);
   const [loadingVehicles, setLoadingVehicles] = useState(true);
 
@@ -431,9 +586,6 @@ export function UserDetailPage() {
   const [deletingCredId, setDeletingCredId] = useState<string | null>(null);
   const [selectedCreds, setSelectedCreds] = useState<Set<string>>(new Set());
   const [bulkDeleteCredLoading, setBulkDeleteCredLoading] = useState(false);
-
-  const [selectedAccessGroup, setSelectedAccessGroup] = useState<string>('');
-  const [savingAccessGroup, setSavingAccessGroup] = useState(false);
 
   const [showAssignVehicle, setShowAssignVehicle] = useState(false);
   const [unassigningVehicleId, setUnassigningVehicleId] = useState<string | null>(null);
@@ -457,7 +609,6 @@ export function UserDetailPage() {
       const u = data.user ?? null;
       setUser(u);
       setAvatarPreview(u?.avatar ? assetUrl(u.avatar) : null);
-      setSelectedAccessGroup(u?.access_group_id || '');
       if (u) {
         setEditForm({
           first_name: u.first_name || '',
@@ -513,34 +664,27 @@ export function UserDetailPage() {
     finally { setUnassigningVehicleId(null); }
   }, [fetchUserVehicles]);
 
-  const fetchAccessGroupAPs = useCallback(async (groupId: string) => {
-    if (!groupId) { setAccessPoints([]); return; }
-    setLoadingAPs(true);
+  const fetchUserGroups = useCallback(async () => {
+    if (!id) return;
+    setLoadingUserGroups(true);
     try {
-      const data = await apiFetch<{ data?: AccessGroupAccessPoint[] }>(`/api/v1/access/access-groups/${groupId}/access-points`);
-      setAccessPoints(data.data ?? []);
-    } catch { setAccessPoints([]); }
-    finally { setLoadingAPs(false); }
-  }, []);
+      const data = await apiFetch<{ data?: UserAccessGroup[] }>(`/api/v1/access/access-groups/by-user/${id}`);
+      setUserGroups(data.data ?? []);
+    } catch { setUserGroups([]); }
+    finally { setLoadingUserGroups(false); }
+  }, [id]);
 
   useEffect(() => {
     if (!isNew) {
       fetchUser();
       fetchCredentials();
       fetchUserVehicles();
+      fetchUserGroups();
     }
     apiFetch<{ departments: Department[] }>('/api/v1/identity/departments?limit=200')
       .then((d) => setDepartments(d.departments || []))
       .catch(() => {});
-    apiFetch<{ data: AccessGroupOption[] }>('/api/v1/access/access-groups?limit=200')
-      .then((d) => setAccessGroupOptions(d.data || []))
-      .catch(() => {});
-  }, [isNew, fetchUser, fetchCredentials, fetchUserVehicles]);
-
-  useEffect(() => {
-    if (selectedAccessGroup) fetchAccessGroupAPs(selectedAccessGroup);
-    else setAccessPoints([]);
-  }, [selectedAccessGroup, fetchAccessGroupAPs]);
+  }, [isNew, fetchUser, fetchCredentials, fetchUserVehicles, fetchUserGroups]);
 
   // ─── Handlers ────────────────────────────────────────────────────────────
 
@@ -660,30 +804,19 @@ export function UserDetailPage() {
     });
   };
 
-  const handleSaveAccessGroup = async () => {
+  const handleRemoveFromGroup = async (groupId: string) => {
     if (!id) return;
-    setSavingAccessGroup(true);
+    setRemovingGroupId(groupId);
     try {
-      if (user?.access_group_id && user.access_group_id !== selectedAccessGroup) {
-        try { await apiFetch(`/api/v1/access/access-groups/${user.access_group_id}/users/${id}`, { method: 'DELETE' }); } catch { /* ignore */ }
-      }
-      if (selectedAccessGroup) {
-        await apiFetch(`/api/v1/access/access-groups/${selectedAccessGroup}/users`, {
-          method: 'POST', body: JSON.stringify([{ user_id: id }]),
-        });
-      }
-      await fetchUser();
+      await apiFetch(`/api/v1/access/access-groups/${groupId}/users/${id}`, { method: 'DELETE' });
+      await fetchUserGroups();
       toast(t('toast.accessGroupUpdated'), 'success');
     } catch (err) {
       toast(err instanceof Error ? err.message : t('toast.accessGroupFailed'), 'error');
-    } finally { setSavingAccessGroup(false); }
+    } finally { setRemovingGroupId(null); }
   };
 
-  const accessGroupChanged = selectedAccessGroup !== (user?.access_group_id || '');
-  const currentAGName = useMemo(
-    () => accessGroupOptions.find((ag) => ag.id === selectedAccessGroup)?.name ?? '',
-    [accessGroupOptions, selectedAccessGroup],
-  );
+  const userGroupIds = useMemo(() => new Set(userGroups.map((g) => g.id)), [userGroups]);
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setEditForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -796,10 +929,12 @@ export function UserDetailPage() {
                   <Hash size={11} />
                   {user.user_code}
                 </span>
-                {user?.access_group_name && (
+                {userGroups.length > 0 && (
                   <span className="text-[12px] text-muted-foreground flex items-center gap-1">
                     <Shield size={11} />
-                    {user.access_group_name}
+                    {userGroups.length === 1
+                      ? userGroups[0].name
+                      : t('accessGroup.groupsCount', '{{count}} groups', { count: userGroups.length })}
                   </span>
                 )}
               </div>}
@@ -850,7 +985,7 @@ export function UserDetailPage() {
             </TabsTrigger>}
             {!isNew && <TabsTrigger value="access" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-access-group">
               <DoorOpen size={13} className="mr-1.5" />
-              {t('tab.accessGroup')} ({accessPoints.length})
+              {t('tab.accessGroup')} ({userGroups.length})
             </TabsTrigger>}
             {!isNew && <TabsTrigger value="vehicles" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-vehicle">
               <Car size={13} className="mr-1.5" />
@@ -889,9 +1024,9 @@ export function UserDetailPage() {
               </Button>
             </div>
           )}
-          {activeTab === 'access' && selectedAccessGroup && (
-            <Button variant="outline" size="sm" onClick={() => navigate(`/access/access-groups/${selectedAccessGroup}`)}>
-              {t('accessGroup.viewGroup')}
+          {activeTab === 'access' && (
+            <Button size="sm" onClick={() => setShowAddToGroupModal(true)} data-testid="user-button-add-to-group">
+              <Plus size={14} className="mr-1.5" /> {t('accessGroup.addToGroup', 'Add to group')}
             </Button>
           )}
         </div>
@@ -997,82 +1132,84 @@ export function UserDetailPage() {
 
         {/* ╔══ Access Group Tab ═══════════════════════════════════════════ */}
         <TabsContent value="access" className="min-h-0 flex-1 overflow-auto p-4">
-          <div className="space-y-4">
-            <div className="flex items-end gap-3">
-              <div className="flex-1 space-y-1">
-                <Label>{t('accessGroup.title')}</Label>
-                <Select
-                  value={selectedAccessGroup}
-                  onValueChange={setSelectedAccessGroup}
-                  data-testid="user-select-access-group-id"
-                >
-                  <SelectOption value="">{t('accessGroup.none')}</SelectOption>
-                  {accessGroupOptions.map((ag) => (
-                    <SelectOption key={ag.id} value={ag.id}>{ag.name}</SelectOption>
-                  ))}
-                </Select>
-              </div>
-              {accessGroupChanged && (
-                <Button size="sm" onClick={handleSaveAccessGroup} disabled={savingAccessGroup} data-testid="user-button-save-access-group">
-                  <Save size={14} className="mr-1.5" />
-                  {savingAccessGroup ? t('actions.saving') : t('actions.save')}
-                </Button>
-              )}
+          {loadingUserGroups ? (
+            <div className="flex justify-center py-12">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
             </div>
-
-            {selectedAccessGroup ? (
-              <div className="space-y-2">
-                <h4 className="text-[13px] font-medium text-foreground flex items-center gap-1.5">
-                  <Shield size={13} className="text-primary" />
-                  {t('accessGroup.accessPoints')}
-                  {currentAGName && <span className="text-muted-foreground font-normal">— {currentAGName}</span>}
-                </h4>
-
-                {loadingAPs ? (
-                  <div className="flex justify-center py-8">
-                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                  </div>
-                ) : accessPoints.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <DoorOpen size={28} className="mb-2 text-muted-foreground/40" />
-                    <p className="text-[13px] text-muted-foreground">{t('accessGroup.noAPs')}</p>
-                  </div>
-                ) : (
-                  <div className="rounded-md border border-border overflow-hidden">
-                    <table className="w-full text-[13px]">
-                      <thead className="bg-muted/60 border-b border-border">
-                        <tr>
-                          <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.accessPoints')}</th>
-                          <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.zone', 'Zone')}</th>
-                          <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.description', 'Description')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {accessPoints.map((ap) => (
-                          <tr key={ap.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors">
-                            <td className="px-3 py-2">
-                              <div className="flex items-center gap-2">
-                                <DoorOpen size={14} className="text-primary shrink-0" />
-                                <span className="font-medium">{ap.access_point?.name ?? ap.access_point_id}</span>
-                              </div>
-                            </td>
-                            <td className="px-3 py-2 text-muted-foreground">{ap.access_point?.zone?.name ?? '—'}</td>
-                            <td className="px-3 py-2 text-muted-foreground">{ap.access_point?.description ?? '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <ShieldCheck size={36} className="mb-3 text-muted-foreground/40" />
-                <p className="text-[13px] font-medium text-foreground">{t('accessGroup.selectHint')}</p>
-                <p className="mt-1 text-[12px] text-muted-foreground">{t('accessGroup.title')}</p>
-              </div>
-            )}
-          </div>
+          ) : userGroups.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <ShieldCheck size={36} className="mb-3 text-muted-foreground/40" />
+              <p className="text-[13px] font-medium text-foreground">{t('accessGroup.emptyUserGroups', 'User is not in any access group')}</p>
+              <p className="mt-1 text-[12px] text-muted-foreground">{t('accessGroup.addToGroupHint', 'Add the user to one or more groups to grant access')}</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => setShowAddToGroupModal(true)}>
+                <Plus size={14} className="mr-1.5" /> {t('accessGroup.addToGroup', 'Add to group')}
+              </Button>
+            </div>
+          ) : (
+            <div className="rounded-md border border-border overflow-hidden" data-testid="user-table-access-groups">
+              <table className="w-full text-[13px]">
+                <thead className="bg-muted/60 border-b border-border">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.name', 'Name')}</th>
+                    <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.description', 'Description')}</th>
+                    <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.accessPoints')}</th>
+                    <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.accessTime', 'Access Time')}</th>
+                    <th className="px-3 py-2 text-left font-medium text-foreground">{t('accessGroup.effective', 'Effective')}</th>
+                    <th className="px-3 py-2 text-right font-medium text-foreground">{t('actions.actions', 'Actions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userGroups.map((g) => (
+                    <tr key={g.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors" data-testid={`user-row-group-${g.id}`}>
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/access/access-groups/${g.id}`)}
+                          className="flex items-center gap-2 font-medium text-left hover:text-primary transition-colors"
+                        >
+                          <Shield size={13} className="text-primary shrink-0" />
+                          {g.name}
+                          {g.is_default && <Badge variant="secondary" className="text-[10px]">{t('accessGroup.default', 'Default')}</Badge>}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">{g.description || '—'}</td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <DoorOpen size={12} className="text-muted-foreground/70" />
+                          {g.access_point_count}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {g.access_time_name ? (
+                          <span className="inline-flex items-center gap-1">
+                            <Clock size={12} className="text-muted-foreground/70" />
+                            {g.access_time_name}
+                          </span>
+                        ) : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground text-[12px]">
+                        {g.effective_from ? new Date(g.effective_from).toLocaleDateString() : '—'}
+                        {g.effective_to && <> → {new Date(g.effective_to).toLocaleDateString()}</>}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-[12px] text-destructive hover:text-destructive"
+                          onClick={() => handleRemoveFromGroup(g.id)}
+                          disabled={removingGroupId === g.id}
+                          data-testid={`user-button-remove-group-${g.id}`}
+                        >
+                          <Unlink size={13} className="mr-1" />
+                          {removingGroupId === g.id ? t('actions.removing', 'Removing…') : t('actions.remove', 'Remove')}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </TabsContent>
 
         {/* ╔══ Vehicles Tab ══════════════════════════════════════════════ */}
@@ -1308,6 +1445,16 @@ export function UserDetailPage() {
           userId={id}
           alreadyAssignedIds={userVehicles.map((v) => v.id)}
           onAssigned={fetchUserVehicles}
+        />
+      )}
+
+      {id && (
+        <AddToGroupModal
+          open={showAddToGroupModal}
+          onOpenChange={setShowAddToGroupModal}
+          userId={id}
+          currentGroupIds={userGroupIds}
+          onAdded={fetchUserGroups}
         />
       )}
 
