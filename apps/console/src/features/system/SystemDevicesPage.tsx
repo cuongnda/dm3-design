@@ -6,6 +6,7 @@ import { fetchSystemDevices, fetchCompanies, fetchEMQXClients, apiFetch, type Co
 import { RefreshCw, Plus, Pencil, Trash2, Monitor, Wifi, WifiOff, AlertTriangle, Terminal, Cpu, Camera, Gauge, History, Power, PowerOff, RotateCcw, ShieldAlert, Zap, Send, MessageSquare, DoorOpen, Lock, Shield } from 'lucide-react';
 import { fetchDeviceHistory, type DeviceHistoryEvent } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { CreateDeviceModal } from './CreateDeviceModal';
 
 interface SystemDevice {
   id: string;
@@ -155,6 +156,9 @@ export function SystemDevicesPage() {
 
   // History modal
   const [historyDevice, setHistoryDevice] = useState<SystemDevice | null>(null);
+
+  // Create modal
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // EMQX client map: device_id → EMQXClientDTO
   const [emqxMap, setEmqxMap] = useState<Map<string, EMQXClientDTO>>(new Map());
@@ -325,7 +329,7 @@ export function SystemDevicesPage() {
       <div className="shrink-0">
         <PageHeader title={tSystem('systemDevices.title')} description={tSystem('systemDevices.description')}>
           <div className="flex gap-2">
-            <Button data-testid="sysdevice-button-create" size="sm" onClick={() => navigate('/system/devices/new')} className="gap-1">
+            <Button data-testid="sysdevice-button-create" size="sm" onClick={() => setShowCreateModal(true)} className="gap-1">
               <Plus size={13} /> {tSystem('createDevice.title')}
             </Button>
             <Button data-testid="sysdevice-button-refresh" variant="outline" size="sm" onClick={loadData} className="gap-1">
@@ -396,6 +400,13 @@ export function SystemDevicesPage() {
           loading={loading}
         />
       </div>
+
+      {/* Create Device Modal */}
+      <CreateDeviceModal
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
+        onCreated={loadData}
+      />
 
       {/* Delete Device Modal */}
       <AppModal
