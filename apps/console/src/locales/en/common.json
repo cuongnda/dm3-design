@@ -174,5 +174,16 @@
   "cctv.settings.preRollDefault": "Pre-roll default",
   "cctv.settings.postRollDefault": "Post-roll default",
   "cctv.settings.storageSection": "Storage",
-  "cctv.settings.storageQuota": "Storage quota"
+  "cctv.settings.storageQuota": "Storage quota",
+  "cctv.severity.online": "Online",
+  "cctv.severity.degraded": "Stale",
+  "cctv.severity.offline": "Offline",
+  "cctv.severity.noStream": "No stream",
+  "cctv.cols.lastFrame": "Last Frame",
+  "cctv.cols.backend": "Backend",
+  "cctv.backend.ok": "OK",
+  "cctv.backend.off": "Off",
+  "cctv.lastFrame.never": "Never",
+  "cctv.lastFrame.justNow": "Just now",
+  "cctv.cameras.notLinked": "Not linked to access point"
 }

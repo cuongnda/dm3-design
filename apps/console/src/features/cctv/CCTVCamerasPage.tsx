@@ -1,10 +1,20 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader, DataTable, type Column, Button } from '@dm3/ui';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, Pencil, Play, Video } from 'lucide-react';
+import {
+  Plus,
+  Trash2,
+  Pencil,
+  Play,
+  Video,
+  MapPin,
+  Clock,
+  HardDrive,
+} from 'lucide-react';
 import {
   listCameras,
+  listAccessPoints,
   createCamera,
   updateCamera,
   deleteCamera,
@@ -13,8 +23,31 @@ import {
   type CreateCameraRequest,
   type TestConnectionDTO,
 } from '@dm3/api-client';
-import { CameraStatusBadge } from './components/CameraStatusBadge';
+import { SeverityPill, deriveSeverity } from './components/CameraStatusBadge';
 import { CameraFormModal } from './components/CameraFormModal';
+
+type RelTone = 'fresh' | 'stale' | 'dead';
+
+function formatRelative(iso?: string | null): { text: string; tone: RelTone } {
+  if (!iso) return { text: '__never__', tone: 'dead' };
+  const age = Date.now() - new Date(iso).getTime();
+  if (age < 60_000) return { text: '__justNow__', tone: 'fresh' };
+  if (age < 3_600_000) {
+    const minutes = Math.floor(age / 60_000);
+    return { text: `${minutes}m ago`, tone: age > 5 * 60_000 ? 'stale' : 'fresh' };
+  }
+  if (age < 86_400_000) {
+    const hours = Math.floor(age / 3_600_000);
+    return { text: `${hours}h ago`, tone: 'stale' };
+  }
+  return { text: new Date(iso).toLocaleDateString(), tone: 'dead' };
+}
+
+const relToneClass: Record<RelTone, string> = {
+  fresh: 'text-success',
+  stale: 'text-warning',
+  dead: 'text-muted-foreground',
+};
 
 export function CCTVCamerasPage() {
   const { t } = useTranslation('common');
@@ -30,6 +63,19 @@ export function CCTVCamerasPage() {
     queryKey: ['cctv-cameras', page, statusFilter],
     queryFn: () => listCameras({ page, limit: 20, status: statusFilter || undefined }),
   });
+
+  const { data: apResp } = useQuery({
+    queryKey: ['access-points-all'],
+    queryFn: () => listAccessPoints({ limit: 200 }),
+  });
+
+  const accessPointNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    (apResp?.data ?? []).forEach((ap) => {
+      map[ap.id] = ap.name;
+    });
+    return map;
+  }, [apResp]);
 
   const createMutation = useMutation({
     mutationFn: (data: CreateCameraRequest) => createCamera(data),
@@ -99,34 +145,99 @@ export function CCTVCamerasPage() {
     {
       key: 'name',
       header: t('cctv.cameras.cols.name'),
-      width: '180px',
-      render: (r) => <span className="font-medium text-[13px]">{r.name}</span>,
+      width: '260px',
+      render: (r) => {
+        const apName = r.access_point_id ? accessPointNames[r.access_point_id] : null;
+        return (
+          <div className="flex items-start gap-2">
+            <div className="w-12 h-8 rounded-sm bg-muted border border-border shrink-0 flex items-center justify-center">
+              <Video size={14} className="text-muted-foreground/50" />
+            </div>
+            <div className="min-w-0">
+              <div className="font-medium text-[13px] truncate">{r.name}</div>
+              <div className="text-[11px] text-muted-foreground truncate flex items-center gap-1">
+                {apName ? (
+                  <>
+                    <MapPin size={10} className="shrink-0" />
+                    <span className="truncate">{apName}</span>
+                  </>
+                ) : (
+                  <span className="opacity-60">{t('cctv.cameras.notLinked')}</span>
+                )}
+                {r.brand && (
+                  <span className="ml-1 text-[10px] text-muted-foreground/70 shrink-0">
+                    · {r.brand}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      },
     },
     {
       key: 'status',
       header: t('cctv.cameras.cols.status'),
-      width: '90px',
-      render: (r) => <CameraStatusBadge status={r.status} />,
+      width: '130px',
+      render: (r) => <SeverityPill severity={deriveSeverity(r)} />,
     },
     {
-      key: 'brand',
-      header: t('cctv.cameras.cols.brand'),
-      width: '100px',
-      render: (r) => <span className="text-[12px] text-muted-foreground">{r.brand ?? '—'}</span>,
+      key: 'last_frame',
+      header: t('cctv.cols.lastFrame'),
+      width: '130px',
+      render: (r) => {
+        const rel = formatRelative(r.last_checked_at);
+        const text =
+          rel.text === '__never__'
+            ? t('cctv.lastFrame.never')
+            : rel.text === '__justNow__'
+              ? t('cctv.lastFrame.justNow')
+              : rel.text;
+        return (
+          <span className={`inline-flex items-center gap-1 text-[12px] ${relToneClass[rel.tone]}`}>
+            <Clock size={11} />
+            {text}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'backend',
+      header: t('cctv.cols.backend'),
+      width: '110px',
+      render: (r) => {
+        const severity = deriveSeverity(r);
+        const recordingOn = r.recording_mode === 'event_only';
+        if (!recordingOn) {
+          return (
+            <span className="inline-flex items-center gap-1 text-[12px] text-muted-foreground">
+              <HardDrive size={11} />
+              {t('cctv.backend.off')}
+            </span>
+          );
+        }
+        const healthy = severity === 'online';
+        return (
+          <span
+            className={`inline-flex items-center gap-1 text-[12px] ${
+              healthy ? 'text-success' : 'text-muted-foreground'
+            }`}
+          >
+            <HardDrive size={11} />
+            NVR · {t('cctv.backend.ok')}
+          </span>
+        );
+      },
     },
     {
       key: 'recording_mode',
       header: t('cctv.cameras.cols.recordingMode'),
-      width: '110px',
-      render: (r) => <span className="text-[12px] capitalize">{r.recording_mode}</span>,
-    },
-    {
-      key: 'last_checked_at',
-      header: t('cctv.cameras.cols.lastChecked'),
-      width: '140px',
+      width: '100px',
       render: (r) => (
-        <span className="font-mono text-[12px] text-muted-foreground">
-          {r.last_checked_at ? new Date(r.last_checked_at).toLocaleString() : '—'}
+        <span className="text-[12px] capitalize text-muted-foreground">
+          {r.recording_mode === 'event_only'
+            ? t('cctv.cameras.recordingModes.event')
+            : t('cctv.cameras.recordingModes.off')}
         </span>
       ),
     },

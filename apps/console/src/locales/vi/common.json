@@ -174,5 +174,16 @@
   "cctv.settings.preRollDefault": "Pre-roll mặc định",
   "cctv.settings.postRollDefault": "Post-roll mặc định",
   "cctv.settings.storageSection": "Dung lượng lưu trữ",
-  "cctv.settings.storageQuota": "Hạn mức lưu trữ"
+  "cctv.settings.storageQuota": "Hạn mức lưu trữ",
+  "cctv.severity.online": "Trực tuyến",
+  "cctv.severity.degraded": "Chậm cập nhật",
+  "cctv.severity.offline": "Ngoại tuyến",
+  "cctv.severity.noStream": "Không có luồng",
+  "cctv.cols.lastFrame": "Khung hình cuối",
+  "cctv.cols.backend": "Lưu trữ",
+  "cctv.backend.ok": "OK",
+  "cctv.backend.off": "Tắt",
+  "cctv.lastFrame.never": "Chưa có",
+  "cctv.lastFrame.justNow": "Vừa xong",
+  "cctv.cameras.notLinked": "Chưa liên kết điểm truy cập"
 }
