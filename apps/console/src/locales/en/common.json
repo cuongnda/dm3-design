@@ -190,5 +190,12 @@
   "cctv.live.diag": "Diag",
   "cctv.live.open": "Open",
   "cctv.live.diagnostics": "Stream Diagnostics",
-  "cctv.live.lastFramePrefix": "Last frame"
+  "cctv.live.lastFramePrefix": "Last frame",
+  "cctv.live.mode.default": "Default",
+  "cctv.live.mode.wall": "Wall",
+  "cctv.live.mode.operate": "Operate",
+  "cctv.live.mode.compact": "Compact",
+  "cctv.live.exitWall": "Exit wall",
+  "cctv.live.recentEvents": "Live Events",
+  "cctv.live.noEvents": "No recent events"
 }

@@ -190,5 +190,12 @@
   "cctv.live.diag": "Chẩn đoán",
   "cctv.live.open": "Mở",
   "cctv.live.diagnostics": "Chẩn đoán luồng",
-  "cctv.live.lastFramePrefix": "Khung hình cuối"
+  "cctv.live.lastFramePrefix": "Khung hình cuối",
+  "cctv.live.mode.default": "Mặc định",
+  "cctv.live.mode.wall": "Toàn cảnh",
+  "cctv.live.mode.operate": "Vận hành",
+  "cctv.live.mode.compact": "Rút gọn",
+  "cctv.live.exitWall": "Thoát toàn cảnh",
+  "cctv.live.recentEvents": "Sự kiện trực tiếp",
+  "cctv.live.noEvents": "Chưa có sự kiện"
 }
