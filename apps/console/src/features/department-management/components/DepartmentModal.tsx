@@ -77,10 +77,21 @@ export function DepartmentModal({ isOpen, onClose, onSubmit, department, title }
 
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
-        if (!formData.name.trim()) newErrors.name = t('validation.nameRequired');
-        if (!formData.number.trim()) newErrors.number = t('validation.numberRequired');
-        if (formData.number.length > 100) newErrors.number = t('validation.numberTooLong');
-        if (formData.name.length > 255) newErrors.name = t('validation.nameTooLong');
+        const trimmedName = formData.name.trim();
+        const trimmedNumber = formData.number.trim();
+
+        if (!trimmedName) newErrors.name = t('validation.nameRequired');
+        else if (trimmedName.length < 2) newErrors.name = t('validation.nameTooShort');
+        else if (trimmedName.length > 255) newErrors.name = t('validation.nameTooLong');
+
+        if (!trimmedNumber) newErrors.number = t('validation.numberRequired');
+        else if (trimmedNumber.length > 100) newErrors.number = t('validation.numberTooLong');
+        else if (!/^[A-Za-z0-9_-]+$/.test(trimmedNumber)) newErrors.number = t('validation.numberFormat');
+
+        if (formData.parent_id && department && formData.parent_id === department.id) {
+            newErrors.parent_id = t('validation.parentSelf');
+        }
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -134,7 +145,9 @@ export function DepartmentModal({ isOpen, onClose, onSubmit, department, title }
             <div className="space-y-4">
                 {/* Name */}
                 <div>
-                    <Label htmlFor="dept-name">{t('name')} *</Label>
+                    <Label htmlFor="dept-name">
+                        {t('name')} <span className="text-destructive">*</span>
+                    </Label>
                     <Input
                         id="dept-name"
                         value={formData.name}
@@ -142,13 +155,24 @@ export function DepartmentModal({ isOpen, onClose, onSubmit, department, title }
                         placeholder={t('namePlaceholder')}
                         className={errors.name ? 'border-destructive' : ''}
                         disabled={loading}
+                        aria-invalid={!!errors.name}
+                        aria-describedby={errors.name ? 'dept-name-error' : 'dept-name-hint'}
+                        maxLength={255}
                     />
-                    {errors.name && <p className="text-sm text-destructive mt-1">{errors.name}</p>}
+                    {errors.name ? (
+                        <p id="dept-name-error" className="text-sm text-destructive mt-1">{errors.name}</p>
+                    ) : (
+                        <p id="dept-name-hint" className="text-[11px] text-muted-foreground mt-1">
+                            {t('validation.nameHint', '2–255 characters')}
+                        </p>
+                    )}
                 </div>
 
                 {/* Number */}
                 <div>
-                    <Label htmlFor="dept-number">{t('number')} *</Label>
+                    <Label htmlFor="dept-number">
+                        {t('number')} <span className="text-destructive">*</span>
+                    </Label>
                     <Input
                         id="dept-number"
                         value={formData.number}
@@ -156,8 +180,17 @@ export function DepartmentModal({ isOpen, onClose, onSubmit, department, title }
                         placeholder={t('numberPlaceholder')}
                         className={errors.number ? 'border-destructive' : ''}
                         disabled={loading}
+                        aria-invalid={!!errors.number}
+                        aria-describedby={errors.number ? 'dept-number-error' : 'dept-number-hint'}
+                        maxLength={100}
                     />
-                    {errors.number && <p className="text-sm text-destructive mt-1">{errors.number}</p>}
+                    {errors.number ? (
+                        <p id="dept-number-error" className="text-sm text-destructive mt-1">{errors.number}</p>
+                    ) : (
+                        <p id="dept-number-hint" className="text-[11px] text-muted-foreground mt-1">
+                            {t('validation.numberHint', 'Letters, numbers, dashes, underscores — must be unique')}
+                        </p>
+                    )}
                 </div>
 
                 {/* Parent Department */}
@@ -175,6 +208,7 @@ export function DepartmentModal({ isOpen, onClose, onSubmit, department, title }
                             </SelectOption>
                         ))}
                     </Select>
+                    {errors.parent_id && <p className="text-sm text-destructive mt-1">{errors.parent_id}</p>}
                 </div>
 
                 {/* Manager */}

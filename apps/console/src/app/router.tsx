@@ -123,6 +123,9 @@ const UserDetailPage = lazyWithRetry(() =>
 const DepartmentManagementPage = lazyWithRetry(() =>
   import('@/features/department-management/DepartmentManagementPage').then((m) => ({ default: m.DepartmentManagementPage }))
 );
+const DepartmentDetailPage = lazyWithRetry(() =>
+  import('@/features/department-management/DepartmentDetailPage').then((m) => ({ default: m.DepartmentDetailPage }))
+);
 
 const VisitorsPage = lazyWithRetry(() =>
   import('@/features/manage/visitors/VisitorsPage').then((m) => ({ default: m.VisitorsPage }))
@@ -380,6 +383,7 @@ export const Router = createBrowserRouter([
               // Vehicle registry moved to parking plugin (see docs/changelog/2026-04-12-parking-access-integration.md)
               { path: 'manage/vehicles', element: <Navigate to="/parking/vehicles" replace /> },
               { path: 'manage/departments', element: <LazyWrap><DepartmentManagementPage /></LazyWrap> },
+              { path: 'manage/departments/:id', element: <LazyWrap><DepartmentDetailPage /></LazyWrap> },
               { path: 'manage/contractors', element: <LazyWrap><ContractorsPage /></LazyWrap> },
 
               // VISITORS

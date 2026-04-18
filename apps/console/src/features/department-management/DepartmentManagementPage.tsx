@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Building2, Plus, Edit, Trash2, Trash, Users } from 'lucide-react';
 import {
@@ -20,6 +21,7 @@ import type { Department, DepartmentFormData } from './types';
 
 export function DepartmentManagementPage() {
     const { t } = useTranslation('departments');
+    const navigate = useNavigate();
 
     const {
         departments,
@@ -119,13 +121,17 @@ export function DepartmentManagementPage() {
                 header: t('col.department'),
                 sortable: true,
                 render: (d) => (
-                    <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/manage/departments/${d.id}`); }}
+                        className="flex items-center gap-2 text-left hover:text-primary"
+                    >
                         <Building2 size={14} className="text-primary shrink-0" />
                         <div>
                             <div className="text-[13px] font-medium">{d.name}</div>
                             <div className="text-[11px] text-muted-foreground">#{d.number}</div>
                         </div>
-                    </div>
+                    </button>
                 ),
             },
             {
@@ -243,7 +249,7 @@ export function DepartmentManagementPage() {
                         rowKey={(d) => d.id}
                         sortState={{ col: sortBy, dir: sortDir }}
                         onSortChange={handleSortChange}
-                        onRowDoubleClick={(d) => setEditingDepartment(d)}
+                        onRowDoubleClick={(d) => navigate(`/manage/departments/${d.id}`)}
                         emptyMessage={filters.search ? t('table.empty.search') : t('table.empty.default')}
                         emptyIcon={<Building2 size={32} strokeWidth={1.2} />}
                         selection={{
