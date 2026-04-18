@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>Duall Master — Guard Station Main</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: #070A12;
+  color: #E8ECF0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Layout */
+.main-layout {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* Sidebar Nav */
+.sidebar {
+  width: 56px;
+  background: #0D1117;
+  border-right: 1px solid #1C2333;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  gap: 4px;
+}
+.nav-logo {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #2563EB, #3B82F6);
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  margin-bottom: 16px;
+}
+.nav-item {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  cursor: pointer;
+  color: #64748B;
+}
+.nav-item.active {
+  background: #1C2333;
+  color: #3B82F6;
+}
+.nav-item:hover { color: #E8ECF0; }
+.nav-spacer { flex: 1; }
+
+/* Center area */
+.center-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Camera Grid */
+.camera-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 2px;
+  padding: 2px;
+  min-height: 0;
+}
+.camera-tile {
+  background: #0D1117;
+  border: 1px solid #1C2333;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.camera-tile .cam-content {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(145deg, #0a0d14, #0f1420, #0a0d14);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.camera-tile .no-signal {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #334155;
+  text-align: center;
+}
+.cam-label {
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+.cam-time {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #64748B;
+}
+.cam-rec {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #EF4444;
+  text-transform: uppercase;
+}
+.cam-rec .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #EF4444;
+  animation: blink 1.5s infinite;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.cam-number {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  color: #475569;
+  background: rgba(7, 10, 18, 0.7);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+/* Bottom panels */
+.bottom-panels {
+  height: 220px;
+  display: flex;
+  border-top: 1px solid #1C2333;
+}
+.panel {
+  background: #0D1117;
+  border-right: 1px solid #1C2333;
+}
+.panel:last-child { border-right: none; }
+.panel-header {
+  height: 32px;
+  background: #161B26;
+  border-bottom: 1px solid #1C2333;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.panel-body {
+  padding: 8px 12px;
+  overflow: hidden;
+}
+
+.quick-actions-panel { flex: 1; }
+.guard-status-panel { width: 320px; }
+
+/* Quick actions */
+.actions-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  padding-top: 8px;
+}
+.action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 4px;
+  background: #161B26;
+  border: 1px solid #1C2333;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.action-btn:hover { border-color: #334155; }
+.action-btn .icon { font-size: 22px; }
+.action-btn .label {
+  font-size: 10px;
+  font-weight: 500;
+  color: #94A3B8;
+  text-align: center;
+}
+.action-btn.danger { border-color: rgba(239,68,68,0.3); }
+.action-btn.danger .label { color: #EF4444; }
+
+.building-stats {
+  display: flex;
+  gap: 24px;
+  margin-top: 16px;
+}
+.stat-item { }
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.stat-value.blue { color: #3B82F6; }
+.stat-value.green { color: #22C55E; }
+.stat-value.amber { color: #F59E0B; }
+.stat-value.red { color: #EF4444; }
+.stat-label {
+  font-size: 11px;
+  color: #64748B;
+  margin-top: 2px;
+}
+
+/* Guard status */
+.guard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+}
+.guard-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+.guard-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+}
+.guard-name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+}
+.guard-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+.guard-badge.patrol { color: #22C55E; background: rgba(34,197,94,0.15); }
+.guard-badge.station { color: #3B82F6; background: rgba(59,130,246,0.15); }
+.guard-badge.break { color: #F59E0B; background: rgba(245,158,11,0.15); }
+
+/* Event Feed */
+.event-feed {
+  width: 340px;
+  background: #0D1117;
+  border-left: 1px solid #1C2333;
+  display: flex;
+  flex-direction: column;
+}
+.feed-header {
+  height: 40px;
+  background: #161B26;
+  border-bottom: 1px solid #1C2333;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 12px;
+}
+.feed-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.feed-tabs {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.feed-tab {
+  font-size: 10px;
+  font-weight: 500;
+  color: #475569;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.feed-tab.active { color: #E8ECF0; background: #1C2333; }
+
+.feed-list {
+  flex: 1;
+  overflow: hidden;
+  padding: 4px 0;
+}
+.feed-item {
+  display: flex;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(28,35,51,0.5);
+  font-size: 12px;
+}
+.feed-item.critical {
+  background: rgba(127, 29, 29, 0.25);
+}
+.feed-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+.feed-dot.green { background: #22C55E; }
+.feed-dot.red { background: #EF4444; }
+.feed-dot.amber { background: #EAB308; }
+.feed-dot.blue { background: #3B82F6; }
+.feed-dot.gray { background: #475569; }
+.feed-content { flex: 1; }
+.feed-title-text {
+  font-weight: 500;
+  color: #E8ECF0;
+  margin-bottom: 2px;
+}
+.feed-desc {
+  color: #64748B;
+  font-size: 11px;
+}
+.feed-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #475569;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Status Bar */
+.status-bar {
+  height: 36px;
+  background: #0D1117;
+  border-top: 1px solid #1C2333;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 24px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #94A3B8;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.status-dot.green { background: #22C55E; }
+.status-dot.red { background: #EF4444; animation: blink 1.5s infinite; }
+.status-spacer { flex: 1; }
+.status-clock {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #E8ECF0;
+}
+.status-mode {
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(34,197,94,0.15);
+  color: #22C55E;
+}
+.vol-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.vol-seg {
+  width: 4px;
+  height: 12px;
+  border-radius: 1px;
+}
+.vol-seg.on { background: #3B82F6; }
+.vol-seg.off { background: #1C2333; }
+</style>
+</head>
+<body>
+
+<div class="main-layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="nav-logo"></div>
+    <div class="nav-item active">🏠</div>
+    <div class="nav-item">📹</div>
+    <div class="nav-item">🚨</div>
+    <div class="nav-item">🗺️</div>
+    <div class="nav-item">👮</div>
+    <div class="nav-item">🎤</div>
+    <div class="nav-item">🤖</div>
+    <div class="nav-spacer"></div>
+    <div class="nav-item">⚙️</div>
+  </div>
+
+  <!-- Center -->
+  <div class="center-area">
+    <!-- Camera Grid 2x2 -->
+    <div class="camera-grid">
+      <div class="camera-tile">
+        <div class="cam-content"><div class="no-signal">● ● ●</div></div>
+        <span class="cam-number">01</span>
+        <span class="cam-label">Sảnh chính · Lobby</span>
+        <span class="cam-time">14:32:07</span>
+        <span class="cam-rec"><span class="dot"></span>REC</span>
+      </div>
+      <div class="camera-tile">
+        <div class="cam-content"><div class="no-signal">● ● ●</div></div>
+        <span class="cam-number">02</span>
+        <span class="cam-label">Cổng Bắc · Gate North</span>
+        <span class="cam-time">14:32:07</span>
+        <span class="cam-rec"><span class="dot"></span>REC</span>
+      </div>
+      <div class="camera-tile">
+        <div class="cam-content"><div class="no-signal">● ● ●</div></div>
+        <span class="cam-number">03</span>
+        <span class="cam-label">Bãi xe B1 · Parking B1</span>
+        <span class="cam-time">14:32:07</span>
+        <span class="cam-rec"><span class="dot"></span>REC</span>
+      </div>
+      <div class="camera-tile">
+        <div class="cam-content"><div class="no-signal">● ● ●</div></div>
+        <span class="cam-number">04</span>
+        <span class="cam-label">Thang máy 1 · Elevator 1</span>
+        <span class="cam-time">14:32:07</span>
+        <span class="cam-rec"><span class="dot"></span>REC</span>
+      </div>
+    </div>
+
+    <!-- Bottom Panels -->
+    <div class="bottom-panels">
+      <div class="panel quick-actions-panel">
+        <div class="panel-header">⚡ Quick Actions & Building Status</div>
+        <div class="panel-body">
+          <div class="actions-grid">
+            <div class="action-btn"><span class="icon">🔓</span><span class="label">Mở cửa<br>Open</span></div>
+            <div class="action-btn"><span class="icon">🔒</span><span class="label">Khoá<br>Lock</span></div>
+            <div class="action-btn action-btn danger"><span class="icon">🔔</span><span class="label">Báo động<br>Alarm</span></div>
+            <div class="action-btn"><span class="icon">📹</span><span class="label">Ghi hình<br>Record</span></div>
+            <div class="action-btn"><span class="icon">📞</span><span class="label">Liên lạc<br>Call</span></div>
+            <div class="action-btn"><span class="icon">📢</span><span class="label">Thông báo<br>Announce</span></div>
+          </div>
+          <div class="building-stats">
+            <div class="stat-item">
+              <div class="stat-value blue">42</div>
+              <div class="stat-label">Cửa Online / Doors</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value green">16</div>
+              <div class="stat-label">Camera Active</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value amber">247</div>
+              <div class="stat-label">Người trong toà / Occupants</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value red">1</div>
+              <div class="stat-label">Cảnh báo / Alarms</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel guard-status-panel">
+        <div class="panel-header">👮 Ca trực / Guard On Duty</div>
+        <div class="panel-body">
+          <div class="guard-list">
+            <div class="guard-item">
+              <div class="guard-avatar" style="background:#2563EB">TB</div>
+              <div class="guard-name">Trần Văn B</div>
+              <span class="guard-badge patrol">🟢 Tuần tra</span>
+            </div>
+            <div class="guard-item">
+              <div class="guard-avatar" style="background:#7C3AED">LC</div>
+              <div class="guard-name">Lê Minh C</div>
+              <span class="guard-badge station">📍 Trực trạm</span>
+            </div>
+            <div class="guard-item">
+              <div class="guard-avatar" style="background:#0D9488">PD</div>
+              <div class="guard-name">Phạm Đức D</div>
+              <span class="guard-badge break">☕ Nghỉ giữa ca</span>
+            </div>
+            <div class="guard-item">
+              <div class="guard-avatar" style="background:#DB2777">NE</div>
+              <div class="guard-name">Ngô Thanh E</div>
+              <span class="guard-badge patrol">🟢 Tuần tra</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event Feed -->
+  <div class="event-feed">
+    <div class="feed-header">
+      <span class="feed-title">📋 Sự kiện / Events</span>
+      <div class="feed-tabs">
+        <span class="feed-tab active">Tất cả</span>
+        <span class="feed-tab">Truy cập</span>
+        <span class="feed-tab">Cảnh báo</span>
+      </div>
+    </div>
+    <div class="feed-list">
+      <div class="feed-item critical">
+        <span class="feed-dot red"></span>
+        <div class="feed-content">
+          <div class="feed-title-text">Cửa 7 — Mở cưỡng bức</div>
+          <div class="feed-desc">Tầng 2, Khu B · Door forced open</div>
+        </div>
+        <span class="feed-time">14:32:30</span>
+      </div>
+      <div class="feed-item">
+        <span class="feed-dot green"></span>
+        <div class="feed-content">
+          <div class="feed-title-text">Cửa 3 — Truy cập OK</div>
+          <div class="feed-desc">Nguyễn Văn A · Card #4821</div>
+        </div>
+        <span class="feed-time">14:32:01</span>
+      </div>
+      <div class="feed-item">
+        <span class="feed-dot green"></span>
+        <div class="feed-content">
+          <div class="feed-title-text">Cổng 1 — Mở cổng</div>
+          <div class="feed-desc">Visitor QR · Trần Thị B</div>
+        </div>
+        <span class="feed-time">14:31:58</span>
+      </div>
+      <div class="feed-item">
+        <span class="feed-dot amber"></span>
+        <div class="feed-content">
+          <div class="feed-title-text">Cảm biến Z3 — Phát hiện</div>
+          <div class="feed-desc">Motion detected · Khu C Tầng 3</div>
+        </div>
+        <span class="feed-time">14:31:45</span>
+      </div>
+      <div class="feed-item">
+        <span class="feed-dot blue"></span>
+        <div class="feed-content">
+          <div class="feed-title-text">Khách check-in</div>
+          <div class="feed-desc">Lê Hoàng D · Host: Phạm E</div>
+        </div>
+        <span class="feed-time">14:31:20</span>
+      </div>
+      <div class="feed-item">
+        <span class="feed-dot green"></span>
+        <div class="feed-content">
+          <div class="feed-title-text">Cửa 12 — Truy cập OK</div>
+          <div class="feed-desc">Võ Thị F · Fingerprint</div>
+        </div>
+        <span class="feed-time">14:30:55</span>
+      </div>
+      <div class="feed-item">
+        <span class="feed-dot gray"></span>
+        <div class="feed-content">
+          <div class="feed-title-text">Hệ thống — Backup</div>
+          <div class="feed-desc">Scheduled backup completed</div>
+        </div>
+        <span class="feed-time">14:30:00</span>
+      </div>
+      <div class="feed-item">
+        <span class="feed-dot green"></span>
+        <div class="feed-content">
+          <div class="feed-title-text">Bãi xe — Xe vào</div>
+          <div class="feed-desc">51A-123.45 · Slot B1-042</div>
+        </div>
+        <span class="feed-time">14:29:33</span>
+      </div>
+      <div class="feed-item">
+        <span class="feed-dot amber"></span>
+        <div class="feed-content">
+          <div class="feed-title-text">Chấm công trễ</div>
+          <div class="feed-desc">Hoàng Văn G · +15 phút</div>
+        </div>
+        <span class="feed-time">14:29:10</span>
+      </div>
+      <div class="feed-item">
+        <span class="feed-dot green"></span>
+        <div class="feed-content">
+          <div class="feed-title-text">Cửa 1 — Truy cập OK</div>
+          <div class="feed-desc">Trần Minh H · Card #3192</div>
+        </div>
+        <span class="feed-time">14:28:45</span>
+      </div>
+      <div class="feed-item">
+        <span class="feed-dot green"></span>
+        <div class="feed-content">
+          <div class="feed-title-text">Cổng 2 — Xe ra</div>
+          <div class="feed-desc">30A-567.89 · Duration: 2h15</div>
+        </div>
+        <span class="feed-time">14:28:20</span>
+      </div>
+      <div class="feed-item">
+        <span class="feed-dot blue"></span>
+        <div class="feed-content">
+          <div class="feed-title-text">Tuần tra — CP-4 ✓</div>
+          <div class="feed-desc">Trần Văn B · On schedule</div>
+        </div>
+        <span class="feed-time">14:27:50</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Status Bar -->
+<div class="status-bar">
+  <div class="status-item"><span class="status-dot green"></span> 42/44 Cửa</div>
+  <div class="status-item"><span class="status-dot green"></span> 16/16 Camera</div>
+  <div class="status-item"><span class="status-dot red"></span> 1 Cảnh báo</div>
+  <div class="status-item">👮 3 Ca trực</div>
+  <div class="status-mode">☀ Day Mode</div>
+  <div class="status-spacer"></div>
+  <div class="vol-bar">
+    🔊
+    <span class="vol-seg on"></span>
+    <span class="vol-seg on"></span>
+    <span class="vol-seg on"></span>
+    <span class="vol-seg off"></span>
+    <span class="vol-seg off"></span>
+  </div>
+  <span class="status-clock">14:32:07</span>
+</div>
+
+</body>
+</html>

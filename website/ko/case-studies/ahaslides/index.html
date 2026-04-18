@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <title>AhaSlides 회사 — 사례 연구 | Duall Master</title>
+  <meta name="description" content="빠르게 성장하는 테크 스타트업을 위한 자동화된 근태 관리 및 출입 통제.">
+  <link rel="canonical" href="https://duallmaster.com/ko/case-studies/ahaslides/">
+  <link rel="alternate" hreflang="en" href="https://duallmaster.com/en/case-studies/ahaslides/">
+  <link rel="alternate" hreflang="ko" href="https://duallmaster.com/ko/case-studies/ahaslides/">
+  <link rel="alternate" hreflang="vi" href="https://duallmaster.com/vi/case-studies/ahaslides/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="AhaSlides 회사 — 사례 연구 | Duall Master">
+  <meta property="og:description" content="빠르게 성장하는 테크 스타트업을 위한 자동화된 근태 관리 및 출입 통제.">
+  <meta property="og:url" content="https://duallmaster.com/ko/case-studies/ahaslides/">
+  <meta property="og:image" content="https://duallmaster.com/images/og-default.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="AhaSlides 회사 — 사례 연구 | Duall Master">
+  <meta name="twitter:description" content="빠르게 성장하는 테크 스타트업을 위한 자동화된 근태 관리 및 출입 통제.">
+  <link rel="stylesheet" href="../../../css/style.css">
+  <link rel="stylesheet" href="../../../css/enhancements.css">
+  <style>
+    .icon, [data-lucide] { width: 24px; height: 24px; display: inline-block; vertical-align: middle; stroke-width: 1.5; }
+    .icon-lg, .icon-lg[data-lucide] { width: 32px; height: 32px; }
+    .icon-xl, .icon-xl[data-lucide] { width: 48px; height: 48px; }
+  </style>
+<!-- Replace GTM-XXXXXXX with your actual GTM container ID -->
+<!-- Google Tag Manager (loaded conditionally via cookie-consent.js) -->
+<script>window.dataLayer = window.dataLayer || [];</script>
+  <!-- TODO: Generate og:image from the AI Vision Shield logo (favicon.svg) -->
+</head>
+<body>
+<!-- Google Tag Manager (noscript) - Replace GTM-XXXXXXX with your actual GTM container ID -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-XXXXXXX" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+<style>
+  .cs-hero { padding: 8rem 1.5rem 4rem; text-align: center; position: relative; overflow: hidden; }
+  .cs-hero::before { content: ''; position: absolute; inset: 0; opacity: 0.15; z-index: 0; }
+  .cs-hero > * { position: relative; z-index: 1; }
+  .cs-hero .category-tag { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+  .cs-hero h1 { font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .cs-hero .year-tag { color: var(--text-tertiary); font-size: 0.875rem; }
+
+  .cs-content { max-width: 900px; margin: 0 auto; padding: 0 1.5rem; }
+  .cs-section { padding: 3rem 0; border-bottom: 1px solid var(--border-default); }
+  .cs-section:last-child { border-bottom: none; }
+  .cs-section h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; color: var(--text-primary); }
+  .cs-section p { color: var(--text-secondary); line-height: 1.8; font-size: 1rem; }
+
+  .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.5rem; margin-top: 1.5rem; }
+  .result-card { background: var(--surface-1); border: 1px solid var(--border-default); border-radius: 12px; padding: 1.5rem; text-align: center; }
+  .result-card .number { font-size: 2rem; font-weight: 700; margin-bottom: 0.25rem; }
+  .result-card .label { color: var(--text-secondary); font-size: 0.8125rem; }
+
+  .tech-tags { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+  .tech-tag { background: var(--surface-1); border: 1px solid var(--border-strong); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.875rem; color: var(--text-primary); font-weight: 500; }
+
+  .cs-quote { background: var(--surface-1); border-left: 4px solid var(--accent); border-radius: 0 12px 12px 0; padding: 2rem; margin-top: 1.5rem; }
+  .cs-quote p { font-style: italic; font-size: 1.125rem; color: var(--text-primary); line-height: 1.7; margin-bottom: 1rem; }
+  .cs-quote cite { color: var(--text-tertiary); font-size: 0.875rem; }
+
+  .related-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 1.5rem; }
+  .related-card { background: var(--surface-1); border: 1px solid var(--border-default); border-radius: 12px; overflow: hidden; text-decoration: none; transition: border-color 0.2s, transform 0.2s; }
+  .related-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .related-card-img { height: 120px; }
+  .related-card-body { padding: 1rem; }
+  .related-card-body h4 { color: var(--text-primary); font-size: 0.9375rem; margin-bottom: 0.25rem; }
+  .related-card-body span { color: var(--text-tertiary); font-size: 0.75rem; }
+
+  /* Index page styles */
+  .cs-index-hero { padding: 8rem 1.5rem 3rem; text-align: center; }
+  .cs-index-hero h1 { font-size: 2.5rem; font-weight: 700; margin-bottom: 0.75rem; }
+  .cs-index-hero p { color: var(--text-secondary); max-width: 600px; margin: 0 auto; }
+
+  .filter-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; padding: 1rem 1.5rem 2rem; max-width: 900px; margin: 0 auto; }
+  .filter-tab { padding: 0.5rem 1rem; border-radius: 999px; border: 1px solid var(--border-strong); background: transparent; color: var(--text-secondary); font-size: 0.8125rem; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+  .filter-tab:hover, .filter-tab.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+  .cs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.5rem; max-width: 1280px; margin: 0 auto; padding: 0 1.5rem 4rem; }
+  .cs-card { background: var(--surface-1); border: 1px solid var(--border-default); border-radius: 12px; overflow: hidden; text-decoration: none; transition: border-color 0.2s, transform 0.2s; display: block; }
+  .cs-card:hover { border-color: var(--accent); transform: translateY(-4px); }
+  .cs-card-img { height: 180px; position: relative; }
+  .cs-card-img .category-tag { position: absolute; top: 1rem; left: 1rem; padding: 0.25rem 0.65rem; border-radius: 6px; font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .cs-card-body { padding: 1.25rem; }
+  .cs-card-body h3 { color: var(--text-primary); font-size: 1.125rem; margin-bottom: 0.5rem; }
+  .cs-card-body p { color: var(--text-secondary); font-size: 0.875rem; line-height: 1.6; margin-bottom: 0.75rem; }
+  .cs-card-body .read-more { color: var(--accent); font-size: 0.8125rem; font-weight: 500; }
+
+  @media (max-width: 768px) {
+    .cs-hero h1, .cs-index-hero h1 { font-size: 1.75rem; }
+    .cs-grid { grid-template-columns: 1fr; }
+    .results-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+<!-- Navigation -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="/ko/" class="nav-logo" style="display:flex;align-items:center;gap:10px;text-decoration:none">
+  <svg width="36" height="40" viewBox="0 0 52 58" fill="none">
+    <path d="M26 2L4 12V28C4 42 14 52 26 56C38 52 48 42 48 28V12L26 2Z" stroke="#06B6D4" stroke-width="2" fill="none"/>
+    <path d="M10 28C10 28 18 18 26 18C34 18 42 28 42 28C42 28 34 38 26 38C18 38 10 28 10 28Z" stroke="#3B82F6" stroke-width="1.5" fill="none"/>
+    <circle cx="26" cy="28" r="6" stroke="#06B6D4" stroke-width="1.5" fill="none"/>
+    <circle cx="26" cy="28" r="3" fill="#06B6D4"/>
+    <line x1="26" y1="12" x2="26" y2="17" stroke="#06B6D4" stroke-width="1" opacity="0.4"/>
+    <line x1="26" y1="39" x2="26" y2="46" stroke="#06B6D4" stroke-width="1" opacity="0.4"/>
+    <circle cx="16" cy="14" r="1.5" fill="#3B82F6" opacity="0.5"/>
+    <circle cx="36" cy="14" r="1.5" fill="#3B82F6" opacity="0.5"/>
+    <circle cx="14" cy="42" r="1.5" fill="#8B5CF6" opacity="0.5"/>
+    <circle cx="38" cy="42" r="1.5" fill="#8B5CF6" opacity="0.5"/>
+  </svg>
+  <span style="font-family:'Space Grotesk',sans-serif;line-height:1">
+    <span style="font-weight:700;font-size:20px;letter-spacing:2px;color:#fff">DUALL</span><br>
+    <span style="font-weight:300;font-size:10px;letter-spacing:4px;color:#94A3B8">MASTER</span>
+  </span>
+</a>
+    <button class="nav-toggle" aria-label="Menu"><i data-lucide="menu" style="width:24px;height:24px"></i></button>
+    <ul class="nav-links">
+      <li class="nav-dropdown">
+        <a href="/ko/platform/">플랫폼 <i data-lucide="chevron-down" style="width:14px;height:14px;"></i></a>
+        <div class="nav-dropdown-menu">
+          <a href="/ko/platform/">개요</a>
+          <a href="/ko/platform/secure/">SECURE</a>
+          <a href="/ko/platform/manage/">MANAGE</a>
+          <a href="/ko/platform/operate/">OPERATE</a>
+          <a href="/ko/platform/smart/">SMART</a>
+        </div>
+      </li>
+      <li class="nav-dropdown">
+        <a href="#">솔루션 <i data-lucide="chevron-down" style="width:14px;height:14px;"></i></a>
+        <div class="nav-dropdown-menu">
+          <a href="/ko/solutions/office/">오피스 빌딩</a>
+          <a href="/ko/solutions/residential/">주거</a>
+          <a href="/ko/solutions/industrial/">산업</a>
+          <a href="/ko/solutions/government/">공공기관</a>
+          <a href="/ko/solutions/education/">교육</a>
+          <a href="/ko/solutions/healthcare/">의료</a>
+        </div>
+      </li>
+      <li><a href="/ko/case-studies/">사례 연구</a></li>
+      <li><a href="/ko/pricing/">가격</a></li>
+      <li><a href="/ko/about/">소개</a></li>
+      <li><a href="/ko/contact/">연락처</a></li>
+      <li><a href="/ko/contact/" class="nav-cta">데모 요청</a></li>
+<li class="nav-dropdown lang-switcher"><a href="#" class="lang-toggle">🌐 <i data-lucide="chevron-down" style="width:14px;height:14px;"></i></a><div class="nav-dropdown-menu"><a href="/en/">🇺🇸 English</a><a href="/ko/">🇰🇷 한국어</a><a href="/vi/">🇻🇳 Tiếng Việt</a></div></li>
+    </ul>
+  </div>
+</nav>
+
+<section class="cs-hero" style="--hero-color: #8B5CF6">
+  <div style="position:absolute;inset:0;background:linear-gradient(135deg, #4c1d95 0%, #8B5CF6 100%);opacity:0.1;z-index:0;"></div>
+  <span class="category-tag" style="background: rgba(139,92,246,0.2); color: #8B5CF6">오피스 빌딩</span>
+  <h1>AhaSlides 회사</h1>
+  <span class="year-tag">연도: 2022</span>
+</section>
+
+<main class="cs-content">
+  <div style="padding: 1.5rem 0;">
+    <a href="/ko/case-studies/" style="color: var(--accent); text-decoration: none; font-size: 0.875rem;">← 사례 연구로 돌아가기</a>
+  </div>
+
+  
+  <section class="cs-section">
+    <div style="display:flex;justify-content:center;align-items:center;padding:2rem;margin:1rem 0;">
+      <img src="/images/case-studies/ahaslides.jpg" alt="AhaSlides company logo" loading="lazy" style="max-width:200px;max-height:120px;object-fit:contain;">
+    </div>
+  </section>
+
+<section class="cs-section">
+    <h2><i data-lucide="alert-triangle" style="width:24px;height:24px;color:#8B5CF6;margin-right:8px;vertical-align:-4px;"></i>도전 과제</h2>
+    <p>AhaSlides는 10명 미만에서 빠르게 성장한 테크 스타트업으로, 종이 문서를 이용한 수동 근태 관리에 어려움을 겪고 있었습니다. 직원 출석에 대한 실시간 가시성이 없었고, 보안이 최소한이었으며, 수동 프로세스의 행정 부담이 팀 확장에 따라 운영을 저해하고 있었습니다.</p>
+  </section>
+
+  <section class="cs-section">
+    <h2><i data-lucide="lightbulb" style="width:24px;height:24px;color:#8B5CF6;margin-right:8px;vertical-align:-4px;"></i>우리의 솔루션</h2>
+    <p>Duall Master는 통합 근태 관리 및 출입 통제 솔루션을 제공했습니다. 온라인 인증을 통한 체크인/체크아웃 자동화, 관리자에게 실시간 상태 업데이트, 휴가 신청 및 일정 확인을 위한 직원 셀프서비스를 제공합니다.</p>
+  </section>
+
+  <section class="cs-section">
+    <h2><i data-lucide="bar-chart-3" style="width:24px;height:24px;color:#8B5CF6;margin-right:8px;vertical-align:-4px;"></i>주요 성과</h2>
+    <div class="results-grid">
+        <div class="result-card fade-up">
+          <div class="number" style="color: #8B5CF6">70%</div>
+          <div class="label">근태 관리 시간 절감</div>
+        </div>
+        <div class="result-card fade-up">
+          <div class="number" style="color: #8B5CF6">100%</div>
+          <div class="label">실시간 직원 출석 가시성</div>
+        </div>
+        <div class="result-card fade-up">
+          <div class="number" style="color: #8B5CF6">3x</div>
+          <div class="label">신입사원 온보딩 가속</div>
+        </div>
+        <div class="result-card fade-up">
+          <div class="number" style="color: #8B5CF6">95%</div>
+          <div class="label">셀프서비스 직원 만족도</div>
+        </div>
+    </div>
+  </section>
+
+  <section class="cs-section">
+    <h2><i data-lucide="cpu" style="width:24px;height:24px;color:#8B5CF6;margin-right:8px;vertical-align:-4px;"></i>사용 기술</h2>
+    <div class="tech-tags">
+        <span class="tech-tag">DUALL Attendance</span>
+        <span class="tech-tag">DUALL Access</span>
+    </div>
+  </section>
+
+  <section class="cs-section">
+    <h2><i data-lucide="quote" style="width:24px;height:24px;color:#8B5CF6;margin-right:8px;vertical-align:-4px;"></i>고객의 말씀</h2>
+    <div class="cs-quote">
+      <p>"10명에서 50명 이상으로 성장하면서 Duall Master는 우리와 함께 원활하게 확장되었습니다. 수작업으로 몇 시간 걸리던 일이 이제 자동으로 처리됩니다."</p>
+      <cite>— 운영 매니저, AhaSlides</cite>
+    </div>
+  </section>
+
+  <section class="cs-section">
+    <h2>관련 프로젝트</h2>
+    <div class="related-grid">
+      <a href="/ko/case-studies/vietnam-military-medical-university/" class="related-card fade-up">
+        <div class="related-card-img" style="background: linear-gradient(rgba(30,58,95,0.5), rgba(59,130,246,0.5)), url('/images/case-studies/military-medical-2.jpg'); background-size:cover; background-position:center;"></div>
+        <div class="related-card-body">
+          <h4>베트남 군사의과대학교</h4>
+          <span>공공기관</span>
+        </div>
+      </a>
+      <a href="/ko/case-studies/childrens-hospital-1/" class="related-card fade-up">
+        <div class="related-card-img" style="background: linear-gradient(rgba(20,83,45,0.5), rgba(34,197,94,0.5)), url('/images/case-studies/childrens-hospital.png'); background-size:cover; background-position:center;"></div>
+        <div class="related-card-body">
+          <h4>제1아동병원</h4>
+          <span>병원</span>
+        </div>
+      </a>
+      <a href="/ko/case-studies/sti-softorb-indonesia/" class="related-card fade-up">
+        <div class="related-card-img" style="background: linear-gradient(rgba(120,53,15,0.6), rgba(245,158,11,0.6)), url('/images/case-studies/sti-softorb.jpg'); background-size:contain; background-repeat:no-repeat; background-position:center;"></div>
+        <div class="related-card-body">
+          <h4>STI Softorb 인도네시아 사무실</h4>
+          <span>오피스 빌딩</span>
+        </div>
+      </a>
+    </div>
+  </section>
+</main>
+
+<!-- CTA -->
+<section class="cta-section">
+  <h2 class="fade-up">프로젝트 시작하기</h2>
+  <p class="fade-up">Duall Master가 빌딩 보안 및 관리 과제를 어떻게 해결하는지 확인하세요.</p>
+  <div class="btn-group fade-up">
+    <a href="/ko/contact/" class="btn btn-primary">데모 요청</a>
+    <a href="/ko/contact/" class="btn btn-secondary">연락처</a>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <a href="/ko/" class="nav-logo" style="display:flex;align-items:center;gap:8px;text-decoration:none">
+  <svg width="28" height="32" viewBox="0 0 52 58" fill="none">
+    <path d="M26 2L4 12V28C4 42 14 52 26 56C38 52 48 42 48 28V12L26 2Z" stroke="#06B6D4" stroke-width="2" fill="none"/>
+    <path d="M10 28C10 28 18 18 26 18C34 18 42 28 42 28C42 28 34 38 26 38C18 38 10 28 10 28Z" stroke="#3B82F6" stroke-width="1.5" fill="none"/>
+    <circle cx="26" cy="28" r="6" stroke="#06B6D4" stroke-width="1.5" fill="none"/>
+    <circle cx="26" cy="28" r="3" fill="#06B6D4"/>
+  </svg>
+  <span style="font-family:'Space Grotesk',sans-serif;line-height:1">
+    <span style="font-weight:700;font-size:16px;letter-spacing:2px;color:#fff">DUALL</span><br>
+    <span style="font-weight:300;font-size:8px;letter-spacing:4px;color:#94A3B8">MASTER</span>
+  </span>
+</a>
+      <p>빌딩 보안 및 시설 관리를 위한 통합 플랫폼. 빌딩의 모든 것을 연결, 모니터링, 자동화하는 하나의 플랫폼.</p>
+    </div>
+    <div class="footer-col">
+      <h4>플랫폼</h4>
+      <ul>
+        <li><a href="/ko/platform/">개요</a></li>
+        <li><a href="/ko/platform/secure/">SECURE</a></li>
+        <li><a href="/ko/platform/manage/">MANAGE</a></li>
+        <li><a href="/ko/platform/operate/">OPERATE</a></li>
+        <li><a href="/ko/platform/smart/">SMART</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>솔루션</h4>
+      <ul>
+        <li><a href="/ko/solutions/office/">오피스 빌딩</a></li>
+        <li><a href="/ko/solutions/residential/">주거</a></li>
+        <li><a href="/ko/solutions/industrial/">산업</a></li>
+        <li><a href="/ko/solutions/government/">공공기관</a></li>
+        <li><a href="/ko/solutions/education/">교육</a></li>
+        <li><a href="/ko/solutions/healthcare/">의료</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>회사</h4>
+      <ul>
+        <li><a href="/ko/case-studies/">사례 연구</a></li>
+        <li><a href="/ko/about/">소개</a></li>
+        <li><a href="/ko/pricing/">가격</a></li>
+        <li><a href="/ko/contact/">연락처</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>최신 소식</h4>
+      <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.75rem;">제품 업데이트와 빌딩 기술 인사이트를 받으세요.</p>
+      <div style="display:flex;gap:0.5rem;">
+        <input type="email" placeholder="you@company.com" style="flex:1;padding:0.5rem 0.75rem;background:var(--bg-primary);border:1px solid var(--border-strong);border-radius:6px;color:var(--text-primary);font-size:0.8125rem;">
+        <button class="btn btn-primary" style="padding:0.5rem 1rem;font-size:0.8125rem;">구독</button>
+      </div>
+      <div class="footer-social" style="margin-top:1rem;display:flex;gap:0.75rem;">
+        <a href="#" style="color:var(--text-tertiary);transition:color 0.15s;" aria-label="LinkedIn"><i data-lucide="linkedin" style="width:20px;height:20px"></i></a>
+        <a href="#" style="color:var(--text-tertiary);transition:color 0.15s;" aria-label="Twitter"><i data-lucide="twitter" style="width:20px;height:20px"></i></a>
+        <a href="#" style="color:var(--text-tertiary);transition:color 0.15s;" aria-label="YouTube"><i data-lucide="youtube" style="width:20px;height:20px"></i></a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 Duali Vietnam. All rights reserved.</span>
+    <span>hello@duallmaster.com</span>
+  </div>
+</footer>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="../../../js/main.js"></script>
+<script>lucide.createIcons();</script>
+<script>localStorage.setItem("dm3-lang","/ko/");</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://duallmaster.com/ko/"},{"@type":"ListItem","position":2,"name":"사례 연구","item":"https://duallmaster.com/ko/case-studies/"},{"@type":"ListItem","position":3,"name":"AhaSlides 회사","item":"https://duallmaster.com/ko/case-studies/ahaslides/"}]}</script>
+<script src="../../../js/cookie-consent.js"></script>
+<script src="../../../js/analytics.js"></script>
+</body>
+</html>

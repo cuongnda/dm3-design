@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DM3 — Entity Relationship Diagram</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0B1120; font-family: 'Inter', -apple-system, sans-serif; color: #E2E8F0; padding: 40px; min-height: 100vh; }
+  h1 { font-size: 28px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: #64748B; font-size: 14px; margin-bottom: 32px; }
+  
+  .er-canvas { 
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 24px;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+  
+  .domain-group {
+    border: 1px solid;
+    border-radius: 12px;
+    padding: 20px;
+    background: rgba(255,255,255,0.02);
+  }
+  .domain-group.secure { border-color: #3B82F633; }
+  .domain-group.manage { border-color: #8B5CF633; }
+  .domain-group.operate { border-color: #F59E0B33; }
+  .domain-group.smart { border-color: #06B6D433; }
+  .domain-group.platform { border-color: #6B728033; }
+  
+  .domain-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+  }
+  .domain-tag.secure { background: #3B82F620; color: #3B82F6; }
+  .domain-tag.manage { background: #8B5CF620; color: #8B5CF6; }
+  .domain-tag.operate { background: #F59E0B20; color: #F59E0B; }
+  .domain-tag.smart { background: #06B6D420; color: #06B6D4; }
+  .domain-tag.platform { background: #6B728020; color: #6B7280; }
+  
+  .entity {
+    background: #131B2E;
+    border: 1px solid #1E293B;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .entity:last-child { margin-bottom: 0; }
+  
+  .entity-name {
+    font-size: 14px;
+    font-weight: 700;
+    padding: 10px 14px;
+    border-bottom: 1px solid #1E293B;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .entity-name .badge {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .badge.hyper { background: #F59E0B20; color: #F59E0B; }
+  
+  .entity-fields {
+    padding: 10px 14px;
+    font-size: 12px;
+    line-height: 1.8;
+  }
+  .field { display: flex; gap: 8px; }
+  .field-icon { width: 16px; text-align: center; flex-shrink: 0; }
+  .field-name { color: #CBD5E1; font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+  .field-type { color: #64748B; margin-left: auto; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 11px; }
+  .field.pk .field-name { color: #FBBF24; }
+  .field.fk .field-name { color: #60A5FA; }
+  
+  .relations {
+    margin-top: 32px;
+    max-width: 1600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .relations h2 { font-size: 18px; margin-bottom: 16px; }
+  .rel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 12px;
+  }
+  .rel {
+    background: #131B2E;
+    border: 1px solid #1E293B;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .rel-from, .rel-to {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 12px;
+  }
+  .rel-arrow { color: #64748B; font-size: 16px; }
+  .rel-card { color: #94A3B8; font-size: 11px; }
+  
+  .legend {
+    margin-top: 32px;
+    max-width: 1600px;
+    margin-left: auto;
+    margin-right: auto;
+    display: flex;
+    gap: 32px;
+    padding: 16px 20px;
+    background: #131B2E;
+    border-radius: 8px;
+    border: 1px solid #1E293B;
+    font-size: 12px;
+    flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+  
+  .full-width { grid-column: 1 / -1; }
+  .span-2 { grid-column: span 2; }
+</style>
+</head>
+<body>
+
+<h1>Duall Master 3.0 — Entity Relationship Diagram</h1>
+<p class="subtitle">5 Domains · Multi-tenant · TimescaleDB + PostgreSQL · Offline-first Architecture</p>
+
+<div class="er-canvas">
+
+  <!-- PLATFORM -->
+  <div class="domain-group platform">
+    <span class="domain-tag platform">PLATFORM</span>
+    
+    <div class="entity">
+      <div class="entity-name" style="color:#6B7280">companies <span style="font-size:10px;color:#94A3B8;font-weight:400">(= tenant)</span></div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK (= tenant_id)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">VARCHAR(255)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">code</span><span class="field-type">VARCHAR(50) UQ</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">plan</span><span class="field-type">starter | professional | enterprise</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">active | suspended | deactivated</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">logo_url / address / phone / email</span><span class="field-type">VARCHAR</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">max_devices / max_users</span><span class="field-type">INT</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">settings</span><span class="field-type">JSONB</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">created_at</span><span class="field-type">TIMESTAMPTZ</span></div>
+      </div>
+    </div>
+    
+    <div class="entity">
+      <div class="entity-name" style="color:#6B7280">users</div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">company_id</span><span class="field-type">→ companies (NULL for sysadmin)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">email</span><span class="field-type">VARCHAR UQ</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">password_hash</span><span class="field-type">VARCHAR (bcrypt)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">VARCHAR(255)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">role</span><span class="field-type">system_admin | primary_manager | manager | operator | viewer</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">active | inactive | locked</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">last_login</span><span class="field-type">TIMESTAMPTZ</span></div>
+      </div>
+    </div>
+    
+    <div class="entity">
+      <div class="entity-name" style="color:#6B7280">sites</div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">tenant_id</span><span class="field-type">→ tenants</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">VARCHAR(255)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">address</span><span class="field-type">TEXT</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">timezone</span><span class="field-type">VARCHAR(50)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">geo_lat / geo_lng</span><span class="field-type">DECIMAL</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">ENUM</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECURE — Devices + Access -->
+  <div class="domain-group secure">
+    <span class="domain-tag secure">SECURE</span>
+    
+    <div class="entity">
+      <div class="entity-name" style="color:#3B82F6">devices</div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">tenant_id</span><span class="field-type">→ tenants</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">device_id</span><span class="field-type">VARCHAR(20) UQ</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">VARCHAR(255)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">type</span><span class="field-type">terminal | controller | sensor | camera</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">online | offline | error</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">firmware_version</span><span class="field-type">VARCHAR</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">site_id</span><span class="field-type">→ sites</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">location</span><span class="field-type">VARCHAR</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">last_seen</span><span class="field-type">TIMESTAMPTZ</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">config</span><span class="field-type">JSONB</span></div>
+      </div>
+    </div>
+    
+    <div class="entity">
+      <div class="entity-name" style="color:#3B82F6">doors</div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">tenant_id</span><span class="field-type">→ tenants</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">site_id</span><span class="field-type">→ sites</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">zone_id</span><span class="field-type">→ zones</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">VARCHAR(255)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">type</span><span class="field-type">ENUM</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">device_id</span><span class="field-type">→ devices</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">status / state / mode</span><span class="field-type">ENUM</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">unlock_duration_ms</span><span class="field-type">INT</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">anti_passback</span><span class="field-type">BOOLEAN</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">emergency_unlock</span><span class="field-type">BOOLEAN</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">camera_id</span><span class="field-type">→ devices</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">*_version</span><span class="field-type">INT (config/person_db/rules)</span></div>
+      </div>
+    </div>
+
+    <div class="entity">
+      <div class="entity-name" style="color:#3B82F6">zones</div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">tenant_id / site_id</span><span class="field-type">→ tenants / sites</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">VARCHAR(255)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">type / floor / building</span><span class="field-type">VARCHAR</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">max_occupancy</span><span class="field-type">INT</span></div>
+      </div>
+    </div>
+
+    <div class="entity">
+      <div class="entity-name" style="color:#3B82F6">access_rules</div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">tenant_id</span><span class="field-type">→ tenants</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">VARCHAR(255)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">door_ids</span><span class="field-type">UUID[]</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">person_group_ids</span><span class="field-type">UUID[]</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">schedule_id</span><span class="field-type">→ schedules</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">priority</span><span class="field-type">INT</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">enabled / multi_factor</span><span class="field-type">BOOLEAN</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">valid_from / valid_until</span><span class="field-type">TIMESTAMPTZ</span></div>
+      </div>
+    </div>
+
+    <div class="entity">
+      <div class="entity-name" style="color:#3B82F6">schedules</div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">tenant_id</span><span class="field-type">→ tenants</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">name / timezone</span><span class="field-type">VARCHAR</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">blocks</span><span class="field-type">JSONB</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">holidays</span><span class="field-type">JSONB</span></div>
+      </div>
+    </div>
+    
+    <div class="entity">
+      <div class="entity-name" style="color:#3B82F6">access_events <span class="badge hyper">⏱ HYPERTABLE</span></div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">tenant_id + time + id</span><span class="field-type">COMPOSITE PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">door_id / device_id</span><span class="field-type">→ doors / devices</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">person_id</span><span class="field-type">→ persons</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">credential_type</span><span class="field-type">face | card | pin | qr</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">direction</span><span class="field-type">in | out</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">decision</span><span class="field-type">granted | denied</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">reason</span><span class="field-type">VARCHAR</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">metadata</span><span class="field-type">JSONB</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MANAGE — Identity -->
+  <div class="domain-group manage">
+    <span class="domain-tag manage">MANAGE</span>
+    
+    <div class="entity">
+      <div class="entity-name" style="color:#8B5CF6">persons</div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">tenant_id</span><span class="field-type">→ tenants</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">first_name / last_name</span><span class="field-type">VARCHAR(255)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">email</span><span class="field-type">VARCHAR(255)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">phone</span><span class="field-type">VARCHAR(50)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">department / role</span><span class="field-type">VARCHAR</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">employee_id</span><span class="field-type">VARCHAR(50)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">active | inactive | suspended</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">photo_url</span><span class="field-type">VARCHAR(500)</span></div>
+      </div>
+    </div>
+    
+    <div class="entity">
+      <div class="entity-name" style="color:#8B5CF6">credentials</div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">person_id</span><span class="field-type">→ persons</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">type</span><span class="field-type">face | card | pin | qr | fingerprint</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">value</span><span class="field-type">TEXT (encrypted)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">ENUM</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">valid_from / valid_until</span><span class="field-type">TIMESTAMPTZ</span></div>
+      </div>
+    </div>
+    
+    <div class="entity">
+      <div class="entity-name" style="color:#8B5CF6">person_groups</div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">tenant_id</span><span class="field-type">→ tenants</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">VARCHAR(255)</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">type</span><span class="field-type">employee | visitor | contractor</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">person_ids</span><span class="field-type">UUID[]</span></div>
+      </div>
+    </div>
+    
+    <div class="entity">
+      <div class="entity-name" style="color:#8B5CF6">visitors</div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">person_id</span><span class="field-type">→ persons</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">host_person_id</span><span class="field-type">→ persons</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">purpose</span><span class="field-type">VARCHAR</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">expected_arrival</span><span class="field-type">TIMESTAMPTZ</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">checked_in/out_at</span><span class="field-type">TIMESTAMPTZ</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">status / badge_number</span><span class="field-type">VARCHAR</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPERATE -->
+  <div class="domain-group operate">
+    <span class="domain-tag operate">OPERATE</span>
+    
+    <div class="entity">
+      <div class="entity-name" style="color:#F59E0B">guard_tours</div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">tenant_id</span><span class="field-type">→ tenants</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">VARCHAR</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">schedule_id</span><span class="field-type">→ schedules</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">checkpoints</span><span class="field-type">JSONB</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">assigned_guard</span><span class="field-type">→ persons</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">ENUM</span></div>
+      </div>
+    </div>
+    
+    <div class="entity">
+      <div class="entity-name" style="color:#F59E0B">parking_sessions</div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">person_id</span><span class="field-type">→ persons</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">plate_number</span><span class="field-type">VARCHAR</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">entry_time / exit_time</span><span class="field-type">TIMESTAMPTZ</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">zone / status</span><span class="field-type">VARCHAR</span></div>
+      </div>
+    </div>
+
+    <div class="entity">
+      <div class="entity-name" style="color:#F59E0B">room_bookings</div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">room_id / person_id</span><span class="field-type">→ zones / persons</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">start_time / end_time</span><span class="field-type">TIMESTAMPTZ</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">title / status</span><span class="field-type">VARCHAR</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SMART -->
+  <div class="domain-group smart">
+    <span class="domain-tag smart">SMART</span>
+    
+    <div class="entity">
+      <div class="entity-name" style="color:#06B6D4">automation_rules</div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">id</span><span class="field-type">UUID PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">tenant_id</span><span class="field-type">→ tenants</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">VARCHAR</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">trigger_type</span><span class="field-type">event | schedule | threshold</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">trigger_config</span><span class="field-type">JSONB</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">conditions / actions</span><span class="field-type">JSONB</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">enabled</span><span class="field-type">BOOLEAN</span></div>
+      </div>
+    </div>
+    
+    <div class="entity">
+      <div class="entity-name" style="color:#06B6D4">ai_detections <span class="badge hyper">⏱ HYPERTABLE</span></div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">tenant_id + time + id</span><span class="field-type">COMPOSITE PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">camera_id</span><span class="field-type">→ devices</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">type</span><span class="field-type">face | plate | object | anomaly</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">confidence</span><span class="field-type">FLOAT</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">bbox / result</span><span class="field-type">JSONB</span></div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- AUDIT -->
+  <div class="domain-group platform">
+    <span class="domain-tag platform">AUDIT</span>
+    
+    <div class="entity">
+      <div class="entity-name" style="color:#6B7280">audit_log <span class="badge hyper">⏱ HYPERTABLE</span></div>
+      <div class="entity-fields">
+        <div class="field pk"><span class="field-icon">🔑</span><span class="field-name">tenant_id + time + id</span><span class="field-type">COMPOSITE PK</span></div>
+        <div class="field fk"><span class="field-icon">🔗</span><span class="field-name">user_id</span><span class="field-type">→ users</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">action</span><span class="field-type">VARCHAR</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">resource_type / resource_id</span><span class="field-type">VARCHAR / UUID</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">changes</span><span class="field-type">JSONB</span></div>
+        <div class="field"><span class="field-icon"></span><span class="field-name">ip_address</span><span class="field-type">INET</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Relationships -->
+<div class="relations">
+  <h2>Key Relationships</h2>
+  <div class="rel-grid">
+    <div class="rel"><span class="rel-from" style="color:#6B7280">companies</span><span class="rel-arrow">──1:N──▶</span><span class="rel-to" style="color:#6B7280">users, sites, devices, doors, persons, ...</span><span class="rel-card">Every entity scoped by company (tenant_id = company.id)</span></div>
+    <div class="rel"><span class="rel-from" style="color:#3B82F6">devices</span><span class="rel-arrow">──1:1──▶</span><span class="rel-to" style="color:#3B82F6">doors</span><span class="rel-card">Terminal controls a door</span></div>
+    <div class="rel"><span class="rel-from" style="color:#3B82F6">doors</span><span class="rel-arrow">──1:N──▶</span><span class="rel-to" style="color:#F59E0B">access_events</span><span class="rel-card">Events logged per door</span></div>
+    <div class="rel"><span class="rel-from" style="color:#8B5CF6">persons</span><span class="rel-arrow">──1:N──▶</span><span class="rel-to" style="color:#8B5CF6">credentials</span><span class="rel-card">Face, card, PIN, QR, fingerprint</span></div>
+    <div class="rel"><span class="rel-from" style="color:#8B5CF6">persons</span><span class="rel-arrow">──1:N──▶</span><span class="rel-to" style="color:#F59E0B">access_events</span><span class="rel-card">Who accessed what</span></div>
+    <div class="rel"><span class="rel-from" style="color:#3B82F6">access_rules</span><span class="rel-arrow">──N:1──▶</span><span class="rel-to" style="color:#3B82F6">schedules</span><span class="rel-card">Time-based access control</span></div>
+    <div class="rel"><span class="rel-from" style="color:#3B82F6">access_rules</span><span class="rel-arrow">──N:M──▶</span><span class="rel-to" style="color:#3B82F6">doors</span><span class="rel-card">Rules apply to multiple doors (UUID[])</span></div>
+    <div class="rel"><span class="rel-from" style="color:#3B82F6">access_rules</span><span class="rel-arrow">──N:M──▶</span><span class="rel-to" style="color:#8B5CF6">person_groups</span><span class="rel-card">Rules grant access to groups (UUID[])</span></div>
+    <div class="rel"><span class="rel-from" style="color:#3B82F6">zones</span><span class="rel-arrow">──1:N──▶</span><span class="rel-to" style="color:#3B82F6">doors</span><span class="rel-card">Doors grouped by zone/floor</span></div>
+    <div class="rel"><span class="rel-from" style="color:#06B6D4">ai_detections</span><span class="rel-arrow">──N:1──▶</span><span class="rel-to" style="color:#3B82F6">devices</span><span class="rel-card">Camera produces AI detections</span></div>
+  </div>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#FBBF24"></div> 🔑 Primary Key</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#60A5FA"></div> 🔗 Foreign Key</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#F59E0B"></div> ⏱ TimescaleDB Hypertable</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3B82F6"></div> SECURE</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#8B5CF6"></div> MANAGE</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#F59E0B"></div> OPERATE</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#06B6D4"></div> SMART</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#6B7280"></div> PLATFORM</div>
+</div>
+
+</body>
+</html>

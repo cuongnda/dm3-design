@@ -1,0 +1,86 @@
+package cctv
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"net/url"
+	"strings"
+	"time"
+)
+
+// ValidateRTSPURL validates a user-supplied RTSP URL for SSRF safety.
+//
+// Rules:
+//   - Must be parseable by net/url.
+//   - Scheme must be "rtsp" or "rtsps".
+//   - Must NOT embed userinfo (credentials belong in dedicated fields).
+//   - Must have a non-empty host.
+//   - Hostname (or literal IP) must resolve to ONLY public, routable IPs.
+//     Rejects loopback, link-local, private, and unspecified addresses.
+//
+// Returns a descriptive error that includes the rejection category, with
+// no sensitive data echoed back.
+func ValidateRTSPURL(rawURL string) error {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return fmt.Errorf("invalid rtsp url: %w", err)
+	}
+
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "rtsp" && scheme != "rtsps" {
+		return fmt.Errorf("invalid rtsp url: scheme must be rtsp or rtsps (got %q)", u.Scheme)
+	}
+
+	if u.User != nil {
+		return fmt.Errorf("invalid rtsp url: credentials must not be embedded in the URL; use the dedicated username and password fields")
+	}
+
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("invalid rtsp url: host is required")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	var ips []net.IP
+	if literal := net.ParseIP(host); literal != nil {
+		ips = []net.IP{literal}
+	} else {
+		addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+		if err != nil {
+			return fmt.Errorf("invalid rtsp url: cannot resolve host %q: %w", host, err)
+		}
+		if len(addrs) == 0 {
+			return fmt.Errorf("invalid rtsp url: host %q resolved to no addresses", host)
+		}
+		for _, a := range addrs {
+			ips = append(ips, a.IP)
+		}
+	}
+
+	for _, ip := range ips {
+		if reason := disallowedIPReason(ip); reason != "" {
+			return fmt.Errorf("invalid rtsp url: host resolves to %s address (%s) which is not allowed", reason, ip.String())
+		}
+	}
+
+	return nil
+}
+
+// disallowedIPReason returns a non-empty category name when ip is not allowed.
+// Categories: "loopback", "link-local", "private", "unspecified".
+func disallowedIPReason(ip net.IP) string {
+	switch {
+	case ip.IsLoopback():
+		return "loopback"
+	case ip.IsLinkLocalUnicast():
+		return "link-local"
+	case ip.IsPrivate():
+		return "private"
+	case ip.IsUnspecified():
+		return "unspecified"
+	}
+	return ""
+}

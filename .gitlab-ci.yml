@@ -1,0 +1,113 @@
+stages:
+  - verify
+  - deploy
+
+# ── Shared bootstrap ──────────────────────────────────────────────────────────
+# Jobs that need .env use .setup_env as a script-level include. It generates
+# .env from GitLab CI/CD project variables and installs a trap to shred the
+# file at job exit so secrets don't linger in the shell-executor workspace.
+
+.setup_env: &setup_env |
+  trap 'rm -f .env' EXIT
+  bash scripts/write-ci-env.sh
+
+# Pre-flight container cleanup. Compose's own `down` only removes containers
+# owned by the current project, so orphans from a previous compose project
+# (different directory, different project name) keep their fixed
+# container_name values and block `up` with "name already in use". This
+# anchor force-removes anything matching the dm3-* prefix so a fresh `up`
+# always starts from a clean namespace.
+.compose_cleanup: &compose_cleanup |
+  echo "=== Removing stale dm3-* containers ==="
+  stale=$(docker ps -aq --filter "name=^dm3-" || true)
+  if [ -n "$stale" ]; then
+    docker rm -f $stale || true
+  fi
+
+verify:compose:
+  stage: verify
+  script:
+    - echo "=== Validating deploy compose config ==="
+    - *setup_env
+    - bash scripts/check-deploy-env.sh
+    - docker compose -f docker-compose.prod.yml config -q
+  only:
+    - develop
+    - /^v\d+\.\d+\.\d+$/
+
+verify:backend:
+  stage: verify
+  script:
+    - echo "=== Verifying backend build ==="
+    - docker build --target builder -f backend/Dockerfile -t dm3-backend-ci ./backend
+  only:
+    - develop
+    - /^v\d+\.\d+\.\d+$/
+
+verify:frontend:
+  stage: verify
+  script:
+    - echo "=== Verifying frontend build ==="
+    - docker build -f apps/console/Dockerfile -t dm3-console-ci .
+  only:
+    - develop
+    - /^v\d+\.\d+\.\d+$/
+
+# ── Deploy: Staging ───────────────────────────────────────────────────────────
+# Auto-deploys when develop branch is pushed.
+# Shell executor on demo.demasterpro.com — GitLab runner clones repo automatically.
+
+deploy:staging:
+  stage: deploy
+  needs:
+    - verify:compose
+    - verify:backend
+    - verify:frontend
+  environment:
+    name: staging
+    url: http://dm3.demasterpro.com
+  script:
+    - echo "=== Deploying DM3 to staging ==="
+    - *setup_env
+    - bash scripts/check-deploy-env.sh
+    - docker compose -f docker-compose.prod.yml --profile test down --timeout 30 || true
+    - *compose_cleanup
+    - docker compose -f docker-compose.prod.yml --profile test build --no-cache
+    - docker compose -f docker-compose.prod.yml up -d --remove-orphans
+    - sleep 15
+    - echo "=== Service status ==="
+    - docker compose -f docker-compose.prod.yml ps
+    # Ensure nginx is on the main proxy network (external network reconnect)
+    - docker network connect dmpw-net dm3-nginx 2>/dev/null || true
+    # Start automation after services are healthy
+    - echo "=== Starting automation tests ==="
+    - docker compose -f docker-compose.prod.yml --profile test up -d automation
+    - sleep 5
+    - docker compose -f docker-compose.prod.yml --profile test ps
+  only:
+    - develop
+
+# ── Deploy: Production ────────────────────────────────────────────────────────
+deploy:production:
+  stage: deploy
+  needs:
+    - verify:compose
+    - verify:backend
+    - verify:frontend
+  environment:
+    name: production
+    url: http://dm3.demasterpro.com
+  script:
+    - *setup_env
+    - bash scripts/check-deploy-env.sh
+    - docker compose -f docker-compose.prod.yml down --timeout 30 || true
+    - *compose_cleanup
+    - docker compose -f docker-compose.prod.yml build --no-cache
+    - docker compose -f docker-compose.prod.yml up -d --remove-orphans
+    - sleep 15
+    - docker compose -f docker-compose.prod.yml ps
+  only:
+    - /^v\d+\.\d+\.\d+$/
+  except:
+    - branches
+  when: manual

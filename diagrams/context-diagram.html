@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>C4 Context Diagram — Duall Master 3.0</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: Helvetica, Arial, sans-serif; background: #FAFBFC; padding: 30px; }
+.diagram { width: 1400px; margin: 0 auto; position: relative; }
+h1 { text-align: center; color: #1E293B; font-size: 22px; margin-bottom: 8px; }
+.subtitle { text-align: center; color: #64748B; font-size: 13px; margin-bottom: 30px; }
+.section { border: 2px dashed #CBD5E1; border-radius: 16px; padding: 20px; margin-bottom: 24px; position: relative; }
+.section-label { position: absolute; top: -12px; left: 24px; background: #FAFBFC; padding: 0 10px; font-weight: 700; font-size: 13px; color: #64748B; letter-spacing: 1px; }
+.row { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
+.box { border-radius: 12px; padding: 14px 18px; text-align: center; font-size: 13px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,.1); min-width: 140px; line-height: 1.4; }
+.ext { background: #E5E7EB; color: #374151; border: 2px solid #9CA3AF; }
+.main { background: linear-gradient(135deg, #3B82F6, #2563EB); color: #fff; border: 3px solid #1D4ED8; font-size: 22px; padding: 36px 60px; border-radius: 16px; box-shadow: 0 8px 30px rgba(59,130,246,.35); margin: 0 auto; display: inline-block; }
+.main small { font-size: 13px; font-weight: 400; display: block; margin-top: 4px; opacity: .85; }
+.user { background: #D1FAE5; color: #065F46; border: 2px solid #059669; }
+.user .icon { font-size: 28px; display: block; margin-bottom: 4px; }
+.device { background: #FED7AA; color: #7C2D12; border: 2px solid #EA580C; }
+.arrow-section { text-align: center; padding: 10px 0; color: #94A3B8; font-size: 20px; letter-spacing: 6px; }
+.arrow-label { font-size: 10px; color: #64748B; letter-spacing: 0; display: block; }
+.center { text-align: center; }
+.connector { display: flex; justify-content: center; gap: 60px; padding: 6px 0; }
+.connector span { color: #94A3B8; font-size: 18px; }
+</style></head><body>
+<div class="diagram">
+<h1>C4 Context Diagram — Duall Master 3.0</h1>
+<p class="subtitle">Level 1 · System Context · External actors and integrations</p>
+
+<div class="section">
+  <span class="section-label">EXTERNAL SYSTEMS</span>
+  <div class="row">
+    <div class="box ext">HR / ERP<br>Systems</div>
+    <div class="box ext">Active Directory<br>/ LDAP</div>
+    <div class="box ext">Calendar<br>(Outlook / Google)</div>
+    <div class="box ext">Payment<br>Gateway</div>
+    <div class="box ext">Messaging<br>(Telegram / Zalo / SMS)</div>
+  </div>
+</div>
+
+<div class="arrow-section">▼ ▼ ▼ ▼ ▼<br><span class="arrow-label">REST / LDAP / SMTP / Webhooks</span></div>
+
+<div class="center" style="margin: 16px 0 16px;">
+  <div class="box main">DUALL MASTER 3.0<small>Smart Building Management Platform</small></div>
+</div>
+
+<div class="arrow-section">▼ ▼ ▼ ▼ ▼<br><span class="arrow-label">Web Console · Mobile Apps · Guard Station · Push Notifications</span></div>
+
+<div class="section">
+  <span class="section-label">USERS</span>
+  <div class="row">
+    <div class="box user"><span class="icon">🛡️</span>Security<br>Guards</div>
+    <div class="box user"><span class="icon">🏢</span>Building<br>Admin</div>
+    <div class="box user"><span class="icon">👤</span>HR<br>Manager</div>
+    <div class="box user"><span class="icon">🔧</span>Facility<br>Manager</div>
+    <div class="box user"><span class="icon">🏠</span>Residents<br>/ Tenants</div>
+  </div>
+</div>
+
+<div class="arrow-section">▼ ▼ ▼ ▼ ▼ ▼<br><span class="arrow-label">MQTT · OSDP · ONVIF · RTSP · SIP · Zigbee · RS-485</span></div>
+
+<div class="section" style="border-color: #F59E0B;">
+  <span class="section-label" style="color: #D97706;">DEVICE LAYER</span>
+  <div class="row">
+    <div class="box device">🔒 Card Readers<br><small>OSDP</small></div>
+    <div class="box device">📷 IP Cameras<br><small>ONVIF / RTSP</small></div>
+    <div class="box device">📞 Intercoms<br><small>SIP</small></div>
+    <div class="box device">🌡️ IoT Sensors<br><small>Zigbee / MQTT</small></div>
+    <div class="box device">🚧 Barriers<br><small>RS-485</small></div>
+    <div class="box device">🛗 Lifts<br><small>RS-485</small></div>
+  </div>
+</div>
+</div>
+</body></html>

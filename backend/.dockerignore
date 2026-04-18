@@ -1,0 +1,19 @@
+# Local infra bind-mount data — must never be copied into build context.
+data/
+tmp/
+logs/
+bin/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Git / graphify artifacts
+.git/
+graphify-out/
+
+# Go build outputs
+*.out
+coverage.txt

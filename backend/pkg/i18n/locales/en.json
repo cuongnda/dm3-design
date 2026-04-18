@@ -1,0 +1,78 @@
+{
+  "auth.invalid_credentials": "Invalid email or password",
+  "auth.account_not_active": "Account is not active",
+  "auth.token_expired": "Session expired, please log in again",
+  "auth.unauthorized": "You do not have permission to access this resource",
+  "auth.invalid_token": "Invalid or expired token",
+  "auth.invalid_temp_token": "Invalid or expired temporary token",
+  "auth.no_company_access": "You do not have access to this company",
+  "auth.no_active_company": "No active company associated with this account",
+  "auth.user_not_found": "User not found or inactive",
+  "auth.token_generation_failed": "Token generation failed",
+  "auth.token_reuse_detected": "Token reuse detected, all sessions revoked",
+  "auth.refresh_token_expired": "Refresh token expired",
+  "auth.invalid_refresh_token": "Invalid refresh token",
+  "auth.password_hashing_failed": "Password hashing failed",
+  "auth.current_password_incorrect": "Current password is incorrect",
+  "auth.invalid_reset_token": "Invalid or expired password reset token",
+  "auth.reset_token_expired": "Password reset token has expired",
+
+  "validation.invalid_request_body": "Invalid request body",
+  "validation.email_required": "Email is required",
+  "validation.all_fields_required": "All fields are required",
+  "validation.password_too_short": "Password must be at least 6 characters",
+  "validation.password_mismatch": "Passwords do not match",
+  "validation.email_password_required": "Email and password are required",
+  "validation.temp_token_company_required": "Temporary token and company ID are required",
+  "validation.device_id_required": "Device ID is required",
+  "validation.password_required": "Password is required",
+  "validation.required_field": "{{field}} is required",
+  "validation.invalid_email": "Invalid email format",
+  "validation.first_last_name_required": "First name and last name are required",
+
+  "device.not_found": "Device not found",
+  "device.already_registered": "Device is already registered",
+
+  "person.not_found": "Person not found",
+  "person.create_error": "Failed to create person",
+  "person.update_error": "Failed to update person",
+  "person.delete_error": "Failed to delete person",
+
+  "user.not_found": "User not found",
+  "user.already_exists": "User already exists or invalid data",
+  "user.create_error": "Failed to create user",
+  "user.update_error": "Failed to update user",
+  "user.delete_error": "Failed to delete user",
+
+  "company.not_found": "Company not found",
+  "company.create_error": "Failed to create company",
+  "company.update_error": "Failed to update company",
+  "company.delete_error": "Failed to delete company",
+
+  "access.denied": "Access denied",
+  "access.permission_required": "You do not have the required permissions",
+
+  "system.database_error": "Database error occurred",
+  "system.internal_error": "Internal server error",
+  "system.service_unavailable": "Service is temporarily unavailable",
+  "system.database_not_ready": "Database not ready",
+
+  "group.not_found": "Group not found",
+  "group.create_error": "Failed to create group",
+  "group.update_error": "Failed to update group",
+  "group.delete_error": "Failed to delete group",
+  "group.member_add_error": "Failed to add group member",
+  "group.member_remove_error": "Failed to remove group member",
+
+  "credential.not_found": "Credential not found",
+  "credential.create_error": "Failed to create credential",
+  "credential.update_error": "Failed to update credential",
+  "credential.delete_error": "Failed to delete credential",
+
+  "photo.upload_error": "Failed to upload photo",
+  "photo.invalid_format": "Invalid photo format",
+  "photo.too_large": "Photo file is too large",
+
+  "access_time.template_not_found": "Access time template not found",
+  "access_time.invalid_timezone": "Invalid timezone"
+}

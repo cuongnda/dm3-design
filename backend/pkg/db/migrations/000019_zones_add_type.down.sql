@@ -1,0 +1,1 @@
+ALTER TABLE dm3_access.zones DROP COLUMN IF EXISTS type;

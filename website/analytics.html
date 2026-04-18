@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Analytics Dashboard — Duall Master 3.0 (Internal)</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { background: #0B1121; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .dashboard { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
+    .dashboard h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+    .dashboard .subtitle { color: #94a3b8; margin-bottom: 2rem; }
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; margin-bottom: 2.5rem; }
+    .metric-card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.5rem; }
+    .metric-card .label { font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+    .metric-card .value { font-size: 2rem; font-weight: 700; color: #fff; }
+    .metric-card .change { font-size: 0.8rem; margin-top: 0.25rem; }
+    .metric-card .change.up { color: #22c55e; }
+    .metric-card .change.down { color: #ef4444; }
+    .section { background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .section h2 { font-size: 1.1rem; margin-bottom: 1rem; }
+    .checklist { list-style: none; padding: 0; }
+    .checklist li { padding: 0.6rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; gap: 0.75rem; }
+    .checklist li:last-child { border-bottom: none; }
+    .status { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .status.done { background: #22c55e; }
+    .status.pending { background: #f59e0b; }
+    .status.todo { background: #64748b; }
+    .embed-placeholder { background: rgba(15, 23, 42, 0.8); border: 2px dashed rgba(255,255,255,0.1); border-radius: 8px; padding: 3rem; text-align: center; color: #64748b; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    th { color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    code { background: rgba(255,255,255,0.08); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.85rem; }
+    .back-link { color: #3B82F6; text-decoration: none; display: inline-block; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+<div class="dashboard">
+  <a href="/en/" class="back-link">← Back to website</a>
+  <h1>📊 Analytics Dashboard</h1>
+  <p class="subtitle">Internal analytics overview — Duall Master 3.0 | Data from GA4 / GTM</p>
+
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="label">Total Visitors (This Month)</div>
+      <div class="value">—</div>
+      <div class="change">Connect GA4 to see data</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Demo Requests</div>
+      <div class="value">—</div>
+      <div class="change">Track via GTM form events</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Conversion Rate</div>
+      <div class="value">—%</div>
+      <div class="change">Visitors → Demo requests</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Avg. Time on Site</div>
+      <div class="value">—</div>
+      <div class="change">From page_exit events</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Top Language</div>
+      <div class="value">—</div>
+      <div class="change">EN / KO / VI split</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Bounce Rate</div>
+      <div class="value">—%</div>
+      <div class="change">From GA4 engagement</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📈 Traffic Overview (GA4 Embed)</h2>
+    <div class="embed-placeholder">
+      <p>Embed your GA4 or Looker Studio report here</p>
+      <p style="margin-top:1rem;font-size:0.85rem;">
+        Replace this with:<br>
+        <code>&lt;iframe src="https://lookerstudio.google.com/embed/reporting/YOUR_REPORT_ID" ...&gt;&lt;/iframe&gt;</code>
+      </p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🌍 Traffic by Country</h2>
+    <table>
+      <thead><tr><th>Country</th><th>Visitors</th><th>% Share</th></tr></thead>
+      <tbody>
+        <tr><td>🇻🇳 Vietnam</td><td>—</td><td>—</td></tr>
+        <tr><td>🇰🇷 South Korea</td><td>—</td><td>—</td></tr>
+        <tr><td>🇺🇸 United States</td><td>—</td><td>—</td></tr>
+        <tr><td>🇮🇩 Indonesia</td><td>—</td><td>—</td></tr>
+        <tr><td>🇯🇵 Japan</td><td>—</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>🔝 Top Pages</h2>
+    <table>
+      <thead><tr><th>Page</th><th>Views</th><th>Avg. Time</th></tr></thead>
+      <tbody>
+        <tr><td>/en/</td><td>—</td><td>—</td></tr>
+        <tr><td>/en/platform/</td><td>—</td><td>—</td></tr>
+        <tr><td>/en/pricing/</td><td>—</td><td>—</td></tr>
+        <tr><td>/en/case-studies/</td><td>—</td><td>—</td></tr>
+        <tr><td>/en/contact/</td><td>—</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>🌐 Traffic by Language</h2>
+    <table>
+      <thead><tr><th>Language</th><th>Visitors</th><th>Demo Requests</th><th>Conv. Rate</th></tr></thead>
+      <tbody>
+        <tr><td>English (/en/)</td><td>—</td><td>—</td><td>—</td></tr>
+        <tr><td>Korean (/ko/)</td><td>—</td><td>—</td><td>—</td></tr>
+        <tr><td>Vietnamese (/vi/)</td><td>—</td><td>—</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>✅ Tracking Setup Checklist</h2>
+    <ul class="checklist">
+      <li><span class="status done"></span> GTM container snippet added to all pages</li>
+      <li><span class="status done"></span> Microsoft Clarity snippet added</li>
+      <li><span class="status done"></span> Cookie consent banner (GDPR)</li>
+      <li><span class="status done"></span> Custom event tracking (analytics.js)</li>
+      <li><span class="status done"></span> dataLayer initialized on all pages</li>
+      <li><span class="status pending"></span> Replace <code>GTM-XXXXXXX</code> with real GTM container ID</li>
+      <li><span class="status pending"></span> Replace <code>CLARITY_PROJECT_ID</code> with real Clarity project ID</li>
+      <li><span class="status pending"></span> Create GA4 property and link to GTM</li>
+      <li><span class="status todo"></span> Set up GA4 conversion goals (demo request, contact form)</li>
+      <li><span class="status todo"></span> Create Looker Studio dashboard and embed above</li>
+      <li><span class="status todo"></span> Set up GTM triggers for custom events</li>
+      <li><span class="status todo"></span> Configure Clarity heatmaps for key pages</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>🔧 How to Connect Real Data</h2>
+    <ol style="line-height:1.8;color:#cbd5e1;">
+      <li>Create a <a href="https://tagmanager.google.com" style="color:#3B82F6">Google Tag Manager</a> container → replace <code>GTM-XXXXXXX</code> in <code>js/cookie-consent.js</code> and all HTML files</li>
+      <li>Create a <a href="https://analytics.google.com" style="color:#3B82F6">GA4 property</a> → add GA4 tag in GTM</li>
+      <li>Create a <a href="https://clarity.microsoft.com" style="color:#3B82F6">Microsoft Clarity</a> project → replace <code>CLARITY_PROJECT_ID</code> in <code>js/cookie-consent.js</code></li>
+      <li>In GTM, create triggers for custom events: <code>cta_click</code>, <code>form_submit</code>, <code>scroll_depth</code>, <code>language_switch</code></li>
+      <li>Create a <a href="https://lookerstudio.google.com" style="color:#3B82F6">Looker Studio</a> report → embed iframe in the Traffic Overview section above</li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h2>📋 Custom Events Reference</h2>
+    <table>
+      <thead><tr><th>Event Name</th><th>Parameters</th><th>Source</th></tr></thead>
+      <tbody>
+        <tr><td><code>cta_click</code></td><td>cta_text, page</td><td>analytics.js</td></tr>
+        <tr><td><code>language_switch</code></td><td>target_lang</td><td>analytics.js</td></tr>
+        <tr><td><code>scroll_depth</code></td><td>depth (25/50/75/100), page</td><td>analytics.js</td></tr>
+        <tr><td><code>form_submit</code></td><td>form_id, page</td><td>analytics.js</td></tr>
+        <tr><td><code>case_study_filter</code></td><td>filter</td><td>analytics.js</td></tr>
+        <tr><td><code>page_exit</code></td><td>time_seconds, page</td><td>analytics.js</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,59 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Infra: Start (DB + MQTT + NATS + Valkey)",
+      "type": "shell",
+      "command": "docker compose -f backend/docker-compose.yml up -d timescaledb emqx nats valkey minio",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
+      "label": "Infra: Stop",
+      "type": "shell",
+      "command": "docker compose -f backend/docker-compose.yml down",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Infra: Logs",
+      "type": "shell",
+      "command": "docker compose -f backend/docker-compose.yml logs -f --tail=50",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "isBackground": true
+    },
+    {
+      "label": "DB: Seed Demo Data",
+      "type": "shell",
+      "command": "docker compose -f backend/docker-compose.yml run --rm seed-demo",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Go: Build All",
+      "type": "shell",
+      "command": "cd backend && go build ./cmd/...",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": ["$go"],
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "Go: Test All",
+      "type": "shell",
+      "command": "cd backend && go test ./... -v -count=1",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": ["$go"],
+      "group": "test"
+    },
+    {
+      "label": "Frontend: Dev Server",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "${workspaceFolder}/apps/console" },
+      "problemMatcher": [],
+      "isBackground": true
+    }
+  ]
+}

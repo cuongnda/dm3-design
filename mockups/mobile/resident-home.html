@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=375">
+<title>Resident Home — Duall Master 3.0</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1E293B; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Inter', -apple-system, sans-serif; }
+.phone-frame { width: 375px; height: 812px; background: #0A0E1A; border-radius: 44px; overflow: hidden; position: relative; border: 3px solid #334155; box-shadow: 0 0 40px rgba(0,0,0,0.5); }
+.notch { width: 150px; height: 28px; background: #000; border-radius: 0 0 18px 18px; position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 100; }
+.status-bar { height: 54px; padding: 30px 24px 0; display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: #F8FAFC; }
+.screen { height: calc(812px - 54px - 56px); overflow-y: auto; padding: 0 16px 16px; }
+.screen::-webkit-scrollbar { display: none; }
+.bottom-nav { height: 56px; background: #111827; border-top: 1px solid #1E293B; display: flex; align-items: center; justify-content: space-around; position: absolute; bottom: 0; left: 0; right: 0; padding-bottom: 4px; }
+.nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10px; font-weight: 500; color: #64748B; }
+.nav-item.active { color: #3B82F6; }
+.nav-item svg { width: 24px; height: 24px; }
+
+.top-bar { display: flex; justify-content: space-between; align-items: center; padding: 4px 0 16px; }
+.building-name { font-size: 14px; font-weight: 600; color: #F8FAFC; }
+.notif-btn { position: relative; color: #94A3B8; }
+.notif-btn svg { width: 20px; height: 20px; }
+.notif-badge { position: absolute; top: -4px; right: -4px; width: 16px; height: 16px; background: #EF4444; border-radius: 50%; font-size: 10px; font-weight: 600; color: white; display: flex; align-items: center; justify-content: center; border: 2px solid #0A0E1A; }
+
+.greeting { margin-bottom: 20px; }
+.greeting h1 { font-size: 20px; font-weight: 600; color: #F8FAFC; margin-bottom: 4px; letter-spacing: -0.02em; }
+.greeting-sub { font-size: 13px; color: #94A3B8; }
+
+.unlock-section { display: flex; flex-direction: column; align-items: center; padding: 24px 0 20px; margin-bottom: 20px; }
+.unlock-btn { width: 150px; height: 150px; border-radius: 50%; background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%); border: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: white; position: relative; box-shadow: 0 0 40px rgba(37, 99, 235, 0.3), 0 0 80px rgba(37, 99, 235, 0.1); }
+.unlock-btn::before { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid rgba(59, 130, 246, 0.3); animation: glow-pulse 3s ease-in-out infinite; }
+@keyframes glow-pulse { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 0.8; transform: scale(1.03); } }
+.unlock-icon { font-size: 40px; }
+.unlock-text { font-size: 16px; font-weight: 700; letter-spacing: 0.05em; }
+.door-selector { margin-top: 12px; font-size: 13px; color: #94A3B8; display: flex; align-items: center; gap: 4px; }
+.door-selector span { color: #F8FAFC; font-weight: 500; }
+
+.section-title { font-size: 12px; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+
+.quick-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 24px; }
+.quick-item { display: flex; flex-direction: column; align-items: center; gap: 6px; background: #1E293B; border-radius: 8px; padding: 14px 8px; border: 1px solid #334155; }
+.quick-icon { font-size: 24px; }
+.quick-label { font-size: 11px; color: #94A3B8; font-weight: 500; text-align: center; }
+
+.announce-card { background: #1E293B; border-radius: 8px; border: 1px solid #334155; padding: 12px; margin-bottom: 8px; display: flex; align-items: flex-start; gap: 10px; }
+.announce-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.announce-text { font-size: 13px; color: #F8FAFC; line-height: 1.4; }
+.announce-date { font-size: 11px; color: #64748B; margin-top: 2px; }
+.see-all { font-size: 12px; color: #3B82F6; text-align: right; padding: 4px 0 16px; font-weight: 500; }
+
+.upcoming-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #1E293B; }
+.upcoming-icon { font-size: 18px; }
+.upcoming-content { flex: 1; }
+.upcoming-title { font-size: 13px; color: #F8FAFC; }
+.upcoming-meta { font-size: 11px; color: #64748B; margin-top: 1px; }
+</style>
+</head>
+<body>
+<div class="phone-frame">
+  <div class="notch"></div>
+  <div class="status-bar"><span>9:41</span><span style="display:flex;gap:6px;align-items:center;"><svg width="25" height="12" viewBox="0 0 25 12" fill="#F8FAFC"><rect x="0" y="1" width="21" height="10" rx="2" stroke="#F8FAFC" stroke-width="1" fill="none"/><rect x="22" y="4" width="2" height="4" rx="0.5"/><rect x="2" y="3" width="15" height="6" rx="1" fill="#22C55E"/></svg></span></div>
+
+  <div class="screen">
+    <div class="top-bar">
+      <span class="building-name">Sunrise Tower</span>
+      <div class="notif-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <div class="notif-badge">2</div>
+      </div>
+    </div>
+
+    <div class="greeting">
+      <h1>Good evening, Linh 🌙</h1>
+      <div class="greeting-sub">Unit 1203 · Block A</div>
+    </div>
+
+    <div class="unlock-section">
+      <button class="unlock-btn">
+        <span class="unlock-icon">🔑</span>
+        <span class="unlock-text">UNLOCK</span>
+      </button>
+      <div class="door-selector">Target: <span>Main Entrance ▾</span></div>
+    </div>
+
+    <div class="section-title">Quick Actions</div>
+    <div class="quick-grid">
+      <div class="quick-item">
+        <span class="quick-icon">👤</span>
+        <span class="quick-label">Invite</span>
+      </div>
+      <div class="quick-item">
+        <span class="quick-icon">📦</span>
+        <span class="quick-label">Packages</span>
+      </div>
+      <div class="quick-item">
+        <span class="quick-icon">🔧</span>
+        <span class="quick-label">Fix</span>
+      </div>
+      <div class="quick-item">
+        <span class="quick-icon">🅿️</span>
+        <span class="quick-label">Parking</span>
+      </div>
+    </div>
+
+    <div class="section-title">Announcements</div>
+    <div class="announce-card">
+      <span class="announce-icon">📢</span>
+      <div>
+        <div class="announce-text">Water shutdown Feb 20, 9-11AM — Floors 10-15</div>
+        <div class="announce-date">Posted by Management · Feb 18</div>
+      </div>
+    </div>
+    <div class="announce-card">
+      <span class="announce-icon">🎉</span>
+      <div>
+        <div class="announce-text">Lunar New Year event — RSVP now!</div>
+        <div class="announce-date">Feb 25, 6PM · Lobby · Feb 17</div>
+      </div>
+    </div>
+    <div class="see-all">See All →</div>
+
+    <div class="section-title">Upcoming</div>
+    <div class="upcoming-item">
+      <span class="upcoming-icon">📦</span>
+      <div class="upcoming-content">
+        <div class="upcoming-title">Package waiting at reception</div>
+        <div class="upcoming-meta">From Shopee · Arrived 2:30 PM</div>
+      </div>
+    </div>
+    <div class="upcoming-item">
+      <span class="upcoming-icon">👤</span>
+      <div class="upcoming-content">
+        <div class="upcoming-title">Visitor: Mom — Tomorrow 2PM</div>
+        <div class="upcoming-meta">QR code sent</div>
+      </div>
+    </div>
+    <div class="upcoming-item">
+      <span class="upcoming-icon">🏊</span>
+      <div class="upcoming-content">
+        <div class="upcoming-title">Pool booking — Saturday 8AM</div>
+        <div class="upcoming-meta">2 hours reserved</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <div class="nav-item active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Home</span>
+    </div>
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+      <span>Keys</span>
+    </div>
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+      <span>Visitors</span>
+    </div>
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span>Services</span>
+    </div>
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span>Profile</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DM3 Simulator Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #0A0E1A; color: #E5E7EB; font-family: 'Inter', system-ui, sans-serif; }
+  .card { background: #111827; border: 1px solid #1F2937; border-radius: 0.75rem; }
+  .status-ready { color: #34D399; }
+  .status-syncing { color: #FBBF24; }
+  .status-offline, .status-error, .status-init, .status-connecting { color: #F87171; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot-ready { background: #34D399; }
+  .dot-syncing { background: #FBBF24; }
+  .dot-offline, .dot-error, .dot-init, .dot-connecting { background: #F87171; }
+  .event-granted { border-left: 3px solid #34D399; }
+  .event-denied { border-left: 3px solid #F87171; }
+  .event-alarm { border-left: 3px solid #FBBF24; }
+  #event-feed { max-height: 400px; overflow-y: auto; }
+  .device-card:hover { border-color: #3B82F6; cursor: pointer; }
+  .device-card:active { transform: scale(0.98); }
+  input[type=range] { accent-color: #3B82F6; }
+  .btn-green { background: #059669; } .btn-green:hover { background: #047857; }
+  .btn-red { background: #DC2626; } .btn-red:hover { background: #B91C1C; }
+  .btn-blue { background: #2563EB; } .btn-blue:hover { background: #1D4ED8; }
+  .pulse { animation: pulse 2s infinite; }
+  .tab-btn { transition: all 0.15s; cursor: pointer; }
+  .tab-btn:hover { color: #93C5FD; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+  /* Provisioning badges */
+  .prov-unprovisioned { background: #374151; color: #9CA3AF; }
+  .prov-registering { background: #1E3A5F; color: #60A5FA; }
+  .prov-pending_approval { background: #78350F; color: #FBBF24; }
+  .prov-approved { background: #064E3B; color: #34D399; }
+  .prov-rejected { background: #7F1D1D; color: #F87171; }
+  .prov-provisioned { background: #1C1917; color: #78716C; }
+  /* Sync status badges */
+  .sync-empty { background: #7F1D1D; color: #FCA5A5; }
+  .sync-syncing { background: #78350F; color: #FDE68A; }
+  .sync-synced { background: #064E3B; color: #6EE7B7; }
+  .sync-unknown { background: #374151; color: #9CA3AF; }
+  .modal-overlay { backdrop-filter: blur(4px); }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- Header -->
+<header class="card mx-4 mt-4 p-4 flex flex-wrap items-center justify-between gap-4">
+  <div>
+    <h1 class="text-xl font-bold text-white">🏢 DM3 Simulator Dashboard</h1>
+    <p class="text-sm text-gray-400 mt-1">Virtual Access Control Device Simulator</p>
+  </div>
+  <div class="flex gap-6 text-sm items-center">
+    <button onclick="openNewDeviceModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">➕ New Device</button>
+    <div class="text-center"><div class="text-2xl font-bold text-white" id="stat-total">0</div><div class="text-gray-400">Devices</div></div>
+    <div class="text-center"><div class="text-2xl font-bold text-green-400" id="stat-online">0</div><div class="text-gray-400">Online</div></div>
+    <div class="text-center"><div class="text-2xl font-bold text-blue-400" id="stat-eps">0</div><div class="text-gray-400">Events/s</div></div>
+    <div class="text-center">
+      <div class="text-2xl font-bold" id="stat-status-text">Stopped</div>
+      <div class="text-gray-400">Status</div>
+    </div>
+  </div>
+</header>
+
+<div class="mx-4 mt-4 grid grid-cols-1 lg:grid-cols-4 gap-4">
+
+  <!-- Left: Config + Metrics -->
+  <div class="space-y-4">
+    <!-- Configuration Panel -->
+    <div class="card p-4">
+      <h2 class="font-semibold text-white mb-3">⚙️ Configuration</h2>
+      <div class="space-y-3 text-sm">
+        <div>
+          <label class="text-gray-400 block mb-1">MQTT Broker</label>
+          <input id="cfg-broker" type="text" value="" placeholder="mqtt://localhost:1883" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm">
+        </div>
+        <div>
+          <label class="text-gray-400 block mb-1">Site ID</label>
+          <input id="cfg-site" type="text" value="site-001" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm">
+        </div>
+        <div>
+          <label class="text-gray-400 block mb-1">Devices: <span id="cfg-devices-val" class="text-white">10</span></label>
+          <input id="cfg-devices" type="range" min="1" max="1000" value="10" class="w-full" oninput="document.getElementById('cfg-devices-val').textContent=this.value">
+        </div>
+        <div>
+          <label class="text-gray-400 block mb-1">Mode</label>
+          <select id="cfg-mode" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm">
+            <option value="normal">Normal</option>
+            <option value="stress">Stress</option>
+            <option value="chaos">Chaos</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-gray-400 block mb-1">Event Rate: <span id="cfg-rate-val" class="text-white">1.0</span> /min/device</label>
+          <input id="cfg-rate" type="range" min="0.1" max="60" step="0.1" value="1" class="w-full" oninput="document.getElementById('cfg-rate-val').textContent=parseFloat(this.value).toFixed(1)">
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button onclick="startSimulation()" class="btn-green text-white px-4 py-2 rounded text-sm font-medium flex-1">➕ Create Devices</button>
+          <button onclick="stopSimulation()" class="btn-red text-white px-4 py-2 rounded text-sm font-medium flex-1">⏹ Stop All</button>
+        </div>
+        <p class="text-[10px] text-gray-500 mt-1">Creates unprovisioned devices. Use Bootstrap or QR to activate.</p>
+      </div>
+    </div>
+
+    <!-- Metrics Panel -->
+    <div class="card p-4">
+      <h2 class="font-semibold text-white mb-3">📊 Metrics</h2>
+      <div class="space-y-3 text-sm">
+        <!-- Throughput -->
+        <div>
+          <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Throughput</div>
+          <div class="space-y-1">
+            <div class="flex justify-between" title="Total access events generated per second across all devices"><span class="text-gray-400">Total EPS</span><span class="text-white font-mono" id="m-eps">0</span></div>
+            <div class="flex justify-between" title="Average events per second per individual device"><span class="text-gray-400">Per Device</span><span class="text-white font-mono" id="m-eps-device">0</span></div>
+            <div class="flex justify-between" title="Cumulative events since simulation started"><span class="text-gray-400">Total Events</span><span class="text-white font-mono" id="m-total">0</span></div>
+          </div>
+        </div>
+        <!-- Access Decisions -->
+        <div>
+          <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Access Decisions</div>
+          <div class="space-y-1">
+            <div class="flex justify-between" title="Number of access granted vs denied from recent events"><span class="text-gray-400">Granted</span><span class="text-green-400 font-mono" id="m-granted">0</span></div>
+            <div class="flex justify-between"><span class="text-gray-400">Denied</span><span class="text-red-400 font-mono" id="m-denied">0</span></div>
+            <div class="flex justify-between" title="Percentage of access attempts that were granted"><span class="text-gray-400">Grant Rate</span><span class="text-white font-mono" id="m-grant-rate">—</span></div>
+          </div>
+          <!-- Mini bar -->
+          <div class="flex h-1.5 rounded-full overflow-hidden mt-1.5 bg-gray-700">
+            <div class="bg-green-500 transition-all" id="m-grant-bar" style="width:50%"></div>
+            <div class="bg-red-500 transition-all" id="m-deny-bar" style="width:50%"></div>
+          </div>
+        </div>
+        <!-- Decision Latency -->
+        <div>
+          <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Decision Latency</div>
+          <div class="space-y-1">
+            <div class="flex justify-between" title="Average time for the access decision engine to evaluate a credential lookup in local SQLite"><span class="text-gray-400">Avg</span><span class="text-white font-mono" id="m-latency-avg">—</span></div>
+            <div class="flex justify-between" title="99th percentile — worst-case latency excluding outliers"><span class="text-gray-400">P99</span><span class="text-white font-mono" id="m-latency-p99">—</span></div>
+            <div class="flex justify-between" title="Fastest and slowest decision times"><span class="text-gray-400">Min / Max</span><span class="text-white font-mono" id="m-latency-range">—</span></div>
+          </div>
+        </div>
+        <!-- Offline / Sync -->
+        <div>
+          <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Offline & Sync</div>
+          <div class="space-y-1">
+            <div class="flex justify-between" title="Devices with network manually disconnected — still making decisions locally"><span class="text-gray-400">Offline Devices</span><span class="font-mono" id="m-offline-count">0</span></div>
+            <div class="flex justify-between" title="Events queued locally on offline devices, waiting to sync when network reconnects"><span class="text-gray-400">Queued Events</span><span class="font-mono" id="m-queued">0</span></div>
+          </div>
+        </div>
+        <!-- System -->
+        <div>
+          <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">System</div>
+          <div class="space-y-1">
+            <div class="flex justify-between" title="Time since simulation started"><span class="text-gray-400">Uptime</span><span class="text-white font-mono" id="m-uptime">—</span></div>
+            <div class="flex justify-between" title="MQTT broker used by all devices"><span class="text-gray-400">Broker</span><span class="text-gray-300 font-mono text-[11px]" id="m-broker">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Center: Device Grid -->
+  <div class="lg:col-span-2">
+    <div class="card p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold text-white">🖥️ Devices <span class="text-gray-500 text-sm font-normal" id="device-count"></span></h2>
+        <div class="flex gap-2 text-xs">
+          <span class="text-gray-400" id="selected-count">0 selected</span>
+          <button onclick="batchAction('trigger')" class="btn-blue text-white px-2 py-1 rounded">⚡ Trigger</button>
+          <button onclick="batchAction('auto-on')" class="bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded">🔄 Auto On</button>
+          <button onclick="batchAction('auto-off')" class="bg-gray-600 hover:bg-gray-700 text-white px-2 py-1 rounded">⏸ Auto Off</button>
+          <button onclick="batchAction('disconnect')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded">📡 Off</button>
+          <button onclick="batchAction('reconnect')" class="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded">📡 On</button>
+          <button onclick="batchAction('stop')" class="btn-red text-white px-2 py-1 rounded">⏹ Stop</button>
+          <button onclick="batchAction('start')" class="btn-green text-white px-2 py-1 rounded">▶ Start</button>
+        </div>
+      </div>
+      <!-- Select All -->
+      <div class="flex items-center gap-2 text-xs text-gray-400 border-b border-gray-700 pb-2 mb-1">
+        <input type="checkbox" id="select-all" onchange="toggleSelectAll(this.checked)" class="accent-blue-500">
+        <span class="w-20">Device ID</span>
+        <span class="w-16">State</span>
+        <span class="w-24">Sync</span>
+        <span class="w-14">Network</span>
+        <span class="flex-1">Actions</span>
+        <span class="w-16 text-right">Events</span>
+        <span class="w-10"></span>
+      </div>
+      <div id="device-grid" class="max-h-[500px] overflow-y-auto space-y-0.5">
+        <div class="text-gray-500 text-sm p-4">No devices running. Click Start to begin.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Event Feed -->
+  <div>
+    <div class="card p-4">
+      <h2 class="font-semibold text-white mb-3">📡 Live Event Feed</h2>
+      <div id="event-feed" class="space-y-1 text-xs">
+        <div class="text-gray-500 p-2">Waiting for events...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Device Detail Modal -->
+<div id="device-modal" class="fixed inset-0 bg-black/70 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeDeviceModal()">
+  <div class="card w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between p-4 border-b border-gray-700">
+      <h2 class="text-lg font-bold text-white">🔍 Device <span id="dm-device-id" class="text-blue-400 font-mono"></span></h2>
+      <div class="flex gap-2 items-center">
+        <button onclick="triggerDeviceFromModal()" class="btn-blue text-white px-3 py-1.5 rounded text-xs">⚡ Trigger</button>
+        <button onclick="toggleAutoTrigger()" id="dm-auto-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs">🔄 Auto Off</button>
+        <button onclick="toggleDeviceNetwork()" id="dm-network-btn" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1.5 rounded text-xs">📡 Disconnect</button>
+        <button onclick="toggleDeviceRunning()" id="dm-startstop-btn" class="btn-red text-white px-3 py-1.5 rounded text-xs">⏹ Stop</button>
+        <button onclick="closeDeviceModal()" class="text-gray-400 hover:text-white text-2xl leading-none ml-2">&times;</button>
+      </div>
+    </div>
+    <!-- Tabs -->
+    <div class="flex border-b border-gray-700 px-4 gap-1">
+      <button onclick="showTab('config')" class="tab-btn px-3 py-2 text-sm" id="tab-config">⚙️ Config</button>
+      <button onclick="showTab('persons')" class="tab-btn px-3 py-2 text-sm" id="tab-persons">👥 Persons</button>
+      <button onclick="showTab('credentials')" class="tab-btn px-3 py-2 text-sm" id="tab-credentials">🔑 Credentials</button>
+      <button onclick="showTab('rules')" class="tab-btn px-3 py-2 text-sm" id="tab-rules">📋 Rules</button>
+      <button onclick="showTab('queue')" class="tab-btn px-3 py-2 text-sm" id="tab-queue">📤 Event Queue</button>
+    </div>
+    <!-- Tab Content -->
+    <div class="flex-1 overflow-y-auto p-4" id="dm-content">
+      <div class="text-gray-500">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<footer class="text-center text-gray-600 text-xs py-4">DM3 Simulator v0.1 • DUALI</footer>
+
+<script>
+const API = '';
+let pollInterval = null;
+let lastEventCount = 0;
+let lastEventTime = 0;
+
+async function fetchJSON(url, opts) {
+  try {
+    const r = await fetch(API + url, opts);
+    return await r.json();
+  } catch(e) { return null; }
+}
+
+async function startSimulation() {
+  const body = {
+    num_devices: parseInt(document.getElementById('cfg-devices').value),
+    mode: document.getElementById('cfg-mode').value,
+    event_rate: parseFloat(document.getElementById('cfg-rate').value),
+  };
+  // Only send broker/site if explicitly set (don't override server defaults)
+  const broker = document.getElementById('cfg-broker').value.trim();
+  const site = document.getElementById('cfg-site').value.trim();
+  if (broker) body.broker = broker;
+  if (site) body.site_id = site;
+  await fetchJSON('/api/simulation/start', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+}
+
+async function stopSimulation() {
+  await fetchJSON('/api/simulation/stop', { method: 'POST' });
+}
+
+async function triggerDevice(deviceId) {
+  await fetchJSON(`/api/devices/${deviceId}/trigger`, { method: 'POST' });
+}
+
+function formatTime(ts) {
+  if (!ts) return '-';
+  const d = new Date(ts * 1000);
+  return d.toLocaleTimeString('vi-VN');
+}
+
+function formatUptime(s) {
+  if (!s) return '-';
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+  return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+}
+
+function stateClass(state) {
+  if (state === 'ready') return 'ready';
+  if (state === 'syncing') return 'syncing';
+  return 'offline';
+}
+
+async function poll() {
+  // Fetch devices
+  const devData = await fetchJSON('/api/devices');
+  if (devData) {
+    const devices = devData.devices || [];
+    const grid = document.getElementById('device-grid');
+    const online = devices.filter(d => d.state === 'ready').length;
+    const totalEvents = devices.reduce((s,d) => s + d.events_published, 0);
+    
+    document.getElementById('stat-total').textContent = devices.length;
+    document.getElementById('stat-online').textContent = online;
+    document.getElementById('device-count').textContent = `(${devices.length})`;
+    
+    // EPS calc
+    const now = Date.now()/1000;
+    if (lastEventTime > 0) {
+      const dt = now - lastEventTime;
+      const de = totalEvents - lastEventCount;
+      const eps = dt > 0 ? (de/dt).toFixed(1) : '0';
+      document.getElementById('stat-eps').textContent = eps;
+      document.getElementById('m-eps').textContent = eps;
+    }
+    lastEventCount = totalEvents;
+    lastEventTime = now;
+    document.getElementById('m-total').textContent = totalEvents;
+
+    if (devices.length === 0) {
+      grid.innerHTML = '<div class="text-gray-500 text-sm p-4">No devices running. Click Start to begin.</div>';
+    } else {
+      // Preserve checkbox state
+      const prevChecked = new Set();
+      grid.querySelectorAll('input[type=checkbox]:checked').forEach(cb => prevChecked.add(cb.dataset.id));
+      
+      grid.innerHTML = devices.map(d => {
+        const ss = d.sync_status || 'unknown';
+        const personCount = d.local_person_count || 0;
+        const syncLabel = ss === 'empty' ? 'No data' : ss === 'syncing' ? 'Syncing...' : ss === 'synced' ? `Synced (${personCount})` : 'Unknown';
+        return `
+        <div class="flex items-center gap-2 text-xs px-1 py-1.5 rounded hover:bg-gray-800/50 ${!d.running ? 'opacity-40' : ''} ${d.network_disabled ? 'bg-yellow-900/10' : ''}">
+          <input type="checkbox" class="device-cb accent-blue-500" data-id="${d.device_id}" ${prevChecked.has(d.device_id)?'checked':''} onchange="updateSelectedCount()" onclick="event.stopPropagation()">
+          <span class="w-20 font-mono text-white cursor-pointer hover:text-blue-400" onclick="openDeviceModal('${d.device_id}')">${d.device_id}</span>
+          <span class="w-16"><span class="dot dot-${stateClass(d.state)}"></span> <span class="status-${stateClass(d.state)} uppercase">${d.state}</span></span>
+          <span class="w-24 flex items-center gap-1">
+            <span class="sync-${ss} px-1.5 py-0.5 rounded text-[10px] font-medium">${syncLabel}</span>
+            <button onclick="event.stopPropagation();triggerSync('${d.device_id}')" class="text-blue-400 hover:text-blue-300 text-[10px]" title="Trigger sync">🔄</button>
+          </span>
+          <span class="w-14">${d.network_disabled ? '<span class="text-yellow-400">📡 OFF</span>' : '<span class="text-green-400/60">📡 ON</span>'}</span>
+          <span class="flex-1 flex gap-1">${
+            d.provisioning_status === 'unprovisioned' ? `<button onclick="event.stopPropagation();bootstrapDevice('${d.device_id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-0.5 rounded text-[10px]">🚀 Bootstrap</button><button onclick="event.stopPropagation();openQRModal('${d.device_id}')" class="bg-green-600 hover:bg-green-700 text-white px-2 py-0.5 rounded text-[10px]">📱 QR</button>` :
+            d.provisioning_status === 'pending_approval' ? `<span class="text-yellow-400 text-[10px]">⏳ Pending</span>` :
+            d.provisioning_status === 'rejected' ? `<span class="text-red-400 text-[10px]">❌ Rejected</span>` :
+            d.provisioning_status === 'registering' ? `<span class="text-blue-400 text-[10px]">📡 Registering...</span>` : ''
+          }</span>
+          <span class="w-16 text-right text-gray-300 font-mono">${d.events_published}</span>
+          <span class="w-10 text-right"><button class="text-blue-400 hover:text-blue-300" onclick="event.stopPropagation();openDeviceModal('${d.device_id}')">🔍</button></span>
+        </div>`;
+      }).join('');
+    }
+    updateSelectedCount();
+  }
+
+  // Fetch detailed stats
+  const stats = await fetchJSON('/api/stats');
+  if (stats) {
+    // Status
+    const el = document.getElementById('stat-status-text');
+    el.textContent = stats.devices.total > 0 ? 'Running' : 'Stopped';
+    el.className = 'text-2xl font-bold ' + (stats.devices.total > 0 ? 'text-green-400' : 'text-red-400');
+    
+    // Throughput
+    document.getElementById('m-eps').textContent = stats.throughput.total_eps;
+    document.getElementById('m-eps-device').textContent = stats.throughput.avg_eps_per_device + ' /dev';
+    document.getElementById('m-total').textContent = stats.events.total_published.toLocaleString();
+    document.getElementById('stat-eps').textContent = stats.throughput.total_eps;
+    
+    // Access Decisions
+    document.getElementById('m-granted').textContent = stats.events.granted;
+    document.getElementById('m-denied').textContent = stats.events.denied;
+    document.getElementById('m-grant-rate').textContent = stats.events.grant_rate_pct + '%';
+    const total = stats.events.granted + stats.events.denied;
+    if (total > 0) {
+      document.getElementById('m-grant-bar').style.width = stats.events.grant_rate_pct + '%';
+      document.getElementById('m-deny-bar').style.width = (100 - stats.events.grant_rate_pct) + '%';
+    }
+    
+    // Latency
+    document.getElementById('m-latency-avg').textContent = stats.latency.avg_ms + ' ms';
+    document.getElementById('m-latency-p99').textContent = stats.latency.p99_ms + ' ms';
+    document.getElementById('m-latency-range').textContent = stats.latency.min_ms + ' / ' + stats.latency.max_ms + ' ms';
+    
+    // Offline & Sync
+    const offEl = document.getElementById('m-offline-count');
+    offEl.textContent = stats.offline.devices_offline;
+    offEl.className = 'font-mono ' + (stats.offline.devices_offline > 0 ? 'text-yellow-400' : 'text-gray-500');
+    const qEl = document.getElementById('m-queued');
+    qEl.textContent = stats.offline.queued_events;
+    qEl.className = 'font-mono ' + (stats.offline.queued_events > 0 ? 'text-yellow-400' : 'text-gray-500');
+    
+    // System
+    document.getElementById('m-uptime').textContent = formatUptime(stats.uptime_s);
+  }
+
+  // Fetch recent events for feed
+  const evtData = await fetchJSON('/api/events/recent?limit=100');
+  if (evtData) {
+    const events = evtData.events || [];
+    const feed = document.getElementById('event-feed');
+    
+    if (events.length === 0) {
+      feed.innerHTML = '<div class="text-gray-500 p-2">Waiting for events...</div>';
+    } else {
+      feed.innerHTML = events.slice(-100).reverse().map(e => {
+        const dec = (e.decision||'').toUpperCase();
+        const cls = dec === 'GRANTED' ? 'granted' : dec === 'DENIED' ? 'denied' : 'alarm';
+        return `<div class="event-${cls} bg-gray-800/50 px-2 py-1 rounded">
+          <span class="text-gray-500">${formatTime(e.timestamp)}</span>
+          <span class="font-mono text-blue-300">${e.device_id||''}</span>
+          <span class="${cls==='granted'?'text-green-400':cls==='denied'?'text-red-400':'text-yellow-400'} font-medium">${dec}</span>
+          <span class="text-gray-300">${e.person_name||'Unknown'}</span>
+          <span class="text-gray-500">${e.credential_type||''}</span>
+        </div>`;
+      }).join('');
+      feed.scrollTop = 0;
+    }
+  }
+}
+
+// === Batch Operations ===
+function getSelectedDeviceIds() {
+  return [...document.querySelectorAll('.device-cb:checked')].map(cb => cb.dataset.id);
+}
+
+function updateSelectedCount() {
+  const count = document.querySelectorAll('.device-cb:checked').length;
+  document.getElementById('selected-count').textContent = `${count} selected`;
+}
+
+function toggleSelectAll(checked) {
+  document.querySelectorAll('.device-cb').forEach(cb => { cb.checked = checked; });
+  updateSelectedCount();
+}
+
+async function batchAction(action) {
+  const ids = getSelectedDeviceIds();
+  if (ids.length === 0) return;
+  
+  const endpoints = {
+    trigger: id => [`/api/devices/${id}/trigger`, 'POST'],
+    'auto-on': id => [`/api/devices/${id}/auto-trigger`, 'POST', {enabled: true}],
+    'auto-off': id => [`/api/devices/${id}/auto-trigger`, 'POST', {enabled: false}],
+    disconnect: id => [`/api/devices/${id}/network/disconnect`, 'POST'],
+    reconnect: id => [`/api/devices/${id}/network/reconnect`, 'POST'],
+    stop: id => [`/api/devices/${id}/stop`, 'POST'],
+    start: id => [`/api/devices/${id}/start`, 'POST'],
+  };
+  
+  const fn = endpoints[action];
+  if (!fn) return;
+  
+  // Execute in parallel
+  await Promise.all(ids.map(id => {
+    const [url, method, body] = fn(id);
+    const opts = { method };
+    if (body) { opts.headers = {'Content-Type':'application/json'}; opts.body = JSON.stringify(body); }
+    return fetch(url, opts);
+  }));
+  
+  // Immediate refresh
+  poll();
+}
+
+// === Device Detail Modal ===
+let currentDeviceId = null;
+let currentTab = 'config';
+
+function openDeviceModal(deviceId) {
+  currentDeviceId = deviceId;
+  document.getElementById('dm-device-id').textContent = deviceId;
+  document.getElementById('device-modal').classList.remove('hidden');
+  document.getElementById('device-modal').classList.add('flex');
+  updateModalButtons();
+  showTab('config');
+}
+
+function closeDeviceModal() {
+  document.getElementById('device-modal').classList.add('hidden');
+  document.getElementById('device-modal').classList.remove('flex');
+  currentDeviceId = null;
+}
+
+async function triggerDeviceFromModal() {
+  if (!currentDeviceId) return;
+  await fetch(`/api/devices/${currentDeviceId}/trigger`, { method: 'POST' });
+  showTab(currentTab);
+}
+
+async function toggleAutoTrigger() {
+  if (!currentDeviceId) return;
+  await fetch(`/api/devices/${currentDeviceId}/auto-trigger`, { method: 'POST' });
+  updateModalButtons();
+}
+
+async function toggleDeviceNetwork() {
+  if (!currentDeviceId) return;
+  const data = await fetchJSON(`/api/devices/${currentDeviceId}`);
+  if (!data) return;
+  const action = data.network_disabled ? 'reconnect' : 'disconnect';
+  const resp = await fetch(`/api/devices/${currentDeviceId}/network/${action}`, { method: 'POST' });
+  const result = await resp.json();
+  updateModalButtons();
+  // Refresh queue tab if viewing it
+  if (currentTab === 'queue') showTab('queue');
+}
+
+async function toggleDeviceRunning() {
+  if (!currentDeviceId) return;
+  const data = await fetchJSON(`/api/devices/${currentDeviceId}`);
+  if (!data) return;
+  const action = data.running ? 'stop' : 'start';
+  await fetch(`/api/devices/${currentDeviceId}/${action}`, { method: 'POST' });
+  updateModalButtons();
+}
+
+async function updateModalButtons() {
+  if (!currentDeviceId) return;
+  const data = await fetchJSON(`/api/devices/${currentDeviceId}`);
+  if (!data) return;
+  
+  const autoBtn = document.getElementById('dm-auto-btn');
+  if (data.auto_trigger) {
+    autoBtn.textContent = '🔄 Auto Off';
+    autoBtn.className = 'bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs';
+  } else {
+    autoBtn.textContent = '🔄 Auto On';
+    autoBtn.className = 'bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded text-xs';
+  }
+  
+  const netBtn = document.getElementById('dm-network-btn');
+  if (data.network_disabled) {
+    netBtn.textContent = '📡 Reconnect';
+    netBtn.className = 'bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs';
+  } else {
+    netBtn.textContent = '📡 Disconnect';
+    netBtn.className = 'bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1.5 rounded text-xs';
+  }
+  
+  const ssBtn = document.getElementById('dm-startstop-btn');
+  if (data.running) {
+    ssBtn.textContent = '⏹ Stop';
+    ssBtn.className = 'btn-red text-white px-3 py-1.5 rounded text-xs';
+  } else {
+    ssBtn.textContent = '▶ Start';
+    ssBtn.className = 'btn-green text-white px-3 py-1.5 rounded text-xs';
+  }
+}
+
+function showTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.remove('text-blue-400', 'border-b-2', 'border-blue-400');
+    b.classList.add('text-gray-400');
+  });
+  const btn = document.getElementById('tab-' + tab);
+  btn.classList.add('text-blue-400', 'border-b-2', 'border-blue-400');
+  btn.classList.remove('text-gray-400');
+  loadTabContent(tab);
+}
+
+async function loadTabContent(tab) {
+  const el = document.getElementById('dm-content');
+  el.innerHTML = '<div class="text-gray-500">Loading...</div>';
+  
+  if (tab === 'config') {
+    const data = await fetchJSON(`/api/devices/${currentDeviceId}/config`);
+    if (!data) { el.innerHTML = '<div class="text-red-400">Failed to load</div>'; return; }
+    el.innerHTML = `
+      <div class="grid grid-cols-2 gap-4 text-sm">
+        <div class="space-y-3">
+          <h3 class="text-white font-semibold">Device Info</h3>
+          ${cfgRow('Device ID', data.device_id)}
+          ${cfgRow('Site ID', data.site_id)}
+          ${cfgRow('Tenant ID', `<span class="font-mono text-[11px]">${data.tenant_id}</span>`)}
+          ${cfgRow('State', `<span class="status-${data.state}">${data.state.toUpperCase()}</span>`)}
+          ${cfgRow('Provisioning', `<span class="prov-${data.provisioning_status || 'unknown'} px-2 py-0.5 rounded text-[11px]">${(data.provisioning_status || 'unknown').toUpperCase()}</span>`)}
+          ${cfgRow('Lockdown', data.lockdown_active ? '<span class="text-red-400">ACTIVE</span>' : '<span class="text-gray-400">No</span>')}
+        </div>
+        <div class="space-y-3">
+          <h3 class="text-white font-semibold">MQTT Connection</h3>
+          ${cfgRow('Broker', `<span class="font-mono text-[11px]">${data.mqtt_broker || '—'}</span>`)}
+          ${cfgRow('Host:Port', `<span class="font-mono text-[11px]">${data.mqtt_host || '—'}:${data.mqtt_port || '—'}</span>`)}
+          ${cfgRow('Username', `<span class="font-mono text-[11px]">${data.mqtt_username || '—'}</span>`)}
+          ${cfgRow('Client ID', `<span class="font-mono text-[11px]">${data.mqtt_client_id || '—'}</span>`)}
+          ${cfgRow('Topic Prefix', `<span class="font-mono text-[11px]">${data.mqtt_topic_prefix || '—'}</span>`)}
+          ${cfgRow('Status', data.mqtt_connected ? '<span class="text-green-400">● Connected</span>' : '<span class="text-red-400">● Disconnected</span>')}
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4 text-sm mt-4">
+        <div class="space-y-3">
+          <h3 class="text-white font-semibold">Statistics</h3>
+          ${cfgRow('Doors', data.doors?.join(', ') || 'None')}
+          ${cfgRow('Person Count', data.person_count)}
+          ${cfgRow('Events Published', data.events_published)}
+          ${cfgRow('Uptime', formatUptime(data.uptime_s))}
+        </div>
+      </div>
+      ${data.sync_state && Object.keys(data.sync_state).length ? `
+        <div class="mt-4">
+          <h3 class="text-white font-semibold text-sm mb-2">Sync State</h3>
+          <div class="bg-gray-800 rounded p-3 text-xs font-mono space-y-1">
+            ${Object.entries(data.sync_state).map(([k,v]) => `<div><span class="text-gray-400">${k}:</span> <span class="text-white">${v}</span></div>`).join('')}
+          </div>
+        </div>` : ''}`;
+  }
+  
+  else if (tab === 'persons') {
+    const data = await fetchJSON(`/api/devices/${currentDeviceId}/persons?limit=50`);
+    if (!data) { el.innerHTML = '<div class="text-red-400">Failed to load</div>'; return; }
+    el.innerHTML = `
+      <div class="text-sm text-gray-400 mb-3">Total: <span class="text-white font-bold">${data.total}</span> persons in local DB</div>
+      <table class="w-full text-xs">
+        <thead><tr class="text-left text-gray-400 border-b border-gray-700">
+          <th class="pb-2 pr-3">Person ID</th>
+          <th class="pb-2 pr-3">Name</th>
+          <th class="pb-2 pr-3">Status</th>
+          <th class="pb-2 pr-3">Valid From</th>
+          <th class="pb-2">Valid Until</th>
+        </tr></thead>
+        <tbody>
+          ${data.persons.map(p => `<tr class="border-b border-gray-800 hover:bg-gray-800/50">
+            <td class="py-1.5 pr-3 font-mono text-blue-300 text-xs">${p.person_id?.slice(0,8)}...</td>
+            <td class="py-1.5 pr-3 text-white">${p.name || '—'}</td>
+            <td class="py-1.5 pr-3"><span class="${p.status==='active'?'text-green-400':'text-red-400'}">${p.status}</span></td>
+            <td class="py-1.5 pr-3 text-gray-400 font-mono">${p.valid_from || '—'}</td>
+            <td class="py-1.5 text-gray-400 font-mono">${p.valid_until || '—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+  
+  else if (tab === 'credentials') {
+    const data = await fetchJSON(`/api/devices/${currentDeviceId}/credentials`);
+    if (!data) { el.innerHTML = '<div class="text-red-400">Failed to load</div>'; return; }
+    el.innerHTML = `
+      <div class="text-sm text-gray-400 mb-3">Total: <span class="text-white font-bold">${data.count}</span> credentials</div>
+      <table class="w-full text-xs">
+        <thead><tr class="text-left text-gray-400 border-b border-gray-700">
+          <th class="pb-2 pr-3">Person ID</th>
+          <th class="pb-2 pr-3">Type</th>
+          <th class="pb-2 pr-3">Value</th>
+          <th class="pb-2">Status</th>
+        </tr></thead>
+        <tbody>
+          ${data.credentials.map(c => `<tr class="border-b border-gray-800 hover:bg-gray-800/50">
+            <td class="py-1.5 pr-3 font-mono text-blue-300">${c.person_id?.slice(0,8)}...</td>
+            <td class="py-1.5 pr-3"><span class="px-1.5 py-0.5 rounded text-xs ${c.type==='card'?'bg-blue-900 text-blue-300':c.type==='face'?'bg-purple-900 text-purple-300':'bg-gray-700 text-gray-300'}">${c.type}</span></td>
+            <td class="py-1.5 pr-3 font-mono text-gray-300">${c.value}</td>
+            <td class="py-1.5"><span class="${c.status==='active'?'text-green-400':'text-red-400'}">${c.status}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+  
+  else if (tab === 'rules') {
+    const data = await fetchJSON(`/api/devices/${currentDeviceId}/rules`);
+    if (!data) { el.innerHTML = '<div class="text-red-400">Failed to load</div>'; return; }
+    el.innerHTML = `
+      <div class="text-sm text-gray-400 mb-3">Total: <span class="text-white font-bold">${data.count}</span> access rules</div>
+      <div class="space-y-3">
+        ${data.rules.map(r => `
+          <div class="bg-gray-800 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-white font-medium">${r.name}</span>
+              <div class="flex gap-2 items-center">
+                <span class="text-xs text-gray-400">Priority: ${r.priority}</span>
+                <span class="px-2 py-0.5 rounded text-xs ${r.enabled?'bg-green-900 text-green-300':'bg-red-900 text-red-300'}">${r.enabled?'Enabled':'Disabled'}</span>
+              </div>
+            </div>
+            <div class="text-xs space-y-1">
+              <div class="text-gray-400">🚪 Doors: <span class="text-gray-300">${r.doors?.join(', ') || 'None'}</span></div>
+              <div class="text-gray-400">👥 Groups: <span class="text-gray-300">${r.groups?.join(', ') || 'None'}</span></div>
+              ${r.schedules?.length ? `<div class="text-gray-400">🕐 Schedules: ${r.schedules.map(s => 
+                `<span class="text-gray-300">${typeof s === 'object' ? `Day ${s.day_of_week??s.day} ${s.start_time??s.start}-${s.end_time??s.end}` : s}</span>`
+              ).join(', ')}</div>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>`;
+  }
+  
+  else if (tab === 'queue') {
+    const data = await fetchJSON(`/api/devices/${currentDeviceId}/events-queue`);
+    if (!data) { el.innerHTML = '<div class="text-red-400">Failed to load</div>'; return; }
+    if (data.count === 0) {
+      el.innerHTML = '<div class="text-gray-500 text-sm">📤 Event queue is empty — all events have been published to MQTT.</div>';
+    } else {
+      el.innerHTML = `
+        <div class="text-sm text-gray-400 mb-3">⚠️ <span class="text-yellow-400 font-bold">${data.count}</span> events pending in offline queue</div>
+        <div class="space-y-1 text-xs">
+          ${data.events.map(e => `<div class="bg-gray-800 rounded px-3 py-2 font-mono text-gray-300">${JSON.stringify(e).slice(0,120)}...</div>`).join('')}
+        </div>`;
+    }
+  }
+}
+
+function cfgRow(label, value) {
+  return `<div class="flex justify-between"><span class="text-gray-400">${label}</span><span class="text-white">${value ?? '—'}</span></div>`;
+}
+
+// ─── Provisioning Functions ───────────────────────────────────────────────
+
+function openNewDeviceModal() {
+  const modal = document.createElement('div');
+  modal.id = 'new-device-modal';
+  modal.className = 'fixed inset-0 bg-black/70 modal-overlay z-50 flex items-center justify-center p-4';
+  modal.onclick = e => { if(e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div class="card p-6 w-full max-w-md" onclick="event.stopPropagation()">
+      <h2 class="text-lg font-bold text-white mb-4">➕ New Unprovisioned Device</h2>
+      <div class="space-y-3">
+        <div>
+          <label class="text-gray-400 text-sm block mb-1">Device RID (6-digit ID)</label>
+          <input id="new-rid" type="text" placeholder="e.g. 000099" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm" autofocus>
+        </div>
+        <div>
+          <label class="text-gray-400 text-sm block mb-1">Device Type</label>
+          <select id="new-dtype" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+            <option value="terminal">Terminal</option>
+            <option value="reader">Reader</option>
+            <option value="controller">Controller</option>
+          </select>
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button onclick="createNewDevice()" class="btn-green text-white px-4 py-2 rounded text-sm font-medium flex-1">Create</button>
+          <button onclick="document.getElementById('new-device-modal').remove()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded text-sm font-medium">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.getElementById('new-rid').focus();
+}
+
+async function createNewDevice() {
+  const rid = document.getElementById('new-rid').value.trim();
+  const dtype = document.getElementById('new-dtype').value;
+  if (!rid) return;
+  const r = await fetchJSON('/api/devices/new', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ rid, device_type: dtype })
+  });
+  document.getElementById('new-device-modal')?.remove();
+  if (r && r.status === 'created') poll();
+}
+
+async function triggerSync(deviceId) {
+  const r = await fetchJSON(`/api/devices/${deviceId}/sync`, { method: 'POST' });
+  if (r) { setTimeout(poll, 1000); }
+}
+
+async function bootstrapDevice(deviceId) {
+  await fetchJSON(`/api/devices/${deviceId}/bootstrap`, { method: 'POST' });
+  poll();
+}
+
+function openQRModal(deviceId) {
+  const modal = document.createElement('div');
+  modal.id = 'qr-modal';
+  modal.className = 'fixed inset-0 bg-black/70 modal-overlay z-50 flex items-center justify-center p-4';
+  modal.onclick = e => { if(e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div class="card p-6 w-full max-w-md" onclick="event.stopPropagation()">
+      <h2 class="text-lg font-bold text-white mb-4">📱 QR Activation — ${deviceId}</h2>
+      <div class="space-y-3">
+        <div>
+          <label class="text-gray-400 text-sm block mb-1">QR Token (from backend /api/v1/devices/provision)</label>
+          <textarea id="qr-token-input" rows="4" placeholder="Paste QR token here..." class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm font-mono"></textarea>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="activateWithQR('${deviceId}')" class="btn-green text-white px-4 py-2 rounded text-sm font-medium flex-1">🔓 Activate</button>
+          <button onclick="document.getElementById('qr-modal').remove()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded text-sm font-medium">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function activateWithQR(deviceId) {
+  const token = document.getElementById('qr-token-input').value.trim();
+  if (!token) return;
+  const r = await fetchJSON(`/api/devices/${deviceId}/activate`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ qr_token: token })
+  });
+  document.getElementById('qr-modal')?.remove();
+  poll();
+}
+
+async function approveDevice(deviceId) {
+  // Get pending registration from backend, then approve
+  const pending = await fetchJSON('http://localhost:8002/api/v1/devices/pending');
+  if (!pending) return;
+  const reg = (Array.isArray(pending) ? pending : []).find(p => p.rid === deviceId && p.status === 'pending');
+  if (!reg) { alert('No pending registration found for ' + deviceId); return; }
+
+  // We need a company_id — use default
+  const r = await fetch(`http://localhost:8002/api/v1/devices/pending/${reg.id}/approve`, {
+    method: 'POST', headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + generateAdminJWT()
+    },
+    body: JSON.stringify({
+      company_id: '00000000-0000-0000-0000-000000000001',
+      name: 'Device ' + deviceId,
+    })
+  });
+  poll();
+}
+
+async function rejectDevice(deviceId) {
+  const pending = await fetchJSON('http://localhost:8002/api/v1/devices/pending');
+  if (!pending) return;
+  const reg = (Array.isArray(pending) ? pending : []).find(p => p.rid === deviceId && p.status === 'pending');
+  if (!reg) return;
+  await fetch(`http://localhost:8002/api/v1/devices/pending/${reg.id}/reject`, {
+    method: 'POST', headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + generateAdminJWT()
+    }
+  });
+  poll();
+}
+
+// Simple JWT generation for dev/testing (HS256, matches dm3-dev-secret-change-me)
+function generateAdminJWT() {
+  // In development, we use a hardcoded dev JWT.
+  // The backend accepts JWT_SECRET=dm3-dev-secret-change-me
+  function b64url(s) { return btoa(s).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_'); }
+  const header = b64url(JSON.stringify({alg:'HS256',typ:'JWT'}));
+  const now = Math.floor(Date.now()/1000);
+  const payload = b64url(JSON.stringify({
+    sub:'user:admin', role:'system_admin',
+    cid:'00000000-0000-0000-0000-000000000001',
+    iat:now, exp:now+3600, iss:'dm3'
+  }));
+  // NOTE: This is unsigned — works only if backend doesn't validate signature in dev mode
+  // For real testing, get a token from auth-svc
+  return header + '.' + payload + '.dev-unsigned';
+}
+
+// Start polling
+pollInterval = setInterval(poll, 2000);
+poll();
+</script>
+</body>
+</html>

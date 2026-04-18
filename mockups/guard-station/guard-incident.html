@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>Duall Master — Incident Response</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: #070A12;
+  color: #E8ECF0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Alert banner */
+.alert-banner {
+  height: 44px;
+  background: linear-gradient(90deg, #7F1D1D, #991B1B, #7F1D1D);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 12px;
+  animation: bannerPulse 2s ease-in-out infinite;
+}
+@keyframes bannerPulse {
+  0%, 100% { background-color: #7F1D1D; }
+  50% { background-color: #991B1B; }
+}
+.alert-icon {
+  font-size: 18px;
+  animation: blink 1s infinite;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.alert-text {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 700;
+  color: #FCA5A5;
+  letter-spacing: 0.02em;
+}
+.alert-exit {
+  font-size: 12px;
+  font-weight: 600;
+  color: #FCA5A5;
+  background: rgba(255,255,255,0.1);
+  padding: 4px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid rgba(252,165,165,0.3);
+}
+
+/* Main layout */
+.incident-layout {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* Left side */
+.left-side {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Primary camera */
+.primary-cam {
+  flex: 1;
+  background: #0a0d14;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid #1C2333;
+}
+.primary-cam .cam-content {
+  color: #1C2333;
+  font-size: 48px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.primary-cam .overlay-label {
+  position: absolute;
+  bottom: 12px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.primary-cam .cam-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #E8ECF0;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+}
+.primary-cam .cam-time-big {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: #94A3B8;
+}
+.primary-cam .rec-badge {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #EF4444;
+}
+.rec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #EF4444;
+  animation: blink 1s infinite;
+}
+.motion-box {
+  position: absolute;
+  border: 2px solid rgba(34, 197, 94, 0.6);
+  border-radius: 4px;
+  background: rgba(34, 197, 94, 0.05);
+}
+
+/* Adjacent cameras */
+.adjacent-cams {
+  height: 160px;
+  display: flex;
+  border-bottom: 1px solid #1C2333;
+}
+.adj-cam {
+  flex: 1;
+  background: #0a0d14;
+  border-right: 1px solid #1C2333;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.adj-cam:last-child { border-right: none; }
+.adj-cam .adj-label {
+  position: absolute;
+  bottom: 6px;
+  left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+.adj-cam .adj-sub {
+  position: absolute;
+  bottom: 6px;
+  right: 8px;
+  font-size: 10px;
+  color: #475569;
+  font-family: 'JetBrains Mono', monospace;
+}
+.adj-cam .no-signal { color: #1C2333; font-size: 18px; font-family: 'JetBrains Mono', monospace; }
+
+/* Timeline */
+.timeline-panel {
+  height: 160px;
+  background: #0D1117;
+  display: flex;
+  flex-direction: column;
+}
+.tl-header {
+  height: 28px;
+  background: #161B26;
+  border-bottom: 1px solid #1C2333;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.tl-body {
+  flex: 1;
+  padding: 8px 14px;
+  overflow: hidden;
+  font-size: 12px;
+}
+.tl-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 3px 0;
+}
+.tl-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #475569;
+  flex-shrink: 0;
+  width: 60px;
+}
+.tl-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+.tl-dot.red { background: #EF4444; }
+.tl-dot.blue { background: #3B82F6; }
+.tl-dot.green { background: #22C55E; }
+.tl-dot.amber { background: #EAB308; }
+.tl-text { color: #94A3B8; }
+.tl-text strong { color: #E8ECF0; font-weight: 500; }
+.tl-now {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.tl-now-line {
+  flex: 1;
+  height: 1px;
+  background: #3B82F6;
+}
+.tl-now-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #3B82F6;
+}
+
+/* Right side */
+.right-side {
+  width: 420px;
+  background: #0D1117;
+  border-left: 1px solid #1C2333;
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid #1C2333;
+}
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 8px 12px;
+  font-size: 13px;
+}
+.detail-label { color: #475569; font-weight: 500; }
+.detail-value { color: #E8ECF0; }
+.severity-critical {
+  color: #EF4444;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.severity-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #EF4444;
+  animation: blink 1.5s infinite;
+}
+
+/* Action buttons */
+.actions-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid #1C2333;
+}
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.incident-btn {
+  height: 48px;
+  border: none;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  color: #fff;
+}
+.incident-btn .shortcut {
+  font-size: 10px;
+  font-weight: 500;
+  background: rgba(255,255,255,0.15);
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-left: auto;
+}
+.btn-ack { background: #2563EB; }
+.btn-dispatch { background: #16A34A; }
+.btn-escalate { background: #F59E0B; color: #000; }
+.btn-escalate .shortcut { background: rgba(0,0,0,0.15); color: #000; }
+.btn-lockdown {
+  background: transparent;
+  border: 2px solid #EF4444 !important;
+  color: #EF4444;
+}
+.btn-lockdown .shortcut { background: rgba(239,68,68,0.15); color: #EF4444; }
+
+/* Comms */
+.comms-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid #1C2333;
+}
+.comms-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.comm-btn {
+  height: 40px;
+  background: #161B26;
+  border: 1px solid #1C2333;
+  border-radius: 6px;
+  color: #94A3B8;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+/* SOP */
+.sop-section {
+  flex: 1;
+  padding: 16px 20px;
+  overflow: hidden;
+}
+.sop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sop-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: #94A3B8;
+}
+.sop-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid #334155;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+.sop-check.done {
+  background: #16A34A;
+  border-color: #16A34A;
+  color: #fff;
+}
+.sop-check.active {
+  border-color: #3B82F6;
+  color: #3B82F6;
+}
+.sop-item.done { color: #475569; text-decoration: line-through; }
+.sop-item.active { color: #E8ECF0; font-weight: 500; }
+
+/* Status Bar */
+.status-bar {
+  height: 36px;
+  background: #7F1D1D;
+  border-top: 1px solid #991B1B;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 24px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #FCA5A5;
+}
+.status-spacer { flex: 1; }
+.status-clock {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #FCA5A5;
+}
+.lockdown-flash {
+  font-weight: 700;
+  color: #fff;
+  animation: blink 1s infinite;
+}
+</style>
+</head>
+<body>
+
+<!-- Alert Banner -->
+<div class="alert-banner">
+  <span class="alert-icon">🔴</span>
+  <span class="alert-text">SỰ CỐ — Xâm nhập: Khu B, Phòng Server · INTRUSION: Zone B, Server Room</span>
+  <span class="alert-exit">✕ Thoát / Exit (Esc)</span>
+</div>
+
+<div class="incident-layout">
+  <!-- Left Side -->
+  <div class="left-side">
+    <!-- Primary Camera -->
+    <div class="primary-cam">
+      <div class="cam-content">▋</div>
+      <div class="rec-badge"><span class="rec-dot"></span> REC</div>
+      <div class="motion-box" style="top:25%;left:35%;width:180px;height:140px;"></div>
+      <div class="overlay-label">
+        <span class="cam-name">CAM 12 — Phòng Server / Server Room</span>
+        <span class="cam-time-big">14:32:42</span>
+      </div>
+    </div>
+
+    <!-- Adjacent Cameras -->
+    <div class="adjacent-cams">
+      <div class="adj-cam">
+        <span class="no-signal">● ● ●</span>
+        <span class="adj-label">CAM 13 · Hành lang B</span>
+        <span class="adj-sub">14:32:42</span>
+      </div>
+      <div class="adj-cam">
+        <span class="no-signal">● ● ●</span>
+        <span class="adj-label">CAM 14 · Lối ra B</span>
+        <span class="adj-sub">14:32:42</span>
+      </div>
+      <div class="adj-cam">
+        <span class="no-signal">● ● ●</span>
+        <span class="adj-label">CAM 15 · Cầu thang B</span>
+        <span class="adj-sub">14:32:42</span>
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="timeline-panel">
+      <div class="tl-header">📋 Dòng thời gian / Timeline</div>
+      <div class="tl-body">
+        <div class="tl-item"><span class="tl-time">14:32:07</span><span class="tl-dot red"></span><span class="tl-text"><strong>Phát hiện chuyển động Khu B</strong> — Motion Sensor #4</span></div>
+        <div class="tl-item"><span class="tl-time">14:32:08</span><span class="tl-dot blue"></span><span class="tl-text">Camera 12 tự động lấy nét — Auto-focused</span></div>
+        <div class="tl-item"><span class="tl-time">14:32:10</span><span class="tl-dot blue"></span><span class="tl-text">Gửi cảnh báo tới tất cả bảo vệ</span></div>
+        <div class="tl-item"><span class="tl-time">14:32:15</span><span class="tl-dot green"></span><span class="tl-text"><strong>Trần Văn B</strong> đã được điều phối</span></div>
+        <div class="tl-item"><span class="tl-time">14:32:30</span><span class="tl-dot amber"></span><span class="tl-text">Cửa Khu B đã khoá tự động — Auto-locked</span></div>
+        <div class="tl-now">
+          <span class="tl-now-label">▶ HIỆN TẠI</span>
+          <span class="tl-now-line"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Side -->
+  <div class="right-side">
+    <!-- Incident Detail -->
+    <div class="detail-section">
+      <div class="section-title">Chi tiết sự cố / Incident Detail</div>
+      <div class="detail-grid">
+        <span class="detail-label">Loại / Type</span>
+        <span class="detail-value">Xâm nhập / Intrusion</span>
+        <span class="detail-label">Khu vực / Zone</span>
+        <span class="detail-value">B — Phòng Server</span>
+        <span class="detail-label">Thời gian</span>
+        <span class="detail-value">14:32:07</span>
+        <span class="detail-label">Nguồn / Source</span>
+        <span class="detail-value">Motion Sensor #4</span>
+        <span class="detail-label">Mức độ</span>
+        <span class="severity-critical"><span class="severity-dot"></span>CRITICAL</span>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions-section">
+      <div class="section-title">Hành động / Actions</div>
+      <div class="action-buttons">
+        <button class="incident-btn btn-ack">✓ Xác nhận / Acknowledge <span class="shortcut">Space</span></button>
+        <button class="incident-btn btn-dispatch">👮 Điều phối / Dispatch <span class="shortcut">G</span></button>
+        <button class="incident-btn btn-escalate">⬆ Nâng cấp / Escalate <span class="shortcut">E</span></button>
+        <button class="incident-btn btn-lockdown">🔒 Phong toả / Lockdown <span class="shortcut">L</span></button>
+      </div>
+    </div>
+
+    <!-- Comms -->
+    <div class="comms-section">
+      <div class="section-title">Liên lạc / Communications</div>
+      <div class="comms-grid">
+        <button class="comm-btn">📻 Radio</button>
+        <button class="comm-btn">📞 Intercom</button>
+        <button class="comm-btn">☎ Điện thoại</button>
+        <button class="comm-btn">📝 Ghi chú / Note</button>
+      </div>
+    </div>
+
+    <!-- SOP -->
+    <div class="sop-section">
+      <div class="section-title">Quy trình / SOP — Intrusion</div>
+      <div class="sop-list">
+        <div class="sop-item done"><span class="sop-check done">✓</span>1. Xác nhận cảnh báo / Acknowledge alert</div>
+        <div class="sop-item done"><span class="sop-check done">✓</span>2. Kiểm tra camera / Check cameras</div>
+        <div class="sop-item active"><span class="sop-check active">3</span>3. Điều phối bảo vệ / Dispatch guard</div>
+        <div class="sop-item"><span class="sop-check"></span>4. Nếu xác nhận: Phong toả khu vực</div>
+        <div class="sop-item"><span class="sop-check"></span>5. Gọi quản lý / Call supervisor</div>
+        <div class="sop-item"><span class="sop-check"></span>6. Lập báo cáo / File report</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Status Bar (Red = Active Incident) -->
+<div class="status-bar">
+  <span class="lockdown-flash">🔴 INCIDENT ACTIVE</span>
+  <div class="status-item">Khu B — Phong toả / Zone B Locked</div>
+  <div class="status-item">👮 Trần Văn B đang tới / Dispatched</div>
+  <div class="status-spacer"></div>
+  <div class="status-item">Thời gian xử lý: 0:35</div>
+  <span class="status-clock">14:32:42</span>
+</div>
+
+</body>
+</html>
