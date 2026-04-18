@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duall Master 3.0 — Analytics</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', -apple-system, sans-serif; background: #0B1120; color: #F8FAFC; font-size: 13px; display: flex; height: 100vh; overflow: hidden; font-variant-numeric: tabular-nums; }
+.sidebar { width: 240px; background: #111827; border-right: 1px solid #1E293B; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+.sidebar-logo { padding: 16px; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #1E293B; }
+.sidebar-logo .diamond { width: 20px; height: 20px; background: #3B82F6; transform: rotate(45deg); border-radius: 4px; }
+.sidebar-section { padding: 16px 12px 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.nav-item { display: flex; align-items: center; padding: 6px 12px; margin: 1px 8px; border-radius: 6px; color: #94A3B8; font-size: 13px; cursor: pointer; gap: 10px; }
+.nav-item:hover { background: #1E293B; color: #F8FAFC; }
+.nav-item.active { background: rgba(6,182,212,0.15); color: #06B6D4; border-left: 2px solid #06B6D4; }
+.nav-item .badge { margin-left: auto; background: #EF4444; color: white; font-size: 10px; padding: 1px 6px; border-radius: 9999px; font-weight: 600; }
+.sidebar-bottom { margin-top: auto; border-top: 1px solid #1E293B; padding: 8px; }
+.user-avatar { width: 28px; height: 28px; background: #3B82F6; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.topbar { height: 48px; background: #111827; border-bottom: 1px solid #1E293B; display: flex; align-items: center; padding: 0 24px; flex-shrink: 0; }
+.breadcrumb { font-size: 13px; color: #94A3B8; }
+.breadcrumb span { color: #F8FAFC; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.content { flex: 1; overflow-y: auto; padding: 24px; }
+.content::-webkit-scrollbar { width: 6px; }
+.content::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.page-title { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+.btn { padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 6px; }
+.btn-primary { background: #2563EB; color: white; }
+.btn-secondary { background: #1E293B; color: #F8FAFC; border: 1px solid #334155; }
+
+/* Date picker */
+.date-range { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: #1E293B; border: 1px solid #334155; border-radius: 6px; color: #F8FAFC; font-size: 12px; }
+
+/* Tabs */
+.tabs { display: flex; gap: 0; border-bottom: 1px solid #1E293B; margin-bottom: 20px; }
+.tab { padding: 8px 16px; font-size: 13px; font-weight: 500; color: #94A3B8; cursor: pointer; border-bottom: 2px solid transparent; }
+.tab:hover { color: #F8FAFC; }
+.tab.active { color: #F8FAFC; border-bottom-color: #06B6D4; }
+
+/* Chart placeholder */
+.chart-card { background: #1E293B; border: 1px solid #334155; border-radius: 8px; overflow: hidden; }
+.chart-header { padding: 12px 16px; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
+.chart-title { font-size: 13px; font-weight: 600; }
+.chart-area { height: 220px; padding: 16px; display: flex; align-items: flex-end; gap: 0; position: relative; }
+.chart-area-line { height: 220px; padding: 16px; position: relative; }
+
+/* Bar chart */
+.bar-group { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.bar { width: 70%; border-radius: 3px 3px 0 0; transition: height 0.3s; min-height: 2px; }
+.bar-label { font-size: 10px; color: #64748B; }
+
+/* Line chart placeholder */
+.line-placeholder { width: 100%; height: 100%; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 180'%3E%3Cpath d='M0,140 Q50,130 100,120 T200,80 T300,90 T400,50 T500,60 T600,30' fill='none' stroke='%233B82F6' stroke-width='2'/%3E%3Cpath d='M0,140 Q50,130 100,120 T200,80 T300,90 T400,50 T500,60 T600,30 L600,180 L0,180 Z' fill='url(%23grad)' /%3E%3Cdefs%3E%3ClinearGradient id='grad' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0%25' stop-color='%233B82F6' stop-opacity='0.2'/%3E%3Cstop offset='100%25' stop-color='%233B82F6' stop-opacity='0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0,160 Q50,155 100,150 T200,130 T300,135 T400,110 T500,100 T600,85' fill='none' stroke='%238B5CF6' stroke-width='2' stroke-dasharray='4,4'/%3E%3C/svg%3E") no-repeat center; background-size: 100% 100%; }
+.chart-legend { display: flex; gap: 16px; padding: 8px 16px; border-top: 1px solid #334155; }
+.chart-legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #94A3B8; }
+.chart-legend-dot { width: 8px; height: 3px; border-radius: 2px; }
+
+/* Grid layouts */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+
+/* Stat cards */
+.stat-card { background: #1E293B; border: 1px solid #334155; border-radius: 8px; padding: 16px; }
+.stat-label { font-size: 12px; font-weight: 500; color: #94A3B8; margin-bottom: 4px; }
+.stat-value { font-size: 24px; font-weight: 600; letter-spacing: -0.025em; }
+.stat-sub { font-size: 11px; color: #64748B; margin-top: 2px; }
+.stat-trend { font-size: 11px; margin-top: 2px; }
+.stat-trend.up { color: #22C55E; }
+.stat-trend.down { color: #EF4444; }
+
+/* Report cards */
+.report-card { background: #1E293B; border: 1px solid #334155; border-radius: 8px; padding: 16px; cursor: pointer; }
+.report-card:hover { border-color: #06B6D4; }
+.report-icon { font-size: 20px; margin-bottom: 8px; }
+.report-name { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.report-desc { font-size: 11px; color: #94A3B8; line-height: 1.4; }
+.report-meta { font-size: 10px; color: #64748B; margin-top: 8px; }
+
+/* Heatmap */
+.heatmap { display: grid; grid-template-columns: 40px repeat(24, 1fr); gap: 2px; padding: 16px; }
+.heatmap-label { font-size: 10px; color: #64748B; display: flex; align-items: center; }
+.heatmap-cell { aspect-ratio: 1; border-radius: 2px; min-height: 16px; }
+.heatmap-header { font-size: 9px; color: #475569; text-align: center; }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-logo"><div class="diamond"></div> DUALL MASTER</div>
+  <div class="sidebar-section" style="color:#64748B;">Overview</div>
+  <a class="nav-item">📊 Dashboard</a>
+  <a class="nav-item">🔔 Alerts <span class="badge">3</span></a>
+  <div class="sidebar-section" style="color:#3B82F6;">🔒 SECURE</div>
+  <a class="nav-item">🚪 Access Control</a>
+  <a class="nav-item">📹 CCTV</a>
+  <div class="sidebar-section" style="color:#8B5CF6;">👤 MANAGE</div>
+  <a class="nav-item">🧑‍💼 Visitors</a>
+  <a class="nav-item">⏰ Attendance</a>
+  <div class="sidebar-section" style="color:#F59E0B;">🏢 OPERATE</div>
+  <a class="nav-item">🅿️ Parking</a>
+  <div class="sidebar-section" style="color:#06B6D4;">🧠 SMART</div>
+  <a class="nav-item active">📈 Analytics</a>
+  <a class="nav-item">🧠 AI Assistant</a>
+  <a class="nav-item">⚡ Automation</a>
+  <div class="sidebar-bottom">
+    <a class="nav-item">⚙️ Settings</a>
+    <div class="nav-item" style="gap: 8px;">
+      <div class="user-avatar">CN</div>
+      <span style="color: #F8FAFC; font-size: 12px; font-weight: 500;">Cuong N.</span>
+      <span style="margin-left: auto; color: #64748B;">▾</span>
+    </div>
+  </div>
+</nav>
+
+<div class="main">
+  <header class="topbar">
+    <div class="breadcrumb">🧠 SMART / <span>Analytics</span></div>
+    <div class="topbar-right">
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#1E293B;border:1px solid #334155;border-radius:6px;color:#64748B;font-size:12px;">🔍 Search... <kbd style="background:#334155;padding:1px 5px;border-radius:4px;font-size:10px;">⌘K</kbd></div>
+      <div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#94A3B8;position:relative;">🔔<div style="position:absolute;top:4px;right:4px;width:8px;height:8px;background:#EF4444;border-radius:50%;border:2px solid #111827;"></div></div>
+      <div class="user-avatar">CN</div>
+    </div>
+  </header>
+
+  <div class="content">
+    <div class="page-header">
+      <h1 class="page-title">Analytics Hub</h1>
+      <div style="display:flex;gap:8px;">
+        <div class="date-range">📅 Feb 12 – Feb 19, 2026 ▾</div>
+        <button class="btn btn-secondary">📥 Export</button>
+        <button class="btn btn-primary">+ New Report</button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active">Overview</div>
+      <div class="tab">Access</div>
+      <div class="tab">Visitors</div>
+      <div class="tab">Attendance</div>
+      <div class="tab">Occupancy</div>
+      <div class="tab">Security</div>
+      <div class="tab">Energy</div>
+    </div>
+
+    <!-- Summary stats -->
+    <div class="grid-4">
+      <div class="stat-card">
+        <div class="stat-label">🔒 Access Events</div>
+        <div class="stat-value" style="color:#3B82F6;">89,421</div>
+        <div class="stat-trend up">↑ 12.3% vs last week</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">👤 Visitor Check-ins</div>
+        <div class="stat-value" style="color:#8B5CF6;">342</div>
+        <div class="stat-trend up">↑ 8.1% vs last week</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">⏰ Avg Attendance</div>
+        <div class="stat-value" style="color:#22C55E;">91.2%</div>
+        <div class="stat-trend down">↓ 1.3% vs last week</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">⚠️ Security Incidents</div>
+        <div class="stat-value" style="color:#EF4444;">7</div>
+        <div class="stat-trend up" style="color:#22C55E;">↓ 30% vs last week</div>
+      </div>
+    </div>
+
+    <!-- Charts row -->
+    <div class="grid-2">
+      <!-- Access trend -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Access Events — 7 Day Trend</span>
+          <select style="background:#111827;border:1px solid #334155;border-radius:4px;color:#94A3B8;padding:4px 8px;font-size:11px;"><option>Daily</option><option>Hourly</option></select>
+        </div>
+        <div class="chart-area-line">
+          <div class="line-placeholder"></div>
+        </div>
+        <div class="chart-legend">
+          <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#3B82F6;"></div> This week</div>
+          <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#8B5CF6;"></div> Last week</div>
+        </div>
+      </div>
+
+      <!-- Door utilization bar chart -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Top Doors by Usage</span>
+          <span style="font-size:11px;color:#64748B;">This week</span>
+        </div>
+        <div class="chart-area" style="padding-bottom:8px;">
+          <div class="bar-group"><div class="bar" style="height:180px;background:#3B82F6;"></div><div class="bar-label">Main</div></div>
+          <div class="bar-group"><div class="bar" style="height:150px;background:#3B82F6;"></div><div class="bar-label">Gate 1</div></div>
+          <div class="bar-group"><div class="bar" style="height:120px;background:#3B82F6;"></div><div class="bar-label">T'stile</div></div>
+          <div class="bar-group"><div class="bar" style="height:100px;background:#3B82F6;"></div><div class="bar-label">Lift 1</div></div>
+          <div class="bar-group"><div class="bar" style="height:85px;background:#3B82F6;"></div><div class="bar-label">Door 3</div></div>
+          <div class="bar-group"><div class="bar" style="height:60px;background:#3B82F6;"></div><div class="bar-label">Door 5</div></div>
+          <div class="bar-group"><div class="bar" style="height:45px;background:#3B82F6;"></div><div class="bar-label">Gate 2</div></div>
+          <div class="bar-group"><div class="bar" style="height:30px;background:#3B82F6;"></div><div class="bar-label">Server</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Heatmap -->
+    <div class="chart-card" style="margin-bottom:16px;">
+      <div class="chart-header">
+        <span class="chart-title">Access Heatmap — Hourly Pattern</span>
+        <span style="font-size:11px;color:#64748B;">Last 7 days</span>
+      </div>
+      <div class="heatmap">
+        <!-- Header row -->
+        <div></div>
+        <div class="heatmap-header">0</div><div class="heatmap-header">1</div><div class="heatmap-header">2</div><div class="heatmap-header">3</div><div class="heatmap-header">4</div><div class="heatmap-header">5</div>
+        <div class="heatmap-header">6</div><div class="heatmap-header">7</div><div class="heatmap-header">8</div><div class="heatmap-header">9</div><div class="heatmap-header">10</div><div class="heatmap-header">11</div>
+        <div class="heatmap-header">12</div><div class="heatmap-header">13</div><div class="heatmap-header">14</div><div class="heatmap-header">15</div><div class="heatmap-header">16</div><div class="heatmap-header">17</div>
+        <div class="heatmap-header">18</div><div class="heatmap-header">19</div><div class="heatmap-header">20</div><div class="heatmap-header">21</div><div class="heatmap-header">22</div><div class="heatmap-header">23</div>
+        <!-- Mon -->
+        <div class="heatmap-label">Mon</div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.05);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.03);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.02);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.02);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.03);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.08);"></div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.2);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.6);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.95);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.7);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.4);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.35);"></div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.5);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.45);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.35);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.3);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.4);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.8);"></div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.5);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.2);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.1);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.08);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.05);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.03);"></div>
+        <!-- Tue -->
+        <div class="heatmap-label">Tue</div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.04);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.02);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.02);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.01);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.02);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.1);"></div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.25);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.65);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.9);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.65);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.45);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.4);"></div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.55);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.5);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.4);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.35);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.45);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.85);"></div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.45);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.18);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.1);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.06);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.04);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.03);"></div>
+        <!-- Wed -->
+        <div class="heatmap-label">Wed</div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.05);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.03);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.01);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.01);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.03);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.12);"></div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.3);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.7);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,1);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.75);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.5);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.4);"></div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.6);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.5);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.4);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.35);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.5);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.9);"></div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.5);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.2);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.12);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.07);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.05);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.04);"></div>
+        <!-- Thu -->
+        <div class="heatmap-label">Thu</div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.04);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.02);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.02);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.01);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.04);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.1);"></div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.22);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.55);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.85);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.6);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.4);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.35);"></div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.5);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.45);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.35);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.3);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.4);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.75);"></div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.4);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.15);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.08);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.05);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.04);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.03);"></div>
+        <!-- Fri -->
+        <div class="heatmap-label">Fri</div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.03);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.02);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.01);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.01);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.02);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.08);"></div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.18);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.5);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.8);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.55);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.4);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.3);"></div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.35);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.3);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.3);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.35);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.5);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.65);"></div>
+        <div class="heatmap-cell" style="background:rgba(59,130,246,0.3);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.12);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.06);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.04);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.03);"></div><div class="heatmap-cell" style="background:rgba(59,130,246,0.02);"></div>
+      </div>
+    </div>
+
+    <!-- Report cards -->
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:12px;">📋 Available Reports</h3>
+    <div class="grid-4">
+      <div class="report-card">
+        <div class="report-icon">🔒</div>
+        <div class="report-name">Access Summary</div>
+        <div class="report-desc">Daily/weekly/monthly access events, denied attempts, peak hours analysis.</div>
+        <div class="report-meta">Last generated: Today 08:00</div>
+      </div>
+      <div class="report-card">
+        <div class="report-icon">👤</div>
+        <div class="report-name">Visitor Report</div>
+        <div class="report-desc">Visitor volume trends, average visit duration, host ranking.</div>
+        <div class="report-meta">Last generated: Yesterday</div>
+      </div>
+      <div class="report-card">
+        <div class="report-icon">⏰</div>
+        <div class="report-name">Attendance Report</div>
+        <div class="report-desc">Punctuality rates, absenteeism, overtime patterns by department.</div>
+        <div class="report-meta">Last generated: Today 08:00</div>
+      </div>
+      <div class="report-card">
+        <div class="report-icon">🏢</div>
+        <div class="report-name">Occupancy Analysis</div>
+        <div class="report-desc">Space utilization, peak occupancy times, room booking efficiency.</div>
+        <div class="report-meta">Last generated: Feb 18</div>
+      </div>
+      <div class="report-card">
+        <div class="report-icon">⚠️</div>
+        <div class="report-name">Security Incidents</div>
+        <div class="report-desc">Incident trends, alarm frequency, average response times.</div>
+        <div class="report-meta">Last generated: Today 08:00</div>
+      </div>
+      <div class="report-card">
+        <div class="report-icon">⚡</div>
+        <div class="report-name">Energy & IoT</div>
+        <div class="report-desc">Consumption patterns, cost trends, sustainability metrics.</div>
+        <div class="report-meta">Last generated: Feb 17</div>
+      </div>
+      <div class="report-card">
+        <div class="report-icon">🔧</div>
+        <div class="report-name">Device Health</div>
+        <div class="report-desc">Uptime metrics, failure predictions, maintenance schedules.</div>
+        <div class="report-meta">Last generated: Today 06:00</div>
+      </div>
+      <div class="report-card">
+        <div class="report-icon">📊</div>
+        <div class="report-name">Custom Report</div>
+        <div class="report-desc">Build your own report with custom metrics, filters, and schedule.</div>
+        <div class="report-meta">Create new →</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

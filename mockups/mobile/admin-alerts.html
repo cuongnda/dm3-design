@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=375">
+<title>Admin Alerts — Duall Master 3.0</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1E293B; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Inter', -apple-system, sans-serif; }
+.phone-frame { width: 375px; height: 812px; background: #0A0E1A; border-radius: 44px; overflow: hidden; position: relative; border: 3px solid #334155; box-shadow: 0 0 40px rgba(0,0,0,0.5); }
+.notch { width: 150px; height: 28px; background: #000; border-radius: 0 0 18px 18px; position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 100; }
+.status-bar { height: 54px; padding: 30px 24px 0; display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: #F8FAFC; }
+.screen { height: calc(812px - 54px - 56px); overflow-y: auto; }
+.screen::-webkit-scrollbar { display: none; }
+.bottom-nav { height: 56px; background: #111827; border-top: 1px solid #1E293B; display: flex; align-items: center; justify-content: space-around; position: absolute; bottom: 0; left: 0; right: 0; padding-bottom: 4px; }
+.nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10px; font-weight: 500; color: #64748B; }
+.nav-item.active { color: #3B82F6; }
+.nav-item svg { width: 24px; height: 24px; }
+
+.top-app-bar { height: 48px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; }
+.top-app-bar h1 { font-size: 18px; font-weight: 600; color: #F8FAFC; letter-spacing: -0.015em; }
+.top-actions { display: flex; gap: 12px; }
+.top-actions button { background: none; border: none; color: #94A3B8; font-size: 13px; font-weight: 500; }
+
+.filter-bar { padding: 0 16px 12px; display: flex; gap: 8px; overflow-x: auto; }
+.filter-bar::-webkit-scrollbar { display: none; }
+.filter-chip { padding: 6px 14px; border-radius: 9999px; font-size: 13px; font-weight: 500; white-space: nowrap; border: 1px solid #334155; background: #1E293B; color: #94A3B8; }
+.filter-chip.active { background: #2563EB; color: #fff; border-color: #2563EB; }
+.filter-chip.critical { border-color: #7F1D1D; }
+.filter-chip.critical.active { background: #EF4444; border-color: #EF4444; }
+
+.section-header { padding: 12px 16px 8px; font-size: 11px; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; background: #0A0E1A; z-index: 10; }
+
+.alert-card { margin: 0 16px 12px; background: #1E293B; border-radius: 8px; border: 1px solid #334155; overflow: hidden; }
+.alert-accent { height: 100%; width: 3px; position: absolute; left: 0; top: 0; }
+.alert-inner { padding: 14px 14px 12px; position: relative; border-left: 3px solid transparent; }
+.alert-inner.critical { border-left-color: #EF4444; }
+.alert-inner.warning { border-left-color: #EAB308; }
+.alert-inner.info { border-left-color: #3B82F6; }
+.alert-inner.success { border-left-color: #22C55E; }
+
+.alert-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+.alert-severity { display: flex; align-items: center; gap: 6px; }
+.severity-dot { width: 8px; height: 8px; border-radius: 50%; }
+.severity-dot.red { background: #EF4444; box-shadow: 0 0 6px #EF4444; }
+.severity-dot.amber { background: #EAB308; }
+.severity-dot.blue { background: #3B82F6; }
+.severity-dot.green { background: #22C55E; }
+.alert-time { font-size: 12px; color: #64748B; font-variant-numeric: tabular-nums; }
+.alert-title { font-size: 14px; font-weight: 600; color: #F8FAFC; margin-bottom: 4px; }
+.alert-desc { font-size: 13px; color: #94A3B8; line-height: 1.4; margin-bottom: 10px; }
+.alert-actions { display: flex; gap: 8px; }
+.alert-btn { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; border: none; cursor: pointer; }
+.alert-btn.primary { background: #2563EB; color: white; }
+.alert-btn.ghost { background: transparent; color: #94A3B8; border: 1px solid #334155; }
+.alert-btn.danger { background: transparent; color: #EF4444; border: 1px solid #7F1D1D; }
+</style>
+</head>
+<body>
+<div class="phone-frame">
+  <div class="notch"></div>
+  <div class="status-bar">
+    <span>9:41</span>
+    <span style="display:flex;gap:6px;align-items:center;">
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="#F8FAFC"><rect x="0" y="7" width="3" height="5" rx="0.5"/><rect x="4.5" y="4" width="3" height="8" rx="0.5"/><rect x="9" y="1" width="3" height="11" rx="0.5"/><rect x="13" y="0" width="3" height="12" rx="0.5" opacity="0.3"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="#F8FAFC"><rect x="0" y="1" width="21" height="10" rx="2" stroke="#F8FAFC" stroke-width="1" fill="none"/><rect x="22" y="4" width="2" height="4" rx="0.5"/><rect x="2" y="3" width="15" height="6" rx="1" fill="#22C55E"/></svg>
+    </span>
+  </div>
+
+  <div class="screen">
+    <div class="top-app-bar">
+      <h1>Alerts</h1>
+      <div class="top-actions">
+        <button>Filter</button>
+        <button>⋮</button>
+      </div>
+    </div>
+
+    <div class="filter-bar">
+      <div class="filter-chip active">All (12)</div>
+      <div class="filter-chip critical">Critical (1)</div>
+      <div class="filter-chip">Warning (4)</div>
+      <div class="filter-chip">Info (7)</div>
+    </div>
+
+    <div class="section-header">Today</div>
+
+    <div class="alert-card">
+      <div class="alert-inner critical">
+        <div class="alert-header">
+          <div class="alert-severity"><div class="severity-dot red"></div><span style="font-size:11px;font-weight:600;color:#EF4444;">CRITICAL</span></div>
+          <span class="alert-time">10:23 AM</span>
+        </div>
+        <div class="alert-title">Door Forced Open — Door 3, Floor 2</div>
+        <div class="alert-desc">Sensor triggered. No matching access event. Security camera captured motion.</div>
+        <div class="alert-actions">
+          <button class="alert-btn primary">View Camera</button>
+          <button class="alert-btn danger">Acknowledge</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert-card">
+      <div class="alert-inner warning">
+        <div class="alert-header">
+          <div class="alert-severity"><div class="severity-dot amber"></div><span style="font-size:11px;font-weight:600;color:#EAB308;">WARNING</span></div>
+          <span class="alert-time">10:15 AM</span>
+        </div>
+        <div class="alert-title">Access Denied — Expired Card</div>
+        <div class="alert-desc">User: Tran Van Binh attempted access at Floor 5 reader with expired credential.</div>
+        <div class="alert-actions">
+          <button class="alert-btn ghost">View Details</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert-card">
+      <div class="alert-inner info">
+        <div class="alert-header">
+          <div class="alert-severity"><div class="severity-dot blue"></div><span style="font-size:11px;font-weight:500;color:#3B82F6;">INFO</span></div>
+          <span class="alert-time">10:12 AM</span>
+        </div>
+        <div class="alert-title">Visitor Checked In — Lobby</div>
+        <div class="alert-desc">Nguyen Thi Lan checked in. Host: Le Van Minh, Floor 8.</div>
+        <div class="alert-actions">
+          <button class="alert-btn ghost">View Visitor</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert-card">
+      <div class="alert-inner warning">
+        <div class="alert-header">
+          <div class="alert-severity"><div class="severity-dot amber"></div><span style="font-size:11px;font-weight:600;color:#EAB308;">WARNING</span></div>
+          <span class="alert-time">09:58 AM</span>
+        </div>
+        <div class="alert-title">Camera Offline — Parking P2</div>
+        <div class="alert-desc">Camera feed lost. Last frame captured at 09:57. Reconnection attempt #3 failed.</div>
+        <div class="alert-actions">
+          <button class="alert-btn ghost">View Device</button>
+          <button class="alert-btn ghost">Acknowledge</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert-card">
+      <div class="alert-inner success">
+        <div class="alert-header">
+          <div class="alert-severity"><div class="severity-dot green"></div><span style="font-size:11px;font-weight:500;color:#22C55E;">RESOLVED</span></div>
+          <span class="alert-time">09:45 AM</span>
+        </div>
+        <div class="alert-title">Guard Tour Completed</div>
+        <div class="alert-desc">Night Patrol Route A completed by Nguyen Van Minh. 12/12 checkpoints. Duration: 47min.</div>
+      </div>
+    </div>
+
+    <div class="alert-card">
+      <div class="alert-inner warning">
+        <div class="alert-header">
+          <div class="alert-severity"><div class="severity-dot amber"></div><span style="font-size:11px;font-weight:600;color:#EAB308;">WARNING</span></div>
+          <span class="alert-time">09:32 AM</span>
+        </div>
+        <div class="alert-title">Tailgating Detected — Main Gate</div>
+        <div class="alert-desc">Multiple entries detected on single access event. Camera clip saved.</div>
+        <div class="alert-actions">
+          <button class="alert-btn primary">View Camera</button>
+          <button class="alert-btn ghost">Dismiss</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-header">Yesterday</div>
+
+    <div class="alert-card">
+      <div class="alert-inner info">
+        <div class="alert-header">
+          <div class="alert-severity"><div class="severity-dot blue"></div><span style="font-size:11px;font-weight:500;color:#3B82F6;">INFO</span></div>
+          <span class="alert-time">11:45 PM</span>
+        </div>
+        <div class="alert-title">System Backup Completed</div>
+        <div class="alert-desc">Daily backup finished. 2.4GB processed. All data verified.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="4" rx="1"/><rect x="14" y="10" width="7" height="11" rx="1"/><rect x="3" y="13" width="7" height="8" rx="1"/></svg>
+      <span>Dashboard</span>
+    </div>
+    <div class="nav-item active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      <span>Alerts</span>
+    </div>
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 4h3a2 2 0 012 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 01-1.242.97L5 20V5.562a2 2 0 011.515-1.94l4-1A2 2 0 0113 4.561z"/></svg>
+      <span>Doors</span>
+    </div>
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="13" height="10" rx="2"/></svg>
+      <span>Cameras</span>
+    </div>
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+      <span>More</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

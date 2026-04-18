@@ -1,0 +1,279 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { startOfDay } from 'date-fns';
+import { ChevronDown, ChevronRight, Download, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import {
+  Button,
+  Input,
+  Label,
+  Select,
+  SelectOption,
+  Badge,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  DatetimePicker,
+  TablePaginationFooter,
+} from '@dm3/ui';
+import {
+  fetchAuditLogs,
+  exportAuditLogsUrl,
+  type AuditEntryDTO,
+  type AuditFilters,
+} from '@/lib/api';
+
+const SERVICES = ['auth-svc', 'identity-svc', 'access-svc', 'device-gateway'] as const;
+const ENTITY_TYPES = [
+  'account', 'tenant', 'user', 'access_device', 'access_group', 'access_point',
+  'zone', 'access_time', 'device', 'credential', 'department', 'user_group',
+] as const;
+const STATUSES = ['success', 'failure', 'error'] as const;
+
+function statusBadgeClass(status: string) {
+  if (status === 'success') return 'bg-green-500/15 text-green-400 border-green-500/30';
+  if (status === 'failure') return 'bg-red-500/15 text-red-400 border-red-500/30';
+  return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
+}
+
+function serviceBadgeClass(service: string) {
+  if (service === 'auth-svc') return 'bg-blue-500/15 text-blue-400';
+  if (service === 'identity-svc') return 'bg-purple-500/15 text-purple-400';
+  if (service === 'access-svc') return 'bg-green-500/15 text-green-400';
+  if (service === 'device-gateway') return 'bg-amber-500/15 text-amber-400';
+  return 'bg-muted text-muted-foreground';
+}
+
+function formatTime(iso: string) {
+  try { return new Date(iso).toLocaleString(); } catch { return iso; }
+}
+
+function RowDetail({ entry, t }: { entry: AuditEntryDTO; t: (key: string) => string }) {
+  return (
+    <TableRow className="hover:bg-transparent">
+      <TableCell colSpan={7} className="px-4 py-3 bg-card/30">
+        <div className="grid grid-cols-1 gap-3 text-[12px]">
+          {entry.actor_ip && (
+            <div className="flex gap-2">
+              <span className="text-muted-foreground w-28 shrink-0">{t('audit.detail.ip')}</span>
+              <span className="text-foreground font-mono">{entry.actor_ip}</span>
+            </div>
+          )}
+          {entry.user_agent && (
+            <div className="flex gap-2">
+              <span className="text-muted-foreground w-28 shrink-0">{t('audit.detail.userAgent')}</span>
+              <span className="text-foreground truncate max-w-xl">{entry.user_agent}</span>
+            </div>
+          )}
+          {entry.old_values && Object.keys(entry.old_values).length > 0 && (
+            <div>
+              <div className="text-muted-foreground mb-1">{t('audit.detail.oldValues')}</div>
+              <pre className="bg-background rounded p-2 text-[11px] text-red-400 overflow-auto max-h-32">
+                {JSON.stringify(entry.old_values, null, 2)}
+              </pre>
+            </div>
+          )}
+          {entry.new_values && Object.keys(entry.new_values).length > 0 && (
+            <div>
+              <div className="text-muted-foreground mb-1">{t('audit.detail.newValues')}</div>
+              <pre className="bg-background rounded p-2 text-[11px] text-green-400 overflow-auto max-h-32">
+                {JSON.stringify(entry.new_values, null, 2)}
+              </pre>
+            </div>
+          )}
+          {entry.metadata && Object.keys(entry.metadata).length > 0 && (
+            <div>
+              <div className="text-muted-foreground mb-1">{t('audit.detail.metadata')}</div>
+              <pre className="bg-background rounded p-2 text-[11px] text-muted-foreground overflow-auto max-h-32">
+                {JSON.stringify(entry.metadata, null, 2)}
+              </pre>
+            </div>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+export function AuditLogPage() {
+  const { t } = useTranslation('system');
+
+  const [entries, setEntries] = useState<AuditEntryDTO[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const [filters, setFilters] = useState<AuditFilters>({});
+  const [draftFilters, setDraftFilters] = useState<AuditFilters>({});
+
+  const load = useCallback((p: number, f: AuditFilters) => {
+    setLoading(true);
+    fetchAuditLogs(p, pageSize, f)
+      .then((res) => { setEntries(res.data); setTotal(res.total); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(page, filters); }, [page, filters, load]);
+
+  const applyFilters = () => { setFilters({ ...draftFilters }); setPage(1); };
+  const clearFilters = () => { setDraftFilters({}); setFilters({}); setPage(1); };
+  const hasFilters = Object.values(draftFilters).some((v) => v !== undefined && v !== '');
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const datePresets = [
+    { label: t('audit.presets.today'), value: startOfDay(new Date()) },
+  ];
+
+  return (
+    <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden p-6">
+      {/* Header */}
+      <div className="shrink-0 flex items-start justify-between">
+        <div>
+          <h1 className="text-[18px] font-semibold text-foreground">{t('audit.title')}</h1>
+          <p className="text-[13px] text-muted-foreground mt-0.5">{t('audit.description')}</p>
+        </div>
+        <Button variant="outline" size="sm" asChild>
+          <a href={exportAuditLogsUrl(filters)}>
+            <Download size={14} />
+            {t('audit.export')}
+          </a>
+        </Button>
+      </div>
+
+      {/* Filters */}
+      <div className="shrink-0 bg-card border border-border rounded-lg p-3">
+        <div className="flex flex-wrap gap-2 items-end">
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px]">{t('audit.filters.service')}</Label>
+            <Select value={draftFilters.service ?? ''} onValueChange={(v) => setDraftFilters((prev) => ({ ...prev, service: v || undefined }))}
+              className="w-[160px]" data-testid="sys-select-auditService">
+              <SelectOption value="">{t('audit.filters.allServices')}</SelectOption>
+              {SERVICES.map((s) => <SelectOption key={s} value={s}>{s}</SelectOption>)}
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px]">{t('audit.filters.action')}</Label>
+            <Input value={draftFilters.action ?? ''} onChange={(e) => setDraftFilters((prev) => ({ ...prev, action: e.target.value || undefined }))}
+              placeholder={t('audit.filters.action')} className="w-[140px] h-9" data-testid="sys-input-auditAction" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px]">{t('audit.filters.entityType')}</Label>
+            <Select value={draftFilters.entity_type ?? ''} onValueChange={(v) => setDraftFilters((prev) => ({ ...prev, entity_type: v || undefined }))}
+              className="w-[160px]" data-testid="sys-select-auditEntity">
+              <SelectOption value="">{t('audit.filters.allEntities')}</SelectOption>
+              {ENTITY_TYPES.map((et) => <SelectOption key={et} value={et}>{et}</SelectOption>)}
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px]">{t('audit.filters.status')}</Label>
+            <Select value={draftFilters.status ?? ''} onValueChange={(v) => setDraftFilters((prev) => ({ ...prev, status: v || undefined }))}
+              className="w-[140px]" data-testid="sys-select-auditStatus">
+              <SelectOption value="">{t('audit.filters.allStatuses')}</SelectOption>
+              {STATUSES.map((s) => <SelectOption key={s} value={s}>{s}</SelectOption>)}
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px]">{t('audit.filters.from')}</Label>
+            <DatetimePicker value={draftFilters.from ?? null} onChange={(v) => setDraftFilters((prev) => ({ ...prev, from: v || undefined }))}
+              placeholder={t('audit.filters.from')} className="w-[200px]" presets={datePresets} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px]">{t('audit.filters.to')}</Label>
+            <DatetimePicker value={draftFilters.to ?? null} onChange={(v) => setDraftFilters((prev) => ({ ...prev, to: v || undefined }))}
+              placeholder={t('audit.filters.to')} className="w-[200px]" presets={datePresets} />
+          </div>
+          <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
+            <Label className="text-[11px]">{t('audit.filters.search')}</Label>
+            <Input value={draftFilters.search ?? ''} onChange={(e) => setDraftFilters((prev) => ({ ...prev, search: e.target.value || undefined }))}
+              placeholder={t('audit.filters.search')} className="h-9" data-testid="sys-input-auditSearch" />
+          </div>
+          <div className="flex gap-1 self-end">
+            {hasFilters && (
+              <Button size="sm" variant="ghost" onClick={clearFilters} data-testid="sys-button-auditClear">
+                <X size={14} /> {t('audit.filters.clear')}
+              </Button>
+            )}
+            <Button size="sm" onClick={applyFilters} data-testid="sys-button-auditApply">
+              {t('audit.filters.apply')}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+        <div className="min-h-0 flex-1 overflow-auto">
+          {loading ? (
+            <div className="flex items-center justify-center h-40">
+              <div className="w-5 h-5 border-2 border-operate/30 border-t-operate rounded-full animate-spin" />
+            </div>
+          ) : (
+            <Table noWrapper>
+              <TableHeader className="sticky top-0 z-10 bg-muted/30">
+                <TableRow>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.time')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.actor')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.service')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.action')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.entity')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.status')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('audit.table.details')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {entries.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="px-4 py-10 text-center text-[13px] text-muted-foreground">
+                      {t('audit.empty')}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  entries.map((entry) => (
+                    <React.Fragment key={entry.id}>
+                      <TableRow className="cursor-pointer"
+                        onClick={() => setExpandedId(expandedId === entry.id ? null : entry.id)}>
+                        <TableCell className="px-4 text-[12px] text-muted-foreground font-mono">{formatTime(entry.time)}</TableCell>
+                        <TableCell className="px-4 text-[13px]">{entry.actor_email ?? entry.actor_id ?? '—'}</TableCell>
+                        <TableCell className="px-4">
+                          <Badge variant="outline" className={`rounded text-[11px] ${serviceBadgeClass(entry.service)}`}>{entry.service}</Badge>
+                        </TableCell>
+                        <TableCell className="px-4 text-[13px] font-mono">{entry.action}</TableCell>
+                        <TableCell className="px-4 text-[13px] text-muted-foreground">
+                          <div>{entry.entity_type}</div>
+                          {entry.entity_name && <div className="text-[11px] text-muted-foreground/70 truncate max-w-[140px]">{entry.entity_name}</div>}
+                        </TableCell>
+                        <TableCell className="px-4">
+                          <Badge variant="outline" className={`rounded text-[11px] ${statusBadgeClass(entry.status)}`}>{entry.status}</Badge>
+                        </TableCell>
+                        <TableCell className="px-4">
+                          <Button variant="ghost" size="icon-xs"
+                            onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === entry.id ? null : entry.id); }}>
+                            {expandedId === entry.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                      {expandedId === entry.id && <RowDetail key={`${entry.id}-detail`} entry={entry} t={t} />}
+                    </React.Fragment>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+        <TablePaginationFooter
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          loading={loading}
+        />
+      </div>
+    </div>
+  );
+}

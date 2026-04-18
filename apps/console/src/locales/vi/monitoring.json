@@ -1,0 +1,79 @@
+{
+  "title": "Giám sát",
+  "description": "Sự kiện ra vào, cảnh báo và trạng thái cửa theo thời gian thực.",
+  "live": {
+    "online": "Trực tiếp",
+    "connecting": "Đang kết nối…",
+    "offline": "Ngoại tuyến"
+  },
+  "actions": {
+    "pause": "Tạm dừng",
+    "resume": "Tiếp tục",
+    "clear": "Xóa"
+  },
+  "kind": {
+    "access": "Ra vào",
+    "alarm": "Cảnh báo",
+    "door": "Cửa"
+  },
+  "filters": {
+    "allDevices": "Tất cả thiết bị",
+    "allResults": "Tất cả kết quả",
+    "granted": "Cho phép",
+    "denied": "Từ chối",
+    "forced": "Mở cưỡng bức",
+    "searchPlaceholder": "Tìm người / cửa / thiết bị"
+  },
+  "rows": {
+    "count": "{{filtered}} / {{total}} dòng",
+    "paused": "(đã tạm dừng)"
+  },
+  "columns": {
+    "time": "Thời gian",
+    "type": "Loại",
+    "device": "Thiết bị",
+    "name": "Tên",
+    "department": "Phòng ban",
+    "cardId": "Mã thẻ",
+    "result": "Kết quả",
+    "detail": "Chi tiết"
+  },
+  "empty": {
+    "waiting": "Đang chờ sự kiện…",
+    "disconnected": "Chưa kết nối tới luồng dữ liệu trực tiếp."
+  },
+  "result": {
+    "granted": "Cho phép",
+    "denied": "Từ chối",
+    "forced": "Cưỡng bức",
+    "open": "Đang mở",
+    "closed": "Đã đóng",
+    "unlocked": "Đã mở khóa",
+    "locked": "Đã khóa",
+    "alarm": "Cảnh báo",
+    "info": "Thông tin",
+    "warning": "Cảnh báo",
+    "critical": "Nghiêm trọng"
+  },
+  "reason": {
+    "authorized": "Hợp lệ",
+    "granted": "Cho phép",
+    "denied": "Từ chối",
+    "denied_unknown": "Người dùng chưa đăng ký",
+    "denied_expired": "Thẻ/mã đã hết hạn",
+    "denied_zone": "Không thuộc khu vực cho phép",
+    "denied_time": "Ngoài khung giờ cho phép",
+    "denied_blacklist": "Trong danh sách đen",
+    "denied_invalid_qr": "Mã QR không hợp lệ",
+    "denied_invalid_card": "Thẻ không hợp lệ",
+    "denied_invalid_pin": "Mã PIN không hợp lệ",
+    "denied_invalid_face": "Không nhận diện được khuôn mặt",
+    "denied_invalid_fp": "Không nhận diện được vân tay",
+    "denied_no_credential": "Không có thông tin xác thực",
+    "denied_anti_passback": "Vi phạm chống đi vòng",
+    "denied_offline": "Thiết bị ngoại tuyến",
+    "forced": "Cửa bị mở cưỡng bức",
+    "held_open": "Cửa bị giữ mở",
+    "tampered": "Phát hiện can thiệp"
+  }
+}

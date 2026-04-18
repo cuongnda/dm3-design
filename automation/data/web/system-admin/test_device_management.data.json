@@ -1,0 +1,18 @@
+{
+  "test_system_devices_page": {
+    "description": "Verify system devices page loads with table and filters",
+    "steps": [
+      {"action": "navigate", "url": "/system/devices"},
+      {"action": "assert_visible", "testid": "sysdevice-table-list"},
+      {"action": "assert_visible", "testid": "sysdevice-button-refresh"}
+    ]
+  },
+  "test_pending_devices_page": {
+    "description": "Verify pending devices page loads with table",
+    "steps": [
+      {"action": "navigate", "url": "/system/devices/pending"},
+      {"action": "assert_visible", "testid": "pending-table-list"},
+      {"action": "assert_visible", "testid": "pending-button-refresh"}
+    ]
+  }
+}

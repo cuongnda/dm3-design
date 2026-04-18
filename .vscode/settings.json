@@ -1,0 +1,35 @@
+{
+  "go.gopath": "",
+  "go.goroot": "",
+  "go.toolsManagement.autoUpdate": true,
+  "go.lintTool": "golangci-lint",
+  "go.lintOnSave": "package",
+  "go.formatTool": "goimports",
+  "go.useLanguageServer": true,
+  "gopls": {
+    "ui.semanticTokens": true,
+    "analyses": {
+      "unusedparams": true,
+      "shadow": true
+    }
+  },
+  "go.testFlags": ["-v", "-count=1"],
+  "go.buildFlags": [],
+  "editor.formatOnSave": true,
+  "[go]": {
+    "editor.defaultFormatter": "golang.go",
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "files.exclude": {
+    "**/.git": true,
+    "**/node_modules": true,
+    "backend/data": true
+  },
+  "search.exclude": {
+    "backend/data": true,
+    "**/node_modules": true,
+    "apps/console/dist": true
+  }
+}

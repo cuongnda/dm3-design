@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>AI/ML Pipeline — Duall Master 3.0</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: Helvetica, Arial, sans-serif; background: #FAFBFC; padding: 24px; }
+.diagram { width: 1500px; margin: 0 auto; }
+h1 { text-align: center; color: #1E293B; font-size: 20px; margin-bottom: 4px; }
+.sub { text-align: center; color: #64748B; font-size: 12px; margin-bottom: 24px; }
+.pipeline { border: 2px solid; border-radius: 16px; padding: 20px; margin-bottom: 24px; position: relative; background: #fff; }
+.pipe-label { position: absolute; top: -12px; left: 16px; background: #fff; padding: 0 10px; font-weight: 700; font-size: 13px; }
+.flow { display: flex; align-items: center; justify-content: center; gap: 0; margin: 10px 0; }
+.node { border-radius: 10px; padding: 12px 14px; text-align: center; font-size: 12px; font-weight: 600; color: #fff; min-width: 130px; box-shadow: 0 2px 8px rgba(0,0,0,.1); line-height: 1.3; }
+.node small { display: block; font-weight: 400; font-size: 10px; opacity: .8; margin-top: 2px; }
+.arr { padding: 0 6px; color: #64748B; font-size: 11px; display: flex; flex-direction: column; align-items: center; min-width: 70px; }
+.arr .ln { width: 100%; height: 2px; background: #94A3B8; position: relative; }
+.arr .ln::after { content: '▶'; position: absolute; right: -6px; top: -8px; font-size: 14px; color: #64748B; }
+.arr .lb { font-size: 9px; color: #64748B; margin-bottom: 2px; white-space: nowrap; }
+.user { background: #059669; }
+.ai { background: #06B6D4; }
+.llm { background: linear-gradient(135deg,#8B5CF6,#06B6D4); }
+.svc { background: #3B82F6; }
+.device { background: #EA580C; }
+.vision { background: #7C3AED; }
+.ml { background: #DC2626; }
+.data { background: #374151; border-radius: 20px; }
+.nats { background: #1E293B; }
+.detail { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.detail-box { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 12px; font-size: 11px; color: #475569; }
+.detail-box h4 { font-size: 12px; color: #1E293B; margin-bottom: 6px; }
+.detail-box ul { padding-left: 16px; margin: 0; }
+.detail-box li { margin-bottom: 3px; }
+.tag { display: inline-block; background: #DBEAFE; color: #1D4ED8; font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 8px; }
+</style></head><body>
+<div class="diagram">
+<h1>AI/ML Pipeline Architecture — Duall Master 3.0</h1>
+<p class="sub">Three AI pipelines · LLM Assistant · Computer Vision · Anomaly Detection</p>
+
+<!-- LLM Pipeline -->
+<div class="pipeline" style="border-color:#8B5CF6;">
+  <span class="pipe-label" style="color:#6D28D9;">🧠 LLM ASSISTANT PIPELINE</span>
+  <div class="flow">
+    <div class="node user">👤 User<small>Natural Language Query</small></div>
+    <div class="arr"><span class="lb">Chat / Voice</span><div class="ln"></div></div>
+    <div class="node ai">💬 ai-assistant<small>Python · FastAPI</small></div>
+    <div class="arr"><span class="lb">Prompt + Context</span><div class="ln"></div></div>
+    <div class="node llm">🤖 Ollama / vLLM<small>Llama 3 · Mistral · Qwen</small></div>
+    <div class="arr"><span class="lb">Function Call</span><div class="ln"></div></div>
+    <div class="node ai">🔧 Tool Router<small>Function Calling</small></div>
+    <div class="arr"><span class="lb">REST / gRPC</span><div class="ln"></div></div>
+    <div class="node svc">📦 Services<small>access · video · identity</small></div>
+    <div class="arr"><span class="lb">Result</span><div class="ln"></div></div>
+    <div class="node user">📱 Response<small>Text + Actions</small></div>
+  </div>
+  <div class="detail">
+    <div class="detail-box">
+      <h4>Capabilities</h4>
+      <ul>
+        <li>"Unlock door B3 for visitor John" → <span class="tag">access-svc</span></li>
+        <li>"Show camera lobby last 10 min" → <span class="tag">video-svc</span></li>
+        <li>"How many people entered today?" → <span class="tag">report-svc</span></li>
+        <li>"Create visitor pass for tomorrow" → <span class="tag">visitor-svc</span></li>
+      </ul>
+    </div>
+    <div class="detail-box">
+      <h4>Architecture</h4>
+      <ul>
+        <li><strong>RAG:</strong> Building docs + policies in vector store</li>
+        <li><strong>Context:</strong> Tenant-scoped, RBAC-filtered</li>
+        <li><strong>Models:</strong> Llama 3.1 8B (default), Mistral 7B, Qwen 2.5</li>
+        <li><strong>Fallback:</strong> OpenAI API for complex queries</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Vision Pipeline -->
+<div class="pipeline" style="border-color:#06B6D4;">
+  <span class="pipe-label" style="color:#0891B2;">👁️ COMPUTER VISION PIPELINE</span>
+  <div class="flow">
+    <div class="node device">📷 IP Camera<small>RTSP Stream</small></div>
+    <div class="arr"><span class="lb">RTSP</span><div class="ln"></div></div>
+    <div class="node" style="background:#0891B2;">🎥 go2rtc<small>Frame Extractor</small></div>
+    <div class="arr"><span class="lb">JPEG frames</span><div class="ln"></div></div>
+    <div class="node vision">🧠 vision-svc<small>Python · ONNX Runtime</small></div>
+    <div class="arr"><span class="lb">Detections</span><div class="ln"></div></div>
+    <div class="node nats">📡 NATS<small>vision.* events</small></div>
+    <div class="arr"><span class="lb">Subscribe</span><div class="ln"></div></div>
+    <div class="node svc">🔒 access-svc<small>Grant / Deny</small></div>
+  </div>
+  <div class="detail">
+    <div class="detail-box">
+      <h4>Models (ONNX Runtime)</h4>
+      <ul>
+        <li><strong>Face Recognition:</strong> ArcFace (512-d embedding) — <span class="tag">< 50ms</span></li>
+        <li><strong>Object Detection:</strong> YOLOv8n (person, vehicle) — <span class="tag">< 30ms</span></li>
+        <li><strong>LPR:</strong> YOLO + PaddleOCR (license plates) — <span class="tag">< 80ms</span></li>
+        <li><strong>Liveness:</strong> Anti-spoofing model — <span class="tag">< 20ms</span></li>
+      </ul>
+    </div>
+    <div class="detail-box">
+      <h4>Processing</h4>
+      <ul>
+        <li><strong>GPU:</strong> NVIDIA T4/RTX (CUDA) or CPU fallback</li>
+        <li><strong>Batch:</strong> Up to 8 frames per inference</li>
+        <li><strong>Scale:</strong> 1 GPU handles ~50 cameras @ 5 FPS</li>
+        <li><strong>Storage:</strong> Face embeddings in Valkey + TimescaleDB</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Anomaly Detection -->
+<div class="pipeline" style="border-color:#DC2626;">
+  <span class="pipe-label" style="color:#DC2626;">📈 ANOMALY DETECTION PIPELINE</span>
+  <div class="flow">
+    <div class="node data">🗄️ TimescaleDB<small>Time-series Data</small></div>
+    <div class="arr"><span class="lb">Query</span><div class="ln"></div></div>
+    <div class="node ml">📊 Feature Extract<small>Rolling stats · Patterns</small></div>
+    <div class="arr"><span class="lb">Features</span><div class="ln"></div></div>
+    <div class="node ml" style="background:#B91C1C;">🔍 PyOD Models<small>Isolation Forest · LOF</small></div>
+    <div class="arr"><span class="lb">Anomaly score</span><div class="ln"></div></div>
+    <div class="node nats">📡 NATS<small>anomaly.detected</small></div>
+    <div class="arr"><span class="lb">Subscribe</span><div class="ln"></div></div>
+    <div class="node svc" style="background:#6B7280;">🔔 alert-svc<small>Automate Response</small></div>
+  </div>
+  <div class="detail">
+    <div class="detail-box">
+      <h4>Detection Types</h4>
+      <ul>
+        <li><strong>Access:</strong> Unusual hours, frequency spikes, tailgating</li>
+        <li><strong>Energy:</strong> Abnormal consumption patterns</li>
+        <li><strong>Occupancy:</strong> Unexpected crowd density</li>
+        <li><strong>Device:</strong> Sensor drift, offline patterns</li>
+      </ul>
+    </div>
+    <div class="detail-box">
+      <h4>Implementation</h4>
+      <ul>
+        <li><strong>Library:</strong> PyOD (Isolation Forest, LOF, KNN)</li>
+        <li><strong>Training:</strong> Per-tenant, scheduled nightly</li>
+        <li><strong>Inference:</strong> Every 5 min batch or streaming</li>
+        <li><strong>Feedback:</strong> Admin confirms/dismisses → model retrain</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</div>
+</body></html>

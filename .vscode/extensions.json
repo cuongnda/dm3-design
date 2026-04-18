@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "golang.go",
+    "ms-vscode.vscode-typescript-next",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "humao.rest-client"
+  ]
+}

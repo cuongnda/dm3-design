@@ -1,0 +1,22 @@
+{
+  "name": "dm3",
+  "private": true,
+  "packageManager": "npm@11.11.0",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "check:ui-primitives": "bash scripts/check-ui-primitives.sh"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.4"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.95.2",
+    "@tanstack/react-query-devtools": "^5.95.2"
+  }
+}

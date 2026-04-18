@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Deployment Architecture — Duall Master 3.0</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: Helvetica, Arial, sans-serif; background: #FAFBFC; padding: 24px; }
+.diagram { width: 1500px; margin: 0 auto; }
+h1 { text-align: center; color: #1E293B; font-size: 20px; margin-bottom: 4px; }
+.sub { text-align: center; color: #64748B; font-size: 12px; margin-bottom: 24px; }
+.modes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+.mode { border: 2px solid; border-radius: 16px; padding: 18px; position: relative; background: #fff; }
+.mode-label { position: absolute; top: -12px; left: 16px; background: #fff; padding: 0 10px; font-weight: 700; font-size: 13px; }
+.mode-desc { font-size: 11px; color: #64748B; margin-bottom: 14px; text-align: center; }
+.comp { border-radius: 8px; padding: 8px 10px; margin: 4px 0; font-size: 11px; font-weight: 600; color: #fff; text-align: center; }
+.comp small { font-weight: 400; font-size: 9px; opacity: .8; display: block; }
+.server { border: 2px dashed #94A3B8; border-radius: 10px; padding: 10px; margin: 8px 0; position: relative; }
+.server-label { font-size: 10px; font-weight: 700; color: #64748B; margin-bottom: 6px; }
+.infra { background: #1E293B; }
+.svc-g { background: #3B82F6; }
+.data-g { background: #374151; border-radius: 16px; }
+.obs { background: #64748B; }
+.orch { background: #7C3AED; }
+.cloud { background: linear-gradient(135deg,#0EA5E9,#3B82F6); }
+.badge { display: inline-block; background: #DBEAFE; color: #1D4ED8; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin-bottom: 8px; }
+.specs { font-size: 10px; color: #64748B; margin-top: 10px; padding-top: 8px; border-top: 1px solid #E2E8F0; }
+.specs strong { color: #334155; }
+.check { color: #059669; }
+.cross { color: #DC2626; }
+.compare { margin-top: 20px; width: 100%; border-collapse: collapse; font-size: 11px; }
+.compare th { background: #F1F5F9; padding: 8px 12px; text-align: left; font-weight: 700; color: #334155; border-bottom: 2px solid #CBD5E1; }
+.compare td { padding: 6px 12px; border-bottom: 1px solid #E2E8F0; color: #475569; }
+.compare tr:hover { background: #F8FAFC; }
+</style></head><body>
+<div class="diagram">
+<h1>Deployment Architecture — Duall Master 3.0</h1>
+<p class="sub">Three deployment modes · Progressive scaling · Same codebase</p>
+
+<div class="modes">
+  <!-- On-Premise Single -->
+  <div class="mode" style="border-color:#F59E0B;">
+    <span class="mode-label" style="color:#D97706;">🏢 On-Premise (Single)</span>
+    <div class="mode-desc"><span class="badge">Docker Compose</span><br>Small buildings · 1-5 doors · ≤50 cameras</div>
+    <div class="server">
+      <div class="server-label">🖥️ Single Server (16GB RAM / 8 cores)</div>
+      <div class="comp orch">Docker Compose<small>Container orchestration</small></div>
+      <div class="comp infra">Traefik<small>API Gateway + TLS</small></div>
+      <div class="comp svc-g">Core Services (Go)<small>auth · access · identity · video · device-gw</small></div>
+      <div class="comp svc-g" style="background:#06B6D4;">AI Services (Python)<small>vision-svc · ai-assistant (optional)</small></div>
+      <div class="comp infra">EMQX + NATS<small>Messaging</small></div>
+      <div class="comp data-g">TimescaleDB · Valkey · MinIO<small>Data stores</small></div>
+      <div class="comp infra">go2rtc<small>Video proxy</small></div>
+      <div class="comp obs">Prometheus + Grafana + Loki<small>Observability</small></div>
+    </div>
+    <div class="specs">
+      <strong>Min:</strong> 16GB RAM, 8 cores, 500GB SSD<br>
+      <strong>HA:</strong> <span class="cross">✗</span> Single point of failure<br>
+      <strong>Update:</strong> docker compose pull && up -d<br>
+      <strong>Backup:</strong> pg_dump + MinIO sync
+    </div>
+  </div>
+
+  <!-- On-Premise HA -->
+  <div class="mode" style="border-color:#3B82F6;">
+    <span class="mode-label" style="color:#1D4ED8;">🏗️ On-Premise HA</span>
+    <div class="mode-desc"><span class="badge">K3s Cluster</span><br>Medium buildings · 5-50 doors · ≤200 cameras</div>
+    <div class="server">
+      <div class="server-label">🖥️ Node 1 (Master + Worker)</div>
+      <div class="comp orch">K3s Server<small>Control plane + etcd</small></div>
+      <div class="comp svc-g">Core Services<small>Replicated pods</small></div>
+      <div class="comp data-g">TimescaleDB Primary<small>Streaming replication</small></div>
+    </div>
+    <div class="server">
+      <div class="server-label">🖥️ Node 2 (Worker)</div>
+      <div class="comp svc-g">Core Services<small>Replicated pods</small></div>
+      <div class="comp svc-g" style="background:#06B6D4;">AI Services<small>GPU optional</small></div>
+      <div class="comp data-g">TimescaleDB Replica<small>Hot standby</small></div>
+    </div>
+    <div class="server">
+      <div class="server-label">🖥️ Node 3 (Worker)</div>
+      <div class="comp svc-g">Core Services<small>Replicated pods</small></div>
+      <div class="comp infra">EMQX Cluster · NATS Cluster<small>3-node consensus</small></div>
+      <div class="comp infra">MinIO (distributed)<small>Erasure coding</small></div>
+    </div>
+    <div class="specs">
+      <strong>Min:</strong> 3× (16GB RAM, 8 cores, 500GB SSD)<br>
+      <strong>HA:</strong> <span class="check">✓</span> Survives 1 node failure<br>
+      <strong>Update:</strong> Rolling update via K3s<br>
+      <strong>Backup:</strong> Velero + S3
+    </div>
+  </div>
+
+  <!-- Cloud SaaS -->
+  <div class="mode" style="border-color:#8B5CF6;">
+    <span class="mode-label" style="color:#6D28D9;">☁️ Cloud SaaS</span>
+    <div class="mode-desc"><span class="badge">Managed Kubernetes</span><br>Multi-tenant · Unlimited scale · Global</div>
+    <div class="server">
+      <div class="server-label">☁️ Managed K8s (EKS / GKE / AKS)</div>
+      <div class="comp cloud">Kubernetes<small>Auto-scaling node pools</small></div>
+      <div class="comp cloud">Ingress Controller<small>ALB / Cloud Load Balancer</small></div>
+      <div class="comp svc-g">Core Services<small>HPA auto-scaled pods</small></div>
+      <div class="comp svc-g" style="background:#06B6D4;">AI Services<small>GPU node pool</small></div>
+    </div>
+    <div class="server">
+      <div class="server-label">☁️ Managed Services</div>
+      <div class="comp data-g">RDS/Cloud SQL (TimescaleDB)<small>Multi-AZ, auto-backup</small></div>
+      <div class="comp data-g">ElastiCache / MemoryDB (Valkey)<small>Managed cache</small></div>
+      <div class="comp data-g">S3 / GCS / Blob Storage<small>Object storage</small></div>
+      <div class="comp infra">EMQX Cloud + NATS<small>Managed messaging</small></div>
+    </div>
+    <div class="server">
+      <div class="server-label">☁️ Edge (per-site)</div>
+      <div class="comp" style="background:#F59E0B;color:#1E293B;">Edge Gateway<small>Local device-gateway + EMQX</small></div>
+      <div class="comp" style="background:#F59E0B;color:#1E293B;">Offline Cache<small>SQLite + NATS leaf node</small></div>
+    </div>
+    <div class="specs">
+      <strong>Scale:</strong> 100+ tenants, 10K+ doors<br>
+      <strong>HA:</strong> <span class="check">✓</span> Multi-AZ, 99.9% SLA<br>
+      <strong>Update:</strong> GitOps (ArgoCD)<br>
+      <strong>Backup:</strong> Managed + cross-region
+    </div>
+  </div>
+</div>
+
+<table class="compare">
+  <tr><th>Feature</th><th>🏢 On-Premise Single</th><th>🏗️ On-Premise HA</th><th>☁️ Cloud SaaS</th></tr>
+  <tr><td>Orchestrator</td><td>Docker Compose</td><td>K3s</td><td>Managed K8s</td></tr>
+  <tr><td>High Availability</td><td><span class="cross">✗</span></td><td><span class="check">✓</span> (N+1)</td><td><span class="check">✓</span> (Multi-AZ)</td></tr>
+  <tr><td>Auto-scaling</td><td><span class="cross">✗</span></td><td>Manual</td><td><span class="check">✓</span> HPA/VPA</td></tr>
+  <tr><td>Multi-tenant</td><td>Single tenant</td><td>Single tenant</td><td><span class="check">✓</span> Multi-tenant</td></tr>
+  <tr><td>GPU AI</td><td>Optional</td><td>Optional</td><td>GPU node pool</td></tr>
+  <tr><td>Offline capable</td><td><span class="check">✓</span></td><td><span class="check">✓</span></td><td>Edge gateway</td></tr>
+  <tr><td>Target</td><td>Small (≤5 doors)</td><td>Medium (≤50 doors)</td><td>Enterprise (unlimited)</td></tr>
+</table>
+</div>
+</body></html>

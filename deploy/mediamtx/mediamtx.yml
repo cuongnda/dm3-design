@@ -1,0 +1,40 @@
+# MediaMTX config for DM3 local dev.
+# Auth is required. Stream user can publish/read; admin user has API access
+# and is source-IP restricted to loopback + Docker bridge networks.
+# Credentials are supplied via env vars (see docker-compose.local.yml).
+
+api: yes
+# Bound to all interfaces because cctv-svc runs in a separate container and
+# reaches this API via the shared Docker network. Authentication + per-user
+# IP restriction (see authInternalUsers below) enforce access control.
+apiAddress: :9997
+
+rtspAddress: :8554
+webrtcAddress: :8889
+webrtcLocalUDPAddress: :8189
+# Advertise 127.0.0.1 as an ICE candidate so browsers on the Docker host can
+# reach MediaMTX's RTP port. Without this, ICE only announces the container
+# IP, which isn't routable from the host → video stays at readyState 0.
+webrtcAdditionalHosts: [127.0.0.1]
+hlsAddress: :8888
+hlsVariant: lowLatency
+
+# Two-user model: stream user for publish/read, admin user for API ops.
+authInternalUsers:
+  - user: "${MEDIAMTX_STREAM_USER}"
+    pass: "${MEDIAMTX_STREAM_PASS}"
+    ips: []
+    permissions:
+      - action: publish
+      - action: read
+      - action: playback
+  - user: "${MEDIAMTX_API_USER}"
+    pass: "${MEDIAMTX_API_PASS}"
+    ips:
+      - "127.0.0.1/32"
+      - "::1/128"
+      - "172.16.0.0/12"
+    permissions:
+      - action: api
+      - action: metrics
+      - action: pprof

@@ -1,0 +1,24 @@
+---
+description: Always prefer design-system components for UI work
+alwaysApply: true
+---
+
+# System Components First
+
+When implementing or refactoring UI in this project, always prioritize components from `@dm3/ui` over raw HTML elements.
+
+## Priority Order
+
+1. Use existing `@dm3/ui` components first (`Button`, `Input`, `Select`, `Textarea`, `Label`, `Dialog`, `DataTable`, etc.).
+2. If a required pattern is missing, check for another system component that can be composed to solve it.
+3. Only use raw HTML (`input`, `select`, `textarea`, `button`) when no suitable system component exists.
+
+## Styling Rules
+
+- Prefer semantic tokens (`text-foreground`, `text-muted-foreground`, `bg-card`, `border-border`, domain tokens like `text-secure`, `bg-operate`) over hardcoded colors.
+- Avoid inline color styles when token-based classes can be used.
+
+## Refactor Guidance
+
+- During UI updates, replace raw form controls with system components where possible.
+- Keep behavior unchanged; focus on component consistency, accessibility, and design-system alignment.

@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duall Master — Logo Concepts</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0B1120; color: #fff; font-family: 'Inter', sans-serif; padding: 40px; }
+  h1 { text-align: center; font-size: 2rem; margin-bottom: 8px; }
+  .subtitle { text-align: center; color: #94A3B8; margin-bottom: 60px; font-size: 1.1rem; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; max-width: 1200px; margin: 0 auto; }
+  .concept { background: #0F172A; border: 1px solid #1E293B; border-radius: 16px; overflow: hidden; }
+  .concept-header { padding: 24px 32px 12px; }
+  .concept-header h2 { font-size: 1rem; color: #3B82F6; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; }
+  .concept-header p { color: #94A3B8; font-size: 0.85rem; margin-top: 4px; }
+  .logo-area { padding: 40px; display: flex; align-items: center; justify-content: center; min-height: 200px; }
+  .logo-area.dark { background: #0B1120; }
+  .logo-area.light { background: #F8FAFC; }
+  .variants { display: flex; gap: 0; }
+  .variants > div { flex: 1; padding: 30px; display: flex; align-items: center; justify-content: center; }
+  .variants .dark { background: #0B1120; }
+  .variants .light { background: #F8FAFC; }
+  
+  /* CONCEPT 1: Shield + Network */
+  .logo-1 { display: flex; align-items: center; gap: 16px; }
+  .logo-1 .mark {
+    width: 52px; height: 58px; position: relative;
+  }
+  .logo-1 .mark svg { width: 100%; height: 100%; }
+  .logo-1 .wordmark { display: flex; flex-direction: column; line-height: 1; }
+  .logo-1 .wordmark .duall { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 28px; letter-spacing: 3px; }
+  .logo-1 .wordmark .master { font-family: 'Space Grotesk', sans-serif; font-weight: 300; font-size: 14px; letter-spacing: 6px; text-transform: uppercase; margin-top: 2px; }
+  
+  /* CONCEPT 2: Hexagonal Building */
+  .logo-2 { display: flex; align-items: center; gap: 16px; }
+  .logo-2 .mark { width: 50px; height: 56px; }
+  .logo-2 .mark svg { width: 100%; height: 100%; }
+  .logo-2 .wordmark { font-family: 'Inter', sans-serif; }
+  .logo-2 .wordmark .duall { font-weight: 800; font-size: 30px; letter-spacing: 1px; }
+  .logo-2 .wordmark .master { font-weight: 300; font-size: 30px; margin-left: 4px; }
+  
+  /* CONCEPT 3: Connected Dots / Platform */
+  .logo-3 { display: flex; align-items: center; gap: 14px; }
+  .logo-3 .mark { width: 48px; height: 48px; }
+  .logo-3 .mark svg { width: 100%; height: 100%; }
+  .logo-3 .wordmark { font-family: 'Space Grotesk', sans-serif; }
+  .logo-3 .wordmark .duall { font-weight: 700; font-size: 26px; letter-spacing: 2px; display: inline; }
+  .logo-3 .wordmark .master { font-weight: 400; font-size: 26px; letter-spacing: 2px; display: inline; color: #64748B; }
+  .logo-3.on-light .wordmark .duall { color: #0B1120; }
+  .logo-3.on-light .wordmark .master { color: #64748B; }
+  
+  /* CONCEPT 4: Monogram DM */
+  .logo-4 { display: flex; align-items: center; gap: 16px; }
+  .logo-4 .mark { width: 52px; height: 52px; }
+  .logo-4 .mark svg { width: 100%; height: 100%; }
+  .logo-4 .wordmark { font-family: 'Inter', sans-serif; line-height: 1.1; }
+  .logo-4 .wordmark .duall { font-weight: 700; font-size: 24px; letter-spacing: 4px; text-transform: uppercase; }
+  .logo-4 .wordmark .master { font-weight: 300; font-size: 11px; letter-spacing: 8px; text-transform: uppercase; }
+  
+  /* CONCEPT 5: Abstract D + Shield */
+  .logo-5 { display: flex; align-items: center; gap: 14px; }
+  .logo-5 .mark { width: 50px; height: 56px; }
+  .logo-5 .mark svg { width: 100%; height: 100%; }
+  .logo-5 .wordmark { font-family: 'JetBrains Mono', monospace; }
+  .logo-5 .wordmark .duall { font-weight: 700; font-size: 24px; letter-spacing: 3px; }
+  .logo-5 .wordmark .sep { color: #3B82F6; margin: 0 2px; }
+  .logo-5 .wordmark .master { font-weight: 400; font-size: 24px; letter-spacing: 3px; color: #94A3B8; }
+
+  /* CONCEPT 6: Stacked Minimal */
+  .logo-6 { text-align: center; }
+  .logo-6 .mark { width: 56px; height: 56px; margin: 0 auto 12px; }
+  .logo-6 .mark svg { width: 100%; height: 100%; }
+  .logo-6 .wordmark { font-family: 'Space Grotesk', sans-serif; }
+  .logo-6 .wordmark .duall { font-weight: 700; font-size: 22px; letter-spacing: 8px; display: block; }
+  .logo-6 .wordmark .master { font-weight: 300; font-size: 11px; letter-spacing: 12px; display: block; margin-top: 2px; color: #64748B; }
+
+  .note { max-width: 1200px; margin: 60px auto 0; padding: 32px; background: #0F172A; border: 1px solid #1E293B; border-radius: 12px; }
+  .note h3 { color: #3B82F6; margin-bottom: 12px; }
+  .note p, .note li { color: #94A3B8; font-size: 0.9rem; line-height: 1.7; }
+  .note ul { padding-left: 20px; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<h1>Duall Master 3.0 — Logo Concepts</h1>
+<p class="subtitle">6 directions for the new brand identity. All designed for dark-first UI.</p>
+
+<div class="grid">
+
+<!-- CONCEPT 1: Shield + Network Nodes -->
+<div class="concept">
+  <div class="concept-header">
+    <h2>Concept 1 — Shield Network</h2>
+    <p>Security shield with connected nodes. Communicates protection + connectivity.</p>
+  </div>
+  <div class="variants">
+    <div class="dark">
+      <div class="logo-1">
+        <div class="mark">
+          <svg viewBox="0 0 52 58" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M26 2L4 12V28C4 42 14 52 26 56C38 52 48 42 48 28V12L26 2Z" stroke="#3B82F6" stroke-width="2.5" fill="none"/>
+            <circle cx="26" cy="24" r="4" fill="#3B82F6"/>
+            <circle cx="16" cy="34" r="3" fill="#3B82F6" opacity="0.7"/>
+            <circle cx="36" cy="34" r="3" fill="#3B82F6" opacity="0.7"/>
+            <line x1="26" y1="24" x2="16" y2="34" stroke="#3B82F6" stroke-width="1.5" opacity="0.5"/>
+            <line x1="26" y1="24" x2="36" y2="34" stroke="#3B82F6" stroke-width="1.5" opacity="0.5"/>
+            <line x1="16" y1="34" x2="36" y2="34" stroke="#3B82F6" stroke-width="1.5" opacity="0.3"/>
+          </svg>
+        </div>
+        <div class="wordmark">
+          <span class="duall" style="color:#fff">DUALL</span>
+          <span class="master" style="color:#94A3B8">MASTER</span>
+        </div>
+      </div>
+    </div>
+    <div class="light">
+      <div class="logo-1">
+        <div class="mark">
+          <svg viewBox="0 0 52 58" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M26 2L4 12V28C4 42 14 52 26 56C38 52 48 42 48 28V12L26 2Z" stroke="#3B82F6" stroke-width="2.5" fill="none"/>
+            <circle cx="26" cy="24" r="4" fill="#3B82F6"/>
+            <circle cx="16" cy="34" r="3" fill="#3B82F6" opacity="0.7"/>
+            <circle cx="36" cy="34" r="3" fill="#3B82F6" opacity="0.7"/>
+            <line x1="26" y1="24" x2="16" y2="34" stroke="#3B82F6" stroke-width="1.5" opacity="0.5"/>
+            <line x1="26" y1="24" x2="36" y2="34" stroke="#3B82F6" stroke-width="1.5" opacity="0.5"/>
+            <line x1="16" y1="34" x2="36" y2="34" stroke="#3B82F6" stroke-width="1.5" opacity="0.3"/>
+          </svg>
+        </div>
+        <div class="wordmark">
+          <span class="duall" style="color:#0B1120">DUALL</span>
+          <span class="master" style="color:#64748B">MASTER</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CONCEPT 2: Hexagonal Building -->
+<div class="concept">
+  <div class="concept-header">
+    <h2>Concept 2 — Hex Building</h2>
+    <p>Hexagonal frame with building silhouette. Tech + architecture fusion.</p>
+  </div>
+  <div class="variants">
+    <div class="dark">
+      <div class="logo-2">
+        <div class="mark">
+          <svg viewBox="0 0 50 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M25 2L47 14V38L25 50L3 38V14L25 2Z" stroke="#3B82F6" stroke-width="2" fill="none"/>
+            <rect x="18" y="18" width="6" height="22" rx="1" fill="#3B82F6"/>
+            <rect x="26" y="14" width="6" height="26" rx="1" fill="#3B82F6" opacity="0.7"/>
+            <rect x="22" y="24" width="6" height="16" rx="1" fill="#06B6D4" opacity="0.5"/>
+          </svg>
+        </div>
+        <div class="wordmark">
+          <span class="duall" style="color:#fff">Duall</span><span class="master" style="color:#94A3B8">Master</span>
+        </div>
+      </div>
+    </div>
+    <div class="light">
+      <div class="logo-2">
+        <div class="mark">
+          <svg viewBox="0 0 50 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M25 2L47 14V38L25 50L3 38V14L25 2Z" stroke="#3B82F6" stroke-width="2" fill="none"/>
+            <rect x="18" y="18" width="6" height="22" rx="1" fill="#3B82F6"/>
+            <rect x="26" y="14" width="6" height="26" rx="1" fill="#3B82F6" opacity="0.7"/>
+            <rect x="22" y="24" width="6" height="16" rx="1" fill="#06B6D4" opacity="0.5"/>
+          </svg>
+        </div>
+        <div class="wordmark">
+          <span class="duall" style="color:#0B1120">Duall</span><span class="master" style="color:#64748B">Master</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CONCEPT 3: Connected Platform Dots -->
+<div class="concept">
+  <div class="concept-header">
+    <h2>Concept 3 — Connected Platform</h2>
+    <p>Four connected dots forming a platform grid. IoT + unified system.</p>
+  </div>
+  <div class="variants">
+    <div class="dark">
+      <div class="logo-3">
+        <div class="mark">
+          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="14" cy="14" r="5" fill="#3B82F6"/>
+            <circle cx="34" cy="14" r="5" fill="#8B5CF6"/>
+            <circle cx="14" cy="34" r="5" fill="#F59E0B"/>
+            <circle cx="34" cy="34" r="5" fill="#06B6D4"/>
+            <line x1="14" y1="14" x2="34" y2="14" stroke="#fff" stroke-width="1.5" opacity="0.3"/>
+            <line x1="14" y1="14" x2="14" y2="34" stroke="#fff" stroke-width="1.5" opacity="0.3"/>
+            <line x1="34" y1="14" x2="34" y2="34" stroke="#fff" stroke-width="1.5" opacity="0.3"/>
+            <line x1="14" y1="34" x2="34" y2="34" stroke="#fff" stroke-width="1.5" opacity="0.3"/>
+            <line x1="14" y1="14" x2="34" y2="34" stroke="#fff" stroke-width="1" opacity="0.15"/>
+            <line x1="34" y1="14" x2="14" y2="34" stroke="#fff" stroke-width="1" opacity="0.15"/>
+          </svg>
+        </div>
+        <div class="wordmark">
+          <span class="duall" style="color:#fff">DUALL</span> <span class="master">MASTER</span>
+        </div>
+      </div>
+    </div>
+    <div class="light">
+      <div class="logo-3 on-light">
+        <div class="mark">
+          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="14" cy="14" r="5" fill="#3B82F6"/>
+            <circle cx="34" cy="14" r="5" fill="#8B5CF6"/>
+            <circle cx="14" cy="34" r="5" fill="#F59E0B"/>
+            <circle cx="34" cy="34" r="5" fill="#06B6D4"/>
+            <line x1="14" y1="14" x2="34" y2="14" stroke="#0B1120" stroke-width="1.5" opacity="0.3"/>
+            <line x1="14" y1="14" x2="14" y2="34" stroke="#0B1120" stroke-width="1.5" opacity="0.3"/>
+            <line x1="34" y1="14" x2="34" y2="34" stroke="#0B1120" stroke-width="1.5" opacity="0.3"/>
+            <line x1="14" y1="34" x2="34" y2="34" stroke="#0B1120" stroke-width="1.5" opacity="0.3"/>
+            <line x1="14" y1="14" x2="34" y2="34" stroke="#0B1120" stroke-width="1" opacity="0.15"/>
+            <line x1="34" y1="14" x2="14" y2="34" stroke="#0B1120" stroke-width="1" opacity="0.15"/>
+          </svg>
+        </div>
+        <div class="wordmark">
+          <span class="duall" style="color:#0B1120">DUALL</span> <span class="master">MASTER</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CONCEPT 4: DM Monogram -->
+<div class="concept">
+  <div class="concept-header">
+    <h2>Concept 4 — DM Monogram</h2>
+    <p>Interlocking D+M lettermark. Premium, compact, memorable.</p>
+  </div>
+  <div class="variants">
+    <div class="dark">
+      <div class="logo-4">
+        <div class="mark">
+          <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="48" height="48" rx="10" stroke="#3B82F6" stroke-width="2.5" fill="none"/>
+            <path d="M12 14H20C26 14 30 18 30 24C30 30 26 34 20 34H12V14Z" stroke="#fff" stroke-width="2.5" fill="none"/>
+            <path d="M24 18L30 34M36 18L30 34M24 18L36 18" stroke="#3B82F6" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="wordmark">
+          <div class="duall" style="color:#fff">DUALL</div>
+          <div class="master" style="color:#94A3B8">MASTER</div>
+        </div>
+      </div>
+    </div>
+    <div class="light">
+      <div class="logo-4">
+        <div class="mark">
+          <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="48" height="48" rx="10" stroke="#3B82F6" stroke-width="2.5" fill="none"/>
+            <path d="M12 14H20C26 14 30 18 30 24C30 30 26 34 20 34H12V14Z" stroke="#0B1120" stroke-width="2.5" fill="none"/>
+            <path d="M24 18L30 34M36 18L30 34M24 18L36 18" stroke="#3B82F6" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="wordmark">
+          <div class="duall" style="color:#0B1120">DUALL</div>
+          <div class="master" style="color:#64748B">MASTER</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CONCEPT 5: Abstract D-Shield -->
+<div class="concept">
+  <div class="concept-header">
+    <h2>Concept 5 — D-Shield</h2>
+    <p>Letter D shaped as a shield. Bold, distinctive, mono-friendly.</p>
+  </div>
+  <div class="variants">
+    <div class="dark">
+      <div class="logo-5">
+        <div class="mark">
+          <svg viewBox="0 0 50 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 8H28C40 8 46 16 46 28C46 40 40 48 28 48H8V8Z" fill="#3B82F6"/>
+            <path d="M16 16H26C34 16 38 20 38 28C38 36 34 40 26 40H16V16Z" fill="#0B1120"/>
+            <circle cx="28" cy="28" r="4" fill="#06B6D4"/>
+          </svg>
+        </div>
+        <div class="wordmark">
+          <span class="duall" style="color:#fff">DUALL</span><span class="sep">_</span><span class="master">MASTER</span>
+        </div>
+      </div>
+    </div>
+    <div class="light">
+      <div class="logo-5">
+        <div class="mark">
+          <svg viewBox="0 0 50 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 8H28C40 8 46 16 46 28C46 40 40 48 28 48H8V8Z" fill="#3B82F6"/>
+            <path d="M16 16H26C34 16 38 20 38 28C38 36 34 40 26 40H16V16Z" fill="#F8FAFC"/>
+            <circle cx="28" cy="28" r="4" fill="#06B6D4"/>
+          </svg>
+        </div>
+        <div class="wordmark">
+          <span class="duall" style="color:#0B1120">DUALL</span><span class="sep">_</span><span class="master" style="color:#64748B">MASTER</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CONCEPT 6: Stacked Minimal -->
+<div class="concept">
+  <div class="concept-header">
+    <h2>Concept 6 — Layered Stack</h2>
+    <p>Three stacked layers = three domains. Minimal, iconic, scalable.</p>
+  </div>
+  <div class="variants">
+    <div class="dark">
+      <div class="logo-6">
+        <div class="mark">
+          <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M28 6L50 18L28 30L6 18L28 6Z" fill="#3B82F6" opacity="0.9"/>
+            <path d="M28 18L50 30L28 42L6 30L28 18Z" fill="#8B5CF6" opacity="0.7"/>
+            <path d="M28 28L50 40L28 52L6 40L28 28Z" fill="#06B6D4" opacity="0.6"/>
+          </svg>
+        </div>
+        <div class="wordmark">
+          <span class="duall" style="color:#fff">DUALL</span>
+          <span class="master" style="color:#64748B">MASTER</span>
+        </div>
+      </div>
+    </div>
+    <div class="light">
+      <div class="logo-6">
+        <div class="mark">
+          <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M28 6L50 18L28 30L6 18L28 6Z" fill="#3B82F6" opacity="0.9"/>
+            <path d="M28 18L50 30L28 42L6 30L28 18Z" fill="#8B5CF6" opacity="0.7"/>
+            <path d="M28 28L50 40L28 52L6 40L28 28Z" fill="#06B6D4" opacity="0.6"/>
+          </svg>
+        </div>
+        <div class="wordmark">
+          <span class="duall" style="color:#0B1120">DUALL</span>
+          <span class="master">MASTER</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<div class="note">
+  <h3>💡 Notes for Selection</h3>
+  <ul>
+    <li><strong>Concept 1 (Shield Network)</strong> — Best for: emphasizing security + connectivity. Most "cyber" feel.</li>
+    <li><strong>Concept 2 (Hex Building)</strong> — Best for: building/facility management focus. Architecture vibe.</li>
+    <li><strong>Concept 3 (Connected Platform)</strong> — Best for: showing the 4 domains (SECURE/MANAGE/OPERATE/SMART) visually. Very "platform" feel.</li>
+    <li><strong>Concept 4 (DM Monogram)</strong> — Best for: compact use (app icons, favicons). Premium brand feel.</li>
+    <li><strong>Concept 5 (D-Shield)</strong> — Best for: bold, distinctive mark. Works great at small sizes. Monospace wordmark gives tech/developer vibe.</li>
+    <li><strong>Concept 6 (Layered Stack)</strong> — Best for: representing the three domains as layers. Isometric/3D feel. Very modern.</li>
+  </ul>
+  <p style="margin-top: 16px;">All concepts show dark + light variants. These are SVG-based and can be refined by a designer into production-ready assets.</p>
+</div>
+
+</body>
+</html>

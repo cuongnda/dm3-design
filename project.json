@@ -1,0 +1,50 @@
+{
+  "name": "DM3 — Duall Master 3.0",
+  "description": "Next-gen access control platform. Go backend (4 services), React webapp, Android terminal, Python simulator.",
+  "telegram": {
+    "name": "Aysee-DM3 Project",
+    "invite_link": "https://t.me/+Z9J4nz06YWszODll"
+  },
+  "task_aliases": ["dm3-backend", "dm3-webapp", "dm3-terminal", "duall-master", "dmpw-webapp-v3", "duallmaster"],
+  "links": [],
+  "services": [
+    {
+      "name": "Device Gateway",
+      "port": 8002
+    },
+    {
+      "name": "Access Svc",
+      "port": 8003
+    },
+    {
+      "name": "Identity Svc",
+      "port": 8004
+    },
+    {
+      "name": "Auth Svc",
+      "port": 8005
+    },
+    {
+      "name": "EMQX MQTT",
+      "port": 1884
+    },
+    {
+      "name": "Simulator",
+      "port": 9090
+    }
+  ],
+  "docs": [
+    {
+      "label": "Project Context",
+      "file": "PROJECT.md"
+    },
+    {
+      "label": "Vision",
+      "file": "docs/vision.md"
+    },
+    {
+      "label": "Specs",
+      "file": "docs/specs"
+    }
+  ]
+}
