@@ -57,6 +57,7 @@ type AccessTime struct {
 	CreatedBy   *string          `json:"created_by,omitempty"`
 	SlotCount   int              `json:"slot_count,omitempty"`
 	GroupCount  int              `json:"group_count,omitempty"`
+	UserCount   int              `json:"user_count,omitempty"` // Distinct users reachable via linked access groups.
 	Slots       []AccessTimeSlot `json:"slots,omitempty"`
 	CreatedAt   time.Time        `json:"created_at"`
 	UpdatedAt   time.Time        `json:"updated_at"`

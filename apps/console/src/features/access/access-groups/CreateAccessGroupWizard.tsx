@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Shield, DoorOpen, Users, Search, User as UserIcon } from 'lucide-react';
+import { AlertTriangle, DoorOpen, Search, User as UserIcon } from 'lucide-react';
 import {
     WizardModal,
     Button,
@@ -60,6 +60,9 @@ export function CreateAccessGroupWizard({
     const [groupForm, setGroupForm] = useState<AccessGroupFormData>({ name: '', is_default: false });
     const [formError, setFormError] = useState('');
     const [createdId, setCreatedId] = useState<string | null>(null);
+    // Track which steps were explicitly skipped so we can show a warning banner.
+    const [skippedAPs, setSkippedAPs] = useState(false);
+    const [skippedUsers, setSkippedUsers] = useState(false);
 
     // Step 2 (APs)
     const [aps, setAPs] = useState<AvailableAP[]>([]);
@@ -83,6 +86,8 @@ export function CreateAccessGroupWizard({
         setGroupForm({ name: '', is_default: false });
         setFormError('');
         setCreatedId(null);
+        setSkippedAPs(false);
+        setSkippedUsers(false);
         setAPs([]);
         setZones([]);
         setSelectedAPs(new Set());
@@ -188,7 +193,10 @@ export function CreateAccessGroupWizard({
 
     const handleStep2Continue = async (skip: boolean) => {
         if (!createdId) return;
-        if (!skip && selectedAPs.size > 0) {
+        if (skip || selectedAPs.size === 0) {
+            setSkippedAPs(true);
+        } else {
+            setSkippedAPs(false);
             setSubmitting(true);
             try {
                 for (const apId of selectedAPs) {
@@ -215,7 +223,10 @@ export function CreateAccessGroupWizard({
 
     const handleStep3Finish = async (skip: boolean) => {
         if (!createdId) return;
-        if (!skip && selectedUsers.size > 0) {
+        if (skip || selectedUsers.size === 0) {
+            setSkippedUsers(true);
+        } else {
+            setSkippedUsers(false);
             setSubmitting(true);
             try {
                 await apiFetch(`/api/v1/access/access-groups/${createdId}/users`, {
@@ -246,10 +257,12 @@ export function CreateAccessGroupWizard({
 
     // ── Rendering helpers ───────────────────────────────────────────────
 
+    // Numbered stepper (1) INFO ── (2) WHERE ── (3) WHO — no icons so
+    // WizardModal shows numeric badges.
     const steps = [
-        { id: 1 as const, label: t('wizard.step1', 'Info'), icon: Shield },
-        { id: 2 as const, label: t('wizard.step2', 'Access Points'), icon: DoorOpen },
-        { id: 3 as const, label: t('wizard.step3', 'Users'), icon: Users },
+        { id: 1 as const, label: t('wizard.step1', 'INFO') },
+        { id: 2 as const, label: t('wizard.step2', 'WHERE') },
+        { id: 3 as const, label: t('wizard.step3', 'WHO') },
     ];
 
     // ── Step 1 body (info form) ─────────────────────────────────────────
@@ -465,6 +478,20 @@ export function CreateAccessGroupWizard({
     };
     const Step3Body = (
         <div className="space-y-3">
+            {skippedAPs && (
+                <div
+                    className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-300"
+                    data-testid="access-wizard-warning-step2-skipped"
+                >
+                    <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                    <span>
+                        {t(
+                            'wizard.incompleteStep2',
+                            'No access points assigned — members of this group will not be able to enter anywhere until you add some later.',
+                        )}
+                    </span>
+                </div>
+            )}
             <div className="flex gap-2">
                 <div className="flex-1 relative">
                     <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -599,6 +626,10 @@ export function CreateAccessGroupWizard({
                             onClick={() => handleStep2Continue(true)}
                             disabled={submitting}
                             data-testid="access-wizard-button-step2-skip"
+                            title={t(
+                                'wizard.skipStep2Hint',
+                                'Skip adding access points — the group will have no entry access until you add some later.',
+                            )}
                         >
                             {t('wizard.skip', 'Skip')}
                         </Button>
@@ -623,6 +654,10 @@ export function CreateAccessGroupWizard({
                             onClick={() => handleStep3Finish(true)}
                             disabled={submitting}
                             data-testid="access-wizard-button-step3-skip"
+                            title={t(
+                                'wizard.skipStep3Hint',
+                                'Skip adding users — the group will have no members. Assign users later from User Management or the group detail page.',
+                            )}
                         >
                             {t('wizard.skip', 'Skip')}
                         </Button>

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Clock, Plus, Settings, Trash2, Users } from 'lucide-react';
+import { Clock, Plus, Settings, Trash2, User as UserIcon, Users } from 'lucide-react';
 import {
     Button,
     Input,
@@ -117,19 +117,37 @@ export function AccessTimesPage() {
         },
         {
             key: 'group_count',
-            header: t('columns.groups', 'Groups'),
-            width: '88px',
+            header: t('columns.usage', 'Usage'),
+            width: '180px',
             sortable: true,
             render: (at) => {
-                const count = at.group_count ?? 0;
+                const groups = at.group_count ?? 0;
+                const users = at.user_count ?? 0;
+                const isUnused = groups === 0;
                 return (
                     <div
-                        className="inline-flex items-center gap-1.5"
-                        title={count === 0 ? t('tooltips.noGroups', 'Not linked to any access group') : undefined}
+                        className="inline-flex items-center gap-3"
+                        title={
+                            isUnused
+                                ? t('tooltips.noGroups', 'Not linked to any access group')
+                                : t('tooltips.usage', '{{groups}} group(s) · {{users}} user(s) affected', {
+                                      groups,
+                                      users,
+                                  })
+                        }
                     >
-                        <Users size={12} className={count > 0 ? 'text-manage' : 'text-muted-foreground/50'} />
-                        <span className={`text-[12px] font-medium ${count > 0 ? 'text-foreground' : 'text-muted-foreground/60'}`}>
-                            {count}
+                        <span className="inline-flex items-center gap-1">
+                            <Users size={12} className={groups > 0 ? 'text-manage' : 'text-muted-foreground/50'} />
+                            <span className={`text-[12px] font-medium ${groups > 0 ? 'text-foreground' : 'text-muted-foreground/60'}`}>
+                                {t('usage.groups', '{{count}} groups', { count: groups })}
+                            </span>
+                        </span>
+                        <span className="text-muted-foreground/40">·</span>
+                        <span className="inline-flex items-center gap-1">
+                            <UserIcon size={12} className={users > 0 ? 'text-secure' : 'text-muted-foreground/50'} />
+                            <span className={`text-[12px] font-medium ${users > 0 ? 'text-foreground' : 'text-muted-foreground/60'}`}>
+                                {t('usage.users', '{{count}} users', { count: users })}
+                            </span>
                         </span>
                     </div>
                 );
@@ -210,8 +228,8 @@ export function AccessTimesPage() {
                             <div className="text-xs text-muted-foreground">{t('stats.linkedGroups', 'Linked Groups')}</div>
                         </Card>
                         <Card className="p-3">
-                            <div className="text-2xl font-bold">{accessTimes.filter(a => (a.group_count ?? 0) === 0).length}</div>
-                            <div className="text-xs text-muted-foreground">{t('stats.unused', 'Unused')}</div>
+                            <div className="text-2xl font-bold">{accessTimes.reduce((sum, a) => sum + (a.user_count ?? 0), 0)}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.linkedUsers', 'Linked Users')}</div>
                         </Card>
                     </div>
                 )}
@@ -266,6 +284,7 @@ export function AccessTimesPage() {
                         { value: 'is_active', label: t('columns.active', 'Status') },
                         { value: 'slot_count', label: t('columns.slots', 'Slots') },
                         { value: 'group_count', label: t('columns.groups', 'Groups') },
+                        { value: 'user_count', label: t('columns.users', 'Users') },
                     ]}
                     sortBy={sortBy}
                     sortDir={sortDir}

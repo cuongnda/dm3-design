@@ -57,13 +57,21 @@ func (h *AccessHandlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.
 		"timezone":    "t.timezone",
 		"slot_count":  "(SELECT COUNT(*) FROM dm3_access.access_time_slots s WHERE s.access_time_id = t.id)",
 		"group_count": "(SELECT COUNT(*) FROM dm3_access.access_groups g WHERE g.access_time_id = t.id)",
+		"user_count": "(SELECT COUNT(DISTINCT agu.user_id) " +
+			"FROM dm3_access.access_groups g " +
+			"JOIN dm3_access.access_group_users agu ON agu.access_group_id = g.id " +
+			"WHERE g.access_time_id = t.id)",
 	}, "t.name")
 	query := fmt.Sprintf(`
 		SELECT
 			t.id, t.tenant_id, t.name, t.description, t.timezone,
 			t.is_active, t.created_by, t.created_at, t.updated_at,
 			(SELECT COUNT(*) FROM dm3_access.access_time_slots s WHERE s.access_time_id = t.id) AS slot_count,
-			(SELECT COUNT(*) FROM dm3_access.access_groups g WHERE g.access_time_id = t.id) AS group_count
+			(SELECT COUNT(*) FROM dm3_access.access_groups g WHERE g.access_time_id = t.id) AS group_count,
+			(SELECT COUNT(DISTINCT agu.user_id)
+				FROM dm3_access.access_groups g
+				JOIN dm3_access.access_group_users agu ON agu.access_group_id = g.id
+				WHERE g.access_time_id = t.id) AS user_count
 		FROM dm3_access.access_times t
 		%s
 		ORDER BY %s %s
@@ -85,7 +93,7 @@ func (h *AccessHandlers) ListAccessTimeTemplates(w http.ResponseWriter, r *http.
 		var t models.AccessTimeTemplate
 		err := rows.Scan(
 			&t.ID, &t.TenantID, &t.Name, &t.Description, &t.Timezone,
-			&t.IsActive, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.SlotCount, &t.GroupCount,
+			&t.IsActive, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.SlotCount, &t.GroupCount, &t.UserCount,
 		)
 		if err != nil {
 			slog.Error("failed to scan access time", "error", err)

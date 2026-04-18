@@ -18,6 +18,7 @@ export interface AccessTime {
   is_active: boolean;
   slot_count?: number;
   group_count?: number;
+  user_count?: number;
   slots?: AccessTimeSlot[];
   created_at: string;
   updated_at: string;
