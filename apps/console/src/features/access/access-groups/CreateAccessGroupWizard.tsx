@@ -12,6 +12,7 @@ import {
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import type { AccessGroupFormData, AccessTime } from './types';
+import { buildZonePathMap, ZonePathLabel, type ZoneRef } from './zone-path';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -19,7 +20,9 @@ interface AvailableAP {
     id: string;
     name: string;
     description?: string;
+    zone_id?: string | null;
 }
+
 
 interface AvailableUser {
     id: string;
@@ -60,6 +63,7 @@ export function CreateAccessGroupWizard({
 
     // Step 2 (APs)
     const [aps, setAPs] = useState<AvailableAP[]>([]);
+    const [zones, setZones] = useState<ZoneRef[]>([]);
     const [loadingAPs, setLoadingAPs] = useState(false);
     const [apSearch, setApSearch] = useState('');
     const [selectedAPs, setSelectedAPs] = useState<Set<string>>(new Set());
@@ -80,6 +84,7 @@ export function CreateAccessGroupWizard({
         setFormError('');
         setCreatedId(null);
         setAPs([]);
+        setZones([]);
         setSelectedAPs(new Set());
         setApSearch('');
         setUsers([]);
@@ -92,11 +97,22 @@ export function CreateAccessGroupWizard({
     useEffect(() => {
         if (!open || step !== 2 || aps.length > 0 || loadingAPs) return;
         setLoadingAPs(true);
-        apiFetch<{ data?: AvailableAP[] }>('/api/v1/access/access-points?limit=500')
-            .then((res) => setAPs(res.data ?? []))
-            .catch(() => setAPs([]))
+        Promise.all([
+            apiFetch<{ data?: AvailableAP[] }>('/api/v1/access/access-points?limit=500'),
+            apiFetch<{ data?: ZoneRef[] }>('/api/v1/access/zones?limit=500'),
+        ])
+            .then(([apsRes, zonesRes]) => {
+                setAPs(apsRes.data ?? []);
+                setZones(zonesRes.data ?? []);
+            })
+            .catch(() => {
+                setAPs([]);
+                setZones([]);
+            })
             .finally(() => setLoadingAPs(false));
     }, [open, step, aps.length, loadingAPs]);
+
+    const zonePathById = useMemo(() => buildZonePathMap(zones), [zones]);
 
     // ── Step 3 data fetch ───────────────────────────────────────────────
     useEffect(() => {
@@ -112,12 +128,15 @@ export function CreateAccessGroupWizard({
     const filteredAPs = useMemo(() => {
         const q = apSearch.trim().toLowerCase();
         if (!q) return aps;
-        return aps.filter(
-            (ap) =>
+        return aps.filter((ap) => {
+            const zonePath = ap.zone_id ? (zonePathById.get(ap.zone_id) ?? '') : '';
+            return (
                 ap.name.toLowerCase().includes(q) ||
-                (ap.description ?? '').toLowerCase().includes(q),
-        );
-    }, [aps, apSearch]);
+                (ap.description ?? '').toLowerCase().includes(q) ||
+                zonePath.toLowerCase().includes(q)
+            );
+        });
+    }, [aps, apSearch, zonePathById]);
 
     const departments = useMemo(
         () => [...new Set(users.map((u) => u.department_name).filter(Boolean))].sort(),
@@ -400,36 +419,49 @@ export function CreateAccessGroupWizard({
                                     {t('columns.accessPointName', 'Access Point')}
                                 </th>
                                 <th className="px-3 py-2 text-left font-medium text-foreground">
+                                    {t('columns.zone', 'Zone')}
+                                </th>
+                                <th className="px-3 py-2 text-left font-medium text-foreground">
                                     {t('columns.description', 'Description')}
                                 </th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredAPs.map((ap) => (
-                                <tr
-                                    key={ap.id}
-                                    onClick={() => !submitting && toggleAP(ap.id)}
-                                    className="border-b border-border last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
-                                >
-                                    <td className="w-10 px-3 py-2">
-                                        <Checkbox
-                                            checked={selectedAPs.has(ap.id)}
-                                            onCheckedChange={() => toggleAP(ap.id)}
-                                            onClick={(e) => e.stopPropagation()}
-                                            disabled={submitting}
-                                        />
-                                    </td>
-                                    <td className="px-3 py-2">
-                                        <div className="flex items-center gap-2">
-                                            <DoorOpen size={13} className="text-primary shrink-0" />
-                                            <span className="font-medium">{ap.name}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-3 py-2 text-muted-foreground">
-                                        {ap.description ?? '—'}
-                                    </td>
-                                </tr>
-                            ))}
+                            {filteredAPs.map((ap) => {
+                                const zonePath = ap.zone_id ? zonePathById.get(ap.zone_id) : undefined;
+                                return (
+                                    <tr
+                                        key={ap.id}
+                                        onClick={() => !submitting && toggleAP(ap.id)}
+                                        className="border-b border-border last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
+                                    >
+                                        <td className="w-10 px-3 py-2">
+                                            <Checkbox
+                                                checked={selectedAPs.has(ap.id)}
+                                                onCheckedChange={() => toggleAP(ap.id)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                disabled={submitting}
+                                            />
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <div className="flex items-center gap-2">
+                                                <DoorOpen size={13} className="text-primary shrink-0" />
+                                                <span className="font-medium">{ap.name}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            {zonePath ? (
+                                                <ZonePathLabel path={zonePath} />
+                                            ) : (
+                                                <span className="text-muted-foreground/60">—</span>
+                                            )}
+                                        </td>
+                                        <td className="px-3 py-2 text-muted-foreground">
+                                            {ap.description ?? '—'}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 )}

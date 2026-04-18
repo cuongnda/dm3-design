@@ -16,6 +16,7 @@ import { toast } from '@/lib/toast';
 import { useBreadcrumbStore } from '@dm3/ui';
 import type { AccessGroup, AccessGroupAccessPoint, AccessGroupFormData, AccessTime } from './types';
 import type { User } from '@/features/user-management/types';
+import { buildZonePathMap, ZonePathLabel, type ZoneRef } from './zone-path';
 
 interface GroupUser {
   id: string;
@@ -36,6 +37,7 @@ interface AvailableAP {
   id: string;
   name: string;
   description?: string;
+  zone_id?: string | null;
 }
 
 interface AddAccessPointModalProps {
@@ -51,6 +53,7 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [allAPs, setAllAPs] = useState<AvailableAP[]>([]);
+  const [zones, setZones] = useState<ZoneRef[]>([]);
   const [loadingAPs, setLoadingAPs] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -59,11 +62,26 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    apiFetch<{ data?: AvailableAP[] }>('/api/v1/access/access-points?limit=200')
-      .then((res) => { if (!cancelled) { setAllAPs(res.data ?? []); setLoadingAPs(false); } })
-      .catch(() => { if (!cancelled) { setAllAPs([]); setLoadingAPs(false); } });
+    Promise.all([
+      apiFetch<{ data?: AvailableAP[] }>('/api/v1/access/access-points?limit=200'),
+      apiFetch<{ data?: ZoneRef[] }>('/api/v1/access/zones?limit=500'),
+    ])
+      .then(([apsRes, zonesRes]) => {
+        if (cancelled) return;
+        setAllAPs(apsRes.data ?? []);
+        setZones(zonesRes.data ?? []);
+        setLoadingAPs(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAllAPs([]);
+        setZones([]);
+        setLoadingAPs(false);
+      });
     return () => { cancelled = true; };
   }, [open]);
+
+  const zonePathById = useMemo(() => buildZonePathMap(zones), [zones]);
 
   const availableAPs = useMemo(
     () => allAPs.filter((ap) => !linkedAPIds.includes(ap.id)),
@@ -72,10 +90,16 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
 
   const filteredAPs = useMemo(() => {
     const q = search.toLowerCase();
-    return q
-      ? availableAPs.filter((ap) => ap.name.toLowerCase().includes(q) || ap.description?.toLowerCase().includes(q))
-      : availableAPs;
-  }, [availableAPs, search]);
+    if (!q) return availableAPs;
+    return availableAPs.filter((ap) => {
+      const zonePath = ap.zone_id ? (zonePathById.get(ap.zone_id) ?? '') : '';
+      return (
+        ap.name.toLowerCase().includes(q) ||
+        (ap.description ?? '').toLowerCase().includes(q) ||
+        zonePath.toLowerCase().includes(q)
+      );
+    });
+  }, [availableAPs, search, zonePathById]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAPs.length / PAGE_SIZE));
   const pagedAPs = filteredAPs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -109,6 +133,7 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
       setSearch('');
       setPage(1);
       setAllAPs([]);
+      setZones([]);
       setLoadingAPs(true);
     }
     onOpenChange(v);
@@ -190,27 +215,38 @@ function AddAccessPointModal({ open, onOpenChange, linkedAPIds, onSubmit }: AddA
                       />
                     </th>
                     <th className="px-3 py-2 text-left font-medium text-foreground">{t('columns.accessPointName', 'Access Point')}</th>
+                    <th className="px-3 py-2 text-left font-medium text-foreground">{t('columns.zone', 'Zone')}</th>
                     <th className="px-3 py-2 text-left font-medium text-foreground">{t('columns.description', 'Description')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {pagedAPs.map((ap) => (
-                    <tr
-                      key={ap.id}
-                      onClick={() => !submitting && toggleOne(ap.id)}
-                      className="border-b border-border last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
-                    >
-                      <td className="w-10 px-3 py-2">
-                        <Checkbox
-                          checked={selected.has(ap.id)}
-                          onCheckedChange={() => toggleOne(ap.id)}
-                          disabled={submitting}
-                        />
-                      </td>
-                      <td className="px-3 py-2 font-medium text-foreground">{ap.name}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{ap.description ?? '—'}</td>
-                    </tr>
-                  ))}
+                  {pagedAPs.map((ap) => {
+                    const zonePath = ap.zone_id ? zonePathById.get(ap.zone_id) : undefined;
+                    return (
+                      <tr
+                        key={ap.id}
+                        onClick={() => !submitting && toggleOne(ap.id)}
+                        className="border-b border-border last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
+                      >
+                        <td className="w-10 px-3 py-2">
+                          <Checkbox
+                            checked={selected.has(ap.id)}
+                            onCheckedChange={() => toggleOne(ap.id)}
+                            disabled={submitting}
+                          />
+                        </td>
+                        <td className="px-3 py-2 font-medium text-foreground">{ap.name}</td>
+                        <td className="px-3 py-2">
+                          {zonePath ? (
+                            <ZonePathLabel path={zonePath} />
+                          ) : (
+                            <span className="text-muted-foreground/60">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{ap.description ?? '—'}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               <TablePaginationFooter
