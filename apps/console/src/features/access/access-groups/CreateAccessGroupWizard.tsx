@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, DoorOpen, Search, User as UserIcon } from 'lucide-react';
+import { AlertTriangle, DoorOpen, Search, Shield, User as UserIcon } from 'lucide-react';
 import {
     WizardModal,
     Button,
