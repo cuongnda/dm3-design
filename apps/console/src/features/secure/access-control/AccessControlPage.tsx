@@ -297,8 +297,14 @@ export function AccessControlPage() {
             columns={columns}
             data={accessPoints}
             rowKey={(ap) => ap.id}
-            emptyMessage="No access points found"
             emptyIcon={<DoorOpen size={32} strokeWidth={1.2} />}
+            emptyTitle={searchTerm ? 'No access points match your search' : 'No access points configured yet'}
+            emptyDescription={searchTerm
+              ? 'Try a different name or location, or clear the search to see every access point.'
+              : 'Access points are the doors, turnstiles, and barriers that devices control. Add one under Access → Access Points, then link it to a zone and assign access rules.'}
+            emptyAction={searchTerm
+              ? { label: 'Clear search', variant: 'outline', onClick: () => { setSearchTerm(''); setPage(1); }, 'data-testid': 'access-button-clear-search-empty' }
+              : undefined}
           />
         </div>
         <TablePaginationFooter

@@ -8,6 +8,7 @@ import {
   Badge,
   Button,
   AppModal,
+  EmptyState,
   TablePaginationFooter,
   type Column,
 } from '@dm3/ui';
@@ -360,7 +361,13 @@ export function EmergencyPage() {
             </div>
           ))}
           {plans.length === 0 && !loading && (
-            <p className="py-8 text-center text-[13px] text-muted-foreground">No emergency plans configured yet</p>
+            <EmptyState
+              icon={<ShieldAlert size={32} strokeWidth={1.2} />}
+              title="No emergency plans configured yet"
+              description="Emergency plans pre-wire a one-tap response for fires, lockdowns, and evacuations — unlocking all doors, locking a building, or triggering sirens. Define a plan so operators can react without hunting for devices."
+              primaryAction={{ label: 'New Plan', icon: <Plus size={14} />, onClick: () => { setEditingPlanId(null); setShowPlanModal(true); }, 'data-testid': 'emergency-button-create-plan-empty' }}
+              compact
+            />
           )}
         </div>
       </div>
@@ -373,7 +380,9 @@ export function EmergencyPage() {
         <div className="min-h-0 flex-1 overflow-auto">
           <DataTable embedded stickyHeader paginate={false} loading={loading}
             columns={incidentColumns} data={incidents} rowKey={(r) => r.id}
-            emptyMessage="No incidents recorded" emptyIcon={<ShieldAlert size={32} strokeWidth={1.2} />} />
+            emptyIcon={<ShieldAlert size={32} strokeWidth={1.2} />}
+            emptyTitle="No incidents recorded"
+            emptyDescription="Incidents appear here every time an emergency plan is activated or cleared. A quiet history is a good sign — it means no one has had to press the panic button." />
         </div>
         <TablePaginationFooter page={incidentPage} pageSize={10}
           total={incidentTotal} totalPages={Math.ceil(incidentTotal / 10)}

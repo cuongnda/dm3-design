@@ -303,8 +303,32 @@ export function UserManagementPage() {
                         sortState={{ col: sortBy, dir: sortDir }}
                         onSortChange={handleSortChange}
                         onRowDoubleClick={(u) => navigate(`/manage/users/${u.id}`)}
-                        emptyMessage={search ? t('table.empty.search') : t('table.empty.default')}
                         emptyIcon={<Users size={32} strokeWidth={1.2} />}
+                        emptyTitle={search || statusFilter.length > 0 || departmentFilter.length > 0
+                            ? t('table.empty.searchTitle', 'No users match these filters')
+                            : t('table.empty.defaultTitle', 'No users yet')}
+                        emptyDescription={search || statusFilter.length > 0 || departmentFilter.length > 0
+                            ? t('table.empty.searchHint', 'Try a different keyword or clear the filters above.')
+                            : t('table.empty.defaultHint', 'Create user records to grant access, assign departments, and enroll credentials.')}
+                        emptyAction={
+                            search || statusFilter.length > 0 || departmentFilter.length > 0
+                                ? {
+                                      label: t('filter.clear', 'Clear filters'),
+                                      variant: 'outline',
+                                      onClick: () => {
+                                          setSearch('');
+                                          setStatusFilter([]);
+                                          setDepartmentFilter([]);
+                                      },
+                                      'data-testid': 'user-button-clear-filters-empty',
+                                  }
+                                : {
+                                      label: t('addUser'),
+                                      icon: <Plus size={14} />,
+                                      onClick: () => setShowCreateModal(true),
+                                      'data-testid': 'user-button-create-empty',
+                                  }
+                        }
                         selection={{
                             selectedIds: Array.from(selected),
                             onSelectedIdsChange: (ids) => setSelected(new Set(ids)),

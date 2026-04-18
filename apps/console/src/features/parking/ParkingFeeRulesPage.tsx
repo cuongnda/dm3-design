@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader, DataTable, type Column, Button, AppModal, Input, Label } from '@dm3/ui';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Receipt } from 'lucide-react';
 import {
   listParkingFeeRules,
   createParkingFeeRule,
@@ -104,7 +104,21 @@ export function ParkingFeeRulesPage() {
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Loading fee rules...</div>
       ) : (
-        <DataTable columns={columns} data={rules} rowKey={(r) => r.id} pageSize={20} />
+        <DataTable
+          columns={columns}
+          data={rules}
+          rowKey={(r) => r.id}
+          pageSize={20}
+          emptyIcon={<Receipt size={32} strokeWidth={1.2} />}
+          emptyTitle="No fee rules configured"
+          emptyDescription="Define how visitors are charged — hourly, flat, or daily rates — per vehicle type. Rules are applied in priority order at session exit."
+          emptyAction={{
+            label: 'Add Fee Rule',
+            icon: <Plus size={14} />,
+            onClick: () => setShowForm(true),
+            'data-testid': 'parking-button-create-fee-rule-empty',
+          }}
+        />
       )}
 
       <AppModal open={showForm} onOpenChange={(o) => { if (!o) { setShowForm(false); resetForm(); } }} title="Create Fee Rule">

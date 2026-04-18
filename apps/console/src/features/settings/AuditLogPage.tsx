@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { startOfDay } from 'date-fns';
-import { ChevronDown, ChevronRight, Download, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, X, Activity } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   Button,
@@ -16,6 +16,7 @@ import {
   TableHead,
   TableCell,
   DatetimePicker,
+  EmptyState,
 } from '@dm3/ui';
 import {
   fetchTenantAuditLogs,
@@ -273,8 +274,18 @@ export function TenantAuditLogPage() {
             <TableBody>
               {entries.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="px-4 py-10 text-center text-[13px] text-muted-foreground">
-                    {t('audit.empty')}
+                  <TableCell colSpan={6} className="px-4 py-10">
+                    <EmptyState
+                      icon={<Activity size={32} strokeWidth={1.2} />}
+                      title={Object.values(filters).some((v) => v !== undefined && v !== '') ? 'No audit entries match these filters' : t('audit.empty')}
+                      description={Object.values(filters).some((v) => v !== undefined && v !== '')
+                        ? 'Try a broader time window, a different action, or clear filters to see the full audit trail.'
+                        : 'Every create, update, delete, and auth event is recorded here. As users and devices interact with the system, the audit trail fills up automatically — no action required.'}
+                      primaryAction={Object.values(filters).some((v) => v !== undefined && v !== '')
+                        ? { label: 'Clear filters', variant: 'outline', onClick: clearFilters, 'data-testid': 'settings-button-auditClear-empty' }
+                        : undefined}
+                      compact
+                    />
                   </TableCell>
                 </TableRow>
               ) : (

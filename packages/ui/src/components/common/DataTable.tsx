@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "../ui/table"
 import type { BulkAction } from "./DataTableCard"
+import { EmptyState, type EmptyStateAction } from "./EmptyState"
 
 export interface DataTableSelectionProps {
   selectedIds: string[]
@@ -70,10 +71,20 @@ interface DataTableProps<T> {
   loading?: boolean
   /** Number of skeleton rows to show when loading */
   skeletonRows?: number
-  /** Custom empty state message */
+  /** Custom empty state message (legacy — prefer `emptyTitle` + `emptyDescription`). */
   emptyMessage?: string
   /** Custom empty state icon */
   emptyIcon?: ReactNode
+  /** Rich empty state: headline (e.g. "No vehicles registered yet"). */
+  emptyTitle?: string
+  /** Rich empty state: body copy explaining why the screen matters and what the next step is. */
+  emptyDescription?: ReactNode
+  /** Rich empty state: primary CTA (e.g. "Register Vehicle"). */
+  emptyAction?: EmptyStateAction
+  /** Rich empty state: optional secondary action (docs link, import, etc.). */
+  emptySecondaryAction?: EmptyStateAction
+  /** Fully custom empty state node — escape hatch; wins over all other empty props. */
+  emptyState?: ReactNode
   "data-testid"?: string
   rowTestId?: (row: T) => string
 }
@@ -115,6 +126,11 @@ export function DataTable<T>({
   skeletonRows = 5,
   emptyMessage,
   emptyIcon,
+  emptyTitle,
+  emptyDescription,
+  emptyAction,
+  emptySecondaryAction,
+  emptyState,
   "data-testid": testId,
   rowTestId,
 }: DataTableProps<T>) {
@@ -296,11 +312,23 @@ export function DataTable<T>({
               ))
             ) : paged.length === 0 ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={colCount} className="py-12 text-center">
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground/50">
-                    {emptyIcon ?? <Inbox size={32} strokeWidth={1.2} />}
-                    <span className="text-[13px]">{emptyMessage ?? t('table.noData')}</span>
-                  </div>
+                <TableCell colSpan={colCount} className="px-3">
+                  {emptyState ? (
+                    emptyState
+                  ) : emptyTitle || emptyDescription || emptyAction || emptySecondaryAction ? (
+                    <EmptyState
+                      icon={emptyIcon}
+                      title={emptyTitle ?? emptyMessage ?? t('table.noData')}
+                      description={emptyDescription}
+                      primaryAction={emptyAction}
+                      secondaryAction={emptySecondaryAction}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground/50">
+                      {emptyIcon ?? <Inbox size={32} strokeWidth={1.2} />}
+                      <span className="text-[13px]">{emptyMessage ?? t('table.noData')}</span>
+                    </div>
+                  )}
                 </TableCell>
               </TableRow>
             ) : (

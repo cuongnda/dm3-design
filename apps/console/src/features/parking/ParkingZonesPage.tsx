@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader, DataTable, type Column, Button, AppModal, Input, Label } from '@dm3/ui';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Warehouse, Map } from 'lucide-react';
 import {
   listParkingLots,
   listParkingZones,
@@ -158,9 +158,37 @@ export function ParkingZonesPage() {
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Loading...</div>
       ) : tab === 'lots' ? (
-        <DataTable columns={lotColumns} data={(lotsData?.data ?? []) as ParkingLotDTO[]} rowKey={(r) => r.id} pageSize={20} />
+        <DataTable
+          columns={lotColumns}
+          data={(lotsData?.data ?? []) as ParkingLotDTO[]}
+          rowKey={(r) => r.id}
+          pageSize={20}
+          emptyIcon={<Warehouse size={32} strokeWidth={1.2} />}
+          emptyTitle="No parking lots configured"
+          emptyDescription="A parking lot is the top-level container (e.g. Main Building, Basement). Create one before adding zones and spaces."
+          emptyAction={{
+            label: 'Add Lot',
+            icon: <Plus size={14} />,
+            onClick: () => setShowLotForm(true),
+            'data-testid': 'parking-button-create-lot-empty',
+          }}
+        />
       ) : (
-        <DataTable columns={zoneColumns} data={(zonesData?.data ?? []) as ParkingZoneDTO[]} rowKey={(r) => r.id} pageSize={20} />
+        <DataTable
+          columns={zoneColumns}
+          data={(zonesData?.data ?? []) as ParkingZoneDTO[]}
+          rowKey={(r) => r.id}
+          pageSize={20}
+          emptyIcon={<Map size={32} strokeWidth={1.2} />}
+          emptyTitle="No zones configured yet"
+          emptyDescription="Zones group spaces by type (open, covered, VIP, etc.) inside a lot, and drive capacity and pricing rules."
+          emptyAction={{
+            label: 'Add Zone',
+            icon: <Plus size={14} />,
+            onClick: () => setShowZoneForm(true),
+            'data-testid': 'parking-button-create-zone-empty',
+          }}
+        />
       )}
 
       <AppModal open={showLotForm} onOpenChange={(o) => { if (!o) setShowLotForm(false); }} title="Create Parking Lot">

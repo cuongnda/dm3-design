@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader, DataTable, type Column, Button, AppModal, Input, Label } from '@dm3/ui';
-import { Plus, Trash2, Pencil, User, Users, CircleDashed } from 'lucide-react';
+import { Plus, Trash2, Pencil, User, Users, CircleDashed, Car } from 'lucide-react';
 import {
   listParkingVehicles,
   createParkingVehicle,
@@ -232,7 +232,21 @@ export function ParkingVehiclesPage() {
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Loading vehicles...</div>
       ) : (
-        <DataTable columns={columns} data={vehicles} rowKey={(r) => r.id} pageSize={20} />
+        <DataTable
+          columns={columns}
+          data={vehicles}
+          rowKey={(r) => r.id}
+          pageSize={20}
+          emptyIcon={<Car size={32} strokeWidth={1.2} />}
+          emptyTitle="No vehicles registered yet"
+          emptyDescription="Register your first vehicle to enable plate-based access and parking permissions."
+          emptyAction={{
+            label: 'Register Vehicle',
+            icon: <Plus size={14} />,
+            onClick: openCreate,
+            'data-testid': 'parking-button-create-vehicle-empty',
+          }}
+        />
       )}
 
       <AppModal

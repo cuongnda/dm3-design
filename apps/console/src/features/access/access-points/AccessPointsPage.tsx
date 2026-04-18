@@ -514,8 +514,16 @@ export function AccessPointsPage() {
                         sortState={{ col: sortBy, dir: sortDir }}
                         onSortChange={changeSort}
                         onRowDoubleClick={(ap) => navigate(`/access/access-points/${ap.id}`)}
-                        emptyMessage={t('noAccessPoints', 'No access points found')}
                         emptyIcon={<Shield size={32} strokeWidth={1.2} />}
+                        emptyTitle={(filters.search || filters.zone_id)
+                            ? t('empty.searchTitle', 'No access points match these filters')
+                            : t('empty.defaultTitle', 'No access points yet')}
+                        emptyDescription={(filters.search || filters.zone_id)
+                            ? t('empty.searchHint', 'Try a different keyword or clear the zone filter.')
+                            : t('empty.defaultHint', 'Create an access point for each door, gate, or turnstile you want to control, then assign readers and rules.')}
+                        emptyAction={(filters.search || filters.zone_id)
+                            ? { label: t('empty.clearFilters', 'Clear filters'), variant: 'outline', onClick: () => updateFilters({ search: '', zone_id: '' }), 'data-testid': 'access-points-button-clear-filters-empty' }
+                            : { label: t('empty.createAction', 'New Access Point'), icon: <Plus size={14} />, onClick: () => setShowCreateModal(true), 'data-testid': 'access-points-button-create-empty' }}
                         selection={{
                             selectedIds: selected,
                             onSelectedIdsChange: setSelected,

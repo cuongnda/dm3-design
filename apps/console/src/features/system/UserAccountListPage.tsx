@@ -210,8 +210,14 @@ export function UserAccountListPage() {
             rowKey={(u) => u.id}
             rowTestId={(u) => `user-row-${u.id}`}
             onRowClick={(u) => navigate(`/system/accounts/${u.id}`)}
-            emptyMessage={search ? 'No users match your search' : 'No users yet'}
             emptyIcon={<Users size={32} strokeWidth={1.2} />}
+            emptyTitle={(search || statusFilter || roleFilter) ? 'No users match these filters' : 'No user accounts yet'}
+            emptyDescription={(search || statusFilter || roleFilter)
+              ? 'Try a different keyword, status, or role — or clear the filters to see every account.'
+              : 'User accounts grant access to the admin console. Each account can be scoped to one or more companies with a specific role.'}
+            emptyAction={(search || statusFilter || roleFilter)
+              ? { label: 'Clear filters', variant: 'outline', onClick: () => { setSearch(''); setStatusFilter(''); setRoleFilter(''); setPage(1); }, 'data-testid': 'user-button-clear-filters-empty' }
+              : { label: 'Create User Account', icon: <Plus size={14} />, onClick: () => setShowCreateModal(true), 'data-testid': 'user-button-create-empty' }}
           />
         </div>
         <TablePaginationFooter

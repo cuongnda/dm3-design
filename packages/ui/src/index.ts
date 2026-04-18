@@ -32,6 +32,7 @@ export * from './components/ui/calendar';
 // Common Components
 export * from './components/common/DataTable';
 export * from './components/common/DomainIcon';
+export * from './components/common/EmptyState';
 export * from './components/common/EventFeed';
 export * from './components/common/NotificationPanel';
 export * from './components/common/PlaceholderPage';

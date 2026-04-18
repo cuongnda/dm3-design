@@ -10,8 +10,9 @@ import {
   Label,
   Select,
   SelectOption,
+  EmptyState,
 } from '@dm3/ui';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { WatchlistEntryDTO, CreateWatchlistRequest } from '@dm3/api-client';
 import {
@@ -87,7 +88,14 @@ export function VisitorWatchlistPage() {
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">{t('visitors.loading', 'Loading...')}</div>
       ) : entries.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">{t('visitors.watchlist.empty', 'No watchlist entries')}</div>
+        <div className="py-10">
+          <EmptyState
+            icon={<ShieldAlert size={32} strokeWidth={1.2} />}
+            title={t('visitors.watchlist.empty', 'No watchlist entries')}
+            description="Watchlist entries block or flag visitors at check-in by email, phone, national ID, or name. Add an entry to prevent a specific person from registering, or to alert staff when someone attempts a visit."
+            primaryAction={{ label: t('visitors.watchlist.add', 'Add Entry'), icon: <Plus size={14} />, onClick: () => setShowForm(true), 'data-testid': 'visitors-button-add-watchlist-empty' }}
+          />
+        </div>
       ) : (
         <>
           <DataTable columns={columns} data={entries} rowKey={(r) => r.id} />

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Bell, AlertTriangle, ShieldAlert, Info, Search } from 'lucide-react';
-import { Card, CardContent, Input, Button } from '@dm3/ui';
+import { Card, CardContent, Input, Button, EmptyState } from '@dm3/ui';
 
 interface Alert {
   id: string;
@@ -212,10 +212,17 @@ export function AlertsPage() {
 
         {filteredAlerts.length === 0 && (
           <Card>
-            <CardContent className="text-center py-12">
-              <Bell size={48} className="mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No alerts found</h3>
-              <p className="text-muted-foreground">All clear! No security alerts match your criteria.</p>
+            <CardContent className="py-10">
+              <EmptyState
+                icon={<Bell size={32} strokeWidth={1.2} />}
+                title={(searchTerm || filterType !== 'all') ? 'No alerts match these filters' : 'All clear — no active alerts'}
+                description={(searchTerm || filterType !== 'all')
+                  ? 'Try a different keyword or severity — or clear the filters to see every alert.'
+                  : 'Security alerts surface here when a device goes offline, a door is forced, an unauthorized access is attempted, or a policy is violated. Keep this screen open during active monitoring.'}
+                primaryAction={(searchTerm || filterType !== 'all')
+                  ? { label: 'Clear filters', variant: 'outline', onClick: () => { setSearchTerm(''); setFilterType('all'); }, 'data-testid': 'alerts-button-clear-filters-empty' }
+                  : undefined}
+              />
             </CardContent>
           </Card>
         )}

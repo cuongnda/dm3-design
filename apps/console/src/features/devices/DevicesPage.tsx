@@ -1047,8 +1047,25 @@ export function DevicesPage() {
             sortState={{ col: sortBy, dir: sortDir }}
             onSortChange={handleSortChange}
             onRowDoubleClick={(d) => navigate(`/devices/${d.id}/edit`)}
-            emptyMessage={searchTerm ? t('devices.list.emptySearch') : t('devices.list.empty')}
             emptyIcon={<Monitor size={32} strokeWidth={1.2} />}
+            emptyTitle={searchTerm || filterType !== 'all'
+              ? t('devices.list.emptySearchTitle', 'No devices match your filters')
+              : t('devices.list.emptyTitle', 'No devices connected yet')}
+            emptyDescription={searchTerm || filterType !== 'all'
+              ? t('devices.list.emptySearchHint', 'Adjust the search or type filter to find the device you need.')
+              : t('devices.list.emptyHint', 'Provision a terminal, controller, or camera to start capturing access events. New devices are added from the System area.')}
+            emptyAction={searchTerm || filterType !== 'all'
+              ? {
+                  label: t('devices.list.clearFilters', 'Clear filters'),
+                  variant: 'outline',
+                  onClick: () => { setSearchTerm(''); setFilterType('all'); },
+                  'data-testid': 'device-button-clear-filters-empty',
+                }
+              : {
+                  label: t('devices.list.goToSystem', 'Provision a Device'),
+                  onClick: () => navigate('/system/devices'),
+                  'data-testid': 'device-button-provision-empty',
+                }}
           />
         </div>
         <TablePaginationFooter

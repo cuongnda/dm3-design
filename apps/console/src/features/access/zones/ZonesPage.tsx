@@ -11,6 +11,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  EmptyState,
   Input,
 } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
@@ -359,8 +360,17 @@ export function ZonesPage() {
         {loading ? (
           <div className="flex justify-center py-12"><div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" /></div>
         ) : visibleTree.length === 0 ? (
-          <div className="py-12 text-center text-[13px] text-muted-foreground">
-            {search ? t('noResults', 'No zones match your search') : t('empty', 'No zones yet. Add the first one.')}
+          <div className="py-10">
+            <EmptyState
+              icon={<MapPin size={32} strokeWidth={1.2} />}
+              title={search ? t('noResults', 'No zones match your search') : t('empty', 'No zones configured yet')}
+              description={search
+                ? 'Try a different keyword or clear the search to see the full zone hierarchy.'
+                : 'Zones are the spatial backbone — buildings, floors, rooms, and checkpoints. Create a root zone to start laying out access points, uploading floor maps, and scoping access rules by location.'}
+              primaryAction={search
+                ? { label: 'Clear search', variant: 'outline', onClick: () => setSearch(''), 'data-testid': 'zones-button-clear-search-empty' }
+                : { label: t('addZone', 'Add Zone'), icon: <Plus size={14} />, onClick: openCreate, 'data-testid': 'zones-button-add-empty' }}
+            />
           </div>
         ) : (
           <div className="space-y-2">{visibleTree.map(renderNode)}</div>

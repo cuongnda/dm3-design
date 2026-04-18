@@ -194,8 +194,16 @@ export function AccessTimesPage() {
                         sortState={{ col: sortBy, dir: sortDir }}
                         onSortChange={changeSort}
                         onRowDoubleClick={(at) => navigate(`/access/access-times/${at.id}`)}
-                        emptyMessage={search ? t('noResults', 'No access times match your search') : t('empty', 'No access times yet.')}
                         emptyIcon={<Clock size={32} strokeWidth={1.2} />}
+                        emptyTitle={search
+                            ? t('empty.searchTitle', 'No access times match your search')
+                            : t('empty.defaultTitle', 'No access times yet')}
+                        emptyDescription={search
+                            ? t('empty.searchHint', 'Try a different keyword or clear the search to see all schedules.')
+                            : t('empty.defaultHint', 'Create a reusable schedule (e.g. "Office hours", "24/7") that you can apply to access groups and points.')}
+                        emptyAction={search
+                            ? { label: t('empty.clearSearch', 'Clear search'), variant: 'outline', onClick: () => setSearch(''), 'data-testid': 'access-time-button-clear-search-empty' }
+                            : { label: t('empty.createAction', 'New Access Time'), icon: <Plus size={14} />, onClick: () => setShowCreateModal(true), 'data-testid': 'access-time-button-create-empty' }}
                     />
                 </div>
                 <TablePaginationFooter

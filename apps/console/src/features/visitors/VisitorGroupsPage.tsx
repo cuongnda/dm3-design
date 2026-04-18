@@ -9,8 +9,9 @@ import {
   AppModal,
   Input,
   Label,
+  EmptyState,
 } from '@dm3/ui';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Users } from 'lucide-react';
 import {
   listVisitGroups,
   createVisitGroup,
@@ -100,7 +101,14 @@ export function VisitorGroupsPage() {
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">{t('visitors.loading', 'Loading...')}</div>
       ) : groups.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">{t('visitors.groups.empty', 'No visit groups yet')}</div>
+        <div className="py-10">
+          <EmptyState
+            icon={<Users size={32} strokeWidth={1.2} />}
+            title={t('visitors.groups.empty', 'No visit groups yet')}
+            description="Group multiple visitors under one host and purpose — useful for meetings, tours, or delivery batches. Everyone in the group shares a check-in time and access rules."
+            primaryAction={{ label: t('visitors.groups.create', 'Create Group'), icon: <Plus size={14} />, onClick: () => setShowForm(true), 'data-testid': 'visitors-button-create-group-empty' }}
+          />
+        </div>
       ) : (
         <>
           <DataTable columns={columns} data={groups} rowKey={(r) => r.id} />

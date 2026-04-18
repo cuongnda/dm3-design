@@ -326,8 +326,16 @@ export function AccessGroupsPage() {
                         sortState={{ col: sortBy, dir: sortDir }}
                         onSortChange={changeSort}
                         onRowDoubleClick={(g) => navigate(`/access/access-groups/${g.id}`)}
-                        emptyMessage={search ? t('noResults', 'No access groups match your search') : t('empty', 'No access groups yet. Create the first one.')}
                         emptyIcon={<Shield size={32} strokeWidth={1.2} />}
+                        emptyTitle={search
+                            ? t('empty.searchTitle', 'No access groups match your search')
+                            : t('empty.defaultTitle', 'No access groups yet')}
+                        emptyDescription={search
+                            ? t('empty.searchHint', 'Try a different keyword or clear the search to see all access groups.')
+                            : t('empty.defaultHint', 'Create an access group to bundle access points and schedules, then assign users in one step.')}
+                        emptyAction={search
+                            ? { label: t('empty.clearSearch', 'Clear search'), variant: 'outline', onClick: () => setSearch(''), 'data-testid': 'access-button-clear-search-empty' }
+                            : { label: t('empty.createAction', 'New Group'), icon: <Plus size={14} />, onClick: openCreateModal, 'data-testid': 'access-button-create-empty' }}
                         data-testid="access-table-groups"
                         selection={{
                             selectedIds: selected,

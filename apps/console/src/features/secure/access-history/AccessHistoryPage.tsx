@@ -42,6 +42,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  EmptyState,
 } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { assetUrl } from '@/lib/api';
@@ -705,12 +706,18 @@ export function AccessHistoryPage() {
                   <SkeletonRows count={10} />
                 ) : events.length === 0 ? (
                   <TableRow data-testid="access-history-empty">
-                    <TableCell colSpan={9} className="px-4 py-16 text-center">
-                      <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                        <History size={32} className="opacity-30" />
-                        <p className="text-[14px] font-medium">{t('accessHistory.empty.title')}</p>
-                        <p className="text-[12px]">{t('accessHistory.empty.subtitle')}</p>
-                      </div>
+                    <TableCell colSpan={9} className="px-4 py-12">
+                      <EmptyState
+                        icon={<History size={32} strokeWidth={1.2} />}
+                        title={(accessPointParam || userIdParam || decisionParam || credentialTypeParam) ? 'No events match these filters' : t('accessHistory.empty.title')}
+                        description={(accessPointParam || userIdParam || decisionParam || credentialTypeParam)
+                          ? 'Try broadening the date range, choosing a different access point or user, or clear the filters to see every event.'
+                          : 'Access events appear here the moment a credential is presented at an access point. Check that devices are online and that access rules are assigned to users.'}
+                        primaryAction={(accessPointParam || userIdParam || decisionParam || credentialTypeParam)
+                          ? { label: 'Clear filters', variant: 'outline', onClick: clearFilters, 'data-testid': 'access-history-button-clear-empty' }
+                          : undefined}
+                        compact
+                      />
                     </TableCell>
                   </TableRow>
                 ) : (

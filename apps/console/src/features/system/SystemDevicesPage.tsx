@@ -387,8 +387,14 @@ export function SystemDevicesPage() {
             data={devices.slice((page - 1) * pageSize, page * pageSize)}
             rowKey={(d) => d.id}
             rowTestId={(d) => `sysdevice-row-${d.id}`}
-            emptyMessage="No devices found"
             emptyIcon={<Monitor size={32} strokeWidth={1.2} />}
+            emptyTitle={(filterCompany || filterStatus || filterType) ? 'No devices match these filters' : 'No devices provisioned yet'}
+            emptyDescription={(filterCompany || filterStatus || filterType)
+              ? 'Try a different company, status, or type — or clear the filters to see every device.'
+              : 'Provision a device to onboard a controller, terminal, camera, or sensor into a company tenant.'}
+            emptyAction={(filterCompany || filterStatus || filterType)
+              ? { label: 'Clear filters', variant: 'outline', onClick: () => { setFilterCompany(''); setFilterStatus(''); setFilterType(''); setPage(1); }, 'data-testid': 'sysdevice-button-clear-filters-empty' }
+              : { label: tSystem('createDevice.title'), icon: <Plus size={14} />, onClick: () => setShowCreateModal(true), 'data-testid': 'sysdevice-button-create-empty' }}
           />
         </div>
         <TablePaginationFooter

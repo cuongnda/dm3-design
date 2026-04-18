@@ -123,8 +123,14 @@ export function CompanyListPage() {
             data={paged}
             rowKey={(c) => c.id}
             onRowClick={(c) => navigate(`/system/companies/${c.id}`)}
-            emptyMessage={search ? 'No companies match your search' : 'No companies yet'}
             emptyIcon={<Building2 size={32} strokeWidth={1.2} />}
+            emptyTitle={search ? 'No companies match your search' : 'No companies registered yet'}
+            emptyDescription={search
+              ? 'Try a different name or company code, or clear the search to see all tenants.'
+              : 'Each company is a fully-isolated tenant with its own users, devices, and audit trail. Create one to onboard a new organization.'}
+            emptyAction={search
+              ? { label: 'Clear search', variant: 'outline', onClick: () => { setSearch(''); setPage(1); }, 'data-testid': 'company-button-clear-search-empty' }
+              : { label: t('companies.createCompany'), icon: <Plus size={14} />, onClick: () => setShowCreateModal(true), 'data-testid': 'company-button-create-empty' }}
           />
         </div>
         <TablePaginationFooter

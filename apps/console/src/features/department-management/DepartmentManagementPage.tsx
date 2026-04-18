@@ -250,8 +250,26 @@ export function DepartmentManagementPage() {
                         sortState={{ col: sortBy, dir: sortDir }}
                         onSortChange={handleSortChange}
                         onRowDoubleClick={(d) => navigate(`/manage/departments/${d.id}`)}
-                        emptyMessage={filters.search ? t('table.empty.search') : t('table.empty.default')}
                         emptyIcon={<Building2 size={32} strokeWidth={1.2} />}
+                        emptyTitle={filters.search
+                            ? t('table.empty.searchTitle', 'No departments match your search')
+                            : t('table.empty.defaultTitle', 'No departments yet')}
+                        emptyDescription={filters.search
+                            ? t('table.empty.searchHint', 'Try a different keyword or clear your search.')
+                            : t('table.empty.defaultHint', 'Create your first department to organize users, assign managers, and build your org hierarchy.')}
+                        emptyAction={filters.search
+                            ? {
+                                  label: t('filter.clear', 'Clear search'),
+                                  variant: 'outline',
+                                  onClick: () => updateFilters({ search: '' }),
+                                  'data-testid': 'dept-button-clear-search-empty',
+                              }
+                            : {
+                                  label: t('createDepartment', 'Create Department'),
+                                  icon: <Plus size={14} />,
+                                  onClick: () => setShowCreateModal(true),
+                                  'data-testid': 'dept-button-create-empty',
+                              }}
                         selection={{
                             selectedIds: selectedDepartments,
                             onSelectedIdsChange: setSelectedDepartments,

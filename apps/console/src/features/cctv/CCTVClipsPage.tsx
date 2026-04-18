@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader, DataTable, type Column, Button, AppModal } from '@dm3/ui';
 import { useTranslation } from 'react-i18next';
-import { Trash2, Play, Download } from 'lucide-react';
+import { Trash2, Play, Download, Film } from 'lucide-react';
 import {
   listCameras,
   listClips,
@@ -173,6 +173,17 @@ export function CCTVClipsPage() {
           data={clips}
           rowKey={(r) => r.id}
           pageSize={20}
+          emptyIcon={<Film size={32} strokeWidth={1.2} />}
+          emptyTitle={(cameraFilter || fromFilter || toFilter) ? 'No clips match these filters' : 'No clips recorded yet'}
+          emptyDescription={(cameraFilter || fromFilter || toFilter)
+            ? 'Try a different camera or broaden the date range.'
+            : 'Clips are captured automatically when a camera triggers a recording event (motion, access, or manual). Check camera recording mode and MediaMTX connectivity.'}
+          emptyAction={(cameraFilter || fromFilter || toFilter) ? {
+            label: 'Clear filters',
+            variant: 'outline',
+            onClick: () => { setCameraFilter(''); setFromFilter(''); setToFilter(''); setPage(1); },
+            'data-testid': 'cctv-button-clear-filters-empty',
+          } : undefined}
         />
       )}
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader, DataTable, type Column, Button } from '@dm3/ui';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, Pencil, Play } from 'lucide-react';
+import { Plus, Trash2, Pencil, Play, Video } from 'lucide-react';
 import {
   listCameras,
   createCamera,
@@ -208,6 +208,14 @@ export function CCTVCamerasPage() {
           data={cameras}
           rowKey={(r) => r.id}
           pageSize={20}
+          emptyIcon={<Video size={32} strokeWidth={1.2} />}
+          emptyTitle={statusFilter ? `No ${statusFilter} cameras` : 'No cameras registered yet'}
+          emptyDescription={statusFilter
+            ? 'Try a different status filter or clear it to see every camera.'
+            : 'Add a camera to stream live video, record clips, and attach footage to access events.'}
+          emptyAction={statusFilter
+            ? { label: 'Clear filter', variant: 'outline', onClick: () => { setStatusFilter(''); setPage(1); }, 'data-testid': 'cctv-button-clear-filter-empty' }
+            : { label: 'Add Camera', icon: <Plus size={14} />, onClick: openCreate, 'data-testid': 'cctv-button-add-camera-empty' }}
         />
       )}
 

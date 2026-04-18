@@ -161,8 +161,14 @@ export function FirmwareListPage() {
             data={paged}
             rowKey={(fw) => fw.id}
             onRowClick={(fw) => navigate(`/system/firmware/${fw.id}`)}
-            emptyMessage={search || deviceTypeFilter || statusFilter ? t('firmware.noResults') : t('firmware.empty')}
             emptyIcon={<Package size={32} strokeWidth={1.2} />}
+            emptyTitle={(search || deviceTypeFilter || statusFilter) ? 'No firmware matches these filters' : 'No firmware uploaded yet'}
+            emptyDescription={(search || deviceTypeFilter || statusFilter)
+              ? 'Try a different keyword, device type, or status — or clear the filters to see every build.'
+              : 'Upload a signed firmware image to push over-the-air updates to devices. Each image is tied to a device type and can be activated after signature verification.'}
+            emptyAction={(search || deviceTypeFilter || statusFilter)
+              ? { label: 'Clear filters', variant: 'outline', onClick: () => { setSearch(''); setDeviceTypeFilter(''); setStatusFilter(''); setPage(1); }, 'data-testid': 'fw-button-clear-filters-empty' }
+              : { label: t('firmware.upload'), icon: <Plus size={14} />, onClick: () => navigate('/system/firmware/upload'), 'data-testid': 'fw-button-upload-empty' }}
           />
         </div>
         <TablePaginationFooter

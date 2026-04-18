@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader, DataTable, type Column, Button } from '@dm3/ui';
-import { Ban } from 'lucide-react';
+import { Ban, ParkingCircle } from 'lucide-react';
 import {
   listParkingSessions,
   voidParkingSession,
@@ -115,6 +115,17 @@ export function ParkingSessionsPage() {
           data={sessions}
           rowKey={(r) => r.id}
           pageSize={20}
+          emptyIcon={<ParkingCircle size={32} strokeWidth={1.2} />}
+          emptyTitle={statusFilter ? `No ${statusFilter} sessions` : 'No parking sessions yet'}
+          emptyDescription={statusFilter
+            ? 'Try a different status filter to see other sessions, or wait for vehicles to enter.'
+            : 'Sessions appear here automatically when vehicles enter and exit parking lots. Connect parking devices to start collecting data.'}
+          emptyAction={statusFilter ? {
+            label: 'Clear filter',
+            variant: 'outline',
+            onClick: () => { setStatusFilter(''); setPage(1); },
+            'data-testid': 'parking-button-clear-session-filter-empty',
+          } : undefined}
         />
       )}
     </div>

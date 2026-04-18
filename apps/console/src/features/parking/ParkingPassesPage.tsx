@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader, DataTable, type Column, Button, AppModal, Input, Label } from '@dm3/ui';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Ticket } from 'lucide-react';
 import {
   listParkingPasses,
   createParkingPass,
@@ -110,7 +110,21 @@ export function ParkingPassesPage() {
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Loading passes...</div>
       ) : (
-        <DataTable columns={columns} data={passes} rowKey={(r) => r.id} pageSize={20} />
+        <DataTable
+          columns={columns}
+          data={passes}
+          rowKey={(r) => r.id}
+          pageSize={20}
+          emptyIcon={<Ticket size={32} strokeWidth={1.2} />}
+          emptyTitle="No parking passes issued yet"
+          emptyDescription="Create a pass to grant monthly, quarterly, or VIP parking access to specific vehicles."
+          emptyAction={{
+            label: 'Create Pass',
+            icon: <Plus size={14} />,
+            onClick: () => setShowForm(true),
+            'data-testid': 'parking-button-create-pass-empty',
+          }}
+        />
       )}
 
       <AppModal open={showForm} onOpenChange={(o) => { if (!o) { setShowForm(false); resetForm(); } }} title="Create Parking Pass">

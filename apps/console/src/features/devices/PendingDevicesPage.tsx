@@ -13,10 +13,11 @@ import {
   TableHeader,
   TableRow,
 } from '@dm3/ui';
+import { EmptyState } from '@dm3/ui';
 import { fetchCompanies, type PendingDevice, type CompanyDTO } from '@/lib/api';
 import { usePendingDevices, useApprovePendingDevice, useRejectPendingDevice } from '@/lib/hooks';
 import { DEVICE_TYPE_MODELS, resolveDeviceModel } from '@/lib/device-models';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Inbox } from 'lucide-react';
 
 interface Props {
   /** If true, shows company selector (system admin view) */
@@ -147,8 +148,14 @@ export function PendingDevicesPage({ isSystemAdmin = false }: Props) {
                 </TableRow>
               ) : devices.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={isSystemAdmin ? 9 : 8} className="py-12 text-center text-[13px] text-muted-foreground">
-                    No pending registrations
+                  <TableCell colSpan={isSystemAdmin ? 9 : 8} className="py-8">
+                    <EmptyState
+                      icon={<Inbox size={32} strokeWidth={1.2} />}
+                      title="No devices waiting for approval"
+                      description="When a factory-new device boots on the network, it sends a registration request and appears here. Power on a controller, terminal, or camera to onboard it."
+                      primaryAction={{ label: 'Refresh', variant: 'outline', onClick: () => loadData(), 'data-testid': 'pending-button-refresh-empty' }}
+                      compact
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
