@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Shield, Plus, Eye, Edit, Trash2, Trash, Clock, AlertTriangle } from 'lucide-react';
+import { Shield, Plus, Eye, Edit, Trash2, Trash, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import {
     Button,
     Input,
@@ -186,6 +186,60 @@ export function AccessGroupsPage() {
                                 )}
                             </TooltipContent>
                         </Tooltip>
+                    );
+                },
+            },
+            {
+                key: 'flags',
+                header: t('columns.flags', 'Flags'),
+                width: '180px',
+                render: (g) => {
+                    const noAps      = (g.access_point_count ?? 0) === 0;
+                    const noUsers    = (g.user_count ?? 0) === 0;
+                    // Only flag "no schedule" on non-default groups — the default
+                    // group intentionally has no schedule (it gates nothing).
+                    const noSchedule = !g.access_time_id && !g.is_default;
+                    if (!noAps && !noUsers && !noSchedule) {
+                        return (
+                            <span
+                                className="inline-flex items-center gap-1 rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success leading-none"
+                                title={t('flags.healthyTooltip', 'No risk flags detected.')}
+                            >
+                                <CheckCircle2 size={11} strokeWidth={2.2} />
+                                {t('flags.healthy', 'Healthy')}
+                            </span>
+                        );
+                    }
+                    return (
+                        <div className="flex flex-wrap gap-1">
+                            {noAps && (
+                                <span
+                                    className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-destructive leading-none"
+                                    title={t('flags.noApsTooltip', 'This group has no access points — users in it cannot enter anywhere.')}
+                                >
+                                    <AlertTriangle size={10} strokeWidth={2.2} />
+                                    {t('flags.noAps', 'No APs')}
+                                </span>
+                            )}
+                            {noUsers && (
+                                <span
+                                    className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-warning leading-none"
+                                    title={t('flags.noUsersTooltip', 'No users are assigned to this group.')}
+                                >
+                                    <AlertTriangle size={10} strokeWidth={2.2} />
+                                    {t('flags.noUsers', 'No users')}
+                                </span>
+                            )}
+                            {noSchedule && (
+                                <span
+                                    className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-warning leading-none"
+                                    title={t('flags.noScheduleTooltip', 'No access time selected — this group grants 24/7 access.')}
+                                >
+                                    <AlertTriangle size={10} strokeWidth={2.2} />
+                                    {t('flags.noSchedule', 'No schedule')}
+                                </span>
+                            )}
+                        </div>
                     );
                 },
             },
