@@ -12,7 +12,7 @@ import {
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import type { AccessGroupFormData, AccessTime } from './types';
-import { buildZonePathMap, ZonePathLabel, type ZoneRef } from './zone-path';
+import { buildZonePathMap, ZonePathLabel, type ZoneRef } from '../shared/zone-path';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 

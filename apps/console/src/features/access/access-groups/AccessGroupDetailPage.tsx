@@ -16,7 +16,7 @@ import { toast } from '@/lib/toast';
 import { useBreadcrumbStore } from '@dm3/ui';
 import type { AccessGroup, AccessGroupAccessPoint, AccessGroupFormData, AccessTime } from './types';
 import type { User } from '@/features/user-management/types';
-import { buildZonePathMap, ZonePathLabel, type ZoneRef } from './zone-path';
+import { buildZonePathMap, ZonePathLabel, type ZoneRef } from '../shared/zone-path';
 
 interface GroupUser {
   id: string;

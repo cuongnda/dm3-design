@@ -19,6 +19,7 @@ import {
 import { useAccessPoints } from './hooks/useAccessPoints';
 import { toast } from '@/lib/toast';
 import type { AccessPoint, AccessPointFormData, Zone } from './types';
+import { buildZonePathMap, ZonePathLabel } from '../shared/zone-path';
 
 const doorStateConfig: Record<string, { color: string; label: string; icon: typeof Lock }> = {
     closed:     { color: 'border-success/30 bg-success/10 text-success',         label: 'Closed',      icon: Lock },
@@ -197,7 +198,7 @@ export function AccessPointsPage() {
     const [bulkDoorLoading, setBulkDoorLoading] = useState(false);
     const [bulkUnlockSeconds, setBulkUnlockSeconds] = useState(3);
 
-    const zoneMap = useMemo(() => new Map(zones.map((z) => [z.id, z.name])), [zones]);
+    const zonePathById = useMemo(() => buildZonePathMap(zones), [zones]);
 
     const handleCreate = async (data: AccessPointFormData) => createAccessPoint(data);
 
@@ -325,10 +326,24 @@ export function AccessPointsPage() {
             header: t('columns.zone', 'Zone'),
             sortable: true,
             render: (ap) => {
-                const name = ap.zone_name || (ap.zone_id && zoneMap.get(ap.zone_id));
-                return name
-                    ? <span className="inline-flex items-center gap-1 text-[12px] text-muted-foreground"><MapPin size={11} />{name}</span>
-                    : <span className="text-[13px] text-muted-foreground/50">—</span>;
+                const path = ap.zone_id ? zonePathById.get(ap.zone_id) : undefined;
+                if (path) {
+                    return (
+                        <span className="inline-flex items-center gap-1.5">
+                            <MapPin size={11} className="text-muted-foreground shrink-0" />
+                            <ZonePathLabel path={path} />
+                        </span>
+                    );
+                }
+                if (ap.zone_name) {
+                    return (
+                        <span className="inline-flex items-center gap-1 text-[12px] text-muted-foreground">
+                            <MapPin size={11} />
+                            {ap.zone_name}
+                        </span>
+                    );
+                }
+                return <span className="text-[13px] text-muted-foreground/50">—</span>;
             },
         },
         {

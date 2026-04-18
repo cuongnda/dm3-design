@@ -46,6 +46,7 @@ export interface AccessPointDevice {
 export interface Zone {
   id: string;
   name: string;
+  parent_id?: string | null;
   timezone?: string;
   map_image_url?: string;
 }
