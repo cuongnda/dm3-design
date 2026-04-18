@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Shield, DoorOpen, Users, Check, ChevronRight, Search, User as UserIcon } from 'lucide-react';
+import { Shield, DoorOpen, Users, Search, User as UserIcon } from 'lucide-react';
 import {
-    AppModal,
+    WizardModal,
     Button,
     Input,
     Label,
@@ -246,41 +246,11 @@ export function CreateAccessGroupWizard({
 
     // ── Rendering helpers ───────────────────────────────────────────────
 
-    const stepLabels = [
-        { id: 1, label: t('wizard.step1', 'Info'), icon: Shield },
-        { id: 2, label: t('wizard.step2', 'Access Points'), icon: DoorOpen },
-        { id: 3, label: t('wizard.step3', 'Users'), icon: Users },
-    ] as const;
-
-    const StepHeader = (
-        <div className="flex items-center gap-2 mb-4">
-            {stepLabels.map((s, idx) => {
-                const Icon = s.icon;
-                const isActive = s.id === step;
-                const isDone = s.id < step;
-                return (
-                    <div key={s.id} className="flex items-center gap-2">
-                        <div
-                            className={[
-                                'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] border transition-colors',
-                                isActive && 'bg-primary/10 border-primary/40 text-primary',
-                                isDone && 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
-                                !isActive && !isDone && 'border-border/60 text-muted-foreground',
-                            ]
-                                .filter(Boolean)
-                                .join(' ')}
-                        >
-                            {isDone ? <Check size={12} /> : <Icon size={12} />}
-                            <span className="font-medium">{s.label}</span>
-                        </div>
-                        {idx < stepLabels.length - 1 && (
-                            <ChevronRight size={12} className="text-muted-foreground/50" />
-                        )}
-                    </div>
-                );
-            })}
-        </div>
-    );
+    const steps = [
+        { id: 1 as const, label: t('wizard.step1', 'Info'), icon: Shield },
+        { id: 2 as const, label: t('wizard.step2', 'Access Points'), icon: DoorOpen },
+        { id: 3 as const, label: t('wizard.step3', 'Users'), icon: Users },
+    ];
 
     // ── Step 1 body (info form) ─────────────────────────────────────────
     const Step1Body = (
@@ -675,7 +645,7 @@ export function CreateAccessGroupWizard({
     );
 
     return (
-        <AppModal
+        <WizardModal
             open={open}
             onOpenChange={(v) => {
                 if (!v) handleClose();
@@ -688,12 +658,13 @@ export function CreateAccessGroupWizard({
                 </span>
             }
             size="xl"
+            steps={steps}
+            activeStep={step}
             footer={Footer}
         >
-            {StepHeader}
             {step === 1 && Step1Body}
             {step === 2 && Step2Body}
             {step === 3 && Step3Body}
-        </AppModal>
+        </WizardModal>
     );
 }
