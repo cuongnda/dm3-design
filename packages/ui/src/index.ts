@@ -58,6 +58,12 @@ export * from './components/layout/MainLayout';
 export * from './components/layout/PageHeader';
 export * from './components/layout/Sidebar';
 export * from './components/layout/Topbar';
+export * from './components/layout/HealthStrip';
+export * from './components/layout/NavStatusPill';
+
+// Nav config + status
+export * from './config/navConfig';
+export * from './lib/navStatus';
 
 // Notifications
 export * from './toast';

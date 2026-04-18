@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { SearchCommand } from '../common/SearchCommand';
 import { NotificationPanel } from '../common/NotificationPanel';
 import { LanguageSwitcher } from '../common/LanguageSwitcher';
+import { HealthStrip } from './HealthStrip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -263,6 +264,7 @@ export function Topbar() {
           </DropdownMenu>
         </div>
       </header>
+      <HealthStrip />
 
       <SearchCommand open={searchOpen} onOpenChange={setSearchOpen} />
     </>
