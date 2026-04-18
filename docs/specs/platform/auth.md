@@ -8,8 +8,9 @@
 
 The v1 auth system is a lightweight Go service (auth-svc) with:
 - **JWT access tokens** (15min, HS256) + **refresh tokens** (7d, stored in DB with rotation + replay detection)
-- **Company-scoped users** — every user belongs to a Company (except system_admin)
-- **Role-based access**: see canonical role model in `docs/specs/platform/company-rbac.md`
+- **Company-scoped users** — every user belongs to a Company (except `system_admin`)
+- **Fixed top-level roles only**: `system_admin`, `primary_manager`
+- **Company-defined custom roles** for normal company access, as defined in `docs/specs/platform/company-rbac.md`
 - **Device tokens** for MQTT authentication (24h, scoped to company + device)
 - **bcrypt** password hashing
 - No Keycloak dependency yet (planned for v2 SSO/MFA)
@@ -21,13 +22,30 @@ The v1 auth system is a lightweight Go service (auth-svc) with:
   "cid": "company-uuid",        // null for system_admin
   "email": "user@company.com",
   "name": "User Name",
-  "role": "primary_manager",
+  "fixed_role": "primary_manager", 
   "exp": 1740000000,
   "iat": 1739900000
 }
 ```
 
-Canonical role definitions and migration rules now live in `docs/specs/platform/company-rbac.md`.
+### JWT Access Token Claims (target model)
+```json
+{
+  "sub": "user-uuid",
+  "cid": "company-uuid",
+  "email": "user@company.com",
+  "name": "User Name",
+  "fixed_role": null,
+  "permissions": ["attendance.record.read", "attendance.leave.approve"],
+  "assignments": [
+    { "role": "Department Manager", "scope_type": "department", "scope_id": "uuid" }
+  ],
+  "exp": 1740000000,
+  "iat": 1739900000
+}
+```
+
+Canonical authorization definitions and migration rules live in `docs/specs/platform/company-rbac.md`.
 
 ### Device JWT Claims (v1)
 ```json
@@ -47,7 +65,7 @@ Canonical role definitions and migration rules now live in `docs/specs/platform/
 | sysadmin@duali.com | sysadmin123 | system_admin | — (none) |
 | admin@duali.com | admin123 | primary_manager | Duali Demo |
 
-Role semantics are defined in `docs/specs/platform/company-rbac.md`.
+All non-fixed company access beyond `primary_manager` is defined through company roles and scoped assignments in `docs/specs/platform/company-rbac.md`.
 
 ### v1 API Endpoints (auth-svc, port 8005)
 | Method | Path | Auth | Description |
@@ -57,8 +75,8 @@ Role semantics are defined in `docs/specs/platform/company-rbac.md`.
 | POST | `/api/v1/auth/logout` | Bearer | Invalidate refresh token |
 | GET | `/api/v1/auth/me` | Bearer | Current user profile |
 | POST | `/api/v1/auth/device-token` | Bearer | Issue device MQTT JWT |
-| GET | `/api/v1/roles` | Bearer | List available roles |
-| CRUD | `/api/v1/users` | Admin | User management (within company) |
+| GET | `/api/v1/roles` | Bearer | List company roles + templates |
+| CRUD | `/api/v1/users` | Company auth | User management (within company, permission-gated) |
 | CRUD | `/api/v1/system/companies` | system_admin | Company management |
 
 ---
@@ -83,7 +101,9 @@ The Authentication & Authorization system is the security foundation of DM3 — 
 | phone | string(20) | no | null | Phone for SMS MFA |
 | phone_verified | boolean | yes | false | Phone verification status |
 | status | UserStatusEnum | yes | active | Account status |
-| roles | string[] | yes | ["viewer"] | Assigned canonical roles from `company-rbac.md` |
+| fixed_role | string(50) | no | null | Fixed role if user is `system_admin` or `primary_manager` |
+| company_roles | string[] | yes | [] | Derived company role names for display/debugging |
+| permissions | string[] | yes | [] | Effective permission keys |
 | sites | uuid[] | yes | [] | Accessible sites |
 | mfa_enabled | boolean | yes | false | MFA active |
 | mfa_methods | string[] | no | [] | Active MFA methods |
@@ -148,7 +168,7 @@ The Authentication & Authorization system is the security foundation of DM3 — 
 | history_count | int | yes | 5 | Cannot reuse last N passwords |
 | max_failed_attempts | int | yes | 5 | Lock after N failures |
 | lockout_duration_minutes | int | yes | 30 | Lockout duration |
-| mfa_required_roles | string[] | yes | ["primary_manager","admin","system_admin"] | Roles requiring MFA |
+| mfa_required_roles | string[] | yes | ["primary_manager","system_admin"] | Fixed roles requiring MFA by default |
 | session_max_age_hours | int | yes | 24 | Max session duration |
 | session_idle_timeout_minutes | int | yes | 60 | Idle timeout |
 | updated_at | timestamp | yes | now() | Last update |
@@ -176,6 +196,7 @@ UserStatusEnum: active | inactive | suspended | locked | pending_verification
 SessionStatusEnum: active | expired | revoked
 TokenStatusEnum: active | revoked | expired
 MFAMethodEnum: totp | sms | webauthn
+FixedRoleEnum: system_admin | primary_manager
 ```
 
 ## API Endpoints
@@ -380,15 +401,15 @@ MFAMethodEnum: totp | sms | webauthn
 
 ## Business Rules
 
-1. **BR-AUTH-001 — JWT Local Validation:** All services validate JWTs locally using cached JWKS public keys (refreshed every 5 minutes). No auth-svc call per API request. Token claims contain tenant_id, roles, permissions, and sites.
+1. **BR-AUTH-001 — JWT Local Validation:** All services validate JWTs locally using cached JWKS public keys (refreshed every 5 minutes). No auth-svc call per API request. Token claims contain tenant_id, fixed_role, permissions, and scoped assignment context as defined by `company-rbac.md`.
 2. **BR-AUTH-002 — Access Token Short-Lived:** Access tokens expire in 15 minutes (configurable, max 60 min). Refresh tokens expire in 24 hours (configurable, max 30 days). Device authorization tokens expire in 90 days.
 3. **BR-AUTH-003 — Refresh Token Rotation:** Every refresh call issues a new refresh token and invalidates the old one. If a revoked refresh token is reused (token replay), ALL sessions for that user are immediately revoked (compromise detection).
-4. **BR-AUTH-004 — MFA Enforcement:** Users with roles in `mfa_required_roles` MUST enable MFA. Login without MFA returns `mfa_required` response with temporary token valid for 5 minutes.
+4. **BR-AUTH-004 — MFA Enforcement:** Users with fixed roles in `mfa_required_roles` MUST enable MFA. Additional MFA requirements for company-defined roles may be enforced later via policy.
 5. **BR-AUTH-005 — Account Lockout:** After `max_failed_attempts` consecutive failed logins, account is locked for `lockout_duration_minutes`. Each additional failed attempt during lockout extends the duration by 2x (exponential backoff, max 24 hours).
 6. **BR-AUTH-006 — Password Policy Enforcement:** New passwords are validated against tenant PasswordPolicy. Passwords are checked against a breach database (HaveIBeenPwned k-Anonymity API) and rejected if compromised.
 7. **BR-AUTH-007 — Password Expiry:** When `max_age_days > 0`, users with expired passwords receive a 403 with `password_expired` error. Only password change endpoints are accessible until password is updated.
 8. **BR-AUTH-008 — Session Idle Timeout:** Sessions with no activity (no token refresh) for `session_idle_timeout_minutes` are automatically revoked by a background job.
-9. **BR-AUTH-009 — SSO Integration:** SAML 2.0 and OIDC providers are configured per tenant. SSO users are auto-provisioned on first login (JIT provisioning) with roles mapped from IdP attributes.
+9. **BR-AUTH-009 — SSO Integration:** SAML 2.0 and OIDC providers are configured per tenant. SSO users are auto-provisioned on first login (JIT provisioning) with company role assignments mapped from IdP attributes or default onboarding policy.
 10. **BR-AUTH-010 — API Token Scoping:** API tokens have fine-grained scopes (e.g., `access:read`, `identity:write`). Requests outside the token's scope are rejected with 403.
 11. **BR-AUTH-011 — Rate Limiting:** Tier-based rate limits (see architecture doc §3.4). Login endpoint is additionally limited to 10 attempts per IP per minute to prevent brute force.
 12. **BR-AUTH-012 — Tenant Isolation:** Tokens are scoped to a single tenant. A token from tenant A cannot access tenant B's resources. Cross-tenant access requires `system_admin` role.
@@ -397,23 +418,29 @@ MFAMethodEnum: totp | sms | webauthn
 
 ## Permissions Matrix
 
-Auth-specific permissions must follow the canonical role model in `docs/specs/platform/company-rbac.md`.
+Auth-specific authorization must follow `docs/specs/platform/company-rbac.md`.
 
-| Action | viewer | operator | manager | admin | primary_manager | system_admin |
-|--------|--------|----------|---------|-------|-----------------|-------------|
-| Login/logout | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Change own password | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Manage own MFA | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| View own sessions | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Revoke own sessions | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Create API tokens | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Revoke others' sessions | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| View password policy | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Edit password policy | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Manage OAuth clients | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Force password reset (others) | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Disable MFA (others) | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Cross-tenant access | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+The only fixed roles are:
+- `system_admin`
+- `primary_manager`
+
+All other company access is permission + scope based.
+
+| Action | company user | primary_manager | system_admin |
+|--------|--------------|-----------------|-------------|
+| Login/logout | ✅ | ✅ | ✅ |
+| Change own password | ✅ | ✅ | ✅ |
+| Manage own MFA | ✅ | ✅ | ✅ |
+| View own sessions | ✅ | ✅ | ✅ |
+| Revoke own sessions | ✅ | ✅ | ✅ |
+| Create API tokens | permission-based | ✅ | ✅ |
+| Revoke others' sessions | permission-based | ✅ | ✅ |
+| View password policy | permission-based | ✅ | ✅ |
+| Edit password policy | permission-based | ✅ | ✅ |
+| Manage OAuth clients | permission-based | ✅ | ✅ |
+| Force password reset (others) | permission-based | ✅ | ✅ |
+| Disable MFA (others) | permission-based | ✅ | ✅ |
+| Cross-tenant access | ❌ | ❌ | ✅ |
 
 ## Offline Behavior
 

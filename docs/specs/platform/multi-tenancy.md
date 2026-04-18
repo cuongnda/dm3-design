@@ -6,16 +6,20 @@
 
 ## Overview
 
-The Multi-Tenancy system enables DM3 to serve multiple **Companies** (organizations/customers) from a single deployment — each with complete data isolation, independent configuration, and hierarchical site management.
+The Multi-Tenancy system enables DM3 to serve multiple **Companies** (organizations/customers) from a single deployment, each with complete data isolation, independent configuration, and hierarchical site management.
 
 **Key concept:** A **Company** is the top-level isolation boundary. Every piece of data (devices, doors, users, events) belongs to exactly one Company. Users belong to a Company and can only see/manage data within their Company.
+
+Company authorization is defined canonically in:
+- `docs/specs/platform/company-rbac.md`
 
 ### Two-Level Administration
 
 | Level | Role | Scope | UI |
 |-------|------|-------|----|
 | **System Admin** | `system_admin` | All companies | System Admin Panel (`/system`) |
-| **Company Users** | see `docs/specs/platform/company-rbac.md` | One company | Main App (`/`) |
+| **Primary Manager** | `primary_manager` | One company, full access | Main App (`/`) |
+| **Other Company Users** | company-defined roles + scoped assignments | One company, limited by scope | Main App (`/`) |
 
 - **System Admins** are not tied to any company. They manage the platform itself.
 - **Company users** are always scoped to their company. They never see other companies' data.
@@ -31,7 +35,8 @@ When a Company is created:
 1. Company record created in `dm3_auth.companies`
 2. Default **Primary Manager** user auto-created with provided email
 3. Random password generated and returned (must change on first login)
-4. Company is ready to use immediately
+4. Starter role templates may be suggested for initial setup
+5. Company is ready to use immediately
 
 ---
 
@@ -55,15 +60,15 @@ When a Company is created:
 | created_at | timestamptz | yes | now() | Creation time |
 | updated_at | timestamptz | yes | now() | Last update |
 
-### User (updated — belongs to Company)
+### User (updated, belongs to Company)
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | id | uuid | yes | auto | Primary key |
-| tenant_id | uuid | no | FK→tenants | NULL for system_admin |
+| tenant_id | uuid | no | FK→tenants | NULL for `system_admin` |
 | email | string(255) | yes | - | Unique login email |
 | password_hash | string(255) | yes | - | bcrypt hash |
 | name | string(255) | no | null | Display name |
-| role | RoleEnum | yes | viewer | Canonical role within company, defined in `company-rbac.md` |
+| fixed_role | FixedRoleEnum | no | null | Fixed role only for `system_admin` or `primary_manager` |
 | status | UserStatusEnum | yes | active | Account status |
 | last_login | timestamptz | no | null | Last successful login |
 | created_at | timestamptz | yes | now() | Creation time |
@@ -87,17 +92,23 @@ When a Company is created:
 ```
 PlanEnum: starter | professional | enterprise
 CompanyStatusEnum: active | suspended | deactivated
-RoleEnum: system_admin | primary_manager | admin | manager | operator | viewer
+FixedRoleEnum: system_admin | primary_manager
 UserStatusEnum: active | inactive | locked
 SiteStatusEnum: active | inactive | maintenance
 ```
 
-### Role Permissions Matrix
+### Company Authorization Model
 
 Canonical company-level RBAC is defined in:
 - `docs/specs/platform/company-rbac.md`
 
-This file focuses on company isolation and lifecycle, not the full RBAC definition.
+This file focuses on company isolation and lifecycle, not the full authorization definition.
+
+Summary:
+- fixed roles: `system_admin`, `primary_manager`
+- all other roles are company-defined
+- permissions are constrained by scope
+- multiple scoped assignments per user are allowed
 
 ---
 
@@ -146,14 +157,14 @@ This file focuses on company isolation and lifecycle, not the full RBAC definiti
     "email": "admin@acme.vn",
     "password": "Xk9#mP2$vL7n",
     "name": "Primary Manager",
-    "role": "primary_manager"
+    "fixed_role": "primary_manager"
   }
 }
 ```
 
 **Side effects:**
 1. Creates company record
-2. Creates user with role=primary_manager
+2. Creates user with `fixed_role=primary_manager`
 3. MQTT namespace `dm/{tenant_id}/` ready for devices
 
 #### GET /api/v1/system/companies — List Companies
@@ -181,11 +192,13 @@ This file focuses on company isolation and lifecycle, not the full RBAC definiti
 All existing APIs are now **automatically filtered by tenant_id** from the JWT token:
 
 ```
-JWT Claims: { sub: "user-uuid", cid: "tenant-uuid", role: "primary_manager", ... }
+JWT Claims: { sub: "user-uuid", cid: "tenant-uuid", fixed_role: "primary_manager", ... }
                                   ↓
 Auth middleware extracts cid → injects into request context
                                   ↓
-All DB queries: WHERE tenant_id = $tenant_id
+Authorization layer evaluates permission + scope
+                                  ↓
+All DB queries remain bounded by: WHERE tenant_id = $tenant_id
 ```
 
 **No API changes needed** — the filtering is transparent to the client.
@@ -232,7 +245,7 @@ ID: 00000000-0000-0000-0000-000000000001
 | sysadmin@duali.com | sysadmin123 | system_admin | — (none) |
 | admin@duali.com | admin123 | primary_manager | Duali Demo |
 
-Role semantics are defined in `docs/specs/platform/company-rbac.md`.
+Role semantics and scoped company access are defined in `docs/specs/platform/company-rbac.md`.
 
 ---
 
