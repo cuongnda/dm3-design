@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { X } from 'lucide-react';
 import { PageHeader, DataTable, type Column, StatCard, Button, Input, Label } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { mockTemplates, mockRequests, mockAudit, type RoleTemplate, type ProvisioningRequest, type AuditEntry } from './mock-data';
@@ -88,7 +89,7 @@ export function ProvisioningPage() {
             <div className="mt-4 bg-card border border-border rounded-lg p-5">
               <div className="flex justify-between items-start mb-4">
                 <h3 className="text-[16px] font-semibold text-foreground">{t('provisioning.template.editTitle', { name: editTemplate.name })}</h3>
-                <Button variant="ghost" size="icon-xs" onClick={() => setEditTemplate(null)}>✕</Button>
+                <Button variant="ghost" size="icon-xs" onClick={() => setEditTemplate(null)}><X size={14} /></Button>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

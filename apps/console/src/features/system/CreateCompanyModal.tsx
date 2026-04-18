@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Check, Copy, Building2, Sparkles, Gauge, AlertCircle } from 'lucide-react';
+import { Check, Copy, Building2, Sparkles, Gauge, AlertCircle, AlertTriangle } from 'lucide-react';
 import { createCompany, type CreateCompanyResponse, type CreateCompanyRequest } from '@/lib/api';
 import { AppModal, Button, Input, Label, Select, SelectOption, WizardModal } from '@dm3/ui';
 
@@ -125,8 +125,8 @@ export function CreateCompanyModal({ open, onOpenChange, onCreated }: CreateComp
                                     </span>
                                 </div>
                             </div>
-                            <p className="text-[11px] text-warning mt-3">
-                                ⚠ Save these credentials — the password won't be shown again.
+                            <p className="text-[11px] text-warning mt-3 inline-flex items-center gap-1">
+                                <AlertTriangle size={11} /> Save these credentials — the password won't be shown again.
                             </p>
                         </div>
                     ) : (

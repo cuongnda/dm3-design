@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { CheckCircle2, DoorClosed, PhoneOff, Radio, Tv } from 'lucide-react';
 import { PageHeader } from '@dm3/ui';
 import { StatCard } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
@@ -34,8 +35,8 @@ function DeviceCard({ device, selected, onClick }: { device: IntercomDevice; sel
       )}
     >
       <div className="flex items-center gap-3">
-        <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center text-[16px]', isDoor ? 'bg-secure/10' : 'bg-manage/10')}>
-          {isDoor ? '🚪' : '📺'}
+        <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center', isDoor ? 'bg-secure/10 text-secure' : 'bg-manage/10 text-manage')}>
+          {isDoor ? <DoorClosed size={18} /> : <Tv size={18} />}
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-[12px] font-medium text-foreground truncate">{device.name}</div>
@@ -105,10 +106,10 @@ export function IntercomPage() {
       <PageHeader title={t('intercom.title')} description={t('intercom.description')} />
 
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <StatCard label={t('intercom.devices.title')} value={String(mockDevices.length)} sub={`${online} online`} icon="📡" domain="secure" />
-        <StatCard label="Door Station" value={String(doorStations)} sub={/* TODO: add i18n key */"Door stations"} icon="🚪" domain="secure" />
-        <StatCard label={t('intercom.calls.answered')} value={String(answered)} sub={`/${mockCallRecords.length} calls`} icon="✅" domain="default" />
-        <StatCard label={t('intercom.calls.missed')} value={String(missed)} sub={/* TODO: add i18n key */"Needs review"} icon="📵" domain="error" />
+        <StatCard label={t('intercom.devices.title')} value={String(mockDevices.length)} sub={`${online} online`} icon={<Radio size={14} />} domain="secure" />
+        <StatCard label="Door Station" value={String(doorStations)} sub={/* TODO: add i18n key */"Door stations"} icon={<DoorClosed size={14} />} domain="secure" />
+        <StatCard label={t('intercom.calls.answered')} value={String(answered)} sub={`/${mockCallRecords.length} calls`} icon={<CheckCircle2 size={14} />} domain="default" />
+        <StatCard label={t('intercom.calls.missed')} value={String(missed)} sub={/* TODO: add i18n key */"Needs review"} icon={<PhoneOff size={14} />} domain="error" />
       </div>
 
       <div className="grid grid-cols-3 gap-6 mb-6">

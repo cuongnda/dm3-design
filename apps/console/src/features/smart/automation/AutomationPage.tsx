@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
+import { BarChart3, CheckCircle2, ClipboardList, RotateCw, Search, Target, Zap } from 'lucide-react';
 import { PageHeader, StatCard, DataTable, type Column, Button } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { rules, executionLogs, summary, type AutomationRule, type ExecutionLog } from './mock-data';
@@ -40,21 +41,25 @@ export function AutomationPage() {
       </PageHeader>
 
       <div className="grid grid-cols-4 gap-3 mb-6">
-        <StatCard label="Tổng quy tắc" value={String(summary.totalRules)} sub="Đã thiết lập" icon="⚡" domain="smart" />
-        <StatCard label="Đang bật" value={String(summary.activeRules)} sub="Hoạt động" icon="✅" domain="smart" />
-        <StatCard label="Lần chạy" value={String(summary.totalExecutions)} sub="Hôm nay" icon="🔄" domain="smart" />
-        <StatCard label="Tỷ lệ thành công" value={`${summary.successRate}%`} sub="Trung bình" icon="📊" domain="smart" />
+        <StatCard label="Tổng quy tắc" value={String(summary.totalRules)} sub="Đã thiết lập" icon={<Zap size={14} />} domain="smart" />
+        <StatCard label="Đang bật" value={String(summary.activeRules)} sub="Hoạt động" icon={<CheckCircle2 size={14} />} domain="smart" />
+        <StatCard label="Lần chạy" value={String(summary.totalExecutions)} sub="Hôm nay" icon={<RotateCw size={14} />} domain="smart" />
+        <StatCard label="Tỷ lệ thành công" value={`${summary.successRate}%`} sub="Trung bình" icon={<BarChart3 size={14} />} domain="smart" />
       </div>
 
       <div className="flex gap-2 mb-4">
-        {(['rules', 'logs'] as const).map(tabKey => (
-          <button type="button" key={tabKey} onClick={() => setTab(tabKey)} className={cn(
-            'px-3 py-1.5 rounded-md text-[12px] font-medium border',
-            tab === tabKey ? 'bg-smart/20 border-smart/50 text-smart' : 'bg-card border-border text-muted-foreground'
-          )}>
-            {tabKey === 'rules' ? `⚡ ${t('automation.tab.rules')}` : `📋 ${t('automation.tab.log')}`}
-          </button>
-        ))}
+        {(['rules', 'logs'] as const).map(tabKey => {
+          const TabIcon = tabKey === 'rules' ? Zap : ClipboardList;
+          const tabLabel = tabKey === 'rules' ? t('automation.tab.rules') : t('automation.tab.log');
+          return (
+            <button type="button" key={tabKey} onClick={() => setTab(tabKey)} className={cn(
+              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium border',
+              tab === tabKey ? 'bg-smart/20 border-smart/50 text-smart' : 'bg-card border-border text-muted-foreground'
+            )}>
+              <TabIcon size={12} /> {tabLabel}
+            </button>
+          );
+        })}
       </div>
 
       {tab === 'rules' ? (
@@ -74,15 +79,15 @@ export function AutomationPage() {
                   <div className="flex gap-6">
                     <div>
                       <div className="text-[10px] uppercase text-muted-foreground mb-1">Kích hoạt</div>
-                      <div className="text-[12px] text-muted-foreground">🎯 {rule.trigger}</div>
+                      <div className="text-[12px] text-muted-foreground inline-flex items-center gap-1.5"><Target size={12} /> {rule.trigger}</div>
                     </div>
                     <div>
                       <div className="text-[10px] uppercase text-muted-foreground mb-1">Điều kiện</div>
-                      <div className="text-[12px] text-muted-foreground">🔍 {rule.condition}</div>
+                      <div className="text-[12px] text-muted-foreground inline-flex items-center gap-1.5"><Search size={12} /> {rule.condition}</div>
                     </div>
                     <div>
                       <div className="text-[10px] uppercase text-muted-foreground mb-1">Hành động</div>
-                      <div className="text-[12px] text-muted-foreground">⚡ {rule.action}</div>
+                      <div className="text-[12px] text-muted-foreground inline-flex items-center gap-1.5"><Zap size={12} /> {rule.action}</div>
                     </div>
                   </div>
                 </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ClipboardList, Radio, ShieldCheck, Siren } from 'lucide-react';
 import { PageHeader } from '@dm3/ui';
 import { StatCard } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
@@ -133,10 +134,10 @@ export function IntrusionPage() {
       <PageHeader title={t('intrusion.title')} description={t('intrusion.description')} />
 
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <StatCard label={t('intrusion.zones.title')} value={String(mockZones.length)} sub={`${armed} ${t('intrusion.status.armed').toLowerCase()}`} icon="🛡️" domain="secure" />
-        <StatCard label={t('intrusion.status.alarm')} value={String(alarmCount)} sub={/* TODO: add i18n key */"Zones alarming"} icon="🚨" domain="error" />
-        <StatCard label={/* TODO: add i18n key */"Sensors"} value={String(mockSensors.length)} sub={`${offlineSensors} ${/* TODO: add i18n key */"errors"}`} icon="📡" domain="default" />
-        <StatCard label={/* TODO: add i18n key */"Events Today"} value={String(mockAlarmEvents.filter((e) => e.time.startsWith('2026-02-19')).length)} sub={/* TODO: add i18n key */"In last 24h"} icon="📋" domain="secure" />
+        <StatCard label={t('intrusion.zones.title')} value={String(mockZones.length)} sub={`${armed} ${t('intrusion.status.armed').toLowerCase()}`} icon={<ShieldCheck size={14} />} domain="secure" />
+        <StatCard label={t('intrusion.status.alarm')} value={String(alarmCount)} sub={/* TODO: add i18n key */"Zones alarming"} icon={<Siren size={14} />} domain="error" />
+        <StatCard label={/* TODO: add i18n key */"Sensors"} value={String(mockSensors.length)} sub={`${offlineSensors} ${/* TODO: add i18n key */"errors"}`} icon={<Radio size={14} />} domain="default" />
+        <StatCard label={/* TODO: add i18n key */"Events Today"} value={String(mockAlarmEvents.filter((e) => e.time.startsWith('2026-02-19')).length)} sub={/* TODO: add i18n key */"In last 24h"} icon={<ClipboardList size={14} />} domain="secure" />
       </div>
 
       <div className="grid grid-cols-3 gap-6 mb-6">

@@ -1,3 +1,5 @@
+import { Box, Footprints, Siren, Users, UsersRound, type LucideIcon } from 'lucide-react';
+
 export type DetectionType = 'intrusion' | 'loitering' | 'tailgating' | 'abandoned-object' | 'crowd';
 
 export interface AIEvent {
@@ -11,12 +13,12 @@ export interface AIEvent {
   description: string;
 }
 
-export const detectionTypeConfig: Record<DetectionType, { label: string; icon: string; color: string }> = {
-  intrusion: { label: 'Xâm nhập', icon: '🚨', color: '#EF4444' },
-  loitering: { label: 'Lảng vảng', icon: '🚶', color: '#F59E0B' },
-  tailgating: { label: 'Tailgating', icon: '👥', color: '#8B5CF6' },
-  'abandoned-object': { label: 'Vật thể lạ', icon: '📦', color: '#3B82F6' },
-  crowd: { label: 'Tụ tập đông', icon: '👨‍👩‍👧‍👦', color: '#06B6D4' },
+export const detectionTypeConfig: Record<DetectionType, { label: string; Icon: LucideIcon; color: string }> = {
+  intrusion: { label: 'Xâm nhập', Icon: Siren, color: '#EF4444' },
+  loitering: { label: 'Lảng vảng', Icon: Footprints, color: '#F59E0B' },
+  tailgating: { label: 'Tailgating', Icon: Users, color: '#8B5CF6' },
+  'abandoned-object': { label: 'Vật thể lạ', Icon: Box, color: '#3B82F6' },
+  crowd: { label: 'Tụ tập đông', Icon: UsersRound, color: '#06B6D4' },
 };
 
 export const mockAIEvents: AIEvent[] = [

@@ -34,9 +34,9 @@ function CriticalEventToasts() {
           const toast: ToastItem = {
             id: latest.id,
             message: latest.alarmType === 'door.forced'
-              ? '⚠ Door forced open'
+              ? 'Door forced open'
               : latest.alarmType === 'alarm.triggered'
-              ? '🚨 Alarm triggered'
+              ? 'Alarm triggered'
               : `Alert: ${latest.alarmType}`,
             sub: [latest.doorId, latest.zone].filter(Boolean).join(' · ') || latest.deviceId,
             severity: latest.severity === 'critical' ? 'critical' : 'warning',
@@ -63,7 +63,7 @@ function CriticalEventToasts() {
           if (prev.some((t) => t.id === id)) return prev;
           const toast: ToastItem = {
             id,
-            message: latest.reason === 'forced' ? '⚠ Door forced open' : '⚠ Tamper detected',
+            message: latest.reason === 'forced' ? 'Door forced open' : 'Tamper detected',
             sub: [latest.personName, latest.doorName].filter(Boolean).join(' · ') || latest.deviceId,
             severity: 'critical',
             at: Date.now(),

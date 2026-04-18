@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { CheckCircle2, ClipboardList, Cog, Siren, Wrench } from 'lucide-react';
 import { PageHeader } from '@dm3/ui';
 import { StatCard } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
@@ -50,11 +51,11 @@ export function MaintenancePage() {
       </PageHeader>
 
       <div className="grid grid-cols-5 gap-3 mb-6">
-        <StatCard label={t('maintenance.stats.total')} value={String(summary.total)} sub={t('common.sub.all')} icon="🔧" domain="operate" />
-        <StatCard label={t('maintenance.stats.open')} value={String(summary.open)} sub={t('common.sub.waiting')} icon="📋" domain="operate" />
-        <StatCard label={t('maintenance.stats.inProgress')} value={String(summary.inProgress)} sub={t('common.sub.executing')} icon="⚙️" domain="operate" />
-        <StatCard label={t('maintenance.stats.completed')} value={String(summary.completed)} sub={t('common.sub.done')} icon="✅" domain="operate" />
-        <StatCard label={t('maintenance.priority.emergency')} value={String(summary.critical)} sub={t('common.sub.priority')} icon="🚨" domain="error" />
+        <StatCard label={t('maintenance.stats.total')} value={String(summary.total)} sub={t('common.sub.all')} icon={<Wrench size={14} />} domain="operate" />
+        <StatCard label={t('maintenance.stats.open')} value={String(summary.open)} sub={t('common.sub.waiting')} icon={<ClipboardList size={14} />} domain="operate" />
+        <StatCard label={t('maintenance.stats.inProgress')} value={String(summary.inProgress)} sub={t('common.sub.executing')} icon={<Cog size={14} />} domain="operate" />
+        <StatCard label={t('maintenance.stats.completed')} value={String(summary.completed)} sub={t('common.sub.done')} icon={<CheckCircle2 size={14} />} domain="operate" />
+        <StatCard label={t('maintenance.priority.emergency')} value={String(summary.critical)} sub={t('common.sub.priority')} icon={<Siren size={14} />} domain="error" />
       </div>
 
       <div className="flex gap-2 mb-4">

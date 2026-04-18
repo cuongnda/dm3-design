@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Building2, Calendar, CheckCircle2, ClipboardList, Lock } from 'lucide-react';
 import { Button, PageHeader } from '@dm3/ui';
 import { StatCard } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
@@ -43,10 +44,10 @@ export function RoomBookingPage() {
       </PageHeader>
 
       <div className="grid grid-cols-4 gap-3 mb-6">
-        <StatCard label={t('roomBooking.stats.totalRooms')} value={String(summary.totalRooms)} sub={t('common.sub.allFloors')} icon="🏢" domain="operate" />
-        <StatCard label={t('roomBooking.stats.available')} value={String(summary.available)} sub={t('common.sub.ready')} icon="✅" domain="operate" />
-        <StatCard label={t('roomBooking.stats.occupied')} value={String(summary.occupied)} sub={t('common.sub.current')} icon="🔒" domain="operate" />
-        <StatCard label={t('roomBooking.stats.todayBookings')} value={String(summary.todayBookings)} sub={t('common.sub.meetings')} icon="📅" domain="operate" />
+        <StatCard label={t('roomBooking.stats.totalRooms')} value={String(summary.totalRooms)} sub={t('common.sub.allFloors')} icon={<Building2 size={14} />} domain="operate" />
+        <StatCard label={t('roomBooking.stats.available')} value={String(summary.available)} sub={t('common.sub.ready')} icon={<CheckCircle2 size={14} />} domain="operate" />
+        <StatCard label={t('roomBooking.stats.occupied')} value={String(summary.occupied)} sub={t('common.sub.current')} icon={<Lock size={14} />} domain="operate" />
+        <StatCard label={t('roomBooking.stats.todayBookings')} value={String(summary.todayBookings)} sub={t('common.sub.meetings')} icon={<Calendar size={14} />} domain="operate" />
       </div>
 
       {/* Room availability grid */}
@@ -70,14 +71,18 @@ export function RoomBookingPage() {
       </div>
 
       <div className="flex gap-2 mb-4">
-        {(['bookings', 'rooms'] as const).map(tabKey => (
-          <button type="button" key={tabKey} onClick={() => setTab(tabKey)} className={cn(
-            'px-3 py-1.5 rounded-md text-[12px] font-medium border',
-            tab === tabKey ? 'bg-operate/20 border-operate/50 text-operate' : 'bg-card border-border text-muted-foreground'
-          )}>
-            {tabKey === 'bookings' ? `📋 ${t('roomBooking.tab.bookings')}` : `🏢 ${t('roomBooking.tab.rooms')}`}
-          </button>
-        ))}
+        {(['bookings', 'rooms'] as const).map(tabKey => {
+          const TabIcon = tabKey === 'bookings' ? ClipboardList : Building2;
+          const tabLabel = tabKey === 'bookings' ? t('roomBooking.tab.bookings') : t('roomBooking.tab.rooms');
+          return (
+            <button type="button" key={tabKey} onClick={() => setTab(tabKey)} className={cn(
+              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium border',
+              tab === tabKey ? 'bg-operate/20 border-operate/50 text-operate' : 'bg-card border-border text-muted-foreground'
+            )}>
+              <TabIcon size={12} /> {tabLabel}
+            </button>
+          );
+        })}
       </div>
 
       <DataTable columns={bookingCols} data={bookings} rowKey={r => r.id} />

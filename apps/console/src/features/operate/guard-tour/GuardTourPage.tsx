@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { AlertTriangle, BarChart3, Footprints, MapPin, Map as MapIcon } from 'lucide-react';
 import { PageHeader } from '@dm3/ui';
 import { StatCard } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
@@ -41,14 +42,14 @@ export function GuardTourPage() {
   return (
     <div>
       <PageHeader title={t('guardTour.title')} description={t('guardTour.description')}>
-        <button className="px-3 py-1.5 bg-[#F59E0B] text-[#0F172A] rounded-md text-[12px] font-medium">📊 {t('common.report')}</button>
+        <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#F59E0B] text-[#0F172A] rounded-md text-[12px] font-medium"><BarChart3 size={14} /> {t('common.report')}</button>
       </PageHeader>
 
       <div className="grid grid-cols-4 gap-3 mb-6">
-        <StatCard label={t('guardTour.stats.activeTours')} value={String(summary.totalRoutes)} sub={t('common.sub.established')} icon="🗺️" domain="operate" />
-        <StatCard label={t('guardTour.stats.onPatrol')} value={String(summary.activeNow)} sub={t('common.sub.current')} icon="🚶" domain="operate" />
-        <StatCard label={t('guardTour.stats.missed')} value={String(summary.missedToday)} sub={t('common.sub.needsCheck')} icon="⚠️" domain="error" />
-        <StatCard label={t('guardTour.checkpointStatus')} value={String(summary.totalCheckpoints)} sub={t('common.sub.total')} icon="📍" domain="operate" />
+        <StatCard label={t('guardTour.stats.activeTours')} value={String(summary.totalRoutes)} sub={t('common.sub.established')} icon={<MapIcon size={14} />} domain="operate" />
+        <StatCard label={t('guardTour.stats.onPatrol')} value={String(summary.activeNow)} sub={t('common.sub.current')} icon={<Footprints size={14} />} domain="operate" />
+        <StatCard label={t('guardTour.stats.missed')} value={String(summary.missedToday)} sub={t('common.sub.needsCheck')} icon={<AlertTriangle size={14} />} domain="error" />
+        <StatCard label={t('guardTour.checkpointStatus')} value={String(summary.totalCheckpoints)} sub={t('common.sub.total')} icon={<MapPin size={14} />} domain="operate" />
       </div>
 
       {/* Route cards */}

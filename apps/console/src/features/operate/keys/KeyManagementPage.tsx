@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { CheckCircle2, Clock, Key as KeyIcon, ClipboardList, Upload, X, Undo2 } from 'lucide-react';
 import { PageHeader } from '@dm3/ui';
 import { StatCard } from '@dm3/ui';
 import { DataTable, type Column } from '@dm3/ui';
@@ -49,8 +50,9 @@ export function KeyManagementPage() {
     { key: 'keyName', header: t('keys.log.keyName'), sortable: true, render: r => <span className="font-medium text-[#F8FAFC]">{r.keyName}</span> },
     { key: 'person', header: t('keys.log.person'), sortable: true },
     { key: 'action', header: t('keys.log.action'), width: '90px', render: r => (
-      <span className={cn('text-[12px] font-medium', r.action === 'checkout' ? 'text-[#F59E0B]' : 'text-[#22C55E]')}>
-        {r.action === 'checkout' ? `🔑 ${t('keys.log.checkout')}` : `↩ ${t('keys.log.return')}`}
+      <span className={cn('inline-flex items-center gap-1 text-[12px] font-medium', r.action === 'checkout' ? 'text-[#F59E0B]' : 'text-[#22C55E]')}>
+        {r.action === 'checkout' ? <KeyIcon size={12} /> : <Undo2 size={12} />}
+        {r.action === 'checkout' ? t('keys.log.checkout') : t('keys.log.return')}
       </span>
     )},
     { key: 'notes', header: t('keys.log.notes'), render: r => <span className="text-[#64748B]">{r.notes || '—'}</span> },
@@ -63,22 +65,26 @@ export function KeyManagementPage() {
       </PageHeader>
 
       <div className="grid grid-cols-5 gap-3 mb-6">
-        <StatCard label={t('keys.stats.total')} value={String(summary.total)} sub={t('common.sub.inSystem')} icon="🔑" domain="operate" />
-        <StatCard label={t('keys.stats.available')} value={String(summary.available)} sub={t('common.sub.canBorrow')} icon="✅" domain="operate" />
-        <StatCard label={t('keys.stats.borrowed')} value={String(summary.checkedOut)} sub={t('common.sub.inUse')} icon="📤" domain="operate" />
-        <StatCard label={t('keys.stats.overdue')} value={String(summary.overdue)} sub={t('common.sub.needsReturn')} icon="⏰" domain="error" />
-        <StatCard label={t('keys.stats.lost')} value={String(summary.lost)} sub={t('common.sub.needsReplace')} icon="❌" domain="error" />
+        <StatCard label={t('keys.stats.total')} value={String(summary.total)} sub={t('common.sub.inSystem')} icon={<KeyIcon size={14} />} domain="operate" />
+        <StatCard label={t('keys.stats.available')} value={String(summary.available)} sub={t('common.sub.canBorrow')} icon={<CheckCircle2 size={14} />} domain="operate" />
+        <StatCard label={t('keys.stats.borrowed')} value={String(summary.checkedOut)} sub={t('common.sub.inUse')} icon={<Upload size={14} />} domain="operate" />
+        <StatCard label={t('keys.stats.overdue')} value={String(summary.overdue)} sub={t('common.sub.needsReturn')} icon={<Clock size={14} />} domain="error" />
+        <StatCard label={t('keys.stats.lost')} value={String(summary.lost)} sub={t('common.sub.needsReplace')} icon={<X size={14} />} domain="error" />
       </div>
 
       <div className="flex gap-2 mb-4">
-        {(['keys', 'logs'] as const).map(tabKey => (
-          <button key={tabKey} onClick={() => setTab(tabKey)} className={cn(
-            'px-3 py-1.5 rounded-md text-[12px] font-medium border',
-            tab === tabKey ? 'bg-[#F59E0B]/20 border-[#F59E0B]/50 text-[#F59E0B]' : 'bg-[#1E293B] border-[#334155] text-[#94A3B8]'
-          )}>
-            {tabKey === 'keys' ? `🔑 ${t('keys.tab.list')}` : `📋 ${t('keys.tab.log')}`}
-          </button>
-        ))}
+        {(['keys', 'logs'] as const).map(tabKey => {
+          const TabIcon = tabKey === 'keys' ? KeyIcon : ClipboardList;
+          const tabLabel = tabKey === 'keys' ? t('keys.tab.list') : t('keys.tab.log');
+          return (
+            <button key={tabKey} onClick={() => setTab(tabKey)} className={cn(
+              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium border',
+              tab === tabKey ? 'bg-[#F59E0B]/20 border-[#F59E0B]/50 text-[#F59E0B]' : 'bg-[#1E293B] border-[#334155] text-[#94A3B8]'
+            )}>
+              <TabIcon size={12} /> {tabLabel}
+            </button>
+          );
+        })}
       </div>
 
       {tab === 'keys' ? (

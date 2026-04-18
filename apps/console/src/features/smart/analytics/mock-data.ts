@@ -1,7 +1,9 @@
+import { Bot, Settings, Shield, Users, type LucideIcon } from 'lucide-react';
+
 export interface DomainReport {
   domain: string;
   color: string;
-  icon: string;
+  Icon: LucideIcon;
   metrics: { label: string; value: string; change: string; direction: 'up' | 'down' }[];
 }
 
@@ -12,7 +14,7 @@ export interface ChartData {
 
 export const domainReports: DomainReport[] = [
   {
-    domain: 'SECURE', color: '#3B82F6', icon: '🛡️',
+    domain: 'SECURE', color: '#3B82F6', Icon: Shield,
     metrics: [
       { label: 'Sự cố bảo mật', value: '3', change: '-40%', direction: 'down' },
       { label: 'Lượt ra vào', value: '12,450', change: '+8%', direction: 'up' },
@@ -20,7 +22,7 @@ export const domainReports: DomainReport[] = [
     ],
   },
   {
-    domain: 'MANAGE', color: '#8B5CF6', icon: '👥',
+    domain: 'MANAGE', color: '#8B5CF6', Icon: Users,
     metrics: [
       { label: 'Nhân viên hoạt động', value: '245', change: '+5', direction: 'up' },
       { label: 'Khách đến thăm', value: '89', change: '+12%', direction: 'up' },
@@ -28,7 +30,7 @@ export const domainReports: DomainReport[] = [
     ],
   },
   {
-    domain: 'OPERATE', color: '#F59E0B', icon: '⚙️',
+    domain: 'OPERATE', color: '#F59E0B', Icon: Settings,
     metrics: [
       { label: 'Yêu cầu bảo trì', value: '20', change: '+3', direction: 'up' },
       { label: 'Bãi xe sử dụng', value: '64%', change: '+5%', direction: 'up' },
@@ -36,7 +38,7 @@ export const domainReports: DomainReport[] = [
     ],
   },
   {
-    domain: 'SMART', color: '#06B6D4', icon: '🤖',
+    domain: 'SMART', color: '#06B6D4', Icon: Bot,
     metrics: [
       { label: 'Câu hỏi AI', value: '156', change: '+25%', direction: 'up' },
       { label: 'Tự động hóa chạy', value: '342', change: '+18%', direction: 'up' },

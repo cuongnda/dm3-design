@@ -2,8 +2,8 @@
   "accessControl.title": "Kiểm soát ra vào",
   "accessControl.description": "Quản lý cửa và điểm ra vào",
   "accessControl.addDoor": "+ Thêm cửa",
-  "accessControl.rules": "⚙️ Quy tắc",
-  "accessControl.searchPlaceholder": "🔍 Tìm kiếm cửa...",
+  "accessControl.rules": "️ Quy tắc",
+  "accessControl.searchPlaceholder": "Tìm kiếm cửa...",
   "accessControl.tabs.all": "Tất cả",
   "accessControl.tabs.online": "Trực tuyến",
   "accessControl.tabs.offline": "Ngoại tuyến",
@@ -37,24 +37,21 @@
   "accessControl.types.turnstile": "Cửa xoay",
   "accessControl.events.granted": "Cho phép",
   "accessControl.events.denied": "Từ chối",
-  "accessControl.events.forced": "⚠ Cưỡng bức",
+  "accessControl.events.forced": "Cưỡng bức",
   "accessControl.loading": "Đang tải...",
   "accessControl.error": "Có lỗi xảy ra khi tải dữ liệu",
-
   "doorDetail.title": "Chi tiết cửa",
   "doorDetail.overview": "Tổng quan",
   "doorDetail.events": "Sự kiện",
   "doorDetail.settings": "Cài đặt",
-
   "accessRules.title": "Quy tắc truy cập",
   "accessRules.description": "Cấu hình quyền truy cập và lịch trình",
   "accessRules.addRule": "+ Thêm quy tắc",
-
   "cctv.title": "Camera giám sát",
   "cctv.description": "Giám sát camera và nguồn cấp video",
   "cctv.allCameras": "Tất cả camera",
   "cctv.addCamera": "+ Thêm camera",
-  "cctv.searchPlaceholder": "🔍 Tìm kiếm camera...",
+  "cctv.searchPlaceholder": "Tìm kiếm camera...",
   "cctv.tabs.all": "Tất cả",
   "cctv.tabs.online": "Trực tuyến",
   "cctv.tabs.offline": "Ngoại tuyến",
@@ -68,12 +65,10 @@
   "cctv.status.live": "Trực tiếp",
   "cctv.status.idle": "Rảnh rỗi",
   "cctv.viewLive": "Xem trực tiếp",
-
   "cameraDetail.title": "Chi tiết camera",
   "cameraDetail.liveView": "Xem trực tiếp",
   "cameraDetail.recordings": "Bản ghi",
   "cameraDetail.settings": "Cài đặt",
-
   "intrusion.title": "Phát hiện xâm nhập",
   "intrusion.description": "Giám sát cảm biến xâm nhập và báo động",
   "intrusion.status.armed": "Kích hoạt",
@@ -87,7 +82,6 @@
   "intrusion.zones.addZone": "+ Thêm khu vực",
   "intrusion.history.title": "Lịch sử báo động",
   "intrusion.history.viewAll": "Xem tất cả",
-
   "intercom.title": "Liên lạc nội bộ",
   "intercom.description": "Liên lạc nội bộ video và giao tiếp với khách",
   "intercom.calls.title": "Cuộc gọi gần đây",
@@ -96,7 +90,6 @@
   "intercom.calls.answered": "Đã trả lời",
   "intercom.devices.title": "Thiết bị liên lạc nội bộ",
   "intercom.devices.addDevice": "+ Thêm thiết bị",
-
   "aiDetection.title": "Phát hiện AI",
   "aiDetection.description": "Phân tích bảo mật và cảnh báo bằng AI",
   "aiDetection.events.title": "Sự kiện phát hiện AI",
@@ -107,7 +100,6 @@
   "aiDetection.settings.title": "Cài đặt AI",
   "aiDetection.settings.sensitivity": "Độ nhạy phát hiện",
   "aiDetection.settings.enabled": "Bật phát hiện AI",
-
   "emergency.title": "Khẩn cấp",
   "emergency.description": "Phương án ứng phó, kích hoạt nhanh & theo dõi sự cố",
   "emergency.status.normal": "Bình thường",
@@ -166,7 +158,6 @@
   "emergency.toast.loadFailed": "Tải dữ liệu thất bại",
   "accessControl.toast.commandSent": "{{action}} đã gửi đến {{name}}",
   "accessControl.toast.commandFailed": "Không thể {{action}} {{name}}",
-
   "alerts.title": "Sự kiện & Cảnh báo",
   "alerts.description": "Nhật ký truy cập và cảnh báo hệ thống • {{status}}",
   "alerts.status.live": "Trực tuyến",
@@ -193,7 +184,6 @@
   "alerts.pagination.page": "Trang {{current}} / {{total}} · {{count}} sự kiện",
   "alerts.pagination.previous": "Trước",
   "alerts.pagination.next": "Sau",
-
   "accessTime.title": "Quản lý khung giờ ra vào",
   "accessTime.description": "Quản lý các mẫu khung giờ kiểm soát ra vào",
   "accessTime.newTemplate": "+ Tạo mẫu mới",
@@ -229,7 +219,6 @@
   "accessTime.days.thu": "T5",
   "accessTime.days.fri": "T6",
   "accessTime.days.sat": "T7",
-
   "accessHistory.title": "Lịch sử ra vào",
   "accessHistory.subtitle": "Nhật ký kiểm toán toàn bộ sự kiện ra vào trong cơ sở",
   "accessHistory.export.csv": "Xuất CSV",

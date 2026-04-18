@@ -1,5 +1,5 @@
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { Search, Bell, Sun, Moon, User, LogOut } from 'lucide-react';
+import { Search, Bell, Sun, Moon, User, LogOut, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 import { useBreadcrumbStore } from '../../stores/breadcrumbStore';
@@ -64,7 +64,7 @@ export function Topbar() {
     access: { label: t('nav.access'), colorClass: 'text-operate' },
     manage: { label: t('nav.manage'), colorClass: 'text-manage' },
     operate: { label: t('nav.operate'), colorClass: 'text-operate' },
-    smart: { label: t('nav.smart', '🧠 SMART'), colorClass: 'text-smart' },
+    smart: { label: t('nav.smart', 'SMART'), colorClass: 'text-smart' },
   };
 
   const segmentMap: Record<string, string> = {
@@ -191,7 +191,7 @@ export function Topbar() {
               >
                 <Sun className="mr-2 h-4 w-4" />
                 <span>Light</span>
-                {theme === 'light' && <span className="ml-auto">✓</span>}
+                {theme === 'light' && <Check className="ml-auto h-4 w-4" />}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => setTheme('dark')}
@@ -199,7 +199,7 @@ export function Topbar() {
               >
                 <Moon className="mr-2 h-4 w-4" />
                 <span>Dark</span>
-                {theme === 'dark' && <span className="ml-auto">✓</span>}
+                {theme === 'dark' && <Check className="ml-auto h-4 w-4" />}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

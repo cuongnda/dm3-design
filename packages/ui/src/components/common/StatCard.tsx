@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { DOMAIN_COLORS } from '@/lib/constants';
 
@@ -6,7 +8,7 @@ interface StatCardProps {
   value: string;
   sub: string;
   trend?: { direction: 'up' | 'down'; text: string };
-  icon?: string;
+  icon?: ReactNode;
   domain?: 'secure' | 'manage' | 'visitors' | 'parking' | 'operate' | 'smart' | 'error' | 'default';
   onClick?: () => void;
 }
@@ -34,7 +36,7 @@ export function StatCard({ label, value, sub, trend, icon, domain = 'default', o
       )}
     >
       <div className="text-[12px] font-medium text-[#94A3B8] mb-1 flex items-center gap-1.5">
-        {icon && <span>{icon}</span>}
+        {icon && <span className="inline-flex items-center">{icon}</span>}
         {label}
       </div>
       <div className="text-[24px] font-semibold tracking-tight mb-1" style={{ color: valueColor }}>
@@ -44,11 +46,12 @@ export function StatCard({ label, value, sub, trend, icon, domain = 'default', o
       {trend && (
         <div
           className={cn(
-            'text-[11px] mt-0.5',
+            'text-[11px] mt-0.5 inline-flex items-center gap-1',
             trend.direction === 'up' ? 'text-[#22C55E]' : 'text-[#EF4444]'
           )}
         >
-          {trend.direction === 'up' ? '↑' : '↓'} {trend.text}
+          {trend.direction === 'up' ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+          {trend.text}
         </div>
       )}
     </div>

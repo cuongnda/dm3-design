@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Bell, Check, Database, HardDrive, Lock, Mail, Moon, Settings, Sun, type LucideIcon } from 'lucide-react';
 import { PageHeader, useToast, Button, Input, Label, Select, SelectOption, Textarea } from '@dm3/ui';
 import { me as fetchMe, updateMePreferences } from '@dm3/api-client';
 import { cn } from '@/lib/utils';
@@ -126,12 +127,12 @@ export function SystemSettingsPage() {
     setDefaultLang(normalized);
   };
 
-  const tabs: { key: Tab; label: string; icon: string }[] = [
-    { key: 'general', label: t('systemSettings.tabs.general'), icon: '⚙️' },
-    { key: 'security', label: t('systemSettings.tabs.security'), icon: '🔐' },
-    { key: 'email', label: t('systemSettings.tabs.email'), icon: '📧' },
-    { key: 'notifications', label: t('systemSettings.tabs.monitoring'), icon: '🔔' },
-    { key: 'backup', label: t('systemSettings.tabs.backup'), icon: '💾' },
+  const tabs: { key: Tab; label: string; Icon: LucideIcon }[] = [
+    { key: 'general', label: t('systemSettings.tabs.general'), Icon: Settings },
+    { key: 'security', label: t('systemSettings.tabs.security'), Icon: Lock },
+    { key: 'email', label: t('systemSettings.tabs.email'), Icon: Mail },
+    { key: 'notifications', label: t('systemSettings.tabs.monitoring'), Icon: Bell },
+    { key: 'backup', label: t('systemSettings.tabs.backup'), Icon: Database },
   ];
 
   return (
@@ -141,21 +142,24 @@ export function SystemSettingsPage() {
       <div className="flex gap-6">
         {/* Tab sidebar */}
         <div className="w-48 space-y-1">
-          {tabs.map((tabItem) => (
-            <button
-              key={tabItem.key}
-              type="button"
-              onClick={() => setTab(tabItem.key)}
-              className={cn(
-                'w-full text-left px-3 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer',
-                tab === tabItem.key
-                  ? 'bg-operate/10 text-operate border border-operate/30'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-card'
-              )}
-            >
-              {tabItem.icon} {tabItem.label}
-            </button>
-          ))}
+          {tabs.map((tabItem) => {
+            const TabIcon = tabItem.Icon;
+            return (
+              <button
+                key={tabItem.key}
+                type="button"
+                onClick={() => setTab(tabItem.key)}
+                className={cn(
+                  'w-full text-left px-3 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer flex items-center gap-2',
+                  tab === tabItem.key
+                    ? 'bg-operate/10 text-operate border border-operate/30'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-card'
+                )}
+              >
+                <TabIcon size={14} /> {tabItem.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Content */}
@@ -184,8 +188,8 @@ export function SystemSettingsPage() {
                     onChange={(e) => handleChangeDefaultLang(e.target.value)}
                     className="mt-1"
                   >
-                    <SelectOption value="vi">🇻🇳 {t('general.language.vi')}</SelectOption>
-                    <SelectOption value="en">🇺🇸 {t('general.language.en')}</SelectOption>
+                    <SelectOption value="vi">{t('general.language.vi')}</SelectOption>
+                    <SelectOption value="en">{t('general.language.en')}</SelectOption>
                   </Select>
                 </div>
                 <div>
@@ -216,7 +220,7 @@ export function SystemSettingsPage() {
                           : 'bg-card border-border hover:border-ring/70 text-muted-foreground hover:text-foreground'
                       )}
                     >
-                      <div className="text-[14px] mb-1">🌙 {t('systemTheme.dark')}</div>
+                      <div className="text-[14px] mb-1 inline-flex items-center gap-1.5"><Moon size={14} /> {t('systemTheme.dark')}</div>
                     </button>
                     <button
                       type="button"
@@ -228,7 +232,7 @@ export function SystemSettingsPage() {
                           : 'bg-card border-border hover:border-ring/70 text-muted-foreground hover:text-foreground'
                       )}
                     >
-                      <div className="text-[14px] mb-1">☀️ {t('systemTheme.light')}</div>
+                      <div className="text-[14px] mb-1 inline-flex items-center gap-1.5"><Sun size={14} /> {t('systemTheme.light')}</div>
                     </button>
                   </div>
                 </div>
@@ -391,7 +395,7 @@ export function SystemSettingsPage() {
                     <span className="text-muted-foreground">{t('backup.lastBackup.size')}:</span>
                     <span className="text-foreground">2.4 GB</span>
                     <span className="text-muted-foreground">{t('backup.lastBackup.status')}:</span>
-                    <span className="text-success font-medium">✓ {t('backup.lastBackup.status.success')}</span>
+                    <span className="text-success font-medium inline-flex items-center gap-1"><Check size={12} /> {t('backup.lastBackup.status.success')}</span>
                     <span className="text-muted-foreground">{t('backup.lastBackup.location')}:</span>
                     <span className="text-foreground">S3 — duall-backup/2026-03-04/</span>
                   </div>
@@ -401,8 +405,8 @@ export function SystemSettingsPage() {
                 <Button onClick={handleSave}>
                   {t('systemSettings.saveChanges')}
                 </Button>
-                <Button variant="outline">
-                  💾 {t('backup.backupNow')}
+                <Button variant="outline" className="inline-flex items-center gap-1.5">
+                  <HardDrive size={14} /> {t('backup.backupNow')}
                 </Button>
               </div>
               {saveAckAt && (

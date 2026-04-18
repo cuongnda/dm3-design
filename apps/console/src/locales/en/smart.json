@@ -16,11 +16,10 @@
   "aiAssistant.insights.patterns": "Unusual access patterns detected",
   "aiAssistant.insights.energy": "Energy usage 15% higher than usual",
   "aiAssistant.insights.maintenance": "3 devices need attention",
-
   "automation.title": "Automation",
   "automation.description": "Configure smart building automation rules",
   "automation.createRule": "+ Create Rule",
-  "automation.searchPlaceholder": "🔍 Search automation rules...",
+  "automation.searchPlaceholder": "Search automation rules...",
   "automation.tabs.all": "All Rules",
   "automation.tabs.active": "Active",
   "automation.tabs.inactive": "Inactive",

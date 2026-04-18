@@ -1,3 +1,4 @@
+import { AlertTriangle, ArrowRight, Check, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { AccessEvent } from '@dm3/api-client';
 
@@ -21,16 +22,24 @@ export function EventFeed({ events, maxItems = 10 }: EventFeedProps) {
         >
           <span className="font-mono text-[11px] text-[#64748B] min-w-[40px]">{event.time}</span>
           <span className="text-[#F8FAFC] font-medium min-w-[100px] truncate">{event.personName}</span>
-          <span className="text-[#94A3B8] min-w-[80px]">→ {event.point}</span>
+          <span className="text-[#94A3B8] min-w-[80px] inline-flex items-center gap-1">
+            <ArrowRight size={12} /> {event.point}
+          </span>
           <span
             className={cn(
-              'font-semibold',
+              'font-semibold inline-flex items-center gap-1',
               event.result === 'granted' && 'text-[#22C55E]',
               event.result === 'denied' && 'text-[#EF4444]',
               event.result === 'forced' && 'text-[#EF4444] font-bold'
             )}
           >
-            {event.result === 'granted' ? '✓ Granted' : event.result === 'denied' ? '✗ Denied' : '⚠ Forced'}
+            {event.result === 'granted' ? (
+              <><Check size={12} /> Granted</>
+            ) : event.result === 'denied' ? (
+              <><X size={12} /> Denied</>
+            ) : (
+              <><AlertTriangle size={12} /> Forced</>
+            )}
           </span>
         </div>
       ))}

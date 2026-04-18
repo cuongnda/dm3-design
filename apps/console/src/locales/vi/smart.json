@@ -16,11 +16,10 @@
   "aiAssistant.insights.patterns": "Phát hiện mô hình truy cập bất thường",
   "aiAssistant.insights.energy": "Sử dụng năng lượng cao hơn bình thường 15%",
   "aiAssistant.insights.maintenance": "3 thiết bị cần chú ý",
-
   "automation.title": "Tự động hóa",
   "automation.description": "Cấu hình quy tắc tự động hóa tòa nhà thông minh",
   "automation.createRule": "+ Tạo quy tắc",
-  "automation.searchPlaceholder": "🔍 Tìm kiếm quy tắc tự động...",
+  "automation.searchPlaceholder": "Tìm kiếm quy tắc tự động...",
   "automation.tabs.all": "Tất cả quy tắc",
   "automation.tabs.active": "Hoạt động",
   "automation.tabs.inactive": "Không hoạt động",

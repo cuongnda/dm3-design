@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { AlertTriangle, Building2, Calendar, Check, CircleParking, Cpu, Lock, SquareActivity, UserCog } from 'lucide-react';
 import { PageHeader } from '@dm3/ui';
 import { StatCard } from '@dm3/ui';
 import { EventFeed } from '@dm3/ui';
@@ -79,7 +80,7 @@ export function DashboardPage() {
         direction: 'up' as const,
         text: isConnected ? t('status.live') : (isConnecting ? t('status.connecting') : t('status.offline'))
       },
-      icon: '📊',
+      icon: <SquareActivity size={14} />,
       domain: 'default' as const,
     },
     {
@@ -90,7 +91,7 @@ export function DashboardPage() {
         direction: (statsData?.doors_offline ?? 0) > 0 ? 'down' as const : 'up' as const,
         text: `${statsData?.doors_offline ?? 0} ${t('status.offline')}`
       },
-      icon: '🔒',
+      icon: <Lock size={14} />,
       domain: 'secure' as const,
     },
     {
@@ -101,7 +102,7 @@ export function DashboardPage() {
         direction: devicesOnline === devicesTotal ? 'up' as const : 'down' as const,
         text: `${devicesTotal - devicesOnline} ${t('status.offline')}`
       },
-      icon: '📡',
+      icon: <Cpu size={14} />,
       domain: 'default' as const,
     },
     {
@@ -112,7 +113,7 @@ export function DashboardPage() {
         direction: activeAlarms.filter(a => a.severity === 'critical').length > 0 ? 'down' as const : 'up' as const,
         text: `${activeAlarms.filter(a => a.severity === 'critical').length} critical`
       },
-      icon: '⚠️',
+      icon: <AlertTriangle size={14} />,
       domain: 'error' as const,
     },
     {
@@ -120,42 +121,42 @@ export function DashboardPage() {
       value: '78%',
       sub: '312 / 400 spots',
       trend: { direction: 'up' as const, text: '5% from last week' },
-      icon: '🅿️',
+      icon: <CircleParking size={14} />,
       domain: 'operate' as const,
     },
   ];
 
-  const domainHealthData: { domain: string; colorCls: string; emoji: string; items: DomainHealth[]; viewLink: string }[] = [
+  const domainHealthData: { domain: string; colorCls: string; Icon: typeof Lock; items: DomainHealth[]; viewLink: string }[] = [
     {
-      domain: t('domain.secure'), colorCls: 'text-secure', emoji: '🔒',
+      domain: t('domain.secure'), colorCls: 'text-secure', Icon: Lock,
       viewLink: t('health.viewSecurity'),
       items: [
-        { module: t('modules.accessControl'), status: 'ok', detail: '✓ Online' },
-        { module: t('modules.cctv'), status: 'warning', detail: '⚠ 1 offline' },
-        { module: t('modules.intrusion'), status: 'ok', detail: '✓ Armed' },
-        { module: t('modules.intercom'), status: 'ok', detail: '✓ Online' },
-        { module: t('modules.aiDetection'), status: 'ok', detail: '✓ Active' },
+        { module: t('modules.accessControl'), status: 'ok', detail: 'Online' },
+        { module: t('modules.cctv'), status: 'warning', detail: '1 offline' },
+        { module: t('modules.intrusion'), status: 'ok', detail: 'Armed' },
+        { module: t('modules.intercom'), status: 'ok', detail: 'Online' },
+        { module: t('modules.aiDetection'), status: 'ok', detail: 'Active' },
       ],
     },
     {
-      domain: t('domain.manage'), colorCls: 'text-manage', emoji: '👤',
+      domain: t('domain.manage'), colorCls: 'text-manage', Icon: UserCog,
       viewLink: t('health.viewPeople'),
       items: [
-        { module: t('modules.visitors'), status: 'ok', detail: '✓ 3 waiting' },
-        { module: t('modules.attendance'), status: 'ok', detail: '✓ Online' },
-        { module: t('modules.contractors'), status: 'ok', detail: '✓ 34 on-site' },
-        { module: t('modules.deliveries'), status: 'warning', detail: '⚠ 2 uncollected' },
+        { module: t('modules.visitors'), status: 'ok', detail: '3 waiting' },
+        { module: t('modules.attendance'), status: 'ok', detail: 'Online' },
+        { module: t('modules.contractors'), status: 'ok', detail: '34 on-site' },
+        { module: t('modules.deliveries'), status: 'warning', detail: '2 uncollected' },
       ],
     },
     {
-      domain: t('domain.operate'), colorCls: 'text-operate', emoji: '🏢',
+      domain: t('domain.operate'), colorCls: 'text-operate', Icon: Building2,
       viewLink: t('health.viewFacility'),
       items: [
-        { module: t('modules.roomBooking'), status: 'ok', detail: '✓ 3/12 in use' },
-        { module: t('modules.parking'), status: 'ok', detail: '✓ 78% full' },
-        { module: t('modules.maintenance'), status: 'warning', detail: '⚠ 2 overdue' },
-        { module: t('modules.guardTour'), status: 'ok', detail: '✓ On schedule' },
-        { module: t('modules.iotEnergy'), status: 'ok', detail: '✓ 142 kWh today' },
+        { module: t('modules.roomBooking'), status: 'ok', detail: '3/12 in use' },
+        { module: t('modules.parking'), status: 'ok', detail: '78% full' },
+        { module: t('modules.maintenance'), status: 'warning', detail: '2 overdue' },
+        { module: t('modules.guardTour'), status: 'ok', detail: 'On schedule' },
+        { module: t('modules.iotEnergy'), status: 'ok', detail: '142 kWh today' },
       ],
     },
   ];
@@ -192,10 +193,10 @@ export function DashboardPage() {
       <PageHeader title={t('title')}>
         <div className="flex gap-2">
           <button type="button" className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border rounded-md text-foreground text-[12px]">
-            🏢 Landmark 81 ▾
+            <Building2 size={14} /> Landmark 81 ▾
           </button>
           <button type="button" className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border rounded-md text-foreground text-[12px]">
-            📅 Today ▾
+            <Calendar size={14} /> Today ▾
           </button>
           {/* Connection Status Indicator */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border rounded-md text-foreground text-[12px]">
@@ -244,7 +245,10 @@ export function DashboardPage() {
         {/* Active Alerts */}
         <div className="bg-card border border-border rounded-lg overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <div className="text-[13px] font-semibold">⚠️ {t('alerts.title')}</div>
+            <div className="text-[13px] font-semibold flex items-center gap-2">
+              <AlertTriangle size={14} className="text-warning" />
+              {t('alerts.title')}
+            </div>
             <span className="text-[12px] text-secure cursor-pointer hover:underline">{t('alerts.viewAll')}</span>
           </div>
           <div className="px-4 py-3 space-y-0">
@@ -263,25 +267,33 @@ export function DashboardPage() {
 
       {/* Domain Health */}
       <div className="grid grid-cols-3 gap-4">
-        {domainHealthData.map((d) => (
-          <div key={d.domain} className="bg-card border border-border rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-[16px]">{d.emoji}</span>
-              <span className={cn('font-semibold text-[14px]', d.colorCls)}>{d.domain}</span>
-            </div>
-            {d.items.map((item) => (
-              <div key={item.module} className="flex items-center justify-between py-1 text-[12px]">
-                <span className="text-foreground">{item.module}</span>
-                <span className={cn('text-[11px]', healthStatusClass[item.status])}>{item.detail}</span>
+        {domainHealthData.map((d) => {
+          const DomainIcon = d.Icon;
+          return (
+            <div key={d.domain} className="bg-card border border-border rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <DomainIcon size={16} className={d.colorCls} />
+                <span className={cn('font-semibold text-[14px]', d.colorCls)}>{d.domain}</span>
               </div>
-            ))}
-            <div className="mt-3">
-              <span className="text-[12px] text-secure cursor-pointer hover:underline">
-                {d.viewLink}
-              </span>
+              {d.items.map((item) => {
+                const StatusIcon = item.status === 'warning' ? AlertTriangle : item.status === 'critical' ? AlertTriangle : Check;
+                return (
+                  <div key={item.module} className="flex items-center justify-between py-1 text-[12px]">
+                    <span className="text-foreground">{item.module}</span>
+                    <span className={cn('text-[11px] inline-flex items-center gap-1', healthStatusClass[item.status])}>
+                      <StatusIcon size={11} /> {item.detail}
+                    </span>
+                  </div>
+                );
+              })}
+              <div className="mt-3">
+                <span className="text-[12px] text-secure cursor-pointer hover:underline">
+                  {d.viewLink}
+                </span>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

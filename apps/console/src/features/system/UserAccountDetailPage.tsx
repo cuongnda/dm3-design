@@ -250,7 +250,7 @@ export function UserAccountDetailPage() {
             <span className="text-muted-foreground">Password:</span>{' '}
             <span className="font-mono bg-muted px-2 py-1 rounded">{resetPasswordResult}</span>
           </div>
-          <p className="text-[11px] text-warning mt-2">⚠ Save this password — it won't be shown again.</p>
+          <p className="text-[11px] text-warning mt-2 inline-flex items-center gap-1"><AlertTriangle size={11} /> Save this password — it won't be shown again.</p>
         </div>
       )}
 

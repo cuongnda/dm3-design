@@ -2,8 +2,10 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   CarFront,
+  CheckCircle2,
   CircleDot,
   CircleOff,
+  CircleParking,
   CreditCard,
   Gauge,
   ListPlus,
@@ -12,6 +14,7 @@ import {
   Rows3,
   ScanLine,
   ShieldAlert,
+  Ticket,
 } from "lucide-react";
 import {
   AppModal,
@@ -667,21 +670,21 @@ export function ParkingPage() {
           label={t("parking.stats.totalSpots")}
           value={String(totals.totalSpaces)}
           sub={t("parking.stats.zoneCount", { count: filteredZones.length })}
-          icon="🅿️"
+          icon={<CircleParking size={14} />}
           domain="operate"
         />
         <StatCard
           label={t("parking.stats.occupied")}
           value={String(totals.occupiedSpaces)}
           sub={`${totals.occupancyPercent}% ${t("parking.stats.utilization")}`}
-          icon="🚗"
+          icon={<CarFront size={14} />}
           domain="operate"
         />
         <StatCard
           label={t("parking.stats.available")}
           value={String(totals.availableSpaces)}
           sub={t("parking.stats.liveCapacity")}
-          icon="✅"
+          icon={<CheckCircle2 size={14} />}
           domain="operate"
         />
         <StatCard
@@ -692,7 +695,7 @@ export function ParkingPage() {
               ? formatMoney(sessionsSummary.revenuePending)
               : t("parking.stats.noFeesYet")
           }
-          icon="🎫"
+          icon={<Ticket size={14} />}
           domain="operate"
         />
       </div>

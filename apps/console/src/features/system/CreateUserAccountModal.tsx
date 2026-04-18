@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Check, Copy, Building2, AlertCircle, Shield, UserPlus } from 'lucide-react';
+import { Check, Copy, Building2, AlertCircle, Shield, UserPlus, AlertTriangle } from 'lucide-react';
 import { createUserAccount, type CreateUserAccountResponse, type CreateUserAccountRequest } from '@/lib/api-users';
 import { fetchCompanies, type CompanyDTO } from '@/lib/api';
 import { AppModal, Button, Input, Label, Select, SelectOption, type SelectRichOption as Option } from '@dm3/ui';
@@ -135,8 +135,8 @@ export function CreateUserAccountModal({ open, onOpenChange, onCreated }: Create
                                 </span>
                             </div>
                         </div>
-                        <p className="text-[11px] text-warning mt-3">
-                            ⚠ Save these credentials — the password won't be shown again.
+                        <p className="text-[11px] text-warning mt-3 inline-flex items-center gap-1">
+                            <AlertTriangle size={11} /> Save these credentials — the password won't be shown again.
                         </p>
                     </div>
                 </div>

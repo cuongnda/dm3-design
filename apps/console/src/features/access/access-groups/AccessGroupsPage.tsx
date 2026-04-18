@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Shield, Plus, Eye, Edit, Trash2, Trash, Clock } from 'lucide-react';
+import { Shield, Plus, Eye, Edit, Trash2, Trash, Clock, AlertTriangle } from 'lucide-react';
 import {
     Button,
     Input,
@@ -438,8 +438,8 @@ export function AccessGroupsPage() {
                     {t('deleteConfirm', 'Are you sure you want to delete')}{' '}
                     <span className="font-medium text-foreground">"{groupToDelete?.name}"</span>?
                     {(groupToDelete?.user_count ?? 0) > 0 && (
-                        <span className="block mt-2 text-destructive">
-                            ⚠ {t('deleteWarningUsers', 'This group has {{count}} users assigned.', { count: groupToDelete?.user_count })}
+                        <span className="mt-2 inline-flex items-center gap-1 text-destructive">
+                            <AlertTriangle size={12} /> {t('deleteWarningUsers', 'This group has {{count}} users assigned.', { count: groupToDelete?.user_count })}
                         </span>
                     )}
                 </p>

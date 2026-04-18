@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import {
   Flame, Lock, Unlock, HeartPulse, UserX, ShieldAlert, CheckCircle2,
   Plus, Play, Trash2, Edit, Settings2, DoorOpen, Zap, AlertTriangle,
+  ClipboardList, ShieldCheck, Siren,
 } from 'lucide-react';
 import {
   fetchEmergencyPlans, deleteEmergencyPlan,
@@ -293,11 +294,11 @@ export function EmergencyPage() {
       {/* Stats */}
       <div className="shrink-0 grid grid-cols-4 gap-3">
         <StatCard label="Status" value={activeIncidents.length > 0 ? 'EMERGENCY' : 'Normal'}
-          icon="🛡️" domain={activeIncidents.length > 0 ? 'error' : 'secure'}
+          icon={<ShieldCheck size={14} />} domain={activeIncidents.length > 0 ? 'error' : 'secure'}
           sub={activeIncidents.length > 0 ? `${activeIncidents.length} active` : 'All systems normal'} />
-        <StatCard label="Plans" value={String(enabledPlans)} icon="📋" domain="secure" sub={`${plans.length} total`} />
-        <StatCard label="Incidents" value={String(incidentTotal)} icon="🚨" domain="error" sub="Total recorded" />
-        <StatCard label="Active" value={String(activeIncidents.length)} icon="⚠️"
+        <StatCard label="Plans" value={String(enabledPlans)} icon={<ClipboardList size={14} />} domain="secure" sub={`${plans.length} total`} />
+        <StatCard label="Incidents" value={String(incidentTotal)} icon={<Siren size={14} />} domain="error" sub="Total recorded" />
+        <StatCard label="Active" value={String(activeIncidents.length)} icon={<AlertTriangle size={14} />}
           domain={activeIncidents.length > 0 ? 'error' : 'default'} sub="Right now" />
       </div>
 

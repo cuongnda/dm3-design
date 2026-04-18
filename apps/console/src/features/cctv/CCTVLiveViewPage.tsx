@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { Menu, X } from 'lucide-react';
 import { PageHeader } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { listAccessPoints, listCameras, type CameraDTO } from '@dm3/api-client';
@@ -106,11 +107,11 @@ function CameraSidebar({
         </span>
         <button
           onClick={onToggle}
-          className="text-[#64748B] hover:text-[#F8FAFC] text-[14px]"
+          className="text-[#64748B] hover:text-[#F8FAFC]"
           data-testid="cctv-button-sidebar-close"
           aria-label="Close sidebar"
         >
-          ✕
+          <X size={14} />
         </button>
       </div>
       <div className="overflow-y-auto max-h-[calc(100vh-160px)]">
@@ -218,9 +219,9 @@ export function CCTVLiveViewPage() {
             <button
               onClick={() => setSidebarOpen(true)}
               data-testid="cctv-button-sidebar-open"
-              className="px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px] font-medium"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px] font-medium"
             >
-              ☰ {t('nav.cctvCameras')}
+              <Menu size={14} /> {t('nav.cctvCameras')}
             </button>
           )}
           <div className="flex items-center bg-[#111827] border border-[#334155] rounded-md overflow-hidden">

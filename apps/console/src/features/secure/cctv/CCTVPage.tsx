@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { Menu, X } from 'lucide-react';
 import { PageHeader } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { mockCameras, mockNVRs } from './mock-data';
@@ -143,7 +144,7 @@ function CameraSidebar({
     <div className={cn('border-r border-[#1E293B] bg-[#0D1117] shrink-0 transition-all overflow-hidden', collapsed ? 'w-0' : 'w-56')}>
       <div className="p-3 border-b border-[#1E293B] flex items-center justify-between">
         <span className="text-[12px] font-semibold text-[#F8FAFC] uppercase tracking-wide">{t('cctv.allCameras')}</span>
-        <button onClick={onToggle} className="text-[#64748B] hover:text-[#F8FAFC] text-[14px]">✕</button>
+        <button onClick={onToggle} className="text-[#64748B] hover:text-[#F8FAFC]"><X size={14} /></button>
       </div>
       <div className="overflow-y-auto max-h-[calc(100vh-200px)]">
         {grouped.map(([floor, cams]) => (
@@ -190,9 +191,9 @@ export function CCTVPage() {
           {!sidebarOpen && (
             <button
               onClick={() => setSidebarOpen(true)}
-              className="px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px] font-medium"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#1E293B] border border-[#334155] rounded-md text-[#F8FAFC] text-[12px] font-medium"
             >
-              ☰ {t('cctv.allCameras')}
+              <Menu size={14} /> {t('cctv.allCameras')}
             </button>
           )}
           <div className="flex items-center bg-[#111827] border border-[#334155] rounded-md overflow-hidden">

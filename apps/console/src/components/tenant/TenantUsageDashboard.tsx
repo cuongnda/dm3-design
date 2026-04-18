@@ -1,4 +1,5 @@
 import React from 'react'
+import { AlertTriangle } from 'lucide-react'
 import { useTenantUsage } from '../../stores/tenantStore'
 
 interface UsageBarProps {
@@ -159,16 +160,16 @@ export const TenantUsageDashboard: React.FC<TenantUsageDashboardProps> = ({
       <div className="mt-4 space-y-2">
         {getDeviceUsagePercentage() >= 90 && (
           <div className="bg-red-50 border border-red-200 rounded-md p-3">
-            <p className="text-sm text-red-800">
-              ⚠️ Device limit almost reached. Consider upgrading your plan.
+            <p className="text-sm text-red-800 inline-flex items-center gap-1.5">
+              <AlertTriangle size={14} /> Device limit almost reached. Consider upgrading your plan.
             </p>
           </div>
         )}
-        
+
         {getUserUsagePercentage() >= 90 && (
           <div className="bg-red-50 border border-red-200 rounded-md p-3">
-            <p className="text-sm text-red-800">
-              ⚠️ User limit almost reached. Consider upgrading your plan.
+            <p className="text-sm text-red-800 inline-flex items-center gap-1.5">
+              <AlertTriangle size={14} /> User limit almost reached. Consider upgrading your plan.
             </p>
           </div>
         )}

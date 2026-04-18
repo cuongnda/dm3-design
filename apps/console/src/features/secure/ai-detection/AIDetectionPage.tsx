@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AlertTriangle, MapPin, Undo2 } from 'lucide-react';
 import { PageHeader } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { mockAIEvents, detectionTypeConfig } from './mock-data';
@@ -35,20 +36,23 @@ export function AIDetectionPage() {
 
       {/* Stats cards */}
       <div className="grid grid-cols-5 gap-3 mb-6">
-        {stats.map((s) => (
-          <div
-            key={s.type}
-            onClick={() => setFilter(filter === s.type ? 'all' : s.type)}
-            className={cn(
-              'p-4 rounded-lg border bg-card cursor-pointer transition-all',
-              filter === s.type ? 'border-secure' : 'border-border hover:border-muted-foreground'
-            )}
-          >
-            <div className="text-[20px] mb-1">{s.icon}</div>
-            <div className="text-[24px] font-semibold" style={{ color: s.color }}>{s.count}</div>
-            <div className="text-[12px] text-muted-foreground">{s.label}</div>
-          </div>
-        ))}
+        {stats.map((s) => {
+          const StatIcon = s.Icon;
+          return (
+            <div
+              key={s.type}
+              onClick={() => setFilter(filter === s.type ? 'all' : s.type)}
+              className={cn(
+                'p-4 rounded-lg border bg-card cursor-pointer transition-all',
+                filter === s.type ? 'border-secure' : 'border-border hover:border-muted-foreground'
+              )}
+            >
+              <div className="mb-1" style={{ color: s.color }}><StatIcon size={20} /></div>
+              <div className="text-[24px] font-semibold" style={{ color: s.color }}>{s.count}</div>
+              <div className="text-[12px] text-muted-foreground">{s.label}</div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Filters */}
@@ -65,6 +69,7 @@ export function AIDetectionPage() {
         </button>
         {typeKeys.map((type) => {
           const cfg = detectionTypeConfig[type];
+          const FilterIcon = cfg.Icon;
           const count = mockAIEvents.filter((e) => e.type === type).length;
           return (
             <button
@@ -72,12 +77,12 @@ export function AIDetectionPage() {
               type="button"
               onClick={() => setFilter(filter === type ? 'all' : type)}
               className={cn(
-                'px-3 py-1.5 rounded-md text-[12px] font-medium border transition-colors',
+                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium border transition-colors',
                 filter === type ? 'text-white' : 'bg-card border-border text-muted-foreground hover:text-foreground'
               )}
               style={filter === type ? { backgroundColor: cfg.color, borderColor: cfg.color } : undefined}
             >
-              {cfg.icon} {cfg.label} ({count})
+              <FilterIcon size={12} /> {cfg.label} ({count})
             </button>
           );
         })}
@@ -87,6 +92,7 @@ export function AIDetectionPage() {
       <div className="space-y-2">
         {filtered.map((event) => {
           const cfg = detectionTypeConfig[event.type];
+          const EventIcon = cfg.Icon;
           const isFP = markedFP.has(event.id);
           return (
             <div key={event.id} className={cn('flex gap-4 p-3 rounded-lg border bg-card transition-all', isFP ? 'border-border opacity-60' : 'border-border hover:border-muted-foreground')}>
@@ -100,8 +106,8 @@ export function AIDetectionPage() {
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-medium" style={{ backgroundColor: `${cfg.color}20`, color: cfg.color }}>
-                    {cfg.icon} {cfg.label}
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium" style={{ backgroundColor: `${cfg.color}20`, color: cfg.color }}>
+                    <EventIcon size={10} /> {cfg.label}
                   </span>
                   <span className="text-[11px] text-muted-foreground">{event.time}</span>
                   <span className="text-[11px] text-muted-foreground">·</span>
@@ -109,7 +115,7 @@ export function AIDetectionPage() {
                   {isFP && <span className="px-1.5 py-0.5 rounded bg-warning/15 text-warning text-[10px] font-medium">{/* TODO: add i18n key */}False Positive</span>}
                 </div>
                 <div className="text-[13px] text-foreground mb-0.5">{event.description}</div>
-                <div className="text-[11px] text-muted-foreground">📍 {event.location} · {t('aiDetection.confidence')}: {event.confidence}%</div>
+                <div className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"><MapPin size={11} /> {event.location} · {t('aiDetection.confidence')}: {event.confidence}%</div>
               </div>
 
               {/* Actions */}
@@ -118,13 +124,13 @@ export function AIDetectionPage() {
                   type="button"
                   onClick={() => toggleFP(event.id)}
                   className={cn(
-                    'px-2.5 py-1.5 rounded text-[11px] font-medium border transition-colors',
+                    'inline-flex items-center gap-1 px-2.5 py-1.5 rounded text-[11px] font-medium border transition-colors',
                     isFP
                       ? 'bg-warning/10 border-warning/30 text-warning'
                       : 'bg-card border-border text-muted-foreground hover:text-foreground'
                   )}
                 >
-                  {isFP ? /* TODO: add i18n key */'↩ Undo' : /* TODO: add i18n key */'⚠ False Positive'}
+                  {isFP ? <><Undo2 size={11} /> {/* TODO: add i18n key */}Undo</> : <><AlertTriangle size={11} /> {/* TODO: add i18n key */}False Positive</>}
                 </button>
               </div>
             </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AlertCircle, Camera, Package } from 'lucide-react';
 import {
   PageHeader,
   DataTable,
@@ -45,7 +46,7 @@ export function DeliveriesPage() {
       const c = statusConfig[r.status];
       return <span className={`text-[12px] font-medium ${c.cls}`}>{c.label}</span>;
     }},
-    { key: 'photo', header: '📷', width: '40px', render: (r) => r.hasPhoto ? <div className="w-6 h-6 bg-muted rounded text-[10px] flex items-center justify-center">📷</div> : null },
+    { key: 'photo', header: 'Photo', width: '60px', render: (r) => r.hasPhoto ? <div className="w-6 h-6 bg-muted rounded inline-flex items-center justify-center text-muted-foreground"><Camera size={12} /></div> : null },
     ...(true ? [{
       key: 'actions' as string, header: '', width: '80px',
       render: (r: Delivery) => r.status === 'pending' ? (
@@ -62,9 +63,9 @@ export function DeliveriesPage() {
 
       <div className="grid grid-cols-4 gap-3 mb-6">
         <StatCard label={t('deliveries.stats.totalToday')} value={String(mockDeliveries.length)} sub="deliveries" domain="manage" />
-        <StatCard label={t('deliveries.stats.waiting')} value={String(pending.length)} sub="pending pickup" icon="📦" domain="manage" />
+        <StatCard label={t('deliveries.stats.waiting')} value={String(pending.length)} sub="pending pickup" icon={<Package size={14} />} domain="manage" />
         <StatCard label={t('deliveries.stats.collected')} value={String(mockDeliveries.filter(d => d.status === 'collected').length)} sub="collected" domain="manage" />
-        <StatCard label={t('deliveries.stats.over24h')} value={String(over24h.length)} sub="uncollected" icon="🔴" domain="error" />
+        <StatCard label={t('deliveries.stats.over24h')} value={String(over24h.length)} sub="uncollected" icon={<AlertCircle size={14} />} domain="error" />
       </div>
 
       <DataTable

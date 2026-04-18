@@ -10,6 +10,9 @@ import {
   AlertTriangle,
   Play,
   MapPin,
+  CheckCircle2,
+  CircleOff,
+  Siren,
 } from 'lucide-react';
 import {
   PageHeader,
@@ -267,11 +270,11 @@ export function AccessControlPage() {
 
       {/* Stats */}
       <div className="shrink-0 grid grid-cols-5 gap-3">
-        <StatCard label={t('accessControl.stats.total')} value={String(total)} icon="🚪" domain="secure" sub={t('accessControl.stats.accessPoints')} />
-        <StatCard label={t('accessControl.stats.online')} value={String(stats.online)} icon="🟢" domain="secure" sub={t('accessControl.stats.connected')} />
-        <StatCard label={t('accessControl.stats.warning')} value={String(stats.warning)} icon="🟡" domain={stats.warning > 0 ? 'error' : 'default'} sub={t('accessControl.stats.partial')} />
-        <StatCard label={t('accessControl.stats.offline')} value={String(stats.offline)} icon="⚫" domain={stats.offline > 0 ? 'error' : 'default'} sub={t('accessControl.stats.disconnected')} />
-        <StatCard label={t('accessControl.stats.alerts')} value={String(stats.alarm)} icon="🚨" domain={stats.alarm > 0 ? 'error' : 'default'} sub={t('accessControl.stats.forcedAlarm')} />
+        <StatCard label={t('accessControl.stats.total')} value={String(total)} icon={<DoorOpen size={14} />} domain="secure" sub={t('accessControl.stats.accessPoints')} />
+        <StatCard label={t('accessControl.stats.online')} value={String(stats.online)} icon={<CheckCircle2 size={14} />} domain="secure" sub={t('accessControl.stats.connected')} />
+        <StatCard label={t('accessControl.stats.warning')} value={String(stats.warning)} icon={<AlertTriangle size={14} />} domain={stats.warning > 0 ? 'error' : 'default'} sub={t('accessControl.stats.partial')} />
+        <StatCard label={t('accessControl.stats.offline')} value={String(stats.offline)} icon={<CircleOff size={14} />} domain={stats.offline > 0 ? 'error' : 'default'} sub={t('accessControl.stats.disconnected')} />
+        <StatCard label={t('accessControl.stats.alerts')} value={String(stats.alarm)} icon={<Siren size={14} />} domain={stats.alarm > 0 ? 'error' : 'default'} sub={t('accessControl.stats.forcedAlarm')} />
       </div>
 
       {/* Search */}

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { PageHeader } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { domainReports, occupancyData, accessTrend, energyTrend } from './mock-data';
@@ -40,10 +41,12 @@ export function AnalyticsPage() {
 
       {/* Domain report cards */}
       <div className="grid grid-cols-4 gap-3 mb-6">
-        {domainReports.map(dr => (
+        {domainReports.map(dr => {
+          const DomainIcon = dr.Icon;
+          return (
           <div key={dr.domain} className="bg-card border border-border rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
-              <span>{dr.icon}</span>
+              <DomainIcon size={14} style={{ color: dr.color }} />
               <span className="text-[13px] font-semibold" style={{ color: dr.color }}>{dr.domain}</span>
             </div>
             <div className="space-y-2">
@@ -52,15 +55,16 @@ export function AnalyticsPage() {
                   <span className="text-[12px] text-muted-foreground">{m.label}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-[13px] font-semibold text-foreground">{m.value}</span>
-                    <span className={cn('text-[10px]', m.direction === 'up' ? 'text-success' : 'text-error')}>
-                      {m.direction === 'up' ? '↑' : '↓'}{m.change}
+                    <span className={cn('inline-flex items-center gap-0.5 text-[10px]', m.direction === 'up' ? 'text-success' : 'text-error')}>
+                      {m.direction === 'up' ? <ArrowUp size={10} /> : <ArrowDown size={10} />}{m.change}
                     </span>
                   </div>
                 </div>
               ))}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Charts */}

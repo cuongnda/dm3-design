@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AlertTriangle, Check, X } from 'lucide-react';
 import { Button, PageHeader, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@dm3/ui';
 import { StatCard } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { mockCompanies } from './mock-data';
 
 function ComplianceCheck({ ok, label }: { ok: boolean; label: string }) {
-  return <span className={cn('text-[12px] mr-3', ok ? 'text-success' : 'text-error')}>{ok ? '✅' : '❌'} {label}</span>;
+  return (
+    <span className={cn('inline-flex items-center gap-1 text-[12px] mr-3', ok ? 'text-success' : 'text-error')}>
+      {ok ? <Check size={12} /> : <X size={12} />} {label}
+    </span>
+  );
 }
 
 function BadgeExpiry({ date, expiredLabel, daysLeftLabel }: { date?: string; expiredLabel: string; daysLeftLabel: (days: number) => string }) {
@@ -42,7 +47,7 @@ export function ContractorsPage() {
         <StatCard label={t('contractors.stats.companies')} value={String(mockCompanies.length)} sub="active contracts" domain="manage" />
         <StatCard label={t('contractors.stats.workers')} value={String(allWorkers.length)} sub="registered" domain="manage" />
         <StatCard label={t('contractors.stats.checkedIn')} value={String(checkedIn)} sub="on site today" domain="manage" />
-        <StatCard label={t('contractors.stats.expiring')} value={String(expiring)} sub="credentials" icon="⚠️" domain="error" />
+        <StatCard label={t('contractors.stats.expiring')} value={String(expiring)} sub="credentials" icon={<AlertTriangle size={14} />} domain="error" />
       </div>
 
       <div className="space-y-3">

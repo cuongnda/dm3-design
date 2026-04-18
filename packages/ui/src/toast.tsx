@@ -1,4 +1,6 @@
 import React, { useSyncExternalStore } from 'react';
+import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -58,11 +60,18 @@ const TYPE_STYLES: Record<Toast['type'], React.CSSProperties> = {
   info:    { background: '#1E3A5F', borderColor: '#3B82F6', color: '#E0F2FE' },
 };
 
-const ICON: Record<Toast['type'], string> = {
-  success: '✅',
-  error: '🚨',
-  warning: '⚠️',
-  info: 'ℹ️',
+const ICON: Record<Toast['type'], LucideIcon> = {
+  success: CheckCircle2,
+  error: XCircle,
+  warning: AlertTriangle,
+  info: Info,
+};
+
+const ICON_COLOR: Record<Toast['type'], string> = {
+  success: '#22C55E',
+  error: '#EF4444',
+  warning: '#F59E0B',
+  info: '#3B82F6',
 };
 
 const containerStyle: React.CSSProperties = {
@@ -95,9 +104,12 @@ const itemStyle: React.CSSProperties = {
 
 function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
   const colors = TYPE_STYLES[toast.type];
+  const Icon = ICON[toast.type];
   return (
     <div style={{ ...itemStyle, ...colors }}>
-      <span style={{ fontSize: 18, lineHeight: 1 }}>{ICON[toast.type]}</span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 1, color: ICON_COLOR[toast.type] }}>
+        <Icon size={18} />
+      </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 500, fontSize: 13 }}>{toast.title}</div>
         {toast.description && (
@@ -106,9 +118,10 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
       </div>
       <button
         onClick={onClose}
-        style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', opacity: 0.6, fontSize: 14, padding: 0 }}
+        aria-label="Dismiss"
+        style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', opacity: 0.6, padding: 0, display: 'inline-flex' }}
       >
-        ✕
+        <X size={14} />
       </button>
     </div>
   );

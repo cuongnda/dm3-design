@@ -5,6 +5,7 @@ import {
   ArrowLeft, DoorOpen, Lock, ShieldAlert, Wrench, Video,
   Clock, Cpu, Wifi, User, CreditCard, Fingerprint,
   KeyRound, Smartphone, Eye, Settings, Calendar, List, Shield,
+  Check, X,
 } from 'lucide-react';
 import { DataTable, type Column, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, AppModal, Button, Input, Label, Select, SelectOption, useBreadcrumbStore } from '@dm3/ui';
 import { cn } from '@/lib/utils';
@@ -126,8 +127,8 @@ export function DoorDetailPage() {
     {
       key: 'decision', header: t('alerts.table.reason'), width: '100px',
       render: (r) => (
-        <span className={cn('text-[12px] font-semibold', r.decision === 'granted' ? 'text-success' : 'text-error')}>
-          {r.decision === 'granted' ? `✓ ${t('accessControl.events.granted')}` : `✕ ${t('accessControl.events.denied')}`}
+        <span className={cn('inline-flex items-center gap-1 text-[12px] font-semibold', r.decision === 'granted' ? 'text-success' : 'text-error')}>
+          {r.decision === 'granted' ? <><Check size={12} /> {t('accessControl.events.granted')}</> : <><X size={12} /> {t('accessControl.events.denied')}</>}
         </span>
       ),
     },

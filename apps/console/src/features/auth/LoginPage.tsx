@@ -191,8 +191,8 @@ export function LoginPage() {
               </div>
             </div>
 
-            <Button type="button" variant="outline" className="w-full">
-              🏢 {t('signInWithSSO')}
+            <Button type="button" variant="outline" className="w-full inline-flex items-center justify-center gap-2">
+              <Building2 size={14} /> {t('signInWithSSO')}
             </Button>
 
             <div className="text-center mt-4">
