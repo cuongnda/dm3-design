@@ -15,6 +15,7 @@ import {
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useAccessTimes } from './hooks/useAccessTimes';
+import { AccessTimeFormModal } from './AccessTimeFormModal';
 import type { AccessTime } from './types';
 
 export function AccessTimesPage() {
@@ -24,6 +25,7 @@ export function AccessTimesPage() {
     const { accessTimes, loading, pagination, sortBy, sortDir, fetchAccessTimes, changePage, changePageSize, changeSort } = useAccessTimes();
 
     const [search, setSearch] = useState('');
+    const [showCreateModal, setShowCreateModal] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [timeToDelete, setTimeToDelete] = useState<AccessTime | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
@@ -141,7 +143,11 @@ export function AccessTimesPage() {
                         <h1 className="text-[18px] font-semibold text-foreground">{t('title', 'Access Times')}</h1>
                         <p className="text-[13px] text-muted-foreground">{t('description', 'Manage access time schedules')}</p>
                     </div>
-                    <Button size="sm" onClick={() => navigate('/access/access-times/new')}>
+                    <Button
+                        size="sm"
+                        onClick={() => setShowCreateModal(true)}
+                        data-testid="access-time-button-create"
+                    >
                         <Plus size={14} className="mr-1.5" />
                         {t('newAccessTime', 'New Access Time')}
                     </Button>
@@ -212,6 +218,13 @@ export function AccessTimesPage() {
                     onSortChange={changeSort}
                 />
             </div>
+
+            {/* Create */}
+            <AccessTimeFormModal
+                open={showCreateModal}
+                onOpenChange={setShowCreateModal}
+                onCreated={() => fetchAccessTimes()}
+            />
 
             {/* Delete Confirmation */}
             <AppModal

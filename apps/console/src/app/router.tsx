@@ -392,7 +392,6 @@ export const Router = createBrowserRouter([
               { path: 'access/access-groups', element: <LazyWrap><AccessGroupsPage /></LazyWrap> },
               { path: 'access/access-groups/:id', element: <LazyWrap><AccessGroupDetailPage /></LazyWrap> },
               { path: 'access/access-times', element: <LazyWrap><AccessTimesPage /></LazyWrap> },
-              { path: 'access/access-times/new', element: <LazyWrap><AccessTimeFormPage2 /></LazyWrap> },
               { path: 'access/access-times/:id', element: <LazyWrap><AccessTimeFormPage2 /></LazyWrap> },
 
               // MANAGE
