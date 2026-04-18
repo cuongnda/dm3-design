@@ -26,11 +26,14 @@ case "${SERVICE_NAME}" in
   cctv-svc)
     exec /app/bin/cctv-svc "$@"
     ;;
+  attend-svc)
+    exec /app/bin/attend-svc "$@"
+    ;;
   migrate)
     exec /app/scripts/migrate.sh "$@"
     ;;
   *)
-    echo "ERROR: SERVICE_NAME must be one of: device-gateway, access-svc, identity-svc, auth-svc, audit-svc, visitor-svc, parking-svc, cctv-svc, migrate" >&2
+    echo "ERROR: SERVICE_NAME must be one of: device-gateway, access-svc, identity-svc, auth-svc, audit-svc, visitor-svc, parking-svc, cctv-svc, attend-svc, migrate" >&2
     exit 1
     ;;
 esac
