@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, ChevronRight, Edit, MapPin, MoreHorizontal, Plus, Search, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Edit, GripVertical, MapPin, MoreHorizontal, Plus, Search, Trash2 } from 'lucide-react';
 import {
   AppModal,
   Badge,
@@ -13,6 +13,8 @@ import {
   DropdownMenuTrigger,
   Input,
 } from '@dm3/ui';
+import { apiFetch } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { useZones } from './hooks/useZones';
 import type { Zone } from './types';
 
@@ -72,10 +74,29 @@ function flattenTree(nodes: ZoneTreeNode[]): ZoneTreeNode[] {
   return nodes.flatMap((node) => [node, ...flattenTree(node.children)]);
 }
 
+function collectDescendantIds(nodes: ZoneTreeNode[], rootId: string): Set<string> {
+  const result = new Set<string>();
+  const find = (list: ZoneTreeNode[]): ZoneTreeNode | null => {
+    for (const n of list) {
+      if (n.zone.id === rootId) return n;
+      const child = find(n.children);
+      if (child) return child;
+    }
+    return null;
+  };
+  const walk = (n: ZoneTreeNode) => {
+    result.add(n.zone.id);
+    n.children.forEach(walk);
+  };
+  const root = find(nodes);
+  if (root) walk(root);
+  return result;
+}
+
 export function ZonesPage() {
   const { t } = useTranslation('zones');
   const navigate = useNavigate();
-  const { zones, loading, pagination, deleteZone } = useZones();
+  const { zones, loading, pagination, deleteZone, fetchZones } = useZones();
 
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -84,6 +105,11 @@ export function ZonesPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Drag-and-drop re-parenting state
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [reparenting, setReparenting] = useState(false);
+
   const zoneTree = useMemo(() => buildZoneTree(zones), [zones]);
   const visibleTree = useMemo(() => filterZoneTree(zoneTree, search), [zoneTree, search]);
   const visibleNodes = useMemo(() => flattenTree(visibleTree), [visibleTree]);
@@ -91,6 +117,80 @@ export function ZonesPage() {
 
   const toggleExpanded = (zoneId: string) => {
     setExpanded((prev) => ({ ...prev, [zoneId]: !prev[zoneId] }));
+  };
+
+  // Descendants of the node currently being dragged (includes self).
+  // Used to forbid drops that would create a cycle.
+  const forbiddenDropIds = useMemo(
+    () => (draggingId ? collectDescendantIds(zoneTree, draggingId) : new Set<string>()),
+    [zoneTree, draggingId],
+  );
+
+  const canDropOn = useCallback(
+    (targetId: string): boolean => {
+      if (!draggingId || reparenting) return false;
+      if (forbiddenDropIds.has(targetId)) return false;
+      const source = zoneMap.get(draggingId);
+      if (!source) return false;
+      // No-op if already parented there.
+      if (source.parent_id === targetId) return false;
+      return true;
+    },
+    [draggingId, reparenting, forbiddenDropIds, zoneMap],
+  );
+
+  const handleDragStart = (event: React.DragEvent, zoneId: string) => {
+    setDraggingId(zoneId);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', zoneId);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingId(null);
+    setDropTargetId(null);
+  };
+
+  const handleDragOver = (event: React.DragEvent, targetId: string) => {
+    if (!canDropOn(targetId)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    if (dropTargetId !== targetId) setDropTargetId(targetId);
+  };
+
+  const handleDragLeave = (targetId: string) => {
+    if (dropTargetId === targetId) setDropTargetId(null);
+  };
+
+  const handleDrop = async (event: React.DragEvent, targetId: string) => {
+    event.preventDefault();
+    const sourceId = draggingId;
+    setDropTargetId(null);
+    setDraggingId(null);
+    if (!sourceId || !canDropOn(targetId)) return;
+    const source = zoneMap.get(sourceId);
+    const target = zoneMap.get(targetId);
+    if (!source || !target) return;
+    setReparenting(true);
+    try {
+      await apiFetch(`/api/v1/access/zones/${sourceId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ parent_id: targetId }),
+      });
+      toast(
+        t('toast.moved', '"{{name}}" moved under "{{parent}}"', {
+          name: source.name,
+          parent: target.name,
+        }),
+        'success',
+      );
+      setExpanded((prev) => ({ ...prev, [targetId]: true }));
+      await fetchZones();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('toast.moveFailed', 'Failed to move zone');
+      toast(message, 'error');
+    } finally {
+      setReparenting(false);
+    }
   };
 
   const openCreate = () => navigate('/access/zones/new');
@@ -123,15 +223,41 @@ export function ZonesPage() {
     const isExpanded = expanded[node.zone.id] ?? true;
     const hasChildren = node.children.length > 0;
     const parentName = node.zone.parent_id ? zoneMap.get(node.zone.parent_id)?.name : undefined;
+    const isDragging = draggingId === node.zone.id;
+    const isDropTarget = dropTargetId === node.zone.id && canDropOn(node.zone.id);
+    const isDragActive = draggingId !== null;
+    const isForbiddenTarget = isDragActive && !isDragging && !canDropOn(node.zone.id);
 
     return (
       <div key={node.zone.id} className="space-y-2">
         <div
-          className="group rounded-xl border border-border/60 bg-card/70 p-3 transition hover:border-primary/40 hover:bg-card"
+          draggable={!reparenting}
+          onDragStart={(e) => handleDragStart(e, node.zone.id)}
+          onDragEnd={handleDragEnd}
+          onDragOver={(e) => handleDragOver(e, node.zone.id)}
+          onDragLeave={() => handleDragLeave(node.zone.id)}
+          onDrop={(e) => handleDrop(e, node.zone.id)}
+          className={[
+            'group rounded-xl border p-3 transition',
+            isDragging
+              ? 'border-primary/60 bg-primary/5 opacity-60'
+              : isDropTarget
+                ? 'border-primary bg-primary/10 ring-2 ring-primary/40'
+                : isForbiddenTarget
+                  ? 'border-border/40 bg-card/40 opacity-60'
+                  : 'border-border/60 bg-card/70 hover:border-primary/40 hover:bg-card',
+          ].join(' ')}
           style={{ marginLeft: `${node.level * 20}px` }}
           data-testid={`zones-tree-node-${node.zone.id}`}
         >
           <div className="flex items-start gap-3">
+            <span
+              className="mt-1 flex h-6 w-4 cursor-grab items-center justify-center text-muted-foreground/50 hover:text-foreground active:cursor-grabbing"
+              title={t('dragHint', 'Drag to reparent')}
+              aria-hidden
+            >
+              <GripVertical size={14} />
+            </span>
             <button
               type="button"
               className="mt-1 flex h-6 w-6 items-center justify-center rounded-md border border-border bg-background text-muted-foreground disabled:opacity-40"
@@ -219,6 +345,13 @@ export function ZonesPage() {
           <Badge variant="outline">{pagination.total || zones.length} {t('summary.total', 'total')}</Badge>
         </div>
       </div>
+
+      <p className="text-[12px] text-muted-foreground">
+        {t(
+          'dragHintBanner',
+          'Tip: drag any zone and drop it onto another zone to change its parent.',
+        )}
+      </p>
 
       <Card className="min-h-0 flex-1 overflow-auto border-border/60 bg-card/70 p-4" data-testid="zones-tree-card">
         {loading ? (
