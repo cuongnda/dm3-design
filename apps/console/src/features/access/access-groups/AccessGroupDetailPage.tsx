@@ -984,7 +984,7 @@ export function AccessGroupDetailPage() {
               columns={userColumns}
               data={users}
               rowKey={(u) => u.id}
-              onRowDoubleClick={(u) => navigate(`/manage/identities/${u.id}`)}
+              onRowDoubleClick={(u) => navigate(`/manage/users/${u.id}`)}
             />
           )}
         </TabsContent>
