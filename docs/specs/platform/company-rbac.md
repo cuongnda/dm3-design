@@ -4,10 +4,14 @@
 > Status: Draft | Owner: Platform Team
 > Source of Truth: Canonical RBAC definition for company-scoped roles and permissions
 > Updated: 2026-04-18 — consolidated from auth, multi-tenancy, and architecture docs
+> Related recommendation: `docs/specs/platform/company-rbac-recommendation.md`
 
 ## Overview
 
 This document is the **single source of truth** for DM3 company-level RBAC.
+
+For the newer recommended product direction, including custom company-defined roles, scoped assignments, MVP phasing, and manual UX guidance, see:
+- `docs/specs/platform/company-rbac-recommendation.md`
 
 It defines:
 - the canonical role model for DM3
