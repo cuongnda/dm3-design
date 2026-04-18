@@ -177,12 +177,87 @@ Frontend routes and sidebar items must load only when:
 | location_name | string(200) | no | — | "Sảnh chính — Tầng 1" |
 | is_primary | boolean | no | false | Primary attendance device |
 
+### LeaveRequest
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| id | uuid | yes | auto | Primary key |
+| tenant_id | uuid | yes | — | Tenant isolation |
+| site_id | uuid | yes | — | Site (soft reference) |
+| user_id | uuid | yes | — | Requester (soft reference to User) |
+| leave_type | LeaveTypeEnum | yes | — | Type of leave |
+| start_date | date | yes | — | Leave start date |
+| end_date | date | yes | — | Leave end date |
+| duration_days | decimal(4,1) | yes | — | Total leave duration |
+| partial_day_mode | string(20) | no | full_day | full_day, morning_half, afternoon_half, hourly |
+| partial_start_time | time | no | — | Used when partial_day_mode=hourly |
+| partial_end_time | time | no | — | Used when partial_day_mode=hourly |
+| reason | text | yes | — | Employee reason |
+| status | LeaveRequestStatusEnum | yes | pending | Approval status |
+| approver_id | uuid | no | — | Current or final approver |
+| approved_at | timestamp | no | — | Approval time |
+| rejection_reason | text | no | — | Rejection note |
+| cancel_reason | text | no | — | If requester cancels |
+| source | LeaveSourceEnum | yes | self_service | self_service, admin, external_sync |
+| attachment_refs | jsonb | no | [] | Supporting documents |
+| created_at | timestamp | yes | now() | Creation time |
+| updated_at | timestamp | yes | now() | Last update |
+
+### LeaveBalance
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| id | uuid | yes | auto | Primary key |
+| tenant_id | uuid | yes | — | Tenant isolation |
+| user_id | uuid | yes | — | Soft reference to User |
+| year | int | yes | — | Balance year |
+| leave_type | LeaveTypeEnum | yes | — | Balance bucket |
+| entitled_days | decimal(5,1) | yes | 0 | Annual quota |
+| carry_over_days | decimal(5,1) | yes | 0 | Days carried from previous year |
+| used_days | decimal(5,1) | yes | 0 | Approved leave consumed |
+| pending_days | decimal(5,1) | yes | 0 | Pending requests |
+| remaining_days | decimal(5,1) | yes | 0 | Computed remaining balance |
+| adjusted_by | uuid | no | — | Admin who adjusted balance |
+| adjustment_reason | text | no | — | Reason for adjustment |
+| updated_at | timestamp | yes | now() | Last update |
+
+### LeavePolicy
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| id | uuid | yes | auto | Primary key |
+| tenant_id | uuid | yes | — | Tenant isolation |
+| site_id | uuid | no | — | Optional site override |
+| leave_type | LeaveTypeEnum | yes | — | Policy bucket |
+| annual_quota_days | decimal(5,1) | yes | — | Default annual quota |
+| carry_over_limit_days | decimal(5,1) | no | 0 | Max days carried over |
+| min_notice_days | int | no | 0 | Required advance notice |
+| requires_attachment | boolean | no | false | Whether proof is required |
+| allow_negative_balance | boolean | no | false | Allow request beyond balance |
+| approval_mode | string(30) | no | manager | manager, department_head, hr, auto |
+| auto_approve_below_days | decimal(4,1) | no | — | Auto-approve small requests |
+| status | string(20) | yes | active | active or archived |
+| created_at | timestamp | yes | now() | Creation time |
+| updated_at | timestamp | yes | now() | Last update |
+
+### HolidayCalendar
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| id | uuid | yes | auto | Primary key |
+| tenant_id | uuid | yes | — | Tenant isolation |
+| site_id | uuid | no | — | Optional site-specific calendar |
+| date | date | yes | — | Holiday date |
+| name | string(150) | yes | — | Holiday name |
+| holiday_type | string(30) | yes | public | public, company, makeup_workday |
+| paid | boolean | no | true | Paid holiday |
+| notes | text | no | — | Additional notes |
+| created_at | timestamp | yes | now() | Creation time |
+
 ### Enums
 ```
 AttendanceStatusEnum: on_time | late | absent | on_leave | half_day | holiday | pending
 LeaveTypeEnum: annual | sick | maternity | paternity | marriage | bereavement | unpaid | compensatory | other
 OTStatusEnum: pending | approved | rejected | cancelled
 DeviceFunctionEnum: clock_in | clock_out | both
+LeaveRequestStatusEnum: pending | approved | rejected | cancelled
+LeaveSourceEnum: self_service | admin | external_sync
 ```
 
 ## API Endpoints
@@ -312,6 +387,69 @@ DeviceFunctionEnum: clock_in | clock_out | both
 - **Auth:** role >= viewer
 - **Query params:** `site_id`, `status`, `date_from`, `date_to`, `user_id`
 
+### GET /api/v1/attendance/leave/requests
+- **Auth:** role >= viewer (self limited to own records unless manager/admin)
+- **Query params:** `site_id`, `status`, `user_id`, `department_id`, `date_from`, `date_to`, `leave_type`
+- **Response 200:** List of leave requests with approval status, requester, duration, balance impact
+
+### POST /api/v1/attendance/leave/requests
+- **Auth:** Any authenticated employee (self-service) or admin on behalf
+- **Body:**
+  ```json
+  {
+    "site_id": "uuid",
+    "leave_type": "annual",
+    "start_date": "2026-03-10",
+    "end_date": "2026-03-12",
+    "duration_days": 3,
+    "partial_day_mode": "full_day",
+    "reason": "Nghỉ phép gia đình",
+    "attachment_refs": []
+  }
+  ```
+- **Side effects:** Creates pending leave request, reserves `pending_days` from leave balance, may auto-approve based on policy
+
+### GET /api/v1/attendance/leave/requests/{id}
+- **Auth:** requester, approver, or role >= viewer with scope
+- **Response 200:** Full leave request, approval trail, attachments, balance impact
+
+### PUT /api/v1/attendance/leave/requests/{id}/approve
+- **Auth:** role >= admin or designated approver
+- **Body:** `{ "approved": true, "note": "Approved by department head" }`
+- **Side effects:** marks request approved, converts pending balance to used balance, updates AttendanceRecord(s)
+
+### PUT /api/v1/attendance/leave/requests/{id}/reject
+- **Auth:** role >= admin or designated approver
+- **Body:** `{ "reason": "Peak staffing day, please reschedule" }`
+- **Side effects:** releases pending balance, leaves attendance unchanged
+
+### PUT /api/v1/attendance/leave/requests/{id}/cancel
+- **Auth:** requester (while pending) or admin
+- **Body:** `{ "reason": "No longer needed" }`
+- **Side effects:** releases pending balance, reverts attendance leave mark if generated early
+
+### GET /api/v1/attendance/leave/balances
+- **Auth:** role >= viewer (self limited unless manager/admin)
+- **Query params:** `user_id`, `year`, `site_id`
+- **Response 200:** leave balances by type with entitled / used / pending / remaining
+
+### PUT /api/v1/attendance/leave/balances/{id}
+- **Auth:** role >= admin
+- **Body:** `{ "remaining_days": 10, "adjustment_reason": "Carry-over correction" }`
+
+### GET /api/v1/attendance/leave/policies
+- **Auth:** role >= admin
+- **Query params:** `site_id`
+
+### POST /api/v1/attendance/leave/policies
+- **Auth:** role >= admin
+- **Body:** create or update leave policy for type/site
+
+### GET /api/v1/attendance/leave/calendar
+- **Auth:** role >= viewer
+- **Query params:** `site_id`, `month`, `department_id`
+- **Response 200:** calendar view of approved and pending leave requests
+
 ### GET /api/v1/attendance/report/monthly
 - **Auth:** role >= admin
 - **Query params:** `site_id`, `month` (YYYY-MM), `department_id`, `format` (json|csv|xlsx)
@@ -404,7 +542,7 @@ Note: attend-svc subscribes to access events via NATS (`dm.{tenant}.access.log.*
 
 8. **BR-ATT-008: Holiday calendar.** Public holidays (Tết, 30/4, 1/5, 2/9, 1/1) are configured per site. Attendance on holidays is auto-classified as overtime at 300% rate (for reporting).
 
-9. **BR-ATT-009: Leave integration.** When leave records are synced (via API or webhook from HR system), the attendance record for that date is marked with the leave type. If a user has both a leave record and a clock-in event, the clock-in takes precedence (leave cancelled).
+9. **BR-ATT-009: Leave integration.** When leave records are approved internally or synced from an external HR system, the attendance record for that date is marked with the leave type. If a user has both an approved leave record and a clock-in event, the request enters exception state for manager review, clock-in is not silently discarded.
 
 10. **BR-ATT-010: Manual adjustment audit.** All manual adjustments require a reason and are permanently logged in audit trail. Original values are preserved in the audit diff.
 
@@ -415,6 +553,18 @@ Note: attend-svc subscribes to access events via NATS (`dm.{tenant}.access.log.*
 13. **BR-ATT-013: Multi-device clock-in.** If a site has multiple attendance devices, the earliest entry event across all devices is the clock-in. The system deduplicates events within a 5-minute window from the same user.
 
 14. **BR-ATT-014: Attendance rate threshold.** Sites can configure a minimum attendance rate (e.g., 90%). Users falling below threshold trigger an alert to their department head.
+
+15. **BR-ATT-015: Leave balance reservation.** Creating a pending leave request reserves the requested days into `pending_days`. Approval moves days from `pending_days` to `used_days`; rejection/cancellation releases them.
+
+16. **BR-ATT-016: Leave policy enforcement.** Requests validate against policy rules: minimum notice, attachment requirement, quota limits, and approval mode. Violations return actionable validation errors.
+
+17. **BR-ATT-017: Partial-day leave.** Half-day or hourly leave requests only affect matching portions of the working day and must integrate correctly with late/early-leave calculations.
+
+18. **BR-ATT-018: Holiday precedence.** Public holidays and company holidays override normal leave deductions unless policy explicitly marks the date as a makeup workday.
+
+19. **BR-ATT-019: Cancellation window.** Employees may cancel only pending requests unless an admin override is used. Approved requests require approver/admin cancellation with audit reason.
+
+20. **BR-ATT-020: Team visibility.** Managers may view pending/approved leave for their departments in calendar and list format to avoid staffing conflicts before approval.
 
 ## Permissions Matrix
 
@@ -453,8 +603,14 @@ Note: attend-svc subscribes to access events via NATS (`dm.{tenant}.access.log.*
 | /manage/attendance/:personId | User attendance | Calendar heatmap, monthly table, clock-in/out timeline, leave overlay |
 | /manage/attendance/shifts | Shift management | Shift list, create/edit forms, assignment matrix |
 | /manage/attendance/overtime | OT requests | Pending approvals, approved/rejected history, monthly OT chart |
+| /manage/attendance/leave | Leave requests | Request list, status tabs, approval queue, request drawer/modal, balance preview |
+| /manage/attendance/leave/balance | Leave balances | Balance table, quota adjustments, per-type cards, carry-over indicators |
+| /manage/attendance/leave/calendar | Team leave calendar | Monthly/weekly calendar, department filter, pending vs approved overlays |
+| /manage/attendance/leave/policies | Leave policies | Policy forms, approval mode settings, attachment requirement, quota config |
 | /manage/attendance/reports | Reports | Monthly summary table, department comparison, export buttons (CSV, Excel) |
 | /manage/attendance/settings | Configuration | Attendance devices, holiday calendar, threshold settings |
+| /me/attendance | Self-service attendance | Personal timeline, monthly stats, shift info, attendance exceptions |
+| /me/leave | Self-service leave | Request form, request history, leave balance cards, cancellation action |
 
 ## Events & Audit Log
 
@@ -466,6 +622,12 @@ Note: attend-svc subscribes to access events via NATS (`dm.{tenant}.access.log.*
 | attendance.marked_absent | cron job | user_id + date + shift | 3 years |
 | attendance.adjusted | PUT adjust | user_id + date + old_values + new_values + reason + actor | 7 years |
 | attendance.leave_synced | POST leave sync | user_id + date + leave_type | 3 years |
+| leave.requested | POST leave request | user_id + leave_type + dates + duration | 3 years |
+| leave.approved | PUT leave approve | leave_id + approver + balance impact | 3 years |
+| leave.rejected | PUT leave reject | leave_id + approver + reason | 3 years |
+| leave.cancelled | PUT leave cancel | leave_id + actor + reason | 3 years |
+| leave.balance_adjusted | PUT leave balance | user_id + leave_type + before/after + reason | 7 years |
+| leave.policy_updated | POST/PUT leave policy | policy diff + actor | 7 years |
 | shift.created | POST shift | full shift | 7 years |
 | shift.updated | PUT shift | diff | 7 years |
 | shift.assigned | POST assign | user_ids + shift_id + dates | 3 years |
