@@ -18,6 +18,7 @@ import {
     SelectOption,
     Checkbox,
     TablePaginationFooter,
+    useBreadcrumbStore,
 } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -342,6 +343,8 @@ export function AccessPointDetailPage() {
     const { t } = useTranslation('accessPoints');
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
+    const setLabel = useBreadcrumbStore((s) => s.setLabel);
+    const clearLabel = useBreadcrumbStore((s) => s.clearLabel);
 
     // AP details
     const [ap, setAP] = useState<AccessPoint | null>(null);
@@ -524,6 +527,11 @@ export function AccessPointDetailPage() {
         if (!cancelled) run();
         return () => { cancelled = true; };
     }, [fetchAP, fetchDevices]);
+
+    useEffect(() => {
+        if (id && ap?.name) setLabel(id, ap.name);
+        return () => { if (id) clearLabel(id); };
+    }, [id, ap?.name, setLabel, clearLabel]);
 
     // ── Edit handlers ───────────────────────────────────────────────────────
 

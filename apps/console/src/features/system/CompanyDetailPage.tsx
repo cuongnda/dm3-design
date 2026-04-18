@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Building2, Users, Cpu, DoorOpen, Activity, Save, Puzzle } from 'lucide-react';
 import { fetchCompany, updateCompany, suspendCompany, fetchTenantPlugins, updateTenantPlugins, type CompanyDTO, type PluginInfo } from '@/lib/api';
-import { Button, Input, Select, SelectOption, Label } from '@dm3/ui';
+import { Button, Input, Select, SelectOption, Label, useBreadcrumbStore } from '@dm3/ui';
 
 const statusColors: Record<string, string> = {
   active: 'bg-success/10 text-success border-success/20',
@@ -15,6 +15,8 @@ export function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation('system');
+  const setLabel = useBreadcrumbStore((s) => s.setLabel);
+  const clearLabel = useBreadcrumbStore((s) => s.clearLabel);
   const [company, setCompany] = useState<CompanyDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -45,6 +47,11 @@ export function CompanyDetailPage() {
       .finally(() => setLoading(false));
     loadPlugins(id);
   }, [id, loadPlugins]);
+
+  useEffect(() => {
+    if (id && company?.name) setLabel(id, company.name);
+    return () => { if (id) clearLabel(id); };
+  }, [id, company?.name, setLabel, clearLabel]);
 
   const handleSave = async () => {
     if (!id) return;

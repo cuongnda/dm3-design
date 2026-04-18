@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { PageHeader, DataTable, type Column, Button } from '@dm3/ui';
+import { PageHeader, DataTable, type Column, Button, useBreadcrumbStore } from '@dm3/ui';
 import { fetchDeviceEvents, type EventDTO } from '@/lib/api';
 import { useDevice, useSendCommand } from '@/lib/hooks';
 import { useRealtimeStore, useDeviceStatus } from '@dm3/api-client';
@@ -17,6 +17,8 @@ export function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation('devices');
+  const setLabel = useBreadcrumbStore((s) => s.setLabel);
+  const clearLabel = useBreadcrumbStore((s) => s.clearLabel);
   const [recentEvents, setRecentEvents] = useState<EventDTO[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
 
@@ -53,6 +55,11 @@ export function DeviceDetailPage() {
 
     loadEvents();
   }, [device]);
+
+  useEffect(() => {
+    if (id && device?.name) setLabel(id, device.name);
+    return () => { if (id) clearLabel(id); };
+  }, [id, device?.name, setLabel, clearLabel]);
 
   const handleCommand = async (commandId: string) => {
     if (!device) return;

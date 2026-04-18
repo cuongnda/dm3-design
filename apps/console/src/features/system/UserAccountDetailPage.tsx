@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Users, Save, Edit3, Shield, Play, Pause, Key, Building2, AlertTriangle } from 'lucide-react';
 import { fetchUserAccount, updateUserAccount, deleteUserAccount, resetUserPassword, changeUserPassword, type UserAccountDTO, type UpdateUserAccountRequest } from '@/lib/api-users';
 import { fetchCompanies, type CompanyDTO } from '@/lib/api';
-import { Button, Input, Label, Select, SelectOption, Checkbox, type SelectRichOption as Option } from '@dm3/ui';
+import { Button, Input, Label, Select, SelectOption, Checkbox, useBreadcrumbStore, type SelectRichOption as Option } from '@dm3/ui';
 
 const statusColors: Record<string, string> = {
   active: 'bg-success/10 text-success border-success/20',
@@ -23,6 +23,8 @@ export function UserAccountDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation('system');
+  const setLabel = useBreadcrumbStore((s) => s.setLabel);
+  const clearLabel = useBreadcrumbStore((s) => s.clearLabel);
   const [user, setUser] = useState<UserAccountDTO | null>(null);
   const [companies, setCompanies] = useState<CompanyDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,6 +63,11 @@ export function UserAccountDetailPage() {
   useEffect(() => {
     loadUser();
   }, [id]);
+
+  useEffect(() => {
+    if (id && user?.name) setLabel(id, user.name);
+    return () => { if (id) clearLabel(id); };
+  }, [id, user?.name, setLabel, clearLabel]);
 
   useEffect(() => {
     // Load companies only once, not dependent on id changes

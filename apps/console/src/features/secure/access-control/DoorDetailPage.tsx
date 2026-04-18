@@ -6,7 +6,7 @@ import {
   Clock, Cpu, Wifi, User, CreditCard, Fingerprint,
   KeyRound, Smartphone, Eye, Settings, Calendar, List, Shield,
 } from 'lucide-react';
-import { DataTable, type Column, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, AppModal, Button, Input, Label, Select, SelectOption } from '@dm3/ui';
+import { DataTable, type Column, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, AppModal, Button, Input, Label, Select, SelectOption, useBreadcrumbStore } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { useAccessDevice, useEvents, useRules, useUpdateAccessDevice, useSendCommand } from '@/lib/hooks';
 import type { EventDTO, AccessRuleDTO } from '@/lib/api';
@@ -45,6 +45,8 @@ export function DoorDetailPage() {
   const { t } = useTranslation('secure');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const setLabel = useBreadcrumbStore((s) => s.setLabel);
+  const clearLabel = useBreadcrumbStore((s) => s.clearLabel);
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
   const [settings, setSettings] = useState({
     name: '',
@@ -70,6 +72,11 @@ export function DoorDetailPage() {
       });
     }
   }, [door]);
+
+  useEffect(() => {
+    if (id && door?.name) setLabel(id, door.name);
+    return () => { if (id) clearLabel(id); };
+  }, [id, door?.name, setLabel, clearLabel]);
 
   if (!id) {
     return <div className="text-center py-8 text-error">{/* TODO: add i18n key */}ID không hợp lệ</div>;

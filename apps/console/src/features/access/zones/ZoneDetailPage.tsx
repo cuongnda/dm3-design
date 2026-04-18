@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Crosshair, Map, MapPin, Network, Plus, Save } from 'lucide-react';
-import { AppModal, Badge, Button, Card, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger } from '@dm3/ui';
+import { AppModal, Badge, Button, Card, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger, useBreadcrumbStore } from '@dm3/ui';
 import { authenticatedUrl } from '@dm3/api-client';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -15,6 +15,8 @@ interface ZonesResponse {
 export function ZoneDetailPage() {
   const { t } = useTranslation('zones');
   const { id } = useParams<{ id: string }>();
+  const setLabel = useBreadcrumbStore((s) => s.setLabel);
+  const clearLabel = useBreadcrumbStore((s) => s.clearLabel);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef<string | null>(null);
 
@@ -65,6 +67,11 @@ export function ZoneDetailPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (id && zone?.name) setLabel(id, zone.name);
+    return () => { if (id) clearLabel(id); };
+  }, [id, zone?.name, setLabel, clearLabel]);
 
   const childZones = useMemo(() => allZones.filter((item) => item.parent_id === zone?.id), [allZones, zone?.id]);
   const parentZone = useMemo(() => allZones.find((item) => item.id === zone?.parent_id), [allZones, zone?.parent_id]);

@@ -1,6 +1,7 @@
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { PageHeader } from '@dm3/ui';
+import { PageHeader, useBreadcrumbStore } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { mockCameras, mockNVRs } from './mock-data';
 import type { CameraStatus } from './mock-data';
@@ -15,7 +16,14 @@ export function CameraDetailPage() {
   const { t } = useTranslation('secure');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const setLabel = useBreadcrumbStore((s) => s.setLabel);
+  const clearLabel = useBreadcrumbStore((s) => s.clearLabel);
   const camera = mockCameras.find((c) => c.id === id);
+
+  useEffect(() => {
+    if (id && camera?.name) setLabel(id, camera.name);
+    return () => { if (id) clearLabel(id); };
+  }, [id, camera?.name, setLabel, clearLabel]);
 
   if (!camera) {
     return (

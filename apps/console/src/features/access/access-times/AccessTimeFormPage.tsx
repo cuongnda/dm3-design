@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft } from 'lucide-react';
-import { Button } from '@dm3/ui';
+import { Button, useBreadcrumbStore } from '@dm3/ui';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import {
@@ -30,10 +30,17 @@ export function AccessTimeFormPage() {
     const { t } = useTranslation('accessTimes');
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
+    const setLabel = useBreadcrumbStore((s) => s.setLabel);
+    const clearLabel = useBreadcrumbStore((s) => s.clearLabel);
 
     const [values, setValues] = useState<AccessTimeFormValues>(emptyAccessTimeValues);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (id && id !== 'new' && values.name) setLabel(id, values.name);
+        return () => { if (id && id !== 'new') clearLabel(id); };
+    }, [id, values.name, setLabel, clearLabel]);
 
     useEffect(() => {
         if (!id || id === 'new') return;

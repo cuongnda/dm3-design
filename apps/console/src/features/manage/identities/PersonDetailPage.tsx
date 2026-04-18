@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Upload, Plus, Trash2, CreditCard, Eye, Fingerprint, KeyRound, Smartphone, Shield, Clock, User } from 'lucide-react';
-import { DataTable, type Column } from '@dm3/ui';
+import { DataTable, type Column, useBreadcrumbStore } from '@dm3/ui';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@dm3/ui';
 import { AppModal } from '@dm3/ui';
 import { Button, Input, Label, Select, SelectOption } from '@dm3/ui';
@@ -28,6 +28,8 @@ export function PersonDetailPage() {
   const navigate = useNavigate();
   const { t } = useTranslation('manage');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const setLabel = useBreadcrumbStore((s) => s.setLabel);
+  const clearLabel = useBreadcrumbStore((s) => s.clearLabel);
 
   const [showCredentialForm, setShowCredentialForm] = useState(false);
   const [deleteCredentialId, setDeleteCredentialId] = useState<string | null>(null);
@@ -46,6 +48,12 @@ export function PersonDetailPage() {
   const createCredentialMutation = useCreateCredential();
   const deleteCredentialMutation = useDeleteCredential();
   const uploadPhotoMutation = useUploadPhoto();
+
+  const personName = person ? `${person.first_name} ${person.last_name}`.trim() : '';
+  useEffect(() => {
+    if (id && personName) setLabel(id, personName);
+    return () => { if (id) clearLabel(id); };
+  }, [id, personName, setLabel, clearLabel]);
 
   if (!id) {
     return <div className="text-center py-8 text-[#EF4444]">{t('personDetail.invalidId')}</div>;

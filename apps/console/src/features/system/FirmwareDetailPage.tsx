@@ -8,7 +8,7 @@ import {
   type FirmwareDTO, type FirmwareDeploymentDTO,
 } from '@/lib/api';
 import { ALL_DEVICE_MODELS } from '@/lib/device-models';
-import { Button, Input, Label, Badge, AppModal, Checkbox, DataTable, type Column, TablePaginationFooter } from '@dm3/ui';
+import { Button, Input, Label, Badge, AppModal, Checkbox, DataTable, type Column, TablePaginationFooter, useBreadcrumbStore } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 
@@ -48,6 +48,8 @@ export function FirmwareDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation('system');
+  const setLabel = useBreadcrumbStore((s) => s.setLabel);
+  const clearLabel = useBreadcrumbStore((s) => s.clearLabel);
   const [firmware, setFirmware] = useState<FirmwareDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,6 +79,11 @@ export function FirmwareDetailPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (id && firmware?.version) setLabel(id, firmware.version);
+    return () => { if (id) clearLabel(id); };
+  }, [id, firmware?.version, setLabel, clearLabel]);
 
   // Load deployments + poll for status updates
   const loadDeployments = useCallback(async () => {
