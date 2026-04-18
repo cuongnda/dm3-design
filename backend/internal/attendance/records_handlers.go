@@ -59,7 +59,7 @@ func (h *AttendanceHandlers) ListRecords(w http.ResponseWriter, r *http.Request)
 		idx++
 	}
 	if search != "" {
-		where += ` AND (u.name ILIKE $` + strconv.Itoa(idx) + ` OR u.email ILIKE $` + strconv.Itoa(idx) + `)`
+		where += ` AND (u.first_name ILIKE $` + strconv.Itoa(idx) + ` OR u.last_name ILIKE $` + strconv.Itoa(idx) + ` OR u.email ILIKE $` + strconv.Itoa(idx) + `)`
 		args = append(args, "%"+search+"%")
 		idx++
 	}
@@ -90,7 +90,7 @@ func (h *AttendanceHandlers) ListRecords(w http.ResponseWriter, r *http.Request)
 			ar.manual_adjustment, ar.adjusted_by::text, ar.adjustment_reason,
 			ar.leave_type, ar.leave_reference_id, ar.notes,
 			ar.created_at, ar.updated_at,
-			COALESCE(u.name, '') AS user_name,
+			COALESCE(NULLIF(TRIM(u.first_name || ' ' || u.last_name), ''), '') AS user_name,
 			COALESCE(u.email, '') AS user_email,
 			COALESCE(s.name, '') AS shift_name,
 			COALESCE(to_char(s.start_time, 'HH24:MI'), '') AS shift_start,
@@ -99,7 +99,7 @@ func (h *AttendanceHandlers) ListRecords(w http.ResponseWriter, r *http.Request)
 		  LEFT JOIN dm3_identity.users u ON u.id = ar.user_id AND u.tenant_id = ar.tenant_id
 		  LEFT JOIN dm3_attendance.shifts s ON s.id = ar.shift_id AND s.tenant_id = ar.tenant_id
 		 WHERE ` + where + `
-		 ORDER BY ar.clock_in NULLS LAST, u.name NULLS LAST
+		 ORDER BY ar.clock_in NULLS LAST, u.first_name NULLS LAST
 		 LIMIT $` + strconv.Itoa(idx) + ` OFFSET $` + strconv.Itoa(idx+1)
 
 	rows, err := h.db.Pool.Query(r.Context(), listSQL, listArgs...)
