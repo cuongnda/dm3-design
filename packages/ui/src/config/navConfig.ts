@@ -63,7 +63,6 @@ export const NAV_CONFIG: NavSection[] = [
     items: [
       { to: '/manage/users', icon: UserCheck, labelKey: 'nav.users', labelFallback: 'Users', status: 'setup' },
       { to: '/manage/departments', icon: Building2, labelKey: 'nav.departments', labelFallback: 'Departments', status: 'setup' },
-      { to: '/manage/identities', icon: Users, labelKey: 'nav.identities', labelFallback: 'Identities', status: 'ready' },
       { to: '/manage/contractors', icon: Wrench, labelKey: 'nav.contractors', labelFallback: 'Contractors', status: 'coming-soon' },
       { to: '/manage/attendance', icon: Clock, labelKey: 'nav.attendance', labelFallback: 'Attendance', status: 'coming-soon' },
       { to: '/manage/deliveries', icon: Package, labelKey: 'nav.deliveries', labelFallback: 'Deliveries', status: 'coming-soon' },

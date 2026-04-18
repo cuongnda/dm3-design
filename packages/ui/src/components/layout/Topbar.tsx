@@ -78,7 +78,6 @@ export function Topbar() {
     // manage
     users:          t('nav.users', 'Users'),
     departments:    t('nav.departments', 'Departments'),
-    identities:     t('nav.identities', 'Identities'),
     visitors:       t('nav.visitors', 'Visitors'),
     contractors:    t('nav.contractors', 'Contractors'),
     attendance:     t('nav.attendance', 'Attendance'),

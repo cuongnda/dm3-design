@@ -17,7 +17,6 @@ PAGES = [
     ("/secure/intercom", "Intercom"),
     ("/secure/ai-detection", "AI Detection"),
     ("/secure/emergency", "Emergency"),
-    ("/manage/identities", "Identities"),
     ("/visitors", "Visitors"),
     ("/manage/contractors", "Contractors"),
     ("/manage/attendance", "Attendance"),

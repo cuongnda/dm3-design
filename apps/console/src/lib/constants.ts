@@ -44,7 +44,6 @@ export const ROUTES = {
   // MANAGE
   users: '/manage/users',
   departments: '/manage/departments',
-  identities: '/manage/identities',
   contractors: '/manage/contractors',
   attendance: '/manage/attendance',
   deliveries: '/manage/deliveries',

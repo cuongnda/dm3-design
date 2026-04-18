@@ -141,7 +141,6 @@ export function DashboardPage() {
       domain: t('domain.manage'), colorCls: 'text-manage', emoji: '👤',
       viewLink: t('health.viewPeople'),
       items: [
-        { module: t('modules.identities'), status: 'ok', detail: '✓ Active' },
         { module: t('modules.visitors'), status: 'ok', detail: '✓ 3 waiting' },
         { module: t('modules.attendance'), status: 'ok', detail: '✓ Online' },
         { module: t('modules.contractors'), status: 'ok', detail: '✓ 34 on-site' },

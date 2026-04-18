@@ -31,9 +31,6 @@ export function SearchCommand({ open, onOpenChange }: SearchCommandProps) {
           <CommandItem onSelect={() => go(ROUTES.accessControl)}>
             🕐 Main Entrance Door
           </CommandItem>
-          <CommandItem onSelect={() => go(ROUTES.identities)}>
-            🕐 Nguyen Van A — Employee
-          </CommandItem>
           <CommandItem onSelect={() => go(ROUTES.users)}>
             🕐 User Management
           </CommandItem>

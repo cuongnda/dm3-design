@@ -114,12 +114,6 @@ const AccessTimeFormPage2 = lazyWithRetry(() =>
 );
 
 // MANAGE
-const IdentitiesPage = lazyWithRetry(() =>
-  import('@/features/manage/identities/IdentitiesPage').then((m) => ({ default: m.IdentitiesPage }))
-);
-const PersonDetailPage = lazyWithRetry(() =>
-  import('@/features/manage/identities/PersonDetailPage').then((m) => ({ default: m.PersonDetailPage }))
-);
 const UserManagementPage = lazyWithRetry(() =>
   import('@/features/user-management/UserManagementPage').then((m) => ({ default: m.UserManagementPage }))
 );
@@ -165,9 +159,6 @@ const AttendancePage = lazyWithRetry(() =>
 );
 const DeliveriesPage = lazyWithRetry(() =>
   import('@/features/manage/deliveries/DeliveriesPage').then((m) => ({ default: m.DeliveriesPage }))
-);
-const GroupsPage = lazyWithRetry(() =>
-  import('@/features/manage/identities/GroupsPage').then((m) => ({ default: m.GroupsPage }))
 );
 const ProvisioningPage = lazyWithRetry(() =>
   import('@/features/manage/provisioning/ProvisioningPage').then((m) => ({ default: m.ProvisioningPage }))
@@ -389,9 +380,6 @@ export const Router = createBrowserRouter([
               // Vehicle registry moved to parking plugin (see docs/changelog/2026-04-12-parking-access-integration.md)
               { path: 'manage/vehicles', element: <Navigate to="/parking/vehicles" replace /> },
               { path: 'manage/departments', element: <LazyWrap><DepartmentManagementPage /></LazyWrap> },
-              { path: 'manage/identities', element: <LazyWrap><IdentitiesPage /></LazyWrap> },
-              { path: 'manage/identities/:id', element: <LazyWrap><PersonDetailPage /></LazyWrap> },
-              { path: 'manage/identities/groups', element: <LazyWrap><GroupsPage /></LazyWrap> },
               { path: 'manage/contractors', element: <LazyWrap><ContractorsPage /></LazyWrap> },
 
               // VISITORS

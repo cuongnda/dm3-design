@@ -28,7 +28,6 @@
   "modules.intrusion": "Intrusion Detection",
   "modules.intercom": "Intercom",
   "modules.aiDetection": "AI Detection",
-  "modules.identities": "Identities",
   "modules.visitors": "Visitors",
   "modules.attendance": "Attendance",
   "modules.contractors": "Contractors",
