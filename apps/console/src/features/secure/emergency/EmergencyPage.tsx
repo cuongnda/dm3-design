@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { EmergencyPlanModal } from './EmergencyPlanModal';
 import {
   PageHeader,
   DataTable,
@@ -68,9 +68,10 @@ const POLL_INTERVAL = 5000;
 
 export function EmergencyPage() {
   const { t } = useTranslation('secure');
-  const navigate = useNavigate();
 
   const [plans, setPlans] = useState<EmergencyPlanDTO[]>([]);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+  const [showPlanModal, setShowPlanModal] = useState(false);
   const [incidents, setIncidents] = useState<EmergencyIncidentDTO[]>([]);
   const [activeIncidents, setActiveIncidents] = useState<EmergencyIncidentDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -256,7 +257,11 @@ export function EmergencyPage() {
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 basis-0 flex-col gap-4 overflow-hidden">
       <PageHeader title={t('emergency.title')} description={t('emergency.description')}>
-        <Button size="sm" onClick={() => navigate('/secure/emergency/plans/new')}>
+        <Button
+          data-testid="emergency-button-create"
+          size="sm"
+          onClick={() => { setEditingPlanId(null); setShowPlanModal(true); }}
+        >
           <Plus size={14} className="mr-1.5" /> New Plan
         </Button>
       </PageHeader>
@@ -346,7 +351,7 @@ export function EmergencyPage() {
               <Badge variant="outline" className={cn('text-[10px]', plan.enabled ? 'text-success border-success/30' : 'text-muted-foreground')}>
                 {plan.enabled ? t('emergency.statusActive') : t('emergency.statusDisabled')}
               </Badge>
-              <Button data-testid={`emergency-button-edit-${plan.id}`} variant="ghost" size="sm" onClick={() => navigate(`/secure/emergency/plans/${plan.id}/edit`)}>
+              <Button data-testid={`emergency-button-edit-${plan.id}`} variant="ghost" size="sm" onClick={() => { setEditingPlanId(plan.id); setShowPlanModal(true); }}>
                 <Edit size={14} />
               </Button>
               <Button data-testid={`emergency-button-delete-${plan.id}`} variant="ghost" size="sm" className="text-destructive" onClick={() => setDeletingPlan(plan)}>
@@ -410,6 +415,14 @@ export function EmergencyPage() {
           Delete <strong>"{deletingPlan?.name}"</strong>? This cannot be undone.
         </p>
       </AppModal>
+
+      {/* ── Plan create/edit wizard ────────────────────────── */}
+      <EmergencyPlanModal
+        open={showPlanModal}
+        onOpenChange={(v) => { setShowPlanModal(v); if (!v) setEditingPlanId(null); }}
+        planId={editingPlanId}
+        onSaved={loadPlans}
+      />
     </div>
   );
 }

@@ -80,9 +80,6 @@ const AIDetectionPage = lazyWithRetry(() =>
 const EmergencyPage = lazyWithRetry(() =>
   import('@/features/secure/emergency/EmergencyPage').then((m) => ({ default: m.EmergencyPage }))
 );
-const EmergencyPlanFormPage = lazyWithRetry(() =>
-  import('@/features/secure/emergency/EmergencyPlanFormPage').then((m) => ({ default: m.EmergencyPlanFormPage }))
-);
 const AccessHistoryPage = lazyWithRetry(() =>
   import('@/features/secure/access-history/AccessHistoryPage').then((m) => ({ default: m.AccessHistoryPage }))
 );
@@ -373,8 +370,6 @@ export const Router = createBrowserRouter([
               { path: 'secure/intercom', element: <LazyWrap><IntercomPage /></LazyWrap> },
               { path: 'secure/ai-detection', element: <LazyWrap><AIDetectionPage /></LazyWrap> },
               { path: 'secure/emergency', element: <LazyWrap><EmergencyPage /></LazyWrap> },
-              { path: 'secure/emergency/plans/new', element: <LazyWrap><EmergencyPlanFormPage /></LazyWrap> },
-              { path: 'secure/emergency/plans/:id/edit', element: <LazyWrap><EmergencyPlanFormPage /></LazyWrap> },
               { path: 'secure/access-history', element: <LazyWrap><AccessHistoryPage /></LazyWrap> },
 
               // ACCESS (new)
