@@ -185,5 +185,10 @@
   "cctv.backend.off": "Tắt",
   "cctv.lastFrame.never": "Chưa có",
   "cctv.lastFrame.justNow": "Vừa xong",
-  "cctv.cameras.notLinked": "Chưa liên kết điểm truy cập"
+  "cctv.cameras.notLinked": "Chưa liên kết điểm truy cập",
+  "cctv.live.retry": "Thử lại",
+  "cctv.live.diag": "Chẩn đoán",
+  "cctv.live.open": "Mở",
+  "cctv.live.diagnostics": "Chẩn đoán luồng",
+  "cctv.live.lastFramePrefix": "Khung hình cuối"
 }

@@ -1,8 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import Hls from 'hls.js';
-import { Maximize2, Video, VideoOff } from 'lucide-react';
+import {
+  ExternalLink,
+  Maximize2,
+  RotateCcw,
+  Stethoscope,
+  Video,
+  VideoOff,
+} from 'lucide-react';
 import { getCameraStreamUrls, type CameraDTO } from '@dm3/api-client';
+import { SeverityPill, deriveSeverity, type Severity } from './CameraStatusBadge';
 
 interface Props {
   camera: CameraDTO;
@@ -94,13 +103,38 @@ function attachHls(
   return hls;
 }
 
+function formatLastFrame(iso?: string | null): string | null {
+  if (!iso) return null;
+  const age = Date.now() - new Date(iso).getTime();
+  if (age < 60_000) return 'just now';
+  if (age < 3_600_000) return `${Math.floor(age / 60_000)}m ago`;
+  if (age < 86_400_000) return `${Math.floor(age / 3_600_000)}h ago`;
+  return new Date(iso).toLocaleString();
+}
+
+function maskRtsp(url?: string | null): string {
+  if (!url) return '—';
+  try {
+    const u = new URL(url);
+    if (u.password) u.password = '***';
+    if (u.username) u.username = u.username.replace(/./g, '•');
+    return u.toString();
+  } catch {
+    return url.replace(/:([^:@/]+)@/, ':***@');
+  }
+}
+
 export function LiveTile({ camera }: Props) {
   const { t } = useTranslation('common');
+  const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [state, setState] = useState<TileState>('idle');
   const [transport, setTransport] = useState<Transport>('whep');
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
+  const [diagOpen, setDiagOpen] = useState(false);
   const [, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -110,11 +144,15 @@ export function LiveTile({ camera }: Props) {
 
     (async () => {
       setState('connecting');
+      setLastError(null);
       let urls;
       try {
         urls = await getCameraStreamUrls(camera.id);
-      } catch {
-        if (mounted) setState('error');
+      } catch (err: unknown) {
+        if (mounted) {
+          setLastError(err instanceof Error ? err.message : 'Failed to fetch stream URL');
+          setState('error');
+        }
         return;
       }
       if (!mounted) return;
@@ -130,8 +168,9 @@ export function LiveTile({ camera }: Props) {
         setTransport('whep');
         setState('playing');
         return;
-      } catch {
+      } catch (err: unknown) {
         if (!mounted || abortCtrl.signal.aborted) return;
+        setLastError(err instanceof Error ? err.message : 'WHEP failed');
         // fall through to HLS
       }
 
@@ -143,8 +182,12 @@ export function LiveTile({ camera }: Props) {
         hlsRef.current = hls;
         setTransport('hls');
         setState('playing');
-      } catch {
-        if (mounted) setState('error');
+        setLastError(null);
+      } catch (err: unknown) {
+        if (mounted) {
+          setLastError(err instanceof Error ? err.message : 'HLS failed');
+          setState('error');
+        }
       }
     })();
 
@@ -156,7 +199,7 @@ export function LiveTile({ camera }: Props) {
       hlsRef.current?.destroy();
       hlsRef.current = null;
     };
-  }, [camera.id]);
+  }, [camera.id, retryToken]);
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
@@ -165,6 +208,26 @@ export function LiveTile({ camera }: Props) {
     } else {
       document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
     }
+  };
+
+  const overlaySeverity = useMemo<Severity>(() => {
+    if (state === 'connecting') return 'no-stream';
+    if (state === 'error') {
+      return deriveSeverity(camera) === 'online' ? 'offline' : deriveSeverity(camera);
+    }
+    return deriveSeverity(camera);
+  }, [state, camera]);
+
+  const showOverlay = state !== 'playing';
+  const recording = camera.recording_mode === 'event_only';
+  const lastFrame = formatLastFrame(camera.last_checked_at);
+
+  const handleRetry = () => {
+    setRetryToken((n) => n + 1);
+  };
+
+  const handleOpenCamera = () => {
+    navigate(`/secure/cctv/cameras?id=${camera.id}`);
   };
 
   return (
@@ -182,17 +245,17 @@ export function LiveTile({ camera }: Props) {
         data-testid={`cctv-video-${camera.id}`}
       />
 
-      {/* Overlay: name + status */}
-      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-2 py-1 bg-gradient-to-b from-black/60 to-transparent">
-        <span className="text-[11px] font-medium text-white truncate">{camera.name}</span>
-        {state === 'connecting' && (
-          <span className="text-[10px] text-[#3B82F6]">{t('cctv.live.connecting')}</span>
-        )}
-        {state === 'error' && (
-          <VideoOff size={12} className="text-red-400" />
-        )}
-        {state === 'playing' && (
+      {/* Top overlay: name + transport tag */}
+      {state === 'playing' && (
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-2 py-1 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
+          <span className="text-[11px] font-medium text-white truncate">{camera.name}</span>
           <span className="flex items-center gap-1">
+            {recording && (
+              <span className="inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-red-400 bg-black/50 px-1.5 py-0.5 rounded">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                REC
+              </span>
+            )}
             {transport === 'hls' && (
               <span
                 className="text-[9px] uppercase tracking-wide text-amber-300"
@@ -203,15 +266,118 @@ export function LiveTile({ camera }: Props) {
             )}
             <Video size={12} className="text-emerald-400" />
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Error overlay */}
-      {state === 'error' && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-          <div className="text-center">
-            <VideoOff size={24} className="text-muted-foreground mx-auto mb-1" />
-            <p className="text-[11px] text-muted-foreground">{t('cctv.live.streamError')}</p>
+      {/* Degraded overlay (connecting / error / offline) */}
+      {showOverlay && (
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0A0E1A]/95 to-[#0A0E1A] flex flex-col justify-between p-3">
+          <div className="flex items-center justify-between">
+            <SeverityPill severity={overlaySeverity} size="xs" />
+            <span className="text-[10px] font-mono text-muted-foreground/70 truncate ml-2">
+              {camera.name}
+            </span>
+          </div>
+
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center space-y-1 px-2">
+              <VideoOff size={32} className="mx-auto text-muted-foreground/40" />
+              {state === 'connecting' ? (
+                <p className="text-[11px] text-muted-foreground">{t('cctv.live.connecting')}</p>
+              ) : (
+                <>
+                  <p className="text-[11px] text-muted-foreground">
+                    {t('cctv.live.lastFramePrefix')}: {lastFrame ?? t('cctv.lastFrame.never')}
+                  </p>
+                  {lastError && (
+                    <p className="text-[10px] text-destructive/80 max-w-[260px] truncate mx-auto">
+                      {lastError}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {state !== 'connecting' && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                onClick={handleRetry}
+                className="inline-flex items-center gap-1 px-2 py-1 bg-white/10 hover:bg-white/20 text-[10px] text-white rounded-full border border-white/10 transition-colors"
+                data-testid={`cctv-button-retry-${camera.id}`}
+              >
+                <RotateCcw size={10} /> {t('cctv.live.retry')}
+              </button>
+              <button
+                onClick={() => setDiagOpen(true)}
+                className="inline-flex items-center gap-1 px-2 py-1 bg-white/10 hover:bg-white/20 text-[10px] text-white rounded-full border border-white/10 transition-colors"
+                data-testid={`cctv-button-diag-${camera.id}`}
+              >
+                <Stethoscope size={10} /> {t('cctv.live.diag')}
+              </button>
+              <button
+                onClick={handleOpenCamera}
+                className="inline-flex items-center gap-1 px-2 py-1 bg-white/10 hover:bg-white/20 text-[10px] text-white rounded-full border border-white/10 transition-colors"
+                data-testid={`cctv-button-open-${camera.id}`}
+              >
+                <ExternalLink size={10} /> {t('cctv.live.open')}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Diagnostics modal */}
+      {diagOpen && (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 p-3"
+          onClick={() => setDiagOpen(false)}
+        >
+          <div
+            className="w-full max-w-[300px] bg-[#0D1117] border border-border rounded-lg p-3 text-left text-[11px] text-foreground"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[12px] font-semibold">{t('cctv.live.diagnostics')}</span>
+              <button
+                onClick={() => setDiagOpen(false)}
+                className="text-muted-foreground hover:text-foreground text-[14px] leading-none"
+                aria-label={t('cctv.common.close')}
+              >
+                ×
+              </button>
+            </div>
+            <dl className="space-y-1.5 font-mono text-[10px]">
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">RTSP</dt>
+                <dd className="truncate text-right">{maskRtsp(camera.rtsp_url)}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">Brand</dt>
+                <dd>{camera.brand ?? '—'}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">Last checked</dt>
+                <dd>{lastFrame ?? t('cctv.lastFrame.never')}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">Status</dt>
+                <dd className="capitalize">{camera.status}</dd>
+              </div>
+              {lastError && (
+                <div className="pt-1.5 border-t border-border">
+                  <dt className="text-muted-foreground mb-0.5">Last error</dt>
+                  <dd className="text-destructive/90 break-all">{lastError}</dd>
+                </div>
+              )}
+            </dl>
+            <button
+              onClick={() => { setDiagOpen(false); handleRetry(); }}
+              className="mt-3 w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 bg-[#3B82F6] hover:bg-[#2563EB] text-white text-[11px] rounded-md transition-colors"
+              data-testid={`cctv-button-diag-retry-${camera.id}`}
+            >
+              <RotateCcw size={11} /> {t('cctv.live.retry')}
+            </button>
           </div>
         </div>
       )}

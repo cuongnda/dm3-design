@@ -185,5 +185,10 @@
   "cctv.backend.off": "Off",
   "cctv.lastFrame.never": "Never",
   "cctv.lastFrame.justNow": "Just now",
-  "cctv.cameras.notLinked": "Not linked to access point"
+  "cctv.cameras.notLinked": "Not linked to access point",
+  "cctv.live.retry": "Retry",
+  "cctv.live.diag": "Diag",
+  "cctv.live.open": "Open",
+  "cctv.live.diagnostics": "Stream Diagnostics",
+  "cctv.live.lastFramePrefix": "Last frame"
 }
