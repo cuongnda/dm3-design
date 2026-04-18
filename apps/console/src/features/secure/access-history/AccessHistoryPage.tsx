@@ -27,10 +27,7 @@ import {
   TableCell,
   TablePaginationFooter,
   DatetimePicker,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+  AppModal,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -162,20 +159,20 @@ function PhotoCell({ photoRef, t }: { photoRef?: string; t: (k: string) => strin
         </span>
       </button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{t('accessHistory.photo.modal')}</DialogTitle>
-          </DialogHeader>
-          <div className="flex items-center justify-center bg-muted rounded overflow-hidden">
-            <img
-              src={url}
-              alt={t('accessHistory.photo.modal')}
-              className="max-h-[60vh] object-contain"
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
+      <AppModal
+        open={open}
+        onOpenChange={setOpen}
+        title={t('accessHistory.photo.modal')}
+        size="lg"
+      >
+        <div className="flex items-center justify-center bg-muted rounded overflow-hidden">
+          <img
+            src={url}
+            alt={t('accessHistory.photo.modal')}
+            className="max-h-[60vh] object-contain"
+          />
+        </div>
+      </AppModal>
     </>
   );
 }
