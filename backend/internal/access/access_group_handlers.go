@@ -648,6 +648,73 @@ func (h *AccessHandlers) RemoveAccessGroupAccessPoint(w http.ResponseWriter, r *
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// GET /access-groups/by-user/:userId — list all access groups a user belongs to.
+// Counterpart of /access-groups/:id/users: the user-detail page needs the
+// many-to-many *inverse* so it can render every group the user is in instead
+// of silently collapsing to the first one returned by GetUser's LEFT JOIN.
+func (h *AccessHandlers) ListUserAccessGroups(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "userId")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+	if cid == "" {
+		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+
+	type groupRow struct {
+		ID                string  `json:"id"`
+		Name              string  `json:"name"`
+		Description       *string `json:"description,omitempty"`
+		IsDefault         bool    `json:"is_default"`
+		AccessTimeID      *string `json:"access_time_id,omitempty"`
+		AccessTimeName    *string `json:"access_time_name,omitempty"`
+		AccessPointCount  int64   `json:"access_point_count"`
+		EffectiveFrom     *string `json:"effective_from,omitempty"`
+		EffectiveTo       *string `json:"effective_to,omitempty"`
+	}
+
+	rows, err := h.db.Pool.Query(r.Context(),
+		`SELECT ag.id, ag.name, ag.description, ag.is_default,
+		        ag.access_time_id::text, at.name,
+		        COALESCE((SELECT COUNT(*) FROM dm3_access.access_group_access_points agap
+		                  WHERE agap.access_group_id = ag.id), 0) AS access_point_count,
+		        agu.effective_from::text, agu.effective_to::text
+		 FROM dm3_access.access_group_users agu
+		 JOIN dm3_access.access_groups ag ON ag.id = agu.access_group_id
+		 LEFT JOIN dm3_access.access_times at ON at.id = ag.access_time_id
+		 WHERE agu.user_id = $1::uuid
+		   AND agu.tenant_id = $2::uuid
+		   AND ag.is_deleted = false
+		   AND (agu.effective_to IS NULL OR agu.effective_to > now())
+		 ORDER BY ag.name ASC`,
+		userID, cid,
+	)
+	if err != nil {
+		slog.Error("list user access groups error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	groups := []groupRow{}
+	for rows.Next() {
+		var g groupRow
+		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &g.IsDefault,
+			&g.AccessTimeID, &g.AccessTimeName, &g.AccessPointCount,
+			&g.EffectiveFrom, &g.EffectiveTo); err != nil {
+			slog.Error("list user access groups scan error", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		groups = append(groups, g)
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("list user access groups rows iteration error", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	httputil.JSON(w, http.StatusOK, map[string]any{"data": groups, "total": len(groups)})
+}
+
 // ─── NATS event publishing ────────────────────────────────────────────────────
 
 // publishAGEvent fires a NATS notification for access group mutations.
