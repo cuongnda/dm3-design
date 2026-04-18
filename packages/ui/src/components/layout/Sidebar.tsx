@@ -189,7 +189,11 @@ export function Sidebar() {
       .filter((s) => !s.pluginGate || enabledPlugins?.includes(s.pluginGate))
       .map((s) => ({
         ...s,
-        items: s.items.filter((i) => shouldRenderNavStatus(i.status)),
+        items: s.items.filter(
+          (i) =>
+            shouldRenderNavStatus(i.status) &&
+            (!i.pluginGate || enabledPlugins?.includes(i.pluginGate)),
+        ),
       }))
       .filter((s) => s.items.length > 0);
   }, [enabledPlugins]);

@@ -9,6 +9,8 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import type { NavStatus } from '../lib/navStatus';
 
+export type PluginGate = 'visitor' | 'parking' | 'cctv' | 'attendance';
+
 export interface NavItem {
   to: string;
   icon: LucideIcon;
@@ -17,6 +19,7 @@ export interface NavItem {
   status: NavStatus;
   testId?: string;
   badgeKey?: 'alerts';
+  pluginGate?: PluginGate;
 }
 
 export interface NavSection {
@@ -24,7 +27,7 @@ export interface NavSection {
   labelKey: string;
   labelFallback: string;
   color: string;
-  pluginGate?: 'visitor' | 'parking' | 'cctv';
+  pluginGate?: PluginGate;
   items: NavItem[];
 }
 
@@ -64,7 +67,7 @@ export const NAV_CONFIG: NavSection[] = [
       { to: '/manage/users', icon: UserCheck, labelKey: 'nav.users', labelFallback: 'Users', status: 'setup' },
       { to: '/manage/departments', icon: Building2, labelKey: 'nav.departments', labelFallback: 'Departments', status: 'setup' },
       { to: '/manage/contractors', icon: Wrench, labelKey: 'nav.contractors', labelFallback: 'Contractors', status: 'coming-soon' },
-      { to: '/manage/attendance', icon: Clock, labelKey: 'nav.attendance', labelFallback: 'Attendance', status: 'coming-soon' },
+      { to: '/manage/attendance', icon: Clock, labelKey: 'nav.attendance', labelFallback: 'Attendance', status: 'ready', pluginGate: 'attendance' },
       { to: '/manage/deliveries', icon: Package, labelKey: 'nav.deliveries', labelFallback: 'Deliveries', status: 'coming-soon' },
     ],
   },
