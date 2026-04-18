@@ -9,7 +9,8 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
-    "lint": "turbo lint"
+    "lint": "turbo lint",
+    "check:ui-primitives": "bash scripts/check-ui-primitives.sh"
   },
   "devDependencies": {
     "turbo": "^2.5.4"
