@@ -49,6 +49,7 @@ export function useAccessTimes(): UseAccessTimesReturn {
             const params = new URLSearchParams({
                 page: pagination.page.toString(),
                 limit: pagination.limit.toString(),
+                include_slots: 'true',
             });
             if (sortBy) params.set('sort_by', sortBy);
             if (sortDir) params.set('sort_order', sortDir);

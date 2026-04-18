@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Clock, Plus, Settings, Trash2 } from 'lucide-react';
+import { Clock, Plus, Settings, Trash2, Users } from 'lucide-react';
 import {
     Button,
     Input,
@@ -16,6 +16,8 @@ import { apiFetch } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useAccessTimes } from './hooks/useAccessTimes';
 import { AccessTimeFormModal } from './AccessTimeFormModal';
+import { WeekdayStrip } from './components/WeekdayStrip';
+import { summarizeSchedule } from './utils/schedule';
 import type { AccessTime } from './types';
 
 export function AccessTimesPage() {
@@ -68,31 +70,70 @@ export function AccessTimesPage() {
             header: t('columns.name', 'Name'),
             sortable: true,
             render: (at) => (
-                <div className="flex items-center gap-3">
-                    <div className={`w-2.5 h-2.5 rounded-full ${at.is_active ? 'bg-green-500' : 'bg-gray-400'}`} />
-                    <div>
-                        <p className="text-[13px] font-medium">{at.name}</p>
-                        {at.description && <p className="text-[11px] text-muted-foreground">{at.description}</p>}
+                <div className="flex items-center gap-3 min-w-0">
+                    <div
+                        className={`w-2.5 h-2.5 rounded-full shrink-0 ${at.is_active ? 'bg-green-500' : 'bg-gray-400'}`}
+                        title={at.is_active ? t('badge.active', 'Active') : t('badge.inactive', 'Inactive')}
+                    />
+                    <div className="min-w-0">
+                        <p className="text-[13px] font-medium truncate">{at.name}</p>
+                        {at.description && (
+                            <p className="text-[11px] text-muted-foreground truncate">{at.description}</p>
+                        )}
                     </div>
                 </div>
             ),
         },
         {
-            key: 'timezone',
-            header: t('columns.timezone', 'Timezone'),
-            sortable: true,
-            render: (at) => <span className="text-[13px] text-muted-foreground">{at.timezone}</span>,
+            key: 'schedule',
+            header: t('columns.schedule', 'Schedule'),
+            render: (at) => {
+                const summary = summarizeSchedule(at.slots);
+                return (
+                    <div className="flex items-center gap-3 min-w-0">
+                        <WeekdayStrip slots={at.slots} size="sm" />
+                        <div className="min-w-0">
+                            <p
+                                className={`text-[13px] truncate ${
+                                    summary.headline === 'No schedule' ? 'text-muted-foreground italic' : 'text-foreground'
+                                }`}
+                            >
+                                {summary.headline}
+                            </p>
+                            {summary.detail && (
+                                <p className="text-[11px] text-muted-foreground truncate">{summary.detail}</p>
+                            )}
+                        </div>
+                    </div>
+                );
+            },
         },
         {
-            key: 'is_active',
-            header: t('columns.active', 'Status'),
-            width: '80px',
+            key: 'timezone',
+            header: t('columns.timezone', 'Timezone'),
+            width: '140px',
             sortable: true,
-            render: (at) => (
-                <Badge variant={at.is_active ? 'default' : 'secondary'}>
-                    {at.is_active ? t('badge.active', 'Active') : t('badge.inactive', 'Inactive')}
-                </Badge>
-            ),
+            render: (at) => <span className="text-[12px] text-muted-foreground">{at.timezone}</span>,
+        },
+        {
+            key: 'group_count',
+            header: t('columns.groups', 'Groups'),
+            width: '88px',
+            sortable: true,
+            render: (at) => {
+                const count = at.group_count ?? 0;
+                return (
+                    <div
+                        className="inline-flex items-center gap-1.5"
+                        title={count === 0 ? t('tooltips.noGroups', 'Not linked to any access group') : undefined}
+                    >
+                        <Users size={12} className={count > 0 ? 'text-manage' : 'text-muted-foreground/50'} />
+                        <span className={`text-[12px] font-medium ${count > 0 ? 'text-foreground' : 'text-muted-foreground/60'}`}>
+                            {count}
+                        </span>
+                    </div>
+                );
+            },
         },
         {
             key: 'slots',
@@ -155,7 +196,7 @@ export function AccessTimesPage() {
 
                 {/* Stats */}
                 {!loading && (
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-4 gap-3">
                         <Card className="p-3">
                             <div className="text-2xl font-bold">{pagination.total}</div>
                             <div className="text-xs text-muted-foreground">{t('stats.total', 'Total')}</div>
@@ -165,8 +206,12 @@ export function AccessTimesPage() {
                             <div className="text-xs text-muted-foreground">{t('stats.active', 'Active')}</div>
                         </Card>
                         <Card className="p-3">
-                            <div className="text-2xl font-bold">{accessTimes.filter(a => !a.is_active).length}</div>
-                            <div className="text-xs text-muted-foreground">{t('stats.inactive', 'Inactive')}</div>
+                            <div className="text-2xl font-bold">{accessTimes.reduce((sum, a) => sum + (a.group_count ?? 0), 0)}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.linkedGroups', 'Linked Groups')}</div>
+                        </Card>
+                        <Card className="p-3">
+                            <div className="text-2xl font-bold">{accessTimes.filter(a => (a.group_count ?? 0) === 0).length}</div>
+                            <div className="text-xs text-muted-foreground">{t('stats.unused', 'Unused')}</div>
                         </Card>
                     </div>
                 )}
@@ -220,6 +265,7 @@ export function AccessTimesPage() {
                         { value: 'timezone', label: t('columns.timezone', 'Timezone') },
                         { value: 'is_active', label: t('columns.active', 'Status') },
                         { value: 'slot_count', label: t('columns.slots', 'Slots') },
+                        { value: 'group_count', label: t('columns.groups', 'Groups') },
                     ]}
                     sortBy={sortBy}
                     sortDir={sortDir}
