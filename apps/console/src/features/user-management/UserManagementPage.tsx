@@ -5,6 +5,7 @@ import { Plus, Edit, Trash2, Trash, Users } from 'lucide-react';
 import { Button, Input, Multiselect, Badge, AppModal, DataTable, type Column, Card, TablePaginationFooter } from '@dm3/ui';
 import { apiFetch, assetUrl } from '@/lib/api';
 import { toast } from '@/lib/toast';
+import { CreateUserModal } from './CreateUserModal';
 import type { User } from './types';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
@@ -38,6 +39,7 @@ export function UserManagementPage() {
     const [pageSize, setPageSize] = useState(20);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
+    const [showCreateModal, setShowCreateModal] = useState(false);
     const [statusFilter, setStatusFilter] = useState<string[]>([]);
     const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
     const [sortBy, setSortBy] = useState<string | null>('user_code');
@@ -218,7 +220,11 @@ export function UserManagementPage() {
                         <h1 className="text-[18px] font-semibold text-foreground">{t('title')}</h1>
                         <p className="text-[13px] text-muted-foreground">{t('description')}</p>
                     </div>
-                    <Button size="sm" onClick={() => navigate('/manage/users/new')}>
+                    <Button
+                        size="sm"
+                        onClick={() => setShowCreateModal(true)}
+                        data-testid="user-button-create"
+                    >
                         <Plus size={14} className="mr-1.5" />
                         {t('addUser')}
                     </Button>
@@ -403,6 +409,13 @@ export function UserManagementPage() {
                     {t('delete.bulkSuffix', 'users? This cannot be undone.')}
                 </p>
             </AppModal>
+
+            {/* Create */}
+            <CreateUserModal
+                open={showCreateModal}
+                onOpenChange={setShowCreateModal}
+                onCreated={fetchUsers}
+            />
         </div>
     );
 }

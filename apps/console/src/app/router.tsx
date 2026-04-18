@@ -396,7 +396,6 @@ export const Router = createBrowserRouter([
 
               // MANAGE
               { path: 'manage/users', element: <LazyWrap><UserManagementPage /></LazyWrap> },
-              { path: 'manage/users/new', element: <LazyWrap><UserDetailPage /></LazyWrap> },
               { path: 'manage/users/:id', element: <LazyWrap><UserDetailPage /></LazyWrap> },
               // Vehicle registry moved to parking plugin (see docs/changelog/2026-04-12-parking-access-integration.md)
               { path: 'manage/vehicles', element: <Navigate to="/parking/vehicles" replace /> },
