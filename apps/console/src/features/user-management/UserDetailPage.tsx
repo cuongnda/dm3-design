@@ -5,7 +5,7 @@ import {
   ArrowLeft, Trash2, User, Camera, CreditCard, Plus, ShieldCheck,
   KeyRound, Fingerprint, QrCode, Save, X, Info, DoorOpen, Car,
   ScanLine, Search, Unlink, Mail, Phone, Hash, Pencil, Radio,
-  Building2, Calendar, Shield, Clock, Briefcase, MapPin,
+  Building2, Calendar, Shield, Clock, Briefcase, MapPin, FileText,
 } from 'lucide-react';
 import {
   Button, Input, Label, Badge, AppModal, Select, SelectOption,
@@ -15,6 +15,8 @@ import { useBreadcrumbStore } from '@dm3/ui';
 import { apiFetch, assetUrl } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import type { User as UserType } from './types';
+import { UserSummaryCard } from './components/UserSummaryCard';
+import { UserAuditTab } from './components/UserAuditTab';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -900,8 +902,8 @@ export function UserDetailPage() {
                   </Badge>
                 )}
               </div>
-              {!isNew && <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                {user?.department_name && (
+              {!isNew && user && <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                {user.department_name && (
                   <span className="text-[12px] text-muted-foreground flex items-center gap-1">
                     <Building2 size={11} />
                     {user.department_name}
@@ -963,11 +965,27 @@ export function UserDetailPage() {
         </div>
       </div>
 
-      {/* ── Tabs (card container — same pattern as AccessGroupDetailPage) ── */}
+      {/* ── Content row: summary rail + tabs ──────────────────────────── */}
+      <div className="flex flex-col xl:flex-row gap-4 min-h-0 flex-1 overflow-hidden">
+        {!isNew && user && (
+          <div className="xl:order-last xl:w-[260px] xl:shrink-0">
+            <UserSummaryCard
+              user={user}
+              userGroups={userGroups}
+              credentials={credentials}
+              loadingGroups={loadingUserGroups}
+              loadingCreds={loadingCreds}
+              onAssignAccessGroup={() => setShowAddToGroupModal(true)}
+              onGoToAccessTab={() => setActiveTab('access')}
+              onGoToCredentialsTab={() => setActiveTab('credentials')}
+            />
+          </div>
+        )}
+
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
-        className="flex flex-col flex-1 min-h-0 overflow-hidden"
+        className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-1 py-1">
           <TabsList variant="line">
@@ -975,21 +993,21 @@ export function UserDetailPage() {
               <User size={13} className="mr-1.5" />
               {t('tab.userInfo')}
             </TabsTrigger>
-            <TabsTrigger value="detail" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-detail">
-              <Info size={13} className="mr-1.5" />
-              {t('tab.detail')}
-            </TabsTrigger>
-            {!isNew && <TabsTrigger value="credentials" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-card-list">
-              <CreditCard size={13} className="mr-1.5" />
-              {t('tab.cardList')} ({credentials.length})
-            </TabsTrigger>}
             {!isNew && <TabsTrigger value="access" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-access-group">
               <DoorOpen size={13} className="mr-1.5" />
               {t('tab.accessGroup')} ({userGroups.length})
             </TabsTrigger>}
+            {!isNew && <TabsTrigger value="credentials" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-card-list">
+              <CreditCard size={13} className="mr-1.5" />
+              {t('tab.cardList')} ({credentials.length})
+            </TabsTrigger>}
             {!isNew && <TabsTrigger value="vehicles" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-vehicle">
               <Car size={13} className="mr-1.5" />
               {t('tab.vehicles')} ({userVehicles.length})
+            </TabsTrigger>}
+            {!isNew && <TabsTrigger value="audit" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-audit">
+              <FileText size={13} className="mr-1.5" />
+              {t('tab.audit')}
             </TabsTrigger>}
           </TabsList>
 
@@ -1349,7 +1367,7 @@ export function UserDetailPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label>{t('modal.userCode', 'User Code')}</Label>
-                <p className="text-[13px] py-1 font-mono text-muted-foreground">{user.user_code || '—'}</p>
+                <p className="text-[13px] py-1 font-mono text-muted-foreground">{user?.user_code || '—'}</p>
               </div>
               <div className="space-y-1">
                 <Label>{t('modal.masterCard')}</Label>
@@ -1376,48 +1394,54 @@ export function UserDetailPage() {
                 <SelectOption value="suspended">{t('status.suspended', 'Suspended')}</SelectOption>
               </Select>
             </div>
-          </div>
-        </TabsContent>
-
-        {/* ╔══ Detail Tab ════════════════════════════════════════════════ */}
-        <TabsContent value="detail" className="min-h-0 flex-1 overflow-auto p-4">
-          <div className="max-w-3xl space-y-5">
-            <div className="space-y-1">
-              <Label>{t('modal.address', 'Address')}</Label>
-              <Input value={String(editForm.address ?? '')} onChange={set('address')} data-testid="user-input-address" />
-            </div>
 
             <div className="space-y-1">
               <Label>{t('modal.phone', 'Phone')}</Label>
               <Input value={String(editForm.phone ?? '')} onChange={set('phone')} data-testid="user-input-phone" />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label>{t('modal.created')}</Label>
-                <p className="text-[13px] py-1 text-muted-foreground flex items-center gap-1.5">
-                  <Clock size={12} />
-                  {user.created_on ? new Date(user.created_on).toLocaleString() : '—'}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <Label>{t('modal.updated')}</Label>
-                <p className="text-[13px] py-1 text-muted-foreground flex items-center gap-1.5">
-                  <Clock size={12} />
-                  {user.updated_on ? new Date(user.updated_on).toLocaleString() : '—'}
-                </p>
-              </div>
+            <div className="space-y-1">
+              <Label>{t('modal.address', 'Address')}</Label>
+              <Input value={String(editForm.address ?? '')} onChange={set('address')} data-testid="user-input-address" />
             </div>
 
-            {user.account_id && (
-              <div className="space-y-1">
-                <Label>{t('modal.accountId')}</Label>
-                <p className="font-mono text-[12px] py-1 text-muted-foreground">{user.account_id}</p>
+            {!isNew && user && (
+              <div className="pt-3 mt-3 border-t border-border/50 space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-[11px] text-muted-foreground">{t('modal.created')}</Label>
+                    <p className="text-[12px] py-0.5 text-muted-foreground flex items-center gap-1.5">
+                      <Clock size={11} />
+                      {user.created_on ? new Date(user.created_on).toLocaleString() : '—'}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px] text-muted-foreground">{t('modal.updated')}</Label>
+                    <p className="text-[12px] py-0.5 text-muted-foreground flex items-center gap-1.5">
+                      <Clock size={11} />
+                      {user.updated_on ? new Date(user.updated_on).toLocaleString() : '—'}
+                    </p>
+                  </div>
+                </div>
+                {user.account_id && (
+                  <div className="space-y-1">
+                    <Label className="text-[11px] text-muted-foreground">{t('modal.accountId')}</Label>
+                    <p className="font-mono text-[12px] py-0.5 text-muted-foreground">{user.account_id}</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </TabsContent>
+
+        {/* ╔══ Audit Tab ═════════════════════════════════════════════════ */}
+        {!isNew && id && (
+          <TabsContent value="audit" className="min-h-0 flex-1 overflow-auto p-4">
+            <UserAuditTab userId={id} />
+          </TabsContent>
+        )}
       </Tabs>
+      </div>
 
       {/* ── Modals ───────────────────────────────────────────────────────── */}
 
@@ -1425,8 +1449,8 @@ export function UserDetailPage() {
         open={showAddCred}
         onOpenChange={setShowAddCred}
         onSubmit={handleAddCredential}
-        defaultValidFrom={user?.effective_date ?? editForm.effective_date}
-        defaultValidUntil={user?.expired_date ?? editForm.expired_date}
+        defaultValidFrom={user?.effective_date ?? (typeof editForm.effective_date === 'string' ? editForm.effective_date : undefined)}
+        defaultValidUntil={user?.expired_date ?? (typeof editForm.expired_date === 'string' ? editForm.expired_date : undefined)}
       />
 
       <AddCredentialModal
@@ -1434,8 +1458,8 @@ export function UserDetailPage() {
         onOpenChange={(v) => { if (!v) setEditingCred(null); }}
         onSubmit={handleUpdateCredential}
         editData={editingCred}
-        defaultValidFrom={user?.effective_date ?? editForm.effective_date}
-        defaultValidUntil={user?.expired_date ?? editForm.expired_date}
+        defaultValidFrom={user?.effective_date ?? (typeof editForm.effective_date === 'string' ? editForm.effective_date : undefined)}
+        defaultValidUntil={user?.expired_date ?? (typeof editForm.expired_date === 'string' ? editForm.expired_date : undefined)}
       />
 
       {id && (
