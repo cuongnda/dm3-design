@@ -21,6 +21,7 @@ import { Separator } from '../ui/separator';
 import { NAV_CONFIG, findActiveSectionKey, type NavItem, type NavSection } from '../../config/navConfig';
 import { isNavClickable, shouldRenderNavStatus } from '../../lib/navStatus';
 import { NavStatusPill } from './NavStatusPill';
+import { HealthStrip } from './HealthStrip';
 
 interface NavItemRowProps {
   item: NavItem;
@@ -249,6 +250,8 @@ export function Sidebar() {
 
       {/* Bottom — pinned */}
       <div className="shrink-0 bg-sidebar">
+        <Separator className="bg-sidebar-border" />
+        <HealthStrip variant="sidebar" collapsed={c} />
         <Separator className="bg-sidebar-border" />
         <div className={cn('py-1', c ? 'px-2 space-y-2' : 'space-y-0.5')}>
           <SidebarNavItem
