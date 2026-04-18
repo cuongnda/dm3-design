@@ -20,6 +20,7 @@ import {
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useAccessGroups } from './hooks/useAccessGroups';
+import { CreateAccessGroupWizard } from './CreateAccessGroupWizard';
 import type { AccessGroup, AccessGroupFormData, AccessTime } from './types';
 
 export function AccessGroupsPage() {
@@ -35,7 +36,6 @@ export function AccessGroupsPage() {
         sortDir,
         setSearch,
         fetchAccessGroups,
-        createAccessGroup,
         updateAccessGroup,
         deleteAccessGroup,
         changePage,
@@ -68,24 +68,12 @@ export function AccessGroupsPage() {
         [accessTimes],
     );
 
-    const openCreateModal = () => {
-        setFormData({ name: '', is_default: false });
-        setFormError('');
-        setShowCreateModal(true);
-    };
+    const openCreateModal = () => setShowCreateModal(true);
 
     const openEditModal = (group: AccessGroup) => {
         setFormData({ name: group.name, description: group.description, is_default: group.is_default, access_time_id: group.access_time_id });
         setFormError('');
         setEditingGroup(group);
-    };
-
-    const handleCreateSubmit = async () => {
-        if (!formData.name.trim()) { setFormError(t('validation.nameRequired', 'Name is required')); return; }
-        setSubmitting(true);
-        const success = await createAccessGroup(formData);
-        setSubmitting(false);
-        if (success) setShowCreateModal(false);
     };
 
     const handleEditSubmit = async () => {
@@ -378,28 +366,16 @@ export function AccessGroupsPage() {
                 />
             </div>
 
-            {/* Create Modal */}
-            <AppModal
+            {/* Create Wizard (Info → Access Points → Users) */}
+            <CreateAccessGroupWizard
                 open={showCreateModal}
                 onOpenChange={setShowCreateModal}
-                title={
-                    <span className="flex items-center gap-2">
-                        <Shield size={16} className="text-primary" />
-                        {t('createGroup', 'New Access Group')}
-                    </span>
-                }
-                size="sm"
-                showCancelButton
-                cancelLabel={t('cancel', 'Cancel')}
-                primaryAction={{
-                    label: submitting ? t('creating', 'Creating...') : t('create', 'Create'),
-                    onClick: handleCreateSubmit,
-                    disabled: submitting,
-                    loading: submitting,
+                accessTimes={accessTimes}
+                onCompleted={(createdId) => {
+                    fetchAccessGroups();
+                    if (createdId) navigate(`/access/access-groups/${createdId}`);
                 }}
-            >
-                {GroupFormContent}
-            </AppModal>
+            />
 
             {/* Edit Modal */}
             <AppModal

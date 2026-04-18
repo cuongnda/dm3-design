@@ -28,7 +28,7 @@ interface UseAccessGroupsReturn {
     sortDir: 'asc' | 'desc' | null;
     setSearch: (value: string) => void;
     fetchAccessGroups: () => Promise<void>;
-    createAccessGroup: (data: AccessGroupFormData) => Promise<boolean>;
+    createAccessGroup: (data: AccessGroupFormData) => Promise<{ id: string } | null>;
     updateAccessGroup: (id: string, data: AccessGroupFormData) => Promise<boolean>;
     deleteAccessGroup: (id: string) => Promise<boolean>;
     changePage: (page: number) => void;
@@ -90,20 +90,22 @@ export function useAccessGroups(): UseAccessGroupsReturn {
     }, [pagination.page, pagination.limit, debouncedSearch, sortBy, sortDir]);
 
     const createAccessGroup = useCallback(
-        async (data: AccessGroupFormData): Promise<boolean> => {
+        async (data: AccessGroupFormData): Promise<{ id: string } | null> => {
             try {
-                await apiFetch('/api/v1/access/access-groups', {
-                    method: 'POST',
-                    body: JSON.stringify(data),
-                });
+                const res = await apiFetch<{ id: string } | { data: { id: string } }>(
+                    '/api/v1/access/access-groups',
+                    { method: 'POST', body: JSON.stringify(data) },
+                );
+                // Backend may return the record directly or wrapped in { data }
+                const createdId = ('id' in res ? res.id : res.data?.id) ?? '';
                 await fetchAccessGroups();
                 toast(t('toast.created'), 'success');
-                return true;
+                return createdId ? { id: createdId } : { id: '' };
             } catch (err) {
                 const message = err instanceof Error ? err.message : 'Failed to create access group';
                 setError(message);
                 toast(message, 'error');
-                return false;
+                return null;
             }
         },
         [fetchAccessGroups, t],
