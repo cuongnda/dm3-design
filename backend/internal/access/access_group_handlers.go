@@ -433,26 +433,31 @@ func (h *AccessHandlers) ListAccessGroupUsers(w http.ResponseWriter, r *http.Req
 	}
 
 	type userRow struct {
-		ID            string  `json:"id"`
-		FirstName     string  `json:"first_name"`
-		LastName      string  `json:"last_name"`
-		Email         *string `json:"email,omitempty"`
-		Position      *string `json:"position,omitempty"`
-		Status        string  `json:"status"`
-		EffectiveFrom *string `json:"effective_from,omitempty"`
-		EffectiveTo   *string `json:"effective_to,omitempty"`
+		ID             string  `json:"id"`
+		FirstName      string  `json:"first_name"`
+		LastName       string  `json:"last_name"`
+		Email          *string `json:"email,omitempty"`
+		Position       *string `json:"position,omitempty"`
+		DepartmentID   *string `json:"department_id,omitempty"`
+		DepartmentName *string `json:"department_name,omitempty"`
+		Status         string  `json:"status"`
+		EffectiveFrom  *string `json:"effective_from,omitempty"`
+		EffectiveTo    *string `json:"effective_to,omitempty"`
 	}
 
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT u.id, u.first_name, u.last_name, u.email, u.position, u.status,
+		`SELECT u.id, u.first_name, u.last_name, u.email, u.position,
+		        u.department_id::text, d.name AS department_name,
+		        u.status,
 		        agu.effective_from::text, agu.effective_to::text
 		 FROM dm3_access.access_group_users agu
 		 JOIN dm3_identity.users u ON u.id = agu.user_id
+		 LEFT JOIN dm3_identity.departments d ON d.id = u.department_id
 		 WHERE agu.access_group_id = $1::uuid
 		   AND agu.tenant_id = $2::uuid
 		   AND (u.is_deleted = false OR u.is_deleted IS NULL)
 		   AND (agu.effective_to IS NULL OR agu.effective_to > now())
-		 ORDER BY u.last_name ASC, u.first_name ASC`,
+		 ORDER BY d.name ASC NULLS LAST, u.last_name ASC, u.first_name ASC`,
 		groupID, cid,
 	)
 	if err != nil {
@@ -465,7 +470,8 @@ func (h *AccessHandlers) ListAccessGroupUsers(w http.ResponseWriter, r *http.Req
 	users := []userRow{}
 	for rows.Next() {
 		var u userRow
-		if err := rows.Scan(&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Position, &u.Status,
+		if err := rows.Scan(&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Position,
+			&u.DepartmentID, &u.DepartmentName, &u.Status,
 			&u.EffectiveFrom, &u.EffectiveTo); err != nil {
 			slog.Error("list access group users scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")

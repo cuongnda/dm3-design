@@ -25,6 +25,8 @@ interface GroupUser {
   last_name: string;
   email?: string;
   position?: string;
+  department_id?: string;
+  department_name?: string;
   status: string;
   effective_from?: string;
   effective_to?: string;
@@ -760,6 +762,13 @@ export function AccessGroupDetailPage() {
       header: t('userColumns.email', 'Email'),
       render: (u) => (
         <span className="text-[13px] text-muted-foreground">{u.email ?? '—'}</span>
+      ),
+    },
+    {
+      key: 'department',
+      header: t('userColumns.department', 'Department'),
+      render: (u) => (
+        <span className="text-[13px] text-muted-foreground">{u.department_name || '—'}</span>
       ),
     },
     {
