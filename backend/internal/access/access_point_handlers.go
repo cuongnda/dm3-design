@@ -20,7 +20,7 @@ func scanAccessPoint(row interface{ Scan(dest ...any) error }, ap *models.Access
 	return row.Scan(&ap.ID, &ap.TenantID, &ap.ZoneID, &ap.AccessTimeID,
 		&ap.Name, &ap.Description, &ap.MapX, &ap.MapY, &ap.MapRotation,
 		&ap.AccessDeviceCount, &ap.DeviceStatus, &ap.DoorState,
-		&ap.ZoneName, &ap.CreatedAt, &ap.UpdatedAt)
+		&ap.ZoneName, &ap.InAnyGroup, &ap.CreatedAt, &ap.UpdatedAt)
 }
 
 // scanAccessPointBasic scans a row without aggregated device/zone columns (for CREATE/UPDATE RETURNING).
@@ -81,6 +81,7 @@ func (h *AccessHandlers) ListAccessPoints(w http.ResponseWriter, r *http.Request
 		            WHEN 4 THEN 'held_close' WHEN 3 THEN 'held_open'
 		            WHEN 2 THEN 'open' WHEN 1 THEN 'closed' ELSE NULL END AS door_state,
 		       (SELECT z.name FROM dm3_access.zones z WHERE z.id = ap.zone_id) AS zone_name,
+		       EXISTS(SELECT 1 FROM dm3_access.access_group_access_points agap WHERE agap.access_point_id = ap.id) AS in_any_group,
 		       ap.created_at, ap.updated_at
 		FROM dm3_access.access_points ap
 		LEFT JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
@@ -176,6 +177,7 @@ func (h *AccessHandlers) GetAccessPoint(w http.ResponseWriter, r *http.Request) 
 		             WHEN 3 THEN 'held_open' WHEN 2 THEN 'open'
 		             WHEN 1 THEN 'closed' ELSE NULL END AS door_state,
 		        (SELECT z.name FROM dm3_access.zones z WHERE z.id = ap.zone_id) AS zone_name,
+		        EXISTS(SELECT 1 FROM dm3_access.access_group_access_points agap WHERE agap.access_point_id = ap.id) AS in_any_group,
 		        ap.created_at, ap.updated_at
 		 FROM dm3_access.access_points ap
 		 LEFT JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id

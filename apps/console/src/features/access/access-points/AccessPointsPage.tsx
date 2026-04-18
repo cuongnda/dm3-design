@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Plus, Edit, Trash2, Eye, Trash, Unlock, Lock, DoorOpen, DoorClosed, RotateCcw, ShieldAlert, AlertTriangle, MapPin } from 'lucide-react';
+import { Shield, Plus, Edit, Trash2, Eye, Trash, Unlock, Lock, DoorOpen, DoorClosed, RotateCcw, ShieldAlert, AlertTriangle, MapPin, Wifi, WifiOff, Unplug, MinusCircle, CircleCheck, CircleX } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import {
     Button,
@@ -20,6 +20,82 @@ import { useAccessPoints } from './hooks/useAccessPoints';
 import { toast } from '@/lib/toast';
 import type { AccessPoint, AccessPointFormData, Zone } from './types';
 import { buildZonePathMap, ZonePathLabel } from '../shared/zone-path';
+
+// ---------------------------------------------------------------------------
+// Health derivation: summarizes device connectivity + wiring completeness into
+// a single taxonomy used by the HealthChip below and (later) filters.
+// ---------------------------------------------------------------------------
+type HealthState = 'online' | 'degraded' | 'offline' | 'unassigned';
+
+function deriveHealth(ap: AccessPoint): HealthState {
+    if ((ap.access_device_count ?? 0) === 0) return 'unassigned';
+    if (ap.device_status === 'warning') return 'degraded';
+    if (ap.device_status === 'online') return 'online';
+    return 'offline';
+}
+
+interface HealthChipProps {
+    state: HealthState;
+    labels: Record<HealthState, string>;
+    tooltips?: Partial<Record<HealthState, string>>;
+}
+
+function HealthChip({ state, labels, tooltips }: HealthChipProps) {
+    const cfg: Record<HealthState, { color: string; icon: typeof Wifi }> = {
+        online:     { color: 'border-success/30 bg-success/10 text-success',                 icon: Wifi },
+        degraded:   { color: 'border-warning/30 bg-warning/10 text-warning',                 icon: AlertTriangle },
+        offline:    { color: 'border-destructive/30 bg-destructive/10 text-destructive',     icon: WifiOff },
+        unassigned: { color: 'border-border bg-muted/40 text-muted-foreground',              icon: Unplug },
+    };
+    const { color, icon: Icon } = cfg[state];
+    return (
+        <span
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium leading-none ${color}`}
+            title={tooltips?.[state] ?? labels[state]}
+        >
+            <Icon size={11} strokeWidth={2.2} />
+            {labels[state]}
+        </span>
+    );
+}
+
+// Completeness: three mini pills (Zone / Device / Group) showing whether each
+// relationship is present. Missing pieces are the most common "why doesn't
+// this work?" source of confusion, so we surface them as a glanceable row.
+interface CompletenessPillsProps {
+    hasZone: boolean;
+    hasDevice: boolean;
+    hasGroup: boolean;
+    labels: { zone: string; device: string; group: string };
+    missingTooltips: { zone: string; device: string; group: string };
+}
+
+function CompletenessPills({ hasZone, hasDevice, hasGroup, labels, missingTooltips }: CompletenessPillsProps) {
+    const Pill = ({ ok, label, missingTitle }: { ok: boolean; label: string; missingTitle: string }) => (
+        <span
+            className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none ${
+                ok
+                    ? 'border-success/30 bg-success/10 text-success'
+                    : 'border-destructive/30 bg-destructive/10 text-destructive'
+            }`}
+            title={ok ? label : missingTitle}
+        >
+            {ok ? <CircleCheck size={10} strokeWidth={2.2} /> : <CircleX size={10} strokeWidth={2.2} />}
+            {label}
+        </span>
+    );
+    return (
+        <div className="flex flex-wrap gap-1">
+            <Pill ok={hasZone}   label={labels.zone}   missingTitle={missingTooltips.zone} />
+            <Pill ok={hasDevice} label={labels.device} missingTitle={missingTooltips.device} />
+            <Pill ok={hasGroup}  label={labels.group}  missingTitle={missingTooltips.group} />
+        </div>
+    );
+}
+
+// Silence unused-import warnings for the icons reserved for future per-row
+// controls. Keeping the imports grouped makes the icon palette scannable.
+void MinusCircle;
 
 const doorStateConfig: Record<string, { color: string; label: string; icon: typeof Lock }> = {
     closed:     { color: 'border-success/30 bg-success/10 text-success',         label: 'Closed',      icon: Lock },
@@ -304,6 +380,30 @@ export function AccessPointsPage() {
 
     const withDevices = accessPoints.filter((ap) => (ap.access_device_count ?? 0) > 0).length;
 
+    const healthLabels: Record<HealthState, string> = {
+        online:     t('health.online', 'Online'),
+        degraded:   t('health.degraded', 'Degraded'),
+        offline:    t('health.offline', 'Offline'),
+        unassigned: t('health.unassigned', 'Unassigned'),
+    };
+    const healthTooltips: Record<HealthState, string> = {
+        online:     t('health.onlineTooltip', 'All bound devices are reachable.'),
+        degraded:   t('health.degradedTooltip', 'Some devices are offline or reporting a warning.'),
+        offline:    t('health.offlineTooltip', 'All bound devices are offline.'),
+        unassigned: t('health.unassignedTooltip', 'No device is wired to this access point yet.'),
+    };
+
+    const completenessLabels = {
+        zone:   t('completeness.zone', 'Zone'),
+        device: t('completeness.device', 'Device'),
+        group:  t('completeness.group', 'Group'),
+    };
+    const completenessMissing = {
+        zone:   t('completeness.zoneMissing', 'No zone assigned — location is unknown.'),
+        device: t('completeness.deviceMissing', 'No reader or controller is bound yet.'),
+        group:  t('completeness.groupMissing', 'Not linked to any access group — no one can use it.'),
+    };
+
     const columns: Column<AccessPoint>[] = [
         {
             key: 'name',
@@ -311,11 +411,11 @@ export function AccessPointsPage() {
             sortable: true,
             render: (ap) => (
                 <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-primary/60 shrink-0" />
-                    <div>
-                        <p className="text-[13px] font-medium">{ap.name}</p>
+                    <HealthChip state={deriveHealth(ap)} labels={healthLabels} tooltips={healthTooltips} />
+                    <div className="min-w-0">
+                        <p className="truncate text-[13px] font-medium">{ap.name}</p>
                         {ap.description && (
-                            <p className="text-[11px] text-muted-foreground">{ap.description}</p>
+                            <p className="truncate text-[11px] text-muted-foreground">{ap.description}</p>
                         )}
                     </div>
                 </div>
@@ -347,22 +447,18 @@ export function AccessPointsPage() {
             },
         },
         {
-            key: 'device_status',
-            header: t('columns.status', 'Status'),
-            width: '100px',
-            sortable: true,
-            render: (ap) => {
-                const s = ap.device_status;
-                const color = s === 'online' ? 'text-success' : s === 'warning' ? 'text-warning' : 'text-muted-foreground';
-                const dot = s === 'online' ? 'bg-success animate-pulse' : s === 'warning' ? 'bg-warning animate-pulse' : 'bg-muted-foreground';
-                const label = s === 'online' ? 'Online' : s === 'warning' ? 'Warning' : 'Offline';
-                return (
-                    <span className={`inline-flex items-center gap-1.5 text-[12px] font-medium ${color}`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
-                        {label}
-                    </span>
-                );
-            },
+            key: 'completeness',
+            header: t('columns.completeness', 'Completeness'),
+            width: '160px',
+            render: (ap) => (
+                <CompletenessPills
+                    hasZone={!!ap.zone_id}
+                    hasDevice={(ap.access_device_count ?? 0) > 0}
+                    hasGroup={!!ap.in_any_group}
+                    labels={completenessLabels}
+                    missingTooltips={completenessMissing}
+                />
+            ),
         },
         {
             key: 'door_state',

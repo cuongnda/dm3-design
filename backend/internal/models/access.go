@@ -92,6 +92,7 @@ type AccessPoint struct {
 	DeviceStatus      *string     `json:"device_status,omitempty"`  // online/offline — worst-case from bound devices
 	DoorState         *string     `json:"door_state,omitempty"`     // closed/open/held_open/forced/alarm — worst-case from bound devices
 	ZoneName          *string     `json:"zone_name,omitempty"`
+	InAnyGroup        bool        `json:"in_any_group"`             // true if this AP is bound to at least one access group
 	Zone              *Zone       `json:"zone,omitempty"`
 	AccessTime        *AccessTime `json:"access_time,omitempty"`
 	CreatedAt         time.Time   `json:"created_at"`

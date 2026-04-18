@@ -10,9 +10,10 @@ export interface AccessPoint {
   map_rotation?: number;
   map_label?: string;
   access_device_count: number;
-  device_status?: string;  // online | offline
+  device_status?: string;  // online | offline | warning
   door_state?: string;     // closed | open | held_open | forced | alarm
   zone_name?: string;
+  in_any_group?: boolean;  // true if bound to ≥1 access group
   created_at: string;
   updated_at: string;
 }
