@@ -160,6 +160,21 @@ const ContractorsPage = lazyWithRetry(() =>
 const AttendanceDailyPage = lazyWithRetry(() =>
   import('@/features/attendance/AttendanceDailyPage').then((m) => ({ default: m.AttendanceDailyPage }))
 );
+const ShiftsPage = lazyWithRetry(() =>
+  import('@/features/attendance/ShiftsPage').then((m) => ({ default: m.ShiftsPage }))
+);
+const LeaveRequestsPage = lazyWithRetry(() =>
+  import('@/features/attendance/LeaveRequestsPage').then((m) => ({ default: m.LeaveRequestsPage }))
+);
+const AttendanceSettingsPage = lazyWithRetry(() =>
+  import('@/features/attendance/AttendanceSettingsPage').then((m) => ({ default: m.AttendanceSettingsPage }))
+);
+const OvertimePage = lazyWithRetry(() =>
+  import('@/features/attendance/OvertimePage').then((m) => ({ default: m.OvertimePage }))
+);
+const AttendanceReportsPage = lazyWithRetry(() =>
+  import('@/features/attendance/AttendanceReportsPage').then((m) => ({ default: m.AttendanceReportsPage }))
+);
 const DeliveriesPage = lazyWithRetry(() =>
   import('@/features/manage/deliveries/DeliveriesPage').then((m) => ({ default: m.DeliveriesPage }))
 );
@@ -397,6 +412,11 @@ export const Router = createBrowserRouter([
               { path: 'visitors/recurring', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorRecurringPage /></LazyWrap></PluginGuard> },
               { path: 'visitors/settings', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorSettingsPage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance', element: <PluginGuard plugin="attendance"><LazyWrap><AttendanceDailyPage /></LazyWrap></PluginGuard> },
+              { path: 'manage/attendance/shifts', element: <PluginGuard plugin="attendance"><LazyWrap><ShiftsPage /></LazyWrap></PluginGuard> },
+              { path: 'manage/attendance/leave', element: <PluginGuard plugin="attendance"><LazyWrap><LeaveRequestsPage /></LazyWrap></PluginGuard> },
+              { path: 'manage/attendance/overtime', element: <PluginGuard plugin="attendance"><LazyWrap><OvertimePage /></LazyWrap></PluginGuard> },
+              { path: 'manage/attendance/reports', element: <PluginGuard plugin="attendance"><LazyWrap><AttendanceReportsPage /></LazyWrap></PluginGuard> },
+              { path: 'manage/attendance/settings', element: <PluginGuard plugin="attendance"><LazyWrap><AttendanceSettingsPage /></LazyWrap></PluginGuard> },
               { path: 'manage/deliveries', element: <LazyWrap><DeliveriesPage /></LazyWrap> },
               { path: 'manage/provisioning', element: <LazyWrap><ProvisioningPage /></LazyWrap> },
 

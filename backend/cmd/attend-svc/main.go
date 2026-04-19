@@ -111,6 +111,30 @@ func main() {
 
 		ar.Get("/records", handlers.ListRecords)
 		ar.Get("/records/summary", handlers.DailySummary)
+		ar.Get("/records/{id}", handlers.GetRecord)
+		ar.Patch("/records/{id}", handlers.AdjustRecord)
+
+		ar.Get("/shifts", handlers.ListShifts)
+		ar.Post("/shifts", handlers.CreateShift)
+		ar.Get("/shifts/{id}", handlers.GetShift)
+		ar.Patch("/shifts/{id}", handlers.UpdateShift)
+		ar.Delete("/shifts/{id}", handlers.ArchiveShift)
+
+		ar.Get("/leave/policies", handlers.ListLeavePolicies)
+		ar.Get("/leave/requests", handlers.ListLeaveRequests)
+		ar.Post("/leave/requests", handlers.CreateLeaveRequest)
+		ar.Post("/leave/requests/{id}/approve", handlers.ApproveLeaveRequest)
+		ar.Post("/leave/requests/{id}/reject", handlers.RejectLeaveRequest)
+		ar.Post("/leave/requests/{id}/cancel", handlers.CancelLeaveRequest)
+
+		ar.Get("/settings", handlers.GetSettings)
+		ar.Put("/settings", handlers.UpdateSettings)
+
+		ar.Get("/overtime", handlers.ListOvertime)
+		ar.Post("/overtime/{id}/approve", handlers.ApproveOvertime)
+		ar.Post("/overtime/{id}/reject", handlers.RejectOvertime)
+
+		ar.Get("/reports/summary", handlers.GetReport)
 	})
 
 	handlers.StartBackgroundJobs(ctx)

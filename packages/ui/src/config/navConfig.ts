@@ -127,11 +127,11 @@ export const NAV_CONFIG: NavSection[] = [
     pluginGate: 'attendance',
     items: [
       { to: '/manage/attendance', icon: ClipboardList, labelKey: 'nav.attendanceDaily', labelFallback: 'Daily', status: 'ready' },
-      { to: '/manage/attendance/shifts', icon: Clock, labelKey: 'nav.attendanceShifts', labelFallback: 'Shifts', status: 'coming-soon' },
-      { to: '/manage/attendance/overtime', icon: Timer, labelKey: 'nav.attendanceOvertime', labelFallback: 'Overtime', status: 'coming-soon' },
-      { to: '/manage/attendance/leave', icon: Plane, labelKey: 'nav.attendanceLeave', labelFallback: 'Leave', status: 'coming-soon' },
-      { to: '/manage/attendance/reports', icon: BarChart3, labelKey: 'nav.attendanceReports', labelFallback: 'Reports', status: 'coming-soon' },
-      { to: '/manage/attendance/settings', icon: SlidersHorizontal, labelKey: 'nav.attendanceSettings', labelFallback: 'Settings', status: 'coming-soon' },
+      { to: '/manage/attendance/shifts', icon: Clock, labelKey: 'nav.attendanceShifts', labelFallback: 'Shifts', status: 'ready' },
+      { to: '/manage/attendance/overtime', icon: Timer, labelKey: 'nav.attendanceOvertime', labelFallback: 'Overtime', status: 'ready' },
+      { to: '/manage/attendance/leave', icon: Plane, labelKey: 'nav.attendanceLeave', labelFallback: 'Leave', status: 'ready' },
+      { to: '/manage/attendance/reports', icon: BarChart3, labelKey: 'nav.attendanceReports', labelFallback: 'Reports', status: 'ready' },
+      { to: '/manage/attendance/settings', icon: SlidersHorizontal, labelKey: 'nav.attendanceSettings', labelFallback: 'Settings', status: 'ready' },
     ],
   },
   {

@@ -131,7 +131,86 @@ func (c *AccessEventConsumer) handle(ctx context.Context, subject string, data [
 	method := firstNonEmpty(payload.Method, MethodUnknown)
 	photoRef := payload.PhotoRef
 
-	return c.upsertRecord(ctx, tenantID, siteID, userID, srcDeviceID, date, eventTS, method, photoRef)
+	if err := c.upsertRecord(ctx, tenantID, siteID, userID, srcDeviceID, date, eventTS, method, photoRef); err != nil {
+		return err
+	}
+	// After the raw upsert lands, re-evaluate status/late/OT/hours against the
+	// tenant's default shift so downstream queries see authoritative values
+	// without waiting for a manager to touch the row.
+	return c.applyRules(ctx, tenantID, userID, date)
+}
+
+// applyRules loads the record plus its shift and persists the computed status,
+// lateness, break, and overtime fields. Manual adjustments (manual_adjustment
+// = true) are left alone so manager edits survive a late event replay.
+func (c *AccessEventConsumer) applyRules(ctx context.Context, tenantID, userID string, date time.Time) error {
+	ruleCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	var (
+		recordID       string
+		shiftID        *string
+		clockIn        *time.Time
+		clockOut       *time.Time
+		manualOverride bool
+	)
+	err := c.db.Pool.QueryRow(ruleCtx, `
+		SELECT id::text, shift_id::text, clock_in, clock_out, manual_adjustment
+		  FROM dm3_attendance.attendance_records
+		 WHERE tenant_id = $1::uuid AND user_id = $2::uuid AND date = $3
+	`, tenantID, userID, date).Scan(&recordID, &shiftID, &clockIn, &clockOut, &manualOverride)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+	if manualOverride {
+		return nil
+	}
+
+	shift, err := loadShift(ruleCtx, c.db.Pool, tenantID, shiftID)
+	if err != nil {
+		return fmt.Errorf("attendance: load shift for rules: %w", err)
+	}
+
+	calc := computeRecord(clockIn, clockOut, shift)
+
+	// Preserve whatever status/OT the row already has when we can't derive
+	// richer info (e.g. no clock_in yet). computeRecord returns pending in
+	// that case, which matches the column default.
+	_, err = c.db.Pool.Exec(ruleCtx, `
+		UPDATE dm3_attendance.attendance_records SET
+			shift_id            = COALESCE(shift_id, $1),
+			status              = $2,
+			late_minutes        = $3,
+			early_leave_minutes = $4,
+			total_hours         = CASE WHEN $5::boolean THEN $6 ELSE total_hours END,
+			regular_hours       = CASE WHEN $5::boolean THEN $7 ELSE regular_hours END,
+			overtime_hours      = CASE WHEN $5::boolean THEN $8 ELSE overtime_hours END,
+			break_minutes       = CASE WHEN $5::boolean THEN $9 ELSE break_minutes END,
+			updated_at          = now()
+		 WHERE id = $10::uuid AND tenant_id = $11::uuid AND manual_adjustment = false
+	`,
+		optionalShiftID(shift),
+		calc.Status, calc.LateMinutes, calc.EarlyLeaveMinutes,
+		clockOut != nil, // only overwrite hours once the session is closed
+		calc.TotalHours, calc.RegularHours, calc.OvertimeHours, calc.BreakMinutes,
+		recordID, tenantID,
+	)
+	if err != nil {
+		return fmt.Errorf("attendance: apply rules: %w", err)
+	}
+	return nil
+}
+
+// optionalShiftID returns s.ID as any or nil when the shift is missing, so
+// COALESCE(shift_id, $1) plays nicely with pgx.
+func optionalShiftID(s *Shift) any {
+	if s == nil {
+		return nil
+	}
+	return s.ID
 }
 
 // upsertRecord creates a pending attendance record or updates an existing one.

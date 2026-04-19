@@ -89,3 +89,71 @@ type Shift struct {
 	CreatedAt                time.Time `json:"created_at"`
 	UpdatedAt                time.Time `json:"updated_at"`
 }
+
+// Leave request statuses.
+const (
+	LeavePending   = "pending"
+	LeaveApproved  = "approved"
+	LeaveRejected  = "rejected"
+	LeaveCancelled = "cancelled"
+)
+
+// LeavePolicy mirrors dm3_attendance.leave_policies.
+type LeavePolicy struct {
+	ID                 string    `json:"id"`
+	TenantID           string    `json:"tenant_id"`
+	Code               string    `json:"code"`
+	Name               string    `json:"name"`
+	Color              string    `json:"color"`
+	AnnualQuotaDays    float64   `json:"annual_quota_days"`
+	RequiresApproval   bool      `json:"requires_approval"`
+	DeductsAttendance  bool      `json:"deducts_attendance"`
+	Paid               bool      `json:"paid"`
+	IsActive           bool      `json:"is_active"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+// LeaveRequest mirrors dm3_attendance.leave_requests.
+type LeaveRequest struct {
+	ID            string     `json:"id"`
+	TenantID      string     `json:"tenant_id"`
+	UserID        string     `json:"user_id"`
+	PolicyID      string     `json:"policy_id"`
+	StartDate     time.Time  `json:"start_date"`
+	EndDate       time.Time  `json:"end_date"`
+	Days          float64    `json:"days"`
+	HalfDay       bool       `json:"half_day"`
+	Reason        *string    `json:"reason,omitempty"`
+	AttachmentRef *string    `json:"attachment_ref,omitempty"`
+	Status        string     `json:"status"`
+	ReviewedBy    *string    `json:"reviewed_by,omitempty"`
+	ReviewedAt    *time.Time `json:"reviewed_at,omitempty"`
+	ReviewNote    *string    `json:"review_note,omitempty"`
+	CancelledAt   *time.Time `json:"cancelled_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+
+	// Joined fields for the UI.
+	UserName   string `json:"user_name,omitempty"`
+	UserEmail  string `json:"user_email,omitempty"`
+	PolicyCode string `json:"policy_code,omitempty"`
+	PolicyName string `json:"policy_name,omitempty"`
+	PolicyColor string `json:"policy_color,omitempty"`
+}
+
+// AttendanceSettings mirrors dm3_attendance.attendance_settings (one row per tenant).
+type AttendanceSettings struct {
+	TenantID                    string    `json:"tenant_id"`
+	DefaultGraceMinutes         int       `json:"default_grace_minutes"`
+	DefaultEarlyLeaveThreshold  int       `json:"default_early_leave_threshold"`
+	OvertimeThresholdMinutes    int       `json:"overtime_threshold_minutes"`
+	OvertimeRequiresApproval    bool      `json:"overtime_requires_approval"`
+	AutoClockoutHours           int       `json:"auto_clockout_hours"`
+	WorkweekStart               int       `json:"workweek_start"`
+	Timezone                    string    `json:"timezone"`
+	CarryoverEnabled            bool      `json:"carryover_enabled"`
+	CarryoverMaxDays            float64   `json:"carryover_max_days"`
+	CreatedAt                   time.Time `json:"created_at"`
+	UpdatedAt                   time.Time `json:"updated_at"`
+}

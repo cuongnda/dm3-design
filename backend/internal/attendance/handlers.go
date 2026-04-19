@@ -1,7 +1,6 @@
 package attendance
 
 import (
-	"context"
 	"net/http"
 	"strconv"
 
@@ -22,13 +21,6 @@ type AttendanceHandlers struct {
 // NewAttendanceHandlers constructs a handler group.
 func NewAttendanceHandlers(database *db.DB, auditLog *audit.Logger, natsClient *natsutil.Client) *AttendanceHandlers {
 	return &AttendanceHandlers{db: database, audit: auditLog, nats: natsClient}
-}
-
-// StartBackgroundJobs is a Sprint 1 stub. Sprint 3 adds the status calculator
-// (marks absent/late/on_time at shift end) and Sprint 4 adds the overtime
-// expiration job. Kept here so cmd/attend-svc/main.go can already call it.
-func (h *AttendanceHandlers) StartBackgroundJobs(_ context.Context) {
-	// intentionally empty — placeholder for later sprints
 }
 
 // parsePagination pulls page/limit query params with sane defaults. Matches

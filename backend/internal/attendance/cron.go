@@ -1,0 +1,76 @@
+package attendance
+
+import (
+	"context"
+	"log/slog"
+	"time"
+)
+
+// StartBackgroundJobs launches the attendance cron loop. Runs once on boot
+// (catch-up for days the service was offline) and every hour thereafter.
+//
+// Jobs included:
+//   - markAbsent: BR-004 — users assigned to a shift but without a clock-in
+//     for a finished workday are flipped from pending → absent.
+func (h *AttendanceHandlers) StartBackgroundJobs(ctx context.Context) {
+	go func() {
+		if err := h.runCronOnce(ctx); err != nil {
+			slog.Error("attendance cron initial sweep", "error", err)
+		}
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := h.runCronOnce(ctx); err != nil {
+					slog.Error("attendance cron sweep", "error", err)
+				}
+			}
+		}
+	}()
+}
+
+func (h *AttendanceHandlers) runCronOnce(ctx context.Context) error {
+	jobCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	return h.markAbsent(jobCtx)
+}
+
+// markAbsent flips pending rows to absent for completed workdays where there
+// is still no clock_in. Completion is defined as shift_end + 2h (grace for
+// late-arriving events). The write is tenant-agnostic because the WHERE clause
+// is strictly scoped by the join against a shift in the same tenant.
+//
+// We only touch rows with manual_adjustment = false so manager edits survive.
+func (h *AttendanceHandlers) markAbsent(ctx context.Context) error {
+	// The DB side does the heavy lifting so we do not paginate millions of
+	// rows through Go memory. Shift.end_time is anchored to ar.date; if the
+	// shift spans midnight we add a day.
+	const sql = `
+		UPDATE dm3_attendance.attendance_records ar
+		   SET status = 'absent',
+		       updated_at = now()
+		  FROM dm3_attendance.shifts s
+		 WHERE ar.shift_id = s.id
+		   AND ar.tenant_id = s.tenant_id
+		   AND ar.status = 'pending'
+		   AND ar.manual_adjustment = false
+		   AND ar.clock_in IS NULL
+		   AND (
+		     ar.date
+		       + s.end_time
+		       + CASE WHEN s.end_time <= s.start_time THEN INTERVAL '1 day' ELSE INTERVAL '0' END
+		       + INTERVAL '2 hours'
+		   ) < now()
+	`
+	tag, err := h.db.Pool.Exec(ctx, sql)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() > 0 {
+		slog.Info("attendance: marked absent", "rows", tag.RowsAffected())
+	}
+	return nil
+}
