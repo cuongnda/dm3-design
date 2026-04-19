@@ -18,6 +18,7 @@ export default defineConfig({
             '/api/v1/access/': { target: 'http://localhost:8003', changeOrigin: true },
             '/api/v1/identity/': { target: 'http://localhost:8004', changeOrigin: true },
             '/api/v1/visitors/': { target: 'http://localhost:8006', changeOrigin: true },
+            '/api/v1/parking/': { target: 'http://localhost:8007', changeOrigin: true },
             '/api/v1/attendance/': { target: 'http://localhost:8010', changeOrigin: true },
             '/api/v1/cctv/': { target: 'http://localhost:8008', changeOrigin: true },
             '/cctv/whep/': { target: 'http://localhost:8008', changeOrigin: true },
