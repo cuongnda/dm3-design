@@ -121,6 +121,9 @@ func main() {
 		ar.Delete("/shifts/{id}", handlers.ArchiveShift)
 
 		ar.Get("/leave/policies", handlers.ListLeavePolicies)
+		ar.Post("/leave/policies", handlers.CreateLeavePolicy)
+		ar.Patch("/leave/policies/{id}", handlers.UpdateLeavePolicy)
+		ar.Delete("/leave/policies/{id}", handlers.DeleteLeavePolicy)
 		ar.Get("/leave/requests", handlers.ListLeaveRequests)
 		ar.Post("/leave/requests", handlers.CreateLeaveRequest)
 		ar.Post("/leave/requests/{id}/approve", handlers.ApproveLeaveRequest)

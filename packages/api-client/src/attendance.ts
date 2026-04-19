@@ -297,6 +297,38 @@ export function listLeavePolicies(activeOnly = true): Promise<LeavePolicyDTO[]> 
   );
 }
 
+export interface LeavePolicyInput {
+  code: string;
+  name: string;
+  color?: string;
+  annual_quota_days?: number;
+  requires_approval?: boolean;
+  deducts_attendance?: boolean;
+  paid?: boolean;
+  is_active?: boolean;
+}
+
+export function createLeavePolicy(body: LeavePolicyInput): Promise<{ id: string }> {
+  return apiFetch(`${BASE}/leave/policies`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateLeavePolicy(
+  id: string,
+  body: Partial<LeavePolicyInput>,
+): Promise<{ status: string }> {
+  return apiFetch(`${BASE}/leave/policies/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteLeavePolicy(id: string): Promise<void> {
+  return apiFetch(`${BASE}/leave/policies/${id}`, { method: "DELETE" });
+}
+
 export function listLeaveRequests(
   params?: ListLeaveRequestsParams,
 ): Promise<Paginated<LeaveRequestDTO>> {
