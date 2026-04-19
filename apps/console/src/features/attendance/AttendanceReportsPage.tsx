@@ -5,11 +5,13 @@ import {
   DataTable,
   Button,
   Input,
+  showToast,
   type Column,
 } from '@dm3/ui';
 import { BarChart3, Download, RefreshCw } from 'lucide-react';
 import {
   getAttendanceReport,
+  getToken,
   type ReportUserRowDTO,
 } from '@dm3/api-client';
 
@@ -37,49 +39,33 @@ function todayIso() {
   return isoDay(new Date());
 }
 
-function downloadCsv(rows: ReportUserRowDTO[], from: string, to: string) {
-  const headers = [
-    'user_id',
-    'user_name',
-    'user_email',
-    'record_count',
-    'on_time',
-    'late',
-    'absent',
-    'on_leave',
-    'total_hours',
-    'regular_hours',
-    'overtime_hours',
-    'approved_overtime_hours',
-    'late_minutes',
-  ];
-  const lines = [headers.join(',')];
-  for (const r of rows) {
-    lines.push(
-      [
-        r.user_id,
-        JSON.stringify(r.user_name || ''),
-        JSON.stringify(r.user_email || ''),
-        r.record_count,
-        r.on_time_count,
-        r.late_count,
-        r.absent_count,
-        r.on_leave_count,
-        r.total_hours.toFixed(2),
-        r.regular_hours.toFixed(2),
-        r.overtime_hours.toFixed(2),
-        r.approved_overtime_hours.toFixed(2),
-        r.late_minutes,
-      ].join(','),
-    );
+async function downloadCsv(from: string, to: string) {
+  const url = `/api/v1/attendance/reports/summary.csv?from=${encodeURIComponent(
+    from,
+  )}&to=${encodeURIComponent(to)}`;
+  const token = getToken();
+  try {
+    const res = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(text || `Export failed (${res.status})`);
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = `attendance_summary_${from}_${to}.csv`;
+    a.click();
+    URL.revokeObjectURL(objectUrl);
+  } catch (err) {
+    showToast({
+      title: 'Export failed',
+      description: err instanceof Error ? err.message : 'Unexpected error',
+      type: 'error',
+    });
   }
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `attendance-report_${from}_to_${to}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 export function AttendanceReportsPage() {
@@ -221,8 +207,8 @@ export function AttendanceReportsPage() {
         <Button
           size="sm"
           variant="outline"
-          onClick={() => downloadCsv(users, from, to)}
-          disabled={users.length === 0}
+          onClick={() => downloadCsv(from, to)}
+          disabled={reportQ.isFetching}
           data-testid="attendance-button-report-export"
         >
           <Download size={14} className="mr-1" /> Export CSV
