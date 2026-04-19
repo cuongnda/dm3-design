@@ -215,6 +215,22 @@ func (h *AttendanceHandlers) AdjustRecord(w http.ResponseWriter, r *http.Request
 		httputil.Error(w, http.StatusInternalServerError, "failed to reload record")
 		return
 	}
+	h.audit.LogFromRequest(r, "attendance.record_adjusted", "attendance_record", id,
+		existing.UserName, "success",
+		map[string]any{
+			"clock_in":  existing.ClockIn,
+			"clock_out": existing.ClockOut,
+			"status":    existing.Status,
+			"shift_id":  existing.ShiftID,
+		},
+		map[string]any{
+			"clock_in":          clockIn,
+			"clock_out":         clockOut,
+			"status":            status,
+			"shift_id":          shiftID,
+			"adjustment_reason": req.AdjustmentReason,
+			"recalc":            recalc,
+		})
 	httputil.JSON(w, http.StatusOK, rec)
 }
 

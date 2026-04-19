@@ -143,6 +143,15 @@ func (h *AttendanceHandlers) CreateLeavePolicy(w http.ResponseWriter, r *http.Re
 		httputil.Error(w, http.StatusInternalServerError, "failed to create leave policy")
 		return
 	}
+	h.audit.LogFromRequest(r, "attendance.leave_policy_created", "leave_policy", id,
+		strings.TrimSpace(*p.Name), "success", nil, map[string]any{
+			"code":               strings.TrimSpace(*p.Code),
+			"annual_quota_days":  quota,
+			"requires_approval":  requiresApproval,
+			"deducts_attendance": deducts,
+			"paid":               paid,
+			"is_active":          active,
+		})
 	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id})
 }
 
@@ -193,6 +202,12 @@ func (h *AttendanceHandlers) UpdateLeavePolicy(w http.ResponseWriter, r *http.Re
 		httputil.Error(w, http.StatusNotFound, "leave policy not found")
 		return
 	}
+	name := ""
+	if p.Name != nil {
+		name = *p.Name
+	}
+	h.audit.LogFromRequest(r, "attendance.leave_policy_updated", "leave_policy", id,
+		name, "success", nil, p)
 	httputil.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -225,6 +240,8 @@ func (h *AttendanceHandlers) DeleteLeavePolicy(w http.ResponseWriter, r *http.Re
 		httputil.Error(w, http.StatusNotFound, "leave policy not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "attendance.leave_policy_archived", "leave_policy", id,
+		"", "success", nil, map[string]any{"is_active": false})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -422,6 +439,15 @@ func (h *AttendanceHandlers) CreateLeaveRequest(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	h.audit.LogFromRequest(r, "attendance.leave_requested", "leave_request", id,
+		"", "success", nil, map[string]any{
+			"user_id":    req.UserID,
+			"policy_id":  req.PolicyID,
+			"start_date": req.StartDate,
+			"end_date":   req.EndDate,
+			"days":       days,
+			"half_day":   req.HalfDay,
+		})
 	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id, "status": "pending"})
 }
 
@@ -505,6 +531,20 @@ func (h *AttendanceHandlers) reviewLeaveRequest(w http.ResponseWriter, r *http.R
 		httputil.Error(w, http.StatusInternalServerError, "failed to review leave request")
 		return
 	}
+	action := "attendance.leave_approved"
+	if newStatus == LeaveRejected {
+		action = "attendance.leave_rejected"
+	}
+	h.audit.LogFromRequest(r, action, "leave_request", id,
+		"", "success",
+		map[string]any{"status": "pending"},
+		map[string]any{
+			"status":    newStatus,
+			"user_id":   userID,
+			"policy_id": policyID,
+			"days":      days,
+			"note":      nullStr(payload.Note),
+		})
 	httputil.JSON(w, http.StatusOK, map[string]string{"status": newStatus})
 }
 
@@ -566,5 +606,14 @@ func (h *AttendanceHandlers) CancelLeaveRequest(w http.ResponseWriter, r *http.R
 		httputil.Error(w, http.StatusInternalServerError, "failed to cancel leave request")
 		return
 	}
+	h.audit.LogFromRequest(r, "attendance.leave_cancelled", "leave_request", id,
+		"", "success",
+		map[string]any{"status": prevStat},
+		map[string]any{
+			"status":    "cancelled",
+			"user_id":   userID,
+			"policy_id": policyID,
+			"days":      days,
+		})
 	httputil.JSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }

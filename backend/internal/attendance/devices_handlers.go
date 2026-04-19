@@ -169,8 +169,10 @@ func (h *AttendanceHandlers) RegisterAttendanceDevice(w http.ResponseWriter, r *
 }
 
 // DeregisterAttendanceDevice removes a device from the attendance registry.
-// Access events from the device still land in dm3_access but will no longer
-// count as clock-in/out signals once the consumer filter check lands.
+// Access events from the device still land in dm3_access but the consumer
+// filter (deviceRegistered in consumer.go) drops them before they can produce
+// clock-in/out records — so removing the row here is sufficient to stop
+// attendance tracking for that device.
 func (h *AttendanceHandlers) DeregisterAttendanceDevice(w http.ResponseWriter, r *http.Request) {
 	tenantID := authsvc.CompanyIDFromContext(r.Context())
 	if tenantID == "" {

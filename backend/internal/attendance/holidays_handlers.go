@@ -111,6 +111,12 @@ func (h *AttendanceHandlers) CreateHoliday(w http.ResponseWriter, r *http.Reques
 		httputil.Error(w, http.StatusInternalServerError, "failed to create holiday")
 		return
 	}
+	h.audit.LogFromRequest(r, "attendance.holiday_created", "holiday", id,
+		p.Name, "success", nil, map[string]any{
+			"date":    p.Date,
+			"name":    p.Name,
+			"is_paid": isPaid,
+		})
 	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id})
 }
 
@@ -151,6 +157,8 @@ func (h *AttendanceHandlers) UpdateHoliday(w http.ResponseWriter, r *http.Reques
 		httputil.Error(w, http.StatusNotFound, "holiday not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "attendance.holiday_updated", "holiday", id,
+		p.Name, "success", nil, p)
 	httputil.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -178,6 +186,8 @@ func (h *AttendanceHandlers) DeleteHoliday(w http.ResponseWriter, r *http.Reques
 		httputil.Error(w, http.StatusNotFound, "holiday not found")
 		return
 	}
+	h.audit.LogFromRequest(r, "attendance.holiday_deleted", "holiday", id,
+		"", "success", nil, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 

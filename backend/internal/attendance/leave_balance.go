@@ -294,5 +294,13 @@ func (h *AttendanceHandlers) AdjustLeaveBalance(w http.ResponseWriter, r *http.R
 		httputil.Error(w, http.StatusInternalServerError, "failed to adjust balance")
 		return
 	}
+	h.audit.LogFromRequest(r, "attendance.balance_adjusted", "leave_balance", body.UserID,
+		"", "success", nil, map[string]any{
+			"user_id":       body.UserID,
+			"policy_id":     body.PolicyID,
+			"year":          body.Year,
+			"entitled_days": body.EntitledDays,
+			"carried_over":  body.CarriedOver,
+		})
 	httputil.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

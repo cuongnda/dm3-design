@@ -309,6 +309,17 @@ func (h *AttendanceHandlers) CreateShift(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	h.audit.LogFromRequest(r, "attendance.shift_created", "shift", id,
+		req.Name, "success", nil, map[string]any{
+			"name":         req.Name,
+			"code":         nullStr(req.Code),
+			"site_id":      nullStr(req.SiteID),
+			"start_time":   req.StartTime,
+			"end_time":     req.EndTime,
+			"working_days": workingDays,
+			"is_default":   isDefault,
+			"status":       status,
+		})
 	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id})
 }
 
@@ -435,6 +446,8 @@ func (h *AttendanceHandlers) UpdateShift(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	h.audit.LogFromRequest(r, "attendance.shift_updated", "shift", shiftID,
+		req.Name, "success", nil, req)
 	httputil.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -464,6 +477,10 @@ func (h *AttendanceHandlers) ArchiveShift(w http.ResponseWriter, r *http.Request
 		httputil.Error(w, http.StatusNotFound, "shift not found or already archived")
 		return
 	}
+	h.audit.LogFromRequest(r, "attendance.shift_archived", "shift", shiftID,
+		"", "success",
+		map[string]any{"status": "active"},
+		map[string]any{"status": "archived"})
 	httputil.JSON(w, http.StatusOK, map[string]string{"status": "archived"})
 }
 

@@ -109,6 +109,8 @@ func (h *AttendanceHandlers) UpdateSettings(w http.ResponseWriter, r *http.Reque
 		httputil.Error(w, http.StatusInternalServerError, "failed to reload settings")
 		return
 	}
+	h.audit.LogFromRequest(r, "attendance.settings_updated", "attendance_settings", tenantID,
+		"", "success", nil, req)
 	httputil.JSON(w, http.StatusOK, s)
 }
 
