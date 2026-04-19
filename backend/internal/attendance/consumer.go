@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/natsutil"
 )
@@ -24,13 +25,15 @@ var uuidRegex = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4
 // clock_in, latest event = clock_out; status stays `pending` until Sprint 3's
 // status calculator runs. We still write records so the daily view has rows.
 type AccessEventConsumer struct {
-	db   *db.DB
-	nats *natsutil.Client
+	db    *db.DB
+	nats  *natsutil.Client
+	audit *audit.Logger
 }
 
-// NewAccessEventConsumer constructs a consumer.
-func NewAccessEventConsumer(database *db.DB, natsClient *natsutil.Client) *AccessEventConsumer {
-	return &AccessEventConsumer{db: database, nats: natsClient}
+// NewAccessEventConsumer constructs a consumer. auditLog may be nil in tests —
+// the clash detector just skips audit emission in that case.
+func NewAccessEventConsumer(database *db.DB, natsClient *natsutil.Client, auditLog *audit.Logger) *AccessEventConsumer {
+	return &AccessEventConsumer{db: database, nats: natsClient, audit: auditLog}
 }
 
 type deviceEvent struct {
@@ -137,7 +140,13 @@ func (c *AccessEventConsumer) handle(ctx context.Context, subject string, data [
 	// After the raw upsert lands, re-evaluate status/late/OT/hours against the
 	// tenant's default shift so downstream queries see authoritative values
 	// without waiting for a manager to touch the row.
-	return c.applyRules(ctx, tenantID, userID, date)
+	if err := c.applyRules(ctx, tenantID, userID, date); err != nil {
+		return err
+	}
+	// BR-ATT-009: if this user has an approved leave covering the event date,
+	// the rule-derived status lies — flip the row to on_leave and emit audit
+	// so managers notice an unexpected clock-in-during-leave clash.
+	return c.reconcileLeaveClash(ctx, tenantID, userID, date)
 }
 
 // applyRules loads the record plus its shift and persists the computed status,
@@ -200,6 +209,80 @@ func (c *AccessEventConsumer) applyRules(ctx context.Context, tenantID, userID s
 	)
 	if err != nil {
 		return fmt.Errorf("attendance: apply rules: %w", err)
+	}
+	return nil
+}
+
+// reconcileLeaveClash checks whether the user has an approved leave covering
+// the event date. If yes:
+//   - stamp leave_type / leave_reference_id on the attendance row so the UI
+//     can render "user was on leave but still clocked in"
+//   - flip status to on_leave (the row is considered authoritative-on-leave
+//     for reporting purposes; manual_adjustment=true rows are left alone so
+//     manager overrides survive).
+//   - emit an audit entry tagged "attendance.leave_clash_detected" so the
+//     clash shows up in the audit trail for review.
+//
+// Skipped silently when there is no approved leave.
+func (c *AccessEventConsumer) reconcileLeaveClash(ctx context.Context, tenantID, userID string, date time.Time) error {
+	qCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	var (
+		requestID  string
+		policyCode string
+	)
+	err := c.db.Pool.QueryRow(qCtx, `
+		SELECT lr.id::text, lp.code
+		  FROM dm3_attendance.leave_requests lr
+		  JOIN dm3_attendance.leave_policies lp
+		    ON lp.id = lr.policy_id AND lp.tenant_id = lr.tenant_id
+		 WHERE lr.tenant_id = $1::uuid
+		   AND lr.user_id   = $2::uuid
+		   AND lr.status    = 'approved'
+		   AND $3::date BETWEEN lr.start_date AND lr.end_date
+		 ORDER BY lr.created_at DESC
+		 LIMIT 1
+	`, tenantID, userID, date).Scan(&requestID, &policyCode)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return fmt.Errorf("attendance: scan leave clash: %w", err)
+	}
+
+	ct, err := c.db.Pool.Exec(qCtx, `
+		UPDATE dm3_attendance.attendance_records
+		   SET status              = $1,
+		       leave_type          = $2,
+		       leave_reference_id  = $3,
+		       updated_at          = now()
+		 WHERE tenant_id = $4::uuid
+		   AND user_id   = $5::uuid
+		   AND date      = $6
+		   AND manual_adjustment = false
+		   AND (status, COALESCE(leave_reference_id, '')) IS DISTINCT FROM ($1, $3)
+	`, StatusOnLeave, policyCode, requestID, tenantID, userID, date)
+	if err != nil {
+		return fmt.Errorf("attendance: apply leave clash: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return nil
+	}
+
+	if c.audit != nil {
+		c.audit.Log(audit.Entry{
+			TenantID:   tenantID,
+			Action:     "attendance.leave_clash_detected",
+			EntityType: "attendance_record",
+			EntityID:   userID,
+			Status:     "success",
+			Metadata: map[string]any{
+				"date":               date.Format("2006-01-02"),
+				"leave_reference_id": requestID,
+				"leave_type":         policyCode,
+			},
+		})
 	}
 	return nil
 }

@@ -82,7 +82,8 @@ func main() {
 
 	// Attendance consumer: turns device access.log events into
 	// attendance_records rows (first event = clock_in, latest = clock_out).
-	consumer := attendance.NewAccessEventConsumer(database, natsClient)
+	// auditLog is passed so BR-ATT-009 leave-clash detections are auditable.
+	consumer := attendance.NewAccessEventConsumer(database, natsClient, auditLog)
 	if err := consumer.Start(ctx); err != nil {
 		slog.Error("failed to start access-event consumer", "error", err)
 		os.Exit(1)
