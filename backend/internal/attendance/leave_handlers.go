@@ -539,6 +539,15 @@ func (h *AttendanceHandlers) reviewLeaveRequest(w http.ResponseWriter, r *http.R
 			return err
 		}
 
+		// Department-scope enforcement: plain managers may only review
+		// requests for users in a department they manage. Org-wide roles
+		// (primary_manager, system_admin) short-circuit inside the helper.
+		if err := ensureDepartmentManagerOfUser(
+			r.Context(), h.db.Pool, tenantID, claims.Sub, userID, claims.Roles,
+		); err != nil {
+			return err
+		}
+
 		if _, err := tx.Exec(r.Context(), `
 			UPDATE dm3_attendance.leave_requests
 			   SET status = $1,
@@ -559,6 +568,10 @@ func (h *AttendanceHandlers) reviewLeaveRequest(w http.ResponseWriter, r *http.R
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		httputil.Error(w, http.StatusNotFound, "leave request not found or not pending")
+		return
+	}
+	if errors.Is(err, errCrossDepartmentReview) {
+		httputil.Error(w, http.StatusForbidden, "reviewer is not the department manager of this user")
 		return
 	}
 	if err != nil {

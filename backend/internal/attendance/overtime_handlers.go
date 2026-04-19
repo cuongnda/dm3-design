@@ -2,12 +2,14 @@ package attendance
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/pkg/httputil"
@@ -336,6 +338,40 @@ func (h *AttendanceHandlers) reviewOvertime(w http.ResponseWriter, r *http.Reque
 			httputil.Error(w, http.StatusBadRequest, "invalid payload")
 			return
 		}
+	}
+
+	// Look up the record's owner before mutating so we can enforce the
+	// department-scope rule. Scoped to tenant + non-zero overtime so we
+	// fail-fast with 404 for records that don't exist or have no OT to
+	// review, matching the prior single-statement behaviour.
+	var targetUserID string
+	if err := h.db.Pool.QueryRow(r.Context(), `
+		SELECT user_id::text
+		  FROM dm3_attendance.attendance_records
+		 WHERE id        = $1::uuid
+		   AND tenant_id = $2::uuid
+		   AND overtime_hours IS NOT NULL
+		   AND overtime_hours > 0
+	`, id, tenantID).Scan(&targetUserID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httputil.Error(w, http.StatusNotFound, "overtime record not found")
+			return
+		}
+		slog.Error("lookup overtime owner", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "failed to review overtime")
+		return
+	}
+
+	if err := ensureDepartmentManagerOfUser(
+		r.Context(), h.db.Pool, tenantID, claims.Sub, targetUserID, claims.Roles,
+	); err != nil {
+		if errors.Is(err, errCrossDepartmentReview) {
+			httputil.Error(w, http.StatusForbidden, "reviewer is not the department manager of this user")
+			return
+		}
+		slog.Error("overtime scope check", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "failed to review overtime")
+		return
 	}
 
 	tag, err := h.db.Pool.Exec(r.Context(), `
