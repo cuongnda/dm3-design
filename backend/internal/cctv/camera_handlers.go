@@ -91,10 +91,18 @@ func (h *CCTVHandlers) ListCameras(w http.ResponseWriter, r *http.Request) {
 		argIdx++
 	}
 
-	joinClause := ""
+	// Always LEFT JOIN the access_devices + access_point_devices junction so we
+	// can surface access_point_id in the response. Filter with a subquery-style
+	// EXISTS predicate when an access_point_id filter is requested, so the main
+	// join does not collapse rows.
+	bindingJoin := `
+		LEFT JOIN dm3_access.access_devices ad
+		       ON ad.device_id = d.id AND ad.tenant_id = d.tenant_id
+		LEFT JOIN dm3_access.access_point_devices apd
+		       ON apd.access_device_id = ad.id::text AND apd.tenant_id = ad.tenant_id`
+
 	if accessPointID != "" {
-		joinClause = "JOIN dm3_access.access_devices ad ON ad.device_id = d.id AND ad.tenant_id = d.tenant_id"
-		conditions = append(conditions, fmt.Sprintf("ad.id = $%d::uuid", argIdx))
+		conditions = append(conditions, fmt.Sprintf("apd.access_point_id = $%d::uuid", argIdx))
 		args = append(args, accessPointID)
 		argIdx++
 	}
@@ -102,10 +110,10 @@ func (h *CCTVHandlers) ListCameras(w http.ResponseWriter, r *http.Request) {
 	where := "WHERE " + strings.Join(conditions, " AND ")
 
 	countQuery := fmt.Sprintf(`
-		SELECT COUNT(*)
+		SELECT COUNT(DISTINCT d.id)
 		FROM dm3_devices.devices d
 		JOIN dm3_cctv.cameras c ON c.device_id = d.id AND c.tenant_id = d.tenant_id
-		%s %s`, joinClause, where)
+		%s %s`, bindingJoin, where)
 
 	var total int64
 	if err := h.db.Pool.QueryRow(r.Context(), countQuery, args...).Scan(&total); err != nil {
@@ -116,6 +124,7 @@ func (h *CCTVHandlers) ListCameras(w http.ResponseWriter, r *http.Request) {
 	listArgs := append(args, limit, offset)
 	listQuery := fmt.Sprintf(`
 		SELECT d.id, d.device_id, d.tenant_id, d.name, d.status, d.last_seen,
+		       apd.access_point_id::text,
 		       c.brand, d.model, c.rtsp_url, c.rtsp_username,
 		       c.recording_mode, c.pre_roll_sec, c.post_roll_sec,
 		       c.stream_profile, c.last_checked_at, d.created_at, d.updated_at
@@ -123,7 +132,7 @@ func (h *CCTVHandlers) ListCameras(w http.ResponseWriter, r *http.Request) {
 		JOIN dm3_cctv.cameras c ON c.device_id = d.id AND c.tenant_id = d.tenant_id
 		%s %s
 		ORDER BY d.created_at DESC
-		LIMIT $%d OFFSET $%d`, joinClause, where, argIdx, argIdx+1)
+		LIMIT $%d OFFSET $%d`, bindingJoin, where, argIdx, argIdx+1)
 
 	rows, err := h.db.Pool.Query(r.Context(), listQuery, listArgs...)
 	if err != nil {
@@ -270,6 +279,14 @@ func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Optional binding to an access point (via dm3_access junction).
+	if req.AccessPointID != nil && strings.TrimSpace(*req.AccessPointID) != "" {
+		if err := bindCameraToAccessPoint(r.Context(), tx, cid, deviceUUID, strings.TrimSpace(req.Name), strings.TrimSpace(*req.AccessPointID)); err != nil {
+			httputil.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+
 	if err := tx.Commit(r.Context()); err != nil {
 		logInternalError(w, "commit transaction error", err)
 		return
@@ -309,6 +326,87 @@ func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 		"recording_mode": cam.RecordingMode,
 	})
 	httputil.JSON(w, http.StatusCreated, cam)
+}
+
+// bindCameraToAccessPoint ensures an access_devices wrapper row exists for the
+// camera device and that it is linked to the given access point via
+// access_point_devices. Idempotent — safe to call on repeated writes.
+func bindCameraToAccessPoint(ctx context.Context, tx pgx.Tx, tenantID, deviceUUID, cameraName, accessPointID string) error {
+	// Verify the access point belongs to the same tenant.
+	var apExists bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM dm3_access.access_points
+		               WHERE id = $1::uuid AND tenant_id = $2::uuid)`,
+		accessPointID, tenantID,
+	).Scan(&apExists); err != nil {
+		return fmt.Errorf("verify access_point tenant: %w", err)
+	}
+	if !apExists {
+		return fmt.Errorf("access_point not found for tenant")
+	}
+
+	// Resolve the access_devices wrapper (one per device). Reuse any existing
+	// row for this device; otherwise create a new 'camera'-typed row.
+	// access_devices has no unique constraint on device_id, so we do an explicit
+	// SELECT-then-INSERT.
+	var accessDeviceID string
+	err := tx.QueryRow(ctx, `
+		SELECT id::text FROM dm3_access.access_devices
+		WHERE device_id = $1::uuid AND tenant_id = $2::uuid
+		LIMIT 1`,
+		deviceUUID, tenantID,
+	).Scan(&accessDeviceID)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("lookup access_device: %w", err)
+		}
+		if err := tx.QueryRow(ctx, `
+			INSERT INTO dm3_access.access_devices (tenant_id, device_id, name, type, status, state, mode)
+			VALUES ($1::uuid, $2::uuid, $3, 'camera', 'offline', 'locked', 'normal')
+			RETURNING id::text`,
+			tenantID, deviceUUID, cameraName,
+		).Scan(&accessDeviceID); err != nil {
+			return fmt.Errorf("insert access_device: %w", err)
+		}
+	}
+
+	// Remove any prior binding for this access_device (one camera binds to at
+	// most one access point in the current UI model).
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM dm3_access.access_point_devices
+		WHERE access_device_id = $1 AND tenant_id = $2::uuid`,
+		accessDeviceID, tenantID,
+	); err != nil {
+		return fmt.Errorf("clear prior access_point binding: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO dm3_access.access_point_devices (tenant_id, access_point_id, access_device_id, role)
+		VALUES ($1::uuid, $2::uuid, $3, 'camera')`,
+		tenantID, accessPointID, accessDeviceID,
+	); err != nil {
+		return fmt.Errorf("insert access_point_device: %w", err)
+	}
+	return nil
+}
+
+// unbindCameraFromAccessPoint removes any access_point_devices row referencing
+// the camera's access_devices wrapper. Leaves the access_devices row itself in
+// place (it is owned by the camera lifecycle and cleaned up on device delete).
+func unbindCameraFromAccessPoint(ctx context.Context, tx pgx.Tx, tenantID, deviceUUID string) error {
+	_, err := tx.Exec(ctx, `
+		DELETE FROM dm3_access.access_point_devices apd
+		USING dm3_access.access_devices ad
+		WHERE apd.access_device_id = ad.id::text
+		  AND apd.tenant_id = ad.tenant_id
+		  AND ad.device_id = $1::uuid
+		  AND ad.tenant_id = $2::uuid`,
+		deviceUUID, tenantID,
+	)
+	if err != nil {
+		return fmt.Errorf("remove access_point binding: %w", err)
+	}
+	return nil
 }
 
 // decryptExistingPassword reads the encrypted rtsp_password_enc column for a
@@ -484,6 +582,25 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Handle access_point binding changes. Interpretation:
+	//   - field omitted from payload → leave binding untouched
+	//   - empty string              → clear binding
+	//   - non-empty value           → (re)bind to that access point
+	if req.AccessPointID != nil {
+		trimmedAP := strings.TrimSpace(*req.AccessPointID)
+		if trimmedAP == "" {
+			if err := unbindCameraFromAccessPoint(r.Context(), tx, cid, id); err != nil {
+				logInternalError(w, "unbind access_point error", err)
+				return
+			}
+		} else {
+			if err := bindCameraToAccessPoint(r.Context(), tx, cid, id, name, trimmedAP); err != nil {
+				httputil.Error(w, http.StatusBadRequest, err.Error())
+				return
+			}
+		}
+	}
+
 	if err := tx.Commit(r.Context()); err != nil {
 		logInternalError(w, "commit transaction error", err)
 		return
@@ -620,12 +737,18 @@ func (h *CCTVHandlers) TestCameraConnection(w http.ResponseWriter, r *http.Reque
 func (h *CCTVHandlers) fetchCamera(r *http.Request, tenantID, deviceID string) (Camera, error) {
 	row := h.db.Pool.QueryRow(r.Context(), `
 		SELECT d.id, d.device_id, d.tenant_id, d.name, d.status, d.last_seen,
+		       apd.access_point_id::text,
 		       c.brand, d.model, c.rtsp_url, c.rtsp_username,
 		       c.recording_mode, c.pre_roll_sec, c.post_roll_sec,
 		       c.stream_profile, c.last_checked_at, d.created_at, d.updated_at
 		FROM dm3_devices.devices d
 		JOIN dm3_cctv.cameras c ON c.device_id = d.id AND c.tenant_id = d.tenant_id
-		WHERE d.id = $1::uuid AND d.tenant_id = $2::uuid`,
+		LEFT JOIN dm3_access.access_devices ad
+		       ON ad.device_id = d.id AND ad.tenant_id = d.tenant_id
+		LEFT JOIN dm3_access.access_point_devices apd
+		       ON apd.access_device_id = ad.id::text AND apd.tenant_id = ad.tenant_id
+		WHERE d.id = $1::uuid AND d.tenant_id = $2::uuid
+		LIMIT 1`,
 		deviceID, tenantID,
 	)
 	return scanCamera(row)
@@ -641,6 +764,7 @@ func scanCamera(row scannable) (Camera, error) {
 	var streamProfileRaw []byte
 	err := row.Scan(
 		&cam.ID, &cam.DeviceID, &cam.TenantID, &cam.Name, &cam.Status, &cam.LastSeen,
+		&cam.AccessPointID,
 		&cam.Brand, &cam.Model, &cam.RTSPUrl, &cam.RTSPUsername,
 		&cam.RecordingMode, &cam.PreRollSec, &cam.PostRollSec,
 		&streamProfileRaw, &cam.LastCheckedAt, &cam.CreatedAt, &cam.UpdatedAt,

@@ -55,7 +55,10 @@ export interface StreamUrlsDTO {
 }
 
 export interface ClipPlaybackDTO {
-  url: string;
+  playback_url: string;
+  started_at: string;
+  ended_at?: string;
+  duration_ms?: number;
 }
 
 export interface TestConnectionDTO {

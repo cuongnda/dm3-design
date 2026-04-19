@@ -162,6 +162,7 @@
   "cctv.settings.save": "Save Settings",
   "cctv.settings.retentionSection": "Retention",
   "cctv.settings.retentionDays": "Retention period",
+  "cctv.settings.retentionMaxHint": "Maximum retention allowed by system policy: {{max}} days. Contact your system administrator if you need a higher cap.",
   "cctv.settings.rollSection": "Default Roll Durations",
   "cctv.settings.preRollDefault": "Pre-roll default",
   "cctv.settings.postRollDefault": "Post-roll default",

@@ -49,7 +49,7 @@ export function CCTVClipsPage() {
     mutationFn: (clip: ClipDTO) => getClipPlayback(clip.id),
     onSuccess: (result, clip) => {
       setPlayingClip(clip);
-      setPlayUrl(result.url);
+      setPlayUrl(result.playback_url);
     },
   });
 

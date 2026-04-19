@@ -100,6 +100,12 @@ export function CCTVSettingsPage() {
                   {form.retention_days ?? 30}d
                 </span>
               </div>
+              <p
+                className="mt-2 text-[11px] text-muted-foreground"
+                data-testid="cctv-hint-retention-max"
+              >
+                {t('cctv.settings.retentionMaxHint', { max: maxDays })}
+              </p>
             </div>
           </div>
         </section>

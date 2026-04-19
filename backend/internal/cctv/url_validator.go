@@ -6,8 +6,21 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 )
+
+// allowPrivateIPs, when true, permits RFC1918 / ULA / unique-local addresses.
+// Loopback, link-local, and unspecified remain blocked unconditionally.
+// Toggle via SetAllowPrivateIPs (wired from CCTV_ALLOW_PRIVATE_RTSP).
+var allowPrivateIPs atomic.Bool
+
+// SetAllowPrivateIPs enables or disables acceptance of private-range IP
+// addresses in RTSP URLs. On-prem LAN deployments need this enabled so
+// cameras on 10.x / 192.168.x / 172.16–31.x can be registered.
+func SetAllowPrivateIPs(allow bool) {
+	allowPrivateIPs.Store(allow)
+}
 
 // ValidateRTSPURL validates a user-supplied RTSP URL for SSRF safety.
 //
@@ -16,8 +29,9 @@ import (
 //   - Scheme must be "rtsp" or "rtsps".
 //   - Must NOT embed userinfo (credentials belong in dedicated fields).
 //   - Must have a non-empty host.
-//   - Hostname (or literal IP) must resolve to ONLY public, routable IPs.
-//     Rejects loopback, link-local, private, and unspecified addresses.
+//   - Hostname (or literal IP) must resolve to ONLY permitted IPs.
+//     Loopback, link-local, and unspecified are always rejected.
+//     Private ranges are rejected unless SetAllowPrivateIPs(true) was called.
 //
 // Returns a descriptive error that includes the rejection category, with
 // no sensitive data echoed back.
@@ -71,6 +85,7 @@ func ValidateRTSPURL(rawURL string) error {
 
 // disallowedIPReason returns a non-empty category name when ip is not allowed.
 // Categories: "loopback", "link-local", "private", "unspecified".
+// When allowPrivateIPs is set, "private" addresses are permitted.
 func disallowedIPReason(ip net.IP) string {
 	switch {
 	case ip.IsLoopback():
@@ -78,6 +93,9 @@ func disallowedIPReason(ip net.IP) string {
 	case ip.IsLinkLocalUnicast():
 		return "link-local"
 	case ip.IsPrivate():
+		if allowPrivateIPs.Load() {
+			return ""
+		}
 		return "private"
 	case ip.IsUnspecified():
 		return "unspecified"

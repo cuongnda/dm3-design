@@ -162,6 +162,7 @@
   "cctv.settings.save": "Lưu cài đặt",
   "cctv.settings.retentionSection": "Thời gian lưu trữ",
   "cctv.settings.retentionDays": "Số ngày lưu trữ",
+  "cctv.settings.retentionMaxHint": "Giới hạn tối đa theo chính sách hệ thống: {{max}} ngày. Liên hệ quản trị viên nếu cần mức cao hơn.",
   "cctv.settings.rollSection": "Thời lượng mặc định",
   "cctv.settings.preRollDefault": "Pre-roll mặc định",
   "cctv.settings.postRollDefault": "Post-roll mặc định",

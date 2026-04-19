@@ -54,6 +54,14 @@ func main() {
 		slog.Error("insecure configuration", "error", err)
 		os.Exit(1)
 	}
+
+	// On-prem LAN deployments need RFC1918 cameras (10.x/192.168.x/172.16-31.x)
+	// to pass the RTSP URL SSRF check. Loopback / link-local / unspecified
+	// remain blocked unconditionally.
+	if os.Getenv("CCTV_ALLOW_PRIVATE_RTSP") == "true" {
+		cctv.SetAllowPrivateIPs(true)
+		slog.Warn("CCTV_ALLOW_PRIVATE_RTSP=true: private-range RTSP hosts permitted")
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

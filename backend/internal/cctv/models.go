@@ -15,6 +15,11 @@ type Camera struct {
 	Status   string     `json:"status"`
 	LastSeen *time.Time `json:"last_seen,omitempty"`
 
+	// Optional binding to an access point via the dm3_access junction tables
+	// (access_devices + access_point_devices). Nil when the camera is not
+	// bound to any access point.
+	AccessPointID *string `json:"access_point_id,omitempty"`
+
 	// CCTV-specific fields
 	Brand         *string          `json:"brand,omitempty"`
 	Model         *string          `json:"model,omitempty"`
@@ -33,6 +38,7 @@ type Camera struct {
 // CameraInput is the DTO for create/update operations.
 type CameraInput struct {
 	Name          string           `json:"name"`
+	AccessPointID *string          `json:"access_point_id"`
 	Brand         *string          `json:"brand"`
 	Model         *string          `json:"model"`
 	Location      *string          `json:"location"`

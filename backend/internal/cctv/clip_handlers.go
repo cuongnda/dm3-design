@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -33,6 +34,47 @@ func (noopClipSigner) Sign(_ context.Context, objectKey string) (string, error) 
 // DefaultClipSigner is the no-op signer used when no object store is configured.
 var DefaultClipSigner ClipSigner = noopClipSigner{}
 
+// clipResponseDTO is the public shape returned by list/get clip endpoints.
+// Field names match the frontend contract (camera_id / camera_name /
+// duration_sec / storage_ref) so the Console can render rows without an
+// adapter layer. Keep this in sync with packages/api-client/src/cctv.ts.
+type clipResponseDTO struct {
+	ID            string     `json:"id"`
+	TenantID      string     `json:"tenant_id"`
+	CameraID      string     `json:"camera_id"`
+	CameraName    *string    `json:"camera_name,omitempty"`
+	AccessEventID *string    `json:"access_event_id,omitempty"`
+	StartedAt     time.Time  `json:"started_at"`
+	EndedAt       *time.Time `json:"ended_at,omitempty"`
+	DurationSec   *int       `json:"duration_sec,omitempty"`
+	StorageRef    string     `json:"storage_ref"`
+	Trigger       string     `json:"trigger"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
+// toResponseDTO projects an internal EventClip + joined camera name into the
+// public response shape.
+func toClipResponse(c EventClip, cameraName *string) clipResponseDTO {
+	var durationSec *int
+	if c.DurationMs != nil {
+		v := *c.DurationMs / 1000
+		durationSec = &v
+	}
+	return clipResponseDTO{
+		ID:            c.ID,
+		TenantID:      c.TenantID,
+		CameraID:      c.DeviceID,
+		CameraName:    cameraName,
+		AccessEventID: c.AccessEventID,
+		StartedAt:     c.StartedAt,
+		EndedAt:       c.EndedAt,
+		DurationSec:   durationSec,
+		StorageRef:    c.ObjectKey,
+		Trigger:       c.Trigger,
+		CreatedAt:     c.CreatedAt,
+	}
+}
+
 // ListClips handles GET /clips
 // Supports: ?camera_id=, ?access_event_id=, ?from=, ?to=, ?page=, ?limit=
 func (h *CCTVHandlers) ListClips(w http.ResponseWriter, r *http.Request) {
@@ -55,26 +97,26 @@ func (h *CCTVHandlers) ListClips(w http.ResponseWriter, r *http.Request) {
 	to := q.Get("to")
 
 	args := []any{cid}
-	conditions := []string{"tenant_id = $1::uuid"}
+	conditions := []string{"ec.tenant_id = $1::uuid"}
 	argIdx := 2
 
 	if cameraID != "" {
-		conditions = append(conditions, "device_id = $"+itoa(argIdx)+"::uuid")
+		conditions = append(conditions, "ec.device_id = $"+itoa(argIdx)+"::uuid")
 		args = append(args, cameraID)
 		argIdx++
 	}
 	if accessEventID != "" {
-		conditions = append(conditions, "access_event_id = $"+itoa(argIdx)+"::uuid")
+		conditions = append(conditions, "ec.access_event_id = $"+itoa(argIdx)+"::uuid")
 		args = append(args, accessEventID)
 		argIdx++
 	}
 	if from != "" {
-		conditions = append(conditions, "started_at >= $"+itoa(argIdx)+"::timestamptz")
+		conditions = append(conditions, "ec.started_at >= $"+itoa(argIdx)+"::timestamptz")
 		args = append(args, from)
 		argIdx++
 	}
 	if to != "" {
-		conditions = append(conditions, "started_at <= $"+itoa(argIdx)+"::timestamptz")
+		conditions = append(conditions, "ec.started_at <= $"+itoa(argIdx)+"::timestamptz")
 		args = append(args, to)
 		argIdx++
 	}
@@ -83,7 +125,7 @@ func (h *CCTVHandlers) ListClips(w http.ResponseWriter, r *http.Request) {
 
 	var total int64
 	if err := h.db.Pool.QueryRow(r.Context(),
-		"SELECT COUNT(*) FROM dm3_cctv.event_clips "+where, args...,
+		"SELECT COUNT(*) FROM dm3_cctv.event_clips ec "+where, args...,
 	).Scan(&total); err != nil {
 		logInternalError(w, "list clips count error", err)
 		return
@@ -91,9 +133,14 @@ func (h *CCTVHandlers) ListClips(w http.ResponseWriter, r *http.Request) {
 
 	listArgs := append(args, limit, offset)
 	rows, err := h.db.Pool.Query(r.Context(), `
-		SELECT id, tenant_id, device_id, access_event_id, started_at, ended_at, duration_ms, object_key, trigger, created_at
-		FROM dm3_cctv.event_clips `+where+`
-		ORDER BY started_at DESC
+		SELECT ec.id, ec.tenant_id, ec.device_id, ec.access_event_id, ec.started_at, ec.ended_at,
+		       ec.duration_ms, ec.object_key, ec.trigger, ec.created_at,
+		       d.name
+		FROM dm3_cctv.event_clips ec
+		LEFT JOIN dm3_devices.devices d
+		       ON d.id = ec.device_id AND d.tenant_id = ec.tenant_id
+		`+where+`
+		ORDER BY ec.started_at DESC
 		LIMIT $`+itoa(argIdx)+` OFFSET $`+itoa(argIdx+1), listArgs...)
 	if err != nil {
 		logInternalError(w, "list clips query error", err)
@@ -101,14 +148,19 @@ func (h *CCTVHandlers) ListClips(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	clips := make([]EventClip, 0)
+	clips := make([]clipResponseDTO, 0)
 	for rows.Next() {
-		clip, err := scanClip(rows)
-		if err != nil {
+		var clip EventClip
+		var cameraName *string
+		if err := rows.Scan(
+			&clip.ID, &clip.TenantID, &clip.DeviceID, &clip.AccessEventID,
+			&clip.StartedAt, &clip.EndedAt, &clip.DurationMs, &clip.ObjectKey, &clip.Trigger, &clip.CreatedAt,
+			&cameraName,
+		); err != nil {
 			logInternalError(w, "list clips scan error", err)
 			return
 		}
-		clips = append(clips, clip)
+		clips = append(clips, toClipResponse(clip, cameraName))
 	}
 
 	httputil.Paginated(w, clips, total, page, limit)
@@ -122,7 +174,7 @@ func (h *CCTVHandlers) GetClip(w http.ResponseWriter, r *http.Request) {
 	}
 	id := chi.URLParam(r, "id")
 
-	clip, err := h.fetchClip(r, cid, id)
+	clip, cameraName, err := h.fetchClipWithCamera(r, cid, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			httputil.Error(w, http.StatusNotFound, "clip not found")
@@ -131,7 +183,7 @@ func (h *CCTVHandlers) GetClip(w http.ResponseWriter, r *http.Request) {
 		logInternalError(w, "get clip error", err)
 		return
 	}
-	httputil.JSON(w, http.StatusOK, clip)
+	httputil.JSON(w, http.StatusOK, toClipResponse(clip, cameraName))
 }
 
 // validateClipObjectKey ensures a caller-supplied object_key is confined to the
@@ -221,11 +273,20 @@ func (h *CCTVHandlers) CreateClip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Resolve the camera name for the response payload (best-effort — ignore
+	// failures since the row we just inserted is authoritative).
+	var cameraName *string
+	_ = h.db.Pool.QueryRow(r.Context(), `
+		SELECT name FROM dm3_devices.devices
+		WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+		clip.DeviceID, cid,
+	).Scan(&cameraName)
+
 	h.audit.LogFromRequest(r, "cctv.clip.create", "event_clip", clip.ID, clip.ObjectKey, "success", nil, map[string]any{
 		"device_id": clip.DeviceID,
 		"trigger":   clip.Trigger,
 	})
-	httputil.JSON(w, http.StatusCreated, clip)
+	httputil.JSON(w, http.StatusCreated, toClipResponse(clip, cameraName))
 }
 
 // DeleteClip handles DELETE /clips/{id}
@@ -308,6 +369,28 @@ func (h *CCTVHandlers) fetchClip(r *http.Request, tenantID, clipID string) (Even
 		clipID, tenantID,
 	)
 	return scanClip(row)
+}
+
+// fetchClipWithCamera loads a clip along with the joined camera name. cameraName
+// is nil when the originating device has been deleted.
+func (h *CCTVHandlers) fetchClipWithCamera(r *http.Request, tenantID, clipID string) (EventClip, *string, error) {
+	var clip EventClip
+	var cameraName *string
+	err := h.db.Pool.QueryRow(r.Context(), `
+		SELECT ec.id, ec.tenant_id, ec.device_id, ec.access_event_id, ec.started_at, ec.ended_at,
+		       ec.duration_ms, ec.object_key, ec.trigger, ec.created_at,
+		       d.name
+		FROM dm3_cctv.event_clips ec
+		LEFT JOIN dm3_devices.devices d
+		       ON d.id = ec.device_id AND d.tenant_id = ec.tenant_id
+		WHERE ec.id = $1::uuid AND ec.tenant_id = $2::uuid`,
+		clipID, tenantID,
+	).Scan(
+		&clip.ID, &clip.TenantID, &clip.DeviceID, &clip.AccessEventID,
+		&clip.StartedAt, &clip.EndedAt, &clip.DurationMs, &clip.ObjectKey, &clip.Trigger, &clip.CreatedAt,
+		&cameraName,
+	)
+	return clip, cameraName, err
 }
 
 func scanClip(row scannable) (EventClip, error) {
