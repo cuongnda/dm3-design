@@ -29,6 +29,13 @@ ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
 MQTT_HOST = os.getenv('MQTT_HOST', 'localhost')
 MQTT_PORT = int(os.getenv('MQTT_PORT', '1884'))
 
+# Database (TimescaleDB) — used by tests that must seed state not exposed via API
+DB_HOST = os.getenv('DB_HOST', 'localhost')
+DB_PORT = int(os.getenv('DB_PORT', '5433'))
+DB_NAME = os.getenv('DB_NAME', 'dm3')
+DB_USER = os.getenv('DB_USER', 'dm3')
+DB_PASSWORD = os.getenv('DB_PASSWORD', 'dm3secret')
+
 # Timeouts
 TIMEOUT_API = 10  # seconds
 TIMEOUT_PAGE = 30000  # milliseconds (Playwright)

@@ -29,19 +29,19 @@ func isOrgWideReviewer(roles []string) bool {
 }
 
 // ensureDepartmentManagerOfUser enforces the department-scope rule for
-// approval-style actions:
+// approval-style actions.
 //
 //   - system_admin / primary_manager reviewers are allowed for any user in
 //     the tenant (short-circuit).
 //   - All other roles (notably plain "manager") must be registered as the
 //     department manager of the target user's department via
-//     dm3_identity.departments.department_manager_id_fk. Users without a
-//     department_id can never be reviewed by a plain manager — only by an
-//     org-wide reviewer — because no "manager of nobody" can apply.
+//     dm3_identity.departments.department_manager_id.
 //
-// Returns errCrossDepartmentReview when the scope check fails, or a wrapped
-// error on DB failure. The target lookup enforces both tenant isolation and
-// the manager relationship in a single query so we don't round-trip twice.
+// Identity bridging: reviewerID is dm3_auth.accounts.id (claims.Sub).
+// dm3_identity.departments.department_manager_id stores a dm3_identity.users.id,
+// so we map account → user via dm3_identity.users.account_id. A single
+// existence query enforces tenant isolation, the department relationship, and
+// the reviewer mapping together so we don't round-trip twice.
 func ensureDepartmentManagerOfUser(
 	ctx context.Context,
 	pool *pgxpool.Pool,
@@ -58,12 +58,17 @@ func ensureDepartmentManagerOfUser(
 	err := pool.QueryRow(ctx, `
 		SELECT EXISTS (
 			SELECT 1
-			  FROM dm3_identity.users u
-			  JOIN dm3_identity.departments d ON u.department_id = d.id
-			 WHERE u.id                       = $1::uuid
-			   AND u.tenant_id                = $2::uuid
-			   AND d.tenant_id                = $2::uuid
-			   AND d.department_manager_id_fk = $3::uuid
+			  FROM dm3_identity.users target
+			  JOIN dm3_identity.departments d ON target.department_id = d.id
+			  JOIN dm3_identity.users reviewer ON reviewer.id = d.department_manager_id
+			 WHERE target.id           = $1::uuid
+			   AND target.tenant_id    = $2::uuid
+			   AND d.tenant_id         = $2::uuid
+			   AND reviewer.tenant_id  = $2::uuid
+			   AND reviewer.account_id = $3::uuid
+			   AND COALESCE(target.is_deleted, false)   = false
+			   AND COALESCE(reviewer.is_deleted, false) = false
+			   AND COALESCE(d.is_deleted, false)        = false
 		)`, targetUserID, tenantID, reviewerID).Scan(&allowed)
 	if err != nil {
 		return fmt.Errorf("check department manager scope: %w", err)
