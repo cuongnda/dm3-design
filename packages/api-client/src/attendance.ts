@@ -807,3 +807,44 @@ export function rebuildMonthlyAttendanceSummary(
     method: "POST",
   });
 }
+
+// ─── Monthly report export ───────────────────────────────────────────────────
+
+export type MonthlyReportFormat = "csv" | "xlsx";
+
+export interface ExportMonthlyReportResult {
+  year: number;
+  month: number;
+  format: MonthlyReportFormat;
+  rows: number;
+  key: string;
+  size: number;
+  content_type: string;
+  download_url: string;
+}
+
+export function exportMonthlyAttendanceReport(
+  year: number,
+  month: number,
+  format: MonthlyReportFormat = "csv",
+): Promise<ExportMonthlyReportResult> {
+  const qs = new URLSearchParams();
+  qs.set("year", String(year));
+  qs.set("month", String(month));
+  qs.set("format", format);
+  return apiFetch(`${BASE}/reports/monthly/export?${qs.toString()}`, {
+    method: "POST",
+  });
+}
+
+export function monthlyAttendanceReportDownloadURL(
+  year: number,
+  month: number,
+  format: MonthlyReportFormat = "csv",
+): string {
+  const qs = new URLSearchParams();
+  qs.set("year", String(year));
+  qs.set("month", String(month));
+  qs.set("format", format);
+  return `${BASE}/reports/monthly/download?${qs.toString()}`;
+}

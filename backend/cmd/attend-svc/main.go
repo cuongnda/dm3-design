@@ -20,6 +20,7 @@ import (
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/i18n"
 	"github.com/duali/dm3-backend/pkg/natsutil"
+	"github.com/duali/dm3-backend/pkg/objectstore"
 )
 
 func main() {
@@ -89,7 +90,28 @@ func main() {
 		os.Exit(1)
 	}
 
-	handlers := attendance.NewAttendanceHandlers(database, auditLog, natsClient)
+	// Object storage is optional — if MinIO is not reachable, report
+	// export endpoints return 503 but the rest of the service keeps
+	// working. This mirrors the cctv-svc policy.
+	var objectStore objectstore.Store
+	if cfg.ObjectStoreEndpoint != "" {
+		store, storeErr := objectstore.NewMinIOStore(ctx, objectstore.Config{
+			Endpoint:         cfg.ObjectStoreEndpoint,
+			AccessKeyID:      cfg.ObjectStoreAccessKeyID,
+			SecretAccessKey:  cfg.ObjectStoreSecretAccessKey,
+			Bucket:           cfg.ObjectStoreBucket,
+			UseSSL:           cfg.ObjectStoreUseSSL,
+			AutoCreateBucket: cfg.ObjectStoreAutoCreateBucket,
+		})
+		if storeErr != nil {
+			slog.Warn("attend-svc: MinIO init failed; monthly export disabled", "error", storeErr)
+		} else {
+			slog.Info("attend-svc: object storage ready", "endpoint", cfg.ObjectStoreEndpoint)
+			objectStore = store
+		}
+	}
+
+	handlers := attendance.NewAttendanceHandlers(database, auditLog, natsClient).WithObjectStore(objectStore)
 
 	r := httputil.NewRouter()
 	r.Use(i18n.LocaleMiddleware)
@@ -156,6 +178,9 @@ func main() {
 
 		ar.Get("/summary/monthly", handlers.ListAttendanceSummary)
 		ar.Post("/summary/monthly/rebuild", handlers.RebuildMonthlySummary)
+
+		ar.Post("/reports/monthly/export", handlers.ExportMonthlyReport)
+		ar.Get("/reports/monthly/download", handlers.DownloadMonthlyReport)
 	})
 
 	handlers.StartBackgroundJobs(ctx)
