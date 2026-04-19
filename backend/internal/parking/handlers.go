@@ -990,6 +990,15 @@ func (h *ParkingHandlers) CreateParkingSession(w http.ResponseWriter, r *http.Re
 	}
 	h.publishParkingEvent(r.Context(), "parking.session.entry", map[string]any{"session_id": session.ID, "plate_number": session.PlateNumber, "zone_id": session.ZoneID})
 	h.publishParkingAccessEvent(r.Context(), session, "entry", decisionCode, decisionReason, req.EntryDeviceID)
+	if settings, err := h.getOrCreateSettings(r.Context(), cid); err == nil && settings.CapacityAlertThreshold > 0 {
+		if percent, ok := h.zoneOccupancyPercent(r.Context(), cid, session.ZoneID); ok && percent >= float64(settings.CapacityAlertThreshold) {
+			h.publishParkingEvent(r.Context(), "parking.zone.capacity.alert", map[string]any{
+				"zone_id":           session.ZoneID,
+				"occupancy_percent": percent,
+				"threshold":         settings.CapacityAlertThreshold,
+			})
+		}
+	}
 	h.audit.LogFromRequest(r, "parking.session.entry", "parking_session", session.ID, session.PlateNumber, "success", nil, session)
 	httputil.JSON(w, http.StatusCreated, session)
 }
@@ -1028,7 +1037,13 @@ func (h *ParkingHandlers) ExitParkingSession(w http.ResponseWriter, r *http.Requ
 	// keep the session active so exit is not visible as "completed" until payment
 	// clears (ProcessParkingPayment advances active→completed).
 	status := models.ParkingSessionStatusCompleted
+	overstay := false
+	if settings.MaxSessionHours > 0 && now.Sub(current.EntryTime) > time.Duration(settings.MaxSessionHours)*time.Hour {
+		overstay = true
+	}
 	if normalizedExit != current.NormalizedPlate {
+		status = models.ParkingSessionStatusDisputed
+	} else if overstay {
 		status = models.ParkingSessionStatusDisputed
 	} else if settings.RequirePaymentBeforeExit && !paid {
 		status = models.ParkingSessionStatusActive
@@ -1045,8 +1060,13 @@ func (h *ParkingHandlers) ExitParkingSession(w http.ResponseWriter, r *http.Requ
 	decisionCode := "exit_pending_payment"
 	decisionReason := "payment_required_before_barrier_open"
 	if status == models.ParkingSessionStatusDisputed {
-		decisionCode = "plate_mismatch"
-		decisionReason = "exit_plate_does_not_match_entry"
+		if normalizedExit != current.NormalizedPlate {
+			decisionCode = "plate_mismatch"
+			decisionReason = "exit_plate_does_not_match_entry"
+		} else if overstay {
+			decisionCode = "overstay_exceeded"
+			decisionReason = "session_exceeded_max_hours"
+		}
 	} else if shouldOpenBarrier {
 		decisionCode = "exit_allow"
 		decisionReason = "fee_settled_or_waived"
@@ -1075,6 +1095,15 @@ func (h *ParkingHandlers) ExitParkingSession(w http.ResponseWriter, r *http.Requ
 		eventType = "parking.session.disputed"
 	}
 	h.publishParkingEvent(r.Context(), eventType, map[string]any{"session_id": updated.ID, "plate_number": updated.PlateNumber, "fee_amount": feeAmount})
+	if status == models.ParkingSessionStatusDisputed && settings.NotifyOnDisputed {
+		h.publishParkingEvent(r.Context(), "parking.session.disputed.notify", map[string]any{
+			"session_id":      updated.ID,
+			"plate_number":    updated.PlateNumber,
+			"zone_id":         updated.ZoneID,
+			"decision_code":   decisionCode,
+			"decision_reason": decisionReason,
+		})
+	}
 	h.publishParkingAccessEvent(r.Context(), updated, "exit", decisionCode, decisionReason, req.ExitDeviceID)
 	h.audit.LogFromRequest(r, eventType, "parking_session", updated.ID, updated.PlateNumber, "success", current, updated)
 	httputil.JSON(w, http.StatusOK, updated)
@@ -1586,6 +1615,19 @@ func (h *ParkingHandlers) zoneHasCapacity(ctx context.Context, cid, zoneID strin
 		return false, err
 	}
 	return activeSessions < totalSpaces || totalSpaces == 0, nil
+}
+
+func (h *ParkingHandlers) zoneOccupancyPercent(ctx context.Context, cid, zoneID string) (float64, bool) {
+	var totalSpaces, activeSessions int
+	err := h.db.Pool.QueryRow(ctx, `SELECT z.total_spaces, COUNT(s.id) FILTER (WHERE s.status = 'active')
+		FROM dm3_parking.parking_zones z
+		LEFT JOIN dm3_parking.parking_sessions s ON s.zone_id = z.id
+		WHERE z.tenant_id = $1::uuid AND z.id = $2::uuid
+		GROUP BY z.id`, cid, zoneID).Scan(&totalSpaces, &activeSessions)
+	if err != nil || totalSpaces <= 0 {
+		return 0, false
+	}
+	return float64(activeSessions) / float64(totalSpaces) * 100, true
 }
 
 func (h *ParkingHandlers) calculateParkingFee(ctx context.Context, cid string, session models.ParkingSession, exitAt time.Time) (float64, string, string) {

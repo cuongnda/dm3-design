@@ -85,7 +85,7 @@ export interface ParkingSessionDTO {
   zone_id: string;
   vehicle_id?: string;
   plate_number: string;
-  normalized_plate_number: string;
+  normalized_plate: string;
   vehicle_type: string;
   vehicle_category?: string;
   entry_time: string;

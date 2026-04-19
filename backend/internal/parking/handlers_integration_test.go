@@ -433,6 +433,80 @@ func setParkingSettingBool(t *testing.T, database *db.DB, h *ParkingHandlers, co
 	})
 }
 
+// setParkingSettingInt updates a single integer setting column for the test
+// tenant and registers a defer to restore the given restore value.
+func setParkingSettingInt(t *testing.T, database *db.DB, h *ParkingHandlers, column string, value, restore int) {
+	t.Helper()
+	ensureParkingSettings(t, h)
+	if _, err := database.Pool.Exec(context.Background(),
+		fmt.Sprintf("UPDATE dm3_parking.parking_settings SET %s = $1 WHERE tenant_id = $2::uuid", column),
+		value, parkingTestTenantID,
+	); err != nil {
+		t.Fatalf("update setting %s: %v", column, err)
+	}
+	t.Cleanup(func() {
+		_, _ = database.Pool.Exec(context.Background(),
+			fmt.Sprintf("UPDATE dm3_parking.parking_settings SET %s = $1 WHERE tenant_id = $2::uuid", column),
+			restore, parkingTestTenantID,
+		)
+	})
+}
+
+// TestParkingExitOverstayMarkedDisputed verifies that when a session's duration
+// exceeds max_session_hours, exit marks the session disputed with the
+// overstay_exceeded decision code regardless of payment status.
+func TestParkingExitOverstayMarkedDisputed(t *testing.T) {
+	database := setupParkingTestDB(t)
+	defer database.Close()
+	requireParkingSchema(t, database)
+
+	h := NewParkingHandlers(database, nil, nil)
+	router := setupParkingRouter(h)
+	ids := map[string]string{}
+	defer cleanupParkingFixtures(t, database, ids)
+
+	// max_session_hours=1 so backdating entry by 2h triggers overstay.
+	setParkingSettingInt(t, database, h, "max_session_hours", 1, 24)
+	// Disable payment gate so exit would otherwise complete cleanly.
+	setParkingSettingBool(t, database, h, "require_payment_before_exit", false)
+
+	suffix := time.Now().Format("20060102150405")
+	ids["lot"], ids["zone"] = createParkingLotAndZone(t, router, suffix+"-over", 3)
+
+	plate := fmt.Sprintf("29A-%s", suffix[len(suffix)-5:])
+	sessionResp := parkingRequest(t, router, http.MethodPost, "/api/v1/parking/sessions", map[string]any{
+		"lot_id":       ids["lot"],
+		"zone_id":      ids["zone"],
+		"plate_number": plate,
+		"vehicle_type": "car",
+		"matched_by":   "manual",
+	})
+	if sessionResp.Code != http.StatusCreated {
+		t.Fatalf("create session: expected 201, got %d: %s", sessionResp.Code, sessionResp.Body.String())
+	}
+	ids["session"] = decodeJSON[map[string]any](t, sessionResp)["id"].(string)
+
+	// Backdate entry_time to 2 hours ago.
+	if _, err := database.Pool.Exec(context.Background(),
+		`UPDATE dm3_parking.parking_sessions SET entry_time = NOW() - INTERVAL '2 hours' WHERE id = $1::uuid`,
+		ids["session"],
+	); err != nil {
+		t.Fatalf("backdate entry_time: %v", err)
+	}
+
+	exitResp := parkingRequest(t, router, http.MethodPut, "/api/v1/parking/sessions/"+ids["session"]+"/exit", map[string]any{})
+	if exitResp.Code != http.StatusOK {
+		t.Fatalf("exit session: expected 200, got %d: %s", exitResp.Code, exitResp.Body.String())
+	}
+	exited := decodeJSON[map[string]any](t, exitResp)
+	if exited["status"] != "disputed" {
+		t.Fatalf("expected disputed on overstay, got %#v", exited["status"])
+	}
+	if exited["decision_code"] != "overstay_exceeded" {
+		t.Fatalf("expected decision_code=overstay_exceeded, got %#v", exited["decision_code"])
+	}
+}
+
 // TestParkingRecognitionDisabled verifies plate_recognition_enabled=false
 // rejects /sessions/recognitions with 403.
 func TestParkingRecognitionDisabled(t *testing.T) {
