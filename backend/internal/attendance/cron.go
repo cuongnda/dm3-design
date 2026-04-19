@@ -33,9 +33,19 @@ func (h *AttendanceHandlers) StartBackgroundJobs(ctx context.Context) {
 }
 
 func (h *AttendanceHandlers) runCronOnce(ctx context.Context) error {
-	jobCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	jobCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	return h.markAbsent(jobCtx)
+	if err := h.markAbsent(jobCtx); err != nil {
+		return err
+	}
+	// BR-ATT rollup: keep the current + previous month fresh so reports
+	// and CSV/XLSX exports never have to rescan attendance_records. Logged
+	// but non-fatal — an error here should not keep markAbsent from
+	// running on the next tick.
+	if err := h.rebuildMonthlySummaryCurrentAndPrev(jobCtx); err != nil {
+		slog.Error("attendance cron: monthly summary rollup", "error", err)
+	}
+	return nil
 }
 
 // markAbsent flips pending rows to absent for completed workdays where there

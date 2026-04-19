@@ -153,6 +153,9 @@ func main() {
 		ar.Delete("/devices/{id}", handlers.DeregisterAttendanceDevice)
 
 		ar.Get("/reports/summary", handlers.GetReport)
+
+		ar.Get("/summary/monthly", handlers.ListAttendanceSummary)
+		ar.Post("/summary/monthly/rebuild", handlers.RebuildMonthlySummary)
 	})
 
 	handlers.StartBackgroundJobs(ctx)

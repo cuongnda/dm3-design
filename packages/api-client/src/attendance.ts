@@ -752,3 +752,58 @@ export function getLeaveCalendar(
   if (params.status) qs.set("status", params.status);
   return apiFetch(`${BASE}/leave/calendar?${qs.toString()}`);
 }
+
+// ─── Monthly summary rollup ──────────────────────────────────────────────────
+
+export interface AttendanceSummaryDTO {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  year: number;
+  month: number; // 1..12
+  workdays: number;
+  on_time_count: number;
+  late_count: number;
+  absent_count: number;
+  on_leave_count: number;
+  half_day_count: number;
+  holiday_count: number;
+  pending_count: number;
+  total_hours: number;
+  regular_hours: number;
+  overtime_hours: number;
+  approved_overtime_hours: number;
+  late_minutes: number;
+  early_leave_minutes: number;
+  generated_at: string;
+  user_name?: string;
+  user_email?: string;
+}
+
+export interface ListMonthlySummaryParams {
+  year: number;
+  month: number;
+  user_id?: string;
+}
+
+export function listMonthlyAttendanceSummary(
+  params: ListMonthlySummaryParams,
+): Promise<AttendanceSummaryDTO[]> {
+  const qs = new URLSearchParams();
+  qs.set("year", String(params.year));
+  qs.set("month", String(params.month));
+  if (params.user_id) qs.set("user_id", params.user_id);
+  return apiFetch(`${BASE}/summary/monthly?${qs.toString()}`);
+}
+
+export function rebuildMonthlyAttendanceSummary(
+  year: number,
+  month: number,
+): Promise<{ year: number; month: number; ok: boolean }> {
+  const qs = new URLSearchParams();
+  qs.set("year", String(year));
+  qs.set("month", String(month));
+  return apiFetch(`${BASE}/summary/monthly/rebuild?${qs.toString()}`, {
+    method: "POST",
+  });
+}
