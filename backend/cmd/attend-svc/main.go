@@ -184,6 +184,7 @@ func main() {
 		ar.Get("/reports/monthly/download", handlers.DownloadMonthlyReport)
 
 		ar.Get("/me/attendance", handlers.MeAttendance)
+		ar.Get("/me/leave", handlers.MeLeave)
 	})
 
 	handlers.StartBackgroundJobs(ctx)

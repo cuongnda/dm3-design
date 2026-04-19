@@ -163,6 +163,9 @@ const AttendanceDailyPage = lazyWithRetry(() =>
 const MeAttendancePage = lazyWithRetry(() =>
   import('@/features/attendance/MeAttendancePage').then((m) => ({ default: m.MeAttendancePage }))
 );
+const MeLeavePage = lazyWithRetry(() =>
+  import('@/features/attendance/MeLeavePage').then((m) => ({ default: m.MeLeavePage }))
+);
 const AttendancePersonPage = lazyWithRetry(() =>
   import('@/features/attendance/AttendancePersonPage').then((m) => ({ default: m.AttendancePersonPage }))
 );
@@ -431,6 +434,7 @@ export const Router = createBrowserRouter([
               { path: 'visitors/settings', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorSettingsPage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance', element: <PluginGuard plugin="attendance"><LazyWrap><AttendanceDailyPage /></LazyWrap></PluginGuard> },
               { path: 'me/attendance', element: <PluginGuard plugin="attendance"><LazyWrap><MeAttendancePage /></LazyWrap></PluginGuard> },
+              { path: 'me/leave', element: <PluginGuard plugin="attendance"><LazyWrap><MeLeavePage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance/person/:userId', element: <PluginGuard plugin="attendance"><LazyWrap><AttendancePersonPage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance/shifts', element: <PluginGuard plugin="attendance"><LazyWrap><ShiftsPage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance/leave', element: <PluginGuard plugin="attendance"><LazyWrap><LeaveRequestsPage /></LazyWrap></PluginGuard> },

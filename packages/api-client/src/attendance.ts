@@ -946,3 +946,34 @@ export function getMeAttendance(
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return apiFetch(`${BASE}/me/attendance${suffix}`);
 }
+
+export interface MeLeaveSummary {
+  year: number;
+  entitled_days: number;
+  carried_over: number;
+  used_days: number;
+  pending_days: number;
+  remaining_days: number;
+  pending_requests: number;
+  upcoming_count: number;
+}
+
+export interface MeLeaveResponse {
+  user_id: string;
+  year: number;
+  summary: MeLeaveSummary;
+  balances: LeaveBalanceDTO[];
+  requests: LeaveRequestDTO[];
+  upcoming: LeaveRequestDTO[];
+}
+
+export interface MeLeaveParams {
+  year?: number;
+}
+
+export function getMeLeave(params?: MeLeaveParams): Promise<MeLeaveResponse> {
+  const qs = new URLSearchParams();
+  if (params?.year) qs.set("year", String(params.year));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return apiFetch(`${BASE}/me/leave${suffix}`);
+}
