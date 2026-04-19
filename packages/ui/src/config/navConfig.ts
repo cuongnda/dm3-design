@@ -132,6 +132,7 @@ export const NAV_CONFIG: NavSection[] = [
       { to: '/manage/attendance/leave', icon: Plane, labelKey: 'nav.attendanceLeave', labelFallback: 'Leave', status: 'ready' },
       { to: '/manage/attendance/leave/policies', icon: Palette, labelKey: 'nav.attendanceLeavePolicies', labelFallback: 'Leave policies', status: 'ready' },
       { to: '/manage/attendance/leave/balances', icon: Wallet, labelKey: 'nav.attendanceLeaveBalances', labelFallback: 'Leave balances', status: 'ready' },
+      { to: '/manage/attendance/leave/calendar', icon: CalendarClock, labelKey: 'nav.attendanceLeaveCalendar', labelFallback: 'Leave calendar', status: 'ready' },
       { to: '/manage/attendance/reports', icon: BarChart3, labelKey: 'nav.attendanceReports', labelFallback: 'Reports', status: 'ready' },
       { to: '/manage/attendance/holidays', icon: CalendarClock, labelKey: 'nav.attendanceHolidays', labelFallback: 'Holidays', status: 'ready' },
       { to: '/manage/attendance/settings', icon: SlidersHorizontal, labelKey: 'nav.attendanceSettings', labelFallback: 'Settings', status: 'ready' },
