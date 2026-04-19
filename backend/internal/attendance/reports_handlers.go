@@ -45,10 +45,121 @@ type ReportUserRow struct {
 	LateMinutes           int64   `json:"late_minutes"`
 }
 
+// LaborLawAdvisory is a BR-ATT-007 labor-law warning attached to a user
+// row. Code is a stable identifier ("weekly_cap", "monthly_ot",
+// "annual_ot") so the UI can i18n the message. Severity is "warning"
+// (approaching) or "violation" (exceeded).
+//
+// Thresholds follow Vietnamese labor law (Bộ luật Lao động 2019):
+//   - Regular hours: max 48h/week averaged over the report window
+//   - Overtime: max 40h/month pro-rated across the window
+//   - Overtime: max 200h/year cumulative
+type LaborLawAdvisory struct {
+	Code      string  `json:"code"`      // weekly_cap | monthly_ot | annual_ot
+	Severity  string  `json:"severity"`  // warning | violation
+	Message   string  `json:"message"`   // human-readable explanation
+	Threshold float64 `json:"threshold"` // the cap the value is compared against
+	Value     float64 `json:"value"`     // the user's computed value
+}
+
 // ReportResponse bundles summary + per-user rows so the UI loads in one call.
+// Advisories keyed by user_id surface BR-ATT-007 warnings without bloating
+// every ReportUserRow when most users have none.
 type ReportResponse struct {
-	Summary ReportSummary   `json:"summary"`
-	Users   []ReportUserRow `json:"users"`
+	Summary    ReportSummary                 `json:"summary"`
+	Users      []ReportUserRow               `json:"users"`
+	Advisories map[string][]LaborLawAdvisory `json:"advisories,omitempty"`
+}
+
+// Labor-law thresholds (Vietnamese Labor Code 2019 / BR-ATT-007).
+const (
+	maxRegularHoursPerWeek = 48.0
+	maxOvertimeHoursMonth  = 40.0
+	maxOvertimeHoursYear   = 200.0
+	// Warning band: start flagging when 80% of the threshold is reached.
+	laborLawWarningRatio = 0.8
+)
+
+// computeLaborLawAdvisories derives BR-ATT-007 advisories for one user over
+// the report window. days is inclusive (to - from + 1).
+//
+// The monthly cap is pro-rated: for a 45-day window, the allowed OT is
+// 40 * (45/30). This keeps short windows from triggering false positives
+// while still catching sustained overwork.
+func computeLaborLawAdvisories(u ReportUserRow, days int) []LaborLawAdvisory {
+	if days <= 0 {
+		return nil
+	}
+	advisories := make([]LaborLawAdvisory, 0)
+
+	weeks := float64(days) / 7.0
+	if weeks < 1 {
+		weeks = 1
+	}
+	avgWeekly := (u.RegularHours + u.OvertimeHours) / weeks
+	if avgWeekly > maxRegularHoursPerWeek {
+		advisories = append(advisories, LaborLawAdvisory{
+			Code:      "weekly_cap",
+			Severity:  "violation",
+			Message:   "Average weekly working hours exceed the 48h cap",
+			Threshold: maxRegularHoursPerWeek,
+			Value:     avgWeekly,
+		})
+	} else if avgWeekly > maxRegularHoursPerWeek*laborLawWarningRatio {
+		advisories = append(advisories, LaborLawAdvisory{
+			Code:      "weekly_cap",
+			Severity:  "warning",
+			Message:   "Average weekly working hours approaching the 48h cap",
+			Threshold: maxRegularHoursPerWeek,
+			Value:     avgWeekly,
+		})
+	}
+
+	months := float64(days) / 30.0
+	if months < 1 {
+		months = 1
+	}
+	monthlyOTCap := maxOvertimeHoursMonth * months
+	if u.OvertimeHours > monthlyOTCap {
+		advisories = append(advisories, LaborLawAdvisory{
+			Code:      "monthly_ot",
+			Severity:  "violation",
+			Message:   "Overtime exceeds the 40h/month cap over the window",
+			Threshold: monthlyOTCap,
+			Value:     u.OvertimeHours,
+		})
+	} else if u.OvertimeHours > monthlyOTCap*laborLawWarningRatio {
+		advisories = append(advisories, LaborLawAdvisory{
+			Code:      "monthly_ot",
+			Severity:  "warning",
+			Message:   "Overtime approaching the 40h/month cap over the window",
+			Threshold: monthlyOTCap,
+			Value:     u.OvertimeHours,
+		})
+	}
+
+	if u.OvertimeHours > maxOvertimeHoursYear {
+		advisories = append(advisories, LaborLawAdvisory{
+			Code:      "annual_ot",
+			Severity:  "violation",
+			Message:   "Overtime exceeds the 200h/year statutory cap",
+			Threshold: maxOvertimeHoursYear,
+			Value:     u.OvertimeHours,
+		})
+	} else if u.OvertimeHours > maxOvertimeHoursYear*laborLawWarningRatio {
+		advisories = append(advisories, LaborLawAdvisory{
+			Code:      "annual_ot",
+			Severity:  "warning",
+			Message:   "Overtime approaching the 200h/year statutory cap",
+			Threshold: maxOvertimeHoursYear,
+			Value:     u.OvertimeHours,
+		})
+	}
+
+	if len(advisories) == 0 {
+		return nil
+	}
+	return advisories
 }
 
 // GetReport serves GET /api/v1/attendance/reports/summary.
@@ -175,5 +286,19 @@ func (h *AttendanceHandlers) GetReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.JSON(w, http.StatusOK, ReportResponse{Summary: sum, Users: users})
+	// BR-ATT-007: attach labor-law advisories per user. Empty map means
+	// everyone is within limits.
+	windowDays := int(to.Sub(from).Hours()/24) + 1
+	advisories := make(map[string][]LaborLawAdvisory)
+	for _, u := range users {
+		if a := computeLaborLawAdvisories(u, windowDays); len(a) > 0 {
+			advisories[u.UserID] = a
+		}
+	}
+
+	httputil.JSON(w, http.StatusOK, ReportResponse{
+		Summary:    sum,
+		Users:      users,
+		Advisories: advisories,
+	})
 }

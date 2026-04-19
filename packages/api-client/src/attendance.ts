@@ -635,9 +635,27 @@ export interface ReportUserRowDTO {
   late_minutes: number;
 }
 
+export type LaborLawAdvisoryCode =
+  | "weekly_cap"
+  | "monthly_ot"
+  | "annual_ot";
+
+export type LaborLawAdvisorySeverity = "warning" | "violation";
+
+export interface LaborLawAdvisoryDTO {
+  code: LaborLawAdvisoryCode;
+  severity: LaborLawAdvisorySeverity;
+  message: string;
+  threshold: number;
+  value: number;
+}
+
 export interface ReportResponseDTO {
   summary: ReportSummaryDTO;
   users: ReportUserRowDTO[];
+  // BR-ATT-007 labor-law advisories keyed by user_id. Only users with at
+  // least one advisory appear here; treat a missing key as "all clear".
+  advisories?: Record<string, LaborLawAdvisoryDTO[]>;
 }
 
 export function getAttendanceReport(
