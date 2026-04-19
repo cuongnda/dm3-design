@@ -179,7 +179,6 @@ export function CreateCompanyModal({ open, onOpenChange, onCreated }: CreateComp
                         size="sm"
                         onClick={handleSubmit}
                         disabled={!infoValid || submitting}
-                        loading={submitting}
                         data-testid="create-button-submit"
                     >
                         {submitting ? 'Creating…' : 'Create Company'}

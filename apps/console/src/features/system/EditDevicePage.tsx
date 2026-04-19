@@ -125,26 +125,27 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
     let cancelled = false;
     (async () => {
       try {
-        const [device, comps] = await Promise.all([
+        const [deviceRaw, comps] = await Promise.all([
           loadDevice(id),
           isSystemAdmin ? fetchCompanies() : Promise.resolve([] as CompanyDTO[]),
         ]);
         if (cancelled) return;
+        const device = deviceRaw as unknown as Record<string, unknown>;
         setCompanies(comps);
         setIdentity({
-          device_id: device.device_id ?? '',
-          type: device.type ?? '',
-          tenant_id: device.tenant_id ?? '',
+          device_id: (device.device_id as string | undefined) ?? '',
+          type: (device.type as string | undefined) ?? '',
+          tenant_id: (device.tenant_id as string | undefined) ?? '',
         });
         setForm({
-          name: device.name ?? '',
-          location: device.location ?? '',
+          name: (device.name as string | undefined) ?? '',
+          location: (device.location as string | undefined) ?? '',
         });
         setConfig({
-          model: device.model ?? '',
-          open_relay_ms: device.open_relay_ms ?? 3000,
-          timezone: device.timezone ?? 'Asia/Ho_Chi_Minh',
-          verify_methods: (device.verify_methods ?? []) as VerifyMethodValue[],
+          model: (device.model as string | undefined) ?? '',
+          open_relay_ms: (device.open_relay_ms as number | undefined) ?? 3000,
+          timezone: (device.timezone as string | undefined) ?? 'Asia/Ho_Chi_Minh',
+          verify_methods: (device.verify_methods as VerifyMethodValue[] | undefined) ?? [],
           verify_logic: (device.verify_logic === 'and' ? 'and' : 'or'),
         });
       } catch (err) {
@@ -185,7 +186,7 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
     setLoading(true);
     setError('');
     try {
-      await saveDevice(id, {
+      await (saveDevice as (id: string, data: Record<string, unknown>) => Promise<unknown>)(id, {
         name: form.name.trim(),
         location: form.location.trim(),
         model: config.model || null,

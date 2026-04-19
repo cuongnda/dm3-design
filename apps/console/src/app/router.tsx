@@ -9,7 +9,7 @@ import { DashboardPage } from '@/features/dashboard/DashboardPage';
  * with exponential backoff. Handles intermittent network failures and stale
  * chunk hashes after deployments.
  */
-function lazyWithRetry<T extends React.ComponentType<unknown>>(
+function lazyWithRetry<T extends React.ComponentType<any>>(
   factory: () => Promise<{ default: T }>,
   retries = 3,
 ): React.LazyExoticComponent<T> {

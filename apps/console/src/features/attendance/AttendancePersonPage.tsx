@@ -363,7 +363,7 @@ interface AdjustmentModalProps {
 
 function AdjustmentModal({ record, onClose }: AdjustmentModalProps) {
   const qc = useQueryClient();
-  const { toast } = useToast();
+  const { showToast } = useToast();
   const [clockIn, setClockIn] = useState('');
   const [clockOut, setClockOut] = useState('');
   const [status, setStatus] = useState<AttendanceStatus>('pending');
@@ -386,11 +386,11 @@ function AdjustmentModal({ record, onClose }: AdjustmentModalProps) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['attendance-person'] });
       qc.invalidateQueries({ queryKey: ['attendance-records'] });
-      toast({ title: 'Record updated', description: 'Adjustment saved.' });
+      showToast({ type: 'success', title: 'Record updated', description: 'Adjustment saved.' });
       onClose();
     },
     onError: (err: Error) => {
-      toast({ title: 'Could not save', description: err.message, variant: 'destructive' });
+      showToast({ type: 'error', title: 'Could not save', description: err.message });
     },
   });
 

@@ -8,7 +8,7 @@ import {
   AppModal,
   type Column,
 } from '@dm3/ui';
-import { CalendarDays, Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import {
   listHolidays,
   createHoliday,
@@ -112,7 +112,7 @@ export function HolidaysPage() {
       {
         key: 'date',
         header: 'Date',
-        accessor: (h) =>
+        render: (h) =>
           new Date(h.date).toLocaleDateString(undefined, {
             weekday: 'short',
             year: 'numeric',
@@ -120,21 +120,21 @@ export function HolidaysPage() {
             day: '2-digit',
           }),
       },
-      { key: 'name', header: 'Name', accessor: (h) => h.name },
+      { key: 'name', header: 'Name', render: (h) => h.name },
       {
         key: 'is_paid',
         header: 'Paid',
-        accessor: (h) => (h.is_paid ? 'Yes' : 'No'),
+        render: (h) => (h.is_paid ? 'Yes' : 'No'),
       },
       {
         key: 'description',
         header: 'Description',
-        accessor: (h) => h.description ?? '—',
+        render: (h) => h.description ?? '—',
       },
       {
         key: 'actions',
         header: '',
-        accessor: (h) => (
+        render: (h) => (
           <div className="flex items-center gap-2 justify-end">
             <Button
               variant="ghost"
@@ -164,7 +164,6 @@ export function HolidaysPage() {
   return (
     <div className="flex flex-col gap-6 p-6">
       <PageHeader
-        icon={CalendarDays}
         title="Holiday Calendar"
         description="Public holidays and company closures. Employees on shift are not marked absent on these dates."
         actions={
@@ -197,9 +196,9 @@ export function HolidaysPage() {
       <DataTable
         columns={columns}
         data={listQ.data?.items ?? []}
+        rowKey={(h) => h.id}
         loading={listQ.isLoading}
         emptyMessage="No holidays configured for this year yet."
-        data-testid="holiday-table"
       />
 
       <AppModal

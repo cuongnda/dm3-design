@@ -269,7 +269,6 @@ export function EmergencyPlanModal({ open, onOpenChange, planId, onSaved }: Emer
                         size="sm"
                         onClick={handleSave}
                         disabled={!identityValid || !targetsValid || saving}
-                        loading={saving}
                         data-testid="emergency-button-save"
                     >
                         {saving
@@ -513,7 +512,7 @@ function ZoneGroup({
                     <ChevronRight size={14} className="text-muted-foreground" />
                 )}
                 <Checkbox
-                    checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                    checked={allSelected}
                     onCheckedChange={() => onToggleZone()}
                     onClick={(e) => e.stopPropagation()}
                 />

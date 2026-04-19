@@ -176,7 +176,6 @@ export function DoorDetailPage() {
         id: id!,
         data: {
           name: settings.name,
-          mode: settings.mode,
           unlock_duration_ms: settings.unlockDuration * 1000,
           anti_passback: settings.antiPassback,
         },

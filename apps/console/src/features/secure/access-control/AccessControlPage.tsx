@@ -53,7 +53,7 @@ export function AccessControlPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [stats, setStats] = useState<AccessPointStats>({ online: 0, offline: 0, alarm: 0 });
+  const [stats, setStats] = useState<AccessPointStats>({ online: 0, offline: 0, warning: 0, alarm: 0 });
   const pageSize = 20;
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pauseUntilRef = useRef(0); // skip polls until this timestamp

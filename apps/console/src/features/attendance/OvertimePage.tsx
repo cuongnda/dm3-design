@@ -350,7 +350,7 @@ function RequestOvertimeModal({ open, onClose, onSubmitted }: RequestOvertimeMod
   return (
     <AppModal
       open={open}
-      onClose={onClose}
+      onOpenChange={(o) => { if (!o) onClose(); }}
       title="Request overtime"
       description="Ask a manager to approve overtime hours you worked or plan to work."
       size="md"

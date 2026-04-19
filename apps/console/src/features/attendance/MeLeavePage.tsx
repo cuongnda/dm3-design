@@ -117,13 +117,13 @@ function RequestLeaveModal({ userId, onClose, onCreated }: RequestLeaveModalProp
         reason: reason.trim() || null,
       }),
     onSuccess: () => {
-      showToast.success('Leave request submitted');
+      showToast({ type: 'success', title: 'Leave request submitted' });
       onCreated();
       onClose();
     },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : 'Failed to submit request';
-      showToast.error(msg);
+      showToast({ type: 'error', title: 'Request failed', description: msg });
     },
   });
 
@@ -136,8 +136,8 @@ function RequestLeaveModal({ userId, onClose, onCreated }: RequestLeaveModalProp
 
   return (
     <AppModal
-      isOpen
-      onClose={onClose}
+      open
+      onOpenChange={(o) => { if (!o) onClose(); }}
       title="Request leave"
       description="Submit a leave request for approval."
       size="md"
@@ -237,12 +237,12 @@ export function MeLeavePage() {
   const cancelMut = useMutation({
     mutationFn: (id: string) => cancelLeaveRequest(id),
     onSuccess: () => {
-      showToast.success('Request cancelled');
+      showToast({ type: 'success', title: 'Request cancelled' });
       qc.invalidateQueries({ queryKey: ['me-leave'] });
     },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : 'Failed to cancel';
-      showToast.error(msg);
+      showToast({ type: 'error', title: 'Cancel failed', description: msg });
     },
   });
 

@@ -419,7 +419,7 @@ function AdjustBalanceModal({
   return (
     <AppModal
       open
-      onClose={onClose}
+      onOpenChange={(o) => { if (!o) onClose(); }}
       title={`Adjust ${policyLabel}`}
       description={`${userLabel} · ${year}. Used and pending days are derived from leave requests and cannot be edited here.`}
       size="md"

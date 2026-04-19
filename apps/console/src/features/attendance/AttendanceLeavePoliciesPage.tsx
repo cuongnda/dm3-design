@@ -325,7 +325,7 @@ function PolicyForm({
   return (
     <AppModal
       open={open}
-      onClose={onClose}
+      onOpenChange={(o) => { if (!o) onClose(); }}
       title={isEdit ? `Edit policy — ${policy?.name}` : 'New leave policy'}
       size="md"
       footer={
