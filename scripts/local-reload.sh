@@ -60,6 +60,52 @@ if ! docker compose -f "$COMPOSE_FILE" ps --quiet nginx > /dev/null 2>&1; then
     exit 1
 fi
 
+# Clear rename artifacts left by failed recreations. When `docker compose up -d`
+# fails mid-way, compose renames the old container with an ID prefix
+# (e.g. c25e9d540bc8_dm3-local-auth-svc) and never reclaims the clean name on
+# the next run, leaving services stuck in Created state. Sweep these before
+# every reload so the clean `dm3-local-<svc>` name is always free.
+cleanup_stale_containers() {
+    local stale
+    # Match any container whose name ends with _dm3-local-<svc> (the rename
+    # artifact pattern) AND is not currently running.
+    stale=$(docker ps -a --format '{{.Names}}\t{{.State}}' \
+        | awk -F'\t' '$1 ~ /_dm3-local-/ && $2 != "running" {print $1}')
+    if [ -n "$stale" ]; then
+        warn "Removing stale rename artifacts:"
+        echo "$stale" | sed 's/^/  /'
+        echo "$stale" | xargs -r docker rm -f > /dev/null 2>&1 || true
+    fi
+}
+
+# Verify every backend service is at least Running. Most services do not
+# declare a HEALTHCHECK in compose, so Health.Status is empty and a pure
+# health poll times out silently. Running-state is the minimum signal we
+# can actually rely on.
+verify_running() {
+    local failed=()
+    for svc in "${BACKEND_SERVICES[@]}"; do
+        local state
+        state=$(docker inspect --format='{{.State.Status}}' "dm3-local-$svc" 2>/dev/null || echo "missing")
+        if [ "$state" != "running" ]; then
+            failed+=("$svc=$state")
+        fi
+    done
+    if [ ${#failed[@]} -gt 0 ]; then
+        err "Backend services not running: ${failed[*]}"
+        for svc in "${BACKEND_SERVICES[@]}"; do
+            local state
+            state=$(docker inspect --format='{{.State.Status}}' "dm3-local-$svc" 2>/dev/null || echo "missing")
+            if [ "$state" != "running" ]; then
+                err "--- last logs from dm3-local-$svc (state=$state) ---"
+                docker logs "dm3-local-$svc" --tail 15 2>&1 | sed 's/^/  /' || true
+            fi
+        done
+        return 1
+    fi
+    return 0
+}
+
 # Ensure infra is healthy before rebuilding
 check_infra() {
     log "Checking infrastructure..."
@@ -103,6 +149,7 @@ check_infra() {
 # Rebuild and restart backend services
 reload_backend() {
     check_infra
+    cleanup_stale_containers
 
     log "Rebuilding backend images (migrate + all services)..."
     # All backend services share the same Dockerfile but have separate image tags,
@@ -127,27 +174,47 @@ reload_backend() {
     docker compose -f "$COMPOSE_FILE" up -d \
         "${BACKEND_SERVICES[@]}" 2>&1 | tail -5
 
-    # Wait for services to be healthy
-    log "Waiting for services to become healthy..."
+    # Stage 1: wait for every service to be in State=running. This is the
+    # only signal we can rely on for services without a declared HEALTHCHECK.
+    log "Waiting for services to be running..."
     local retries=30
     while [ $retries -gt 0 ]; do
-        local all_healthy=true
+        if verify_running > /dev/null 2>&1; then
+            ok "All backend services running."
+            break
+        fi
+        retries=$((retries - 1))
+        sleep 2
+    done
+    if ! verify_running; then
+        err "Backend reload failed — see service logs above."
+        return 1
+    fi
+
+    # Stage 2: for services that DO declare a HEALTHCHECK, poll until healthy.
+    # Services with no healthcheck return an empty status and are skipped.
+    log "Waiting for health probes (only services with HEALTHCHECK)..."
+    retries=30
+    while [ $retries -gt 0 ]; do
+        local all_ok=true
         for svc in "${BACKEND_SERVICES[@]}"; do
             local status
-            status=$(docker inspect --format='{{.State.Health.Status}}' "dm3-local-$svc" 2>/dev/null || echo "missing")
-            if [ "$status" != "healthy" ]; then
-                all_healthy=false
+            status=$(docker inspect --format='{{.State.Health.Status}}' "dm3-local-$svc" 2>/dev/null || echo "")
+            # Empty = no HEALTHCHECK declared; treat as OK.
+            if [ -n "$status" ] && [ "$status" != "healthy" ]; then
+                all_ok=false
                 break
             fi
         done
-        if [ "$all_healthy" = true ]; then
-            ok "All backend services healthy."
+        if [ "$all_ok" = true ]; then
+            ok "All backend services healthy (or healthcheck-less)."
             return 0
         fi
         retries=$((retries - 1))
         sleep 2
     done
-    warn "Some services may still be starting (timeout after 60s)."
+    warn "Some health probes still starting after 60s (services are running — will continue stabilizing)."
+    return 0
 }
 
 # Rebuild and restart frontend
@@ -167,10 +234,20 @@ reload_frontend() {
 # Restart without rebuild
 restart_only() {
     check_infra
+    cleanup_stale_containers
 
     log "Restarting all services (no rebuild)..."
-    docker compose -f "$COMPOSE_FILE" restart \
-        "${BACKEND_SERVICES[@]}" 2>&1
+    # If any service ended up as an orphan (no compose-managed container at
+    # the clean name), `restart` would no-op silently. Use `up -d` so the
+    # clean container is created on-demand.
+    docker compose -f "$COMPOSE_FILE" up -d \
+        "${BACKEND_SERVICES[@]}" 2>&1 | tail -5
+
+    log "Verifying services are running..."
+    if ! verify_running; then
+        err "Restart left services in a bad state — see logs above."
+        return 1
+    fi
 
     log "Reloading nginx..."
     docker exec dm3-local-nginx nginx -s reload 2>/dev/null || true
