@@ -147,6 +147,10 @@ func main() {
 		ar.Post("/overtime/{id}/approve", handlers.ApproveOvertime)
 		ar.Post("/overtime/{id}/reject", handlers.RejectOvertime)
 
+		ar.Get("/devices", handlers.ListAttendanceDevices)
+		ar.Post("/devices", handlers.RegisterAttendanceDevice)
+		ar.Delete("/devices/{id}", handlers.DeregisterAttendanceDevice)
+
 		ar.Get("/reports/summary", handlers.GetReport)
 	})
 

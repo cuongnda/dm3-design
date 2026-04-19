@@ -647,3 +647,46 @@ export function getAttendanceReport(
   const q = new URLSearchParams({ from, to });
   return apiFetch(`${BASE}/reports/summary?${q.toString()}`);
 }
+
+// ─── Attendance devices registry ─────────────────────────────────────────────
+
+export type AttendanceDeviceFunction = "clock_in" | "clock_out" | "both";
+
+export interface AttendanceDeviceDTO {
+  id: string;
+  tenant_id: string;
+  site_id?: string;
+  device_id: string;
+  function: AttendanceDeviceFunction;
+  location_name?: string;
+  is_primary: boolean;
+  created_at: string;
+  updated_at: string;
+  device_name?: string;
+  device_kind?: string;
+}
+
+export interface RegisterAttendanceDeviceInput {
+  device_id: string;
+  site_id?: string;
+  function: AttendanceDeviceFunction;
+  location_name?: string;
+  is_primary?: boolean;
+}
+
+export function listAttendanceDevices(): Promise<AttendanceDeviceDTO[]> {
+  return apiFetch(`${BASE}/devices`);
+}
+
+export function registerAttendanceDevice(
+  input: RegisterAttendanceDeviceInput,
+): Promise<{ id: string }> {
+  return apiFetch(`${BASE}/devices`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deregisterAttendanceDevice(id: string): Promise<void> {
+  return apiFetch(`${BASE}/devices/${id}`, { method: "DELETE" });
+}
