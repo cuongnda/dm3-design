@@ -848,3 +848,47 @@ export function monthlyAttendanceReportDownloadURL(
   qs.set("format", format);
   return `${BASE}/reports/monthly/download?${qs.toString()}`;
 }
+
+// ─── HR leave sync webhook ─────────────────────────────────────────────────
+
+export type LeaveSyncStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "cancelled";
+
+export interface LeaveSyncRequestInput {
+  external_id: string;
+  user_id: string;
+  policy_code: string;
+  start_date: string; // YYYY-MM-DD
+  end_date: string;
+  days?: number;
+  half_day?: boolean;
+  reason?: string | null;
+  status?: LeaveSyncStatus;
+}
+
+export interface LeaveSyncRowResult {
+  external_id: string;
+  id?: string;
+  status?: "created" | "updated" | "unchanged" | "failed";
+  error?: string;
+}
+
+export interface LeaveSyncResponse {
+  processed: number;
+  created: number;
+  updated: number;
+  failed: number;
+  results: LeaveSyncRowResult[];
+}
+
+export function syncLeaveRequests(
+  requests: LeaveSyncRequestInput[],
+): Promise<LeaveSyncResponse> {
+  return apiFetch(`${BASE}/leave/sync`, {
+    method: "POST",
+    body: JSON.stringify({ requests }),
+  });
+}

@@ -156,6 +156,7 @@ func main() {
 		ar.Get("/leave/balances", handlers.ListLeaveBalances)
 		ar.Post("/leave/balances/adjust", handlers.AdjustLeaveBalance)
 		ar.Get("/leave/calendar", handlers.LeaveCalendar)
+		ar.Post("/leave/sync", handlers.SyncLeaveRequests)
 
 		ar.Get("/holidays", handlers.ListHolidays)
 		ar.Post("/holidays", handlers.CreateHoliday)
