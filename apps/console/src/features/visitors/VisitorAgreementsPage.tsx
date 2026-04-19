@@ -10,12 +10,12 @@ import {
   Input,
   Label,
 } from '@dm3/ui';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, PauseCircle, PlayCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   listAgreements,
   createAgreement,
-  deleteAgreement,
+  updateAgreement,
   type AgreementDTO,
 } from '@dm3/api-client';
 
@@ -41,8 +41,8 @@ export function VisitorAgreementsPage() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteAgreement(id),
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) => updateAgreement(id, { active }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['visitor-agreements'] }),
   });
 
@@ -68,8 +68,15 @@ export function VisitorAgreementsPage() {
     {
       key: 'actions', header: '', width: '60px',
       render: (r) => (
-        <Button size="xs" variant="ghost" className="text-destructive" onClick={() => deleteMutation.mutate(r.id)}>
-          <Trash2 size={14} />
+        <Button
+          size="xs"
+          variant="ghost"
+          onClick={() => toggleMutation.mutate({ id: r.id, active: !r.active })}
+          title={r.active ? 'Deactivate' : 'Activate'}
+        >
+          {r.active
+            ? <PauseCircle size={14} className="text-amber-400" />
+            : <PlayCircle size={14} className="text-emerald-400" />}
         </Button>
       ),
     },

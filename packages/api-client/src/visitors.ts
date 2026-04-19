@@ -271,7 +271,7 @@ export interface BatchCreateResponse {
 }
 
 export function batchCreateVisits(data: BatchCreateRequest): Promise<BatchCreateResponse> {
-  return apiFetch<BatchCreateResponse>(`${BASE}/visits/batch`, { method: 'POST', body: JSON.stringify(data) });
+  return apiFetch<BatchCreateResponse>(`${BASE}/batch`, { method: 'POST', body: JSON.stringify(data) });
 }
 
 // ─── Visit Groups ───────────────────────────────────────────────────────────
@@ -327,10 +327,6 @@ export function createVisitGroup(data: CreateVisitGroupRequest): Promise<VisitGr
   return apiFetch<VisitGroupDTO>(`${BASE}/groups`, { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function updateVisitGroup(id: string, data: Partial<CreateVisitGroupRequest>): Promise<VisitGroupDTO> {
-  return apiFetch<VisitGroupDTO>(`${BASE}/groups/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-}
-
 export function deleteVisitGroup(id: string): Promise<void> {
   return apiFetch<void>(`${BASE}/groups/${id}`, { method: 'DELETE' });
 }
@@ -357,33 +353,48 @@ export interface VisitorAccessLogDTO {
 export interface ListAccessLogParams {
   page?: number;
   limit?: number;
-  visitor_id?: string;
-  visit_id?: string;
   from?: string;
   to?: string;
 }
 
-export function listVisitorAccessLog(params?: ListAccessLogParams): Promise<Paginated<VisitorAccessLogDTO>> {
+export function listVisitAccessLog(visitId: string, params?: ListAccessLogParams): Promise<Paginated<VisitorAccessLogDTO>> {
   const qs = new URLSearchParams();
   if (params?.page != null) qs.set('page', String(params.page));
   if (params?.limit != null) qs.set('limit', String(params.limit));
-  if (params?.visitor_id) qs.set('visitor_id', params.visitor_id);
-  if (params?.visit_id) qs.set('visit_id', params.visit_id);
   if (params?.from) qs.set('from', params.from);
   if (params?.to) qs.set('to', params.to);
   const q = qs.toString();
-  return apiFetch<Paginated<VisitorAccessLogDTO>>(`${BASE}/access-log${q ? '?' + q : ''}`);
+  return apiFetch<Paginated<VisitorAccessLogDTO>>(`${BASE}/${visitId}/access-log${q ? '?' + q : ''}`);
+}
+
+export function listVisitorHistory(visitorId: string, params?: ListAccessLogParams): Promise<Paginated<VisitorAccessLogDTO>> {
+  const qs = new URLSearchParams();
+  if (params?.page != null) qs.set('page', String(params.page));
+  if (params?.limit != null) qs.set('limit', String(params.limit));
+  if (params?.from) qs.set('from', params.from);
+  if (params?.to) qs.set('to', params.to);
+  const q = qs.toString();
+  return apiFetch<Paginated<VisitorAccessLogDTO>>(`${BASE}/history/${visitorId}${q ? '?' + q : ''}`);
 }
 
 // ─── Evacuation ─────────────────────────────────────────────────────────────
 
-export interface EvacuationResponse {
-  checked_out: number;
-  already_out: number;
+export interface EvacuationEntry {
+  visit_id: string;
+  visitor_id: string;
+  visitor_name: string;
+  visitor_company?: string;
+  visitor_phone?: string;
+  visitor_photo_ref?: string;
+  host_name: string;
+  checkin_time?: string;
+  last_access_point?: string;
+  last_zone?: string;
+  last_event_time?: string;
 }
 
-export function triggerEvacuation(): Promise<EvacuationResponse> {
-  return apiFetch<EvacuationResponse>(`${BASE}/evacuate`, { method: 'POST' });
+export function getEvacuationList(): Promise<EvacuationEntry[]> {
+  return apiFetch<EvacuationEntry[]>(`${BASE}/evacuation`);
 }
 
 // ─── Agreements ─────────────────────────────────────────────────────────────
@@ -426,10 +437,6 @@ export function createAgreement(data: CreateAgreementRequest): Promise<Agreement
 
 export function updateAgreement(id: string, data: Partial<CreateAgreementRequest> & { active?: boolean }): Promise<AgreementDTO> {
   return apiFetch<AgreementDTO>(`${BASE}/agreements/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-}
-
-export function deleteAgreement(id: string): Promise<void> {
-  return apiFetch<void>(`${BASE}/agreements/${id}`, { method: 'DELETE' });
 }
 
 export function signAgreement(visitId: string, agreementId: string, visitorId: string, signatureRef?: string): Promise<AgreementSignatureDTO> {
@@ -512,8 +519,8 @@ export interface CreateRecurringTemplateRequest {
   escort_required?: boolean;
 }
 
-export function listRecurringTemplates(): Promise<RecurringTemplateDTO[]> {
-  return apiFetch<RecurringTemplateDTO[]>(`${BASE}/recurring`);
+export function listRecurringTemplates(): Promise<Paginated<RecurringTemplateDTO>> {
+  return apiFetch<Paginated<RecurringTemplateDTO>>(`${BASE}/recurring`);
 }
 
 export function createRecurringTemplate(data: CreateRecurringTemplateRequest): Promise<RecurringTemplateDTO> {

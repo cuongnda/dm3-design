@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import {
   PageHeader,
@@ -9,22 +8,34 @@ import {
   Input,
 } from '@dm3/ui';
 import { cn } from '@/lib/utils';
-import { listVisitorAccessLog, type VisitorAccessLogDTO } from '@dm3/api-client';
+import {
+  getTopVisitors,
+  listVisitorHistory,
+  type VisitorAccessLogDTO,
+  type TopVisitorDTO,
+} from '@dm3/api-client';
 
 export function VisitorAccessHistoryPage() {
-  const { t } = useTranslation('manage');
+  const [visitorId, setVisitorId] = useState<string>('');
   const [page, setPage] = useState(1);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
+  const { data: topVisitors = [] } = useQuery({
+    queryKey: ['visitors-picker-top'],
+    queryFn: () => getTopVisitors({ limit: 100 }),
+  });
+  const visitors: TopVisitorDTO[] = topVisitors;
+
   const { data, isLoading } = useQuery({
-    queryKey: ['visitor-access-log', page, dateFrom, dateTo],
-    queryFn: () => listVisitorAccessLog({
+    queryKey: ['visitor-history', visitorId, page, dateFrom, dateTo],
+    queryFn: () => listVisitorHistory(visitorId, {
       page,
       limit: 20,
       from: dateFrom || undefined,
       to: dateTo || undefined,
     }),
+    enabled: !!visitorId,
   });
 
   const logs = data?.data ?? [];
@@ -70,7 +81,27 @@ export function VisitorAccessHistoryPage() {
         </div>
       </PageHeader>
 
-      {isLoading ? (
+      <div className="flex gap-3 mb-4">
+        <select
+          className="h-8 text-[12px] rounded-md border border-input bg-background px-2 min-w-[260px]"
+          value={visitorId}
+          onChange={(e) => { setVisitorId(e.target.value); setPage(1); }}
+          data-testid="visitors-select-history-visitor"
+        >
+          <option value="">Select a visitor…</option>
+          {visitors.map((v) => (
+            <option key={v.visitor_id} value={v.visitor_id}>
+              {v.name}{v.company ? ` — ${v.company}` : ''} · {v.visit_count} visits
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {!visitorId ? (
+        <div className="text-center py-12 text-muted-foreground text-[13px]">
+          Select a visitor to view their access history.
+        </div>
+      ) : isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Loading...</div>
       ) : logs.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">No access log entries found</div>

@@ -12,10 +12,11 @@ import {
 export function VisitorRecurringPage() {
   const qc = useQueryClient();
 
-  const { data: templates = [], isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['visitor-recurring'],
     queryFn: () => listRecurringTemplates(),
   });
+  const templates = data?.data ?? [];
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteRecurringTemplate(id),
