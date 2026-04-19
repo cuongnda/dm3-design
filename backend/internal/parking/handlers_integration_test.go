@@ -85,6 +85,7 @@ func setupParkingRouter(h *ParkingHandlers) http.Handler {
 		r.Get("/sessions/{id}", h.GetParkingSession)
 		r.Put("/sessions/{id}/exit", h.ExitParkingSession)
 		r.Post("/sessions/{id}/payment", h.ProcessParkingPayment)
+		r.Post("/sessions/{id}/void", h.VoidParkingSession)
 		r.Get("/passes", h.ListParkingPasses)
 		r.Post("/passes", h.CreateParkingPass)
 	})
@@ -581,4 +582,117 @@ func TestParkingExitCompletesWhenPaymentNotRequired(t *testing.T) {
 	if exited["status"] != "completed" {
 		t.Fatalf("expected completed exit when require_payment_before_exit=false, got %#v", exited["status"])
 	}
+}
+
+// TestParkingSessionListFilterByVoidStatus verifies that the canonical "void"
+// status value (not "voided") is accepted by the list filter and returns only
+// voided sessions. Guards against the backend/frontend status naming mismatch
+// previously flagged in the review verdict.
+func TestParkingSessionListFilterByVoidStatus(t *testing.T) {
+	database := setupParkingTestDB(t)
+	defer database.Close()
+	requireParkingSchema(t, database)
+
+	h := NewParkingHandlers(database, nil, nil)
+	router := setupParkingRouter(h)
+	ids := map[string]string{}
+	defer cleanupParkingFixtures(t, database, ids)
+
+	suffix := time.Now().Format("20060102150405")
+	ids["lot"], ids["zone"] = createParkingLotAndZone(t, router, suffix+"-void", 3)
+
+	plate := fmt.Sprintf("51V-%s", suffix[len(suffix)-5:])
+	sessionResp := parkingRequest(t, router, http.MethodPost, "/api/v1/parking/sessions", map[string]any{
+		"lot_id":       ids["lot"],
+		"zone_id":      ids["zone"],
+		"plate_number": plate,
+		"vehicle_type": "car",
+		"matched_by":   "manual",
+	})
+	if sessionResp.Code != http.StatusCreated {
+		t.Fatalf("create session: expected 201, got %d: %s", sessionResp.Code, sessionResp.Body.String())
+	}
+	ids["session"] = decodeJSON[map[string]any](t, sessionResp)["id"].(string)
+
+	voidResp := parkingRequest(t, router, http.MethodPost, "/api/v1/parking/sessions/"+ids["session"]+"/void", nil)
+	if voidResp.Code != http.StatusOK {
+		t.Fatalf("void session: expected 200, got %d: %s", voidResp.Code, voidResp.Body.String())
+	}
+	voided := decodeJSON[map[string]any](t, voidResp)
+	if voided["status"] != "void" {
+		t.Fatalf("expected status=\"void\" (canonical), got %#v", voided["status"])
+	}
+
+	// status=voided should NOT match (guards against legacy frontend term leaking back).
+	legacyResp := parkingRequest(t, router, http.MethodGet,
+		"/api/v1/parking/sessions?plate_number="+plate+"&status=voided", nil)
+	if legacyResp.Code != http.StatusOK {
+		t.Fatalf("list with legacy status=voided: expected 200, got %d", legacyResp.Code)
+	}
+	legacyBody := decodeJSON[map[string]any](t, legacyResp)
+	if data, _ := legacyBody["data"].([]any); len(data) != 0 {
+		t.Fatalf("expected empty result for status=voided filter, got %d rows", len(data))
+	}
+
+	// status=void returns the voided row.
+	listResp := parkingRequest(t, router, http.MethodGet,
+		"/api/v1/parking/sessions?plate_number="+plate+"&status=void", nil)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("list with status=void: expected 200, got %d: %s", listResp.Code, listResp.Body.String())
+	}
+	body := decodeJSON[map[string]any](t, listResp)
+	data, _ := body["data"].([]any)
+	if len(data) != 1 {
+		t.Fatalf("expected exactly 1 voided session, got %d", len(data))
+	}
+	row := data[0].(map[string]any)
+	if row["status"] != "void" {
+		t.Fatalf("expected filtered row status=void, got %#v", row["status"])
+	}
+}
+
+// TestParkingSessionResponseContract verifies the JSON contract keys exposed to
+// API clients. Guards against DTO drift (e.g. normalized_plate vs
+// normalized_plate_number) that previously broke the frontend.
+func TestParkingSessionResponseContract(t *testing.T) {
+	database := setupParkingTestDB(t)
+	defer database.Close()
+	requireParkingSchema(t, database)
+
+	h := NewParkingHandlers(database, nil, nil)
+	router := setupParkingRouter(h)
+	ids := map[string]string{}
+	defer cleanupParkingFixtures(t, database, ids)
+
+	suffix := time.Now().Format("20060102150405")
+	ids["lot"], ids["zone"] = createParkingLotAndZone(t, router, suffix+"-shape", 3)
+
+	plate := fmt.Sprintf("88K-%s", suffix[len(suffix)-5:])
+	sessionResp := parkingRequest(t, router, http.MethodPost, "/api/v1/parking/sessions", map[string]any{
+		"lot_id":       ids["lot"],
+		"zone_id":      ids["zone"],
+		"plate_number": plate,
+		"vehicle_type": "car",
+		"matched_by":   "manual",
+	})
+	if sessionResp.Code != http.StatusCreated {
+		t.Fatalf("create session: expected 201, got %d: %s", sessionResp.Code, sessionResp.Body.String())
+	}
+	session := decodeJSON[map[string]any](t, sessionResp)
+	ids["session"] = session["id"].(string)
+
+	if _, ok := session["normalized_plate"]; !ok {
+		t.Fatalf("ParkingSession JSON missing expected key \"normalized_plate\"; keys=%v", mapKeys(session))
+	}
+	if _, ok := session["normalized_plate_number"]; ok {
+		t.Fatalf("ParkingSession JSON contains legacy key \"normalized_plate_number\"; should be \"normalized_plate\"")
+	}
+}
+
+func mapKeys(m map[string]any) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	return ks
 }

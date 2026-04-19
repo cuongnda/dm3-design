@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { PageHeader, DataTable, type Column, Button } from '@dm3/ui';
-import { Ban, ParkingCircle } from 'lucide-react';
+import { PageHeader, DataTable, type Column, Button, TablePaginationFooter } from '@dm3/ui';
+import { AlertCircle, Ban, ParkingCircle } from 'lucide-react';
 import {
   listParkingSessions,
   voidParkingSession,
@@ -25,11 +25,12 @@ function StatusBadge({ status }: { status: string }) {
 export function ParkingSessionsPage() {
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
   const [statusFilter, setStatusFilter] = useState('');
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['parking-sessions', page, statusFilter],
-    queryFn: () => listParkingSessions({ page, limit: 20, status: statusFilter || undefined }),
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['parking-sessions', page, limit, statusFilter],
+    queryFn: () => listParkingSessions({ page, limit, status: statusFilter || undefined }),
   });
 
   const voidMutation = useMutation({
@@ -39,6 +40,7 @@ export function ParkingSessionsPage() {
 
   const sessions = data?.data ?? [];
   const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
 
   const columns: Column<ParkingSessionDTO>[] = [
     {
@@ -109,24 +111,58 @@ export function ParkingSessionsPage() {
 
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Loading sessions...</div>
+      ) : isError ? (
+        <div
+          className="mx-4 my-6 flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-[13px] text-destructive"
+          data-testid="parking-error-sessions"
+          role="alert"
+        >
+          <AlertCircle size={18} className="mt-0.5 flex-shrink-0" />
+          <div>
+            <div className="font-medium">Failed to load parking sessions</div>
+            <div className="mt-1 text-destructive/80">
+              {error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.'}
+            </div>
+            <Button
+              size="xs"
+              variant="outline"
+              className="mt-3"
+              onClick={() => qc.invalidateQueries({ queryKey: ['parking-sessions'] })}
+              data-testid="parking-button-retry-sessions"
+            >
+              Retry
+            </Button>
+          </div>
+        </div>
       ) : (
-        <DataTable
-          columns={columns}
-          data={sessions}
-          rowKey={(r) => r.id}
-          pageSize={20}
-          emptyIcon={<ParkingCircle size={32} strokeWidth={1.2} />}
-          emptyTitle={statusFilter ? `No ${statusFilter} sessions` : 'No parking sessions yet'}
-          emptyDescription={statusFilter
-            ? 'Try a different status filter to see other sessions, or wait for vehicles to enter.'
-            : 'Sessions appear here automatically when vehicles enter and exit parking lots. Connect parking devices to start collecting data.'}
-          emptyAction={statusFilter ? {
-            label: 'Clear filter',
-            variant: 'outline',
-            onClick: () => { setStatusFilter(''); setPage(1); },
-            'data-testid': 'parking-button-clear-session-filter-empty',
-          } : undefined}
-        />
+        <>
+          <DataTable
+            columns={columns}
+            data={sessions}
+            rowKey={(r) => r.id}
+            paginate={false}
+            emptyIcon={<ParkingCircle size={32} strokeWidth={1.2} />}
+            emptyTitle={statusFilter ? `No ${statusFilter} sessions` : 'No parking sessions yet'}
+            emptyDescription={statusFilter
+              ? 'Try a different status filter to see other sessions, or wait for vehicles to enter.'
+              : 'Sessions appear here automatically when vehicles enter and exit parking lots. Connect parking devices to start collecting data.'}
+            emptyAction={statusFilter ? {
+              label: 'Clear filter',
+              variant: 'outline',
+              onClick: () => { setStatusFilter(''); setPage(1); },
+              'data-testid': 'parking-button-clear-session-filter-empty',
+            } : undefined}
+          />
+          <TablePaginationFooter
+            page={page}
+            pageSize={limit}
+            total={total}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => { setLimit(size); setPage(1); }}
+            data-testid="parking-pagination-sessions"
+          />
+        </>
       )}
     </div>
   );
