@@ -181,7 +181,7 @@ func createParkingLotAndZone(t *testing.T, router http.Handler, suffix string, t
 
 func TestParkingVehicleSessionPaymentLifecycle(t *testing.T) {
 	database := setupParkingTestDB(t)
-	defer database.Close()
+	t.Cleanup(func() { database.Close() })
 	requireParkingSchema(t, database)
 
 	h := NewParkingHandlers(database, nil, nil)
@@ -296,7 +296,7 @@ func TestParkingVehicleSessionPaymentLifecycle(t *testing.T) {
 
 func TestParkingRecognitionPassFlow(t *testing.T) {
 	database := setupParkingTestDB(t)
-	defer database.Close()
+	t.Cleanup(func() { database.Close() })
 	requireParkingSchema(t, database)
 
 	h := NewParkingHandlers(database, nil, nil)
@@ -458,7 +458,7 @@ func setParkingSettingInt(t *testing.T, database *db.DB, h *ParkingHandlers, col
 // overstay_exceeded decision code regardless of payment status.
 func TestParkingExitOverstayMarkedDisputed(t *testing.T) {
 	database := setupParkingTestDB(t)
-	defer database.Close()
+	t.Cleanup(func() { database.Close() })
 	requireParkingSchema(t, database)
 
 	h := NewParkingHandlers(database, nil, nil)
@@ -512,7 +512,7 @@ func TestParkingExitOverstayMarkedDisputed(t *testing.T) {
 // rejects /sessions/recognitions with 403.
 func TestParkingRecognitionDisabled(t *testing.T) {
 	database := setupParkingTestDB(t)
-	defer database.Close()
+	t.Cleanup(func() { database.Close() })
 	requireParkingSchema(t, database)
 
 	h := NewParkingHandlers(database, nil, nil)
@@ -537,7 +537,7 @@ func TestParkingRecognitionDisabled(t *testing.T) {
 // transitions the session directly to "completed" (old behavior).
 func TestParkingExitCompletesWhenPaymentNotRequired(t *testing.T) {
 	database := setupParkingTestDB(t)
-	defer database.Close()
+	t.Cleanup(func() { database.Close() })
 	requireParkingSchema(t, database)
 
 	h := NewParkingHandlers(database, nil, nil)
@@ -590,7 +590,7 @@ func TestParkingExitCompletesWhenPaymentNotRequired(t *testing.T) {
 // previously flagged in the review verdict.
 func TestParkingSessionListFilterByVoidStatus(t *testing.T) {
 	database := setupParkingTestDB(t)
-	defer database.Close()
+	t.Cleanup(func() { database.Close() })
 	requireParkingSchema(t, database)
 
 	h := NewParkingHandlers(database, nil, nil)
@@ -656,7 +656,7 @@ func TestParkingSessionListFilterByVoidStatus(t *testing.T) {
 // normalized_plate_number) that previously broke the frontend.
 func TestParkingSessionResponseContract(t *testing.T) {
 	database := setupParkingTestDB(t)
-	defer database.Close()
+	t.Cleanup(func() { database.Close() })
 	requireParkingSchema(t, database)
 
 	h := NewParkingHandlers(database, nil, nil)
