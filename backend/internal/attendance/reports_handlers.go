@@ -1,8 +1,11 @@
 package attendance
 
 import (
+	"encoding/csv"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
@@ -301,4 +304,131 @@ func (h *AttendanceHandlers) GetReport(w http.ResponseWriter, r *http.Request) {
 		Users:      users,
 		Advisories: advisories,
 	})
+}
+
+// GetReportCSV serves GET /api/v1/attendance/reports/summary.csv.
+//
+// Unlike GetReport this endpoint streams per-user rows straight to the HTTP
+// response without the 500-row cap — tenants with more than 500 employees
+// would otherwise get silently-truncated exports from the JSON endpoint.
+// The writer is flushed per row so large exports don't buffer in memory.
+func (h *AttendanceHandlers) GetReportCSV(w http.ResponseWriter, r *http.Request) {
+	tenantID := authsvc.CompanyIDFromContext(r.Context())
+	if tenantID == "" {
+		httputil.Error(w, http.StatusUnauthorized, "missing tenant context")
+		return
+	}
+
+	q := r.URL.Query()
+	fromStr := q.Get("from")
+	toStr := q.Get("to")
+	if fromStr == "" || toStr == "" {
+		httputil.Error(w, http.StatusBadRequest, "from and to are required (YYYY-MM-DD)")
+		return
+	}
+	from, err := time.Parse("2006-01-02", fromStr)
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid from (expected YYYY-MM-DD)")
+		return
+	}
+	to, err := time.Parse("2006-01-02", toStr)
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid to (expected YYYY-MM-DD)")
+		return
+	}
+	if to.Before(from) {
+		httputil.Error(w, http.StatusBadRequest, "to must be on or after from")
+		return
+	}
+	if to.Sub(from) > 366*24*time.Hour {
+		httputil.Error(w, http.StatusBadRequest, "date range exceeds 366 days")
+		return
+	}
+
+	// No LIMIT here — this is the "true" export. Cost is still bounded by the
+	// 366-day range cap above and the per-tenant user count.
+	rows, err := h.db.Pool.Query(r.Context(), `
+		SELECT
+			ar.user_id::text,
+			COALESCE(NULLIF(TRIM(u.first_name || ' ' || u.last_name), ''), '') AS user_name,
+			COALESCE(u.email, '')                                              AS user_email,
+			COUNT(*)                                                           AS record_count,
+			COUNT(*) FILTER (WHERE ar.status = 'on_time')                      AS on_time,
+			COUNT(*) FILTER (WHERE ar.status = 'late')                         AS late,
+			COUNT(*) FILTER (WHERE ar.status = 'absent')                       AS absent,
+			COUNT(*) FILTER (WHERE ar.status = 'on_leave')                     AS on_leave,
+			COALESCE(SUM(ar.total_hours), 0)                                   AS total_hours,
+			COALESCE(SUM(ar.regular_hours), 0)                                 AS regular_hours,
+			COALESCE(SUM(ar.overtime_hours), 0)                                AS overtime_hours,
+			COALESCE(SUM(CASE WHEN ar.overtime_approved THEN ar.overtime_hours ELSE 0 END), 0) AS approved_overtime_hours,
+			COALESCE(SUM(ar.late_minutes), 0)                                  AS late_minutes
+		  FROM dm3_attendance.attendance_records ar
+		  LEFT JOIN dm3_identity.users u ON u.id = ar.user_id AND u.tenant_id = ar.tenant_id
+		 WHERE ar.tenant_id = $1::uuid AND ar.date >= $2::date AND ar.date <= $3::date
+		 GROUP BY ar.user_id, u.first_name, u.last_name, u.email
+		 ORDER BY user_name ASC`, tenantID, fromStr, toStr)
+	if err != nil {
+		slog.Error("report csv query", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "failed to build report")
+		return
+	}
+	defer rows.Close()
+
+	filename := fmt.Sprintf("attendance_summary_%s_%s.csv", fromStr, toStr)
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	w.WriteHeader(http.StatusOK)
+
+	cw := csv.NewWriter(w)
+	defer cw.Flush()
+
+	header := []string{
+		"user_id", "user_name", "user_email",
+		"record_count", "on_time", "late", "absent", "on_leave",
+		"total_hours", "regular_hours", "overtime_hours", "approved_overtime_hours",
+		"late_minutes",
+	}
+	if err := cw.Write(header); err != nil {
+		slog.Error("csv header", "error", err)
+		return
+	}
+
+	for rows.Next() {
+		var u ReportUserRow
+		if err := rows.Scan(
+			&u.UserID, &u.UserName, &u.UserEmail,
+			&u.RecordCount,
+			&u.OnTimeCount, &u.LateCount, &u.AbsentCount, &u.OnLeaveCount,
+			&u.TotalHours, &u.RegularHours, &u.OvertimeHours, &u.ApprovedOvertimeHours,
+			&u.LateMinutes,
+		); err != nil {
+			slog.Error("csv scan", "error", err)
+			return
+		}
+		rec := []string{
+			u.UserID, u.UserName, u.UserEmail,
+			strconv.FormatInt(u.RecordCount, 10),
+			strconv.FormatInt(u.OnTimeCount, 10),
+			strconv.FormatInt(u.LateCount, 10),
+			strconv.FormatInt(u.AbsentCount, 10),
+			strconv.FormatInt(u.OnLeaveCount, 10),
+			strconv.FormatFloat(u.TotalHours, 'f', 2, 64),
+			strconv.FormatFloat(u.RegularHours, 'f', 2, 64),
+			strconv.FormatFloat(u.OvertimeHours, 'f', 2, 64),
+			strconv.FormatFloat(u.ApprovedOvertimeHours, 'f', 2, 64),
+			strconv.FormatInt(u.LateMinutes, 10),
+		}
+		if err := cw.Write(rec); err != nil {
+			slog.Error("csv row", "error", err)
+			return
+		}
+		cw.Flush()
+		if err := cw.Error(); err != nil {
+			slog.Error("csv flush", "error", err)
+			return
+		}
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("csv rows iter", "error", err)
+	}
 }

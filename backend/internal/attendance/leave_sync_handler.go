@@ -148,6 +148,10 @@ func (h *AttendanceHandlers) applyLeaveSyncRow(ctx context.Context, tenantID str
 		res.Status, res.Error = "failed", "end_date must be on/after start_date"
 		return res
 	}
+	if req.HalfDay && !start.Equal(end) {
+		res.Status, res.Error = "failed", "half_day is only valid when start_date == end_date"
+		return res
+	}
 
 	status := strings.ToLower(strings.TrimSpace(req.Status))
 	if status == "" {
@@ -162,9 +166,10 @@ func (h *AttendanceHandlers) applyLeaveSyncRow(ctx context.Context, tenantID str
 
 	days := req.Days
 	if days <= 0 {
-		days = float64(end.Sub(start).Hours()/24) + 1
 		if req.HalfDay {
-			days *= 0.5
+			days = 0.5
+		} else {
+			days = float64(end.Sub(start).Hours()/24) + 1
 		}
 	}
 

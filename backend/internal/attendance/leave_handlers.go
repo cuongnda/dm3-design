@@ -364,7 +364,8 @@ func (h *AttendanceHandlers) ListLeaveRequests(w http.ResponseWriter, r *http.Re
 	httputil.Paginated(w, requests, total, page, limit)
 }
 
-// CreateLeaveRequest inserts a pending leave request.
+// CreateLeaveRequest inserts a pending leave request on behalf of any user in
+// the tenant. Management-only path; self-service employees use POST /me/leave.
 func (h *AttendanceHandlers) CreateLeaveRequest(w http.ResponseWriter, r *http.Request) {
 	tenantID := authsvc.CompanyIDFromContext(r.Context())
 	if tenantID == "" {
@@ -382,37 +383,83 @@ func (h *AttendanceHandlers) CreateLeaveRequest(w http.ResponseWriter, r *http.R
 		httputil.Error(w, http.StatusBadRequest, "user_id is required")
 		return
 	}
-	if strings.TrimSpace(req.PolicyID) == "" {
-		httputil.Error(w, http.StatusBadRequest, "policy_id is required")
+
+	id, days, httpErr := h.createLeaveRequest(r, tenantID, req)
+	if httpErr != nil {
+		httputil.Error(w, httpErr.code, httpErr.msg)
 		return
+	}
+
+	h.audit.LogFromRequest(r, "attendance.leave_requested", "leave_request", id,
+		"", "success", nil, map[string]any{
+			"user_id":    req.UserID,
+			"policy_id":  req.PolicyID,
+			"start_date": req.StartDate,
+			"end_date":   req.EndDate,
+			"days":       days,
+			"half_day":   req.HalfDay,
+			"source":     "admin",
+		})
+	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id, "status": "pending"})
+}
+
+// validateLeaveRequestPayload performs the pure (no-DB) validation and day-math
+// for a leave request payload. Extracted so unit tests can cover the
+// invariants — half-day semantics, inclusive day counting, date parsing —
+// without a live database. Returns the parsed start date and canonical day
+// count, or an httpError with the caller-facing status/message.
+func validateLeaveRequestPayload(req leaveRequestPayload) (start time.Time, days float64, httpErr *httpError) {
+	if strings.TrimSpace(req.PolicyID) == "" {
+		return time.Time{}, 0, &httpError{http.StatusBadRequest, "policy_id is required"}
 	}
 	start, err := time.Parse("2006-01-02", req.StartDate)
 	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, "start_date must be YYYY-MM-DD")
-		return
+		return time.Time{}, 0, &httpError{http.StatusBadRequest, "start_date must be YYYY-MM-DD"}
 	}
 	end, err := time.Parse("2006-01-02", req.EndDate)
 	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, "end_date must be YYYY-MM-DD")
-		return
+		return time.Time{}, 0, &httpError{http.StatusBadRequest, "end_date must be YYYY-MM-DD"}
 	}
 	if end.Before(start) {
-		httputil.Error(w, http.StatusBadRequest, "end_date must be on/after start_date")
-		return
+		return time.Time{}, 0, &httpError{http.StatusBadRequest, "end_date must be on/after start_date"}
+	}
+	if req.HalfDay && !start.Equal(end) {
+		return time.Time{}, 0, &httpError{http.StatusBadRequest, "half_day is only valid when start_date == end_date"}
 	}
 
-	days := req.Days
+	days = req.Days
 	if days <= 0 {
-		// Default: inclusive day count, halved if half_day.
-		days = float64(end.Sub(start).Hours()/24) + 1
 		if req.HalfDay {
-			days = days * 0.5
+			// Single-day half-day leave is 0.5 days, not inclusive-scaled.
+			days = 0.5
+		} else {
+			days = float64(end.Sub(start).Hours()/24) + 1
 		}
+	}
+	return start, days, nil
+}
+
+// createLeaveRequest is the shared implementation used by both the admin path
+// (CreateLeaveRequest) and the self-service path (CreateMeLeaveRequest).
+// Returns the new request id and the canonical days count, or an httpError
+// with the caller-facing status code and message. All tenant- and balance-
+// level checks live here so the two callers can't diverge on invariants.
+//
+// Half-day semantics: half_day is only meaningful on a single-day range.
+// Multi-day ranges with half_day are rejected explicitly rather than silently
+// producing fractional-day totals.
+func (h *AttendanceHandlers) createLeaveRequest(
+	r *http.Request,
+	tenantID string,
+	req leaveRequestPayload,
+) (id string, days float64, httpErr *httpError) {
+	start, days, httpErr := validateLeaveRequestPayload(req)
+	if httpErr != nil {
+		return "", 0, httpErr
 	}
 
 	year := balanceYear(start)
-	var id string
-	err = withTx(r.Context(), h.db.Pool, func(tx pgx.Tx) error {
+	err := withTx(r.Context(), h.db.Pool, func(tx pgx.Tx) error {
 		if err := reserveBalance(r.Context(), tx, tenantID, req.UserID, req.PolicyID, year, days); err != nil {
 			return err
 		}
@@ -430,25 +477,13 @@ func (h *AttendanceHandlers) CreateLeaveRequest(w http.ResponseWriter, r *http.R
 		).Scan(&id)
 	})
 	if errors.Is(err, ErrInsufficientBalance) {
-		httputil.Error(w, http.StatusConflict, "insufficient leave balance")
-		return
+		return "", 0, &httpError{http.StatusConflict, "insufficient leave balance"}
 	}
 	if err != nil {
 		slog.Error("create leave request", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, "failed to create leave request")
-		return
+		return "", 0, &httpError{http.StatusInternalServerError, "failed to create leave request"}
 	}
-
-	h.audit.LogFromRequest(r, "attendance.leave_requested", "leave_request", id,
-		"", "success", nil, map[string]any{
-			"user_id":    req.UserID,
-			"policy_id":  req.PolicyID,
-			"start_date": req.StartDate,
-			"end_date":   req.EndDate,
-			"days":       days,
-			"half_day":   req.HalfDay,
-		})
-	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id, "status": "pending"})
+	return id, days, nil
 }
 
 // ApproveLeaveRequest marks a pending request approved.

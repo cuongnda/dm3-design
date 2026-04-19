@@ -39,6 +39,7 @@ type OvertimeEntry struct {
 	OvertimeHours    float64    `json:"overtime_hours"`
 	OvertimeApproved bool       `json:"overtime_approved"`
 	ReviewedBy       *string    `json:"reviewed_by,omitempty"`
+	ReviewNote       *string    `json:"review_note,omitempty"`
 	Status           string     `json:"status"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
@@ -128,6 +129,7 @@ func (h *AttendanceHandlers) ListOvertime(w http.ResponseWriter, r *http.Request
 			COALESCE(s.name, '') AS shift_name,
 			ar.clock_in, ar.clock_out,
 			ar.overtime_hours, ar.overtime_approved, ar.overtime_approved_by::text,
+			ar.overtime_review_note,
 			ar.updated_at
 		  FROM dm3_attendance.attendance_records ar
 		  LEFT JOIN dm3_identity.users u ON u.id = ar.user_id AND u.tenant_id = ar.tenant_id
@@ -148,12 +150,14 @@ func (h *AttendanceHandlers) ListOvertime(w http.ResponseWriter, r *http.Request
 	for rows.Next() {
 		var e OvertimeEntry
 		var reviewedBy *string
+		var reviewNote *string
 		if err := rows.Scan(
 			&e.RecordID, &e.TenantID, &e.UserID,
 			&e.UserName, &e.UserEmail,
 			&e.Date, &e.ShiftName,
 			&e.ClockIn, &e.ClockOut,
 			&e.OvertimeHours, &e.OvertimeApproved, &reviewedBy,
+			&reviewNote,
 			&e.UpdatedAt,
 		); err != nil {
 			slog.Error("scan overtime", "error", err)
@@ -161,6 +165,7 @@ func (h *AttendanceHandlers) ListOvertime(w http.ResponseWriter, r *http.Request
 			return
 		}
 		e.ReviewedBy = reviewedBy
+		e.ReviewNote = reviewNote
 		switch {
 		case e.OvertimeApproved:
 			e.Status = OvertimeApproved
@@ -312,8 +317,6 @@ func (h *AttendanceHandlers) reviewOvertime(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Note is accepted but not persisted — schema has no column for it today.
-	// Keeping the payload shape symmetric with leave review for the UI.
 	var payload overtimeReviewPayload
 	if r.ContentLength > 0 {
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -324,14 +327,15 @@ func (h *AttendanceHandlers) reviewOvertime(w http.ResponseWriter, r *http.Reque
 
 	tag, err := h.db.Pool.Exec(r.Context(), `
 		UPDATE dm3_attendance.attendance_records
-		   SET overtime_approved    = $1,
-		       overtime_approved_by = $2::uuid,
-		       updated_at           = NOW()
+		   SET overtime_approved     = $1,
+		       overtime_approved_by  = $2::uuid,
+		       overtime_review_note  = NULLIF($5,''),
+		       updated_at            = NOW()
 		 WHERE id        = $3::uuid
 		   AND tenant_id = $4::uuid
 		   AND overtime_hours IS NOT NULL
 		   AND overtime_hours > 0
-	`, approve, claims.Sub, id, tenantID)
+	`, approve, claims.Sub, id, tenantID, nullStr(payload.Note))
 	if err != nil {
 		slog.Error("review overtime", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "failed to review overtime")
@@ -343,8 +347,14 @@ func (h *AttendanceHandlers) reviewOvertime(w http.ResponseWriter, r *http.Reque
 	}
 
 	status := OvertimeRejected
+	action := "attendance.overtime_rejected"
 	if approve {
 		status = OvertimeApproved
+		action = "attendance.overtime_approved"
 	}
+	h.audit.LogFromRequest(r, action, "attendance_record", id, "", "success", nil, map[string]any{
+		"status": status,
+		"note":   nullStr(payload.Note),
+	})
 	httputil.JSON(w, http.StatusOK, map[string]string{"id": id, "status": status})
 }

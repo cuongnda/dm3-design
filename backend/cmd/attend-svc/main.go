@@ -127,64 +127,104 @@ func main() {
 		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
 
+	// Attendance routes split into four concentric permission bands:
+	//
+	//  1. /me/*       — self-service. Any authenticated tenant user. Writes
+	//                   force user_id = claims.Sub so employees can't act on
+	//                   behalf of anyone else.
+	//  2. shared reads — GETs that both employees and managers need
+	//                   (shifts, holidays, leave policies, leave calendar).
+	//                   Gated by RequireWriteRole which is a no-op on
+	//                   GET/HEAD/OPTIONS so reads stay open to all roles.
+	//  3. management   — CRUD on org-level resources (shifts, policies,
+	//                   holidays, settings, reports, records adjustment,
+	//                   overtime review, leave approve/reject/cancel on
+	//                   behalf of others, admin leave create). Requires a
+	//                   manager-tier role.
+	//  4. /leave/sync  — HR integration hook. Tighter role list
+	//                   (primary_manager / system_admin) because it bulk-
+	//                   mutates leave balances and has no per-row UI guard.
+	//
+	// All bands share the auth+company+plugin middleware.
+	managerRoles := []string{"manager", "primary_manager", "system_admin"}
+	hrSyncRoles := []string{"primary_manager", "system_admin"}
+
 	r.Route("/api/v1/attendance", func(ar chi.Router) {
 		ar.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
 		ar.Use(authsvc.RequireCompany())
 		ar.Use(authsvc.RequirePlugin("attendance"))
 
-		ar.Get("/records", handlers.ListRecords)
-		ar.Get("/records/summary", handlers.DailySummary)
-		ar.Get("/records/{id}", handlers.GetRecord)
-		ar.Patch("/records/{id}", handlers.AdjustRecord)
-
-		ar.Get("/shifts", handlers.ListShifts)
-		ar.Post("/shifts", handlers.CreateShift)
-		ar.Post("/shifts/assign", handlers.BulkAssignShift)
-		ar.Get("/shifts/{id}", handlers.GetShift)
-		ar.Patch("/shifts/{id}", handlers.UpdateShift)
-		ar.Delete("/shifts/{id}", handlers.ArchiveShift)
-
-		ar.Get("/leave/policies", handlers.ListLeavePolicies)
-		ar.Post("/leave/policies", handlers.CreateLeavePolicy)
-		ar.Patch("/leave/policies/{id}", handlers.UpdateLeavePolicy)
-		ar.Delete("/leave/policies/{id}", handlers.DeleteLeavePolicy)
-		ar.Get("/leave/requests", handlers.ListLeaveRequests)
-		ar.Post("/leave/requests", handlers.CreateLeaveRequest)
-		ar.Post("/leave/requests/{id}/approve", handlers.ApproveLeaveRequest)
-		ar.Post("/leave/requests/{id}/reject", handlers.RejectLeaveRequest)
-		ar.Post("/leave/requests/{id}/cancel", handlers.CancelLeaveRequest)
-		ar.Get("/leave/balances", handlers.ListLeaveBalances)
-		ar.Post("/leave/balances/adjust", handlers.AdjustLeaveBalance)
-		ar.Get("/leave/calendar", handlers.LeaveCalendar)
-		ar.Post("/leave/sync", handlers.SyncLeaveRequests)
-
-		ar.Get("/holidays", handlers.ListHolidays)
-		ar.Post("/holidays", handlers.CreateHoliday)
-		ar.Patch("/holidays/{id}", handlers.UpdateHoliday)
-		ar.Delete("/holidays/{id}", handlers.DeleteHoliday)
-
-		ar.Get("/settings", handlers.GetSettings)
-		ar.Put("/settings", handlers.UpdateSettings)
-
-		ar.Get("/overtime", handlers.ListOvertime)
-		ar.Post("/overtime/request", handlers.RequestOvertime)
-		ar.Post("/overtime/{id}/approve", handlers.ApproveOvertime)
-		ar.Post("/overtime/{id}/reject", handlers.RejectOvertime)
-
-		ar.Get("/devices", handlers.ListAttendanceDevices)
-		ar.Post("/devices", handlers.RegisterAttendanceDevice)
-		ar.Delete("/devices/{id}", handlers.DeregisterAttendanceDevice)
-
-		ar.Get("/reports/summary", handlers.GetReport)
-
-		ar.Get("/summary/monthly", handlers.ListAttendanceSummary)
-		ar.Post("/summary/monthly/rebuild", handlers.RebuildMonthlySummary)
-
-		ar.Post("/reports/monthly/export", handlers.ExportMonthlyReport)
-		ar.Get("/reports/monthly/download", handlers.DownloadMonthlyReport)
-
+		// ── Band 1: self-service (no role gate; handlers force claims.Sub) ──
 		ar.Get("/me/attendance", handlers.MeAttendance)
 		ar.Get("/me/leave", handlers.MeLeave)
+		ar.Post("/me/leave/requests", handlers.CreateMeLeaveRequest)
+		ar.Post("/me/leave/requests/{id}/cancel", handlers.CancelMeLeaveRequest)
+		ar.Post("/me/overtime/request", handlers.RequestMeOvertime)
+
+		// ── Band 2+3: shared reads + management writes.
+		// RequireWriteRole only gates mutating methods, so GETs remain open
+		// to all authenticated roles while POST/PATCH/PUT/DELETE require a
+		// manager tier.
+		ar.Group(func(mgr chi.Router) {
+			mgr.Use(authsvc.RequireWriteRole(managerRoles...))
+
+			mgr.Get("/records", handlers.ListRecords)
+			mgr.Get("/records/summary", handlers.DailySummary)
+			mgr.Get("/records/{id}", handlers.GetRecord)
+			mgr.Patch("/records/{id}", handlers.AdjustRecord)
+
+			mgr.Get("/shifts", handlers.ListShifts)
+			mgr.Post("/shifts", handlers.CreateShift)
+			mgr.Post("/shifts/assign", handlers.BulkAssignShift)
+			mgr.Get("/shifts/{id}", handlers.GetShift)
+			mgr.Patch("/shifts/{id}", handlers.UpdateShift)
+			mgr.Delete("/shifts/{id}", handlers.ArchiveShift)
+
+			mgr.Get("/leave/policies", handlers.ListLeavePolicies)
+			mgr.Post("/leave/policies", handlers.CreateLeavePolicy)
+			mgr.Patch("/leave/policies/{id}", handlers.UpdateLeavePolicy)
+			mgr.Delete("/leave/policies/{id}", handlers.DeleteLeavePolicy)
+			mgr.Get("/leave/requests", handlers.ListLeaveRequests)
+			mgr.Post("/leave/requests", handlers.CreateLeaveRequest)
+			mgr.Post("/leave/requests/{id}/approve", handlers.ApproveLeaveRequest)
+			mgr.Post("/leave/requests/{id}/reject", handlers.RejectLeaveRequest)
+			mgr.Post("/leave/requests/{id}/cancel", handlers.CancelLeaveRequest)
+			mgr.Get("/leave/balances", handlers.ListLeaveBalances)
+			mgr.Post("/leave/balances/adjust", handlers.AdjustLeaveBalance)
+			mgr.Get("/leave/calendar", handlers.LeaveCalendar)
+
+			mgr.Get("/holidays", handlers.ListHolidays)
+			mgr.Post("/holidays", handlers.CreateHoliday)
+			mgr.Patch("/holidays/{id}", handlers.UpdateHoliday)
+			mgr.Delete("/holidays/{id}", handlers.DeleteHoliday)
+
+			mgr.Get("/settings", handlers.GetSettings)
+			mgr.Put("/settings", handlers.UpdateSettings)
+
+			mgr.Get("/overtime", handlers.ListOvertime)
+			mgr.Post("/overtime/request", handlers.RequestOvertime)
+			mgr.Post("/overtime/{id}/approve", handlers.ApproveOvertime)
+			mgr.Post("/overtime/{id}/reject", handlers.RejectOvertime)
+
+			mgr.Get("/devices", handlers.ListAttendanceDevices)
+			mgr.Post("/devices", handlers.RegisterAttendanceDevice)
+			mgr.Delete("/devices/{id}", handlers.DeregisterAttendanceDevice)
+
+			mgr.Get("/reports/summary", handlers.GetReport)
+			mgr.Get("/reports/summary.csv", handlers.GetReportCSV)
+
+			mgr.Get("/summary/monthly", handlers.ListAttendanceSummary)
+			mgr.Post("/summary/monthly/rebuild", handlers.RebuildMonthlySummary)
+
+			mgr.Post("/reports/monthly/export", handlers.ExportMonthlyReport)
+			mgr.Get("/reports/monthly/download", handlers.DownloadMonthlyReport)
+		})
+
+		// ── Band 4: HR integration. Primary manager / system admin only.
+		ar.Group(func(hr chi.Router) {
+			hr.Use(authsvc.RequireRole(hrSyncRoles...))
+			hr.Post("/leave/sync", handlers.SyncLeaveRequests)
+		})
 	})
 
 	handlers.StartBackgroundJobs(ctx)
