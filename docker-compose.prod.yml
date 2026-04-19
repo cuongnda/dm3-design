@@ -316,6 +316,31 @@ services:
       timeout: 5s
       retries: 5
 
+  attend-svc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dm3-attend-svc
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: attend-svc
+      HTTP_PORT: "8010"
+      DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      NATS_URL: nats://nats:4222
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+    networks:
+      - dm3-internal
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8010/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ── MediaMTX — RTSP ingest + WebRTC/WHEP + LL-HLS egress ───────────────────
   mediamtx:
     image: bluenviron/mediamtx:1.9.3
@@ -424,6 +449,8 @@ services:
       parking-svc:
         condition: service_healthy
       cctv-svc:
+        condition: service_healthy
+      attend-svc:
         condition: service_healthy
     networks:
       - dm3-internal
