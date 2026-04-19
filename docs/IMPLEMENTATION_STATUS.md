@@ -148,9 +148,9 @@ This document tracks the current implementation status of DM3 features. Updated:
     7. Integration tests for CCTV are absent in `automation/tests/`.
 
 - **Emergency** (`EmergencyPage`)
-  - Status: ⚠️ Partial (mock-only UI shell) | Risk: High
-  - Evidence: `apps/console/src/features/secure/emergency/EmergencyPage.tsx` — imports mock-data
-  - Deviation: No emergency backend service or endpoint found. High risk as emergency response is safety-critical.
+  - Status: ✅ Implemented (backend + frontend + polling) | Risk: Medium (safety-critical, warrants hardening review)
+  - Evidence: `apps/console/src/features/secure/emergency/EmergencyPage.tsx` + `EmergencyPlanModal.tsx` call real `@/lib/api` functions (`fetchEmergencyPlans`, `activateEmergency`, `allClearEmergency`, `sendBulkDoorCommand`, `fetchEmergencyIncidents`, `fetchActiveEmergencies`). Backend routes live in `backend/cmd/access-svc/main.go:261-268` (`/emergency/plans` CRUD, `/emergency/activate`, `/emergency/incidents/{id}/all-clear`, `/emergency/incidents`, `/emergency/incidents/active`). UI polls every 5 s.
+  - Deviation: no dedicated `emergency-svc` — lives inside `access-svc`. Acceptable for now. Authorization depth and audit coverage still need a security pass.
 
 - **Intercom** (`IntercomPage`)
   - Status: ⚠️ Partial (mock-only UI shell) | Risk: Medium

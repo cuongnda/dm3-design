@@ -54,7 +54,7 @@ export const NAV_CONFIG: NavSection[] = [
       { to: '/secure/intrusion', icon: ShieldAlert, labelKey: 'nav.intrusion', labelFallback: 'Intrusion', status: 'coming-soon' },
       { to: '/secure/intercom', icon: Phone, labelKey: 'nav.intercom', labelFallback: 'Intercom', status: 'coming-soon' },
       { to: '/secure/ai-detection', icon: Bot, labelKey: 'nav.aiDetection', labelFallback: 'AI Detection', status: 'coming-soon' },
-      { to: '/secure/emergency', icon: AlertTriangle, labelKey: 'nav.emergency', labelFallback: 'Emergency', status: 'coming-soon' },
+      { to: '/secure/emergency', icon: AlertTriangle, labelKey: 'nav.emergency', labelFallback: 'Emergency', status: 'ready', testId: 'sys-link-emergency' },
       { to: '/secure/access-history', icon: History, labelKey: 'nav.accessHistory', labelFallback: 'Access History', status: 'ready', testId: 'sys-link-access-history' },
     ],
   },
