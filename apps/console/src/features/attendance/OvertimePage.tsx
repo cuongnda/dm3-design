@@ -5,13 +5,16 @@ import {
   DataTable,
   Button,
   Input,
+  AppModal,
+  showToast,
   type Column,
 } from '@dm3/ui';
-import { Timer, Check, X } from 'lucide-react';
+import { Timer, Check, X, Plus } from 'lucide-react';
 import {
   listOvertime,
   approveOvertime,
   rejectOvertime,
+  requestOvertime,
   type OvertimeEntryDTO,
   type OvertimeStatus,
 } from '@dm3/api-client';
@@ -50,6 +53,7 @@ export function OvertimePage() {
   const [to, setTo] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [requestOpen, setRequestOpen] = useState(false);
 
   const listQ = useQuery({
     queryKey: ['overtime', statusFilter, from, to, search, page],
@@ -229,7 +233,26 @@ export function OvertimePage() {
           className="h-8 w-56 text-[13px]"
           data-testid="attendance-input-ot-search"
         />
+        <Button
+          size="sm"
+          onClick={() => setRequestOpen(true)}
+          data-testid="attendance-button-request-ot"
+        >
+          <Plus size={14} className="mr-1" />
+          Request OT
+        </Button>
       </PageHeader>
+
+      <RequestOvertimeModal
+        open={requestOpen}
+        onClose={() => setRequestOpen(false)}
+        onSubmitted={() => {
+          setRequestOpen(false);
+          qc.invalidateQueries({ queryKey: ['overtime'] });
+          setStatusFilter('pending');
+          setPage(1);
+        }}
+      />
 
       {listQ.isLoading ? (
         <div className="py-12 text-center text-muted-foreground">
@@ -277,5 +300,130 @@ export function OvertimePage() {
         </div>
       )}
     </div>
+  );
+}
+
+interface RequestOvertimeModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSubmitted: () => void;
+}
+
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function RequestOvertimeModal({ open, onClose, onSubmitted }: RequestOvertimeModalProps) {
+  const [date, setDate] = useState(todayIso());
+  const [hours, setHours] = useState('1');
+  const [reason, setReason] = useState('');
+
+  const m = useMutation({
+    mutationFn: () =>
+      requestOvertime({
+        date,
+        hours: Number(hours),
+        reason: reason.trim(),
+      }),
+    onSuccess: () => {
+      showToast({ type: 'success', title: 'Overtime request submitted' });
+      setHours('1');
+      setReason('');
+      setDate(todayIso());
+      onSubmitted();
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Failed to submit request';
+      showToast({ type: 'error', title: 'Request failed', description: msg });
+    },
+  });
+
+  const hoursNum = Number(hours);
+  const canSubmit =
+    reason.trim().length > 0 &&
+    !Number.isNaN(hoursNum) &&
+    hoursNum > 0 &&
+    hoursNum <= 24 &&
+    !m.isPending;
+
+  return (
+    <AppModal
+      open={open}
+      onClose={onClose}
+      title="Request overtime"
+      description="Ask a manager to approve overtime hours you worked or plan to work."
+      size="md"
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose} data-testid="attendance-button-request-ot-cancel">
+            Cancel
+          </Button>
+          <Button
+            onClick={() => m.mutate()}
+            disabled={!canSubmit}
+            data-testid="attendance-button-request-ot-submit"
+          >
+            {m.isPending ? 'Submitting…' : 'Submit request'}
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-3">
+        <Field label="Date">
+          <Input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            max={todayIso()}
+            data-testid="attendance-input-request-ot-date"
+          />
+        </Field>
+        <Field label="Overtime hours">
+          <Input
+            type="number"
+            step="0.25"
+            min="0"
+            max="24"
+            value={hours}
+            onChange={(e) => setHours(e.target.value)}
+            data-testid="attendance-input-request-ot-hours"
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Enter the number of overtime hours (max 24, quarter-hour increments).
+          </p>
+        </Field>
+        <Field label="Reason" required>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            placeholder="Explain why the overtime was needed"
+            className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-[13px] outline-none focus:border-[#3B82F6]"
+            data-testid="attendance-input-request-ot-reason"
+          />
+        </Field>
+      </div>
+    </AppModal>
+  );
+}
+
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[12px] font-medium text-muted-foreground">
+        {label}
+        {required && <span className="ml-0.5 text-red-400">*</span>}
+      </span>
+      {children}
+    </label>
   );
 }
