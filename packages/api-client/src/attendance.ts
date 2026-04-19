@@ -336,6 +336,53 @@ export function cancelLeaveRequest(id: string): Promise<{ status: string }> {
   return apiFetch(`${BASE}/leave/requests/${id}/cancel`, { method: "POST" });
 }
 
+// ─── Leave Balances ─────────────────────────────────────────────────────────
+
+export interface LeaveBalanceDTO {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  policy_id: string;
+  year: number;
+  entitled_days: number;
+  used_days: number;
+  pending_days: number;
+  carried_over: number;
+  remaining_days: number;
+  updated_at: string;
+  policy_code?: string;
+  policy_name?: string;
+  policy_color?: string;
+}
+
+export interface ListLeaveBalancesParams {
+  user_id?: string;
+  year?: number;
+}
+
+export interface AdjustLeaveBalanceInput {
+  user_id: string;
+  policy_id: string;
+  year?: number;
+  entitled_days?: number;
+  carried_over?: number;
+}
+
+export function listLeaveBalances(
+  params?: ListLeaveBalancesParams,
+): Promise<{ items: LeaveBalanceDTO[] }> {
+  return apiFetch(withQuery(`${BASE}/leave/balances`, params));
+}
+
+export function adjustLeaveBalance(
+  body: AdjustLeaveBalanceInput,
+): Promise<{ status: string }> {
+  return apiFetch(`${BASE}/leave/balances/adjust`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 // ─── Settings ───────────────────────────────────────────────────────────────
 
 export interface AttendanceSettingsDTO {

@@ -142,6 +142,28 @@ type LeaveRequest struct {
 	PolicyColor string `json:"policy_color,omitempty"`
 }
 
+// LeaveBalance mirrors dm3_attendance.leave_balances. Remaining is derived so
+// the UI does not have to do the arithmetic — callers can trust that
+// Remaining = Entitled + CarriedOver - Used - Pending.
+type LeaveBalance struct {
+	ID           string    `json:"id"`
+	TenantID     string    `json:"tenant_id"`
+	UserID       string    `json:"user_id"`
+	PolicyID     string    `json:"policy_id"`
+	Year         int       `json:"year"`
+	EntitledDays float64   `json:"entitled_days"`
+	UsedDays     float64   `json:"used_days"`
+	PendingDays  float64   `json:"pending_days"`
+	CarriedOver  float64   `json:"carried_over"`
+	RemainingDays float64  `json:"remaining_days"`
+	UpdatedAt    time.Time `json:"updated_at"`
+
+	// Joined policy fields for the UI.
+	PolicyCode  string `json:"policy_code,omitempty"`
+	PolicyName  string `json:"policy_name,omitempty"`
+	PolicyColor string `json:"policy_color,omitempty"`
+}
+
 // AttendanceSettings mirrors dm3_attendance.attendance_settings (one row per tenant).
 type AttendanceSettings struct {
 	TenantID                    string    `json:"tenant_id"`

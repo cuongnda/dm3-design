@@ -2,6 +2,7 @@ package attendance
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/pkg/httputil"
@@ -226,19 +228,29 @@ func (h *AttendanceHandlers) CreateLeaveRequest(w http.ResponseWriter, r *http.R
 		}
 	}
 
+	year := balanceYear(start)
 	var id string
-	err = h.db.Pool.QueryRow(r.Context(), `
-		INSERT INTO dm3_attendance.leave_requests (
-			tenant_id, user_id, policy_id, start_date, end_date, days,
-			half_day, reason, attachment_ref, status
-		) VALUES (
-			$1::uuid, $2::uuid, $3::uuid, $4::date, $5::date, $6,
-			$7, NULLIF($8,''), NULLIF($9,''), 'pending'
-		) RETURNING id::text`,
-		tenantID, req.UserID, req.PolicyID,
-		req.StartDate, req.EndDate, days,
-		req.HalfDay, nullStr(req.Reason), nullStr(req.AttachmentRef),
-	).Scan(&id)
+	err = withTx(r.Context(), h.db.Pool, func(tx pgx.Tx) error {
+		if err := reserveBalance(r.Context(), tx, tenantID, req.UserID, req.PolicyID, year, days); err != nil {
+			return err
+		}
+		return tx.QueryRow(r.Context(), `
+			INSERT INTO dm3_attendance.leave_requests (
+				tenant_id, user_id, policy_id, start_date, end_date, days,
+				half_day, reason, attachment_ref, status
+			) VALUES (
+				$1::uuid, $2::uuid, $3::uuid, $4::date, $5::date, $6,
+				$7, NULLIF($8,''), NULLIF($9,''), 'pending'
+			) RETURNING id::text`,
+			tenantID, req.UserID, req.PolicyID,
+			req.StartDate, req.EndDate, days,
+			req.HalfDay, nullStr(req.Reason), nullStr(req.AttachmentRef),
+		).Scan(&id)
+	})
+	if errors.Is(err, ErrInsufficientBalance) {
+		httputil.Error(w, http.StatusConflict, "insufficient leave balance")
+		return
+	}
 	if err != nil {
 		slog.Error("create leave request", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "failed to create leave request")
@@ -283,23 +295,49 @@ func (h *AttendanceHandlers) reviewLeaveRequest(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	ct, err := h.db.Pool.Exec(r.Context(), `
-		UPDATE dm3_attendance.leave_requests
-		   SET status = $1,
-		       reviewed_by = $2::uuid,
-		       reviewed_at = now(),
-		       review_note = NULLIF($3,'')
-		 WHERE id = $4::uuid
-		   AND tenant_id = $5::uuid
-		   AND status = 'pending'`,
-		newStatus, claims.Sub, nullStr(payload.Note), id, tenantID)
+	var (
+		userID    string
+		policyID  string
+		startDate time.Time
+		days      float64
+	)
+	err := withTx(r.Context(), h.db.Pool, func(tx pgx.Tx) error {
+		// Lock the pending row so balance arithmetic is race-free.
+		err := tx.QueryRow(r.Context(), `
+			SELECT user_id::text, policy_id::text, start_date, days
+			  FROM dm3_attendance.leave_requests
+			 WHERE id = $1::uuid AND tenant_id = $2::uuid AND status = 'pending'
+			 FOR UPDATE`,
+			id, tenantID).Scan(&userID, &policyID, &startDate, &days)
+		if err != nil {
+			return err
+		}
+
+		if _, err := tx.Exec(r.Context(), `
+			UPDATE dm3_attendance.leave_requests
+			   SET status = $1,
+			       reviewed_by = $2::uuid,
+			       reviewed_at = now(),
+			       review_note = NULLIF($3,'')
+			 WHERE id = $4::uuid
+			   AND tenant_id = $5::uuid`,
+			newStatus, claims.Sub, nullStr(payload.Note), id, tenantID); err != nil {
+			return err
+		}
+
+		year := balanceYear(startDate)
+		if newStatus == LeaveApproved {
+			return confirmBalance(r.Context(), tx, tenantID, userID, policyID, year, days)
+		}
+		return releasePending(r.Context(), tx, tenantID, userID, policyID, year, days)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		httputil.Error(w, http.StatusNotFound, "leave request not found or not pending")
+		return
+	}
 	if err != nil {
 		slog.Error("review leave request", "error", err, "status", newStatus)
 		httputil.Error(w, http.StatusInternalServerError, "failed to review leave request")
-		return
-	}
-	if ct.RowsAffected() == 0 {
-		httputil.Error(w, http.StatusNotFound, "leave request not found or not pending")
 		return
 	}
 	httputil.JSON(w, http.StatusOK, map[string]string{"status": newStatus})
@@ -320,21 +358,47 @@ func (h *AttendanceHandlers) CancelLeaveRequest(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	ct, err := h.db.Pool.Exec(r.Context(), `
-		UPDATE dm3_attendance.leave_requests
-		   SET status = 'cancelled',
-		       cancelled_at = now()
-		 WHERE id = $1::uuid
-		   AND tenant_id = $2::uuid
-		   AND status IN ('pending','approved')`,
-		id, tenantID)
+	var (
+		userID    string
+		policyID  string
+		startDate time.Time
+		days      float64
+		prevStat  string
+	)
+	err := withTx(r.Context(), h.db.Pool, func(tx pgx.Tx) error {
+		err := tx.QueryRow(r.Context(), `
+			SELECT user_id::text, policy_id::text, start_date, days, status
+			  FROM dm3_attendance.leave_requests
+			 WHERE id = $1::uuid AND tenant_id = $2::uuid
+			   AND status IN ('pending','approved')
+			 FOR UPDATE`,
+			id, tenantID).Scan(&userID, &policyID, &startDate, &days, &prevStat)
+		if err != nil {
+			return err
+		}
+
+		if _, err := tx.Exec(r.Context(), `
+			UPDATE dm3_attendance.leave_requests
+			   SET status = 'cancelled',
+			       cancelled_at = now()
+			 WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+			id, tenantID); err != nil {
+			return err
+		}
+
+		year := balanceYear(startDate)
+		if prevStat == LeaveApproved {
+			return releaseUsed(r.Context(), tx, tenantID, userID, policyID, year, days)
+		}
+		return releasePending(r.Context(), tx, tenantID, userID, policyID, year, days)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		httputil.Error(w, http.StatusNotFound, "leave request not found or not cancellable")
+		return
+	}
 	if err != nil {
 		slog.Error("cancel leave request", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "failed to cancel leave request")
-		return
-	}
-	if ct.RowsAffected() == 0 {
-		httputil.Error(w, http.StatusNotFound, "leave request not found or not cancellable")
 		return
 	}
 	httputil.JSON(w, http.StatusOK, map[string]string{"status": "cancelled"})

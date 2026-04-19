@@ -126,6 +126,8 @@ func main() {
 		ar.Post("/leave/requests/{id}/approve", handlers.ApproveLeaveRequest)
 		ar.Post("/leave/requests/{id}/reject", handlers.RejectLeaveRequest)
 		ar.Post("/leave/requests/{id}/cancel", handlers.CancelLeaveRequest)
+		ar.Get("/leave/balances", handlers.ListLeaveBalances)
+		ar.Post("/leave/balances/adjust", handlers.AdjustLeaveBalance)
 
 		ar.Get("/settings", handlers.GetSettings)
 		ar.Put("/settings", handlers.UpdateSettings)
