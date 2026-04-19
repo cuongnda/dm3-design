@@ -35,15 +35,20 @@ interface TenantState {
   // Current tenant info
   tenant: TenantInfo | null
   usage: TenantUsage | null
-  
+
   // Loading states
   isLoadingTenant: boolean
   isLoadingUsage: boolean
-  
+
   // Error states
   tenantError: string | null
   usageError: string | null
-  
+
+  // Freshness tracking — epoch ms of last successful fetch per key.
+  // Used by refreshTenantData to skip no-op refetches on every route change.
+  lastFetchedTenantAt: number | null
+  lastFetchedUsageAt: number | null
+
   // Actions
   setTenant: (tenant: TenantInfo | null) => void
   setUsage: (usage: TenantUsage | null) => void
@@ -51,18 +56,22 @@ interface TenantState {
   setLoadingUsage: (loading: boolean) => void
   setTenantError: (error: string | null) => void
   setUsageError: (error: string | null) => void
-  
+
   // API actions
   fetchTenant: () => Promise<void>
   fetchUsage: () => Promise<void>
-  refreshTenantData: () => Promise<void>
-  
+  refreshTenantData: (opts?: { force?: boolean }) => Promise<void>
+
   // Validation helpers
   canCreateDevice: () => boolean
   canCreateUser: () => boolean
   getDeviceUsagePercentage: () => number
   getUserUsagePercentage: () => number
 }
+
+// Treat tenant/usage as fresh for 60s; only a forced refresh (autoRefresh
+// interval, explicit button press) bypasses the guard.
+const TENANT_FRESHNESS_MS = 60_000
 
 // Create the tenant store
 export const useTenantStore = create<TenantState>()(
@@ -75,6 +84,8 @@ export const useTenantStore = create<TenantState>()(
       isLoadingUsage: false,
       tenantError: null,
       usageError: null,
+      lastFetchedTenantAt: null,
+      lastFetchedUsageAt: null,
 
       // Basic setters
       setTenant: (tenant) => set({ tenant }, false, 'setTenant'),
@@ -93,6 +104,7 @@ export const useTenantStore = create<TenantState>()(
           setTenantError(null)
           const data = await apiFetch<{ tenant: TenantInfo }>('/api/v1/auth/tenant/current')
           setTenant(data.tenant)
+          set({ lastFetchedTenantAt: Date.now() }, false, 'fetchTenant/success')
         } catch (error) {
           // apiFetch redirects to /login on 401 — only log non-auth errors
           if (error instanceof Error && error.message !== 'Unauthorized') {
@@ -112,6 +124,7 @@ export const useTenantStore = create<TenantState>()(
           setUsageError(null)
           const data = await apiFetch<{ usage: TenantUsage }>('/api/v1/auth/tenant/stats')
           setUsage(data.usage)
+          set({ lastFetchedUsageAt: Date.now() }, false, 'fetchUsage/success')
         } catch (error) {
           if (error instanceof Error && error.message !== 'Unauthorized') {
             console.error('Failed to fetch usage:', error)
@@ -122,9 +135,19 @@ export const useTenantStore = create<TenantState>()(
         }
       },
 
-      refreshTenantData: async () => {
-        const { fetchTenant, fetchUsage } = get()
-        await Promise.all([fetchTenant(), fetchUsage()])
+      refreshTenantData: async (opts) => {
+        const { fetchTenant, fetchUsage, lastFetchedTenantAt, lastFetchedUsageAt } = get()
+        const force = opts?.force === true
+        const now = Date.now()
+        const tasks: Promise<void>[] = []
+        if (force || !lastFetchedTenantAt || now - lastFetchedTenantAt > TENANT_FRESHNESS_MS) {
+          tasks.push(fetchTenant())
+        }
+        if (force || !lastFetchedUsageAt || now - lastFetchedUsageAt > TENANT_FRESHNESS_MS) {
+          tasks.push(fetchUsage())
+        }
+        if (tasks.length === 0) return
+        await Promise.all(tasks)
       },
 
       // Validation helpers

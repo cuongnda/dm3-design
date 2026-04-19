@@ -67,14 +67,21 @@ func (h *AttendanceHandlers) UpdateSettings(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Ensure a base row exists, then apply partial updates.
-	if _, err := h.loadSettings(r, tenantID); err != nil {
-		slog.Error("load settings before update", "error", err)
+	// Ensure a default row exists, then merge partial updates and return
+	// the resulting row in one round-trip via RETURNING. Two round-trips
+	// worst case (first write per tenant), one in steady state — down from
+	// the previous 3-5 round-trips.
+	if _, err := h.db.Pool.Exec(r.Context(), `
+		INSERT INTO dm3_attendance.attendance_settings (tenant_id)
+		VALUES ($1::uuid)
+		ON CONFLICT (tenant_id) DO NOTHING`, tenantID); err != nil {
+		slog.Error("seed attendance settings", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "failed to update settings")
 		return
 	}
 
-	_, err := h.db.Pool.Exec(r.Context(), `
+	var s AttendanceSettings
+	err := h.db.Pool.QueryRow(r.Context(), `
 		UPDATE dm3_attendance.attendance_settings SET
 			default_grace_minutes         = COALESCE($2, default_grace_minutes),
 			default_early_leave_threshold = COALESCE($3, default_early_leave_threshold),
@@ -85,7 +92,11 @@ func (h *AttendanceHandlers) UpdateSettings(w http.ResponseWriter, r *http.Reque
 			timezone                      = COALESCE(NULLIF($8,''), timezone),
 			carryover_enabled             = COALESCE($9, carryover_enabled),
 			carryover_max_days            = COALESCE($10, carryover_max_days)
-		WHERE tenant_id = $1::uuid`,
+		WHERE tenant_id = $1::uuid
+		RETURNING tenant_id::text, default_grace_minutes, default_early_leave_threshold,
+		          overtime_threshold_minutes, overtime_requires_approval, auto_clockout_hours,
+		          workweek_start, timezone, carryover_enabled, carryover_max_days,
+		          created_at, updated_at`,
 		tenantID,
 		req.DefaultGraceMinutes,
 		req.DefaultEarlyLeaveThreshold,
@@ -96,6 +107,11 @@ func (h *AttendanceHandlers) UpdateSettings(w http.ResponseWriter, r *http.Reque
 		nullStr(req.Timezone),
 		req.CarryoverEnabled,
 		req.CarryoverMaxDays,
+	).Scan(
+		&s.TenantID, &s.DefaultGraceMinutes, &s.DefaultEarlyLeaveThreshold,
+		&s.OvertimeThresholdMinutes, &s.OvertimeRequiresApproval, &s.AutoClockoutHours,
+		&s.WorkweekStart, &s.Timezone, &s.CarryoverEnabled, &s.CarryoverMaxDays,
+		&s.CreatedAt, &s.UpdatedAt,
 	)
 	if err != nil {
 		slog.Error("update attendance settings", "error", err)
@@ -103,15 +119,9 @@ func (h *AttendanceHandlers) UpdateSettings(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	s, err := h.loadSettings(r, tenantID)
-	if err != nil {
-		slog.Error("reload settings after update", "error", err)
-		httputil.Error(w, http.StatusInternalServerError, "failed to reload settings")
-		return
-	}
 	h.audit.LogFromRequest(r, "attendance.settings_updated", "attendance_settings", tenantID,
 		"", "success", nil, req)
-	httputil.JSON(w, http.StatusOK, s)
+	httputil.JSON(w, http.StatusOK, &s)
 }
 
 // loadSettings fetches the tenant's row, inserting defaults if none exists.

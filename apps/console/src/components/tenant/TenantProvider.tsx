@@ -50,16 +50,17 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({
     refreshTenantData()
   }, [isAuthenticated, isSystemAdmin, refreshTenantData])
 
-  // Auto-refresh setup
+  // Auto-refresh setup — force-refresh bypasses the store's freshness guard
+  // so the periodic tick actually fetches new data.
   useEffect(() => {
     if (!autoRefresh || !isAuthenticated || isSystemAdmin) return
 
     const interval = setInterval(() => {
-      refreshTenantData()
+      refreshTenantData({ force: true })
     }, refreshInterval)
 
     return () => clearInterval(interval)
-  }, [autoRefresh, refreshInterval, isSystemAdmin, refreshTenantData])
+  }, [autoRefresh, refreshInterval, isAuthenticated, isSystemAdmin, refreshTenantData])
 
   const contextValue: TenantContextType = {
     tenant,
