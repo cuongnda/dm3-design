@@ -1,8 +1,8 @@
 # Visitor Plugin Review Verdict
 
 ## Verdict
-- Risk: MEDIUM-HIGH
-- Recommendation: REQUEST CHANGES
+- Risk: MEDIUM
+- Recommendation: NEEDS CHANGES, but close
 
 ## Scope Reviewed
 - Backend service wiring and routes
@@ -59,17 +59,16 @@
 ### 1) API contract mismatches and missing client coverage
 This is the biggest merge-safety problem on the frontend/integration side.
 
-- `packages/api-client/src/visitors.ts` calls batch creation at `POST /api/v1/visitors/visits/batch`, but the backend route in `backend/cmd/visitor-svc/main.go` is `POST /api/v1/visitors/batch`.
-  - Result: batch creation from the client will hit the wrong endpoint.
-- `packages/api-client/src/visitors.ts` exposes `deleteAgreement(id)` to `DELETE /api/v1/visitors/agreements/{id}`, but `backend/cmd/visitor-svc/main.go` does not register any delete-agreement route, and `backend/internal/visitor/agreement_handlers.go` does not implement one.
-  - Result: the UI advertises deletion that the backend does not support.
-- `packages/api-client/src/visitors.ts` exposes `listVisitorAccessLog()` against `/api/v1/visitors/access-log`, but the backend only exposes `GET /api/v1/visitors/{id}/access-log` and `GET /api/v1/visitors/history/{visitor_id}`.
-  - Result: `VisitorAccessHistoryPage.tsx` is wired to a route that does not exist.
-- `packages/api-client/src/visitors.ts` exposes `triggerEvacuation()` against `POST /api/v1/visitors/evacuate`, but the backend only exposes `GET /api/v1/visitors/evacuation`.
-  - Result: client/server mismatch again.
-- `listRecurringTemplates()` in the client is typed as `Promise<RecurringTemplateDTO[]>`, but the backend handler `ListRecurringTemplates` returns paginated output via `httputil.Paginated(...)`.
-  - Result: the current page is very likely relying on the wrong response shape.
-- `updateVisitGroup()` exists in the client, but there is no corresponding update route in `backend/cmd/visitor-svc/main.go` and no handler implementation.
+- `packages/api-client/src/visitors.ts` now correctly posts batch creation to `POST /api/v1/visitors/batch`, which matches `backend/cmd/visitor-svc/main.go`.
+- `listVisitorHistory()` now correctly targets `GET /api/v1/visitors/history/{visitor_id}`, and `VisitorAccessHistoryPage.tsx` uses that path, so the earlier access-history route mismatch is fixed.
+- `getEvacuationList()` now correctly uses `GET /api/v1/visitors/evacuation`, which matches the backend.
+- `listRecurringTemplates()` is now typed as paginated and `VisitorRecurringPage.tsx` consumes `data?.data ?? []`, which fixes the earlier array-vs-paginated mismatch.
+- The old raw `hostUserId` input problem in `VisitorGroupsPage.tsx` is also fixed, the page now uses `HostSelect`.
+
+Remaining contract / capability issues:
+- `packages/api-client/src/visitors.ts` still does not expose a delete-agreement action, which is fine, because the backend also does not implement one. The old review point about a broken delete action is obsolete.
+- `UpdateRecurringTemplate` in `backend/internal/visitor/recurring_handlers.go` only updates `active` and `end_date`, while `VisitorRecurringPage.tsx` edit mode submits a broader payload (`host_user_id`, `purpose`, `recurrence_rule`, `start_date`, `escort_required`). That means the edit UI currently implies more editable fields than the backend actually persists.
+- `DeleteRecurringTemplate` returns HTTP 200 with `{status:"deactivated"}` instead of a real delete/no-content response. That is acceptable if intentional, but the naming in client/UI still reads like a hard delete while backend behavior is soft deactivate.
 
 This is enough on its own to block merge confidence. The surface area is broad, but the contract is not clean.
 
@@ -88,10 +87,11 @@ Notably risky:
 - `max_duration_hours`
 
 Examples from current code state:
-- `WalkinVisit` in `backend/internal/visitor/walkin_handlers.go` hardcodes `status='waiting'` and a 4-hour QR expiry. It does not appear to load settings or respect approval/QR/self-service policy.
-- `CheckinVisit` in `backend/internal/visitor/visit_handlers.go` accepts optional `national_id`, `photo_ref`, and `nda_signed`, but the visible flow does not convincingly reject check-in when policy requires them and the request omits them.
-- `ApproveVisit` checks host/coarse permission but does not appear to use `approver_user_ids` as an approval allowlist.
-- `CreateVisit` and related flows may use some approval logic, but policy application is not obviously consistent across pre-register, walk-in, reinvite, and recurring generation.
+- `CreateVisit` in `backend/internal/visitor/visit_handlers.go` now does more real policy work than before. It loads tenant settings, enforces `require_email`, `require_phone`, `require_company`, checks `allowed_purposes`, and applies `approval_required` plus auto-approve rules for VIP / returning visitors.
+- But `WalkinVisit` in `backend/internal/visitor/walkin_handlers.go` still hardcodes `status='waiting'` and a 4-hour QR expiry, and does not appear to load tenant settings or respect approval / QR / self-service policy.
+- `CheckinVisit` in `backend/internal/visitor/visit_handlers.go` still accepts optional `national_id`, `photo_ref`, and `nda_signed`, but the visible flow does not convincingly reject check-in when policy requires them and the request omits them.
+- `ApproveVisit` checks host/coarse permission but still does not appear to use `approver_user_ids` as an approval allowlist.
+- Policy application is therefore better than the old verdict suggested, but still inconsistent across pre-register, walk-in, approval, and check-in paths.
 
 Right now the settings page is stronger than the actual enforcement. That is dangerous because it creates fake safety.
 
@@ -108,10 +108,10 @@ I would not call this insecure by default, but I would call it under-specified f
 ### 4) Some operator UX is still thin or misleading
 A lot of the pages technically exist, but several feel more like admin scaffolding than production operator workflows.
 
-- `VisitorGroupsPage.tsx` still asks for raw `hostUserId` instead of using the host picker pattern already present in `VisitorsPage.tsx`. That is clunky and error-prone.
-- `VisitorAgreementsPage.tsx` offers delete actions even though the backend route is missing. That is not just rough UX, it is a broken action.
-- `VisitorAccessHistoryPage.tsx` is wired to an API function that currently points to a non-existent endpoint, so the page is effectively lying until the client/backend contract is fixed.
-- `VisitorRecurringPage.tsx` assumes a plain array response and only supports activate/deactivate/delete, with no create/edit flow in the page itself.
+- `VisitorGroupsPage.tsx` is improved, it now uses `HostSelect`, which is the right direction and removes the raw host UUID problem.
+- `VisitorAgreementsPage.tsx` no longer appears to offer a nonexistent delete action. It currently supports create and active/inactive toggle via `updateAgreement`, which aligns with the reviewed backend.
+- `VisitorAccessHistoryPage.tsx` is now wired through `listVisitorHistory(...)`, which matches the backend history route.
+- `VisitorRecurringPage.tsx` is improved and now has create/edit UI, but its edit form still over-promises because backend `UpdateRecurringTemplate` does not persist the full set of fields the page lets the operator change.
 - Several pages still surface raw IDs when cache lookups or richer labels are unavailable.
 - Error handling is generally light. Pages often fall back to generic empty/loading states without surfacing actionable backend errors.
 
@@ -160,28 +160,23 @@ Still missing or not convincing enough:
 - tests for batch API path/client alignment
 
 ## Recommendation before merge
-Request changes.
+Needs changes, but close.
 
-This plugin is substantially further along than a fake feature branch, but it is not merge-safe yet because the edges are where real systems fail: route contracts, settings enforcement, and admin/operator behavior.
+This plugin is substantially further along than the earlier review state. Several concrete client/backend mismatches are now genuinely fixed. But it is still not fully merge-safe because policy enforcement remains inconsistent and the recurring-template edit flow still overstates backend capability.
 
 ## Minimum fix list
-1. Fix client/backend route mismatches in `packages/api-client/src/visitors.ts`.
-   - batch path
-   - access-log path
-   - evacuation path
-   - recurring response typing
-   - remove or implement agreement delete and visit-group update
-2. Either implement the missing backend routes or remove the corresponding frontend/client actions.
-3. Tighten runtime enforcement of visitor settings, especially:
+1. Tighten runtime enforcement of visitor settings, especially:
    - required NDA
    - required photo
    - required national ID
    - self-service flags
    - approver allowlist behavior if intended
    - max duration constraints
-4. Make walk-in flow policy-aware instead of hardcoding status/QR behavior.
-5. Replace raw host UUID entry in groups with the same host selector pattern already used elsewhere.
-6. Add focused tests for the above fixes.
+2. Make walk-in flow policy-aware instead of hardcoding status/QR behavior.
+3. Align recurring-template edit UX with backend capability, either expand `UpdateRecurringTemplate` or narrow the form to fields the backend actually persists.
+4. Add focused tests for the above fixes.
 
 ## Bottom line
-The visitor plugin is promising and materially more complete than the average half-built module, but right now it still has too many contract and policy gaps to call it safe to merge.
+The visitor plugin is in better shape than the old verdict suggested. Some earlier integration findings are now fixed for real.
+
+But I still would not fully approve it today. The main remaining issue is no longer broad route mismatch, it is uneven policy enforcement, especially around walk-in and check-in requirements, plus the recurring-template edit surface promising more than backend update behavior actually supports.
