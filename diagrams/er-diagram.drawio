@@ -58,7 +58,7 @@
         <mxCell id="visitor-bg" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#6EE7B7;dashed=1;arcSize=4;" value="" vertex="1">
           <mxGeometry height="1150" width="1140" x="40" y="2440" as="geometry" />
         </mxCell>
-        <mxCell id="visitor-label" parent="1" style="text;html=1;fontSize=12;fontStyle=1;align=left;fillColor=none;strokeColor=none;fontColor=#059669;" value="dm3_visitor" vertex="1">
+        <mxCell id="visitor-label" parent="1" style="text;html=1;fontSize=12;fontStyle=1;align=left;fillColor=none;strokeColor=none;fontColor=#059669;" value="dm3_visitor  (plugin-gated: RequirePlugin(&quot;visitor&quot;))" vertex="1">
           <mxGeometry height="20" width="150" x="55" y="2448" as="geometry" />
         </mxCell>
         <mxCell id="departments" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=2;verticalAlign=top;spacingTop=0;" value="&lt;b style=&#39;color:#8B5CF6&#39;&gt;departments&lt;/b&gt;&lt;hr size=&#39;1&#39;/&gt;&lt;div style=&#39;text-align:left;font-size:11px;padding:4px&#39;&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → tenants&lt;br/&gt;🔗 parent_id → departments (self)&lt;br/&gt;department_manager_id : UUID&lt;br/&gt;name : VARCHAR(255) NOT NULL&lt;br/&gt;number : VARCHAR(100)&lt;br/&gt;is_deleted : BOOL&lt;br/&gt;created_at / updated_at&lt;/div&gt;" vertex="1">
@@ -247,7 +247,7 @@
         <mxCell id="operate-bg" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#FCD34D;dashed=1;arcSize=4;" value="" vertex="1">
           <mxGeometry height="1150" width="1200" x="1200" y="2440" as="geometry" />
         </mxCell>
-        <mxCell id="operate-label" parent="1" style="text;html=1;fontSize=12;fontStyle=1;align=left;fillColor=none;strokeColor=none;fontColor=#D97706;" value="dm3_parking" vertex="1">
+        <mxCell id="operate-label" parent="1" style="text;html=1;fontSize=12;fontStyle=1;align=left;fillColor=none;strokeColor=none;fontColor=#D97706;" value="dm3_parking  (plugin-gated: RequirePlugin(&quot;parking&quot;))" vertex="1">
           <mxGeometry height="20" width="150" x="1215" y="2448" as="geometry" />
         </mxCell>
         <mxCell id="parking_lots" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=2;verticalAlign=top;spacingTop=0;" value="&lt;b style=&#39;color:#D97706&#39;&gt;parking_lots&lt;/b&gt;&lt;hr size=&#39;1&#39;/&gt;&lt;div style=&#39;text-align:left;font-size:11px;padding:4px&#39;&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → tenants&lt;br/&gt;site_id : UUID&lt;br/&gt;name : VARCHAR(255) NOT NULL&lt;br/&gt;code : VARCHAR(50) UNIQUE&lt;br/&gt;description : TEXT&lt;br/&gt;status : VARCHAR(20) def &#39;active&#39;&lt;br/&gt;metadata : JSONB&lt;br/&gt;created_at / updated_at&lt;/div&gt;" vertex="1">
