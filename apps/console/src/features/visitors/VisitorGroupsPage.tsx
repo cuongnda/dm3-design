@@ -10,6 +10,7 @@ import {
   Input,
   Label,
   EmptyState,
+  showToast,
 } from '@dm3/ui';
 import { Plus, Trash2, Users } from 'lucide-react';
 import {
@@ -18,6 +19,12 @@ import {
   deleteVisitGroup,
   type VisitGroupDTO,
 } from '@dm3/api-client';
+import { HostSelect } from '@/components/common/HostSelect';
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) return err.message;
+  return fallback;
+}
 
 export function VisitorGroupsPage() {
   const { t } = useTranslation('manage');
@@ -55,12 +62,30 @@ export function VisitorGroupsPage() {
       qc.invalidateQueries({ queryKey: ['visit-groups'] });
       setShowForm(false);
       resetForm();
+      showToast({ type: 'success', title: 'Group created' });
+    },
+    onError: (err) => {
+      showToast({
+        type: 'error',
+        title: 'Could not create group',
+        description: getErrorMessage(err, 'Please check the form and try again.'),
+      });
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteVisitGroup(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['visit-groups'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['visit-groups'] });
+      showToast({ type: 'success', title: 'Group deleted' });
+    },
+    onError: (err) => {
+      showToast({
+        type: 'error',
+        title: 'Could not delete group',
+        description: getErrorMessage(err, 'Try again in a moment.'),
+      });
+    },
   });
 
   const groups = data?.data ?? [];
@@ -144,8 +169,15 @@ export function VisitorGroupsPage() {
             <Input className="mt-1 h-8 text-[13px]" value={description} onChange={(e) => setDescription(e.target.value)} data-testid="visitors-input-group-description" />
           </div>
           <div>
-            <Label className="text-[12px]">Host User ID *</Label>
-            <Input className="mt-1 h-8 text-[13px]" placeholder="UUID of the host user" value={hostUserId} onChange={(e) => setHostUserId(e.target.value)} data-testid="visitors-input-group-host" />
+            <Label className="text-[12px]">Host *</Label>
+            <HostSelect
+              value={hostUserId}
+              onChange={(host) => setHostUserId(host?.id ?? '')}
+              placeholder="Select host user"
+              emptyLabel="No matching hosts"
+              buttonTestId="visitors-select-group-host"
+              searchInputTestId="visitors-search-group-host"
+            />
           </div>
           <div>
             <Label className="text-[12px]">Purpose *</Label>
