@@ -3,6 +3,7 @@ package attendance
 import (
 	"context"
 	"log/slog"
+	"runtime/debug"
 	"time"
 )
 
@@ -12,11 +13,20 @@ import (
 // Jobs included:
 //   - markAbsent: BR-004 — users assigned to a shift but without a clock-in
 //     for a finished workday are flipped from pending → absent.
+//
+// The goroutine is wrapped in a recover so a panic inside a single sweep
+// (e.g. from a malformed shift row or DB driver quirk) takes down just that
+// iteration instead of the whole attend-svc process.
 func (h *AttendanceHandlers) StartBackgroundJobs(ctx context.Context) {
 	go func() {
-		if err := h.runCronOnce(ctx); err != nil {
-			slog.Error("attendance cron initial sweep", "error", err)
-		}
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("attendance cron goroutine panicked",
+					"recover", r,
+					"stack", string(debug.Stack()))
+			}
+		}()
+		h.runCronSafely(ctx, "initial")
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
 		for {
@@ -24,12 +34,27 @@ func (h *AttendanceHandlers) StartBackgroundJobs(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := h.runCronOnce(ctx); err != nil {
-					slog.Error("attendance cron sweep", "error", err)
-				}
+				h.runCronSafely(ctx, "tick")
 			}
 		}
 	}()
+}
+
+// runCronSafely invokes runCronOnce with panic recovery so a single bad
+// iteration cannot escape the goroutine. The outer goroutine's recover is a
+// last-resort — this keeps the loop alive for the next tick.
+func (h *AttendanceHandlers) runCronSafely(ctx context.Context, reason string) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("attendance cron sweep panicked",
+				"reason", reason,
+				"recover", r,
+				"stack", string(debug.Stack()))
+		}
+	}()
+	if err := h.runCronOnce(ctx); err != nil {
+		slog.Error("attendance cron sweep", "reason", reason, "error", err)
+	}
 }
 
 func (h *AttendanceHandlers) runCronOnce(ctx context.Context) error {
