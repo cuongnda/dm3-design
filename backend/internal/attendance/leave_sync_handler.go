@@ -116,55 +116,52 @@ func (h *AttendanceHandlers) SyncLeaveRequests(w http.ResponseWriter, r *http.Re
 	httputil.JSON(w, http.StatusOK, resp)
 }
 
-// applyLeaveSyncRow handles a single record. All DB work for one record runs in
-// a serializable transaction so balance bookkeeping is race-free even across
-// concurrent webhook deliveries.
-func (h *AttendanceHandlers) applyLeaveSyncRow(ctx context.Context, tenantID string, req leaveSyncRequest) leaveSyncRowResult {
-	res := leaveSyncRowResult{ExternalID: req.ExternalID}
-
+// validateLeaveSyncRow pins the pure-validation branches of the HR webhook so
+// they can be unit-tested without a DB. Returns the resolved (start, end,
+// days, status) quadruple on success, or a failure reason the caller should
+// surface in leaveSyncRowResult.Error.
+//
+// Default behaviours:
+//   - status "" → LeaveApproved (HR systems typically push already-approved rows)
+//   - days <= 0 + half_day → 0.5
+//   - days <= 0 + multi-day → inclusive day count between start and end
+func validateLeaveSyncRow(req leaveSyncRequest) (start, end time.Time, days float64, status, failReason string) {
 	if strings.TrimSpace(req.ExternalID) == "" {
-		res.Status, res.Error = "failed", "external_id is required"
-		return res
+		return time.Time{}, time.Time{}, 0, "", "external_id is required"
 	}
 	if strings.TrimSpace(req.UserID) == "" {
-		res.Status, res.Error = "failed", "user_id is required"
-		return res
+		return time.Time{}, time.Time{}, 0, "", "user_id is required"
 	}
 	if strings.TrimSpace(req.PolicyCode) == "" {
-		res.Status, res.Error = "failed", "policy_code is required"
-		return res
+		return time.Time{}, time.Time{}, 0, "", "policy_code is required"
 	}
-	start, err := time.Parse("2006-01-02", req.StartDate)
+	var err error
+	start, err = time.Parse("2006-01-02", req.StartDate)
 	if err != nil {
-		res.Status, res.Error = "failed", "start_date must be YYYY-MM-DD"
-		return res
+		return time.Time{}, time.Time{}, 0, "", "start_date must be YYYY-MM-DD"
 	}
-	end, err := time.Parse("2006-01-02", req.EndDate)
+	end, err = time.Parse("2006-01-02", req.EndDate)
 	if err != nil {
-		res.Status, res.Error = "failed", "end_date must be YYYY-MM-DD"
-		return res
+		return time.Time{}, time.Time{}, 0, "", "end_date must be YYYY-MM-DD"
 	}
 	if end.Before(start) {
-		res.Status, res.Error = "failed", "end_date must be on/after start_date"
-		return res
+		return time.Time{}, time.Time{}, 0, "", "end_date must be on/after start_date"
 	}
 	if req.HalfDay && !start.Equal(end) {
-		res.Status, res.Error = "failed", "half_day is only valid when start_date == end_date"
-		return res
+		return time.Time{}, time.Time{}, 0, "", "half_day is only valid when start_date == end_date"
 	}
 
-	status := strings.ToLower(strings.TrimSpace(req.Status))
+	status = strings.ToLower(strings.TrimSpace(req.Status))
 	if status == "" {
-		status = LeaveApproved // HR systems usually only push already-approved rows.
+		status = LeaveApproved
 	}
 	switch status {
 	case LeavePending, LeaveApproved, LeaveRejected, LeaveCancelled:
 	default:
-		res.Status, res.Error = "failed", "status must be pending|approved|rejected|cancelled"
-		return res
+		return time.Time{}, time.Time{}, 0, "", "status must be pending|approved|rejected|cancelled"
 	}
 
-	days := req.Days
+	days = req.Days
 	if days <= 0 {
 		if req.HalfDay {
 			days = 0.5
@@ -172,6 +169,21 @@ func (h *AttendanceHandlers) applyLeaveSyncRow(ctx context.Context, tenantID str
 			days = float64(end.Sub(start).Hours()/24) + 1
 		}
 	}
+	return start, end, days, status, ""
+}
+
+// applyLeaveSyncRow handles a single record. All DB work for one record runs in
+// a serializable transaction so balance bookkeeping is race-free even across
+// concurrent webhook deliveries.
+func (h *AttendanceHandlers) applyLeaveSyncRow(ctx context.Context, tenantID string, req leaveSyncRequest) leaveSyncRowResult {
+	res := leaveSyncRowResult{ExternalID: req.ExternalID}
+
+	start, _, days, status, failReason := validateLeaveSyncRow(req)
+	if failReason != "" {
+		res.Status, res.Error = "failed", failReason
+		return res
+	}
+	var err error
 
 	err = withTx(ctx, h.db.Pool, func(tx pgx.Tx) error {
 		// 1. Resolve policy_code → policy_id for this tenant.

@@ -375,24 +375,16 @@ func (h *AttendanceHandlers) RequestMeOvertime(w http.ResponseWriter, r *http.Re
 		httputil.Error(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
-	if p.Hours <= 0 || p.Hours > 24 {
-		httputil.Error(w, http.StatusBadRequest, "hours must be between 0 and 24")
-		return
-	}
-	if p.Reason == "" {
-		httputil.Error(w, http.StatusBadRequest, "reason required")
-		return
-	}
-	date, err := time.Parse("2006-01-02", p.Date)
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid date (expected YYYY-MM-DD)")
+	date, vErr := validateOvertimeRequestPayload(p)
+	if vErr != nil {
+		httputil.Error(w, vErr.code, vErr.msg)
 		return
 	}
 
 	targetUserID := claims.Sub
 	note := "[OT request] " + p.Reason
 	var recordID string
-	err = h.db.Pool.QueryRow(r.Context(), `
+	err := h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_attendance.attendance_records
 			(tenant_id, user_id, date, overtime_hours, overtime_approved,
 			 manual_adjustment, adjusted_by, adjustment_reason, notes, status)

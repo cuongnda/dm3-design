@@ -196,6 +196,27 @@ type overtimeRequestPayload struct {
 	UserID string  `json:"user_id,omitempty"` // optional override (manager requesting on behalf of user)
 }
 
+// validateOvertimeRequestPayload pins the pure-validation branches shared by
+// RequestOvertime and RequestMeOvertime. Keeps admin/self-service paths from
+// drifting on hours bounds, date format, or reason presence.
+//
+// Hours bounds: strictly >0 and <=24. 24 exactly is permitted because some
+// compressed-shift schedules legitimately submit a full day of OT for a
+// missed/rescheduled regular shift.
+func validateOvertimeRequestPayload(p overtimeRequestPayload) (date time.Time, httpErr *httpError) {
+	if p.Hours <= 0 || p.Hours > 24 {
+		return time.Time{}, &httpError{http.StatusBadRequest, "hours must be between 0 and 24"}
+	}
+	if p.Reason == "" {
+		return time.Time{}, &httpError{http.StatusBadRequest, "reason required"}
+	}
+	d, err := time.Parse("2006-01-02", p.Date)
+	if err != nil {
+		return time.Time{}, &httpError{http.StatusBadRequest, "invalid date (expected YYYY-MM-DD)"}
+	}
+	return d, nil
+}
+
 // RequestOvertime is the management OT request endpoint. Gated by
 // RequireWriteRole on /overtime/request in cmd/attend-svc/main.go, so only
 // managers/admins can hit it — they use it to request OT on behalf of any
@@ -227,17 +248,9 @@ func (h *AttendanceHandlers) RequestOvertime(w http.ResponseWriter, r *http.Requ
 		httputil.Error(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
-	if p.Hours <= 0 || p.Hours > 24 {
-		httputil.Error(w, http.StatusBadRequest, "hours must be between 0 and 24")
-		return
-	}
-	if p.Reason == "" {
-		httputil.Error(w, http.StatusBadRequest, "reason required")
-		return
-	}
-	date, err := time.Parse("2006-01-02", p.Date)
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid date (expected YYYY-MM-DD)")
+	date, vErr := validateOvertimeRequestPayload(p)
+	if vErr != nil {
+		httputil.Error(w, vErr.code, vErr.msg)
 		return
 	}
 
@@ -250,7 +263,7 @@ func (h *AttendanceHandlers) RequestOvertime(w http.ResponseWriter, r *http.Requ
 
 	note := "[OT request] " + p.Reason
 	var recordID string
-	err = h.db.Pool.QueryRow(r.Context(), `
+	if err := h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_attendance.attendance_records
 			(tenant_id, user_id, date, overtime_hours, overtime_approved,
 			 manual_adjustment, adjusted_by, adjustment_reason, notes, status)
@@ -265,8 +278,7 @@ func (h *AttendanceHandlers) RequestOvertime(w http.ResponseWriter, r *http.Requ
 			notes             = EXCLUDED.notes,
 			updated_at        = NOW()
 		RETURNING id::text
-	`, tenantID, targetUserID, date, p.Hours, claims.Sub, note).Scan(&recordID)
-	if err != nil {
+	`, tenantID, targetUserID, date, p.Hours, claims.Sub, note).Scan(&recordID); err != nil {
 		slog.Error("overtime request", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "failed to create overtime request")
 		return
