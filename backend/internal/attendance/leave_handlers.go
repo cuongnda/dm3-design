@@ -583,9 +583,10 @@ func (h *AttendanceHandlers) reviewLeaveRequest(w http.ResponseWriter, r *http.R
 	httputil.JSON(w, http.StatusOK, map[string]string{"status": newStatus})
 }
 
-// CancelLeaveRequest lets the requester (or an admin) cancel a pending/approved
-// request. We do not enforce requester==caller here — the UI layer decides who
-// may invoke this; the handler only ensures tenant scoping.
+// CancelLeaveRequest cancels a pending/approved request on behalf of any user
+// in the tenant. Management-only path (gated by RequireWriteRole on the
+// /leave/requests/* routes in cmd/attend-svc/main.go); self-service employees
+// use POST /me/leave/requests/{id}/cancel, which forces user_id = claims.Sub.
 func (h *AttendanceHandlers) CancelLeaveRequest(w http.ResponseWriter, r *http.Request) {
 	tenantID := authsvc.CompanyIDFromContext(r.Context())
 	if tenantID == "" {

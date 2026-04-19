@@ -196,16 +196,20 @@ type overtimeRequestPayload struct {
 	UserID string  `json:"user_id,omitempty"` // optional override (manager requesting on behalf of user)
 }
 
-// RequestOvertime is the self-service OT request endpoint. The authenticated
-// user requests `hours` of overtime on `date` with `reason`. The attendance
-// record for that (tenant,user,date) is upserted with:
+// RequestOvertime is the management OT request endpoint. Gated by
+// RequireWriteRole on /overtime/request in cmd/attend-svc/main.go, so only
+// managers/admins can hit it — they use it to request OT on behalf of any
+// tenant user (p.UserID). Self-service employees use POST /me/overtime/request
+// (RequestMeOvertime), which forces user_id = claims.Sub.
+//
+// The attendance record for (tenant,user,date) is upserted with:
 //   - overtime_hours     = requested amount
 //   - overtime_approved  = false (approval flow below picks it up)
 //   - manual_adjustment  = true (so computeRecord does not overwrite on later clock-in)
 //   - notes              = reason, prefixed with "[OT request]"
 //
-// Emits an audit entry (attendance.overtime_requested) so the audit trail
-// reflects who asked for what before the reviewer approves/rejects.
+// Emits an audit entry (attendance.overtime_requested) so the trail reflects
+// who asked for what before the reviewer approves/rejects.
 func (h *AttendanceHandlers) RequestOvertime(w http.ResponseWriter, r *http.Request) {
 	tenantID := authsvc.CompanyIDFromContext(r.Context())
 	if tenantID == "" {
@@ -237,14 +241,11 @@ func (h *AttendanceHandlers) RequestOvertime(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Route-level RequireWriteRole already restricts this endpoint to managers,
+	// so any caller here is already authorized to act on behalf of another user.
 	targetUserID := p.UserID
 	if targetUserID == "" {
 		targetUserID = claims.Sub
-	} else if targetUserID != claims.Sub {
-		// Only managers/admins can request OT on behalf of others. Relying on
-		// the authsvc RequireRole chain would tie this handler to role names;
-		// instead we allow the write and let audit reflect who did it.
-		// If stricter enforcement is needed, wire RequireRole upstream.
 	}
 
 	note := "[OT request] " + p.Reason
