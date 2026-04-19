@@ -116,6 +116,18 @@ func (c *AccessEventConsumer) handle(ctx context.Context, subject string, data [
 		return nil // device event without a mapped user — nothing to attribute
 	}
 
+	// Tenants opt individual devices into attendance via
+	// dm3_attendance.attendance_devices. A device can grant access without
+	// counting as a clock-in signal (e.g. a parking barrier); skip those so
+	// we do not accidentally manufacture records from every door-open event.
+	registered, err := c.deviceRegistered(ctx, tenantID, srcDeviceID)
+	if err != nil {
+		return err
+	}
+	if !registered {
+		return nil
+	}
+
 	// Site maps to the access point's zone (DM3 core schema has no sites table,
 	// so root zones play that role). The mapping is best-effort; a missing
 	// zone results in a NULL site_id on the record, which the UI tolerates.
@@ -355,6 +367,27 @@ func (c *AccessEventConsumer) upsertRecord(ctx context.Context, tenantID, siteID
 		return err
 	}
 	return nil
+}
+
+// deviceRegistered reports whether srcDeviceID is listed in
+// dm3_attendance.attendance_devices for this tenant. Returns false for
+// non-UUID source ids so malformed events are ignored.
+func (c *AccessEventConsumer) deviceRegistered(ctx context.Context, tenantID, srcDeviceID string) (bool, error) {
+	if !uuidRegex.MatchString(srcDeviceID) {
+		return false, nil
+	}
+	lookupCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	var ok bool
+	err := c.db.Pool.QueryRow(lookupCtx, `
+		SELECT EXISTS (
+			SELECT 1 FROM dm3_attendance.attendance_devices
+			 WHERE tenant_id = $1::uuid AND device_id = $2::uuid
+		)`, tenantID, srcDeviceID).Scan(&ok)
+	if err != nil {
+		return false, fmt.Errorf("attendance: check registered device: %w", err)
+	}
+	return ok, nil
 }
 
 func (c *AccessEventConsumer) tenantHasPlugin(ctx context.Context, tenantID string) (bool, error) {
