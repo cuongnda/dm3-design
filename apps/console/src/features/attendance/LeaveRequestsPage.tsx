@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   PageHeader,
@@ -8,8 +8,9 @@ import {
   AppModal,
   type Column,
 } from '@dm3/ui';
-import { Plane, Check, X, Ban, Plus } from 'lucide-react';
+import { Plane, Check, X, Ban, Plus, Search } from 'lucide-react';
 import {
+  apiFetch,
   listLeaveRequests,
   listLeavePolicies,
   createLeaveRequest,
@@ -31,6 +32,24 @@ const STATUS_STYLE: Record<LeaveStatus, string> = {
   rejected: 'bg-red-500/20 text-red-400',
   cancelled: 'bg-gray-500/20 text-gray-400',
 };
+
+interface UserLite {
+  id: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  employee_code?: string;
+}
+
+function fullName(u: UserLite): string {
+  return (
+    u.full_name ||
+    [u.first_name, u.last_name].filter(Boolean).join(' ').trim() ||
+    u.email ||
+    u.id.slice(0, 8)
+  );
+}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -54,6 +73,11 @@ export function LeaveRequestsPage() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserLite | null>(null);
+
+  // Reject review modal state: which row is being rejected, with an optional note.
+  const [rejectTarget, setRejectTarget] = useState<LeaveRequestDTO | null>(null);
+  const [rejectNote, setRejectNote] = useState('');
 
   const emptyForm = (): CreateLeaveRequestInput => ({
     user_id: '',
@@ -90,7 +114,11 @@ export function LeaveRequestsPage() {
   const rejectM = useMutation({
     mutationFn: ({ id, note }: { id: string; note?: string }) =>
       rejectLeaveRequest(id, note),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['leave-requests'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['leave-requests'] });
+      setRejectTarget(null);
+      setRejectNote('');
+    },
   });
   const cancelM = useMutation({
     mutationFn: (id: string) => cancelLeaveRequest(id),
@@ -102,6 +130,7 @@ export function LeaveRequestsPage() {
       qc.invalidateQueries({ queryKey: ['leave-requests'] });
       setCreateOpen(false);
       setForm(emptyForm());
+      setSelectedUser(null);
       setError(null);
     },
     onError: (e: Error) => setError(e.message),
@@ -113,7 +142,7 @@ export function LeaveRequestsPage() {
   const submit = () => {
     setError(null);
     if (!form.user_id.trim()) {
-      setError('User ID is required');
+      setError('User is required');
       return;
     }
     if (!form.policy_id.trim()) {
@@ -121,6 +150,12 @@ export function LeaveRequestsPage() {
       return;
     }
     createM.mutate(form);
+  };
+
+  const confirmReject = () => {
+    if (!rejectTarget) return;
+    const note = rejectNote.trim();
+    rejectM.mutate({ id: rejectTarget.id, note: note || undefined });
   };
 
   const columns = useMemo<Column<LeaveRequestDTO>[]>(
@@ -216,8 +251,8 @@ export function LeaveRequestsPage() {
                   size="xs"
                   variant="ghost"
                   onClick={() => {
-                    const note = prompt('Reason for rejection (optional):') ?? undefined;
-                    rejectM.mutate({ id: r.id, note });
+                    setRejectNote('');
+                    setRejectTarget(r);
                   }}
                   data-testid={`attendance-button-reject-leave-${r.id}`}
                 >
@@ -246,7 +281,7 @@ export function LeaveRequestsPage() {
         },
       },
     ],
-    [approveM, rejectM, cancelM],
+    [approveM, cancelM],
   );
 
   return (
@@ -285,6 +320,7 @@ export function LeaveRequestsPage() {
           size="sm"
           onClick={() => {
             setForm(emptyForm());
+            setSelectedUser(null);
             setError(null);
             setCreateOpen(true);
           }}
@@ -338,7 +374,13 @@ export function LeaveRequestsPage() {
 
       <AppModal
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) {
+            setSelectedUser(null);
+            setError(null);
+          }
+        }}
         title="New leave request"
         size="lg"
         errorMessage={error}
@@ -351,17 +393,22 @@ export function LeaveRequestsPage() {
         }}
       >
         <div className="grid grid-cols-2 gap-3 text-[13px]">
-          <label className="col-span-2 flex flex-col gap-1">
+          <div className="col-span-2 flex flex-col gap-1">
             <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              User ID
+              User
             </span>
-            <Input
-              value={form.user_id}
-              onChange={(e) => setForm({ ...form, user_id: e.target.value })}
-              placeholder="uuid"
-              data-testid="attendance-input-leave-user"
+            <UserPickerField
+              selected={selectedUser}
+              onSelect={(u) => {
+                setSelectedUser(u);
+                setForm({ ...form, user_id: u.id });
+              }}
+              onClear={() => {
+                setSelectedUser(null);
+                setForm({ ...form, user_id: '' });
+              }}
             />
-          </label>
+          </div>
           <label className="col-span-2 flex flex-col gap-1">
             <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
               Policy
@@ -433,6 +480,159 @@ export function LeaveRequestsPage() {
           </label>
         </div>
       </AppModal>
+
+      <AppModal
+        open={rejectTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRejectTarget(null);
+            setRejectNote('');
+          }
+        }}
+        title="Reject leave request"
+        description={
+          rejectTarget
+            ? `${rejectTarget.user_name || rejectTarget.user_id.slice(0, 8)} · ${formatDate(rejectTarget.start_date)} → ${formatDate(rejectTarget.end_date)}`
+            : undefined
+        }
+        size="md"
+        showCancelButton
+        primaryAction={{
+          label: 'Reject request',
+          onClick: confirmReject,
+          loading: rejectM.isPending,
+          variant: 'destructive',
+          'data-testid': 'attendance-button-confirm-reject-leave',
+        }}
+      >
+        <label className="flex flex-col gap-1 text-[13px]">
+          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Reason (optional)
+          </span>
+          <textarea
+            value={rejectNote}
+            onChange={(e) => setRejectNote(e.target.value)}
+            rows={4}
+            placeholder="Share context the requester should see…"
+            className="rounded-md border border-border bg-background px-2 py-1 text-[13px]"
+            data-testid="attendance-input-reject-leave-note"
+          />
+          <span className="text-[11px] text-muted-foreground">
+            The note is stored on the request and shown to the employee.
+          </span>
+        </label>
+      </AppModal>
+    </div>
+  );
+}
+
+interface UserPickerFieldProps {
+  selected: UserLite | null;
+  onSelect: (u: UserLite) => void;
+  onClear: () => void;
+}
+
+// UserPickerField — debounced typeahead over /api/v1/identity/users. Same
+// pattern as AttendanceLeaveBalancePage so feel/behaviour stays consistent
+// between the two admin screens.
+function UserPickerField({ selected, onSelect, onClear }: UserPickerFieldProps) {
+  const [query, setQuery] = useState('');
+  const [debounced, setDebounced] = useState('');
+
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(query), 200);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  const userQ = useQuery({
+    queryKey: ['leave-user-search', debounced],
+    enabled: debounced.trim().length >= 2 && !selected,
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        search: debounced.trim(),
+        limit: '10',
+        page: '1',
+      });
+      const data = await apiFetch<{ users: UserLite[] }>(
+        `/api/v1/identity/users?${params.toString()}`,
+      );
+      return data.users ?? [];
+    },
+  });
+
+  if (selected) {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2">
+        <div className="leading-tight">
+          <div className="text-[13px] font-medium text-foreground">
+            {fullName(selected)}
+          </div>
+          {selected.email && (
+            <div className="text-[11px] text-muted-foreground">
+              {selected.email}
+            </div>
+          )}
+        </div>
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={() => {
+            onClear();
+            setQuery('');
+          }}
+          data-testid="attendance-button-clear-leave-user"
+        >
+          <X size={12} className="mr-1" />
+          Change
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <Search
+        size={14}
+        className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+      />
+      <Input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search employee by name, email, or code…"
+        className="h-9 pl-7 text-[13px]"
+        data-testid="attendance-input-leave-user"
+      />
+      {debounced.trim().length >= 2 && (
+        <div className="mt-2 max-h-64 overflow-auto rounded-md border border-border bg-popover">
+          {userQ.isLoading ? (
+            <div className="p-2 text-[12px] text-muted-foreground">Searching…</div>
+          ) : (userQ.data ?? []).length === 0 ? (
+            <div className="p-2 text-[12px] text-muted-foreground">
+              No users match "{debounced}".
+            </div>
+          ) : (
+            (userQ.data ?? []).map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => {
+                  onSelect(u);
+                  setQuery('');
+                }}
+                className="flex w-full items-center justify-between gap-3 border-b border-border px-2 py-1.5 text-left text-[13px] last:border-b-0 hover:bg-accent"
+                data-testid={`attendance-option-leave-user-${u.id}`}
+              >
+                <span className="text-foreground">{fullName(u)}</span>
+                {u.email && (
+                  <span className="text-[11px] text-muted-foreground">
+                    {u.email}
+                  </span>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
