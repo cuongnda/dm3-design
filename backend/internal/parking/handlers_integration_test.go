@@ -254,8 +254,10 @@ func TestParkingVehicleSessionPaymentLifecycle(t *testing.T) {
 		t.Fatalf("exit session: expected 200, got %d: %s", exitResp.Code, exitResp.Body.String())
 	}
 	exited := decodeJSON[map[string]any](t, exitResp)
-	if exited["status"] != "completed" {
-		t.Fatalf("expected completed session after exit, got %#v", exited["status"])
+	// Default settings enforce require_payment_before_exit=true, so an unpaid
+	// exit leaves the session active until payment clears.
+	if exited["status"] != "active" {
+		t.Fatalf("expected active session after unpaid exit (require_payment_before_exit enforced), got %#v", exited["status"])
 	}
 	if exited["payment_status"] != "pending" {
 		t.Fatalf("expected pending payment after fee calculation, got %#v", exited["payment_status"])
@@ -399,5 +401,110 @@ func TestParkingRecognitionPassFlow(t *testing.T) {
 	passes := decodeJSON[map[string]any](t, passesResp)
 	if len(passes["data"].([]any)) == 0 {
 		t.Fatalf("expected active pass in filtered list")
+	}
+}
+
+// ensureParkingSettings creates the default settings row for the test tenant
+// (idempotent). Returns when a row exists.
+func ensureParkingSettings(t *testing.T, h *ParkingHandlers) {
+	t.Helper()
+	if _, err := h.getOrCreateSettings(context.Background(), parkingTestTenantID); err != nil {
+		t.Fatalf("ensure parking settings: %v", err)
+	}
+}
+
+// setParkingSettingBool updates a single boolean setting column for the test
+// tenant and registers a defer to restore the default.
+func setParkingSettingBool(t *testing.T, database *db.DB, h *ParkingHandlers, column string, value bool) {
+	t.Helper()
+	ensureParkingSettings(t, h)
+	if _, err := database.Pool.Exec(context.Background(),
+		fmt.Sprintf("UPDATE dm3_parking.parking_settings SET %s = $1 WHERE tenant_id = $2::uuid", column),
+		value, parkingTestTenantID,
+	); err != nil {
+		t.Fatalf("update setting %s: %v", column, err)
+	}
+	t.Cleanup(func() {
+		// Restore defaults so other tests see a clean state.
+		_, _ = database.Pool.Exec(context.Background(),
+			fmt.Sprintf("UPDATE dm3_parking.parking_settings SET %s = $1 WHERE tenant_id = $2::uuid", column),
+			true, parkingTestTenantID,
+		)
+	})
+}
+
+// TestParkingRecognitionDisabled verifies plate_recognition_enabled=false
+// rejects /sessions/recognitions with 403.
+func TestParkingRecognitionDisabled(t *testing.T) {
+	database := setupParkingTestDB(t)
+	defer database.Close()
+	requireParkingSchema(t, database)
+
+	h := NewParkingHandlers(database, nil, nil)
+	router := setupParkingRouter(h)
+
+	setParkingSettingBool(t, database, h, "plate_recognition_enabled", false)
+
+	resp := parkingRequest(t, router, http.MethodPost, "/api/v1/parking/sessions/recognitions", map[string]any{
+		"lot_id":       "00000000-0000-0000-0000-000000000099",
+		"zone_id":      "00000000-0000-0000-0000-000000000098",
+		"plate_number": "51H-99999",
+		"vehicle_type": "car",
+		"direction":    "entry",
+	})
+	if resp.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when recognition disabled, got %d: %s", resp.Code, resp.Body.String())
+	}
+}
+
+// TestParkingExitCompletesWhenPaymentNotRequired verifies the require_payment_before_exit
+// setting actually gates the session lifecycle: when disabled, an unpaid exit
+// transitions the session directly to "completed" (old behavior).
+func TestParkingExitCompletesWhenPaymentNotRequired(t *testing.T) {
+	database := setupParkingTestDB(t)
+	defer database.Close()
+	requireParkingSchema(t, database)
+
+	h := NewParkingHandlers(database, nil, nil)
+	router := setupParkingRouter(h)
+	ids := map[string]string{}
+	defer cleanupParkingFixtures(t, database, ids)
+
+	setParkingSettingBool(t, database, h, "require_payment_before_exit", false)
+
+	suffix := time.Now().Format("20060102150405")
+	ids["lot"], ids["zone"] = createParkingLotAndZone(t, router, suffix+"-nopay", 3)
+
+	plate := fmt.Sprintf("30X-%s", suffix[len(suffix)-5:])
+	vehicleResp := parkingRequest(t, router, http.MethodPost, "/api/v1/parking/vehicles", map[string]any{
+		"plate_number":        plate,
+		"type":                "car",
+		"category":            "visitor",
+		"registration_status": "visitor",
+	})
+	if vehicleResp.Code != http.StatusCreated {
+		t.Fatalf("create vehicle: expected 201, got %d: %s", vehicleResp.Code, vehicleResp.Body.String())
+	}
+	ids["vehicle"] = decodeJSON[map[string]any](t, vehicleResp)["id"].(string)
+
+	sessionResp := parkingRequest(t, router, http.MethodPost, "/api/v1/parking/sessions", map[string]any{
+		"lot_id":       ids["lot"],
+		"zone_id":      ids["zone"],
+		"plate_number": plate,
+		"vehicle_type": "car",
+		"matched_by":   "manual",
+	})
+	if sessionResp.Code != http.StatusCreated {
+		t.Fatalf("create session: expected 201, got %d: %s", sessionResp.Code, sessionResp.Body.String())
+	}
+	ids["session"] = decodeJSON[map[string]any](t, sessionResp)["id"].(string)
+
+	exitResp := parkingRequest(t, router, http.MethodPut, "/api/v1/parking/sessions/"+ids["session"]+"/exit", map[string]any{})
+	if exitResp.Code != http.StatusOK {
+		t.Fatalf("exit session: expected 200, got %d: %s", exitResp.Code, exitResp.Body.String())
+	}
+	exited := decodeJSON[map[string]any](t, exitResp)
+	if exited["status"] != "completed" {
+		t.Fatalf("expected completed exit when require_payment_before_exit=false, got %#v", exited["status"])
 	}
 }

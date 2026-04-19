@@ -13,7 +13,7 @@ function StatusBadge({ status }: { status: string }) {
     active: 'bg-emerald-500/20 text-emerald-400',
     completed: 'bg-blue-500/20 text-blue-400',
     disputed: 'bg-red-500/20 text-red-400',
-    voided: 'bg-gray-500/20 text-gray-400',
+    void: 'bg-gray-500/20 text-gray-400',
   };
   return (
     <span className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${colors[status] ?? 'bg-muted text-muted-foreground'}`}>
@@ -103,7 +103,7 @@ export function ParkingSessionsPage() {
           <option value="active">Active</option>
           <option value="completed">Completed</option>
           <option value="disputed">Disputed</option>
-          <option value="voided">Voided</option>
+          <option value="void">Voided</option>
         </select>
       </PageHeader>
 

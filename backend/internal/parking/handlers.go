@@ -973,9 +973,19 @@ func (h *ParkingHandlers) CreateParkingSession(w http.ResponseWriter, r *http.Re
 	}
 
 	if req.EntryDeviceID != nil {
-		if err := h.publishBarrierCommand(r.Context(), req.ZoneID, *req.EntryDeviceID, barrierCommand{Action: "open", SessionID: session.ID, Reason: decisionCode}); err == nil {
-			session.IntegrationState = rawJSON(map[string]any{"barrier_command_sent": true, "entry_device_id": *req.EntryDeviceID, "decision_code": decisionCode, "decision_reason": decisionReason})
-			_, _ = h.db.Pool.Exec(r.Context(), `UPDATE dm3_parking.parking_sessions SET integration_state = $2::jsonb WHERE id = $1::uuid`, session.ID, session.IntegrationState)
+		// For pass-holder entries, gate barrier auto-open on auto_open_barrier_on_pass.
+		// Non-pass entries (manual/ANPR) keep their existing auto-open behavior.
+		autoOpenAllowed := true
+		if pass.ID != "" {
+			if settings, err := h.getOrCreateSettings(r.Context(), cid); err == nil {
+				autoOpenAllowed = settings.AutoOpenBarrierOnPass
+			}
+		}
+		if autoOpenAllowed {
+			if err := h.publishBarrierCommand(r.Context(), req.ZoneID, *req.EntryDeviceID, barrierCommand{Action: "open", SessionID: session.ID, Reason: decisionCode}); err == nil {
+				session.IntegrationState = rawJSON(map[string]any{"barrier_command_sent": true, "entry_device_id": *req.EntryDeviceID, "decision_code": decisionCode, "decision_reason": decisionReason})
+				_, _ = h.db.Pool.Exec(r.Context(), `UPDATE dm3_parking.parking_sessions SET integration_state = $2::jsonb WHERE id = $1::uuid`, session.ID, session.IntegrationState)
+			}
 		}
 	}
 	h.publishParkingEvent(r.Context(), "parking.session.entry", map[string]any{"session_id": session.ID, "plate_number": session.PlateNumber, "zone_id": session.ZoneID})
@@ -1012,12 +1022,19 @@ func (h *ParkingHandlers) ExitParkingSession(w http.ResponseWriter, r *http.Requ
 	normalizedExit := normalizePlate(exitPlate)
 	now := time.Now().UTC()
 	feeAmount, feeRuleID, paymentStatus := h.calculateParkingFee(r.Context(), cid, current, now)
+	settings, _ := h.getOrCreateSettings(r.Context(), cid)
+	paid := paymentStatus == models.ParkingPaymentStatusPaid || paymentStatus == models.ParkingPaymentStatusWaived
+	// When require_payment_before_exit is enforced and the fee is not settled,
+	// keep the session active so exit is not visible as "completed" until payment
+	// clears (ProcessParkingPayment advances active→completed).
 	status := models.ParkingSessionStatusCompleted
 	if normalizedExit != current.NormalizedPlate {
 		status = models.ParkingSessionStatusDisputed
+	} else if settings.RequirePaymentBeforeExit && !paid {
+		status = models.ParkingSessionStatusActive
 	}
 	integration := map[string]any{"barrier_command_sent": false}
-	shouldOpenBarrier := status != models.ParkingSessionStatusDisputed && (paymentStatus == models.ParkingPaymentStatusPaid || paymentStatus == models.ParkingPaymentStatusWaived)
+	shouldOpenBarrier := status != models.ParkingSessionStatusDisputed && paid
 	if shouldOpenBarrier && req.ExitDeviceID != nil {
 		if err := h.publishBarrierCommand(r.Context(), current.ZoneID, *req.ExitDeviceID, barrierCommand{Action: "open", SessionID: current.ID, Reason: "exit_granted"}); err == nil {
 			integration["barrier_command_sent"] = true
@@ -1126,6 +1143,10 @@ func (h *ParkingHandlers) RecognizeParkingPlate(w http.ResponseWriter, r *http.R
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	if cid == "" {
 		httputil.Error(w, http.StatusForbidden, "company context required")
+		return
+	}
+	if settings, err := h.getOrCreateSettings(r.Context(), cid); err == nil && !settings.PlateRecognitionEnabled {
+		httputil.Error(w, http.StatusForbidden, "plate recognition is disabled for this tenant")
 		return
 	}
 	var req parkingRecognitionRequest
