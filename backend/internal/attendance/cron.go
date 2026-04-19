@@ -48,6 +48,8 @@ func (h *AttendanceHandlers) markAbsent(ctx context.Context) error {
 	// The DB side does the heavy lifting so we do not paginate millions of
 	// rows through Go memory. Shift.end_time is anchored to ar.date; if the
 	// shift spans midnight we add a day.
+	// NOT EXISTS on holidays short-circuits BR-004 for tenant-configured
+	// closures — otherwise every employee would look absent on Tết.
 	const sql = `
 		UPDATE dm3_attendance.attendance_records ar
 		   SET status = 'absent',
@@ -58,6 +60,10 @@ func (h *AttendanceHandlers) markAbsent(ctx context.Context) error {
 		   AND ar.status = 'pending'
 		   AND ar.manual_adjustment = false
 		   AND ar.clock_in IS NULL
+		   AND NOT EXISTS (
+		     SELECT 1 FROM dm3_attendance.holidays h
+		      WHERE h.tenant_id = ar.tenant_id AND h.date = ar.date
+		   )
 		   AND (
 		     ar.date
 		       + s.end_time

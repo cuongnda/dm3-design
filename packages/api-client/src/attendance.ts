@@ -383,6 +383,52 @@ export function adjustLeaveBalance(
   });
 }
 
+// ─── Holidays ───────────────────────────────────────────────────────────────
+
+export interface HolidayDTO {
+  id: string;
+  tenant_id: string;
+  date: string; // YYYY-MM-DD
+  name: string;
+  description?: string | null;
+  is_paid: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HolidayInput {
+  date: string;
+  name: string;
+  description?: string | null;
+  is_paid?: boolean;
+}
+
+export function listHolidays(year?: number): Promise<{ items: HolidayDTO[] }> {
+  const qs = year ? `?year=${year}` : "";
+  return apiFetch(`${BASE}/holidays${qs}`);
+}
+
+export function createHoliday(body: HolidayInput): Promise<{ id: string }> {
+  return apiFetch(`${BASE}/holidays`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateHoliday(
+  id: string,
+  body: Partial<HolidayInput>,
+): Promise<{ status: string }> {
+  return apiFetch(`${BASE}/holidays/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteHoliday(id: string): Promise<void> {
+  return apiFetch(`${BASE}/holidays/${id}`, { method: "DELETE" });
+}
+
 // ─── Settings ───────────────────────────────────────────────────────────────
 
 export interface AttendanceSettingsDTO {

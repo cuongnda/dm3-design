@@ -129,6 +129,11 @@ func main() {
 		ar.Get("/leave/balances", handlers.ListLeaveBalances)
 		ar.Post("/leave/balances/adjust", handlers.AdjustLeaveBalance)
 
+		ar.Get("/holidays", handlers.ListHolidays)
+		ar.Post("/holidays", handlers.CreateHoliday)
+		ar.Patch("/holidays/{id}", handlers.UpdateHoliday)
+		ar.Delete("/holidays/{id}", handlers.DeleteHoliday)
+
 		ar.Get("/settings", handlers.GetSettings)
 		ar.Put("/settings", handlers.UpdateSettings)
 

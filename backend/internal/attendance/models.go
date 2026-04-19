@@ -164,6 +164,18 @@ type LeaveBalance struct {
 	PolicyColor string `json:"policy_color,omitempty"`
 }
 
+// Holiday mirrors dm3_attendance.holidays.
+type Holiday struct {
+	ID          string    `json:"id"`
+	TenantID    string    `json:"tenant_id"`
+	Date        time.Time `json:"date"`
+	Name        string    `json:"name"`
+	Description *string   `json:"description,omitempty"`
+	IsPaid      bool      `json:"is_paid"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 // AttendanceSettings mirrors dm3_attendance.attendance_settings (one row per tenant).
 type AttendanceSettings struct {
 	TenantID                    string    `json:"tenant_id"`
