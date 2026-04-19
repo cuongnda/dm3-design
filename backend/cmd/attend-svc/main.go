@@ -117,6 +117,7 @@ func main() {
 
 		ar.Get("/shifts", handlers.ListShifts)
 		ar.Post("/shifts", handlers.CreateShift)
+		ar.Post("/shifts/assign", handlers.BulkAssignShift)
 		ar.Get("/shifts/{id}", handlers.GetShift)
 		ar.Patch("/shifts/{id}", handlers.UpdateShift)
 		ar.Delete("/shifts/{id}", handlers.ArchiveShift)

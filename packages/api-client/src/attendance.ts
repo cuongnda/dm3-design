@@ -223,6 +223,26 @@ export function archiveShift(id: string): Promise<{ status: string }> {
   return apiFetch(`${BASE}/shifts/${id}`, { method: "DELETE" });
 }
 
+export interface BulkAssignShiftInput {
+  shift_id: string;
+  user_ids: string[];
+  effective_from: string; // YYYY-MM-DD
+  effective_until?: string | null;
+  replace_active?: boolean;
+}
+
+export function bulkAssignShift(body: BulkAssignShiftInput): Promise<{
+  shift_id: string;
+  assigned_count: number;
+  effective_from: string;
+  effective_until?: string | null;
+}> {
+  return apiFetch(`${BASE}/shifts/assign`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 // ─── Leave ──────────────────────────────────────────────────────────────────
 
 export interface LeavePolicyDTO {
