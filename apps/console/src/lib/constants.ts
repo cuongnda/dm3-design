@@ -74,10 +74,6 @@ export const ROUTES = {
   parkingFeeRules: '/parking/fee-rules',
   parkingAnalytics: '/parking/analytics',
   parkingSettings: '/parking/settings',
-  maintenance: '/operate/maintenance',
-  guardTour: '/operate/guard-tour',
-  keys: '/operate/keys',
-  iotEnergy: '/operate/iot-energy',
   // SMART
   aiAssistant: '/smart/ai-assistant',
   analytics: '/smart/analytics',

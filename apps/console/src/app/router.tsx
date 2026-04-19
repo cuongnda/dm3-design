@@ -248,19 +248,6 @@ const ParkingAnalyticsPage2 = lazyWithRetry(() =>
 const ParkingSettingsPage = lazyWithRetry(() =>
   import('@/features/parking/ParkingSettingsPage').then((m) => ({ default: m.ParkingSettingsPage }))
 );
-const MaintenancePage = lazyWithRetry(() =>
-  import('@/features/operate/maintenance/MaintenancePage').then((m) => ({ default: m.MaintenancePage }))
-);
-const GuardTourPage = lazyWithRetry(() =>
-  import('@/features/operate/guard-tour/GuardTourPage').then((m) => ({ default: m.GuardTourPage }))
-);
-const KeyManagementPage = lazyWithRetry(() =>
-  import('@/features/operate/keys/KeyManagementPage').then((m) => ({ default: m.KeyManagementPage }))
-);
-const IoTEnergyPage = lazyWithRetry(() =>
-  import('@/features/operate/iot-energy/IoTEnergyPage').then((m) => ({ default: m.IoTEnergyPage }))
-);
-
 // SMART
 const AIAssistantPage = lazyWithRetry(() =>
   import('@/features/smart/ai-assistant/AIAssistantPage').then((m) => ({ default: m.AIAssistantPage }))
@@ -479,10 +466,6 @@ export const Router = createBrowserRouter([
 
               // OPERATE
               { path: 'operate/room-booking', element: <LazyWrap><RoomBookingPage /></LazyWrap> },
-              { path: 'operate/maintenance', element: <LazyWrap><MaintenancePage /></LazyWrap> },
-              { path: 'operate/guard-tour', element: <LazyWrap><GuardTourPage /></LazyWrap> },
-              { path: 'operate/keys', element: <LazyWrap><KeyManagementPage /></LazyWrap> },
-              { path: 'operate/iot-energy', element: <LazyWrap><IoTEnergyPage /></LazyWrap> },
 
               // SMART
               { path: 'smart/ai-assistant', element: <LazyWrap><AIAssistantPage /></LazyWrap> },

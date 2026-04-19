@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Bell, DoorOpen, Video, ShieldAlert, Phone,
   Bot, AlertTriangle, Users, UserPlus, Wrench, Clock, Package,
-  Building2, Car, Hammer, Shield, Key, Zap,
+  Building2, Car, Shield,
   UserCheck, MapPin, Users2, Cpu, ClipboardList, Eye, FileText,
   BarChart3, CalendarClock, SlidersHorizontal, CircleDollarSign,
   Ticket, ParkingSquare, Activity, History, Plane, Timer, Palette, Wallet,
@@ -160,10 +160,6 @@ export const NAV_CONFIG: NavSection[] = [
     color: '#F59E0B',
     items: [
       { to: '/operate/room-booking', icon: Building2, labelKey: 'nav.roomBooking', labelFallback: 'Room Booking', status: 'coming-soon' },
-      { to: '/operate/maintenance', icon: Hammer, labelKey: 'nav.maintenance', labelFallback: 'Maintenance', status: 'coming-soon' },
-      { to: '/operate/guard-tour', icon: Shield, labelKey: 'nav.guardTour', labelFallback: 'Guard Tour', status: 'coming-soon' },
-      { to: '/operate/keys', icon: Key, labelKey: 'nav.keys', labelFallback: 'Keys', status: 'coming-soon' },
-      { to: '/operate/iot-energy', icon: Zap, labelKey: 'nav.iotEnergy', labelFallback: 'IoT & Energy', status: 'coming-soon' },
     ],
   },
 ];
