@@ -539,6 +539,26 @@ export function listOvertime(
   return apiFetch(`${BASE}/overtime${qs ? `?${qs}` : ""}`);
 }
 
+export interface OvertimeRequestInput {
+  date: string; // YYYY-MM-DD
+  hours: number;
+  reason: string;
+  user_id?: string; // manager-on-behalf; defaults to the caller
+}
+
+export function requestOvertime(input: OvertimeRequestInput): Promise<{
+  id: string;
+  user_id: string;
+  date: string;
+  overtime_hours: number;
+  status: OvertimeStatus;
+}> {
+  return apiFetch(`${BASE}/overtime/request`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export function approveOvertime(
   id: string,
   note?: string,

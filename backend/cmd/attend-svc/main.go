@@ -142,6 +142,7 @@ func main() {
 		ar.Put("/settings", handlers.UpdateSettings)
 
 		ar.Get("/overtime", handlers.ListOvertime)
+		ar.Post("/overtime/request", handlers.RequestOvertime)
 		ar.Post("/overtime/{id}/approve", handlers.ApproveOvertime)
 		ar.Post("/overtime/{id}/reject", handlers.RejectOvertime)
 
