@@ -79,7 +79,10 @@ export interface AttendanceDailySummaryDTO {
 }
 
 export interface ListAttendanceRecordsParams {
-  date?: string; // YYYY-MM-DD; defaults server-side to today (UTC)
+  date?: string; // YYYY-MM-DD; ignored when from/to supplied; default server-side is today
+  from?: string; // YYYY-MM-DD inclusive lower bound
+  to?: string;   // YYYY-MM-DD inclusive upper bound
+  user_id?: string;
   site_id?: string;
   status?: AttendanceStatus;
   search?: string;

@@ -12,7 +12,10 @@ import (
 // ListRecords serves GET /api/v1/attendance/records.
 // Query params:
 //
-//	date        YYYY-MM-DD (default: today in UTC)
+//	date        YYYY-MM-DD (default: today in UTC) — ignored if `from`/`to` set
+//	from, to    YYYY-MM-DD window — when either is supplied the single-date
+//	            branch is skipped and records in [from,to] are returned
+//	user_id     UUID — narrow to one person (used by the person detail page)
 //	site_id     UUID (optional)
 //	status      one of status constants (optional; repeatable not supported)
 //	search      substring match against users.name / users.email
@@ -29,25 +32,59 @@ func (h *AttendanceHandlers) ListRecords(w http.ResponseWriter, r *http.Request)
 	}
 
 	q := r.URL.Query()
-	dateStr := q.Get("date")
-	if dateStr == "" {
-		dateStr = time.Now().UTC().Format("2006-01-02")
-	}
-	date, err := time.Parse("2006-01-02", dateStr)
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid date (expected YYYY-MM-DD)")
-		return
+
+	args := []any{tenantID}
+	where := `ar.tenant_id = $1::uuid`
+	idx := 2
+
+	fromStr := q.Get("from")
+	toStr := q.Get("to")
+	if fromStr != "" || toStr != "" {
+		if fromStr != "" {
+			if _, err := time.Parse("2006-01-02", fromStr); err != nil {
+				httputil.Error(w, http.StatusBadRequest, "invalid from (expected YYYY-MM-DD)")
+				return
+			}
+			where += ` AND ar.date >= $` + strconv.Itoa(idx) + `::date`
+			args = append(args, fromStr)
+			idx++
+		}
+		if toStr != "" {
+			if _, err := time.Parse("2006-01-02", toStr); err != nil {
+				httputil.Error(w, http.StatusBadRequest, "invalid to (expected YYYY-MM-DD)")
+				return
+			}
+			where += ` AND ar.date <= $` + strconv.Itoa(idx) + `::date`
+			args = append(args, toStr)
+			idx++
+		}
+	} else {
+		dateStr := q.Get("date")
+		if dateStr == "" {
+			dateStr = time.Now().UTC().Format("2006-01-02")
+		}
+		date, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			httputil.Error(w, http.StatusBadRequest, "invalid date (expected YYYY-MM-DD)")
+			return
+		}
+		where += ` AND ar.date = $` + strconv.Itoa(idx)
+		args = append(args, date)
+		idx++
 	}
 
 	siteID := q.Get("site_id")
+	userID := q.Get("user_id")
 	status := q.Get("status")
 	search := q.Get("search")
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
 
-	args := []any{tenantID, date}
-	where := `ar.tenant_id = $1::uuid AND ar.date = $2`
-	idx := 3
+	if userID != "" {
+		where += ` AND ar.user_id = $` + strconv.Itoa(idx) + `::uuid`
+		args = append(args, userID)
+		idx++
+	}
 	if siteID != "" {
 		where += ` AND ar.site_id = $` + strconv.Itoa(idx) + `::uuid`
 		args = append(args, siteID)
@@ -99,7 +136,7 @@ func (h *AttendanceHandlers) ListRecords(w http.ResponseWriter, r *http.Request)
 		  LEFT JOIN dm3_identity.users u ON u.id = ar.user_id AND u.tenant_id = ar.tenant_id
 		  LEFT JOIN dm3_attendance.shifts s ON s.id = ar.shift_id AND s.tenant_id = ar.tenant_id
 		 WHERE ` + where + `
-		 ORDER BY ar.clock_in NULLS LAST, u.first_name NULLS LAST
+		 ORDER BY ar.date DESC, ar.clock_in NULLS LAST, u.first_name NULLS LAST
 		 LIMIT $` + strconv.Itoa(idx) + ` OFFSET $` + strconv.Itoa(idx+1)
 
 	rows, err := h.db.Pool.Query(r.Context(), listSQL, listArgs...)

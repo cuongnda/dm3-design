@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { PageHeader, DataTable, type Column, Button } from '@dm3/ui';
 import { Clock, Download } from 'lucide-react';
 import {
@@ -83,10 +84,16 @@ export function AttendanceDailyPage() {
         key: 'user_name',
         header: t('attendance.table.name'),
         render: (r) => (
-          <div className="leading-tight">
-            <div className="text-foreground text-[13px] font-medium">{r.user_name || r.user_id.slice(0, 8)}</div>
+          <Link
+            to={`/manage/attendance/person/${r.user_id}`}
+            className="block leading-tight hover:text-[#3B82F6]"
+            data-testid={`attendance-link-person-${r.user_id}`}
+          >
+            <div className="text-foreground text-[13px] font-medium hover:text-[#3B82F6]">
+              {r.user_name || r.user_id.slice(0, 8)}
+            </div>
             {r.user_email && <div className="text-[11px] text-muted-foreground">{r.user_email}</div>}
-          </div>
+          </Link>
         ),
       },
       {

@@ -160,6 +160,9 @@ const ContractorsPage = lazyWithRetry(() =>
 const AttendanceDailyPage = lazyWithRetry(() =>
   import('@/features/attendance/AttendanceDailyPage').then((m) => ({ default: m.AttendanceDailyPage }))
 );
+const AttendancePersonPage = lazyWithRetry(() =>
+  import('@/features/attendance/AttendancePersonPage').then((m) => ({ default: m.AttendancePersonPage }))
+);
 const ShiftsPage = lazyWithRetry(() =>
   import('@/features/attendance/ShiftsPage').then((m) => ({ default: m.ShiftsPage }))
 );
@@ -415,6 +418,7 @@ export const Router = createBrowserRouter([
               { path: 'visitors/recurring', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorRecurringPage /></LazyWrap></PluginGuard> },
               { path: 'visitors/settings', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorSettingsPage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance', element: <PluginGuard plugin="attendance"><LazyWrap><AttendanceDailyPage /></LazyWrap></PluginGuard> },
+              { path: 'manage/attendance/person/:userId', element: <PluginGuard plugin="attendance"><LazyWrap><AttendancePersonPage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance/shifts', element: <PluginGuard plugin="attendance"><LazyWrap><ShiftsPage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance/leave', element: <PluginGuard plugin="attendance"><LazyWrap><LeaveRequestsPage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance/overtime', element: <PluginGuard plugin="attendance"><LazyWrap><OvertimePage /></LazyWrap></PluginGuard> },
