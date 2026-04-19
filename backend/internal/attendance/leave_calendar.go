@@ -104,7 +104,7 @@ func (h *AttendanceHandlers) LeaveCalendar(w http.ResponseWriter, r *http.Reques
 	rows, err := h.db.Pool.Query(r.Context(), `
 		SELECT lr.user_id::text, lr.policy_id::text,
 		       lr.start_date, lr.end_date, lr.days, lr.half_day, lr.status,
-		       COALESCE(u.full_name, ''),
+		       COALESCE(NULLIF(TRIM(u.first_name || ' ' || u.last_name), ''), ''),
 		       COALESCE(p.code, ''), COALESCE(p.name, ''), COALESCE(p.color, '')
 		  FROM dm3_attendance.leave_requests lr
 		  LEFT JOIN dm3_identity.users u ON u.id = lr.user_id

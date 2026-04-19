@@ -204,7 +204,7 @@ func (h *AttendanceHandlers) fetchMeLeaveRequests(
 		       lr.start_date, lr.end_date, lr.days, lr.half_day, lr.reason,
 		       lr.attachment_ref, lr.status, lr.reviewed_by::text, lr.reviewed_at,
 		       lr.review_note, lr.cancelled_at, lr.created_at, lr.updated_at,
-		       COALESCE(u.full_name, ''), COALESCE(u.email, ''),
+		       COALESCE(NULLIF(TRIM(u.first_name || ' ' || u.last_name), ''), ''), COALESCE(u.email, ''),
 		       COALESCE(p.code, ''), COALESCE(p.name, ''), COALESCE(p.color, '')
 		  FROM dm3_attendance.leave_requests lr
 		  LEFT JOIN dm3_identity.users u ON u.id = lr.user_id

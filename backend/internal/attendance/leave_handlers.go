@@ -301,7 +301,7 @@ func (h *AttendanceHandlers) ListLeaveRequests(w http.ResponseWriter, r *http.Re
 		idx++
 	}
 	if search := r.URL.Query().Get("search"); search != "" {
-		where += " AND (u.full_name ILIKE $" + strconv.Itoa(idx) + " OR u.email ILIKE $" + strconv.Itoa(idx) + ")"
+		where += " AND (u.first_name ILIKE $" + strconv.Itoa(idx) + " OR u.last_name ILIKE $" + strconv.Itoa(idx) + " OR u.email ILIKE $" + strconv.Itoa(idx) + ")"
 		args = append(args, "%"+search+"%")
 		idx++
 	}
@@ -326,7 +326,7 @@ func (h *AttendanceHandlers) ListLeaveRequests(w http.ResponseWriter, r *http.Re
 		       lr.start_date, lr.end_date, lr.days, lr.half_day, lr.reason,
 		       lr.attachment_ref, lr.status, lr.reviewed_by::text, lr.reviewed_at,
 		       lr.review_note, lr.cancelled_at, lr.created_at, lr.updated_at,
-		       COALESCE(u.full_name, ''), COALESCE(u.email, ''),
+		       COALESCE(NULLIF(TRIM(u.first_name || ' ' || u.last_name), ''), ''), COALESCE(u.email, ''),
 		       COALESCE(p.code, ''), COALESCE(p.name, ''), COALESCE(p.color, '')
 		  FROM dm3_attendance.leave_requests lr
 		  LEFT JOIN dm3_identity.users u ON u.id = lr.user_id
