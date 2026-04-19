@@ -154,9 +154,6 @@ const VisitorRecurringPage = lazyWithRetry(() =>
 const VisitorSettingsPage = lazyWithRetry(() =>
   import('@/features/visitors/VisitorSettingsPage').then((m) => ({ default: m.VisitorSettingsPage }))
 );
-const ContractorsPage = lazyWithRetry(() =>
-  import('@/features/manage/contractors/ContractorsPage').then((m) => ({ default: m.ContractorsPage }))
-);
 const AttendanceDailyPage = lazyWithRetry(() =>
   import('@/features/attendance/AttendanceDailyPage').then((m) => ({ default: m.AttendanceDailyPage }))
 );
@@ -196,9 +193,6 @@ const AttendanceReportsPage = lazyWithRetry(() =>
 const HolidaysPage = lazyWithRetry(() =>
   import('@/features/attendance/HolidaysPage').then((m) => ({ default: m.HolidaysPage }))
 );
-const DeliveriesPage = lazyWithRetry(() =>
-  import('@/features/manage/deliveries/DeliveriesPage').then((m) => ({ default: m.DeliveriesPage }))
-);
 const ProvisioningPage = lazyWithRetry(() =>
   import('@/features/manage/provisioning/ProvisioningPage').then((m) => ({ default: m.ProvisioningPage }))
 );
@@ -221,9 +215,6 @@ const CCTVSettingsPage = lazyWithRetry(() =>
 );
 
 // OPERATE
-const RoomBookingPage = lazyWithRetry(() =>
-  import('@/features/operate/room-booking/RoomBookingPage').then((m) => ({ default: m.RoomBookingPage }))
-);
 const ParkingDashboardPage = lazyWithRetry(() =>
   import('@/features/parking/ParkingDashboardPage').then((m) => ({ default: m.ParkingDashboardPage }))
 );
@@ -407,7 +398,6 @@ export const Router = createBrowserRouter([
               { path: 'manage/vehicles', element: <Navigate to="/parking/vehicles" replace /> },
               { path: 'manage/departments', element: <LazyWrap><DepartmentManagementPage /></LazyWrap> },
               { path: 'manage/departments/:id', element: <LazyWrap><DepartmentDetailPage /></LazyWrap> },
-              { path: 'manage/contractors', element: <LazyWrap><ContractorsPage /></LazyWrap> },
 
               // VISITORS
               { path: 'visitors', element: <PluginGuard plugin="visitor"><LazyWrap><VisitorsPage /></LazyWrap></PluginGuard> },
@@ -432,7 +422,6 @@ export const Router = createBrowserRouter([
               { path: 'manage/attendance/reports', element: <PluginGuard plugin="attendance"><LazyWrap><AttendanceReportsPage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance/holidays', element: <PluginGuard plugin="attendance"><LazyWrap><HolidaysPage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance/settings', element: <PluginGuard plugin="attendance"><LazyWrap><AttendanceSettingsPage /></LazyWrap></PluginGuard> },
-              { path: 'manage/deliveries', element: <LazyWrap><DeliveriesPage /></LazyWrap> },
               { path: 'manage/provisioning', element: <LazyWrap><ProvisioningPage /></LazyWrap> },
 
               // ACCESS CONTROL (legacy)
@@ -463,9 +452,6 @@ export const Router = createBrowserRouter([
               { path: 'parking/fee-rules', element: <PluginGuard plugin="parking"><LazyWrap><ParkingFeeRulesPage /></LazyWrap></PluginGuard> },
               { path: 'parking/analytics', element: <PluginGuard plugin="parking"><LazyWrap><ParkingAnalyticsPage2 /></LazyWrap></PluginGuard> },
               { path: 'parking/settings', element: <PluginGuard plugin="parking"><LazyWrap><ParkingSettingsPage /></LazyWrap></PluginGuard> },
-
-              // OPERATE
-              { path: 'operate/room-booking', element: <LazyWrap><RoomBookingPage /></LazyWrap> },
 
               // SMART
               { path: 'smart/ai-assistant', element: <LazyWrap><AIAssistantPage /></LazyWrap> },

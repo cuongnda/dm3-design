@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Bell, DoorOpen, Video, ShieldAlert, Phone,
-  Bot, AlertTriangle, Users, UserPlus, Wrench, Clock, Package,
+  Bot, AlertTriangle, UserPlus, Clock,
   Building2, Car, Shield,
   UserCheck, MapPin, Users2, Cpu, ClipboardList, Eye, FileText,
   BarChart3, CalendarClock, SlidersHorizontal, CircleDollarSign,
@@ -66,8 +66,6 @@ export const NAV_CONFIG: NavSection[] = [
     items: [
       { to: '/manage/users', icon: UserCheck, labelKey: 'nav.users', labelFallback: 'Users', status: 'setup' },
       { to: '/manage/departments', icon: Building2, labelKey: 'nav.departments', labelFallback: 'Departments', status: 'setup' },
-      { to: '/manage/contractors', icon: Wrench, labelKey: 'nav.contractors', labelFallback: 'Contractors', status: 'coming-soon' },
-      { to: '/manage/deliveries', icon: Package, labelKey: 'nav.deliveries', labelFallback: 'Deliveries', status: 'coming-soon' },
     ],
   },
   {
@@ -151,15 +149,6 @@ export const NAV_CONFIG: NavSection[] = [
       { to: '/access/access-groups', icon: Users2, labelKey: 'nav.accessGroups', labelFallback: 'Access Groups', status: 'ready' },
       { to: '/access/access-times', icon: Clock, labelKey: 'nav.accessTimes', labelFallback: 'Access Times', status: 'ready' },
       { to: '/devices', icon: Cpu, labelKey: 'nav.devices', labelFallback: 'Devices', status: 'ready' },
-    ],
-  },
-  {
-    key: 'operate',
-    labelKey: 'nav.operate',
-    labelFallback: 'OPERATE',
-    color: '#F59E0B',
-    items: [
-      { to: '/operate/room-booking', icon: Building2, labelKey: 'nav.roomBooking', labelFallback: 'Room Booking', status: 'coming-soon' },
     ],
   },
 ];

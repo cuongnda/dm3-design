@@ -30,11 +30,5 @@
   "modules.aiDetection": "AI Detection",
   "modules.visitors": "Visitors",
   "modules.attendance": "Attendance",
-  "modules.contractors": "Contractors",
-  "modules.deliveries": "Deliveries",
-  "modules.parking": "Parking",
-  "modules.roomBooking": "Room Booking",
-  "modules.maintenance": "Maintenance",
-  "modules.guardTour": "Guard Tour",
-  "modules.iotEnergy": "IoT & Energy"
+  "modules.parking": "Parking"
 }

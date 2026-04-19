@@ -44,9 +44,7 @@ export const ROUTES = {
   // MANAGE
   users: '/manage/users',
   departments: '/manage/departments',
-  contractors: '/manage/contractors',
   attendance: '/manage/attendance',
-  deliveries: '/manage/deliveries',
   // VISITORS
   visitors: '/visitors',
   visitorsRegister: '/visitors/register',
@@ -65,7 +63,6 @@ export const ROUTES = {
   // DEVICES
   devices: '/devices',
   // OPERATE
-  roomBooking: '/operate/room-booking',
   parking: '/parking',
   parkingSessions: '/parking/sessions',
   parkingVehicles: '/parking/vehicles',

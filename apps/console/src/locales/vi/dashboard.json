@@ -30,11 +30,5 @@
   "modules.aiDetection": "Phát hiện AI",
   "modules.visitors": "Khách",
   "modules.attendance": "Chấm công",
-  "modules.contractors": "Nhà thầu",
-  "modules.deliveries": "Giao hàng",
-  "modules.parking": "Bãi đỗ xe",
-  "modules.roomBooking": "Đặt phòng",
-  "modules.maintenance": "Bảo trì",
-  "modules.guardTour": "Tuần tra",
-  "modules.iotEnergy": "IoT & Năng lượng"
+  "modules.parking": "Bãi đỗ xe"
 }

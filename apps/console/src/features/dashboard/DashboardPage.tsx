@@ -144,19 +144,13 @@ export function DashboardPage() {
       items: [
         { module: t('modules.visitors'), status: 'ok', detail: '3 waiting' },
         { module: t('modules.attendance'), status: 'ok', detail: 'Online' },
-        { module: t('modules.contractors'), status: 'ok', detail: '34 on-site' },
-        { module: t('modules.deliveries'), status: 'warning', detail: '2 uncollected' },
       ],
     },
     {
       domain: t('domain.operate'), colorCls: 'text-operate', Icon: Building2,
       viewLink: t('health.viewFacility'),
       items: [
-        { module: t('modules.roomBooking'), status: 'ok', detail: '3/12 in use' },
         { module: t('modules.parking'), status: 'ok', detail: '78% full' },
-        { module: t('modules.maintenance'), status: 'warning', detail: '2 overdue' },
-        { module: t('modules.guardTour'), status: 'ok', detail: 'On schedule' },
-        { module: t('modules.iotEnergy'), status: 'ok', detail: '142 kWh today' },
       ],
     },
   ];
