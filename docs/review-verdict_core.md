@@ -9,11 +9,11 @@ Scope: core platform surfaces across access, identity, auth, devices/gateway, an
 
 I re-reviewed this from current repo state, not just the verdict doc.
 
-The big news is that the strongest blocker from my earlier pass is no longer true. The stale `useUserManagement.ts` hook path I previously cited is gone, and the current `UserManagementPage.tsx` now talks directly to `/api/v1/identity/...` endpoints that actually exist in `backend/cmd/identity-svc/main.go`.
+The strongest blocker from my earlier pass is no longer true. The stale `useUserManagement.ts` hook path I previously cited is gone, and the current `UserManagementPage.tsx` now talks directly to `/api/v1/identity/...` endpoints that exist in `backend/cmd/identity-svc/main.go`.
 
 That materially improves merge safety.
 
-So this is no longer a `REQUEST CHANGES` verdict for me. But I still would not call it clean approval yet, because there are still some real contract drifts in shared API clients and some coarse authorization wiring in the service entrypoints.
+So this is no longer a `REQUEST CHANGES` verdict for me. I still would not call it clean approval yet, because there are still real contract drifts in shared API clients.
 
 ## What I re-checked
 
@@ -81,7 +81,7 @@ The repeated use of company scoping and auth middleware is still visible and mea
 ## Remaining findings
 
 ### 1. Shared API clients still expose stale or alternate contracts
-This is now my main reason for not approving cleanly.
+This is now the main reason I would not approve cleanly.
 
 #### `packages/api-client/src/devices.ts`
 This file still uses:
@@ -109,36 +109,9 @@ Maybe there is another service still backing `/persons`, but from the current co
 #### `packages/api-client/src/access-points.ts`
 This client is closer to current routing and uses `/api/v1/access/access-points`, which matches the current access service shape.
 
-So the core issue is not “all clients are broken”. It is inconsistency.
+So the core issue is not that every shared client is broken. It is inconsistency.
 
-### 2. Read/write authorization intent is still muddled in service entrypoints
-This part is still not cleaned up.
-
-#### Identity service
-In `backend/cmd/identity-svc/main.go`, comments say things like:
-- operator/viewer can read, manager+ can write
-
-But the `/users` routes are wrapped in:
-- `RequireWriteRole("primary_manager", "manager", "system_admin")`
-
-That group contains both GET and write endpoints.
-
-So the implementation is still stricter than the comment.
-
-#### Access service
-`backend/cmd/access-svc/main.go` still wraps zones, access points, access devices, access groups, and access times in broad `RequireWriteRole(...)` groups, while those groups also include GET endpoints.
-
-#### Device gateway
-`backend/cmd/device-gateway/main.go` still applies `RequireWriteRole(...)` broadly to company-scoped device routes even though that group includes reads like:
-- `GET /devices`
-- `GET /devices/{id}`
-- `GET /devices/{id}/events`
-- `GET /devices/{id}/history`
-- `GET /events`
-
-This is not a security hole. If anything, it is over-restrictive. But it is still a correctness/policy clarity issue.
-
-### 3. The frontend contract layer is better, but still not unified enough
+### 2. The frontend contract layer is better, but still not unified enough
 The improvement is real:
 - `UserManagementPage.tsx` is now aligned with identity routes
 - `useDepartmentManagement.ts` also uses `/api/v1/identity/departments...`
@@ -146,7 +119,7 @@ The improvement is real:
 
 But shared clients and page-local fetches are still mixed.
 
-That means the system works more by local repair than by one canonical contract layer. That is survivable, but not elegant, and it increases future breakage risk.
+That means the system works more by local repair than by one canonical contract layer. That is survivable, but it increases future breakage risk.
 
 ## Best concrete evidence from the re-review
 
@@ -169,9 +142,6 @@ That matters. This is not a repo that is falling apart underneath the doc.
 ### Blocker 2: unresolved identity/person contract drift
 `packages/api-client/src/persons.ts` still presents a `/api/v1/persons` contract that does not match the identity user surface I re-validated.
 
-### Blocker 3: authorization policy is still coarse and comment-misaligned
-In access, identity, and gateway service entrypoints, GET routes are still grouped under write-role middleware despite comments suggesting broader read access.
-
 ## Recommendation before merge
 
 ### Must fix
@@ -179,14 +149,10 @@ In access, identity, and gateway service entrypoints, GET routes are still group
    - especially `packages/api-client/src/devices.ts`
    - revalidate whether `packages/api-client/src/persons.ts` is still canonical or should be retired/repointed
 
-2. Resolve the read/write policy mismatch in service entrypoints.
-   - either allow read-only roles on GET routes
-   - or update comments and product expectations so the stricter policy is explicit
-
 ### Should fix soon
-3. Continue consolidating core console data access around canonical shared clients or one consistent fetch layer.
+2. Continue consolidating core console data access around canonical shared clients or one consistent fetch layer.
 
-4. Add a small set of contract-focused integration tests for:
+3. Add a small set of contract-focused integration tests for:
    - user list and delete/bulk-delete flows
    - department list and assignment flows
    - device list/detail/history/sync flows
@@ -200,4 +166,4 @@ Current call:
 
 So, no, I would not stamp this as fully clean yet.
 
-But the earlier biggest blocker was real, and it has been fixed. The remaining issues are now mostly contract cleanup and authorization-policy clarity, not a major structural failure.
+But the earlier biggest blocker was real, and it has been fixed. The remaining issues are now mostly contract cleanup, not a major structural failure.
