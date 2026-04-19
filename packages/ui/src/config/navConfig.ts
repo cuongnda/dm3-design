@@ -4,7 +4,7 @@ import {
   Building2, Car, Hammer, Shield, Key, Zap,
   UserCheck, MapPin, Users2, Cpu, ClipboardList, Eye, FileText,
   BarChart3, CalendarClock, SlidersHorizontal, CircleDollarSign,
-  Ticket, ParkingSquare, Activity, History, Plane, Timer, Palette,
+  Ticket, ParkingSquare, Activity, History, Plane, Timer, Palette, Wallet,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { NavStatus } from '../lib/navStatus';
@@ -131,6 +131,7 @@ export const NAV_CONFIG: NavSection[] = [
       { to: '/manage/attendance/overtime', icon: Timer, labelKey: 'nav.attendanceOvertime', labelFallback: 'Overtime', status: 'ready' },
       { to: '/manage/attendance/leave', icon: Plane, labelKey: 'nav.attendanceLeave', labelFallback: 'Leave', status: 'ready' },
       { to: '/manage/attendance/leave/policies', icon: Palette, labelKey: 'nav.attendanceLeavePolicies', labelFallback: 'Leave policies', status: 'ready' },
+      { to: '/manage/attendance/leave/balances', icon: Wallet, labelKey: 'nav.attendanceLeaveBalances', labelFallback: 'Leave balances', status: 'ready' },
       { to: '/manage/attendance/reports', icon: BarChart3, labelKey: 'nav.attendanceReports', labelFallback: 'Reports', status: 'ready' },
       { to: '/manage/attendance/holidays', icon: CalendarClock, labelKey: 'nav.attendanceHolidays', labelFallback: 'Holidays', status: 'ready' },
       { to: '/manage/attendance/settings', icon: SlidersHorizontal, labelKey: 'nav.attendanceSettings', labelFallback: 'Settings', status: 'ready' },

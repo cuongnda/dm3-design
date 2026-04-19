@@ -172,6 +172,9 @@ const LeaveRequestsPage = lazyWithRetry(() =>
 const AttendanceLeavePoliciesPage = lazyWithRetry(() =>
   import('@/features/attendance/AttendanceLeavePoliciesPage').then((m) => ({ default: m.AttendanceLeavePoliciesPage }))
 );
+const AttendanceLeaveBalancePage = lazyWithRetry(() =>
+  import('@/features/attendance/AttendanceLeaveBalancePage').then((m) => ({ default: m.AttendanceLeaveBalancePage }))
+);
 const AttendanceSettingsPage = lazyWithRetry(() =>
   import('@/features/attendance/AttendanceSettingsPage').then((m) => ({ default: m.AttendanceSettingsPage }))
 );
@@ -425,6 +428,7 @@ export const Router = createBrowserRouter([
               { path: 'manage/attendance/shifts', element: <PluginGuard plugin="attendance"><LazyWrap><ShiftsPage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance/leave', element: <PluginGuard plugin="attendance"><LazyWrap><LeaveRequestsPage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance/leave/policies', element: <PluginGuard plugin="attendance"><LazyWrap><AttendanceLeavePoliciesPage /></LazyWrap></PluginGuard> },
+              { path: 'manage/attendance/leave/balances', element: <PluginGuard plugin="attendance"><LazyWrap><AttendanceLeaveBalancePage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance/overtime', element: <PluginGuard plugin="attendance"><LazyWrap><OvertimePage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance/reports', element: <PluginGuard plugin="attendance"><LazyWrap><AttendanceReportsPage /></LazyWrap></PluginGuard> },
               { path: 'manage/attendance/holidays', element: <PluginGuard plugin="attendance"><LazyWrap><HolidaysPage /></LazyWrap></PluginGuard> },
