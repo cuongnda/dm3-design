@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuthStore } from '@/stores/authStore';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, getToken } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import type { Department, DepartmentFormData, DepartmentFilters, DepartmentUser, DepartmentImportData, DepartmentManager } from '../types';
 
@@ -59,6 +58,26 @@ const initialFilters: DepartmentFilters = {
     parent_id: '',
 };
 
+interface DepartmentListResponse {
+    departments?: Department[];
+    pagination?: { total?: number; total_pages?: number };
+    total?: number;
+    total_pages?: number;
+}
+
+interface DepartmentUsersResponse {
+    users?: DepartmentUser[];
+}
+
+interface DepartmentImportResponse {
+    success: number;
+    errors?: DepartmentImportData[];
+}
+
+interface DepartmentManagersResponse {
+    managers?: DepartmentManager[];
+}
+
 export function useDepartmentManagement(): UseDepartmentManagementReturn {
     const [departments, setDepartments] = useState<Department[]>([]);
     const [loading, setLoading] = useState(false);
@@ -76,15 +95,6 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
     const [sortDir, setSortDir] = useState<'asc' | 'desc' | null>('asc');
 
     const { t } = useTranslation('departments');
-    const user = useAuthStore((s) => s.user);
-
-    const getAuthHeaders = () => {
-        const token = localStorage.getItem('dm3-token');
-        return {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        };
-    };
 
     const fetchDepartments = useCallback(async () => {
         setLoading(true);
@@ -102,15 +112,7 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
                 ...(sortDir && { sort_order: sortDir.toUpperCase() }),
             });
 
-            const response = await fetch(`/api/v1/identity/departments?${params}`, {
-                headers: getAuthHeaders(),
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch departments');
-            }
-
-            const data = await response.json();
+            const data = await apiFetch<DepartmentListResponse>(`/api/v1/identity/departments?${params}`);
             setDepartments(data.departments || []);
             setPagination((prev) => ({
                 ...prev,
@@ -124,25 +126,16 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
         } finally {
             setLoading(false);
         }
-    }, [pagination.page, pagination.limit, filters, sortBy, sortDir]);
+    }, [pagination.page, pagination.limit, filters, sortBy, sortDir, t]);
 
-    // Create department
     const createDepartment = useCallback(
         async (data: DepartmentFormData): Promise<boolean> => {
             try {
-                const response = await fetch('/api/v1/identity/departments', {
+                await apiFetch('/api/v1/identity/departments', {
                     method: 'POST',
-                    headers: getAuthHeaders(),
                     body: JSON.stringify(data),
                 });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || 'Failed to create department');
-                }
-
                 toast(t('toast.created'), 'success');
-
                 await fetchDepartments();
                 return true;
             } catch (err) {
@@ -157,19 +150,11 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
     const updateDepartment = useCallback(
         async (id: string, data: DepartmentFormData): Promise<boolean> => {
             try {
-                const response = await fetch(`/api/v1/identity/departments/${id}`, {
+                await apiFetch(`/api/v1/identity/departments/${id}`, {
                     method: 'PUT',
-                    headers: getAuthHeaders(),
                     body: JSON.stringify(data),
                 });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || t('toast.updateFailed'));
-                }
-
                 toast(t('toast.updated'), 'success');
-
                 await fetchDepartments();
                 return true;
             } catch (err) {
@@ -181,22 +166,11 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
         [fetchDepartments, t],
     );
 
-    // Delete department
     const deleteDepartment = useCallback(
         async (id: string): Promise<boolean> => {
             try {
-                const response = await fetch(`/api/v1/identity/departments/${id}`, {
-                    method: 'DELETE',
-                    headers: getAuthHeaders(),
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || 'Failed to delete department');
-                }
-
+                await apiFetch(`/api/v1/identity/departments/${id}`, { method: 'DELETE' });
                 toast(t('toast.deleted'), 'success');
-
                 await fetchDepartments();
                 return true;
             } catch (err) {
@@ -210,15 +184,7 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
 
     const getDepartmentUsers = useCallback(async (id: string): Promise<DepartmentUser[]> => {
         try {
-            const response = await fetch(`/api/v1/identity/departments/${id}/users`, {
-                headers: getAuthHeaders(),
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch department users');
-            }
-
-            const data = await response.json();
+            const data = await apiFetch<DepartmentUsersResponse>(`/api/v1/identity/departments/${id}/users`);
             return data.users || [];
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to fetch department users';
@@ -230,19 +196,11 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
     const assignUsersToDetpartment = useCallback(
         async (departmentId: string, userIds: string[]): Promise<boolean> => {
             try {
-                const response = await fetch(`/api/v1/identity/departments/${departmentId}/users`, {
+                await apiFetch(`/api/v1/identity/departments/${departmentId}/users`, {
                     method: 'POST',
-                    headers: getAuthHeaders(),
                     body: JSON.stringify({ user_ids: userIds }),
                 });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || 'Failed to assign users');
-                }
-
                 toast(t('toast.usersAssigned', { count: userIds.length }), 'success');
-
                 await fetchDepartments();
                 return true;
             } catch (err) {
@@ -257,18 +215,10 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
     const removeUserFromDepartment = useCallback(
         async (departmentId: string, userId: string): Promise<boolean> => {
             try {
-                const response = await fetch(`/api/v1/identity/departments/${departmentId}/users/${userId}`, {
+                await apiFetch(`/api/v1/identity/departments/${departmentId}/users/${userId}`, {
                     method: 'DELETE',
-                    headers: getAuthHeaders(),
                 });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || 'Failed to remove user');
-                }
-
                 toast(t('toast.userRemoved'), 'success');
-
                 await fetchDepartments();
                 return true;
             } catch (err) {
@@ -280,7 +230,8 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
         [fetchDepartments, t],
     );
 
-    // Export departments
+    // Export returns a binary CSV blob, not JSON — stays as raw fetch but uses
+    // the shared token helper instead of reaching into localStorage directly.
     const exportDepartments = useCallback(async (departmentIds?: string[]): Promise<void> => {
         try {
             const params = new URLSearchParams();
@@ -288,8 +239,9 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
                 params.append('ids', departmentIds.join(','));
             }
 
+            const token = getToken();
             const response = await fetch(`/api/v1/identity/departments/export?${params}`, {
-                headers: getAuthHeaders(),
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
 
             if (!response.ok) {
@@ -313,27 +265,16 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
         }
     }, [t]);
 
-    // Import departments
     const importDepartments = useCallback(
         async (file: File): Promise<boolean> => {
             try {
                 const formData = new FormData();
                 formData.append('file', file);
 
-                const response = await fetch('/api/v1/identity/departments/import', {
+                const result = await apiFetch<DepartmentImportResponse>('/api/v1/identity/departments/import', {
                     method: 'POST',
-                    headers: {
-                        Authorization: `Bearer ${localStorage.getItem('dm3-token')}`,
-                    },
                     body: formData,
                 });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || 'Failed to import departments');
-                }
-
-                const result = await response.json();
 
                 toast(t('toast.imported', { count: result.success }), 'success');
 
@@ -352,20 +293,10 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
         [fetchDepartments, t],
     );
 
-    // Fetch managers
     const fetchManagers = useCallback(async () => {
         setManagersLoading(true);
-
         try {
-            const response = await fetch('/api/v1/identity/departments/managers', {
-                headers: getAuthHeaders(),
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch managers');
-            }
-
-            const data = await response.json();
+            const data = await apiFetch<DepartmentManagersResponse>('/api/v1/identity/departments/managers');
             setManagers(data.managers || []);
         } catch (err) {
             console.error('Failed to fetch managers:', err);
@@ -375,10 +306,9 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
         }
     }, []);
 
-    // Filter and pagination handlers
     const updateFilters = useCallback((newFilters: Partial<DepartmentFilters>) => {
         setFilters((prev) => ({ ...prev, ...newFilters }));
-        setPagination((prev) => ({ ...prev, page: 1 })); // Reset to first page
+        setPagination((prev) => ({ ...prev, page: 1 }));
     }, []);
 
     const resetFilters = useCallback(() => {
@@ -404,7 +334,6 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
         await fetchDepartments();
     }, [fetchDepartments]);
 
-    // Auto-fetch on filter/pagination changes
     useEffect(() => {
         fetchDepartments();
     }, [fetchDepartments]);
@@ -420,32 +349,26 @@ export function useDepartmentManagement(): UseDepartmentManagementReturn {
         sortBy,
         sortDir,
 
-        // CRUD Operations
         fetchDepartments,
         createDepartment,
         updateDepartment,
         deleteDepartment,
 
-        // Filtering & Pagination
         updateFilters,
         resetFilters,
         changePage,
         changePageSize,
         handleSortChange,
 
-        // User Management
         getDepartmentUsers,
         assignUsersToDetpartment,
         removeUserFromDepartment,
 
-        // Import/Export
         exportDepartments,
         importDepartments,
 
-        // Managers
         fetchManagers,
 
-        // Utility
         refreshDepartments,
     };
 }

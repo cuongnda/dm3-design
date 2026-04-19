@@ -102,9 +102,8 @@ export function UserModal({ isOpen, onClose, onSave, user }: UserModalProps) {
             if (avatarFile && savedId) {
                 const form = new FormData();
                 form.append('avatar', avatarFile);
-                await fetch(`/api/v1/identity/users/${savedId}/avatar`, {
+                await apiFetch(`/api/v1/identity/users/${savedId}/avatar`, {
                     method: 'POST',
-                    headers: { Authorization: `Bearer ${localStorage.getItem('dm3-token') ?? ''}` },
                     body: form,
                 });
             }

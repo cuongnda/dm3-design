@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { apiFetch } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { Users, UserPlus, UserMinus, Search, User, Mail, Building2, Check } from 'lucide-react';
 import {
@@ -48,23 +49,11 @@ export function UserAssignModal({ isOpen, onClose, department }: UserAssignModal
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState<'current' | 'assign'>('current');
 
-    const getAuthHeaders = () => {
-        const token = localStorage.getItem('dm3-token');
-        return {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        };
-    };
-
     const fetchCurrentUsers = async () => {
         if (!department) return;
         setLoading(true);
         try {
-            const response = await fetch(`/api/v1/identity/departments/${department.id}/users`, {
-                headers: getAuthHeaders(),
-            });
-            if (!response.ok) throw new Error('Failed to fetch current users');
-            const data = await response.json();
+            const data = await apiFetch<{ users?: DepartmentUser[] }>(`/api/v1/identity/departments/${department.id}/users`);
             setCurrentUsers(data.users || []);
         } catch (err) {
             console.error('Error fetching current users:', err);
@@ -77,11 +66,7 @@ export function UserAssignModal({ isOpen, onClose, department }: UserAssignModal
         if (!department) return;
         setLoading(true);
         try {
-            const response = await fetch(`/api/v1/identity/departments/${department.id}/available-users`, {
-                headers: getAuthHeaders(),
-            });
-            if (!response.ok) throw new Error('Failed to fetch available users');
-            const data = await response.json();
+            const data = await apiFetch<{ users?: AvailableUser[] }>(`/api/v1/identity/departments/${department.id}/available-users`);
             setAvailableUsers(data.users || []);
         } catch (err) {
             console.error('Error fetching available users:', err);
@@ -94,15 +79,10 @@ export function UserAssignModal({ isOpen, onClose, department }: UserAssignModal
         if (!department || selectedUsers.length === 0) return;
         setLoading(true);
         try {
-            const response = await fetch(`/api/v1/identity/departments/${department.id}/users`, {
+            await apiFetch(`/api/v1/identity/departments/${department.id}/users`, {
                 method: 'POST',
-                headers: getAuthHeaders(),
                 body: JSON.stringify({ user_ids: selectedUsers }),
             });
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to assign users');
-            }
             toast(t('toast.usersAssigned', { count: selectedUsers.length }), 'success');
             setSelectedUsers([]);
             await fetchCurrentUsers();
@@ -120,14 +100,9 @@ export function UserAssignModal({ isOpen, onClose, department }: UserAssignModal
         if (!department) return;
         setLoading(true);
         try {
-            const response = await fetch(`/api/v1/identity/departments/${department.id}/users/${userId}`, {
+            await apiFetch(`/api/v1/identity/departments/${department.id}/users/${userId}`, {
                 method: 'DELETE',
-                headers: getAuthHeaders(),
             });
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to remove user');
-            }
             toast(t('toast.userRemoved'), 'success');
             await fetchCurrentUsers();
             await fetchAvailableUsers();

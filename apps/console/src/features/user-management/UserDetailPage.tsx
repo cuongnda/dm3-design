@@ -757,9 +757,8 @@ export function UserDetailPage() {
       if (avatarFile && userId) {
         const form = new FormData();
         form.append('avatar', avatarFile);
-        await fetch(`/api/v1/identity/users/${userId}/avatar`, {
+        await apiFetch(`/api/v1/identity/users/${userId}/avatar`, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${localStorage.getItem('dm3-token') ?? ''}` },
           body: form,
         });
       }
