@@ -895,3 +895,54 @@ export function syncLeaveRequests(
     body: JSON.stringify({ requests }),
   });
 }
+
+// ─── Self-service (/me) ─────────────────────────────────────────────────────
+
+export interface MeAttendanceSummary {
+  from: string;
+  to: string;
+  on_time: number;
+  late: number;
+  absent: number;
+  on_leave: number;
+  half_day: number;
+  holiday: number;
+  pending: number;
+  total_hours: number;
+  regular_hours: number;
+  ot_hours: number;
+  late_minutes: number;
+}
+
+export interface MeAttendanceToday {
+  date: string;
+  status: AttendanceStatus;
+  clock_in?: string;
+  clock_out?: string;
+  shift_name?: string;
+  shift_start?: string;
+  shift_end?: string;
+  total_hours?: number;
+}
+
+export interface MeAttendanceResponse {
+  user_id: string;
+  today?: MeAttendanceToday;
+  summary: MeAttendanceSummary;
+  records: AttendanceRecordDTO[];
+}
+
+export interface MeAttendanceParams {
+  from?: string;
+  to?: string;
+}
+
+export function getMeAttendance(
+  params?: MeAttendanceParams,
+): Promise<MeAttendanceResponse> {
+  const qs = new URLSearchParams();
+  if (params?.from) qs.set("from", params.from);
+  if (params?.to) qs.set("to", params.to);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return apiFetch(`${BASE}/me/attendance${suffix}`);
+}

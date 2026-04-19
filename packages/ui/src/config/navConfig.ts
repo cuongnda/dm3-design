@@ -126,6 +126,7 @@ export const NAV_CONFIG: NavSection[] = [
     color: '#14B8A6',
     pluginGate: 'attendance',
     items: [
+      { to: '/me/attendance', icon: UserCheck, labelKey: 'nav.attendanceMe', labelFallback: 'My attendance', status: 'ready' },
       { to: '/manage/attendance', icon: ClipboardList, labelKey: 'nav.attendanceDaily', labelFallback: 'Daily', status: 'ready' },
       { to: '/manage/attendance/shifts', icon: Clock, labelKey: 'nav.attendanceShifts', labelFallback: 'Shifts', status: 'ready' },
       { to: '/manage/attendance/overtime', icon: Timer, labelKey: 'nav.attendanceOvertime', labelFallback: 'Overtime', status: 'ready' },

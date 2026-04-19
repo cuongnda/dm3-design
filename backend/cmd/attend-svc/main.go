@@ -182,6 +182,8 @@ func main() {
 
 		ar.Post("/reports/monthly/export", handlers.ExportMonthlyReport)
 		ar.Get("/reports/monthly/download", handlers.DownloadMonthlyReport)
+
+		ar.Get("/me/attendance", handlers.MeAttendance)
 	})
 
 	handlers.StartBackgroundJobs(ctx)
