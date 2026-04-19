@@ -4,251 +4,200 @@ Date: 2026-04-19
 Scope: core platform surfaces across access, identity, auth, devices/gateway, and related console/API-client flows.
 
 ## Verdict
-- Risk: MEDIUM-HIGH
-- Recommendation: REQUEST CHANGES
+- Risk: MEDIUM
+- Recommendation: NEEDS CHANGES, but close
 
-This core layer is structurally stronger than some plugin modules I reviewed earlier. Service wiring is coherent, event streams are in place, tenant scoping is visible in most handlers, and the main backend packages currently test clean.
+I re-reviewed this from current repo state, not just the verdict doc.
 
-But it is not merge-clean yet.
+The big news is that the strongest blocker from my earlier pass is no longer true. The stale `useUserManagement.ts` hook path I previously cited is gone, and the current `UserManagementPage.tsx` now talks directly to `/api/v1/identity/...` endpoints that actually exist in `backend/cmd/identity-svc/main.go`.
 
-The main problem is not that the backend is obviously broken. The main problem is that parts of the console still speak an older or inconsistent API dialect, especially around user management and some identity/department flows. That means the system can look complete while shipping dead buttons, wrong endpoints, or features that only work on some pages.
+That materially improves merge safety.
 
-## What I reviewed
+So this is no longer a `REQUEST CHANGES` verdict for me. But I still would not call it clean approval yet, because there are still some real contract drifts in shared API clients and some coarse authorization wiring in the service entrypoints.
+
+## What I re-checked
+
+### Repo/doc state
+- `docs/review-verdict_core.md`
+- `git status --short`
+- `git diff --stat -- docs/review-verdict_core.md`
 
 ### Backend services and routing
-- `backend/cmd/access-svc/main.go`
 - `backend/cmd/identity-svc/main.go`
-- `backend/cmd/auth-svc/main.go`
+- `backend/cmd/access-svc/main.go`
 - `backend/cmd/device-gateway/main.go`
 
-### Backend module surfaces
-- `backend/internal/access/handlers.go`
-- `backend/internal/access/access_point_handlers.go`
-- `backend/internal/access/zone_handlers.go`
-- `backend/internal/access/access_group_handlers.go`
-- `backend/internal/access/access_time_handlers.go`
-- `backend/internal/access/emergency_handlers.go`
-- `backend/internal/access/nats_consumer.go`
-- `backend/internal/identity/handlers.go`
-- `backend/internal/identity/user_handlers.go`
-- `backend/internal/identity/email_template_handlers.go`
-- `backend/internal/identity/storage.go`
-- `backend/internal/authsvc/handlers.go`
-- `backend/internal/authsvc/middleware.go`
-- `backend/internal/authsvc/plugin_handlers.go`
-- `backend/internal/authsvc/plugins.go`
-- `backend/internal/authsvc/plugin_check.go`
-- `backend/internal/authsvc/company_handlers.go`
-- `backend/internal/gateway/handlers.go`
-- `backend/internal/gateway/provisioning.go`
-- `backend/internal/gateway/mqtt_handler.go`
+### Frontend / API surfaces
+- `apps/console/src/features/user-management/UserManagementPage.tsx`
+- `apps/console/src/features/department-management/hooks/useDepartmentManagement.ts`
+- `apps/console/src/features/devices/DevicesPage.tsx`
+- `packages/api-client/src/devices.ts`
+- `packages/api-client/src/persons.ts`
+- `packages/api-client/src/access-points.ts`
 
-### Tests checked
+### Backend tests re-run
 - `go test ./internal/access/... ./internal/identity/... ./internal/authsvc/... ./internal/gateway/...`
 - Result: passed in current repo state
 
-### Frontend / API client surfaces
-- `apps/console/src/app/router.tsx`
-- `apps/console/src/components/common/PluginGuard.tsx`
-- `apps/console/src/features/access/...`
-- `apps/console/src/features/devices/...`
-- `apps/console/src/features/user-management/...`
-- `apps/console/src/features/department-management/...`
-- `apps/console/src/features/monitoring/LiveEventsPage.tsx`
-- `packages/api-client/src/access-points.ts`
-- `packages/api-client/src/devices.ts`
-- `packages/api-client/src/persons.ts`
-- `packages/api-client/src/auth.ts`
+## What changed since the earlier review
 
-## What is good
+### 1. The old user-management blocker is resolved
+Earlier I flagged `apps/console/src/features/user-management/hooks/useUserManagement.ts` as stale and mismatched.
 
-### 1. Service wiring is mostly sane
-The core services are not random CRUD islands.
-- `access-svc` ensures and consumes `ACCESS`, `VISITOR`, and `PARKING` streams.
-- `device-gateway` bridges MQTT, NATS, sync, websocket, firmware, and provisioning in one place that mostly makes architectural sense.
-- `identity-svc` publishes identity events and supports photo/object-store flows.
-- `auth-svc` carries plugin registry and enabled-plugin claims in tokens.
+That specific blocker does not hold anymore.
 
-That is a solid platform shape.
+Current evidence:
+- the old hook path is gone
+- `apps/console/src/features/user-management/UserManagementPage.tsx` now fetches:
+  - `GET /api/v1/identity/users`
+  - `DELETE /api/v1/identity/users/{id}`
+  - `POST /api/v1/identity/users/bulk-delete`
+- it also loads departments from `GET /api/v1/identity/departments`
+- those routes are present in `backend/cmd/identity-svc/main.go`
 
-### 2. Tenant scoping is visible in many backend handlers
-Across access, identity, and gateway handlers, the repeated use of `authsvc.CompanyIDFromContext(...)` is doing real work, not just decorative middleware.
+That is a real fix, not doc makeup.
 
-Examples inspected:
-- access handlers and sub-handlers consistently scope by tenant
-- identity user handlers scope list/get/update/delete by tenant
-- gateway device and event handlers scope company routes by tenant
+## What is still good
 
-That reduces the usual “oops, cross-tenant leak” risk.
+### 1. Core backend packages are still structurally solid
+The backend remains the strongest part of this surface.
 
-### 3. Route-level write protection is clearer than earlier plugin modules
-Service entrypoints use role gates with a readable pattern:
-- `RequireWriteRole("primary_manager", "manager", "system_admin")`
-- `RequireRole(...)` for stricter paths like pending devices and provisioning
+Re-run evidence:
+- `internal/access` passed
+- `internal/identity` passed
+- `internal/authsvc` passed
+- `internal/gateway` passed
 
-This is not perfect business authorization, but it is cleaner than pure frontend gating.
+### 2. Identity, access, and gateway service wiring still looks coherent
+The broad architecture is still good:
+- access consumes `ACCESS`, `VISITOR`, and `PARKING`
+- gateway bridges MQTT, NATS, sync, websocket, provisioning, and firmware
+- identity owns identity events and media/object-store flows
+- auth carries plugin claims and platform auth concerns
 
-### 4. Access and device operator UIs are materially better than placeholder quality
-The access-point, access-group, access-time, device, pending-device, and monitoring pages are real operator surfaces, not toy tables.
+### 3. Tenant scoping still looks deliberate
+The repeated use of company scoping and auth middleware is still visible and meaningful across the reviewed service entrypoints.
 
-Notable strengths:
-- Access point page exposes completeness and health state well.
-- Bulk door commands exist and appear backed by a real backend endpoint.
-- Live monitoring page has a fairly honest merged realtime plus backend timeline model.
-- Pending device flow supports approval metadata instead of a dumb approve/reject toggle.
+## Remaining findings
 
-### 5. Auth plugin plumbing is conceptually correct
-`auth-svc` carries enabled plugins in claims and `PluginGuard` checks them on the console side. That is a reasonable feature-flag/plugin availability mechanism.
+### 1. Shared API clients still expose stale or alternate contracts
+This is now my main reason for not approving cleanly.
 
-## Main findings
+#### `packages/api-client/src/devices.ts`
+This file still uses:
+- `const BASE = '/api/v1/devices'`
+- pending routes under `/api/v1/devices/pending`
+- provisioning under `/api/v1/devices/provision`
 
-### 1. User-management frontend still talks to stale or wrong endpoints
-This is the biggest concrete merge blocker I found.
+But the reviewed backend routes in `backend/cmd/device-gateway/main.go` live under:
+- `/api/v1/gateway/devices`
+- `/api/v1/gateway/devices/pending`
+- `/api/v1/gateway/devices/provision`
 
-`apps/console/src/features/user-management/hooks/useUserManagement.ts` is still using endpoints like:
-- `GET /api/v1/users`
-- `GET /api/v1/users/filter-options`
-- `POST /api/v1/users/bulk/delete`
-- `POST /api/v1/users/bulk/update-department`
-- `POST /api/v1/users/bulk/update-access-group`
-- `POST /api/v1/users/bulk/suspend`
-- `POST /api/v1/users/bulk/approve`
+Meanwhile `DevicesPage.tsx` correctly uses `/api/v1/gateway/devices` directly.
 
-But the current backend routing in `backend/cmd/identity-svc/main.go` exposes identity-scoped paths such as:
-- `GET /api/v1/identity/users`
-- `POST /api/v1/identity/users`
-- `POST /api/v1/identity/users/bulk-delete`
+So the page is healthier, but the shared client file is still on a different dialect. That is exactly how regressions sneak back in later.
 
-And I found no backend evidence for several of the hook endpoints above, especially:
-- `/api/v1/users/filter-options`
-- `/api/v1/users/bulk/update-department`
-- `/api/v1/users/bulk/update-access-group`
-- `/api/v1/users/bulk/suspend`
-- `/api/v1/users/bulk/approve`
+#### `packages/api-client/src/persons.ts`
+This client still uses:
+- `const BASE = '/api/v1/persons'`
 
-So at least one user-management path is stale, and likely several actions are dead or partially dead.
+But the current reviewed identity service exposes `/api/v1/identity/users`, not a matching `/api/v1/persons` surface in the files I re-checked.
 
-This is exactly the kind of mismatch that makes a module look done until someone clicks the secondary actions.
+Maybe there is another service still backing `/persons`, but from the current core review surface this client looks suspicious and at least inconsistent with the main identity direction.
 
-### 2. Identity routing comments overstate read/write separation
+#### `packages/api-client/src/access-points.ts`
+This client is closer to current routing and uses `/api/v1/access/access-points`, which matches the current access service shape.
+
+So the core issue is not “all clients are broken”. It is inconsistency.
+
+### 2. Read/write authorization intent is still muddled in service entrypoints
+This part is still not cleaned up.
+
+#### Identity service
 In `backend/cmd/identity-svc/main.go`, comments say things like:
 - operator/viewer can read, manager+ can write
 
-But the route group shown currently wraps the whole `/users` block with `RequireWriteRole(...)`, then registers both GET and write endpoints inside that group.
+But the `/users` routes are wrapped in:
+- `RequireWriteRole("primary_manager", "manager", "system_admin")`
 
-That means the implementation is stricter than the comment, and possibly stricter than product intent.
+That group contains both GET and write endpoints.
 
-This is not a catastrophic security flaw. If anything, it may be over-restrictive. But it is still a correctness mismatch between documented intent and actual behavior, and those are nasty because teams stop trusting comments and permissions docs.
+So the implementation is still stricter than the comment.
 
-### 3. PluginGuard is still availability gating, not authorization
-`apps/console/src/components/common/PluginGuard.tsx` only checks `enabledPlugins`.
+#### Access service
+`backend/cmd/access-svc/main.go` still wraps zones, access points, access devices, access groups, and access times in broad `RequireWriteRole(...)` groups, while those groups also include GET endpoints.
 
-That means it is useful for “plugin on/off”, but not for role or business-rule enforcement. I’m calling this out again because core routes also rely heavily on route structure and page logic, and the platform should stay disciplined about not treating plugin gating as auth.
+#### Device gateway
+`backend/cmd/device-gateway/main.go` still applies `RequireWriteRole(...)` broadly to company-scoped device routes even though that group includes reads like:
+- `GET /devices`
+- `GET /devices/{id}`
+- `GET /devices/{id}/events`
+- `GET /devices/{id}/history`
+- `GET /events`
 
-For the core modules, backend role middleware does exist, so this is less severe than in some plugin reviews. Still worth stating plainly.
+This is not a security hole. If anything, it is over-restrictive. But it is still a correctness/policy clarity issue.
 
-### 4. Core console has mixed API styles, which raises regression risk
-Some pages correctly use current scoped endpoints like:
-- `/api/v1/identity/users`
-- `/api/v1/access/...`
-- `/api/v1/gateway/...`
+### 3. The frontend contract layer is better, but still not unified enough
+The improvement is real:
+- `UserManagementPage.tsx` is now aligned with identity routes
+- `useDepartmentManagement.ts` also uses `/api/v1/identity/departments...`
+- `DevicesPage.tsx` uses `/api/v1/gateway/devices`
 
-But other pages/hooks still use legacy-ish or alternate shapes.
+But shared clients and page-local fetches are still mixed.
 
-Examples from the review:
-- `UserManagementPage.tsx` itself looks closer to current identity endpoints.
-- `useUserManagement.ts` does not.
-- department management uses `/api/v1/identity/departments/...` directly from several places, while backend routing for department flows is added through `tenant.AddDepartmentRoutes(...)`, which is workable but easy to drift if not kept disciplined.
+That means the system works more by local repair than by one canonical contract layer. That is survivable, but not elegant, and it increases future breakage risk.
 
-So the frontend contract layer is not unified enough. That is a real maintainability and merge-safety issue.
+## Best concrete evidence from the re-review
 
-### 5. Devices/gateway backend is strong, but company read access may be tighter than intended
-`device-gateway` comments say operator/viewer can read and manager+ can write, but the company-scoped route group currently applies `RequireWriteRole(...)` broadly before registering both reads and writes.
+### Confirmed fix
+The earlier stale user-management hook blocker is obsolete.
 
-So depending on intended product policy, device list/detail/history/events may be inaccessible to viewer/operator roles even though comments suggest otherwise.
-
-This needs explicit product confirmation. Right now it reads like an implementation/comment mismatch, not a deliberate security rule.
-
-### 6. Access service has the same pattern: broad write-role middleware around mixed routes
-In `backend/cmd/access-svc/main.go`, resource groups like zones, access points, access groups, and access times are wrapped with `RequireWriteRole(...)` even though each group includes GET endpoints too.
-
-If the intended policy is “only managers can view configuration pages”, fine, but then the comments and UX should reflect that. If the intended policy is “operators/viewers can inspect but not mutate”, current routing is too coarse.
-
-This is not unsafe. It is a product/authorization correctness gap.
-
-### 7. Monitoring/live-events path looks decent, but it is still hand-assembled and brittle
-`apps/console/src/features/monitoring/LiveEventsPage.tsx` does a fairly careful merge of backend history and realtime store state. That is good.
-
-But it also means the page depends on several subtly different shapes:
-- realtime access events
-- realtime alarms
-- realtime door status
-- backend `/api/v1/gateway/events`
-
-The current code is thoughtful, but this area is contract-fragile. I did not find a smoking gun bug here, but I would still treat it as regression-prone unless there is explicit integration coverage for the merged timeline shape.
-
-## Best concrete evidence found
-
-### Backend tests passed
-I ran:
+### Fresh backend test pass
+I re-ran:
 - `go test ./internal/access/... ./internal/identity/... ./internal/authsvc/... ./internal/gateway/...`
 
-This is meaningful evidence that the core backend packages are in better shape than some plugin surfaces.
+And it passed again.
 
-### Strong backend features present
-- access NATS consumers and parking/visitor integration hooks are present
-- gateway door command bulk endpoint exists and matches current access UI intent
-- auth token/plugin support is present and tested
-- identity user CRUD is real, not a stub
+That matters. This is not a repo that is falling apart underneath the doc.
 
-## Merge blockers
+## Remaining merge blockers
 
-### Blocker 1: stale user-management hook contract
-`apps/console/src/features/user-management/hooks/useUserManagement.ts` is not aligned with current backend routes. This needs cleanup before the core verdict can be clean.
+### Blocker 1: stale shared device API client
+`packages/api-client/src/devices.ts` still targets `/api/v1/devices...` while current backend/page usage is `/api/v1/gateway/devices...`.
 
-### Blocker 2: read/write authorization intent is unclear and likely inconsistent
-In access, identity, and gateway service entrypoints, comments imply read access for lower roles, while route grouping appears to require manager+ for whole resource groups including GETs.
+### Blocker 2: unresolved identity/person contract drift
+`packages/api-client/src/persons.ts` still presents a `/api/v1/persons` contract that does not match the identity user surface I re-validated.
 
-That needs an explicit decision, then route wiring should match it.
-
-### Blocker 3: frontend contract surface is not unified enough
-Some pages use the current API shape, others still use alternate/legacy shapes. That makes regressions too easy.
+### Blocker 3: authorization policy is still coarse and comment-misaligned
+In access, identity, and gateway service entrypoints, GET routes are still grouped under write-role middleware despite comments suggesting broader read access.
 
 ## Recommendation before merge
 
 ### Must fix
-1. Normalize user-management frontend API usage to current backend routes.
-   - Remove stale `/api/v1/users/...` assumptions where backend is actually `/api/v1/identity/users/...`
-   - Remove or implement missing bulk endpoints
-   - Make one canonical contract and use it everywhere
+1. Normalize shared core API clients to the current backend route shape.
+   - especially `packages/api-client/src/devices.ts`
+   - revalidate whether `packages/api-client/src/persons.ts` is still canonical or should be retired/repointed
 
-2. Resolve the role-policy mismatch in service routing.
-   - If viewers/operators should read these modules, stop wrapping GET routes in write-role middleware
-   - If they should not, fix comments and UI assumptions so the policy is explicit
-
-3. Do one focused pass for core console endpoint consistency.
-   - user management
-   - departments
-   - access config pages
-   - device pages
+2. Resolve the read/write policy mismatch in service entrypoints.
+   - either allow read-only roles on GET routes
+   - or update comments and product expectations so the stricter policy is explicit
 
 ### Should fix soon
-4. Add targeted integration tests for core console/backend contract-critical paths, especially:
-   - user list + bulk actions
-   - department assignment flows
-   - device list/detail/update + sync
-   - access point bulk door commands
-   - live events payload compatibility
+3. Continue consolidating core console data access around canonical shared clients or one consistent fetch layer.
 
-5. Consider centralizing core API clients instead of leaving some screens on ad hoc `fetch(...)` patterns.
+4. Add a small set of contract-focused integration tests for:
+   - user list and delete/bulk-delete flows
+   - department list and assignment flows
+   - device list/detail/history/sync flows
 
 ## Final call
-The backend core is pretty solid. The console contract layer is the part that’s slipping.
+This got better. Enough better that I’m lowering the verdict.
 
-So my current call is:
-- Risk: MEDIUM-HIGH
-- Recommendation: REQUEST CHANGES
+Current call:
+- Risk: MEDIUM
+- Recommendation: NEEDS CHANGES, but close
 
-Not because the architecture is bad. It isn’t.
+So, no, I would not stamp this as fully clean yet.
 
-Because there are enough frontend/backend contract mismatches in the core admin layer that I would not trust this as a clean merge without one more tightening pass.
+But the earlier biggest blocker was real, and it has been fixed. The remaining issues are now mostly contract cleanup and authorization-policy clarity, not a major structural failure.
