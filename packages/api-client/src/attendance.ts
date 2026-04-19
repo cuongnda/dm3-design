@@ -690,3 +690,47 @@ export function registerAttendanceDevice(
 export function deregisterAttendanceDevice(id: string): Promise<void> {
   return apiFetch(`${BASE}/devices/${id}`, { method: "DELETE" });
 }
+
+// ─── Leave calendar ──────────────────────────────────────────────────────────
+
+export type LeaveCalendarEntryType = "leave" | "holiday";
+export type LeaveCalendarStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "cancelled"
+  | "holiday";
+
+export interface LeaveCalendarEntryDTO {
+  type: LeaveCalendarEntryType;
+  start_date: string;
+  end_date: string;
+  user_id?: string;
+  user_name?: string;
+  policy_id?: string;
+  policy_code?: string;
+  policy_name?: string;
+  color?: string;
+  status?: LeaveCalendarStatus;
+  title?: string;
+  days?: number;
+  half_day?: boolean;
+}
+
+export interface LeaveCalendarParams {
+  from: string; // YYYY-MM-DD
+  to: string;   // YYYY-MM-DD
+  user_id?: string;
+  status?: "approved" | "pending" | "all";
+}
+
+export function getLeaveCalendar(
+  params: LeaveCalendarParams,
+): Promise<LeaveCalendarEntryDTO[]> {
+  const qs = new URLSearchParams();
+  qs.set("from", params.from);
+  qs.set("to", params.to);
+  if (params.user_id) qs.set("user_id", params.user_id);
+  if (params.status) qs.set("status", params.status);
+  return apiFetch(`${BASE}/leave/calendar?${qs.toString()}`);
+}

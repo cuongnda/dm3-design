@@ -133,6 +133,7 @@ func main() {
 		ar.Post("/leave/requests/{id}/cancel", handlers.CancelLeaveRequest)
 		ar.Get("/leave/balances", handlers.ListLeaveBalances)
 		ar.Post("/leave/balances/adjust", handlers.AdjustLeaveBalance)
+		ar.Get("/leave/calendar", handlers.LeaveCalendar)
 
 		ar.Get("/holidays", handlers.ListHolidays)
 		ar.Post("/holidays", handlers.CreateHoliday)
