@@ -44,6 +44,9 @@ DELETE FROM dm3_devices.provisioning_tokens;
 DELETE FROM dm3_devices.pending_registrations;
 DELETE FROM dm3_devices.devices;
 DELETE FROM dm3_auth.refresh_tokens;
+DELETE FROM dm3_auth.user_role_assignments;
+DELETE FROM dm3_auth.company_role_permissions;
+DELETE FROM dm3_auth.company_roles;
 DELETE FROM dm3_auth.accounts;
 -- Keep tenants but reset plugins
 UPDATE dm3_auth.tenants SET enabled_plugins = '{core,visitor,parking}' WHERE id = '00000000-0000-0000-0000-000000000001';
@@ -520,12 +523,12 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================
 -- 24. PARKING — Zones
 -- ============================================================
-INSERT INTO dm3_parking.parking_zones (id, tenant_id, lot_id, name, code, type, level, total_spaces, vehicle_types, status) VALUES
+INSERT INTO dm3_parking.parking_zones (id, tenant_id, lot_id, name, code, type, level, total_spaces, allowed_vehicle_types, status) VALUES
   ('e1000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
-   'e0000000-0000-0000-0000-000000000001', 'B1 Car Park', 'B1-CAR', 'covered', 'B1', 80,
+   'e0000000-0000-0000-0000-000000000001', 'B1 Car Park', 'B1-CAR', 'underground', 'B1', 80,
    '{"car","truck"}', 'active'),
   ('e1000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001',
-   'e0000000-0000-0000-0000-000000000001', 'B2 Motorbike Park', 'B2-MOTO', 'covered', 'B2', 200,
+   'e0000000-0000-0000-0000-000000000001', 'B2 Motorbike Park', 'B2-MOTO', 'underground', 'B2', 200,
    '{"motorbike","bicycle"}', 'active'),
   ('e1000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001',
    'e0000000-0000-0000-0000-000000000002', 'Surface Car Lot', 'SURF-CAR', 'surface', null, 40,
@@ -562,25 +565,25 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================
 INSERT INTO dm3_parking.parking_vehicles (id, tenant_id, plate_number, normalized_plate, type, category, brand, color, registration_status, owner_user_id, rfid_tag, nfc_card_id) VALUES
   ('e3000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
-   '51A-123.45', '51A12345', 'car', 'resident', 'Toyota', 'White', 'verified', 'a0000000-0000-0000-0000-000000000001', 'E200-0001-0001-0001', '04:A1:B2:C3:D4:01'),
+   '51A-123.45', '51A12345', 'car', 'resident', 'Toyota', 'White', 'registered', 'a0000000-0000-0000-0000-000000000001', 'E200-0001-0001-0001', '04:A1:B2:C3:D4:01'),
   ('e3000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001',
-   '59C1-456.78', '59C145678', 'motorbike', 'resident', 'Honda', 'Black', 'verified', 'a0000000-0000-0000-0000-000000000002', 'E200-0001-0001-0002', null),
+   '59C1-456.78', '59C145678', 'motorbike', 'resident', 'Honda', 'Black', 'registered', 'a0000000-0000-0000-0000-000000000002', 'E200-0001-0001-0002', null),
   ('e3000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001',
-   '30H-789.01', '30H78901', 'car', 'resident', 'Hyundai', 'Silver', 'verified', 'a0000000-0000-0000-0000-000000000004', null, '04:A1:B2:C3:D4:03'),
+   '30H-789.01', '30H78901', 'car', 'resident', 'Hyundai', 'Silver', 'registered', 'a0000000-0000-0000-0000-000000000004', null, '04:A1:B2:C3:D4:03'),
   ('e3000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000001',
-   '51F-222.33', '51F22233', 'car', 'visitor', null, 'Red', 'unverified', null, null, null),
+   '51F-222.33', '51F22233', 'car', 'visitor', null, 'Red', 'visitor', null, null, null),
   ('e3000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000001',
-   '59B2-333.44', '59B233344', 'motorbike', 'temporary', null, null, 'unverified', null, null, null),
+   '59B2-333.44', '59B233344', 'motorbike', 'temporary', null, null, 'temporary', null, null, null),
   ('e3000000-0000-0000-0000-000000000006', '00000000-0000-0000-0000-000000000001',
-   '51G-555.66', '51G55566', 'car', 'visitor', 'BMW', 'Black', 'unverified', null, null, null),
+   '51G-555.66', '51G55566', 'car', 'visitor', 'BMW', 'Black', 'visitor', null, null, null),
   ('e3000000-0000-0000-0000-000000000007', '00000000-0000-0000-0000-000000000001',
-   '30K-888.99', '30K88899', 'car', 'resident', 'Mercedes', 'White', 'verified', 'a0000000-0000-0000-0000-000000000008', 'E200-0001-0001-0007', '04:A1:B2:C3:D4:07'),
+   '30K-888.99', '30K88899', 'car', 'resident', 'Mercedes', 'White', 'registered', 'a0000000-0000-0000-0000-000000000008', 'E200-0001-0001-0007', '04:A1:B2:C3:D4:07'),
   ('e3000000-0000-0000-0000-000000000008', '00000000-0000-0000-0000-000000000001',
-   '59D1-111.22', '59D111122', 'motorbike', 'resident', 'Yamaha', 'Blue', 'verified', 'a0000000-0000-0000-0000-000000000006', 'E200-0001-0001-0008', null),
+   '59D1-111.22', '59D111122', 'motorbike', 'resident', 'Yamaha', 'Blue', 'registered', 'a0000000-0000-0000-0000-000000000006', 'E200-0001-0001-0008', null),
   ('e3000000-0000-0000-0000-000000000009', '00000000-0000-0000-0000-000000000001',
-   '51H-444.55', '51H44455', 'truck', 'temporary', null, 'White', 'unverified', null, null, null),
+   '51H-444.55', '51H44455', 'truck', 'temporary', null, 'White', 'temporary', null, null, null),
   ('e3000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-000000000001',
-   '29A-777.88', '29A77788', 'car', 'visitor', 'Kia', 'Gray', 'unverified', null, null, null)
+   '29A-777.88', '29A77788', 'car', 'visitor', 'Kia', 'Gray', 'visitor', null, null, null)
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
@@ -589,19 +592,19 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO dm3_parking.parking_passes (id, tenant_id, zone_id, vehicle_id, pass_type, valid_from, valid_until, fee_amount, status, auto_renew) VALUES
   ('e4000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
    'e1000000-0000-0000-0000-000000000001', 'e3000000-0000-0000-0000-000000000001',
-   'monthly', CURRENT_DATE - interval '15 days', CURRENT_DATE + interval '15 days',
+   'standard', CURRENT_DATE - interval '15 days', CURRENT_DATE + interval '15 days',
    1500000, 'active', true),
   ('e4000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001',
    'e1000000-0000-0000-0000-000000000002', 'e3000000-0000-0000-0000-000000000002',
-   'monthly', CURRENT_DATE - interval '10 days', CURRENT_DATE + interval '20 days',
+   'standard', CURRENT_DATE - interval '10 days', CURRENT_DATE + interval '20 days',
    300000, 'active', true),
   ('e4000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001',
    'e1000000-0000-0000-0000-000000000001', 'e3000000-0000-0000-0000-000000000003',
-   'monthly', CURRENT_DATE - interval '45 days', CURRENT_DATE - interval '15 days',
+   'standard', CURRENT_DATE - interval '45 days', CURRENT_DATE - interval '15 days',
    1500000, 'expired', false),
   ('e4000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000001',
    'e1000000-0000-0000-0000-000000000001', 'e3000000-0000-0000-0000-000000000007',
-   'monthly', CURRENT_DATE - interval '5 days', CURRENT_DATE + interval '25 days',
+   'standard', CURRENT_DATE - interval '5 days', CURRENT_DATE + interval '25 days',
    1500000, 'active', true)
 ON CONFLICT (id) DO NOTHING;
 
@@ -619,7 +622,7 @@ INSERT INTO dm3_parking.parking_sessions (id, tenant_id, lot_id, zone_id, vehicl
   ('e5000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
    'e0000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-000000000001',
    'e3000000-0000-0000-0000-000000000001', '51A-123.45', '51A12345', 'car',
-   now() - interval '2 hours', 'active', 'VND', 'anpr', 'e4000000-0000-0000-0000-000000000001')
+   now() - interval '2 hours', 'active', 'VND', 'anpr_auto', 'e4000000-0000-0000-0000-000000000001')
 ON CONFLICT (id) DO NOTHING;
 
 -- Active: visitor car in surface lot (45 min ago)
@@ -627,7 +630,7 @@ INSERT INTO dm3_parking.parking_sessions (id, tenant_id, lot_id, zone_id, vehicl
   ('e5000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001',
    'e0000000-0000-0000-0000-000000000002', 'e1000000-0000-0000-0000-000000000003',
    'e3000000-0000-0000-0000-000000000004', '51F-222.33', '51F22233', 'car',
-   now() - interval '45 minutes', 'active', 'VND', 'anpr')
+   now() - interval '45 minutes', 'active', 'VND', 'anpr_auto')
 ON CONFLICT (id) DO NOTHING;
 
 -- Active: motorbike in B2 (30 min ago)
@@ -635,7 +638,7 @@ INSERT INTO dm3_parking.parking_sessions (id, tenant_id, lot_id, zone_id, vehicl
   ('e5000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001',
    'e0000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-000000000002',
    'e3000000-0000-0000-0000-000000000002', '59C1-456.78', '59C145678', 'motorbike',
-   now() - interval '30 minutes', 'active', 'VND', 'anpr', 'e4000000-0000-0000-0000-000000000002')
+   now() - interval '30 minutes', 'active', 'VND', 'anpr_auto', 'e4000000-0000-0000-0000-000000000002')
 ON CONFLICT (id) DO NOTHING;
 
 -- Active: Mercedes in B1 (1 hour ago)
@@ -643,37 +646,37 @@ INSERT INTO dm3_parking.parking_sessions (id, tenant_id, lot_id, zone_id, vehicl
   ('e5000000-0000-0000-0000-000000000006', '00000000-0000-0000-0000-000000000001',
    'e0000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-000000000001',
    'e3000000-0000-0000-0000-000000000007', '30K-888.99', '30K88899', 'car',
-   now() - interval '1 hour', 'active', 'VND', 'anpr', 'e4000000-0000-0000-0000-000000000004')
+   now() - interval '1 hour', 'active', 'VND', 'anpr_auto', 'e4000000-0000-0000-0000-000000000004')
 ON CONFLICT (id) DO NOTHING;
 
 -- Completed: visitor car (3-hour visit yesterday, paid)
-INSERT INTO dm3_parking.parking_sessions (id, tenant_id, lot_id, zone_id, vehicle_id, plate_number, normalized_plate, vehicle_type, entry_time, exit_time, status, fee_amount, fee_currency, fee_rule_id, payment_status, payment_method, payment_time, matched_by, duration_minutes) VALUES
+INSERT INTO dm3_parking.parking_sessions (id, tenant_id, lot_id, zone_id, vehicle_id, plate_number, normalized_plate, vehicle_type, entry_time, exit_time, status, fee_amount, fee_currency, fee_rule_id, payment_status, payment_method, payment_time, matched_by) VALUES
   ('e5000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000001',
    'e0000000-0000-0000-0000-000000000002', 'e1000000-0000-0000-0000-000000000003',
    'e3000000-0000-0000-0000-000000000006', '51G-555.66', '51G55566', 'car',
    now() - interval '1 day 3 hours', now() - interval '1 day', 'completed',
    40000, 'VND', 'e2000000-0000-0000-0000-000000000001', 'paid', 'cash', now() - interval '1 day',
-   'anpr', 180)
+   'anpr_auto')
 ON CONFLICT (id) DO NOTHING;
 
 -- Completed: motorbike (1-hour visit today, paid by e-wallet)
-INSERT INTO dm3_parking.parking_sessions (id, tenant_id, lot_id, zone_id, plate_number, normalized_plate, vehicle_type, entry_time, exit_time, status, fee_amount, fee_currency, fee_rule_id, payment_status, payment_method, payment_time, matched_by, duration_minutes) VALUES
+INSERT INTO dm3_parking.parking_sessions (id, tenant_id, lot_id, zone_id, plate_number, normalized_plate, vehicle_type, entry_time, exit_time, status, fee_amount, fee_currency, fee_rule_id, payment_status, payment_method, payment_time, matched_by) VALUES
   ('e5000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000001',
    'e0000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-000000000002',
    '59B2-333.44', '59B233344', 'motorbike',
    now() - interval '4 hours', now() - interval '3 hours', 'completed',
    5000, 'VND', 'e2000000-0000-0000-0000-000000000002', 'paid', 'e_wallet', now() - interval '3 hours',
-   'manual', 60)
+   'manual')
 ON CONFLICT (id) DO NOTHING;
 
 -- Completed: visitor car (2-day-ago visit, Kia)
-INSERT INTO dm3_parking.parking_sessions (id, tenant_id, lot_id, zone_id, vehicle_id, plate_number, normalized_plate, vehicle_type, entry_time, exit_time, status, fee_amount, fee_currency, fee_rule_id, payment_status, payment_method, payment_time, matched_by, duration_minutes) VALUES
+INSERT INTO dm3_parking.parking_sessions (id, tenant_id, lot_id, zone_id, vehicle_id, plate_number, normalized_plate, vehicle_type, entry_time, exit_time, status, fee_amount, fee_currency, fee_rule_id, payment_status, payment_method, payment_time, matched_by) VALUES
   ('e5000000-0000-0000-0000-000000000007', '00000000-0000-0000-0000-000000000001',
    'e0000000-0000-0000-0000-000000000002', 'e1000000-0000-0000-0000-000000000003',
    'e3000000-0000-0000-0000-000000000010', '29A-777.88', '29A77788', 'car',
    now() - interval '2 days 2 hours', now() - interval '2 days', 'completed',
    30000, 'VND', 'e2000000-0000-0000-0000-000000000003', 'paid', 'card', now() - interval '2 days',
-   'anpr', 120)
+   'anpr_auto')
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
@@ -686,6 +689,90 @@ VALUES (
   'f4000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
   true, 0.85, true, 15, 24, true, true, 'VND', true, 80
 ) ON CONFLICT DO NOTHING;
+
+-- ============================================================
+-- 30. RBAC — Company roles + permission bundles + assignments
+-- ------------------------------------------------------------
+-- system_admin  : no row (fixed role, bypasses checks)
+-- primary_manager: no row (fixed role, bypasses permission table)
+-- member         : no row (fixed role, permissions from MemberPermissions() in code)
+-- Below are custom tenant-scoped roles that map the legacy demo accounts
+-- (manager/operator/viewer) onto the new RBAC model while keeping their
+-- legacy accounts.role value intact during the migration window.
+-- See docs/specs/platform/company-rbac.md and internal/rbac/catalog.go.
+-- ============================================================
+INSERT INTO dm3_auth.company_roles (id, tenant_id, name, description, template_key, is_system_template_copy, status) VALUES
+  ('bb100000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
+   'Operations Manager', 'Day-to-day tenant operations: identity, access, attendance', 'ops_manager', true, 'active'),
+  ('bb100000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001',
+   'Security Operator', 'Device + access event triage and emergency actuation', 'security_operator', true, 'active'),
+  ('bb100000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001',
+   'Auditor', 'Read-only access to audit logs and reports', 'auditor', true, 'active')
+ON CONFLICT (tenant_id, name) DO NOTHING;
+
+INSERT INTO dm3_auth.company_role_permissions (role_id, permission_key) VALUES
+  -- Operations Manager: full tenant ops except RBAC and company settings
+  ('bb100000-0000-0000-0000-000000000001', 'identity.user.read'),
+  ('bb100000-0000-0000-0000-000000000001', 'identity.user.create'),
+  ('bb100000-0000-0000-0000-000000000001', 'identity.user.update'),
+  ('bb100000-0000-0000-0000-000000000001', 'identity.credential.read'),
+  ('bb100000-0000-0000-0000-000000000001', 'identity.credential.manage'),
+  ('bb100000-0000-0000-0000-000000000001', 'identity.department.read'),
+  ('bb100000-0000-0000-0000-000000000001', 'identity.department.manage'),
+  ('bb100000-0000-0000-0000-000000000001', 'device.read'),
+  ('bb100000-0000-0000-0000-000000000001', 'device.manage'),
+  ('bb100000-0000-0000-0000-000000000001', 'access.rule.read'),
+  ('bb100000-0000-0000-0000-000000000001', 'access.rule.manage'),
+  ('bb100000-0000-0000-0000-000000000001', 'access.point.read'),
+  ('bb100000-0000-0000-0000-000000000001', 'access.point.manage'),
+  ('bb100000-0000-0000-0000-000000000001', 'access.event.read'),
+  ('bb100000-0000-0000-0000-000000000001', 'attendance.record.read'),
+  ('bb100000-0000-0000-0000-000000000001', 'attendance.leave.read'),
+  ('bb100000-0000-0000-0000-000000000001', 'attendance.leave.approve'),
+  ('bb100000-0000-0000-0000-000000000001', 'attendance.overtime.approve'),
+  ('bb100000-0000-0000-0000-000000000001', 'report.read'),
+  ('bb100000-0000-0000-0000-000000000001', 'report.export'),
+  ('bb100000-0000-0000-0000-000000000001', 'visitor.visit.read'),
+  ('bb100000-0000-0000-0000-000000000001', 'visitor.visit.manage'),
+  ('bb100000-0000-0000-0000-000000000001', 'visitor.visit.approve'),
+  ('bb100000-0000-0000-0000-000000000001', 'parking.vehicle.read'),
+  ('bb100000-0000-0000-0000-000000000001', 'parking.vehicle.manage'),
+  -- Security Operator: device + access + emergency
+  ('bb100000-0000-0000-0000-000000000002', 'device.read'),
+  ('bb100000-0000-0000-0000-000000000002', 'device.execute'),
+  ('bb100000-0000-0000-0000-000000000002', 'access.point.read'),
+  ('bb100000-0000-0000-0000-000000000002', 'access.event.read'),
+  ('bb100000-0000-0000-0000-000000000002', 'access.emergency.execute'),
+  ('bb100000-0000-0000-0000-000000000002', 'identity.user.read'),
+  ('bb100000-0000-0000-0000-000000000002', 'identity.credential.read'),
+  ('bb100000-0000-0000-0000-000000000002', 'cctv.camera.read'),
+  ('bb100000-0000-0000-0000-000000000002', 'cctv.camera.stream'),
+  ('bb100000-0000-0000-0000-000000000002', 'cctv.clip.read'),
+  -- Auditor: read-only across tenant + audit log
+  ('bb100000-0000-0000-0000-000000000003', 'identity.user.read'),
+  ('bb100000-0000-0000-0000-000000000003', 'identity.credential.read'),
+  ('bb100000-0000-0000-0000-000000000003', 'identity.department.read'),
+  ('bb100000-0000-0000-0000-000000000003', 'device.read'),
+  ('bb100000-0000-0000-0000-000000000003', 'access.rule.read'),
+  ('bb100000-0000-0000-0000-000000000003', 'access.point.read'),
+  ('bb100000-0000-0000-0000-000000000003', 'access.event.read'),
+  ('bb100000-0000-0000-0000-000000000003', 'attendance.record.read'),
+  ('bb100000-0000-0000-0000-000000000003', 'report.read'),
+  ('bb100000-0000-0000-0000-000000000003', 'audit.log.read')
+ON CONFLICT (role_id, permission_key) DO NOTHING;
+
+-- Bind demo legacy accounts to new roles (company-scoped).
+INSERT INTO dm3_auth.user_role_assignments (id, tenant_id, account_id, role_id, scope_type, scope_id) VALUES
+  -- manager@duali.com → Operations Manager
+  ('bb200000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
+   'aa000000-0000-0000-0000-000000000003', 'bb100000-0000-0000-0000-000000000001', 'company', null),
+  -- operator@duali.com → Security Operator
+  ('bb200000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001',
+   'aa000000-0000-0000-0000-000000000004', 'bb100000-0000-0000-0000-000000000002', 'company', null),
+  -- viewer@duali.com → Auditor
+  ('bb200000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001',
+   'aa000000-0000-0000-0000-000000000005', 'bb100000-0000-0000-0000-000000000003', 'company', null)
+ON CONFLICT (id) DO NOTHING;
 
 COMMIT;
 
