@@ -190,6 +190,7 @@ func main() {
 	}
 	firmwareHandlers := gateway.NewFirmwareHandlers(database, objectStore, mqttClient, auditLog, fwDownloadURL)
 	emqxHandlers := gateway.NewEMQXHandlers(cfg.EMQXApiURL, cfg.EMQXApiUser, cfg.EMQXApiPassword)
+	mediaHandlers := gateway.NewMediaHandlers(objectStore, cfg.JWTSecret)
 
 	// HTTP routes
 	r := httputil.NewRouter()
@@ -278,6 +279,11 @@ func main() {
 	// No-auth endpoints (device activation does not require user auth)
 	r.Post("/api/v1/gateway/devices/activate", provHandlers.ActivateDevice)
 	r.Post("/api/v1/gateway/devices/refresh-token", provHandlers.RefreshToken)
+
+	// Device-authenticated upload-url issuance: device JWT is validated inside
+	// the handler so this route stays out of the user-JWT middleware group.
+	// See docs/architecture/mqtt-protocol.md §15.
+	r.Post("/api/v1/gateway/devices/{id}/media-url", mediaHandlers.IssueUploadURL)
 
 	// WebSocket endpoint — requires valid user JWT to prevent unauthenticated
 	// clients from receiving the real-time event stream.

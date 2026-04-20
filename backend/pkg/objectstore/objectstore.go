@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -93,6 +95,34 @@ func (s *MinIOStore) GetObject(ctx context.Context, key string) (io.ReadCloser, 
 		return nil, ObjectInfo{}, fmt.Errorf("stat object %s: %w", key, err)
 	}
 	return obj, ObjectInfo{ContentType: info.ContentType, Size: info.Size, ETag: info.ETag}, nil
+}
+
+// PresignedPutURL returns a presigned PUT URL the client can upload to directly,
+// bypassing the gateway. Used by edge devices to stream snapshots/clips into
+// MinIO without buffering binary payloads through any Go service.
+func (s *MinIOStore) PresignedPutURL(ctx context.Context, key string, expires time.Duration) (*url.URL, error) {
+	if strings.TrimSpace(key) == "" {
+		return nil, fmt.Errorf("presign put: key is required")
+	}
+	u, err := s.client.PresignedPutObject(ctx, s.bucket, key, expires)
+	if err != nil {
+		return nil, fmt.Errorf("presign put %s: %w", key, err)
+	}
+	return u, nil
+}
+
+// PresignedGetURL returns a presigned GET URL for reading an object — used by
+// the frontend to render snapshots/clips directly from MinIO. Mirrors the
+// CCTV ObjectStoreClipSigner pattern but lives on the shared store.
+func (s *MinIOStore) PresignedGetURL(ctx context.Context, key string, expires time.Duration) (*url.URL, error) {
+	if strings.TrimSpace(key) == "" {
+		return nil, fmt.Errorf("presign get: key is required")
+	}
+	u, err := s.client.PresignedGetObject(ctx, s.bucket, key, expires, nil)
+	if err != nil {
+		return nil, fmt.Errorf("presign get %s: %w", key, err)
+	}
+	return u, nil
 }
 
 func (s *MinIOStore) DeleteObject(ctx context.Context, key string) error {

@@ -1,7 +1,8 @@
 # Duall Master 3.0 — MQTT Protocol Specification
 
 > IoT Device ↔ Server Communication Protocol
-> Version: 1.0 | Updated: 2026-02-19
+> Version: 1.1 | Updated: 2026-04-20
+> Changelog: §15 added — media uploads moved to presigned MinIO PUT; `photo`/`plate_photo`/`clip_object_key` carry object keys, no longer base64.
 
 ---
 
@@ -401,12 +402,22 @@ All messages follow a standard envelope format:
     "person_detected": true,
     "temperature": 36.5,       // Optional: thermal reading (°C)
     "mask_detected": true,     // Optional: mask detection
-    "photo": "base64_jpeg",    // Optional: snapshot (max 100KB, compressed)
+    "photo": "events/<tenant>/<device>/snapshot/<uuid>.jpg",  // Optional: object key from §15 upload, NOT base64
+    "clip_object_key": "events/<tenant>/<device>/clip/<uuid>.mp4", // Optional: video clip object key from §15 upload
     "local_db_version": 42,    // Current user DB version on device
     "local_person_count": 4998 // Number of users in local DB
   }
 }
 ```
+
+**Media fields (`photo`, `clip_object_key`)** *(updated 2026-04)* — both are
+**MinIO object keys**, not embedded binary. Devices upload the bytes first
+via the presigned-URL flow in **§15 Media Uploads**, then publish the
+access.log MQTT event with the returned `object_key`. The legacy
+`"photo": "base64_jpeg"` payload format is no longer accepted; brokers and
+NATS bridges enforce the 256 KB envelope limit, so any media >1 MB never
+worked over MQTT in practice. Existing rows with base64-encoded `photo` are
+left untouched in `access_events.metadata`; new rows always store keys.
 
 **Field notes:**
 
@@ -480,7 +491,7 @@ All messages follow a standard envelope format:
     "door_id": "door-001",      // Optional
     "sensor_id": "sensor-001",  // Optional
     "details": "Door forced open without authorization",
-    "photo": "base64_jpeg"      // Optional: snapshot at alarm time
+    "photo": "events/<tenant>/<device>/snapshot/<uuid>.jpg"  // Optional: object key — see §15
   }
 }
 ```
@@ -496,7 +507,7 @@ All messages follow a standard envelope format:
     "name": "Trần Thị B",
     "id_number": "0123456789",  // Masked in transit
     "host_id": "user-uuid",
-    "photo": "base64_jpeg",
+    "photo": "events/<tenant>/<device>/snapshot/<uuid>.jpg",  // Object key — see §15
     "badge_printed": true,
     "access_zones": ["zone-lobby", "zone-meeting"],
     "valid_until": 1740003600000
@@ -527,7 +538,7 @@ All messages follow a standard envelope format:
   "data": {
     "action": "entry|exit",
     "plate_number": "30A-12345",
-    "plate_photo": "base64_jpeg",
+    "plate_photo": "events/<tenant>/<device>/snapshot/<uuid>.jpg",  // Object key — see §15
     "confidence": 0.98,
     "vehicle_type": "car|motorcycle|truck",
     "lane_id": "lane-001",
@@ -689,7 +700,7 @@ All messages follow a standard envelope format:
   "ref": "original-msg-id",
   "status": "ok",
   "data": {
-    "photo": "base64_jpeg",
+    "photo": "events/<tenant>/<device>/snapshot/<uuid>.jpg",  // Object key — device must complete §15 upload before publishing this response
     "width": 1280,
     "height": 720,
     "captured_at": 1740000001000
@@ -1403,4 +1414,197 @@ Guard Station              Server                 EMQX                  All Devi
 | Medium building | 50 doors, 500 people | ~5,000 access + sensors | ~50 MB/day |
 | Large campus | 200 doors, 5,000 people | ~50,000 access + full telemetry | ~500 MB/day |
 
-*Excludes photo attachments. With snapshots: multiply by 3-5x.*
+*MQTT bandwidth excludes media — snapshots and clips travel out-of-band
+over HTTPS direct to MinIO (see §15). For sites that capture a snapshot
+on every access, add the per-event MinIO PUT bandwidth (typically
+30–200 KB/snapshot, 1–10 MB/clip) to your network plan.*
+
+---
+
+## 15. Media Uploads (Snapshots & Clips)
+
+> **All media — images and videos, regardless of size — uses one consistent
+> flow: presigned PUT directly to MinIO.** No binary payload ever travels
+> through the MQTT broker, the device-gateway, or NATS. The MQTT event
+> carries only the resulting object key.
+
+This section covers how a device attaches a snapshot or video clip to any
+event (`access.log`, `alarm.triggered`, `visitor.checkin`, `parking.plate`,
+or a `cmd.snapshot.resp`).
+
+### 15.1 Why not MQTT?
+
+| Concern | Why MQTT is wrong |
+|---|---|
+| Envelope size | Hard 256 KB cap on MQTT payloads. A 2 MB clip simply won't transit. |
+| Memory amplification | Broker → device-gateway → NATS → access-svc each deserializes the JSON. A 2 MB clip becomes ~3 MB after base64 and is held in memory in 4 places. |
+| NATS limits | Default 1 MB max message size on the `dm3.devices.>` stream. Raising it would penalize every small event. |
+| Resumable upload | MQTT QoS 1/2 retransmits the *whole* message on failure. HTTP/S3 supports range requests and multipart for >5 MB. |
+| Broker scaling | EMQX is tuned for many small messages, not few large ones. Image storms during an incident degrade access decisions for the whole tenant. |
+
+The two-step flow keeps `evt` payloads small (event + reference) while
+allowing arbitrarily large media to flow on a separate, scalable path.
+
+### 15.2 Flow
+
+```
+Device                   device-gateway                  MinIO
+   │                          │                            │
+   │ 1. POST /devices/{id}/media-url  ──────────────►      │
+   │    Authorization: Bearer <device JWT>                  │
+   │    { "kind": "snapshot",                               │
+   │      "content_type": "image/jpeg" }                    │
+   │                          │                            │
+   │ ◄── 200 OK ──────────────│                            │
+   │     { "upload_url": "https://minio.../...?Sig=...",   │
+   │       "object_key": "events/<tid>/<did>/snapshot/<uuid>.jpg",
+   │       "method": "PUT",                                 │
+   │       "expires_at": "..." }                            │
+   │                          │                            │
+   │ 2. PUT <upload_url> ─────────────────────────────────►│
+   │    Content-Type: image/jpeg                            │
+   │    Body: <binary jpg>                                  │
+   │                          │                            │
+   │ ◄────────────────── 200/204 from MinIO ───────────────│
+   │                          │                            │
+   │ 3. MQTT publish dm/{tid}/device/{did}/evt              │
+   │    { "type": "access.log",                             │
+   │      "data": { ..., "photo": "<object_key>" } }        │
+   │                          │                            │
+```
+
+### 15.3 Issue an upload URL
+
+```
+POST /api/v1/gateway/devices/{device_id}/media-url
+Host: <gateway>
+Authorization: Bearer <device JWT, did claim must equal {device_id}>
+Content-Type: application/json
+
+{
+  "kind": "snapshot",            // "snapshot" | "clip"
+  "content_type": "image/jpeg"   // see allow-list below
+}
+```
+
+**Allowed `(kind, content_type)` pairs:**
+
+| `kind` | `content_type` | Stored extension |
+|---|---|---|
+| `snapshot` | `image/jpeg` | `.jpg` |
+| `snapshot` | `image/png`  | `.png` |
+| `snapshot` | `image/webp` | `.webp` |
+| `clip`     | `video/mp4`  | `.mp4` |
+| `clip`     | `video/webm` | `.webm` |
+
+Other values are rejected with **400 Bad Request**.
+
+**Response (200 OK):**
+
+```json
+{
+  "upload_url": "https://minio.example.com/dm3/events/...?X-Amz-Signature=...",
+  "object_key": "events/<tenant_id>/<device_id>/snapshot/<uuid>.jpg",
+  "content_type": "image/jpeg",
+  "expires_at": "2026-04-20T15:00:00Z",
+  "method": "PUT"
+}
+```
+
+**Object key layout:** `events/<tenant_id>/<device_id>/<kind>/<uuid>.<ext>`
+
+The bucket is the same `OBJECT_STORE_BUCKET` already used for firmware
+and CCTV clips — there is no per-tenant bucket.
+
+**URL lifetime:** the URL is signed for **1 hour**. The device should
+upload immediately; the long expiry only exists to tolerate spotty
+links, not to be cached. There is no "extend expiry" endpoint — request
+a fresh URL if needed.
+
+**Auth errors:**
+
+| Status | Cause |
+|---|---|
+| `401 Unauthorized` | Missing/invalid/expired device JWT. Devices must refresh via `/refresh-token` (§2.7) before retrying. The 7-day grace window does NOT apply here — only fully valid tokens can mint upload URLs. |
+| `403 Forbidden` | `did` claim does not match the `{device_id}` path parameter. A device may only upload media for itself. |
+| `503 Service Unavailable` | Object storage not configured on the gateway (`OBJECT_STORE_*` env vars). Devices should buffer and retry later. |
+
+### 15.4 Upload to MinIO
+
+The device PUTs the binary to the returned `upload_url`:
+
+```
+PUT <upload_url>
+Content-Type: <same content_type the device requested>
+Content-Length: <size in bytes>
+Body: <binary>
+```
+
+- **The `Content-Type` header MUST match** the value declared in step 1.
+  MinIO bakes the content type into the presigned URL; mismatched headers
+  fail signature verification with **403 SignatureDoesNotMatch**.
+- **For files >5 MB**, devices SHOULD use multipart upload (S3 protocol).
+  MinIO supports it natively; minio-go and most S3 SDKs handle the chunking.
+  The presigned PUT URL signs only the single PUT — for multipart, request
+  a presigned multipart URL via a future endpoint extension.
+- The gateway never sees the bytes. There is no upload progress beacon
+  on the gateway side.
+
+### 15.5 Reference the upload from the MQTT event
+
+After a successful PUT, publish the event over MQTT with the object key
+in the appropriate field:
+
+| Event type | Field carrying the object key |
+|---|---|
+| `access.log` | `data.photo` (snapshot), `data.clip_object_key` (video) |
+| `alarm.triggered` | `data.photo` |
+| `visitor.checkin` | `data.photo` |
+| `parking.plate` | `data.plate_photo` |
+| `cmd.snapshot.resp` | `data.photo` |
+
+Devices MAY publish the event in parallel with the MinIO PUT (as long as
+the PUT eventually completes). The gateway stores the object key on the
+event row immediately; the frontend handles "image not yet available"
+by retrying the presigned GET.
+
+### 15.6 Render media on the frontend
+
+The console fetches a short-lived (5 min) presigned GET URL via the same
+pattern used today for CCTV clips (see `internal/cctv/clip_signer.go`).
+For snapshots, the matching helper lives on `objectstore.MinIOStore`
+(`PresignedGetURL`). The browser then loads the image/video directly
+from MinIO — no proxying through the gateway.
+
+### 15.7 Orphan cleanup
+
+If a device requests an upload URL, completes the PUT, but crashes
+before publishing the MQTT event, the object becomes an orphan: it
+exists in MinIO with no row pointing to it. A periodic job (planned —
+not yet implemented) walks `events/` and deletes objects whose key has
+no matching `access_event.metadata.photo` /
+`access_event.metadata.clip_object_key` /
+`event_clips.object_key` reference and is older than 24 h.
+
+Until that job ships, orphans are harmless except for storage cost.
+
+### 15.8 Configuration
+
+Required env vars on `device-gateway`:
+
+| Var | Notes |
+|---|---|
+| `OBJECT_STORE_ENDPOINT` | MinIO host:port (e.g. `minio:9000`) |
+| `OBJECT_STORE_ACCESS_KEY` / `OBJECT_STORE_SECRET_KEY` | Credentials with PUT/GET permission on the bucket |
+| `OBJECT_STORE_BUCKET` | Single bucket reused across tenants — keys are namespaced by tenant_id |
+| `OBJECT_STORE_USE_SSL` | `true` in production |
+| `OBJECT_STORE_AUTO_CREATE_BUCKET` | `true` once on first deploy, then `false` |
+
+When any of these are unset on the gateway, `/media-url` returns
+**503**. The MQTT event flow is unaffected — devices that don't capture
+media keep working.
+
+Source of truth: `backend/internal/gateway/media_handlers.go`,
+`backend/pkg/objectstore/objectstore.go` (`PresignedPutURL`).
+
+---
