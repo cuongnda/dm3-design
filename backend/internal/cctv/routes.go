@@ -23,21 +23,21 @@ func RegisterRoutes(r chi.Router, h *CCTVHandlers, jwtSecret string) {
 		r.Get("/clips/{id}/playback", h.GetClipPlayback)
 		r.Get("/settings", h.GetSettings)
 
-		// Operator+ writes
+		// Camera management writes — CRUD, settings, and connection testing
 		r.Group(func(pr chi.Router) {
-			pr.Use(authsvc.RequireWriteRole("operator", "manager", "primary_manager", "system_admin"))
-			pr.Post("/cameras/{id}/test-connection", h.TestCameraConnection)
-			pr.Post("/clips", h.CreateClip)
-			pr.Delete("/clips/{id}", h.DeleteClip)
-		})
-
-		// Manager+ writes
-		r.Group(func(pr chi.Router) {
-			pr.Use(authsvc.RequireWriteRole("manager", "primary_manager", "system_admin"))
+			pr.Use(authsvc.RequireWritePermission("cctv.camera.manage"))
 			pr.Post("/cameras", h.CreateCamera)
 			pr.Put("/cameras/{id}", h.UpdateCamera)
 			pr.Delete("/cameras/{id}", h.DeleteCamera)
+			pr.Post("/cameras/{id}/test-connection", h.TestCameraConnection)
 			pr.Put("/settings", h.UpdateSettings)
+		})
+
+		// Clip export writes — create and delete clips
+		r.Group(func(pr chi.Router) {
+			pr.Use(authsvc.RequireWritePermission("cctv.clip.export"))
+			pr.Post("/clips", h.CreateClip)
+			pr.Delete("/clips/{id}", h.DeleteClip)
 		})
 	})
 }
