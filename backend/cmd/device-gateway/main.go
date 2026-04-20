@@ -154,10 +154,12 @@ func main() {
 
 	objectStore, err := objectstore.NewMinIOStore(ctx, objectstore.Config{
 		Endpoint:         cfg.ObjectStoreEndpoint,
+		PublicEndpoint:   cfg.ObjectStorePublicEndpoint,
 		AccessKeyID:      cfg.ObjectStoreAccessKeyID,
 		SecretAccessKey:  cfg.ObjectStoreSecretAccessKey,
 		Bucket:           cfg.ObjectStoreBucket,
 		UseSSL:           cfg.ObjectStoreUseSSL,
+		PublicUseSSL:     cfg.ObjectStorePublicUseSSL,
 		AutoCreateBucket: cfg.ObjectStoreAutoCreateBucket,
 	})
 	if err != nil {
@@ -166,7 +168,8 @@ func main() {
 	}
 
 	// HTTP handlers
-	handlers := gateway.NewGatewayHandlers(database, mqttClient, auditLog)
+	handlers := gateway.NewGatewayHandlers(database, mqttClient, auditLog).
+		WithMediaPresigner(objectStore)
 	syncService.AttachHandlers(handlers)
 	provHandlers := gateway.NewProvisioningHandlers(database, mqttClient, cfg, auditLog)
 

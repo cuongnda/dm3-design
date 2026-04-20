@@ -1,8 +1,10 @@
 # Duall Master 3.0 — MQTT Protocol Specification
 
 > IoT Device ↔ Server Communication Protocol
-> Version: 1.1 | Updated: 2026-04-20
-> Changelog: §15 added — media uploads moved to presigned MinIO PUT; `photo`/`plate_photo`/`clip_object_key` carry object keys, no longer base64.
+> Version: 1.2 | Updated: 2026-04-20
+> Changelog:
+> - v1.2 — `cmd.snapshot` now carries a server-presigned `upload_url` + `object_key` (§6.4); `OBJECT_STORE_PUBLIC_ENDPOINT` documented (§15.8) so presigned URLs can target a different host than the gateway uses internally.
+> - v1.1 — §15 added: media uploads moved to presigned MinIO PUT; `photo`/`plate_photo`/`clip_object_key` carry object keys, no longer base64.
 
 ---
 
@@ -682,16 +684,44 @@ left untouched in `access_events.metadata`; new rows always store keys.
 
 ### 6.4 Capture Snapshot
 
+The server pre-signs the upload URL when issuing the command — the device
+just PUTs the JPEG bytes to MinIO and echoes back the object key. No HTTP
+round-trip from the device for the URL itself. This is the only command
+that carries a presigned URL today; see §15.5 for the rationale.
+
 ```json
 {
   "type": "cmd.snapshot",
   "data": {
     "camera": "main|secondary",
     "quality": 85,               // JPEG quality
-    "max_width": 1280
+    "max_width": 1280,
+    // ── Pre-signed upload (added 2026-04, server-issued) ──────────────────
+    "upload_url": "https://minio.example.com/dm3/events/...?X-Amz-Signature=...",
+    "object_key": "events/<tenant>/<device>/snapshot/<uuid>.jpg",
+    "upload_expires_at": "2026-04-20T12:34:56Z"  // RFC3339 UTC — typically 5 min
   }
 }
 ```
+
+**Device must:**
+
+1. Capture the JPEG.
+2. `PUT <upload_url>` with `Content-Type: image/jpeg` and the binary as the
+   body. The PUT URL is signed for the exact `image/jpeg` content type, so
+   any other Content-Type triggers `403 SignatureDoesNotMatch` from MinIO.
+3. Publish `cmd.snapshot.resp` with `data.photo = <object_key>` echoed back.
+
+The object key is **server-chosen** — devices MUST NOT modify it (the URL
+signature only covers that exact key). If the device cannot upload (camera
+error, MinIO unreachable), respond with `status: error` and a human-readable
+`error` field instead of inventing a different key.
+
+**Backwards compatibility:** if the gateway is run without object storage
+configured, `upload_url` and `object_key` are omitted from the command.
+Older firmware that doesn't understand these fields should fall back to its
+previous capture-and-respond path; the server will treat a `data.photo`
+that doesn't start with `events/` as a legacy reference.
 
 **Response:**
 ```json
@@ -700,7 +730,7 @@ left untouched in `access_events.metadata`; new rows always store keys.
   "ref": "original-msg-id",
   "status": "ok",
   "data": {
-    "photo": "events/<tenant>/<device>/snapshot/<uuid>.jpg",  // Object key — device must complete §15 upload before publishing this response
+    "photo": "events/<tenant>/<device>/snapshot/<uuid>.jpg",  // Echo of object_key from the command
     "width": 1280,
     "height": 720,
     "captured_at": 1740000001000
@@ -1555,13 +1585,19 @@ Body: <binary>
 After a successful PUT, publish the event over MQTT with the object key
 in the appropriate field:
 
-| Event type | Field carrying the object key |
-|---|---|
-| `access.log` | `data.photo` (snapshot), `data.clip_object_key` (video) |
-| `alarm.triggered` | `data.photo` |
-| `visitor.checkin` | `data.photo` |
-| `parking.plate` | `data.plate_photo` |
-| `cmd.snapshot.resp` | `data.photo` |
+| Event type | Field carrying the object key | Who issues the URL |
+|---|---|---|
+| `access.log` | `data.photo` (snapshot), `data.clip_object_key` (video) | Device, via §15.3 HTTP request |
+| `alarm.triggered` | `data.photo` | Device, via §15.3 HTTP request |
+| `visitor.checkin` | `data.photo` | Device, via §15.3 HTTP request |
+| `parking.plate` | `data.plate_photo` | Device, via §15.3 HTTP request |
+| **`cmd.snapshot.resp`** | **`data.photo`** | **Server — embedded in the `cmd.snapshot` command itself (see §6.4)** |
+
+Why the asymmetry: device-initiated events (`access.log`, `alarm`, …) need
+the device to ask first because the server can't predict when an event
+will fire. `cmd.snapshot` is server-initiated, so the gateway already
+knows the device + tenant when it generates the command — it pre-signs the
+URL and ships it with the command. **One round-trip total instead of two.**
 
 Devices MAY publish the event in parallel with the MinIO PUT (as long as
 the PUT eventually completes). The gateway stores the object key on the
@@ -1590,17 +1626,39 @@ Until that job ships, orphans are harmless except for storage cost.
 
 ### 15.8 Configuration
 
-Required env vars on `device-gateway`:
+Env vars on every service that issues presigned URLs (`device-gateway`,
+`access-svc`, `identity-svc`, `cctv-svc`, `attend-svc`):
 
-| Var | Notes |
-|---|---|
-| `OBJECT_STORE_ENDPOINT` | MinIO host:port (e.g. `minio:9000`) |
-| `OBJECT_STORE_ACCESS_KEY` / `OBJECT_STORE_SECRET_KEY` | Credentials with PUT/GET permission on the bucket |
-| `OBJECT_STORE_BUCKET` | Single bucket reused across tenants — keys are namespaced by tenant_id |
-| `OBJECT_STORE_USE_SSL` | `true` in production |
-| `OBJECT_STORE_AUTO_CREATE_BUCKET` | `true` once on first deploy, then `false` |
+| Var | Required | Notes |
+|---|---|---|
+| `OBJECT_STORE_ENDPOINT` | yes | host:port the **service** uses to call MinIO. In docker, usually `minio:9000`. In native local dev, `localhost:9002`. |
+| `OBJECT_STORE_PUBLIC_ENDPOINT` | optional but **strongly recommended in prod** | host:port baked into the URL handed to **devices and browsers**. Set when devices on the LAN/WAN can't reach the service-internal endpoint. Falls back to `OBJECT_STORE_ENDPOINT` when empty. |
+| `OBJECT_STORE_USE_SSL` | optional | `true` if the service-MinIO link is HTTPS. |
+| `OBJECT_STORE_PUBLIC_USE_SSL` | optional | scheme baked into the URL given to devices/browsers. Defaults to `OBJECT_STORE_USE_SSL`. |
+| `OBJECT_STORE_ACCESS_KEY` / `OBJECT_STORE_SECRET_KEY` | yes | Credentials with PUT/GET on the bucket. |
+| `OBJECT_STORE_BUCKET` | yes | Single bucket reused across tenants — keys are namespaced by tenant_id. |
+| `OBJECT_STORE_AUTO_CREATE_BUCKET` | optional | `true` once on first deploy, then `false`. |
 
-When any of these are unset on the gateway, `/media-url` returns
+**Worked example — devices on a LAN with MinIO behind docker:**
+
+```
+# Gateway talks to MinIO over the docker bridge
+OBJECT_STORE_ENDPOINT=minio:9000
+OBJECT_STORE_USE_SSL=false
+
+# Devices on the LAN (Wi-Fi printers, terminals at 192.168.1.x) reach
+# MinIO via the host's LAN IP / forwarded port
+OBJECT_STORE_PUBLIC_ENDPOINT=192.168.1.254:9002
+OBJECT_STORE_PUBLIC_USE_SSL=false
+```
+
+A presigned URL handed to a device will then look like:
+`http://192.168.1.254:9002/dm3/events/<tid>/<did>/snapshot/<uuid>.jpg?X-Amz-Signature=...`
+— even though the gateway computed it via `minio:9000`. The S3 signature
+covers the path and headers, not the host, so swapping the endpoint at the
+client level produces a fully-valid URL the LAN device can hit directly.
+
+When `OBJECT_STORE_ENDPOINT` is unset on the gateway, `/media-url` returns
 **503**. The MQTT event flow is unaffected — devices that don't capture
 media keep working.
 

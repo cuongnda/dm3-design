@@ -426,6 +426,14 @@ class VirtualDevice:
             "local_person_count": await self.db.get_person_count(),
         }
 
+        # Upload a placeholder snapshot via §15 media-url flow on every granted
+        # event. On any failure (MinIO down, gateway 503, network) we silently
+        # omit `photo` — the event itself must always go through.
+        if decision.granted:
+            object_key = await self._upload_snapshot_placeholder()
+            if object_key:
+                event_data["photo"] = object_key
+
         msg = MqttMessage(
             src=f"device:{self.device_id}",
             type="access.log",
@@ -702,6 +710,62 @@ class VirtualDevice:
         )
         await self.mqtt.publish(f"{self.mqtt.topic_prefix}/cmd/resp", resp.model_dump_json(), qos=2)
         logger.info("snapshot_captured", device_id=self.device_id, camera=camera)
+
+    # 1x1 baseline JPEG used as a stand-in for camera snapshots in the
+    # simulator. Real firmware would PUT the actual capture bytes.
+    _PLACEHOLDER_JPEG: bytes = bytes([
+        0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01,
+        0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xD9,
+    ])
+
+    async def _upload_snapshot_placeholder(self) -> str | None:
+        """Run the two-step §15 media upload and return the object_key.
+
+        Best-effort: returns None on any failure (no token yet, gateway 503
+        because object storage isn't configured, network error, MinIO down).
+        Callers must treat the photo as optional.
+        """
+        if not self.mqtt_token:
+            return None
+        import aiohttp
+        media_url = f"{self.config.gateway_url}/api/v1/gateway/devices/{self.device_id}/media-url"
+        headers = {"Authorization": f"Bearer {self.mqtt_token}"}
+        timeout = aiohttp.ClientTimeout(total=3)
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(
+                    media_url,
+                    json={"kind": "snapshot", "content_type": "image/jpeg"},
+                    headers=headers,
+                ) as resp:
+                    if resp.status != 200:
+                        logger.debug(
+                            "snapshot_url_failed",
+                            device_id=self.device_id,
+                            status=resp.status,
+                        )
+                        return None
+                    issued = await resp.json()
+                put_url = issued.get("upload_url")
+                object_key = issued.get("object_key")
+                if not put_url or not object_key:
+                    return None
+                async with session.put(
+                    put_url,
+                    data=self._PLACEHOLDER_JPEG,
+                    headers={"Content-Type": "image/jpeg"},
+                ) as put_resp:
+                    if put_resp.status not in (200, 204):
+                        logger.debug(
+                            "snapshot_minio_put_failed",
+                            device_id=self.device_id,
+                            status=put_resp.status,
+                        )
+                        return None
+                return object_key
+        except Exception as e:
+            logger.debug("snapshot_upload_error", device_id=self.device_id, error=str(e))
+            return None
 
     async def _handle_firmware_update(self, payload: dict[str, Any]) -> None:
         """Handle firmware OTA: download, verify, install with progress acks."""

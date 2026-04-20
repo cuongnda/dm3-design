@@ -41,10 +41,12 @@ type Config struct {
 
 	// Object Storage (MinIO / S3-compatible) — used when PhotoStorage = "minio"
 	ObjectStoreEndpoint         string
+	ObjectStorePublicEndpoint   string // Optional. Address baked into presigned URLs. Falls back to ObjectStoreEndpoint when empty.
 	ObjectStoreAccessKeyID      string
 	ObjectStoreSecretAccessKey  string
 	ObjectStoreBucket           string
 	ObjectStoreUseSSL           bool
+	ObjectStorePublicUseSSL     bool // Optional. Scheme for presigned URLs. Falls back to ObjectStoreUseSSL when env var unset.
 	ObjectStoreAutoCreateBucket bool
 
 	// EMQX Dashboard API
@@ -96,10 +98,12 @@ func Load() *Config {
 		PhotoLocalDir: env("PHOTO_LOCAL_DIR", "./data/photos"),
 
 		ObjectStoreEndpoint:         env("OBJECT_STORE_ENDPOINT", "localhost:9002"),
+		ObjectStorePublicEndpoint:   env("OBJECT_STORE_PUBLIC_ENDPOINT", ""),
 		ObjectStoreAccessKeyID:      env("OBJECT_STORE_ACCESS_KEY", env("MINIO_ROOT_USER", "dm3admin")),
 		ObjectStoreSecretAccessKey:  env("OBJECT_STORE_SECRET_KEY", env("MINIO_ROOT_PASSWORD", "dm3secret123")),
 		ObjectStoreBucket:           env("OBJECT_STORE_BUCKET", "dm3"),
 		ObjectStoreUseSSL:           env("OBJECT_STORE_USE_SSL", "") == "true",
+		ObjectStorePublicUseSSL:     env("OBJECT_STORE_PUBLIC_USE_SSL", env("OBJECT_STORE_USE_SSL", "")) == "true",
 		ObjectStoreAutoCreateBucket: env("OBJECT_STORE_AUTO_CREATE_BUCKET", "false") == "true",
 
 		EMQXApiURL:      env("EMQX_API_URL", "http://localhost:18084"),

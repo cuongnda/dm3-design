@@ -52,7 +52,10 @@ type accessLogData struct {
 	UserID     string `json:"user_id"`
 	Method     string `json:"method"`
 	Decision   string `json:"decision"` // granted | denied
-	PhotoRef   string `json:"photo_ref"`
+	// Wire field is `photo` per mqtt-protocol.md §4.1. Go field name kept as
+	// PhotoRef to match the access_events.photo_ref column it ultimately maps
+	// into.
+	PhotoRef string `json:"photo"`
 }
 
 // Start subscribes to `dm3.devices.*.*.evt` on DEVICES with queue group

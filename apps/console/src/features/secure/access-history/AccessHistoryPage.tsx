@@ -125,14 +125,15 @@ function SkeletonRows({ count }: { count: number }) {
 
 // ─── Photo thumbnail & modal ────────────────────────────────────────────────
 
-function PhotoCell({ photoRef, t }: { photoRef?: string; t: (k: string) => string }) {
+function PhotoCell({ photoUrl, photoRef, t }: { photoUrl?: string; photoRef?: string; t: (k: string) => string }) {
   const [open, setOpen] = useState(false);
 
-  if (!photoRef) {
+  // Prefer the server-presigned MinIO URL (new device-upload flow). Fall back
+  // to assetUrl(photo_ref) for legacy /photos/... refs from before §15.
+  const url = photoUrl || (photoRef ? assetUrl(photoRef) : '');
+  if (!url) {
     return <span className="text-muted-foreground">—</span>;
   }
-
-  const url = assetUrl(photoRef);
 
   return (
     <>
@@ -765,7 +766,7 @@ export function AccessHistoryPage() {
                         {event.reason || '—'}
                       </TableCell>
                       <TableCell className="px-4">
-                        <PhotoCell photoRef={event.photo_ref} t={t} />
+                        <PhotoCell photoUrl={event.photo_url} photoRef={event.photo_ref} t={t} />
                       </TableCell>
                     </TableRow>
                   ))

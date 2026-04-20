@@ -120,6 +120,32 @@ func (h *MediaHandlers) IssueUploadURL(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// IssueSnapshotPutURL signs a single PUT URL for a snapshot the server is
+// about to ask a device to capture. Used by SendCommand when forwarding a
+// `cmd.snapshot` so the device gets the URL embedded in the command — no
+// extra HTTP round-trip on the device side. Returns the signed URL, the
+// object key, and the absolute expiry time.
+//
+// expiry should be at least the device command timeout (10s per
+// docs/architecture/mqtt-protocol.md §7) plus a generous capture+upload
+// window. 5 minutes is a safe default — far longer than any device should
+// take to respond, but short enough that a leaked URL is mostly harmless.
+func IssueSnapshotPutURL(ctx context.Context, presigner MediaPresigner, tenantID, deviceID string, expiry time.Duration) (uploadURL, objectKey string, expiresAt time.Time, err error) {
+	if presigner == nil {
+		return "", "", time.Time{}, fmt.Errorf("media: presigner not configured")
+	}
+	if tenantID == "" || deviceID == "" {
+		return "", "", time.Time{}, fmt.Errorf("media: tenant_id and device_id are required")
+	}
+	objectKey = fmt.Sprintf("events/%s/%s/snapshot/%s.jpg",
+		tenantID, deviceID, uuid.NewString())
+	signed, err := presigner.PresignedPutURL(ctx, objectKey, expiry)
+	if err != nil {
+		return "", "", time.Time{}, fmt.Errorf("media: presign snapshot put: %w", err)
+	}
+	return signed.String(), objectKey, time.Now().Add(expiry), nil
+}
+
 // mediaExtensionFor validates the (kind, content_type) pair and returns the
 // file extension to append to the object key. Devices must declare the kind
 // up front so the gateway can enforce per-kind content-type allowlists —

@@ -22,13 +22,24 @@ import (
 )
 
 type GatewayHandlers struct {
-	db    *db.DB
-	mqtt  *mqtt.Client
-	audit *audit.Logger
+	db             *db.DB
+	mqtt           *mqtt.Client
+	audit          *audit.Logger
+	mediaPresigner MediaPresigner // optional; when set, cmd.snapshot embeds a presigned PUT URL
 }
 
 func NewGatewayHandlers(database *db.DB, mqttClient *mqtt.Client, auditLog *audit.Logger) *GatewayHandlers {
 	return &GatewayHandlers{db: database, mqtt: mqttClient, audit: auditLog}
+}
+
+// WithMediaPresigner enables server-side presigning for `cmd.snapshot`. When
+// set, SendCommand injects `upload_url` + `object_key` into the cmd payload
+// so the device can PUT its capture directly to MinIO without a second
+// round-trip. Optional: leaving it unset keeps the legacy base64-in-resp
+// behavior, useful for dev environments without object storage.
+func (h *GatewayHandlers) WithMediaPresigner(p MediaPresigner) *GatewayHandlers {
+	h.mediaPresigner = p
+	return h
 }
 
 // ─── Shared scan helpers ────────────────────────────────────────────────────
@@ -508,10 +519,34 @@ func (h *GatewayHandlers) SendCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// For cmd.snapshot, presign a PUT URL up front and embed it in the payload
+	// so the device can stream its capture straight to MinIO. See
+	// docs/architecture/mqtt-protocol.md §6.4 + §15.5. If presigning isn't
+	// configured (no object storage in this env) we fall through and ship the
+	// command without an URL — devices that haven't been updated still respond
+	// the legacy way.
+	data := req.Data
+	if req.Type == "cmd.snapshot" && h.mediaPresigner != nil {
+		uploadURL, objectKey, expiresAt, perr := IssueSnapshotPutURL(
+			r.Context(), h.mediaPresigner, tenantID, deviceID, 5*time.Minute,
+		)
+		if perr != nil {
+			slog.Warn("SendCommand: snapshot presign failed; sending without upload_url",
+				"device_id", deviceID, "error", perr)
+		} else {
+			if data == nil {
+				data = map[string]any{}
+			}
+			data["upload_url"] = uploadURL
+			data["object_key"] = objectKey
+			data["upload_expires_at"] = expiresAt.UTC().Format(time.RFC3339)
+		}
+	}
+
 	topic := fmt.Sprintf("dm/%s/device/%s/cmd", tenantID, deviceID)
 	payload, _ := json.Marshal(map[string]any{
 		"type": req.Type,
-		"data": req.Data,
+		"data": data,
 	})
 
 	if err := h.mqtt.Publish(r.Context(), topic, 2, payload); err != nil {

@@ -14,10 +14,20 @@ import (
 
 type Config struct {
 	Endpoint         string
+	// PublicEndpoint, when set, is the host:port baked into presigned URLs
+	// returned to devices and browsers. Use this when the gateway talks to
+	// MinIO over a docker-internal hostname (e.g. minio:9000) but the device
+	// must reach it over the LAN/WAN at a different address (e.g.
+	// 192.168.1.254:9002 or s3.dm3.example.com). Falls back to Endpoint when
+	// empty.
+	PublicEndpoint   string
 	AccessKeyID      string
 	SecretAccessKey  string
 	Bucket           string
 	UseSSL           bool
+	// PublicUseSSL controls the scheme of presigned URLs. Falls back to
+	// UseSSL when not explicitly set in config.
+	PublicUseSSL     bool
 	AutoCreateBucket bool
 }
 
@@ -33,9 +43,23 @@ type Store interface {
 	DeleteObject(ctx context.Context, key string) error
 }
 
+// GetURLPresigner is the optional capability of issuing time-limited GET URLs.
+// MinIOStore implements it; LocalStore does not. Callers should type-assert
+// before use so dev environments without object storage still compile and run.
+type GetURLPresigner interface {
+	PresignedGetURL(ctx context.Context, key string, expires time.Duration) (*url.URL, error)
+}
+
 type MinIOStore struct {
+	// client talks to MinIO from inside the platform (docker network, internal
+	// VPC). All real GET/PUT/DELETE operations go through it.
 	client *minio.Client
-	bucket string
+	// presignClient is constructed with the public endpoint, so the URLs it
+	// generates point at an address that devices and browsers can actually
+	// reach. It is never used for live S3 calls — only for URL generation.
+	// When Config.PublicEndpoint is empty, this is the same as `client`.
+	presignClient *minio.Client
+	bucket        string
 }
 
 func NewMinIOStore(ctx context.Context, cfg Config) (*MinIOStore, error) {
@@ -60,7 +84,18 @@ func NewMinIOStore(ctx context.Context, cfg Config) (*MinIOStore, error) {
 		return nil, fmt.Errorf("create minio client: %w", err)
 	}
 
-	store := &MinIOStore{client: client, bucket: cfg.Bucket}
+	presignClient := client
+	if strings.TrimSpace(cfg.PublicEndpoint) != "" {
+		presignClient, err = minio.New(cfg.PublicEndpoint, &minio.Options{
+			Creds:  credentials.NewStaticV4(cfg.AccessKeyID, cfg.SecretAccessKey, ""),
+			Secure: cfg.PublicUseSSL,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("create minio presign client: %w", err)
+		}
+	}
+
+	store := &MinIOStore{client: client, presignClient: presignClient, bucket: cfg.Bucket}
 	if cfg.AutoCreateBucket {
 		exists, err := client.BucketExists(ctx, cfg.Bucket)
 		if err != nil {
@@ -104,7 +139,7 @@ func (s *MinIOStore) PresignedPutURL(ctx context.Context, key string, expires ti
 	if strings.TrimSpace(key) == "" {
 		return nil, fmt.Errorf("presign put: key is required")
 	}
-	u, err := s.client.PresignedPutObject(ctx, s.bucket, key, expires)
+	u, err := s.presignClient.PresignedPutObject(ctx, s.bucket, key, expires)
 	if err != nil {
 		return nil, fmt.Errorf("presign put %s: %w", key, err)
 	}
@@ -118,7 +153,7 @@ func (s *MinIOStore) PresignedGetURL(ctx context.Context, key string, expires ti
 	if strings.TrimSpace(key) == "" {
 		return nil, fmt.Errorf("presign get: key is required")
 	}
-	u, err := s.client.PresignedGetObject(ctx, s.bucket, key, expires, nil)
+	u, err := s.presignClient.PresignedGetObject(ctx, s.bucket, key, expires, nil)
 	if err != nil {
 		return nil, fmt.Errorf("presign get %s: %w", key, err)
 	}

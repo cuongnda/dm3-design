@@ -2,6 +2,7 @@ package access
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
@@ -411,6 +412,7 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	events := []eventResponse{}
+	presigner, _ := h.objects.(objectstore.GetURLPresigner)
 	for rows.Next() {
 		var e eventResponse
 		if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.AccessPointID,
@@ -421,6 +423,7 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
+		e.PhotoURL = presignPhotoIfMinIOKey(r.Context(), presigner, e.PhotoRef)
 		events = append(events, e)
 	}
 	if err := rows.Err(); err != nil {
@@ -429,6 +432,27 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httputil.Paginated(w, events, total, page, limit)
+}
+
+// presignPhotoIfMinIOKey returns a 5-minute presigned GET URL when photoRef is
+// a MinIO object key uploaded via the device media-url flow (see
+// docs/architecture/mqtt-protocol.md §15). Returns empty string for legacy
+// `/photos/...` refs, empty input, or when no presigner is wired (LocalStore
+// dev mode). On presign error, logs and returns empty so the frontend falls
+// back to assetUrl(photo_ref) — the page should never break because of media.
+func presignPhotoIfMinIOKey(ctx context.Context, presigner objectstore.GetURLPresigner, photoRef string) string {
+	if photoRef == "" || presigner == nil {
+		return ""
+	}
+	if !strings.HasPrefix(photoRef, "events/") {
+		return ""
+	}
+	u, err := presigner.PresignedGetURL(ctx, photoRef, 5*time.Minute)
+	if err != nil {
+		slog.Warn("access events: presign photo failed", "key", photoRef, "error", err)
+		return ""
+	}
+	return u.String()
 }
 
 type eventResponse struct {
@@ -446,7 +470,12 @@ type eventResponse struct {
 	Reason         string         `json:"reason,omitempty"`
 	Confidence     *float64       `json:"confidence,omitempty"`
 	PhotoRef       string         `json:"photo_ref,omitempty"`
-	Metadata       map[string]any `json:"metadata,omitempty"`
+	// PhotoURL is a 5-minute presigned MinIO GET URL, populated when PhotoRef
+	// looks like an object key (events/<tid>/<did>/...). For legacy /photos/
+	// refs (identity-svc avatars) this stays empty and the frontend falls
+	// back to assetUrl(photo_ref).
+	PhotoURL string         `json:"photo_url,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 // exportRow holds one row of export data.

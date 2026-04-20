@@ -480,6 +480,8 @@ services:
       DM3_DEVICES: 5
       DM3_API_PORT: 9090
       DM3_BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET:-dm3-bootstrap-v1-dev-secret}
+      # Used by the §15 media upload flow — POST /devices/{id}/media-url
+      DM3_GATEWAY_URL: http://device-gateway:8002
     ports:
       - "9091:9090"
     depends_on:
