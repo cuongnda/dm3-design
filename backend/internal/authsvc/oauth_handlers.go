@@ -1,6 +1,7 @@
 package authsvc
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -141,8 +142,13 @@ func (h *AuthHandlers) ValidateAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Bump usage counter async (fire-and-forget).
+	// Use context.Background() — r.Context() is cancelled the moment the
+	// handler returns, which would silently kill this goroutine and leave
+	// last_used_at/usage_count unchanged.
 	go func(id, ip string) {
-		_, _ = h.db.Pool.Exec(r.Context(),
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, _ = h.db.Pool.Exec(ctx,
 			`UPDATE dm3_auth.oauth_api_tokens
 			    SET last_used_at = now(),
 			        last_used_ip = NULLIF($2,'')::inet,
