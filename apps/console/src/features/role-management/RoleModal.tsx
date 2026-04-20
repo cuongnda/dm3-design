@@ -236,8 +236,8 @@ export function RoleModal({ open, role, template, permissions, onOpenChange, onS
                                                                 onCheckedChange={() => toggleDomain(`${plugin}-${domain}`, items)}
                                                                 aria-label={`Select all ${domain}`}
                                                             />
-                                                            <span className="text-[12px] font-medium capitalize">
-                                                                {domain}
+                                                            <span className="text-[12px] font-medium">
+                                                                {t(`domain.${domain}`, domain.charAt(0).toUpperCase() + domain.slice(1))}
                                                             </span>
                                                             {someSelected && !allSelected && (
                                                                 <span className="text-[11px] text-muted-foreground">
@@ -247,30 +247,36 @@ export function RoleModal({ open, role, template, permissions, onOpenChange, onS
                                                         </label>
                                                         <div className="grid grid-cols-1 gap-1 pl-6 sm:grid-cols-2">
                                                             {items
-                                                                .sort((a, b) => a.key.localeCompare(b.key))
-                                                                .map((perm) => (
-                                                                    <label
-                                                                        key={perm.key}
-                                                                        className="flex cursor-pointer items-start gap-2 rounded px-1.5 py-1 hover:bg-muted"
-                                                                        title={perm.description || perm.key}
-                                                                    >
-                                                                        <Checkbox
-                                                                            checked={form.permissions.has(perm.key)}
-                                                                            onCheckedChange={() => togglePermission(perm.key)}
-                                                                            data-testid={`role-checkbox-permission-${perm.key}`}
-                                                                        />
-                                                                        <div className="flex min-w-0 flex-col">
-                                                                            <span className="font-mono text-[11px] leading-tight">
-                                                                                {perm.key}
-                                                                            </span>
-                                                                            {perm.description && (
-                                                                                <span className="truncate text-[10.5px] text-muted-foreground">
-                                                                                    {perm.description}
+                                                                .slice()
+                                                                .sort((a, b) =>
+                                                                    t(`perm.${a.key}`, a.key).localeCompare(
+                                                                        t(`perm.${b.key}`, b.key),
+                                                                    ),
+                                                                )
+                                                                .map((perm) => {
+                                                                    const friendly = t(`perm.${perm.key}`, perm.description || perm.key);
+                                                                    return (
+                                                                        <label
+                                                                            key={perm.key}
+                                                                            className="flex cursor-pointer items-start gap-2 rounded px-1.5 py-1 hover:bg-muted"
+                                                                            title={perm.key}
+                                                                        >
+                                                                            <Checkbox
+                                                                                checked={form.permissions.has(perm.key)}
+                                                                                onCheckedChange={() => togglePermission(perm.key)}
+                                                                                data-testid={`role-checkbox-permission-${perm.key}`}
+                                                                            />
+                                                                            <div className="flex min-w-0 flex-col">
+                                                                                <span className="text-[12px] leading-tight">
+                                                                                    {friendly}
                                                                                 </span>
-                                                                            )}
-                                                                        </div>
-                                                                    </label>
-                                                                ))}
+                                                                                <span className="font-mono text-[10px] text-muted-foreground/70 leading-tight">
+                                                                                    {perm.key}
+                                                                                </span>
+                                                                            </div>
+                                                                        </label>
+                                                                    );
+                                                                })}
                                                         </div>
                                                     </div>
                                                 );

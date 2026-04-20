@@ -265,8 +265,13 @@ export function RoleDetailPage() {
                                         </div>
                                         <div className="flex flex-wrap gap-1.5">
                                             {perms.map((p) => (
-                                                <Badge key={p.key} variant="outline" className="font-mono text-[10.5px]">
-                                                    {p.key}
+                                                <Badge
+                                                    key={p.key}
+                                                    variant="outline"
+                                                    className="text-[11px]"
+                                                    title={p.key}
+                                                >
+                                                    {t(`perm.${p.key}`, p.description || p.key)}
                                                 </Badge>
                                             ))}
                                         </div>
