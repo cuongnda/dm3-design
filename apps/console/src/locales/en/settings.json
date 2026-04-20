@@ -185,5 +185,26 @@
   "apiTokens.confirmRevokeToken": "Revoke this token? Any integration using it will stop working immediately.",
   "apiTokens.confirmRevokeClient": "Revoke this OAuth client? All tokens issued by it will stop working immediately.",
   "apiTokens.tokenRevoked": "Token revoked",
-  "apiTokens.clientRevoked": "Client revoked"
+  "apiTokens.clientRevoked": "Client revoked",
+
+  "apiDocs.title": "API Documentation",
+  "apiDocs.description": "Reference for integrating third-party systems with the Duall Master API using API tokens or OAuth client credentials.",
+  "apiDocs.manageTokens": "Manage tokens",
+  "apiDocs.searchPlaceholder": "Search endpoints, paths, scopes…",
+  "apiDocs.authTitle": "Authentication",
+  "apiDocs.authBody": "Every request must include an API token or OAuth access token in the Authorization header. Tokens are tenant-scoped — they only access data belonging to the issuing tenant.",
+  "apiDocs.liveTitle": "Production",
+  "apiDocs.liveBody": "Tokens prefixed dm3_live_* act on real tenant data. Treat them as production credentials.",
+  "apiDocs.testTitle": "Testing",
+  "apiDocs.testBody": "Tokens prefixed dm3_test_* are for sandbox integrations. Same API surface — use them for CI and local development.",
+  "apiDocs.quickstartTitle": "Quickstart",
+  "apiDocs.quickstartBody": "Create a token on the API Integration page, then try a read request:",
+  "apiDocs.scopesTitle": "Scopes & rate limits",
+  "apiDocs.scopesItem1": "A token with no scopes has full access to every endpoint the API Integration plugin exposes. Prefer narrow scopes.",
+  "apiDocs.scopesItem2": "Default rate limit is 60 requests/minute per token. Contact your admin to request a higher tier.",
+  "apiDocs.scopesItem3": "Tokens can be locked to specific source IPs via IP whitelist at creation time.",
+  "apiDocs.endpointsTitle": "Endpoints",
+  "apiDocs.endpointsSubtitle": "Grouped by domain. The scope listed on each row is the minimum required scope.",
+  "apiDocs.noMatches": "No endpoints match your search.",
+  "apiDocs.footerNote": "This reference covers the stable public surface. Internal/device-gateway endpoints are not listed and not covered by our compatibility guarantees."
 }

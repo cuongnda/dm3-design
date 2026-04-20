@@ -185,5 +185,26 @@
   "apiTokens.confirmRevokeToken": "Thu hồi token này? Mọi tích hợp đang dùng sẽ ngừng hoạt động ngay lập tức.",
   "apiTokens.confirmRevokeClient": "Thu hồi OAuth client này? Mọi token do nó cấp sẽ ngừng hoạt động ngay lập tức.",
   "apiTokens.tokenRevoked": "Đã thu hồi token",
-  "apiTokens.clientRevoked": "Đã thu hồi client"
+  "apiTokens.clientRevoked": "Đã thu hồi client",
+
+  "apiDocs.title": "Tài liệu API",
+  "apiDocs.description": "Hướng dẫn tích hợp hệ thống bên thứ ba với API của Duall Master bằng API token hoặc OAuth client credentials.",
+  "apiDocs.manageTokens": "Quản lý token",
+  "apiDocs.searchPlaceholder": "Tìm endpoint, đường dẫn, scope…",
+  "apiDocs.authTitle": "Xác thực",
+  "apiDocs.authBody": "Mỗi request phải kèm API token hoặc OAuth access token trong header Authorization. Token có phạm vi theo tenant — chỉ truy cập dữ liệu của tenant phát hành.",
+  "apiDocs.liveTitle": "Môi trường thật (Production)",
+  "apiDocs.liveBody": "Token có prefix dm3_live_* tác động trên dữ liệu thật của tenant. Hãy coi như thông tin đăng nhập sản xuất.",
+  "apiDocs.testTitle": "Môi trường thử nghiệm (Testing)",
+  "apiDocs.testBody": "Token có prefix dm3_test_* dùng cho tích hợp sandbox. Cùng bộ API — phù hợp cho CI và phát triển cục bộ.",
+  "apiDocs.quickstartTitle": "Bắt đầu nhanh",
+  "apiDocs.quickstartBody": "Tạo token ở trang Tích hợp API, rồi thử một request đọc:",
+  "apiDocs.scopesTitle": "Phạm vi & giới hạn tốc độ",
+  "apiDocs.scopesItem1": "Token không có scope sẽ có toàn quyền với mọi endpoint mà plugin Tích hợp API cung cấp. Hãy chọn scope hẹp khi có thể.",
+  "apiDocs.scopesItem2": "Giới hạn mặc định là 60 request/phút cho mỗi token. Liên hệ admin để yêu cầu hạn mức cao hơn.",
+  "apiDocs.scopesItem3": "Có thể khóa token theo IP nguồn cụ thể bằng IP whitelist khi tạo.",
+  "apiDocs.endpointsTitle": "Endpoints",
+  "apiDocs.endpointsSubtitle": "Nhóm theo miền nghiệp vụ. Scope hiển thị ở mỗi dòng là scope tối thiểu cần có.",
+  "apiDocs.noMatches": "Không có endpoint nào khớp.",
+  "apiDocs.footerNote": "Tài liệu này bao phủ bề mặt API công khai đã ổn định. Các endpoint nội bộ/device-gateway không được liệt kê và không nằm trong cam kết tương thích."
 }

@@ -24,8 +24,6 @@ import { toast } from '@/lib/toast';
 type Environment = 'live' | 'test';
 type TokenStatus = 'active' | 'revoked' | 'expired';
 
-const API_DOCS_URL = 'https://docs.duali.com/api';
-
 interface ScopeDef {
   value: string;
   label: string;
@@ -183,7 +181,7 @@ export function ApiTokensPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => window.open(API_DOCS_URL, '_blank', 'noopener,noreferrer')}
+            onClick={() => navigate('/settings/api-docs')}
             data-testid="settings-button-api-docs"
           >
             <BookOpen size={14} className="mr-1.5" />
