@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { RefreshCcw } from 'lucide-react';
+import { RefreshCcw, ShieldCheck } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '@dm3/ui';
 import { cn } from '@/lib/utils';
-import { useRealtimeStore } from '@dm3/api-client';
-import { CoreKpiStrip } from './sections/CoreKpiStrip';
+import { useRealtimeStore, useActiveAlarms } from '@dm3/api-client';
+import { HeroStrip } from './sections/HeroStrip';
 import { PluginKpiChips } from './sections/PluginKpiChips';
 import { PluginInsightGrid } from './sections/PluginInsightGrid';
 import { LiveEventsPanel } from './sections/LiveEventsPanel';
@@ -23,6 +23,8 @@ export function DashboardPage(): React.ReactElement {
   const queryClient = useQueryClient();
   const isConnected = useRealtimeStore((s) => s.connected);
   const isConnecting = useRealtimeStore((s) => s.connecting);
+  const activeAlarms = useActiveAlarms();
+  const hasAlarms = activeAlarms.length > 0;
 
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [refreshing, setRefreshing] = useState(false);
@@ -87,13 +89,34 @@ export function DashboardPage(): React.ReactElement {
         </div>
       </PageHeader>
 
-      <CoreKpiStrip />
+      <HeroStrip />
       <PluginKpiChips />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.8fr_1fr] gap-4 mb-6">
-        <LiveEventsPanel />
-        <ActiveAlertsPanel />
-      </div>
+      {hasAlarms ? (
+        <div className="grid grid-cols-1 lg:grid-cols-[1.8fr_1fr] gap-4 mb-6">
+          <LiveEventsPanel />
+          <ActiveAlertsPanel />
+        </div>
+      ) : (
+        <>
+          <div
+            data-testid="dashboard-alerts-pill"
+            className="mb-4 flex items-center gap-2 px-4 py-2 bg-success/5 border border-success/30 rounded-lg text-[12px]"
+          >
+            <ShieldCheck size={14} className="text-success shrink-0" />
+            <span className="font-medium text-success">
+              {t('alerts.emptyTitle', 'All clear')}
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-muted-foreground">
+              {t('alerts.emptyHint', 'No active alarms right now.')}
+            </span>
+          </div>
+          <div className="mb-6">
+            <LiveEventsPanel />
+          </div>
+        </>
+      )}
 
       <PluginInsightGrid />
 
