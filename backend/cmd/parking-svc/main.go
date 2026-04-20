@@ -107,15 +107,20 @@ func main() {
 		r.Get("/analytics", parkingHandlers.GetAnalytics)
 		r.Get("/settings", parkingHandlers.GetSettings)
 
-		// Operator-level routes
+		// Vehicles: reads open, writes require parking.vehicle.manage.
 		r.Group(func(pr chi.Router) {
-			pr.Use(authsvc.RequireWriteRole("operator", "manager", "primary_manager", "system_admin"))
+			pr.Use(authsvc.RequireWritePermission("parking.vehicle.manage"))
 			pr.Get("/vehicles", parkingHandlers.ListParkingVehicles)
 			pr.Post("/vehicles", parkingHandlers.CreateParkingVehicle)
 			pr.Get("/vehicles/{id}", parkingHandlers.GetParkingVehicle)
 			pr.Put("/vehicles/{id}", parkingHandlers.UpdateParkingVehicle)
 			pr.Delete("/vehicles/{id}", parkingHandlers.DeleteParkingVehicle)
 			pr.Post("/vehicles/bulk-delete", parkingHandlers.BulkDeleteParkingVehicles)
+		})
+
+		// Sessions & passes (ticketing): reads open, writes require parking.ticket.manage.
+		r.Group(func(pr chi.Router) {
+			pr.Use(authsvc.RequireWritePermission("parking.ticket.manage"))
 			pr.Get("/sessions", parkingHandlers.ListParkingSessions)
 			pr.Post("/sessions", parkingHandlers.CreateParkingSession)
 			pr.Post("/sessions/recognitions", parkingHandlers.RecognizeParkingPlate)
@@ -124,11 +129,14 @@ func main() {
 			pr.Post("/sessions/{id}/payment", parkingHandlers.ProcessParkingPayment)
 			pr.Put("/sessions/{id}/void", parkingHandlers.VoidParkingSession)
 			pr.Get("/passes", parkingHandlers.ListParkingPasses)
+			pr.Post("/passes", parkingHandlers.CreateParkingPass)
+			pr.Put("/passes/{id}", parkingHandlers.UpdateParkingPass)
+			pr.Delete("/passes/{id}", parkingHandlers.DeleteParkingPass)
 		})
 
-		// Manager-level routes
+		// Facility infrastructure (lots, zones, fee rules): reads open, writes require parking.vehicle.manage.
 		r.Group(func(pr chi.Router) {
-			pr.Use(authsvc.RequireWriteRole("manager", "primary_manager", "system_admin"))
+			pr.Use(authsvc.RequireWritePermission("parking.vehicle.manage"))
 			pr.Get("/lots", parkingHandlers.ListParkingLots)
 			pr.Post("/lots", parkingHandlers.CreateParkingLot)
 			pr.Get("/lots/{id}", parkingHandlers.GetParkingLot)
@@ -143,9 +151,11 @@ func main() {
 			pr.Post("/fee-rules", parkingHandlers.CreateParkingFeeRule)
 			pr.Put("/fee-rules/{id}", parkingHandlers.UpdateParkingFeeRule)
 			pr.Delete("/fee-rules/{id}", parkingHandlers.DeleteParkingFeeRule)
-			pr.Post("/passes", parkingHandlers.CreateParkingPass)
-			pr.Put("/passes/{id}", parkingHandlers.UpdateParkingPass)
-			pr.Delete("/passes/{id}", parkingHandlers.DeleteParkingPass)
+		})
+
+		// Settings: reads open, writes require company.settings.manage.
+		r.Group(func(pr chi.Router) {
+			pr.Use(authsvc.RequireWritePermission("company.settings.manage"))
 			pr.Put("/settings", parkingHandlers.UpdateSettings)
 		})
 	})
