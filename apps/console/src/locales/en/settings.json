@@ -103,6 +103,7 @@
 
   "settings.tabs.auditLog": "Activity Log",
   "settings.tabs.emailTemplates": "Email Templates",
+  "settings.tabs.roles": "Roles & Permissions",
   "auditLog.title": "Activity Log",
   "auditLog.description": "View all changes and actions in your organization",
 

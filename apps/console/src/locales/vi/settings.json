@@ -103,6 +103,7 @@
 
   "settings.tabs.auditLog": "Nhật ký hoạt động",
   "settings.tabs.emailTemplates": "Mẫu email",
+  "settings.tabs.roles": "Vai trò và phân quyền",
   "auditLog.title": "Nhật ký hoạt động",
   "auditLog.description": "Xem tất cả thay đổi và hành động trong tổ chức",
 

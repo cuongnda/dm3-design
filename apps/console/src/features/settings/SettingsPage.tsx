@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Shield, Bell, FileText, Mail, Save } from 'lucide-react';
+import { Shield, Bell, FileText, Mail, Save, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Checkbox } from '@dm3/ui';
 
@@ -64,6 +64,15 @@ export function SettingsPage() {
                 </button>
               );
             })}
+            <button
+              type="button"
+              onClick={() => navigate('/settings/roles')}
+              className="w-full flex items-center gap-3 px-3 py-2 text-left rounded-md transition-colors hover:bg-muted"
+              data-testid="settings-link-roles"
+            >
+              <Users size={18} />
+              {t('settings.tabs.roles')}
+            </button>
             <button
               type="button"
               onClick={() => navigate('/settings/email-templates')}
