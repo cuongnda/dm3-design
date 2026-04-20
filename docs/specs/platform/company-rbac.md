@@ -355,6 +355,60 @@ Examples:
 
 This is canonical behavior and should be supported directly.
 
+## Assignment Lifecycle & Token Propagation
+
+Assignment create / update / delete and role permission edits all land in
+the database synchronously. They do **not** take effect instantly on
+sessions that are already logged in.
+
+### Why
+
+Permission decisions are made at the service layer against JWT claims.
+Each access token carries a snapshot of the caller's assignments and
+fixed role at issue time. Services do not round-trip to the database
+on every request to re-read RBAC — that would add latency and coupling
+on every call. The trade-off is that a change made in the admin UI
+only reaches a session when that session's access token is reissued.
+
+### When changes actually apply
+
+- **New assignment granted / permission added to a role** — takes
+  effect on the target account at the next access-token refresh
+  (default: up to ~15 min, matching the access-token TTL). The user
+  does not need to log out.
+- **Assignment revoked / permission removed / role deleted** — the
+  user's existing access token continues to honor the old grant until
+  it expires, because the token is self-contained. On the next
+  refresh, rbac.Check re-reads the DB and the revocation applies.
+- **`enabled_plugins` toggled on a company** — propagates the same way
+  as RBAC changes: next access-token refresh picks up the new plugin
+  state.
+- **Fixed role change on `dm3_auth.accounts.role`** — same refresh
+  delay. Changing a user to/from `primary_manager` or `member` does
+  not immediately re-bind their session.
+
+### If immediate revocation is required
+
+For an active incident (e.g. terminated employee, compromised account),
+escalate with one or both of:
+
+1. **Disable the account** in `dm3_auth.accounts` (status → inactive).
+   Refresh is rejected on inactive accounts, so the session dies at
+   the next refresh boundary at the latest.
+2. **Rotate the user's password / force re-login** via the admin UI.
+
+Do not rely on the RBAC UI alone for incident response — it is a
+configuration surface, not a kill-switch.
+
+### Guidance for feature specs
+
+When writing feature specs, state assumptions explicitly if instant
+revocation matters. Example:
+> *Auth: requires permission `access.emergency.execute` within
+> matching scope. Revocation of this permission takes effect on the
+> operator's next token refresh (≈15 min). For immediate revocation,
+> disable the operator account.*
+
 ## What is canonical vs non-canonical
 
 ### Canonical
