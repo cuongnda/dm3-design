@@ -6,6 +6,7 @@ import {
   AppModal,
   Badge,
   Button,
+  DatePicker,
   EmptyState,
   Input,
   Label,
@@ -450,12 +451,34 @@ interface CreateTokenModalProps {
   onCreated: (resp: CreateApiTokenResponse) => void;
 }
 
+type ExpiryOption = 'never' | '30d' | '90d' | '1y' | 'custom';
+
+function computeExpiresAt(option: ExpiryOption, customDate: string): string | null {
+  if (option === 'never') return null;
+  if (option === 'custom') {
+    if (!customDate) return null;
+    // yyyy-MM-dd → end-of-day UTC so the token stays valid through the chosen date.
+    const d = new Date(`${customDate}T23:59:59Z`);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  const now = new Date();
+  const days = option === '30d' ? 30 : option === '90d' ? 90 : 365;
+  now.setUTCDate(now.getUTCDate() + days);
+  return now.toISOString();
+}
+
+function todayYmd(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function CreateTokenModal({ open, onOpenChange, onCreated }: CreateTokenModalProps) {
   const { t } = useTranslation('settings');
   const [name, setName] = useState('');
   const [environment, setEnvironment] = useState<Environment>('live');
   const [scopes, setScopes] = useState('');
   const [ipWhitelist, setIpWhitelist] = useState('');
+  const [expiryOption, setExpiryOption] = useState<ExpiryOption>('never');
+  const [customExpiry, setCustomExpiry] = useState<string>('');
   const [saving, setSaving] = useState(false);
 
   const reset = () => {
@@ -463,6 +486,8 @@ function CreateTokenModal({ open, onOpenChange, onCreated }: CreateTokenModalPro
     setEnvironment('live');
     setScopes('');
     setIpWhitelist('');
+    setExpiryOption('never');
+    setCustomExpiry('');
   };
 
   useEffect(() => {
@@ -474,6 +499,11 @@ function CreateTokenModal({ open, onOpenChange, onCreated }: CreateTokenModalPro
       toast(t('apiTokens.nameRequired', 'Name is required'), 'error');
       return;
     }
+    if (expiryOption === 'custom' && !customExpiry) {
+      toast(t('apiTokens.expiryRequired', 'Pick an expiry date or choose Never'), 'error');
+      return;
+    }
+    const expiresAt = computeExpiresAt(expiryOption, customExpiry);
     setSaving(true);
     try {
       const resp = await apiFetch<CreateApiTokenResponse>('/api/v1/auth/api-tokens', {
@@ -483,6 +513,7 @@ function CreateTokenModal({ open, onOpenChange, onCreated }: CreateTokenModalPro
           environment,
           scopes: parseList(scopes),
           ip_whitelist: parseList(ipWhitelist),
+          expires_at: expiresAt,
         }),
       });
       onCreated(resp);
@@ -544,6 +575,37 @@ function CreateTokenModal({ open, onOpenChange, onCreated }: CreateTokenModalPro
           />
           <p className="mt-1 text-[11px] text-muted-foreground">
             {t('apiTokens.ipHint', 'Optional. Restrict this token to specific source IPs.')}
+          </p>
+        </div>
+        <div>
+          <Label htmlFor="token-expiry">{t('apiTokens.expiry', 'Expiration')}</Label>
+          <select
+            id="token-expiry"
+            value={expiryOption}
+            onChange={(e) => setExpiryOption(e.target.value as ExpiryOption)}
+            className="flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-[13px]"
+            data-testid="settings-input-token-expiry"
+          >
+            <option value="never">{t('apiTokens.expiry.never', 'Never (permanent token)')}</option>
+            <option value="30d">{t('apiTokens.expiry.30d', 'In 30 days')}</option>
+            <option value="90d">{t('apiTokens.expiry.90d', 'In 90 days')}</option>
+            <option value="1y">{t('apiTokens.expiry.1y', 'In 1 year')}</option>
+            <option value="custom">{t('apiTokens.expiry.custom', 'Custom date')}</option>
+          </select>
+          {expiryOption === 'custom' && (
+            <div className="mt-2" data-testid="settings-input-token-expiry-custom">
+              <DatePicker
+                value={customExpiry || null}
+                onChange={(v) => setCustomExpiry(v ?? '')}
+                min={todayYmd()}
+                placeholder={t('apiTokens.expiry.pick', 'Select expiry date')}
+              />
+            </div>
+          )}
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {expiryOption === 'never'
+              ? t('apiTokens.expiryHintNever', 'Permanent tokens never expire — rotate them manually when needed.')
+              : t('apiTokens.expiryHint', 'Token will stop working automatically after the chosen date.')}
           </p>
         </div>
         <div className="flex justify-end gap-2">
