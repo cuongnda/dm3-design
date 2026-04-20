@@ -1717,3 +1717,136 @@ export async function acknowledgeNotification(id: string): Promise<NotificationD
 export async function deleteNotification(id: string): Promise<void> {
     return apiFetch<void>(`${NOTIFY_URL}/${id}`, { method: 'DELETE' });
 }
+
+// ─── RBAC — company roles, permissions, assignments ──────────────────────────
+
+const RBAC_URL = '/api/v1/rbac';
+
+export interface RbacPermissionDTO {
+    key: string;
+    domain: string;
+    resource?: string;
+    action: string;
+    plugin: string;
+    scope_types: string[];
+    description?: string;
+}
+
+export interface RbacRoleDTO {
+    id: string;
+    tenant_id: string;
+    name: string;
+    description?: string;
+    template_key?: string;
+    is_system_template_copy: boolean;
+    status: string;
+    permissions: string[];
+    assignment_count: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface RbacRoleWriteRequest {
+    name: string;
+    description?: string;
+    template_key?: string;
+    permissions: string[];
+    status?: string;
+}
+
+export interface RbacAssignmentDTO {
+    id: string;
+    account_id: string;
+    account_email?: string;
+    role_id: string;
+    role_name?: string;
+    scope_type: 'company' | 'site' | 'department' | 'zone' | 'self';
+    scope_id?: string | null;
+    effective_from?: string | null;
+    effective_to?: string | null;
+    created_at: string;
+}
+
+export interface RbacAssignmentCreateRequest {
+    account_id: string;
+    role_id: string;
+    scope_type: 'company' | 'site' | 'department' | 'zone' | 'self';
+    scope_id?: string | null;
+    effective_from?: string | null;
+    effective_to?: string | null;
+}
+
+export interface RbacEligibleAccountDTO {
+    id: string;
+    email: string;
+    full_name: string;
+    role: string;
+    status: string;
+}
+
+function rbacTenantQuery(tenantId?: string): string {
+    return tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : '';
+}
+
+export async function listRbacPermissions(): Promise<RbacPermissionDTO[]> {
+    const res = await apiFetch<{ data: RbacPermissionDTO[] }>(`${RBAC_URL}/permissions`);
+    return res.data;
+}
+
+export async function listRbacEligibleAccounts(tenantId?: string): Promise<RbacEligibleAccountDTO[]> {
+    const res = await apiFetch<{ data: RbacEligibleAccountDTO[] }>(`${RBAC_URL}/accounts${rbacTenantQuery(tenantId)}`);
+    return res.data;
+}
+
+export async function listRbacRoles(tenantId?: string): Promise<RbacRoleDTO[]> {
+    const res = await apiFetch<{ data: RbacRoleDTO[] }>(`${RBAC_URL}/roles${rbacTenantQuery(tenantId)}`);
+    return res.data;
+}
+
+export async function getRbacRole(id: string, tenantId?: string): Promise<RbacRoleDTO> {
+    return apiFetch<RbacRoleDTO>(`${RBAC_URL}/roles/${id}${rbacTenantQuery(tenantId)}`);
+}
+
+export async function createRbacRole(payload: RbacRoleWriteRequest, tenantId?: string): Promise<{ id: string }> {
+    return apiFetch<{ id: string }>(`${RBAC_URL}/roles${rbacTenantQuery(tenantId)}`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function updateRbacRole(id: string, payload: RbacRoleWriteRequest, tenantId?: string): Promise<{ id: string }> {
+    return apiFetch<{ id: string }>(`${RBAC_URL}/roles/${id}${rbacTenantQuery(tenantId)}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function deleteRbacRole(id: string, tenantId?: string): Promise<void> {
+    return apiFetch<void>(`${RBAC_URL}/roles/${id}${rbacTenantQuery(tenantId)}`, { method: 'DELETE' });
+}
+
+export async function listRbacAssignments(params?: {
+    accountId?: string;
+    roleId?: string;
+    tenantId?: string;
+}): Promise<RbacAssignmentDTO[]> {
+    const q = new URLSearchParams();
+    if (params?.accountId) q.set('account_id', params.accountId);
+    if (params?.roleId) q.set('role_id', params.roleId);
+    if (params?.tenantId) q.set('tenant_id', params.tenantId);
+    const qs = q.toString();
+    const url = `${RBAC_URL}/assignments${qs ? `?${qs}` : ''}`;
+    const res = await apiFetch<{ data: RbacAssignmentDTO[] }>(url);
+    return res.data;
+}
+
+export async function createRbacAssignment(payload: RbacAssignmentCreateRequest, tenantId?: string): Promise<{ id: string }> {
+    return apiFetch<{ id: string }>(`${RBAC_URL}/assignments${rbacTenantQuery(tenantId)}`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function deleteRbacAssignment(id: string, tenantId?: string): Promise<void> {
+    return apiFetch<void>(`${RBAC_URL}/assignments/${id}${rbacTenantQuery(tenantId)}`, { method: 'DELETE' });
+}

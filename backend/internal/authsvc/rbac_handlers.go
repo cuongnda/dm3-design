@@ -399,6 +399,50 @@ func (h *AuthHandlers) DeleteRBACRole(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// ─── Eligible Accounts ───────────────────────────────────────────────────────
+
+type rbacEligibleAccount struct {
+	ID       string `json:"id"`
+	Email    string `json:"email"`
+	FullName string `json:"full_name"`
+	Role     string `json:"role"`
+	Status   string `json:"status"`
+}
+
+// ListRBACEligibleAccounts returns the accounts within the caller's tenant that
+// can receive role assignments. Primary managers use this to pick accounts for
+// the assignment picker UX. System admins may scope to any tenant via
+// ?tenant_id=. Excludes soft-deleted accounts.
+func (h *AuthHandlers) ListRBACEligibleAccounts(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := h.requireCompanyRoleAdmin(w, r, false)
+	if !ok {
+		return
+	}
+	rows, err := h.db.Pool.Query(r.Context(), `
+		SELECT id::text, email, COALESCE(full_name, first_name, email),
+		       COALESCE(role,''), status
+		  FROM dm3_auth.accounts
+		 WHERE tenant_id = $1::uuid AND status != 'deleted'
+		 ORDER BY email ASC
+	`, tenantID)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer rows.Close()
+
+	out := []rbacEligibleAccount{}
+	for rows.Next() {
+		var a rbacEligibleAccount
+		if err := rows.Scan(&a.ID, &a.Email, &a.FullName, &a.Role, &a.Status); err != nil {
+			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		out = append(out, a)
+	}
+	httputil.JSON(w, http.StatusOK, map[string]any{"data": out})
+}
+
 // ─── Assignments ─────────────────────────────────────────────────────────────
 
 func (h *AuthHandlers) ListRBACAssignments(w http.ResponseWriter, r *http.Request) {

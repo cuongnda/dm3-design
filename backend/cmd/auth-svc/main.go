@@ -179,6 +179,7 @@ func main() {
 		// primary_manager always pass; other callers must hold
 		// company.role.read (for GETs) or company.role.manage (for mutations).
 		pr.Get("/api/v1/rbac/permissions", h.ListRBACPermissions)
+		pr.Get("/api/v1/rbac/accounts", h.ListRBACEligibleAccounts)
 		pr.Get("/api/v1/rbac/roles", h.ListRBACRoles)
 		pr.Get("/api/v1/rbac/roles/{id}", h.GetRBACRole)
 		pr.Post("/api/v1/rbac/roles", h.CreateRBACRole)

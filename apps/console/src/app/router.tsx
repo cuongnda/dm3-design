@@ -126,6 +126,12 @@ const DepartmentManagementPage = lazyWithRetry(() =>
 const DepartmentDetailPage = lazyWithRetry(() =>
   import('@/features/department-management/DepartmentDetailPage').then((m) => ({ default: m.DepartmentDetailPage }))
 );
+const RoleManagementPage = lazyWithRetry(() =>
+  import('@/features/role-management/RoleManagementPage').then((m) => ({ default: m.RoleManagementPage }))
+);
+const RoleDetailPage = lazyWithRetry(() =>
+  import('@/features/role-management/RoleDetailPage').then((m) => ({ default: m.RoleDetailPage }))
+);
 
 const VisitorsPage = lazyWithRetry(() =>
   import('@/features/manage/visitors/VisitorsPage').then((m) => ({ default: m.VisitorsPage }))
@@ -468,6 +474,8 @@ export const Router = createBrowserRouter([
               { path: 'settings', element: <LazyWrap><SettingsPage /></LazyWrap> },
               { path: 'settings/audit-log', element: <LazyWrap><TenantAuditLogPage /></LazyWrap> },
               { path: 'settings/email-templates', element: <LazyWrap><EmailTemplatesPage /></LazyWrap> },
+              { path: 'settings/roles', element: <LazyWrap><RoleManagementPage /></LazyWrap> },
+              { path: 'settings/roles/:id', element: <LazyWrap><RoleDetailPage /></LazyWrap> },
             ],
           },
         ],
