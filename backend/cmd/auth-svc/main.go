@@ -174,6 +174,20 @@ func main() {
 		pr.Post("/api/v1/auth/device-token", h.DeviceToken)
 		pr.Get("/api/v1/auth/roles", h.ListRoles)
 
+		// RBAC — company roles, permissions catalog, and assignments.
+		// Authorization is handled inside each handler: system_admin and
+		// primary_manager always pass; other callers must hold
+		// company.role.read (for GETs) or company.role.manage (for mutations).
+		pr.Get("/api/v1/rbac/permissions", h.ListRBACPermissions)
+		pr.Get("/api/v1/rbac/roles", h.ListRBACRoles)
+		pr.Get("/api/v1/rbac/roles/{id}", h.GetRBACRole)
+		pr.Post("/api/v1/rbac/roles", h.CreateRBACRole)
+		pr.Put("/api/v1/rbac/roles/{id}", h.UpdateRBACRole)
+		pr.Delete("/api/v1/rbac/roles/{id}", h.DeleteRBACRole)
+		pr.Get("/api/v1/rbac/assignments", h.ListRBACAssignments)
+		pr.Post("/api/v1/rbac/assignments", h.CreateRBACAssignment)
+		pr.Delete("/api/v1/rbac/assignments/{id}", h.DeleteRBACAssignment)
+
 		// System admin only: company management + stats
 		pr.Group(func(sr chi.Router) {
 			sr.Use(authsvc.RequireRole("system_admin"))
