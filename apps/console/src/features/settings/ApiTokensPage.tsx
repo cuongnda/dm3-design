@@ -6,10 +6,6 @@ import {
   AppModal,
   Badge,
   Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
   EmptyState,
   Input,
   Label,
@@ -174,31 +170,34 @@ export function ApiTokensPage() {
       </div>
 
       {/* Content */}
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-6 pb-6">
-        <Tabs defaultValue="tokens">
-          <TabsList>
-            <TabsTrigger value="tokens" data-testid="settings-tab-api-tokens">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pb-6">
+        <Tabs defaultValue="tokens" className="flex min-h-0 flex-1 flex-col">
+          <TabsList variant="line" className="border-b border-border mb-4 shrink-0">
+            <TabsTrigger value="tokens" className="gap-1.5 text-[13px]" data-testid="settings-tab-api-tokens">
+              <KeyRound size={14} />
               {t('apiTokens.tabs.tokens', 'API Tokens')}
             </TabsTrigger>
-            <TabsTrigger value="clients" data-testid="settings-tab-oauth-clients">
+            <TabsTrigger value="clients" className="gap-1.5 text-[13px]" data-testid="settings-tab-oauth-clients">
+              <ShieldAlert size={14} />
               {t('apiTokens.tabs.clients', 'OAuth Clients')}
             </TabsTrigger>
           </TabsList>
 
           {/* ─── Tokens tab ─────────────────────────────────────── */}
-          <TabsContent value="tokens" className="mt-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-[14px]">
-                  <KeyRound size={16} />
-                  {t('apiTokens.tokensTitle', 'API Tokens')}
-                </CardTitle>
-                <Button size="sm" onClick={() => setShowCreateToken(true)} data-testid="settings-button-create-token">
-                  <Plus size={14} className="mr-1.5" />
-                  {t('apiTokens.createToken', 'New Token')}
-                </Button>
-              </CardHeader>
-              <CardContent>
+          <TabsContent value="tokens" className="min-h-0 flex-1 overflow-auto">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h2 className="text-[14px] font-semibold text-foreground">{t('apiTokens.tokensTitle', 'API Tokens')}</h2>
+                <p className="text-[12px] text-muted-foreground">
+                  {t('apiTokens.tokensSubtitle', 'Long-lived bearer tokens for server-to-server calls. Last used updates the first time a token authenticates.')}
+                </p>
+              </div>
+              <Button size="sm" onClick={() => setShowCreateToken(true)} data-testid="settings-button-create-token">
+                <Plus size={14} className="mr-1.5" />
+                {t('apiTokens.createToken', 'New Token')}
+              </Button>
+            </div>
+            <div>
                 {loading ? (
                   <div className="flex items-center justify-center py-12">
                     <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#3B82F6]/30 border-t-[#3B82F6]" />
@@ -255,24 +254,24 @@ export function ApiTokensPage() {
                     </table>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+            </div>
           </TabsContent>
 
           {/* ─── Clients tab ────────────────────────────────────── */}
-          <TabsContent value="clients" className="mt-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-[14px]">
-                  <KeyRound size={16} />
-                  {t('apiTokens.clientsTitle', 'OAuth Clients')}
-                </CardTitle>
-                <Button size="sm" onClick={() => setShowCreateClient(true)} data-testid="settings-button-create-client">
-                  <Plus size={14} className="mr-1.5" />
-                  {t('apiTokens.createClient', 'New Client')}
-                </Button>
-              </CardHeader>
-              <CardContent>
+          <TabsContent value="clients" className="min-h-0 flex-1 overflow-auto">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h2 className="text-[14px] font-semibold text-foreground">{t('apiTokens.clientsTitle', 'OAuth Clients')}</h2>
+                <p className="text-[12px] text-muted-foreground">
+                  {t('apiTokens.clientsSubtitle', 'OAuth 2.0 clients for the client_credentials grant. Exchange a client_id + client_secret for a short-lived access token.')}
+                </p>
+              </div>
+              <Button size="sm" onClick={() => setShowCreateClient(true)} data-testid="settings-button-create-client">
+                <Plus size={14} className="mr-1.5" />
+                {t('apiTokens.createClient', 'New Client')}
+              </Button>
+            </div>
+            <div>
                 {loading ? (
                   <div className="flex items-center justify-center py-12">
                     <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#3B82F6]/30 border-t-[#3B82F6]" />
@@ -325,8 +324,7 @@ export function ApiTokensPage() {
                     </table>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
