@@ -68,23 +68,23 @@ VALUES (
 INSERT INTO dm3_auth.accounts (id, tenant_id, email, password_hash, first_name, last_name, full_name, role, status, locale, preferred_language) VALUES
   -- System admin (no tenant)
   ('aa000000-0000-0000-0000-000000000001', null,
-   'sysadmin@duali.com', '$2b$12$npOZArrFi4NNiLyXGMNase95Ij0Wm6o1d3xE7gR91jLMgzAb8yVCG',
+   'sysadmin@duali.com', '$2b$12$npOZArrFi4NNiuhqOCthxusfTqXHaKXbbXhWDv1Df2mF6svcqg1.S',
    'System', 'Admin', 'System Admin', 'system_admin', 'active', 'en', 'en'),
   -- Tenant admin
   ('aa000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001',
-   'admin@duali.com', '$2b$12$npOZArrFi4NNiLyXGMNase95Ij0Wm6o1d3xE7gR91jLMgzAb8yVCG',
+   'admin@duali.com', '$2b$12$npOZArrFi4NNiuhqOCthxusfTqXHaKXbbXhWDv1Df2mF6svcqg1.S',
    'Nguyen', 'Admin', 'Nguyen Admin', 'primary_manager', 'active', 'vi', 'vi'),
   -- Manager
   ('aa000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001',
-   'manager@duali.com', '$2b$12$npOZArrFi4NNiLyXGMNase95Ij0Wm6o1d3xE7gR91jLMgzAb8yVCG',
+   'manager@duali.com', '$2b$12$npOZArrFi4NNiuhqOCthxusfTqXHaKXbbXhWDv1Df2mF6svcqg1.S',
    'Tran', 'Manager', 'Tran Manager', 'manager', 'active', 'vi', 'vi'),
   -- Operator
   ('aa000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000001',
-   'operator@duali.com', '$2b$12$npOZArrFi4NNiLyXGMNase95Ij0Wm6o1d3xE7gR91jLMgzAb8yVCG',
+   'operator@duali.com', '$2b$12$npOZArrFi4NNiuhqOCthxusfTqXHaKXbbXhWDv1Df2mF6svcqg1.S',
    'Le', 'Operator', 'Le Operator', 'operator', 'active', 'vi', 'vi'),
   -- Viewer
   ('aa000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000001',
-   'viewer@duali.com', '$2b$12$npOZArrFi4NNiLyXGMNase95Ij0Wm6o1d3xE7gR91jLMgzAb8yVCG',
+   'viewer@duali.com', '$2b$12$npOZArrFi4NNiuhqOCthxusfTqXHaKXbbXhWDv1Df2mF6svcqg1.S',
    'Pham', 'Viewer', 'Pham Viewer', 'viewer', 'active', 'en', 'en')
 ON CONFLICT DO NOTHING;
 
