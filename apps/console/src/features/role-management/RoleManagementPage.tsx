@@ -21,8 +21,25 @@ import type { Role, Permission } from './types';
 // role owned by Duali staff and has no place in a tenant's role list.
 const BUILTIN_ROLE_KEYS = ['primary_manager', 'member'] as const;
 
+// Mirrors backend `rbac.MemberPermissions()` in backend/internal/rbac/catalog.go.
+// Members auto-receive these self-scope permissions without needing assignment.
+const MEMBER_PERMISSIONS: readonly string[] = [
+    'identity.user.read_self',
+    'identity.user.update_self',
+    'identity.credential.enroll_self',
+    'access.event.read_self',
+    'attendance.record.read_self',
+    'attendance.leave.request_self',
+    'attendance.overtime.request_self',
+    'notification.read_self',
+] as const;
+
 function isBuiltinRole(role: Role): boolean {
     return role.id.startsWith('builtin:');
+}
+
+function builtinRoleKey(role: Role): string | null {
+    return isBuiltinRole(role) ? role.id.slice('builtin:'.length) : null;
 }
 
 function buildBuiltinRoles(t: (key: string) => string): Role[] {
@@ -34,7 +51,7 @@ function buildBuiltinRoles(t: (key: string) => string): Role[] {
         template_key: key,
         is_system_template_copy: false,
         status: 'active',
-        permissions: [],
+        permissions: key === 'member' ? [...MEMBER_PERMISSIONS] : [],
         assignment_count: 0,
         created_at: '',
         updated_at: '',
@@ -164,23 +181,33 @@ export function RoleManagementPage() {
                 key: 'permissions',
                 header: t('col.permissions'),
                 width: '120px',
-                render: (r) =>
-                    isBuiltinRole(r) ? (
-                        <span className="text-[13px] text-muted-foreground">—</span>
-                    ) : (
-                        <span className="text-[13px] tabular-nums">{r.permissions?.length ?? 0}</span>
-                    ),
+                render: (r) => {
+                    const key = builtinRoleKey(r);
+                    if (key === 'primary_manager') {
+                        return (
+                            <span className="text-[13px] font-medium text-foreground">
+                                {t('builtin.primary_manager.permissionsLabel')}
+                            </span>
+                        );
+                    }
+                    return <span className="text-[13px] tabular-nums">{r.permissions?.length ?? 0}</span>;
+                },
             },
             {
                 key: 'assignment_count',
                 header: t('col.assignments'),
                 width: '120px',
-                render: (r) =>
-                    isBuiltinRole(r) ? (
-                        <span className="text-[13px] text-muted-foreground">—</span>
-                    ) : (
-                        <span className="text-[13px] tabular-nums">{r.assignment_count}</span>
-                    ),
+                render: (r) => {
+                    const key = builtinRoleKey(r);
+                    if (key === 'primary_manager' || key === 'member') {
+                        return (
+                            <span className="text-[13px] text-muted-foreground">
+                                {t('builtin.autoAssigned')}
+                            </span>
+                        );
+                    }
+                    return <span className="text-[13px] tabular-nums">{r.assignment_count}</span>;
+                },
             },
             {
                 key: 'status',
