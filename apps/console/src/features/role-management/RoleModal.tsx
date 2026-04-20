@@ -17,6 +17,9 @@ import type { Role, Permission } from './types';
 interface RoleModalProps {
     open: boolean;
     role: Role | null;
+    // When set, the modal opens in "create" mode but pre-fills name,
+    // description, and permissions from this template role.
+    template?: Role | null;
     permissions: Permission[];
     onOpenChange: (open: boolean) => void;
     onSaved: () => void;
@@ -36,7 +39,7 @@ const EMPTY_FORM: FormState = {
     permissions: new Set<string>(),
 };
 
-export function RoleModal({ open, role, permissions, onOpenChange, onSaved }: RoleModalProps) {
+export function RoleModal({ open, role, template, permissions, onOpenChange, onSaved }: RoleModalProps) {
     const { t } = useTranslation('roles');
     const [form, setForm] = useState<FormState>({ ...EMPTY_FORM, permissions: new Set() });
     const [saving, setSaving] = useState(false);
@@ -51,11 +54,18 @@ export function RoleModal({ open, role, permissions, onOpenChange, onSaved }: Ro
                 status: (role.status === 'inactive' ? 'inactive' : 'active'),
                 permissions: new Set(role.permissions ?? []),
             });
+        } else if (template) {
+            setForm({
+                name: t('modal.copyOfPrefix', 'Copy of {{name}}', { name: template.name }),
+                description: template.description ?? '',
+                status: 'active',
+                permissions: new Set(template.permissions ?? []),
+            });
         } else {
             setForm({ ...EMPTY_FORM, permissions: new Set() });
         }
         setError(null);
-    }, [open, role]);
+    }, [open, role, template, t]);
 
     // Group permissions by plugin, then by domain
     const grouped = useMemo(() => {

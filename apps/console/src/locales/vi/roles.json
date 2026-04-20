@@ -26,6 +26,8 @@
   "table.empty.searchHint": "Thử từ khóa khác hoặc xóa bộ lọc ở trên.",
   "table.empty.defaultTitle": "Chưa có vai trò tùy chỉnh",
   "table.empty.defaultHint": "Tạo vai trò để nhóm người dùng có quyền truy cập theo phạm vi.",
+  "copy.title": "Sao chép thành vai trò tùy chỉnh",
+  "modal.copyOfPrefix": "Bản sao của {{name}}",
   "modal.addTitle": "Tạo vai trò",
   "modal.editTitle": "Sửa vai trò",
   "modal.name": "Tên",

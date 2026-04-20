@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, Shield, KeyRound, Lock } from 'lucide-react';
+import { Plus, Edit, Trash2, Shield, KeyRound, Lock, Copy } from 'lucide-react';
 import {
     Button,
     Input,
@@ -79,6 +79,7 @@ export function RoleManagementPage() {
     const [search, setSearch] = useState('');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingRole, setEditingRole] = useState<Role | null>(null);
+    const [copyingRole, setCopyingRole] = useState<Role | null>(null);
     const [deletingRole, setDeletingRole] = useState<Role | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -220,13 +221,46 @@ export function RoleManagementPage() {
             {
                 key: 'actions',
                 header: t('common:table.actions'),
-                width: '104px',
+                width: '132px',
                 render: (r) => {
+                    const handleCopy = () => {
+                        const key = builtinRoleKey(r);
+                        // Primary Manager effectively has every permission — expand "All" to
+                        // the full catalog when seeding a copy. Member copies the member list.
+                        // Custom roles copy their own permissions as-is.
+                        const seededPermissions =
+                            key === 'primary_manager'
+                                ? permissions.map((p) => p.key)
+                                : (r.permissions ?? []);
+                        setCopyingRole({ ...r, permissions: seededPermissions });
+                    };
+
                     if (isBuiltinRole(r)) {
-                        return <span className="sr-only">—</span>;
+                        return (
+                            <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleCopy}
+                                    title={t('copy.title', 'Duplicate as custom role')}
+                                    data-testid={`role-button-copy-${r.id}`}
+                                >
+                                    <Copy size={14} />
+                                </Button>
+                            </div>
+                        );
                     }
                     return (
                         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleCopy}
+                                title={t('copy.title', 'Duplicate as custom role')}
+                                data-testid={`role-button-copy-${r.id}`}
+                            >
+                                <Copy size={14} />
+                            </Button>
                             <Button
                                 variant="ghost"
                                 size="sm"
@@ -252,7 +286,7 @@ export function RoleManagementPage() {
                 },
             },
         ],
-        [t],
+        [t, permissions],
     );
 
     const totalAssignments = useMemo(
@@ -401,18 +435,21 @@ export function RoleManagementPage() {
             </AppModal>
 
             <RoleModal
-                open={showCreateModal || !!editingRole}
+                open={showCreateModal || !!editingRole || !!copyingRole}
                 role={editingRole}
+                template={copyingRole}
                 permissions={permissions}
                 onOpenChange={(open) => {
                     if (!open) {
                         setShowCreateModal(false);
                         setEditingRole(null);
+                        setCopyingRole(null);
                     }
                 }}
                 onSaved={() => {
                     setShowCreateModal(false);
                     setEditingRole(null);
+                    setCopyingRole(null);
                     void fetchRoles();
                 }}
             />

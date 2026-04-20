@@ -26,6 +26,8 @@
   "table.empty.searchHint": "Try a different keyword or clear the filters above.",
   "table.empty.defaultTitle": "No custom roles yet",
   "table.empty.defaultHint": "Create roles to give groups of users scoped access to permissions.",
+  "copy.title": "Duplicate as custom role",
+  "modal.copyOfPrefix": "Copy of {{name}}",
   "modal.addTitle": "Create Role",
   "modal.editTitle": "Edit Role",
   "modal.name": "Name",
