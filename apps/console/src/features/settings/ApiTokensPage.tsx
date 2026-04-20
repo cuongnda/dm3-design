@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Copy, KeyRound, Plus, ShieldAlert, Trash2 } from 'lucide-react';
+import { ArrowLeft, BookOpen, Copy, KeyRound, Plus, ShieldAlert, Trash2 } from 'lucide-react';
 import {
   AppModal,
   Badge,
@@ -10,6 +10,8 @@ import {
   EmptyState,
   Input,
   Label,
+  Multiselect,
+  type MultiselectOption,
   Tabs,
   TabsContent,
   TabsList,
@@ -21,6 +23,30 @@ import { toast } from '@/lib/toast';
 
 type Environment = 'live' | 'test';
 type TokenStatus = 'active' | 'revoked' | 'expired';
+
+const API_DOCS_URL = 'https://docs.duali.com/api';
+
+interface ScopeDef {
+  value: string;
+  label: string;
+  description: string;
+}
+
+const AVAILABLE_SCOPES: ScopeDef[] = [
+  { value: 'identity:read', label: 'Identity · Read', description: 'List users, companies, profiles' },
+  { value: 'identity:write', label: 'Identity · Write', description: 'Create and update users and profiles' },
+  { value: 'access:read', label: 'Access · Read', description: 'Read access groups, rules, schedules' },
+  { value: 'access:write', label: 'Access · Write', description: 'Manage access rules and schedules' },
+  { value: 'devices:read', label: 'Devices · Read', description: 'List and inspect devices' },
+  { value: 'devices:write', label: 'Devices · Write', description: 'Provision and configure devices' },
+  { value: 'events:read', label: 'Events · Read', description: 'Read access events and activity' },
+  { value: 'audit:read', label: 'Audit · Read', description: 'Query tenant audit logs' },
+  { value: 'visitor:read', label: 'Visitor · Read', description: 'Read visitor records and invites' },
+  { value: 'visitor:write', label: 'Visitor · Write', description: 'Create and manage visitors' },
+  { value: 'parking:read', label: 'Parking · Read', description: 'Read vehicles and parking sessions' },
+  { value: 'parking:write', label: 'Parking · Write', description: 'Manage parking vehicles and rules' },
+  { value: 'cctv:read', label: 'CCTV · Read', description: 'View camera streams and clips' },
+];
 
 interface ApiTokenDTO {
   id: string;
@@ -154,6 +180,15 @@ export function ApiTokensPage() {
               {t('apiTokens.description', 'Manage OAuth clients and long-lived API tokens for third-party integrations')}
             </p>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.open(API_DOCS_URL, '_blank', 'noopener,noreferrer')}
+            data-testid="settings-button-api-docs"
+          >
+            <BookOpen size={14} className="mr-1.5" />
+            {t('apiTokens.apiDocs', 'API Documentation')}
+          </Button>
         </div>
 
         <div className="flex items-start gap-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-[13px] text-amber-200">
@@ -475,16 +510,22 @@ function CreateTokenModal({ open, onOpenChange, onCreated }: CreateTokenModalPro
   const { t } = useTranslation('settings');
   const [name, setName] = useState('');
   const [environment, setEnvironment] = useState<Environment>('live');
-  const [scopes, setScopes] = useState('');
+  const [selectedScopes, setSelectedScopes] = useState<string[]>([]);
   const [ipWhitelist, setIpWhitelist] = useState('');
   const [expiryOption, setExpiryOption] = useState<ExpiryOption>('never');
   const [customExpiry, setCustomExpiry] = useState<string>('');
   const [saving, setSaving] = useState(false);
 
+  const scopeOptions: MultiselectOption[] = AVAILABLE_SCOPES.map((s) => ({
+    value: s.value,
+    label: s.label,
+    description: s.description,
+  }));
+
   const reset = () => {
     setName('');
     setEnvironment('live');
-    setScopes('');
+    setSelectedScopes([]);
     setIpWhitelist('');
     setExpiryOption('never');
     setCustomExpiry('');
@@ -511,7 +552,7 @@ function CreateTokenModal({ open, onOpenChange, onCreated }: CreateTokenModalPro
         body: JSON.stringify({
           name: name.trim(),
           environment,
-          scopes: parseList(scopes),
+          scopes: selectedScopes,
           ip_whitelist: parseList(ipWhitelist),
           expires_at: expiresAt,
         }),
@@ -552,15 +593,17 @@ function CreateTokenModal({ open, onOpenChange, onCreated }: CreateTokenModalPro
         </div>
         <div>
           <Label htmlFor="token-scopes">{t('apiTokens.scopes', 'Scopes')}</Label>
-          <Input
-            id="token-scopes"
-            value={scopes}
-            onChange={(e) => setScopes(e.target.value)}
-            placeholder="identity:read events:read"
-            data-testid="settings-input-token-scopes"
-          />
+          <div data-testid="settings-input-token-scopes">
+            <Multiselect
+              options={scopeOptions}
+              values={selectedScopes}
+              onValuesChange={setSelectedScopes}
+              placeholder={t('apiTokens.scopesPlaceholder', 'Select scopes (leave empty for full access)')}
+              searchPlaceholder={t('apiTokens.scopesSearch', 'Search scopes…')}
+            />
+          </div>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            {t('apiTokens.scopesHint', 'Space or comma separated. Leave empty for full access.')}
+            {t('apiTokens.scopesHint', 'Leave empty for full access. Pick only what the integration needs.')}
           </p>
         </div>
         <div>
@@ -633,14 +676,20 @@ function CreateClientModal({ open, onOpenChange, onCreated }: CreateClientModalP
   const { t } = useTranslation('settings');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [scopes, setScopes] = useState('');
+  const [selectedScopes, setSelectedScopes] = useState<string[]>([]);
   const [redirectUris, setRedirectUris] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const scopeOptions: MultiselectOption[] = AVAILABLE_SCOPES.map((s) => ({
+    value: s.value,
+    label: s.label,
+    description: s.description,
+  }));
 
   const reset = () => {
     setName('');
     setDescription('');
-    setScopes('');
+    setSelectedScopes([]);
     setRedirectUris('');
   };
 
@@ -660,7 +709,7 @@ function CreateClientModal({ open, onOpenChange, onCreated }: CreateClientModalP
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim(),
-          scopes: parseList(scopes),
+          scopes: selectedScopes,
           redirect_uris: parseList(redirectUris),
           grant_types: ['client_credentials'],
         }),
@@ -698,13 +747,15 @@ function CreateClientModal({ open, onOpenChange, onCreated }: CreateClientModalP
         </div>
         <div>
           <Label htmlFor="client-scopes">{t('apiTokens.scopes', 'Scopes')}</Label>
-          <Input
-            id="client-scopes"
-            value={scopes}
-            onChange={(e) => setScopes(e.target.value)}
-            placeholder="identity:read events:read"
-            data-testid="settings-input-client-scopes"
-          />
+          <div data-testid="settings-input-client-scopes">
+            <Multiselect
+              options={scopeOptions}
+              values={selectedScopes}
+              onValuesChange={setSelectedScopes}
+              placeholder={t('apiTokens.scopesPlaceholder', 'Select scopes (leave empty for full access)')}
+              searchPlaceholder={t('apiTokens.scopesSearch', 'Search scopes…')}
+            />
+          </div>
         </div>
         <div>
           <Label htmlFor="client-uris">{t('apiTokens.redirectUris', 'Redirect URIs')}</Label>
