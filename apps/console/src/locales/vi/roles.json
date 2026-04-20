@@ -4,8 +4,6 @@
   "addRole": "Thêm vai trò",
   "custom": "Vai trò tùy chỉnh",
   "builtin.badge": "Mặc định",
-  "builtin.system_admin.name": "Quản trị hệ thống",
-  "builtin.system_admin.description": "Toàn quyền trên nền tảng. Do Duall Master quản lý — không thể chỉnh sửa.",
   "builtin.primary_manager.name": "Quản lý chính",
   "builtin.primary_manager.description": "Toàn quyền trên tenant. Luôn có mọi quyền trong phạm vi công ty.",
   "builtin.member.name": "Thành viên",

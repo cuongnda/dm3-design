@@ -4,8 +4,6 @@
   "addRole": "Add Role",
   "custom": "Custom role",
   "builtin.badge": "Built-in",
-  "builtin.system_admin.name": "System Admin",
-  "builtin.system_admin.description": "Full platform access. Managed by Duall Master — cannot be edited.",
   "builtin.primary_manager.name": "Primary Manager",
   "builtin.primary_manager.description": "Full tenant control. Always has every permission within the company.",
   "builtin.member.name": "Member",

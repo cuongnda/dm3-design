@@ -17,8 +17,9 @@ import { RoleModal } from './RoleModal';
 import type { Role, Permission } from './types';
 
 // Built-in fixed roles are enforced in backend code (not stored as rbac_roles rows).
-// We surface them here as read-only entries so the list is never misleadingly empty.
-const BUILTIN_ROLE_KEYS = ['system_admin', 'primary_manager', 'member'] as const;
+// Only the company-facing roles are surfaced here. `system_admin` is a platform
+// role owned by Duali staff and has no place in a tenant's role list.
+const BUILTIN_ROLE_KEYS = ['primary_manager', 'member'] as const;
 
 function isBuiltinRole(role: Role): boolean {
     return role.id.startsWith('builtin:');
