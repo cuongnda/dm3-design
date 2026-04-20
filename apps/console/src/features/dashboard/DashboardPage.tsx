@@ -9,6 +9,7 @@ import { PluginInsightGrid } from './sections/PluginInsightGrid';
 import { LiveEventsPanel } from './sections/LiveEventsPanel';
 import { ActiveAlertsPanel } from './sections/ActiveAlertsPanel';
 import { DomainHealthGrid } from './sections/DomainHealthGrid';
+import { AuditStrip } from './sections/AuditStrip';
 
 export function DashboardPage(): React.ReactElement {
   const { t } = useTranslation('dashboard');
@@ -62,6 +63,10 @@ export function DashboardPage(): React.ReactElement {
       <PluginInsightGrid />
 
       <DomainHealthGrid />
+
+      <div className="mt-6">
+        <AuditStrip />
+      </div>
     </div>
   );
 }
