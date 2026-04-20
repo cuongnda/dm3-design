@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 import { login as apiLogin, loginStep2, setToken } from '@/lib/api';
@@ -24,6 +24,7 @@ export function LoginPage() {
 
   const login = useAuthStore((s) => s.login);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const completeLogin = (accessToken: string, refreshToken: string, userInfo: LoginUser, enabledPlugins: string[] = []) => {
     setToken(accessToken, refreshToken);
@@ -38,7 +39,13 @@ export function LoginPage() {
       role,
       initials: (userInfo.name || userInfo.email).slice(0, 2).toUpperCase(),
     }, enabledPlugins);
-    navigate(role === 'system_admin' ? '/system' : '/');
+    // Honour `?next=` from ProtectedRoute so users return to where they were
+    // bounced from. Guard against open-redirect by accepting only same-origin
+    // path-relative values.
+    const rawNext = searchParams.get('next');
+    const nextIsSafe = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') && !rawNext.startsWith('/login');
+    const fallback = role === 'system_admin' ? '/system' : '/';
+    navigate(nextIsSafe ? rawNext! : fallback);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

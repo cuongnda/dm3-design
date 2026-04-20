@@ -47,6 +47,7 @@
   "nav.profile": "Profile",
   "actions.signOut": "Sign Out",
   "actions.signIn": "Sign In",
+  "auth.sessionExpired": "Session expired — please sign in again",
   "actions.search": "Search...",
   "actions.viewAll": "View All →",
   "status.live": "Live",

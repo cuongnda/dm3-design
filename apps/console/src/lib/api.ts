@@ -9,6 +9,27 @@ const IDENTITY_URL = '/api/v1/identity';
 
 // ─── Token management ───────────────────────────────────────
 
+type TokenListener = (token: string | null) => void;
+const _tokenListeners = new Set<TokenListener>();
+
+/** Subscribe to token changes (set / clear). Returns an unsubscribe fn. */
+export function subscribeToken(listener: TokenListener): () => void {
+    _tokenListeners.add(listener);
+    return () => {
+        _tokenListeners.delete(listener);
+    };
+}
+
+function notifyTokenListeners(token: string | null) {
+    _tokenListeners.forEach((fn) => {
+        try {
+            fn(token);
+        } catch {
+            /* listener errors must not break auth flow */
+        }
+    });
+}
+
 export function getToken(): string | null {
     return localStorage.getItem('dm3-token');
 }
@@ -16,11 +37,116 @@ export function getToken(): string | null {
 export function setToken(token: string, refresh?: string) {
     localStorage.setItem('dm3-token', token);
     if (refresh) localStorage.setItem('dm3-refresh', refresh);
+    scheduleProactiveRefresh(token);
+    notifyTokenListeners(token);
 }
 
 export function clearToken() {
     localStorage.removeItem('dm3-token');
     localStorage.removeItem('dm3-refresh');
+    cancelProactiveRefresh();
+    notifyTokenListeners(null);
+}
+
+// ─── Proactive refresh ──────────────────────────────────────
+// Background silent refresh avoids the "click menu → 401 → error" experience.
+// Strategy:
+//  1. On every setToken(), decode JWT `exp` and schedule a setTimeout at
+//     (exp − 60s) that calls tryRefreshToken().
+//  2. On visibilitychange → visible, if token is already expired or
+//     near-expiry, refresh synchronously before any query fires.
+
+const REFRESH_SAFETY_MARGIN_S = 60;
+
+let _refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+function decodeExpSeconds(token: string): number | null {
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1] ?? ''));
+        const exp = (payload as { exp?: number }).exp;
+        return typeof exp === 'number' ? exp : null;
+    } catch {
+        return null;
+    }
+}
+
+function cancelProactiveRefresh() {
+    if (_refreshTimer) {
+        clearTimeout(_refreshTimer);
+        _refreshTimer = null;
+    }
+}
+
+function scheduleProactiveRefresh(token: string) {
+    cancelProactiveRefresh();
+    const exp = decodeExpSeconds(token);
+    if (exp === null) return;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const refreshInSec = exp - nowSec - REFRESH_SAFETY_MARGIN_S;
+    if (refreshInSec <= 0) {
+        // Already near/past expiry — refresh on next tick.
+        _refreshTimer = setTimeout(() => {
+            void proactiveRefresh();
+        }, 0);
+        return;
+    }
+    // Cap to ~24h to avoid 32-bit overflow on weird tokens.
+    const delayMs = Math.min(refreshInSec * 1000, 24 * 60 * 60 * 1000);
+    _refreshTimer = setTimeout(() => {
+        void proactiveRefresh();
+    }, delayMs);
+}
+
+async function proactiveRefresh() {
+    // Reuse single-flight dedup with reactive path.
+    if (!_refreshing)
+        _refreshing = tryRefreshToken().finally(() => {
+            _refreshing = null;
+        });
+    await _refreshing;
+}
+
+/**
+ * Register app-level listeners that keep the token fresh while the tab is
+ * open. Call once at bootstrap.
+ */
+export function setupAuthLifecycle() {
+    if (typeof window === 'undefined') return;
+    // Reschedule timer on fresh bootstrap (page load / hard reload).
+    const existing = getToken();
+    if (existing) scheduleProactiveRefresh(existing);
+
+    // When the tab becomes visible again after being idle, the setTimeout
+    // may not have fired reliably (browsers throttle background timers).
+    // Refresh eagerly if the token is close to expiry.
+    const onVisible = () => {
+        if (document.visibilityState !== 'visible') return;
+        const tok = getToken();
+        if (!tok) return;
+        const exp = decodeExpSeconds(tok);
+        if (exp === null) return;
+        const nowSec = Math.floor(Date.now() / 1000);
+        if (exp - nowSec <= REFRESH_SAFETY_MARGIN_S) {
+            void proactiveRefresh();
+        } else {
+            // Still valid but previous timer may have been suspended — reschedule.
+            scheduleProactiveRefresh(tok);
+        }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    // Cross-tab: if another tab refreshed the token, pick it up here.
+    window.addEventListener('storage', (e) => {
+        if (e.key !== 'dm3-token') return;
+        const next = e.newValue;
+        if (next) {
+            scheduleProactiveRefresh(next);
+            notifyTokenListeners(next);
+        } else {
+            cancelProactiveRefresh();
+            notifyTokenListeners(null);
+        }
+    });
 }
 
 // ─── Fetch wrapper ──────────────────────────────────────────

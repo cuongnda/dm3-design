@@ -2,6 +2,27 @@
 
 const AUTH_PATH = '/api/v1/auth';
 
+type TokenListener = (token: string | null) => void;
+const _tokenListeners = new Set<TokenListener>();
+
+/** Subscribe to token changes (set / clear). Returns an unsubscribe fn. */
+export function subscribeToken(listener: TokenListener): () => void {
+  _tokenListeners.add(listener);
+  return () => {
+    _tokenListeners.delete(listener);
+  };
+}
+
+function notifyTokenListeners(token: string | null) {
+  _tokenListeners.forEach((fn) => {
+    try {
+      fn(token);
+    } catch {
+      /* listener errors must not break auth flow */
+    }
+  });
+}
+
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('dm3-token');
@@ -10,11 +31,99 @@ export function getToken(): string | null {
 export function setToken(token: string, refresh?: string): void {
   localStorage.setItem('dm3-token', token);
   if (refresh) localStorage.setItem('dm3-refresh', refresh);
+  scheduleProactiveRefresh(token);
+  notifyTokenListeners(token);
 }
 
 export function clearToken(): void {
   localStorage.removeItem('dm3-token');
   localStorage.removeItem('dm3-refresh');
+  cancelProactiveRefresh();
+  notifyTokenListeners(null);
+}
+
+// ─── Proactive refresh ──────────────────────────────────────
+
+const REFRESH_SAFETY_MARGIN_S = 60;
+
+let _refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+function decodeExpSeconds(token: string): number | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1] ?? ''));
+    const exp = (payload as { exp?: number }).exp;
+    return typeof exp === 'number' ? exp : null;
+  } catch {
+    return null;
+  }
+}
+
+function cancelProactiveRefresh() {
+  if (_refreshTimer) {
+    clearTimeout(_refreshTimer);
+    _refreshTimer = null;
+  }
+}
+
+function scheduleProactiveRefresh(token: string) {
+  if (typeof window === 'undefined') return;
+  cancelProactiveRefresh();
+  const exp = decodeExpSeconds(token);
+  if (exp === null) return;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const refreshInSec = exp - nowSec - REFRESH_SAFETY_MARGIN_S;
+  if (refreshInSec <= 0) {
+    _refreshTimer = setTimeout(() => {
+      void proactiveRefresh();
+    }, 0);
+    return;
+  }
+  const delayMs = Math.min(refreshInSec * 1000, 24 * 60 * 60 * 1000);
+  _refreshTimer = setTimeout(() => {
+    void proactiveRefresh();
+  }, delayMs);
+}
+
+async function proactiveRefresh() {
+  if (!_refreshing)
+    _refreshing = tryRefreshToken().finally(() => {
+      _refreshing = null;
+    });
+  await _refreshing;
+}
+
+/** Bootstrap hook: call once at app start to arm timers + listeners. */
+export function setupAuthLifecycle(): void {
+  if (typeof window === 'undefined') return;
+  const existing = getToken();
+  if (existing) scheduleProactiveRefresh(existing);
+
+  const onVisible = () => {
+    if (document.visibilityState !== 'visible') return;
+    const tok = getToken();
+    if (!tok) return;
+    const exp = decodeExpSeconds(tok);
+    if (exp === null) return;
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (exp - nowSec <= REFRESH_SAFETY_MARGIN_S) {
+      void proactiveRefresh();
+    } else {
+      scheduleProactiveRefresh(tok);
+    }
+  };
+  document.addEventListener('visibilitychange', onVisible);
+  window.addEventListener('focus', onVisible);
+  window.addEventListener('storage', (e) => {
+    if (e.key !== 'dm3-token') return;
+    const next = e.newValue;
+    if (next) {
+      scheduleProactiveRefresh(next);
+      notifyTokenListeners(next);
+    } else {
+      cancelProactiveRefresh();
+      notifyTokenListeners(null);
+    }
+  });
 }
 
 // authenticatedUrl appends the JWT as a `?token=` query param for endpoints
@@ -101,8 +210,11 @@ export async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<
     }
 
     clearToken();
-    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-      window.location.href = '/login';
+    // Soft redirect via SPA router: ProtectedRoute listens for this event,
+    // calls logout(), and Navigate to /login — preserves client state and
+    // avoids a hard page reload mid-interaction.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('dm3:auth-expired'));
     }
     throw new Error('Unauthorized');
   }

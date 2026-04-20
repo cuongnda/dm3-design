@@ -4,6 +4,7 @@ import { Providers } from './providers';
 import { Router as router } from './router';
 import { RealtimeProvider } from './RealtimeProvider';
 import { useAuthStore } from '@/stores/authStore';
+import { setupAuthLifecycle } from '@/lib/api';
 import { useTranslation } from 'react-i18next';
 
 function AppInner() {
@@ -12,6 +13,9 @@ function AppInner() {
   const { i18n } = useTranslation();
 
   useEffect(() => {
+    // Schedule proactive JWT refresh + visibility/storage listeners before
+    // the first auth check fires. Safe to call once per app lifetime.
+    setupAuthLifecycle();
     checkAuth();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
