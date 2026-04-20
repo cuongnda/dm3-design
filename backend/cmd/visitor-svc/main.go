@@ -137,71 +137,82 @@ func main() {
 			ar.Use(authsvc.RequireCompany())
 			ar.Use(authsvc.RequirePlugin("visitor"))
 
-			// Dashboard
+			// Dashboard: all authenticated tenant users with the plugin enabled
 			ar.Get("/today/summary", visitorHandlers.GetTodaySummary)
 
-			// Walk-in registration
-			ar.Post("/walkin", visitorHandlers.WalkinVisit)
+			// Visit CRUD/lifecycle: reads open, writes require visitor.visit.manage.
+			// Approvals use visitor.visit.approve (always checked — no read pass-through).
+			ar.Group(func(mr chi.Router) {
+				mr.Use(authsvc.RequireWritePermission("visitor.visit.manage"))
+				mr.Post("/walkin", visitorHandlers.WalkinVisit)
 
-			// Visit CRUD & lifecycle
-			ar.Get("/", visitorHandlers.ListVisits)
-			ar.Post("/", visitorHandlers.CreateVisit)
-			ar.Get("/{id}", visitorHandlers.GetVisit)
-			ar.Put("/{id}", visitorHandlers.UpdateVisit)
-			ar.Post("/{id}/approve", visitorHandlers.ApproveVisit)
-			ar.Post("/{id}/checkin", visitorHandlers.CheckinVisit)
-			ar.Post("/{id}/checkout", visitorHandlers.CheckoutVisit)
-			ar.Post("/{id}/reinvite", visitorHandlers.ReinviteVisit)
+				mr.Get("/", visitorHandlers.ListVisits)
+				mr.Post("/", visitorHandlers.CreateVisit)
+				mr.Get("/{id}", visitorHandlers.GetVisit)
+				mr.Put("/{id}", visitorHandlers.UpdateVisit)
+				mr.Post("/{id}/checkin", visitorHandlers.CheckinVisit)
+				mr.Post("/{id}/checkout", visitorHandlers.CheckoutVisit)
+				mr.Post("/{id}/reinvite", visitorHandlers.ReinviteVisit)
 
-			// Legacy /visits aliases
-			ar.Get("/visits", visitorHandlers.ListVisits)
-			ar.Post("/visits", visitorHandlers.CreateVisit)
-			ar.Get("/visits/{id}", visitorHandlers.GetVisit)
-			ar.Put("/visits/{id}", visitorHandlers.UpdateVisit)
-			ar.Post("/visits/{id}/approve", visitorHandlers.ApproveVisit)
-			ar.Post("/visits/{id}/checkin", visitorHandlers.CheckinVisit)
-			ar.Post("/visits/{id}/checkout", visitorHandlers.CheckoutVisit)
-			ar.Post("/visits/{id}/reinvite", visitorHandlers.ReinviteVisit)
+				// Legacy /visits aliases
+				mr.Get("/visits", visitorHandlers.ListVisits)
+				mr.Post("/visits", visitorHandlers.CreateVisit)
+				mr.Get("/visits/{id}", visitorHandlers.GetVisit)
+				mr.Put("/visits/{id}", visitorHandlers.UpdateVisit)
+				mr.Post("/visits/{id}/checkin", visitorHandlers.CheckinVisit)
+				mr.Post("/visits/{id}/checkout", visitorHandlers.CheckoutVisit)
+				mr.Post("/visits/{id}/reinvite", visitorHandlers.ReinviteVisit)
 
-			// Batch registration
-			ar.Post("/batch", visitorHandlers.BatchCreateVisits)
+				// Batch registration
+				mr.Post("/batch", visitorHandlers.BatchCreateVisits)
 
-			// Visit groups
-			ar.Get("/groups", visitorHandlers.ListVisitGroups)
-			ar.Post("/groups", visitorHandlers.CreateVisitGroup)
-			ar.Get("/groups/{group_id}", visitorHandlers.GetVisitGroup)
-			ar.Delete("/groups/{group_id}", visitorHandlers.DeleteVisitGroup)
+				// Visit groups
+				mr.Get("/groups", visitorHandlers.ListVisitGroups)
+				mr.Post("/groups", visitorHandlers.CreateVisitGroup)
+				mr.Get("/groups/{group_id}", visitorHandlers.GetVisitGroup)
+				mr.Delete("/groups/{group_id}", visitorHandlers.DeleteVisitGroup)
 
-			// Access history & evacuation
-			ar.Get("/{id}/access-log", visitorHandlers.ListVisitAccessLog)
-			ar.Get("/history/{visitor_id}", visitorHandlers.ListVisitorHistory)
-			ar.Get("/evacuation", visitorHandlers.GetEvacuationList)
+				// Access history & evacuation
+				mr.Get("/{id}/access-log", visitorHandlers.ListVisitAccessLog)
+				mr.Get("/history/{visitor_id}", visitorHandlers.ListVisitorHistory)
+				mr.Get("/evacuation", visitorHandlers.GetEvacuationList)
 
-			// Watchlist
-			ar.Get("/watchlist", visitorHandlers.ListWatchlist)
-			ar.Post("/watchlist", visitorHandlers.CreateWatchlistEntry)
-			ar.Delete("/watchlist/{id}", visitorHandlers.DeleteWatchlistEntry)
+				// Watchlist
+				mr.Get("/watchlist", visitorHandlers.ListWatchlist)
+				mr.Post("/watchlist", visitorHandlers.CreateWatchlistEntry)
+				mr.Delete("/watchlist/{id}", visitorHandlers.DeleteWatchlistEntry)
 
-			// Agreements
-			ar.Get("/agreements", visitorHandlers.ListAgreements)
-			ar.Post("/agreements", visitorHandlers.CreateAgreement)
-			ar.Put("/agreements/{agreement_id}", visitorHandlers.UpdateAgreement)
-			ar.Get("/{id}/agreements", visitorHandlers.ListVisitSignatures)
-			ar.Post("/{id}/agreements/sign", visitorHandlers.SignAgreement)
+				// Agreements
+				mr.Get("/agreements", visitorHandlers.ListAgreements)
+				mr.Post("/agreements", visitorHandlers.CreateAgreement)
+				mr.Put("/agreements/{agreement_id}", visitorHandlers.UpdateAgreement)
+				mr.Get("/{id}/agreements", visitorHandlers.ListVisitSignatures)
+				mr.Post("/{id}/agreements/sign", visitorHandlers.SignAgreement)
 
-			// Analytics
-			ar.Get("/analytics", visitorHandlers.GetVisitorAnalytics)
-			ar.Get("/analytics/top-visitors", visitorHandlers.GetTopVisitors)
+				// Analytics
+				mr.Get("/analytics", visitorHandlers.GetVisitorAnalytics)
+				mr.Get("/analytics/top-visitors", visitorHandlers.GetTopVisitors)
 
-			// Recurring visit templates
-			ar.Get("/recurring", visitorHandlers.ListRecurringTemplates)
-			ar.Post("/recurring", visitorHandlers.CreateRecurringTemplate)
-			ar.Put("/recurring/{template_id}", visitorHandlers.UpdateRecurringTemplate)
-			ar.Delete("/recurring/{template_id}", visitorHandlers.DeleteRecurringTemplate)
+				// Recurring visit templates
+				mr.Get("/recurring", visitorHandlers.ListRecurringTemplates)
+				mr.Post("/recurring", visitorHandlers.CreateRecurringTemplate)
+				mr.Put("/recurring/{template_id}", visitorHandlers.UpdateRecurringTemplate)
+				mr.Delete("/recurring/{template_id}", visitorHandlers.DeleteRecurringTemplate)
+			})
 
-			// Settings (manager+ only)
-			ar.Get("/settings", visitorHandlers.GetSettings)
-			ar.Put("/settings", visitorHandlers.UpdateSettings)
+			// Approvals: always require visitor.visit.approve.
+			ar.Group(func(apr chi.Router) {
+				apr.Use(authsvc.RequirePermission("visitor.visit.approve"))
+				apr.Post("/{id}/approve", visitorHandlers.ApproveVisit)
+				apr.Post("/visits/{id}/approve", visitorHandlers.ApproveVisit)
+			})
+
+			// Settings: reads open, writes require company.settings.manage.
+			ar.Group(func(sr chi.Router) {
+				sr.Use(authsvc.RequireWritePermission("company.settings.manage"))
+				sr.Get("/settings", visitorHandlers.GetSettings)
+				sr.Put("/settings", visitorHandlers.UpdateSettings)
+			})
 		})
 	})
 
