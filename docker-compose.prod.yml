@@ -28,6 +28,9 @@ services:
       EMQX_LOADED_PLUGINS: "emqx_dashboard"
     volumes:
       - emqx_data:/opt/emqx/data
+    ports:
+      - "1884:1883"
+      - "8884:8883"
     networks:
       - dm3-internal
     healthcheck:
