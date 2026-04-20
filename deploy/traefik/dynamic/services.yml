@@ -1,0 +1,62 @@
+# Service upstream registry for the file provider.
+#
+# Each service points at a single container on the dm3-local docker network.
+# If we scale horizontally later (multiple replicas, or staging/prod where the
+# gateway lives outside docker-compose), swap these static targets for a
+# service-discovery backend (Consul / Kubernetes) without touching routers.yml.
+
+http:
+  services:
+    auth-svc:
+      loadBalancer:
+        servers:
+          - url: "http://auth-svc:8005"
+        passHostHeader: true
+
+    identity-svc:
+      loadBalancer:
+        servers:
+          - url: "http://identity-svc:8004"
+        passHostHeader: true
+
+    access-svc:
+      loadBalancer:
+        servers:
+          - url: "http://access-svc:8003"
+        passHostHeader: true
+
+    device-gateway:
+      loadBalancer:
+        servers:
+          - url: "http://device-gateway:8002"
+        passHostHeader: true
+
+    audit-svc:
+      loadBalancer:
+        servers:
+          - url: "http://audit-svc:8001"
+        passHostHeader: true
+
+    visitor-svc:
+      loadBalancer:
+        servers:
+          - url: "http://visitor-svc:8006"
+        passHostHeader: true
+
+    parking-svc:
+      loadBalancer:
+        servers:
+          - url: "http://parking-svc:8007"
+        passHostHeader: true
+
+    cctv-svc:
+      loadBalancer:
+        servers:
+          - url: "http://cctv-svc:8008"
+        passHostHeader: true
+
+    attend-svc:
+      loadBalancer:
+        servers:
+          - url: "http://attend-svc:8010"
+        passHostHeader: true

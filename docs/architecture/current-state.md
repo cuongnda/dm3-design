@@ -58,7 +58,8 @@ and shipped. Treat them as roadmap.
 | `valkey`         | `valkey/valkey:8.0-alpine`     | Cache / device sessions / rate limit                       |
 | `minio`          | `minio/minio:latest`           | S3-compatible object store (CCTV clips today, blobs later) |
 | `mediamtx`       | `bluenviron/mediamtx:1.9.3`    | RTSP ingest + WebRTC/WHEP + LL-HLS egress                  |
-| `nginx`          | `nginx:alpine`                 | Reverse proxy; joins `dm3-internal` and external `dmpw-net` |
+| `traefik`        | `traefik:v3.1`                 | API gateway for `/api/v1/*` and `/ws/*` — rate-limit, CORS, security headers, API-key plane (stub) |
+| `nginx`          | `nginx:alpine`                 | Edge proxy — serves SPA + static + MediaMTX, forwards API to `traefik` |
 
 ### 1.4 Volumes
 
@@ -80,8 +81,12 @@ The numbering matches the arrows in `current-deployment.drawio`.
 ### Request plane (browser ⇄ services)
 
 1. **Browser → nginx** (HTTPS, via dmpw-net). nginx terminates TLS at the host proxy,
-   serves the webapp static bundle, and reverse-proxies `/api/*` to the appropriate
-   `*-svc` on `dm3-internal`. **(arrows ① ② ⑳)**
+   serves the webapp static bundle, and proxies direct: `/photos/` → identity-svc,
+   `/assets/tenants/` → access-svc, `/cctv/whep/` and `/cctv/hls/` → mediamtx.
+2. **nginx → traefik → `*-svc`** — everything under `/api/v1/*` and `/ws/*` is
+   forwarded to Traefik on `dm3-internal`. Traefik applies per-route rate-limit,
+   CORS, security headers, and request-ID propagation, then fans out to the
+   appropriate backend. See `docs/architecture/api-gateway.md` for the route map. **(arrows ① ② ⑳)**
 
 ### Device plane (MQTT)
 
@@ -155,6 +160,10 @@ If you only ever read the C4 doc, here is what is different on the ground today:
   (single bucket `${OBJECT_STORE_BUCKET:-dm3}`, prefixed by tenant).
 * **Reverse proxy:** the C4 doc does not show `nginx`. In reality nginx is the only
   thing on `dmpw-net`; everything else is reachable only on `dm3-internal`.
+* **API gateway:** the C4 doc does not show `traefik`. In reality Traefik sits
+  between nginx and the 9 backend services for all `/api/v1/*` and `/ws/*` traffic,
+  and owns per-route rate-limit, CORS, security headers, and the future API-key /
+  OAuth2 plane (`/api/v1/public/*`). See `docs/architecture/api-gateway.md`.
 
 ---
 

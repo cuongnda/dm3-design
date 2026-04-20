@@ -417,19 +417,21 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Nginx reverse proxy ────────────────────────────────────────────────────
+  # ── Traefik API gateway ────────────────────────────────────────────────────
+  # Internal gateway for /api/v1/* and /ws/*. Not exposed to the host directly —
+  # nginx (on :3000) fronts it. Dashboard at :8080 is bound to localhost for
+  # dev inspection; remove the port mapping in prod.
 
-  nginx:
-    image: nginx:alpine
-    container_name: dm3-local-nginx
+  traefik:
+    image: traefik:v3.1
+    container_name: dm3-local-traefik
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "127.0.0.1:8080:8080"  # dashboard (dev only)
     volumes:
-      - ./deploy/nginx/nginx.local.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./deploy/traefik/dynamic:/etc/traefik/dynamic:ro
     depends_on:
-      webapp:
-        condition: service_healthy
       auth-svc:
         condition: service_healthy
       identity-svc:
@@ -445,6 +447,37 @@ services:
       parking-svc:
         condition: service_healthy
       attend-svc:
+        condition: service_healthy
+      cctv-svc:
+        condition: service_healthy
+    networks:
+      - dm3-local
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Nginx edge (SPA + static + TLS in prod) ────────────────────────────────
+  # Forwards /api/v1/* and /ws/* to Traefik. Serves the SPA, static assets,
+  # identity photos, tenant assets, and MediaMTX streams directly.
+
+  nginx:
+    image: nginx:alpine
+    container_name: dm3-local-nginx
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    volumes:
+      - ./deploy/nginx/nginx.local.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      webapp:
+        condition: service_healthy
+      traefik:
+        condition: service_healthy
+      identity-svc:
+        condition: service_healthy
+      access-svc:
         condition: service_healthy
     networks:
       - dm3-local
