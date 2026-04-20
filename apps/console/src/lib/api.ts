@@ -1077,8 +1077,25 @@ export async function fetchSystemStats(): Promise<SystemStatsDTO> {
 // ─── Companies ──────────────────────────────────────────────
 
 export async function fetchCompanies(): Promise<CompanyDTO[]> {
-    const res = await apiFetch<{ data: CompanyDTO[] } | CompanyDTO[]>(`${AUTH_SYSTEM_URL}/companies`);
-    return Array.isArray(res) ? res : res.data;
+    // Backend caps `limit` at 100 and the companies list is the whole tenant
+    // registry (system-admin view), so walk every page until exhausted.
+    // Client-side search/sort in CompanyListPage depends on having the full set.
+    const limit = 100;
+    const all: CompanyDTO[] = [];
+    for (let page = 1; page <= 100; page++) {
+        const res = await apiFetch<{ data: CompanyDTO[]; total?: number } | CompanyDTO[]>(
+            `${AUTH_SYSTEM_URL}/companies?page=${page}&limit=${limit}`,
+        );
+        if (Array.isArray(res)) {
+            all.push(...res);
+            if (res.length < limit) break;
+        } else {
+            all.push(...res.data);
+            const total = typeof res.total === 'number' ? res.total : all.length;
+            if (all.length >= total || res.data.length < limit) break;
+        }
+    }
+    return all;
 }
 
 export async function fetchCompany(id: string): Promise<CompanyDTO> {
