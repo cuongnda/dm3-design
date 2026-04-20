@@ -147,6 +147,12 @@ export function AssignmentModal({ open, role, onOpenChange, onSaved }: Assignmen
                             </SelectOption>
                         ))}
                     </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                        {t(
+                            'assignment.accountHint',
+                            'Only users with login accounts appear here. To give someone a role, create their login account in User Management first.',
+                        )}
+                    </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

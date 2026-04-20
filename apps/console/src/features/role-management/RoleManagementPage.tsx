@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, Shield, KeyRound, Lock, Copy } from 'lucide-react';
+import { Plus, Edit, Trash2, Shield, KeyRound, Lock, Copy, HelpCircle } from 'lucide-react';
 import {
     Button,
     Input,
@@ -82,6 +82,7 @@ export function RoleManagementPage() {
     const [copyingRole, setCopyingRole] = useState<Role | null>(null);
     const [deletingRole, setDeletingRole] = useState<Role | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
+    const [showHelp, setShowHelp] = useState(false);
 
     const fetchRoles = useCallback(async () => {
         setLoading(true);
@@ -302,14 +303,25 @@ export function RoleManagementPage() {
                         <h1 className="text-[18px] font-semibold text-foreground">{t('title')}</h1>
                         <p className="text-[13px] text-muted-foreground">{t('description')}</p>
                     </div>
-                    <Button
-                        size="sm"
-                        onClick={() => setShowCreateModal(true)}
-                        data-testid="role-button-create"
-                    >
-                        <Plus size={14} className="mr-1.5" />
-                        {t('addRole')}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setShowHelp(true)}
+                            data-testid="role-button-help"
+                        >
+                            <HelpCircle size={14} className="mr-1.5" />
+                            {t('help.button', 'How it works')}
+                        </Button>
+                        <Button
+                            size="sm"
+                            onClick={() => setShowCreateModal(true)}
+                            data-testid="role-button-create"
+                        >
+                            <Plus size={14} className="mr-1.5" />
+                            {t('addRole')}
+                        </Button>
+                    </div>
                 </div>
 
                 {!loading && (
@@ -453,6 +465,131 @@ export function RoleManagementPage() {
                     void fetchRoles();
                 }}
             />
+
+            <AppModal
+                open={showHelp}
+                onOpenChange={setShowHelp}
+                title={
+                    <span className="flex items-center gap-2">
+                        <HelpCircle size={16} />
+                        {t('help.title', 'How Roles & Permissions work')}
+                    </span>
+                }
+                size="2xl"
+                showCancelButton
+                cancelLabel={t('help.close', 'Got it')}
+            >
+                <div className="space-y-5 text-[13px] leading-relaxed">
+                    <section className="space-y-1.5">
+                        <h3 className="text-[14px] font-semibold text-foreground">
+                            {t('help.overview.title', 'The big picture')}
+                        </h3>
+                        <p className="text-muted-foreground">
+                            {t(
+                                'help.overview.body',
+                                'Every login account in your company has a baseline role. You grant extra access by assigning custom roles to accounts within a specific scope (company, department, or zone). Permissions flow from the union of everything an account holds.',
+                            )}
+                        </p>
+                    </section>
+
+                    <section className="space-y-2">
+                        <h3 className="text-[14px] font-semibold text-foreground">
+                            {t('help.builtins.title', 'Built-in roles (read-only)')}
+                        </h3>
+                        <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <Lock size={12} className="text-muted-foreground" />
+                                    <span className="font-medium">{t('builtin.primary_manager.name')}</span>
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                        {t('builtin.badge')}
+                                    </Badge>
+                                </div>
+                                <p className="text-muted-foreground text-[12px] mt-1">
+                                    {t('builtin.primary_manager.description')}
+                                </p>
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <Lock size={12} className="text-muted-foreground" />
+                                    <span className="font-medium">{t('builtin.member.name')}</span>
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                        {t('builtin.badge')}
+                                    </Badge>
+                                </div>
+                                <p className="text-muted-foreground text-[12px] mt-1">
+                                    {t('builtin.member.description')}
+                                </p>
+                            </div>
+                        </div>
+                        <p className="text-muted-foreground text-[12px]">
+                            {t(
+                                'help.builtins.hint',
+                                'You cannot edit or delete built-in roles. Use the Copy button to seed a new custom role from either one.',
+                            )}
+                        </p>
+                    </section>
+
+                    <section className="space-y-2">
+                        <h3 className="text-[14px] font-semibold text-foreground">
+                            {t('help.custom.title', 'Custom roles')}
+                        </h3>
+                        <ol className="list-decimal space-y-1 pl-5 text-muted-foreground">
+                            <li>{t('help.custom.step1', 'Click "Add Role" (or Copy a built-in) to open the editor.')}</li>
+                            <li>{t('help.custom.step2', 'Give it a clear name — e.g. "Site Manager", "HR Viewer".')}</li>
+                            <li>{t('help.custom.step3', 'Tick the permissions it should grant, grouped by plugin and domain.')}</li>
+                            <li>{t('help.custom.step4', 'Save. The role is now available to assign.')}</li>
+                        </ol>
+                    </section>
+
+                    <section className="space-y-2">
+                        <h3 className="text-[14px] font-semibold text-foreground">
+                            {t('help.assignment.title', 'Assigning a role')}
+                        </h3>
+                        <p className="text-muted-foreground">
+                            {t(
+                                'help.assignment.body',
+                                'Open a role, click "Assign", then pick an account and a scope. The account receives that role\'s permissions — but only within the scope you choose.',
+                            )}
+                        </p>
+                        <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1 text-[12px]">
+                            <div><span className="font-medium text-foreground">{t('assignment.scope.company')}:</span> <span className="text-muted-foreground">{t('help.scope.company', 'Everywhere in your tenant.')}</span></div>
+                            <div><span className="font-medium text-foreground">{t('assignment.scope.department')}:</span> <span className="text-muted-foreground">{t('help.scope.department', 'Limited to people/resources of one department.')}</span></div>
+                            <div><span className="font-medium text-foreground">{t('assignment.scope.zone')}:</span> <span className="text-muted-foreground">{t('help.scope.zone', 'Limited to devices and access inside one zone.')}</span></div>
+                            <div><span className="font-medium text-foreground">{t('assignment.scope.self')}:</span> <span className="text-muted-foreground">{t('help.scope.self', 'Only the account\'s own records.')}</span></div>
+                        </div>
+                        <p className="text-muted-foreground text-[12px]">
+                            {t(
+                                'help.assignment.effective',
+                                'You can also set "Effective From" / "Effective To" to time-box the access — useful for contractors or temporary managers.',
+                            )}
+                        </p>
+                    </section>
+
+                    <section className="space-y-2">
+                        <h3 className="text-[14px] font-semibold text-foreground">
+                            {t('help.accounts.title', 'Who can be assigned?')}
+                        </h3>
+                        <p className="text-muted-foreground">
+                            {t(
+                                'help.accounts.body',
+                                'Only users with a login account appear in the assignment list. Employees tracked in Identity without a login (e.g. contractors with just a card) cannot hold a role — create a login account first in User Management.',
+                            )}
+                        </p>
+                    </section>
+
+                    <section className="space-y-2">
+                        <h3 className="text-[14px] font-semibold text-foreground">
+                            {t('help.example.title', 'Example')}
+                        </h3>
+                        <div className="rounded-md border border-border bg-muted/30 p-3 text-[12px] text-muted-foreground space-y-1">
+                            <p>{t('help.example.s1', '• You create a custom role "HR Manager" with identity.user.* permissions.')}</p>
+                            <p>{t('help.example.s2', '• You assign it to alice@company.com with scope = Department "HR".')}</p>
+                            <p>{t('help.example.s3', '• Alice can now view/edit users in HR only. Anywhere else she stays a Member.')}</p>
+                        </div>
+                    </section>
+                </div>
+            </AppModal>
         </div>
     );
 }
