@@ -5,7 +5,6 @@ import { ParkingDashCard } from '../cards/ParkingDashCard';
 import { VisitorDashCard } from '../cards/VisitorDashCard';
 import { CctvDashCard } from '../cards/CctvDashCard';
 import { AttendanceDashCard } from '../cards/AttendanceDashCard';
-import { ApiIntegrationDashCard } from '../cards/ApiIntegrationDashCard';
 
 export function PluginInsightGrid(): React.ReactElement | null {
   const { t } = useTranslation('dashboard');
@@ -13,14 +12,12 @@ export function PluginInsightGrid(): React.ReactElement | null {
   const visitorEnabled = usePlugin('visitor');
   const cctvEnabled = usePlugin('cctv');
   const attendanceEnabled = usePlugin('attendance');
-  const apiEnabled = usePlugin('api_integration');
 
   const anyEnabled =
     parkingEnabled ||
     visitorEnabled ||
     cctvEnabled ||
-    attendanceEnabled ||
-    apiEnabled;
+    attendanceEnabled;
 
   if (!anyEnabled) {
     return null;
@@ -39,7 +36,6 @@ export function PluginInsightGrid(): React.ReactElement | null {
         {visitorEnabled && <VisitorDashCard />}
         {cctvEnabled && <CctvDashCard />}
         {attendanceEnabled && <AttendanceDashCard />}
-        {apiEnabled && <ApiIntegrationDashCard />}
       </div>
     </section>
   );
