@@ -243,9 +243,10 @@ function Select({
         <>
           {/* Invisible full-screen blocker: sits above dialog (z>51) but below panel, prevents dialog content from capturing events */}
           {/* pointerEvents: auto overrides pointer-events: none set by Radix Dialog on document.body */}
-          <div style={{ position: 'fixed', inset: 0, zIndex: 2147483646, pointerEvents: 'auto' }} />
+          <div data-slot="select-panel" style={{ position: 'fixed', inset: 0, zIndex: 2147483646, pointerEvents: 'auto' }} />
           <div
             ref={panelRef}
+            data-slot="select-panel"
             style={{ ...panelStyle, pointerEvents: 'auto' }}
             className="rounded-md border border-border bg-card text-foreground shadow-xl"
           >
