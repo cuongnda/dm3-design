@@ -456,6 +456,8 @@ services:
         condition: service_healthy
       attend-svc:
         condition: service_healthy
+      emqx:
+        condition: service_healthy
     networks:
       - dm3-internal
       - dmpw-net  # join main proxy network for direct container routing
