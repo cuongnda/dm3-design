@@ -83,16 +83,30 @@ export function EmergencyPlanModal({ open, onOpenChange, planId, onSaved }: Emer
         const load = async () => {
             setLoading(true);
             setError('');
-            try {
-                const [zoneData, apRes] = await Promise.all([
-                    fetchZones(),
-                    fetchAccessPoints(1, 500),
-                ]);
-                setZones(zoneData);
-                const aps = apRes.data || [];
-                setAccessPoints(aps);
 
-                if (isEdit && planId) {
+            // Fetch zones & access points in parallel. Tolerate partial failure:
+            // a missing zones list shouldn't block editing an existing plan.
+            const [zoneRes, apRes] = await Promise.allSettled([
+                fetchZones(),
+                fetchAccessPoints(1, 500),
+            ]);
+
+            const zoneData = zoneRes.status === 'fulfilled' ? zoneRes.value : [];
+            const aps = apRes.status === 'fulfilled' ? (apRes.value.data || []) : [];
+            setZones(zoneData);
+            setAccessPoints(aps);
+
+            const ancillaryFailed =
+                zoneRes.status === 'rejected' || apRes.status === 'rejected';
+            if (ancillaryFailed) {
+                console.error('EmergencyPlanModal: failed to load supporting data', {
+                    zones: zoneRes.status === 'rejected' ? zoneRes.reason : null,
+                    accessPoints: apRes.status === 'rejected' ? apRes.reason : null,
+                });
+            }
+
+            if (isEdit && planId) {
+                try {
                     const plan = await fetchEmergencyPlan(planId);
                     if (plan) {
                         setForm({
@@ -114,16 +128,35 @@ export function EmergencyPlanModal({ open, onOpenChange, planId, onSaved }: Emer
                                 .map((ap) => ap.id);
                             setSelectedAPIds(new Set(apIds));
                         }
+                        if (ancillaryFailed) {
+                            setError(
+                                t('emergency.toast.partialLoad', {
+                                    defaultValue:
+                                        'Plan loaded, but zones or access points failed to load. Target selection may be incomplete.',
+                                }),
+                            );
+                        }
                     }
-                } else {
-                    setForm(DEFAULT_FORM);
-                    setSelectedAPIds(new Set());
+                } catch (err) {
+                    console.error('EmergencyPlanModal: failed to load plan', planId, err);
+                    setError(
+                        t('emergency.toast.planLoadFailed', {
+                            defaultValue: 'Failed to load plan details',
+                        }),
+                    );
                 }
-            } catch {
-                setError(t('emergency.toast.loadFailed', { defaultValue: 'Failed to load data' }));
-            } finally {
-                setLoading(false);
+            } else {
+                setForm(DEFAULT_FORM);
+                setSelectedAPIds(new Set());
+                if (ancillaryFailed) {
+                    setError(
+                        t('emergency.toast.loadFailed', {
+                            defaultValue: 'Failed to load data',
+                        }),
+                    );
+                }
             }
+            setLoading(false);
         };
         load();
     }, [open, planId, isEdit, t]);

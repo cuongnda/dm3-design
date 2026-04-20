@@ -259,6 +259,7 @@ func main() {
 
 		// Emergency plans & incidents
 		r.Get("/emergency/plans", handlers.ListEmergencyPlans)
+		r.Get("/emergency/plans/{id}", handlers.GetEmergencyPlan)
 		r.Post("/emergency/plans", handlers.CreateEmergencyPlan)
 		r.Put("/emergency/plans/{id}", handlers.UpdateEmergencyPlan)
 		r.Delete("/emergency/plans/{id}", handlers.DeleteEmergencyPlan)

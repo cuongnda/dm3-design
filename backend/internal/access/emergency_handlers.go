@@ -92,6 +92,37 @@ func (h *AccessHandlers) ListEmergencyPlans(w http.ResponseWriter, r *http.Reque
 	httputil.JSON(w, http.StatusOK, plans)
 }
 
+// ─── Get Plan ───────────────────────────────────────────────────────────────
+
+func (h *AccessHandlers) GetEmergencyPlan(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	cid := authsvc.CompanyIDFromContext(r.Context())
+
+	var p emergencyPlan
+	err := h.db.Pool.QueryRow(r.Context(),
+		`SELECT id, tenant_id, name, description, icon, color, action,
+		        target_type, target_ids, countdown_seconds, enabled, sort_order,
+		        created_by, created_at, updated_at
+		   FROM dm3_access.emergency_plans
+		  WHERE id = $1::uuid AND tenant_id = $2::uuid`, id, cid,
+	).Scan(&p.ID, &p.TenantID, &p.Name, &p.Description, &p.Icon, &p.Color,
+		&p.Action, &p.TargetType, &p.TargetIDs, &p.CountdownSeconds, &p.Enabled,
+		&p.SortOrder, &p.CreatedBy, &p.CreatedAt, &p.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httputil.Error(w, http.StatusNotFound, "plan not found")
+			return
+		}
+		slog.Error("GetEmergencyPlan: query failed", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if p.TargetIDs == nil {
+		p.TargetIDs = []string{}
+	}
+	httputil.JSON(w, http.StatusOK, p)
+}
+
 // ─── Create Plan ────────────────────────────────────────────────────────────
 
 type createEmergencyPlanRequest struct {
