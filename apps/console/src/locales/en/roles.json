@@ -153,7 +153,6 @@
   "assignment.scope.department": "Department",
   "assignment.scope.zone": "Zone",
   "assignment.scope.self": "Self",
-  "assignment.siteNotSupported": "(Sites not yet modeled)",
   "assignment.col.account": "Account",
   "assignment.col.scope": "Scope",
   "assignment.col.from": "From",

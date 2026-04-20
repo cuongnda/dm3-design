@@ -66,7 +66,7 @@ export function AssignmentModal({ open, role, onOpenChange, onSaved }: Assignmen
             .catch(() => setZones([]));
     }, [open]);
 
-    const needsScopeId = form.scope_type === 'site' || form.scope_type === 'department' || form.scope_type === 'zone';
+    const needsScopeId = form.scope_type === 'department' || form.scope_type === 'zone';
 
     const handleSave = async () => {
         if (!form.account_id) {
@@ -195,11 +195,6 @@ export function AssignmentModal({ open, role, onOpenChange, onSaved }: Assignmen
                                             {z.name}
                                         </SelectOption>
                                     ))}
-                                {form.scope_type === 'site' && (
-                                    <SelectOption value="">
-                                        {t('assignment.siteNotSupported', '(Sites not yet modeled)')}
-                                    </SelectOption>
-                                )}
                             </Select>
                         </div>
                     )}
