@@ -246,31 +246,40 @@ func main() {
 		// Company-scoped endpoints
 		r.Group(func(cr chi.Router) {
 			cr.Use(authsvc.RequireCompany())
-			// Devices: operator+viewer can read, manager+ can write
-			cr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
-			cr.Get("/devices", handlers.ListDevices)
-			cr.Post("/devices", handlers.CreateDevice)
-			cr.Get("/devices/{id}", handlers.GetDevice)
-			cr.Put("/devices/{id}", handlers.UpdateDevice)
-			cr.Delete("/devices/{id}", handlers.DeleteDevice)
-			cr.Post("/devices/{id}/command", handlers.SendCommand)
-			cr.Post("/access-points/{id}/door-command", handlers.SendDoorCommand)
-			cr.Post("/access-points/door-command/bulk", handlers.BulkDoorCommand)
-			cr.Get("/devices/{id}/events", handlers.GetDeviceEvents)
-			cr.Get("/devices/{id}/history", handlers.GetDeviceHistory)
-			cr.Get("/events", handlers.ListEvents)
-			// Sync: manager+ only
+			// Devices: reads open to any tenant user, writes require device.manage.
+			// Commands (open door, etc.) require device.execute — enforced in
+			// the inner groups below.
+			cr.Group(func(dr chi.Router) {
+				dr.Use(authsvc.RequireWritePermission("device.manage"))
+				dr.Get("/devices", handlers.ListDevices)
+				dr.Post("/devices", handlers.CreateDevice)
+				dr.Get("/devices/{id}", handlers.GetDevice)
+				dr.Put("/devices/{id}", handlers.UpdateDevice)
+				dr.Delete("/devices/{id}", handlers.DeleteDevice)
+				dr.Get("/devices/{id}/events", handlers.GetDeviceEvents)
+				dr.Get("/devices/{id}/history", handlers.GetDeviceHistory)
+				dr.Get("/events", handlers.ListEvents)
+			})
+			// Commands: always enforce device.execute (no read-passthrough
+			// loophole since these are action endpoints).
+			cr.Group(func(er chi.Router) {
+				er.Use(authsvc.RequirePermission("device.execute"))
+				er.Post("/devices/{id}/command", handlers.SendCommand)
+				er.Post("/access-points/{id}/door-command", handlers.SendDoorCommand)
+				er.Post("/access-points/door-command/bulk", handlers.BulkDoorCommand)
+			})
+			// Sync: sync jobs mutate device state, so we require device.manage.
 			cr.Group(func(mr chi.Router) {
-				mr.Use(authsvc.RequireRole("primary_manager", "manager", "system_admin"))
+				mr.Use(authsvc.RequirePermission("device.manage"))
 				mr.Post("/devices/{id}/sync", syncService.HandleSyncRequest)
 				mr.Get("/devices/{id}/sync/jobs/{jobID}", syncService.HandleGetSyncJob)
 			})
 		})
 
-		// QR Provisioning: manager+ with company context
+		// QR Provisioning: requires device.manage (creates new device rows)
 		r.Group(func(pr chi.Router) {
 			pr.Use(authsvc.RequireCompany())
-			pr.Use(authsvc.RequireRole("primary_manager", "manager", "system_admin"))
+			pr.Use(authsvc.RequirePermission("device.manage"))
 			pr.Post("/devices/provision", provHandlers.ProvisionDevice)
 			pr.Get("/devices/provision/{id}/qr", provHandlers.RegenerateQR)
 		})
