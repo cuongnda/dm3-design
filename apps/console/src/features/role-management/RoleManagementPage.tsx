@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, Shield, KeyRound } from 'lucide-react';
+import { Plus, Edit, Trash2, Shield, KeyRound, Lock } from 'lucide-react';
 import {
     Button,
     Input,
@@ -15,6 +15,30 @@ import { listRbacRoles, deleteRbacRole, listRbacPermissions } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { RoleModal } from './RoleModal';
 import type { Role, Permission } from './types';
+
+// Built-in fixed roles are enforced in backend code (not stored as rbac_roles rows).
+// We surface them here as read-only entries so the list is never misleadingly empty.
+const BUILTIN_ROLE_KEYS = ['system_admin', 'primary_manager', 'member'] as const;
+
+function isBuiltinRole(role: Role): boolean {
+    return role.id.startsWith('builtin:');
+}
+
+function buildBuiltinRoles(t: (key: string) => string): Role[] {
+    return BUILTIN_ROLE_KEYS.map((key): Role => ({
+        id: `builtin:${key}`,
+        tenant_id: '',
+        name: t(`builtin.${key}.name`),
+        description: t(`builtin.${key}.description`),
+        template_key: key,
+        is_system_template_copy: false,
+        status: 'active',
+        permissions: [],
+        assignment_count: 0,
+        created_at: '',
+        updated_at: '',
+    }));
+}
 
 function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
     switch (status) {
@@ -76,16 +100,20 @@ export function RoleManagementPage() {
         }
     };
 
+    const builtinRoles = useMemo(() => buildBuiltinRoles(t), [t]);
+
+    const displayRoles = useMemo(() => [...builtinRoles, ...roles], [builtinRoles, roles]);
+
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return roles;
-        return roles.filter(
+        if (!q) return displayRoles;
+        return displayRoles.filter(
             (r) =>
                 r.name.toLowerCase().includes(q) ||
                 (r.description ?? '').toLowerCase().includes(q) ||
                 (r.template_key ?? '').toLowerCase().includes(q),
         );
-    }, [roles, search]);
+    }, [displayRoles, search]);
 
     const roleColumns = useMemo(
         (): Column<Role>[] => [
@@ -93,23 +121,34 @@ export function RoleManagementPage() {
                 key: 'name',
                 header: t('col.name'),
                 sortable: true,
-                render: (r) => (
-                    <div className="flex items-center gap-2.5">
-                        <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-border bg-muted flex items-center justify-center">
-                            <Shield size={14} className="text-muted-foreground" />
+                render: (r) => {
+                    const builtin = isBuiltinRole(r);
+                    return (
+                        <div className="flex items-center gap-2.5">
+                            <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-border bg-muted flex items-center justify-center">
+                                {builtin ? (
+                                    <Lock size={14} className="text-muted-foreground" />
+                                ) : (
+                                    <Shield size={14} className="text-muted-foreground" />
+                                )}
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                                <span className="text-[13px] font-medium truncate">{r.name}</span>
+                                {builtin ? (
+                                    <Badge variant="outline" className="mt-0.5 w-fit text-[10px] px-1.5 py-0">
+                                        {t('builtin.badge')}
+                                    </Badge>
+                                ) : r.template_key ? (
+                                    <span className="font-mono text-[11px] text-muted-foreground truncate">
+                                        {r.template_key}
+                                    </span>
+                                ) : (
+                                    <span className="text-[11px] text-muted-foreground">{t('custom')}</span>
+                                )}
+                            </div>
                         </div>
-                        <div className="flex flex-col min-w-0">
-                            <span className="text-[13px] font-medium truncate">{r.name}</span>
-                            {r.template_key ? (
-                                <span className="font-mono text-[11px] text-muted-foreground truncate">
-                                    {r.template_key}
-                                </span>
-                            ) : (
-                                <span className="text-[11px] text-muted-foreground">{t('custom')}</span>
-                            )}
-                        </div>
-                    </div>
-                ),
+                    );
+                },
             },
             {
                 key: 'description',
@@ -124,17 +163,23 @@ export function RoleManagementPage() {
                 key: 'permissions',
                 header: t('col.permissions'),
                 width: '120px',
-                render: (r) => (
-                    <span className="text-[13px] tabular-nums">{r.permissions?.length ?? 0}</span>
-                ),
+                render: (r) =>
+                    isBuiltinRole(r) ? (
+                        <span className="text-[13px] text-muted-foreground">—</span>
+                    ) : (
+                        <span className="text-[13px] tabular-nums">{r.permissions?.length ?? 0}</span>
+                    ),
             },
             {
                 key: 'assignment_count',
                 header: t('col.assignments'),
                 width: '120px',
-                render: (r) => (
-                    <span className="text-[13px] tabular-nums">{r.assignment_count}</span>
-                ),
+                render: (r) =>
+                    isBuiltinRole(r) ? (
+                        <span className="text-[13px] text-muted-foreground">—</span>
+                    ) : (
+                        <span className="text-[13px] tabular-nums">{r.assignment_count}</span>
+                    ),
             },
             {
                 key: 'status',
@@ -148,30 +193,35 @@ export function RoleManagementPage() {
                 key: 'actions',
                 header: t('common:table.actions'),
                 width: '104px',
-                render: (r) => (
-                    <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setEditingRole(r)}
-                            title={t('modal.editTitle')}
-                            data-testid={`role-button-edit-${r.id}`}
-                        >
-                            <Edit size={14} />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setDeletingRole(r)}
-                            title={t('delete.title')}
-                            className="text-destructive hover:text-destructive"
-                            data-testid={`role-button-delete-${r.id}`}
-                            disabled={r.assignment_count > 0}
-                        >
-                            <Trash2 size={14} />
-                        </Button>
-                    </div>
-                ),
+                render: (r) => {
+                    if (isBuiltinRole(r)) {
+                        return <span className="sr-only">—</span>;
+                    }
+                    return (
+                        <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditingRole(r)}
+                                title={t('modal.editTitle')}
+                                data-testid={`role-button-edit-${r.id}`}
+                            >
+                                <Edit size={14} />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setDeletingRole(r)}
+                                title={t('delete.title')}
+                                className="text-destructive hover:text-destructive"
+                                data-testid={`role-button-delete-${r.id}`}
+                                disabled={r.assignment_count > 0}
+                            >
+                                <Trash2 size={14} />
+                            </Button>
+                        </div>
+                    );
+                },
             },
         ],
         [t],
@@ -252,7 +302,10 @@ export function RoleManagementPage() {
                         columns={roleColumns}
                         data={filtered}
                         rowKey={(r) => r.id}
-                        onRowDoubleClick={(r) => navigate(`/settings/roles/${r.id}`)}
+                        onRowDoubleClick={(r) => {
+                            if (isBuiltinRole(r)) return;
+                            navigate(`/settings/roles/${r.id}`);
+                        }}
                         emptyIcon={<KeyRound size={32} strokeWidth={1.2} />}
                         emptyTitle={
                             search
