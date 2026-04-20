@@ -42,7 +42,7 @@ import { FirmwareDetailPage } from '@/features/system/FirmwareDetailPage';
 import { UserAccountListPage } from '@/features/system/UserAccountListPage';
 import { UserAccountDetailPage } from '@/features/system/UserAccountDetailPage';
 import { ProtectedRoute } from './ProtectedRoute';
-import { RoleBasedRoute } from './RoleBasedRoute';
+import { RoleBasedRoute, SystemAdminRoute } from './RoleBasedRoute';
 import { PluginGuard } from '@/components/common/PluginGuard';
 
 // Essential Security Features (legacy)
@@ -337,6 +337,8 @@ export const Router = createBrowserRouter([
     children: [
       {
         path: '/system',
+        element: <SystemAdminRoute />,
+        children: [{
         element: <SystemLayout />,
         children: [
           { index: true, element: <SystemDashboardPage /> },
@@ -353,6 +355,7 @@ export const Router = createBrowserRouter([
           { path: 'settings', element: <LazyWrap><SystemSettingsPage /></LazyWrap> },
           { path: 'audit', element: <LazyWrap><AuditLogPage /></LazyWrap> },
         ],
+        }],
       },
       {
         path: '/',

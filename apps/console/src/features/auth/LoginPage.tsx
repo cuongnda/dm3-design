@@ -39,12 +39,16 @@ export function LoginPage() {
       role,
       initials: (userInfo.name || userInfo.email).slice(0, 2).toUpperCase(),
     }, enabledPlugins);
-    // Honour `?next=` from ProtectedRoute so users return to where they were
-    // bounced from. Guard against open-redirect by accepting only same-origin
-    // path-relative values.
     const rawNext = searchParams.get('next');
-    const nextIsSafe = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') && !rawNext.startsWith('/login');
-    const fallback = role === 'system_admin' ? '/system' : '/';
+    const isSystemPath = rawNext?.startsWith('/system');
+    const userIsSystem = role === 'system_admin';
+    const nextIsSafe =
+      !!rawNext &&
+      rawNext.startsWith('/') &&
+      !rawNext.startsWith('//') &&
+      !rawNext.startsWith('/login') &&
+      (isSystemPath ? userIsSystem : !userIsSystem);
+    const fallback = userIsSystem ? '/system' : '/';
     navigate(nextIsSafe ? rawNext! : fallback);
   };
 
