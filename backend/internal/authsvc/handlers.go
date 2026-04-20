@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/duali/dm3-backend/internal/rbac"
@@ -1238,13 +1239,15 @@ func (h *AuthHandlers) ResetUserPassword(w http.ResponseWriter, r *http.Request)
 	// Update ALL rows for this user's email — the codebase assumes every row
 	// sharing an email shares one password (Login picks accounts[0] and treats
 	// its hash as authoritative; partial updates leave other-company rows
-	// stuck on the old hash).
+	// stuck on the old hash). RETURNING surfaces the email + name once, so we
+	// can email the user without a second round-trip.
 	//
 	// Also clear failed_attempts + locked_until: an admin reset is implicitly
 	// an unlock. Otherwise a user who got locked out from typing the previous
 	// (broken) password 5× sees "invalid credentials" even with the new one.
 	// See [SA-02].
-	result, err := h.db.Pool.Exec(r.Context(),
+	var userEmail, userName string
+	err = h.db.Pool.QueryRow(r.Context(),
 		`UPDATE dm3_auth.accounts
 		    SET password_hash   = $1,
 		        failed_attempts = 0,
@@ -1254,21 +1257,51 @@ func (h *AuthHandlers) ResetUserPassword(w http.ResponseWriter, r *http.Request)
 		            SELECT email FROM dm3_auth.accounts
 		             WHERE id = $2::uuid AND status != 'deleted'
 		        )
-		    AND status != 'deleted'`,
-		string(hashedPassword), userID)
+		    AND status != 'deleted'
+		RETURNING email, COALESCE(full_name, first_name, email)`,
+		string(hashedPassword), userID,
+	).Scan(&userEmail, &userName)
 	if err != nil {
+		// pgx returns ErrNoRows when nothing matched.
+		if err == pgx.ErrNoRows {
+			httputil.Error(w, http.StatusNotFound, "user not found")
+			return
+		}
 		httputil.Error(w, http.StatusInternalServerError, "failed to update password")
 		return
 	}
-	if result.RowsAffected() == 0 {
-		httputil.Error(w, http.StatusNotFound, "user not found")
-		return
+
+	// Email the new password to the user — best-effort. SMTP failures (no
+	// client configured, network down, bad credentials) must not fail the
+	// reset itself; the admin already sees the password in the response and
+	// can communicate it manually. We surface email_sent so the UI can show
+	// "emailed to user@example.com" vs "tell them yourself" without a guess.
+	// See [SA-03].
+	emailSent := false
+	if h.email != nil {
+		go func(addr, name, pw, loginURL string) {
+			msg := email.AdminPasswordResetEmail(addr, email.AdminPasswordResetData{
+				UserName:    name,
+				NewPassword: pw,
+				LoginLink:   loginURL,
+			})
+			if err := h.email.Send(msg); err != nil {
+				slog.Error("admin password reset: send email", "error", err, "email", addr)
+				return
+			}
+			slog.Info("admin password reset email sent", "email", addr)
+		}(userEmail, userName, newPassword, h.appURL)
+		emailSent = true
 	}
 
-	h.audit.LogFromRequest(r, "account.password_reset", "account", userID, userID, "success", nil, nil)
+	h.audit.LogFromRequest(r, "account.password_reset", "account", userID, userEmail, "success", nil, map[string]any{
+		"email_dispatched": emailSent,
+	})
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{
-		"password": newPassword,
-		"message":  "password reset successfully",
+		"password":   newPassword,
+		"email_sent": emailSent,
+		"email":      userEmail,
+		"message":    "password reset successfully",
 	})
 }
 
