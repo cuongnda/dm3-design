@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Shield, Bell, FileText, Mail, Save, Users } from 'lucide-react';
+import { Shield, Bell, FileText, Mail, Save, Users, KeyRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Checkbox } from '@dm3/ui';
+import { hasPlugin } from '@/stores/authStore';
 
 type Tab = 'security' | 'notifications';
 
@@ -89,6 +90,17 @@ export function SettingsPage() {
               <FileText size={18} />
               {t('settings.tabs.auditLog')}
             </button>
+            {hasPlugin('api_integration') && (
+              <button
+                type="button"
+                onClick={() => navigate('/settings/api-tokens')}
+                className="w-full flex items-center gap-3 px-3 py-2 text-left rounded-md transition-colors hover:bg-muted"
+                data-testid="settings-link-api-tokens"
+              >
+                <KeyRound size={18} />
+                {t('settings.tabs.apiTokens')}
+              </button>
+            )}
           </nav>
         </div>
 

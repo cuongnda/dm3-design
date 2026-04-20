@@ -88,25 +88,37 @@ func (h *AuthHandlers) ValidateAPIKey(w http.ResponseWriter, r *http.Request) {
 		expiresAt   *time.Time
 		rateTier    string
 	)
+	// Join oauth_api_tokens with the owning tenant so we can reject tokens
+	// whose tenant has had the api_integration plugin disabled. This is the
+	// kill switch: a system admin disabling the plugin for a tenant
+	// immediately invalidates every token that tenant has issued, even
+	// though the tokens still exist in the table.
+	var pluginEnabled bool
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id::text, tenant_id::text, client_id::text, scopes,
+		`SELECT t.id::text, t.tenant_id::text, t.client_id::text, t.scopes,
 		        COALESCE(
 		            (SELECT array_agg(host(ip)::text)
-		               FROM unnest(ip_whitelist) AS ip),
+		               FROM unnest(t.ip_whitelist) AS ip),
 		            '{}'::text[]
 		        ) AS ip_whitelist_text,
-		        status, expires_at, rate_limit_tier
-		   FROM dm3_auth.oauth_api_tokens
-		  WHERE token_hash = $1
+		        t.status, t.expires_at, t.rate_limit_tier,
+		        'api_integration' = ANY(tn.enabled_plugins) AS plugin_enabled
+		   FROM dm3_auth.oauth_api_tokens t
+		   JOIN dm3_auth.tenants tn ON tn.id = t.tenant_id
+		  WHERE t.token_hash = $1
 		  LIMIT 1`,
 		hash,
-	).Scan(&tokenID, &tenantID, &clientID, &scopes, &ipWhitelist, &status, &expiresAt, &rateTier)
+	).Scan(&tokenID, &tenantID, &clientID, &scopes, &ipWhitelist, &status, &expiresAt, &rateTier, &pluginEnabled)
 	if errors.Is(err, pgx.ErrNoRows) {
 		httputil.Error(w, http.StatusUnauthorized, "api key not recognized")
 		return
 	}
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "api key lookup failed")
+		return
+	}
+	if !pluginEnabled {
+		httputil.Error(w, http.StatusForbidden, "api integration is not enabled for this tenant")
 		return
 	}
 
@@ -688,6 +700,17 @@ func (h *AuthHandlers) tokenClientCredentials(w http.ResponseWriter, r *http.Req
 	if !containsStr(grantTypes, "client_credentials") {
 		oauthError(w, http.StatusBadRequest, "unauthorized_client", "client_credentials not allowed for this client")
 		return
+	}
+	// Tenant-scoped clients are gated on the api_integration plugin. System-wide
+	// clients (tenant_id NULL) are managed by system_admin and aren't gated.
+	if tenantID != nil {
+		var pluginEnabled bool
+		if err := h.db.Pool.QueryRow(r.Context(),
+			`SELECT 'api_integration' = ANY(enabled_plugins) FROM dm3_auth.tenants WHERE id = $1::uuid`,
+			*tenantID).Scan(&pluginEnabled); err != nil || !pluginEnabled {
+			oauthError(w, http.StatusForbidden, "access_denied", "api integration is not enabled for this tenant")
+			return
+		}
 	}
 	if bcrypt.CompareHashAndPassword([]byte(secretHash), []byte(req.ClientSecret)) != nil {
 		oauthError(w, http.StatusUnauthorized, "invalid_client", "bad client secret")

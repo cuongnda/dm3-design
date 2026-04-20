@@ -186,18 +186,27 @@ func main() {
 		pr.Post("/api/v1/auth/device-token", h.DeviceToken)
 		pr.Get("/api/v1/auth/roles", h.ListRoles)
 
-		// API tokens — tenant-scoped CRUD. Tokens are issued here and validated
-		// by Traefik forwardAuth against /api/v1/auth/validate-api-key above.
-		pr.Get("/api/v1/auth/api-tokens", h.ListAPITokens)
-		pr.Post("/api/v1/auth/api-tokens", h.CreateAPIToken)
-		pr.Delete("/api/v1/auth/api-tokens/{id}", h.RevokeAPIToken)
+		// API tokens + OAuth clients — gated behind the api_integration plugin.
+		// This feature is only exposed to tenants that have signed an
+		// integration agreement; system_admin toggles the plugin per tenant
+		// via /api/v1/auth/system/companies/{id}/plugins.
+		pr.Group(func(ar chi.Router) {
+			ar.Use(authsvc.RequirePlugin("api_integration"))
 
-		// OAuth2 clients — tenant admins manage their own; system_admin can
-		// create system-wide clients (null tenant_id). Authorization is
-		// enforced inside the handlers.
-		pr.Get("/api/v1/auth/oauth-clients", h.ListOAuthClients)
-		pr.Post("/api/v1/auth/oauth-clients", h.CreateOAuthClient)
-		pr.Delete("/api/v1/auth/oauth-clients/{id}", h.RevokeOAuthClient)
+			// API tokens — tenant-scoped CRUD. Tokens are validated by
+			// Traefik forwardAuth against /api/v1/auth/validate-api-key
+			// (which itself re-checks the plugin on every request).
+			ar.Get("/api/v1/auth/api-tokens", h.ListAPITokens)
+			ar.Post("/api/v1/auth/api-tokens", h.CreateAPIToken)
+			ar.Delete("/api/v1/auth/api-tokens/{id}", h.RevokeAPIToken)
+
+			// OAuth2 clients — tenant admins manage their own; system_admin
+			// can create system-wide clients (null tenant_id). Authorization
+			// is enforced inside the handlers.
+			ar.Get("/api/v1/auth/oauth-clients", h.ListOAuthClients)
+			ar.Post("/api/v1/auth/oauth-clients", h.CreateOAuthClient)
+			ar.Delete("/api/v1/auth/oauth-clients/{id}", h.RevokeOAuthClient)
+		})
 
 		// RBAC — company roles, permissions catalog, and assignments.
 		// Authorization is handled inside each handler: system_admin and

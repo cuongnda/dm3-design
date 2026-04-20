@@ -288,6 +288,9 @@ const TenantAuditLogPage = lazyWithRetry(() =>
 const EmailTemplatesPage = lazyWithRetry(() =>
   import('@/features/settings/EmailTemplatesPage').then((m) => ({ default: m.EmailTemplatesPage }))
 );
+const ApiTokensPage = lazyWithRetry(() =>
+  import('@/features/settings/ApiTokensPage').then((m) => ({ default: m.ApiTokensPage }))
+);
 
 // SYSTEM AUDIT
 const AuditLogPage = lazyWithRetry(() =>
@@ -474,6 +477,7 @@ export const Router = createBrowserRouter([
               { path: 'settings', element: <LazyWrap><SettingsPage /></LazyWrap> },
               { path: 'settings/audit-log', element: <LazyWrap><TenantAuditLogPage /></LazyWrap> },
               { path: 'settings/email-templates', element: <LazyWrap><EmailTemplatesPage /></LazyWrap> },
+              { path: 'settings/api-tokens', element: <PluginGuard plugin="api_integration"><LazyWrap><ApiTokensPage /></LazyWrap></PluginGuard> },
               { path: 'settings/roles', element: <LazyWrap><RoleManagementPage /></LazyWrap> },
               { path: 'settings/roles/:id', element: <LazyWrap><RoleDetailPage /></LazyWrap> },
             ],
