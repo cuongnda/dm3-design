@@ -1,5 +1,7 @@
 {
   "title": "Bảng điều khiển",
+  "header.lastUpdated": "Cập nhật",
+  "header.refresh": "Làm mới",
   "stats.eventsToday": "Sự kiện hôm nay",
   "stats.doors": "Cửa",
   "stats.devicesOnline": "Thiết bị trực tuyến",
@@ -15,6 +17,8 @@
   "events.live": "Trực tiếp",
   "events.cached": "Đã lưu",
   "events.viewAll": "Xem tất cả →",
+  "events.granted": "được phép",
+  "events.denied": "từ chối",
   "alerts.title": "Cảnh báo đang hoạt động",
   "alerts.viewAll": "Xem tất cả →",
   "alerts.emptyTitle": "Mọi thứ ổn định",

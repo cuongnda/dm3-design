@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useActiveAlarms } from '@dm3/api-client';
@@ -11,6 +12,7 @@ const severityDot: Record<string, string> = {
 
 export function ActiveAlertsPanel(): React.ReactElement {
   const { t } = useTranslation('dashboard');
+  const navigate = useNavigate();
   const activeAlarms = useActiveAlarms();
 
   const alerts = activeAlarms.map((alarm) => ({
@@ -30,9 +32,14 @@ export function ActiveAlertsPanel(): React.ReactElement {
           <AlertTriangle size={14} className="text-warning" />
           {t('alerts.title')}
         </div>
-        <span className="text-[12px] text-secure cursor-pointer hover:underline">
+        <button
+          type="button"
+          data-testid="dashboard-section-active-alerts-cta"
+          onClick={() => navigate('/alerts')}
+          className="text-[12px] text-secure hover:underline"
+        >
           {t('alerts.viewAll')}
-        </span>
+        </button>
       </div>
       <div className="px-4 py-3 space-y-0">
         {alerts.length === 0 ? (

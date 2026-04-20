@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { EventFeed } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { useStats } from '@/lib/hooks';
@@ -35,6 +36,7 @@ function eventDtoToAccessEvent(e: AccessEventDTO): AccessEvent {
 
 export function LiveEventsPanel(): React.ReactElement {
   const { t } = useTranslation('dashboard');
+  const navigate = useNavigate();
 
   const { data: statsData } = useStats();
   const isConnected = useRealtimeStore((s) => s.connected);
@@ -53,6 +55,11 @@ export function LiveEventsPanel(): React.ReactElement {
         ].slice(0, 10)
       : apiEvents.slice(0, 10);
 
+  const granted = statsData?.granted_today ?? 0;
+  const denied = statsData?.denied_today ?? 0;
+  const total = granted + denied;
+  const grantedPct = total > 0 ? (granted / total) * 100 : 0;
+
   return (
     <div
       data-testid="dashboard-section-live-events"
@@ -68,26 +75,40 @@ export function LiveEventsPanel(): React.ReactElement {
           />
           {t('events.title')} ({isConnected ? t('events.live') : t('events.cached')})
         </div>
-        <span className="text-[12px] text-secure cursor-pointer hover:underline">
+        <button
+          type="button"
+          data-testid="dashboard-section-live-events-cta"
+          onClick={() => navigate('/monitoring')}
+          className="text-[12px] text-secure hover:underline"
+        >
           {t('events.viewAll')}
-        </span>
+        </button>
       </div>
       <div className="px-4 py-3">
-        <div className="h-10 mb-3 rounded bg-linear-to-b from-transparent to-secure/10 relative overflow-hidden">
-          <svg
-            className="absolute inset-0 w-full h-full"
-            viewBox="0 0 400 40"
-            preserveAspectRatio="none"
-          >
-            <path
-              d="M0,35 Q20,30 40,28 T80,20 T120,25 T160,15 T200,10 T240,18 T280,8 T320,12 T360,6 T400,10"
-              fill="none"
-              stroke="currentColor"
-              className="text-secure"
-              strokeWidth="2"
-            />
-          </svg>
-        </div>
+        {total > 0 && (
+          <div className="mb-3">
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
+              <span>
+                <span className="text-success font-medium">{granted}</span>{' '}
+                {t('events.granted', 'granted')}
+              </span>
+              <span>
+                <span className="text-error font-medium">{denied}</span>{' '}
+                {t('events.denied', 'denied')}
+              </span>
+            </div>
+            <div className="h-1.5 bg-muted/30 rounded overflow-hidden flex">
+              <div
+                className="bg-success h-full"
+                style={{ width: `${grantedPct}%` }}
+              />
+              <div
+                className="bg-error h-full"
+                style={{ width: `${100 - grantedPct}%` }}
+              />
+            </div>
+          </div>
+        )}
         <EventFeed events={events} />
       </div>
     </div>

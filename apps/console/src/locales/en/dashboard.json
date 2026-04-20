@@ -1,5 +1,7 @@
 {
   "title": "Dashboard",
+  "header.lastUpdated": "Updated",
+  "header.refresh": "Refresh",
   "stats.eventsToday": "Events Today",
   "stats.doors": "Doors",
   "stats.devicesOnline": "Devices Online",
@@ -15,6 +17,8 @@
   "events.live": "Live",
   "events.cached": "Cached",
   "events.viewAll": "View All →",
+  "events.granted": "granted",
+  "events.denied": "denied",
   "alerts.title": "Active Alerts",
   "alerts.viewAll": "View All →",
   "alerts.emptyTitle": "All clear",

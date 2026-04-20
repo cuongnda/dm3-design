@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Building2, Calendar } from 'lucide-react';
+import { RefreshCcw } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { useRealtimeStore } from '@dm3/api-client';
@@ -11,28 +13,61 @@ import { ActiveAlertsPanel } from './sections/ActiveAlertsPanel';
 import { DomainHealthGrid } from './sections/DomainHealthGrid';
 import { AuditStrip } from './sections/AuditStrip';
 
+function formatTime(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 export function DashboardPage(): React.ReactElement {
   const { t } = useTranslation('dashboard');
+  const queryClient = useQueryClient();
   const isConnected = useRealtimeStore((s) => s.connected);
   const isConnecting = useRealtimeStore((s) => s.connecting);
+
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    const id = setInterval(() => setLastRefresh((prev) => prev), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const handleRefresh = async (): Promise<void> => {
+    setRefreshing(true);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      await queryClient.invalidateQueries({ queryKey: ['stats'] });
+      await queryClient.invalidateQueries({ queryKey: ['devices'] });
+      setLastRefresh(new Date());
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   return (
     <div>
       <PageHeader title={t('title')}>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <span
+            data-testid="dashboard-updated-at"
+            className="text-[11px] text-muted-foreground tabular-nums"
+          >
+            {t('header.lastUpdated', 'Updated')} {formatTime(lastRefresh)}
+          </span>
           <button
             type="button"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            data-testid="dashboard-button-refresh"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border rounded-md text-foreground text-[12px] hover:bg-muted/20 disabled:opacity-50"
+          >
+            <RefreshCcw size={14} className={refreshing ? 'animate-spin' : ''} />
+            {t('header.refresh', 'Refresh')}
+          </button>
+          <div
+            data-testid="dashboard-connection-status"
             className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border rounded-md text-foreground text-[12px]"
           >
-            <Building2 size={14} /> Landmark 81 ▾
-          </button>
-          <button
-            type="button"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border rounded-md text-foreground text-[12px]"
-          >
-            <Calendar size={14} /> Today ▾
-          </button>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border rounded-md text-foreground text-[12px]">
             <span
               className={cn(
                 'w-2 h-2 rounded-full',

@@ -52,7 +52,7 @@ export function AuditStrip(): React.ReactElement {
         <button
           type="button"
           data-testid="dashboard-section-audit-strip-cta"
-          onClick={() => navigate('/settings/audit')}
+          onClick={() => navigate('/settings/audit-log')}
           className="text-[12px] text-secure hover:underline"
         >
           {t('audit.viewAll', 'View audit log →')}

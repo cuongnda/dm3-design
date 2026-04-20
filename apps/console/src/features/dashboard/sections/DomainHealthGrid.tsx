@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Building2, Check, Lock, UserCog } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePlugin } from '../hooks/usePlugin';
@@ -22,6 +23,7 @@ interface DomainSection {
   Icon: typeof Lock;
   items: HealthItem[];
   viewLink: string;
+  route: string;
 }
 
 const healthStatusClass: Record<Status, string> = {
@@ -32,6 +34,7 @@ const healthStatusClass: Record<Status, string> = {
 
 export function DomainHealthGrid(): React.ReactElement | null {
   const { t } = useTranslation('dashboard');
+  const navigate = useNavigate();
 
   const cctvEnabled = usePlugin('cctv');
   const visitorEnabled = usePlugin('visitor');
@@ -103,6 +106,7 @@ export function DomainHealthGrid(): React.ReactElement | null {
       colorCls: 'text-secure',
       Icon: Lock,
       viewLink: t('health.viewSecurity'),
+      route: '/alerts',
       items: secureItems,
     },
   ];
@@ -113,6 +117,7 @@ export function DomainHealthGrid(): React.ReactElement | null {
       colorCls: 'text-manage',
       Icon: UserCog,
       viewLink: t('health.viewPeople'),
+      route: '/manage/users',
       items: manageItems,
     });
   }
@@ -123,6 +128,7 @@ export function DomainHealthGrid(): React.ReactElement | null {
       colorCls: 'text-operate',
       Icon: Building2,
       viewLink: t('health.viewFacility'),
+      route: parkingEnabled ? '/parking' : '/devices',
       items: operateItems,
     });
   }
@@ -173,9 +179,14 @@ export function DomainHealthGrid(): React.ReactElement | null {
               );
             })}
             <div className="mt-3">
-              <span className="text-[12px] text-secure cursor-pointer hover:underline">
+              <button
+                type="button"
+                data-testid={`dashboard-section-domain-health-${d.key}-cta`}
+                onClick={() => navigate(d.route)}
+                className="text-[12px] text-secure hover:underline"
+              >
                 {d.viewLink}
-              </span>
+              </button>
             </div>
           </div>
         );
