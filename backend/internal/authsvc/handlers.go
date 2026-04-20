@@ -1235,8 +1235,26 @@ func (h *AuthHandlers) ResetUserPassword(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Update ALL rows for this user's email — the codebase assumes every row
+	// sharing an email shares one password (Login picks accounts[0] and treats
+	// its hash as authoritative; partial updates leave other-company rows
+	// stuck on the old hash).
+	//
+	// Also clear failed_attempts + locked_until: an admin reset is implicitly
+	// an unlock. Otherwise a user who got locked out from typing the previous
+	// (broken) password 5× sees "invalid credentials" even with the new one.
+	// See [SA-02].
 	result, err := h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_auth.accounts SET password_hash = $1, updated_at = NOW() WHERE id = $2::uuid AND status != 'deleted'`,
+		`UPDATE dm3_auth.accounts
+		    SET password_hash   = $1,
+		        failed_attempts = 0,
+		        locked_until    = NULL,
+		        updated_at      = NOW()
+		  WHERE email IN (
+		            SELECT email FROM dm3_auth.accounts
+		             WHERE id = $2::uuid AND status != 'deleted'
+		        )
+		    AND status != 'deleted'`,
 		string(hashedPassword), userID)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to update password")
@@ -1284,8 +1302,19 @@ func (h *AuthHandlers) ChangeUserPassword(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// See ResetUserPassword — same rationale: update every row sharing this
+	// user's email and clear lockout state in the same transaction. [SA-02]
 	result, err := h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_auth.accounts SET password_hash = $1, updated_at = NOW() WHERE id = $2::uuid AND status != 'deleted'`,
+		`UPDATE dm3_auth.accounts
+		    SET password_hash   = $1,
+		        failed_attempts = 0,
+		        locked_until    = NULL,
+		        updated_at      = NOW()
+		  WHERE email IN (
+		            SELECT email FROM dm3_auth.accounts
+		             WHERE id = $2::uuid AND status != 'deleted'
+		        )
+		    AND status != 'deleted'`,
 		string(hashedPassword), userID)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to update password")

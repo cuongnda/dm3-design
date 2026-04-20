@@ -1129,18 +1129,28 @@ func (h *UserManagementHandlers) ChangeUserPassword(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Update password in accounts table (find account by user ID)
+	// Update password across every account row sharing this user's email,
+	// and clear lockout state — Login (handlers.go) treats accounts[0]'s
+	// password_hash as authoritative for the email and rejects locked
+	// accounts before checking the password. Partial updates or stale
+	// lockouts both surface to the user as "invalid credentials" even
+	// after a successful password change. See [SA-02].
 	result, err := h.db.Pool.Exec(r.Context(), `
-		UPDATE dm3_auth.accounts 
-		SET password_hash = $1, updated_at = NOW()
-		WHERE id = (
-			SELECT account_id 
-			FROM dm3_identity.users 
-			WHERE id = $2::uuid 
-			AND tenant_id = $3::uuid 
-			AND account_id IS NOT NULL
-			AND is_deleted = false
-		)
+		UPDATE dm3_auth.accounts
+		   SET password_hash   = $1,
+		       failed_attempts = 0,
+		       locked_until    = NULL,
+		       updated_at      = NOW()
+		 WHERE email IN (
+		           SELECT a.email
+		             FROM dm3_auth.accounts a
+		             JOIN dm3_identity.users u ON u.account_id = a.id
+		            WHERE u.id = $2::uuid
+		              AND u.tenant_id = $3::uuid
+		              AND u.account_id IS NOT NULL
+		              AND u.is_deleted = false
+		       )
+		   AND status != 'deleted'
 	`, string(hashedPassword), userID, tenantID)
 
 	if err != nil {
