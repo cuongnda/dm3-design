@@ -124,6 +124,9 @@ export function Multiselect({
       flexDirection: "column",
       overflow: "hidden",
       zIndex: 2147483647,
+      // Escape Radix Dialog's body `pointer-events: none` so the panel is
+      // interactive when this dropdown is rendered inside a modal.
+      pointerEvents: "auto",
     }
 
     setPanelStyle(
@@ -202,6 +205,7 @@ export function Multiselect({
         createPortal(
           <div
             ref={panelRef}
+            data-slot="select-panel"
             style={panelStyle}
             className="rounded-md border border-border bg-card text-foreground shadow-xl"
           >
