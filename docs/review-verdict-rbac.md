@@ -2,7 +2,7 @@
 
 ## Verdict
 - **Risk:** MEDIUM
-- **Recommendation:** NEEDS CHANGES
+- **Recommendation:** MERGEABLE WITH FOLLOW-UP
 
 ## Scope Reviewed
 Reviewed the current RBAC implementation across backend and frontend, including:
@@ -11,7 +11,8 @@ Reviewed the current RBAC implementation across backend and frontend, including:
 - JWT claim integration
 - auth-svc RBAC CRUD APIs
 - role management UI and assignment flows
-- visible enforcement rollout into product routes
+- enforcement rollout into product routes
+- follow-up fixes made after the first review
 
 ## What Is Actually Implemented
 
@@ -22,7 +23,7 @@ Reviewed the current RBAC implementation across backend and frontend, including:
   - `user_role_assignments`
 - Canonical permission catalog exists in `backend/internal/rbac/catalog.go`
 - RBAC evaluation logic exists in `backend/internal/rbac/checker.go`
-- JWT access tokens now carry canonical RBAC context:
+- JWT access tokens carry canonical RBAC context:
   - `fixed_role`
   - `assignments`
   - `enabled_plugins`
@@ -45,92 +46,120 @@ Reviewed the current RBAC implementation across backend and frontend, including:
   - `/settings/roles/:id`
 - Permission labels and role-management localization are present in both English and Vietnamese locale files
 
-### Verification Performed
-- Console build passed
-- Backend tests passed:
-  - `go test ./internal/rbac ./internal/authsvc/...`
+## What Improved Since The Previous Review
+The developer materially addressed the biggest blockers from the prior review.
 
-## Main Findings
-
-### 1. RBAC foundation is real, but enforcement rollout is incomplete
-This is the main blocker to calling RBAC “fully implemented”.
-
-The codebase now has the core RBAC machinery, but visible route-level adoption is still sparse. In the reviewed backend, clear permission middleware usage was only directly observed in CCTV routes (`backend/internal/cctv/routes.go`).
-
-That means the project currently has:
-- a permission catalog
-- a checker
-- assignments in JWT
-- role-management UI
-
-But much of the product surface does not yet appear to be consistently protected by the new RBAC permission model.
-
-**Impact:** The admin surface exists before the enforcement surface is fully rolled out. That is not a finished RBAC implementation.
-
-### 2. Ghost `site` scope is still present in both backend and frontend
-`site` still exists as a supported scope in:
-- `backend/internal/rbac/catalog.go`
-- `backend/internal/rbac/checker.go`
-- migration `000035_rbac_tables.up.sql`
+### 1. `site` scope is now hidden from the UI
+The ghost user-facing `site` scope was removed from the role-management frontend surface:
 - `apps/console/src/features/role-management/types.ts`
 - `apps/console/src/features/role-management/AssignmentModal.tsx`
+- related locale cleanup
 
-The UI still allows `site` selection while also acknowledging that sites are not really modeled. This is the same ghost-domain problem seen elsewhere in DM3.
+The backend catalog still preserves `site` for future modeling, but the current UI no longer exposes a fake or unassignable path to operators.
 
-**Impact:** The product exposes a scope users can pick even though the domain model is not convincingly real. Either hide/remove `site` for now, or implement it properly end to end.
+### 2. JWT assignment staleness is now explicitly documented
+The RBAC spec now documents the propagation model for:
+- assignment grants/revocations
+- role permission edits
+- plugin toggles
+- fixed-role changes
 
-### 3. Permission changes are JWT-cached, so assignment updates are not immediately authoritative
-Assignments are loaded from DB during token minting in `backend/internal/authsvc/handlers.go` and then carried in JWT claims.
+See:
+- `docs/specs/platform/company-rbac.md`
 
-This means role/assignment changes can remain stale until access token refresh or re-login.
+This was an important gap in the first review. It is now an explicit, documented tradeoff rather than hidden behavior.
 
-**Impact:** This may be an acceptable design tradeoff, but it must be treated as an explicit behavior, not an invisible surprise. Sensitive authorization expectations should not assume immediate revocation semantics unless the system compensates elsewhere.
+### 3. RBAC enforcement rollout is now materially broader
+The earlier review found that the RBAC foundation existed but visible service rollout was still thin. That is no longer true.
 
-### 4. Scope enforcement quality depends on handler integration, not just the checker
-`rbac.Check(...)` supports company/site/department/zone/self, but actual correctness depends on handlers passing the right `rbac.Target` values.
+The latest fixes moved multiple services away from legacy role-gating and onto RBAC permission-gating, including:
+- `backend/cmd/access-svc/main.go`
+- `backend/cmd/attend-svc/main.go`
+- `backend/cmd/device-gateway/main.go`
+- `backend/cmd/identity-svc/main.go`
+- `backend/cmd/parking-svc/main.go`
+- `backend/cmd/visitor-svc/main.go`
+- `backend/internal/tenant/department_routes.go`
 
-The generic middleware in `backend/internal/authsvc/rbac_adapter.go` only supplies a company-scoped tenant target by default. Fine-grained scope enforcement still requires handler-level integration.
+This is the single biggest improvement in the review delta.
 
-**Impact:** The checker is not the same thing as completed enforcement. The project still needs consistent per-resource target wiring across services.
+## Verification Performed
+- Console build passed
+  - `npm -C apps/console run build`
+- Backend tests passed
+  - `go test ./internal/rbac ./internal/authsvc/... ./cmd/access-svc ./cmd/attend-svc ./cmd/device-gateway ./cmd/identity-svc ./cmd/parking-svc ./cmd/visitor-svc`
 
-### 5. Role-management UX is real, but some behavior is still technically exposed rather than product-clean
-Examples:
-- `site` scope still appears in assignment flows
-- role detail scope rendering is still technical (`scope_type:id-prefix`) rather than operator-friendly
-- eligible assignment targets are account-bound, not person/identity-bound
+## Current Findings
 
-These are not fatal, but they reinforce that this is a foundation-stage rollout, not a polished finished RBAC system.
+### 1. This is now a real end-to-end RBAC rollout foundation, not just admin UI + checker
+The previous main blocker was incomplete enforcement rollout. The new route-level changes substantially improved that.
+
+At this point, it is fair to say the project has:
+- RBAC schema
+- permission catalog
+- checker
+- JWT integration
+- role-management UI
+- service-level permission rollout across multiple major product services
+
+That is a meaningful jump in implementation maturity.
+
+### 2. Permission mapping is improved, but some route-band choices still look coarse
+A few services now use permission middleware bands that are operationally reasonable but still somewhat coarse.
+
+Example:
+- some identity write surfaces are gated through broad write permissions rather than fully splitting create/update/delete semantics at the middleware layer
+
+This is not necessarily wrong, but it means the policy model is currently practical/coarse rather than maximally granular.
+
+**Impact:** Acceptable for now, but worth tightening later if fine-grained authorization semantics matter.
+
+### 3. Fine-grained scope correctness still depends on handler integration
+This remains the most important remaining caution.
+
+`rbac.Check(...)` supports company/site/department/zone/self, but real correctness still depends on handlers providing the right `rbac.Target` values where resource-level scope matters.
+
+The route middleware rollout is much better now, but this review still does not prove that every handler across every service is passing fully correct target context for department/zone/self decisions.
+
+**Impact:** The rollout is now mergeable, but a later focused audit of scope-sensitive handlers is still warranted.
+
+### 4. Read access policy is intentionally broad in several places
+Many services now follow the pattern:
+- reads open to any authenticated tenant user with plugin/company context
+- writes gated by RBAC permissions
+
+That is a valid product policy if intended, but it should be understood as a policy choice, not as an automatic consequence of “having RBAC”.
+
+**Impact:** If the product later wants narrower read visibility, those routes will need another pass.
 
 ## What Looks Good
 - Permission catalog structure is coherent and practical
 - Plugin gating before primary-manager bypass is the right security/commercial boundary
 - Member self-service baseline is sensible
 - Auth-side role and assignment CRUD shape is coherent
-- Backend checker and authsvc tests exist and pass
+- The biggest previous review blockers were actually addressed, not hand-waved
+- Route-level RBAC rollout is now materially broader and more credible
 - Frontend role pages are real and usable, not placeholder UI
+- Build/tests passed after the fixes
 
-## Missing Confidence / Coverage
-- No strong evidence yet that major non-auth services have broadly migrated to RBAC permission checks
-- No broad handler-level verification showing department/zone/self target enforcement across business modules
-- No evidence in this review that assignment revocation timing/staleness has been explicitly documented as an operational constraint
+## Remaining Follow-up Work
+1. Audit fine-grained scope-sensitive handlers for correct `rbac.Target` population
+2. Revisit coarse permission bundling where create/update/delete may deserve separate enforcement
+3. Revisit broad read-open policies if stricter visibility rules become a product requirement
+4. Add more service/handler-level tests for real scoped authorization paths
 
 ## Recommendation
-**Do not call this fully implemented yet.**
+This should no longer be described as “partial frontend theater” or “RBAC foundation only”. The latest fixes materially improved the implementation.
 
-More accurate status:
+More accurate status now:
 - **RBAC foundation:** implemented
 - **Role management UI/API:** implemented
 - **JWT integration:** implemented
-- **System-wide authorization rollout:** incomplete
-- **Scope model cleanup:** incomplete
-
-## Required Next Fixes
-1. Finish RBAC enforcement rollout across actual product services, not just auth-svc and isolated route slices
-2. Remove, hide, or properly implement `site` scope
-3. Document the token-staleness behavior for assignment changes and revocation expectations
-4. Add more service/handler-level tests for real scoped authorization paths
+- **Major service-level authorization rollout:** implemented
+- **Scope model cleanup in UI:** implemented
+- **Fine-grained scope audit:** still follow-up work
 
 ## Final Assessment
-This is real backend + frontend RBAC work, not frontend theater. But the claim that everything is implemented is too strong.
+This is now **mergeable with follow-up**, not “needs changes” in the earlier sense.
 
-The current state is a **solid RBAC foundation with partial enforcement rollout**, not a completed end-to-end authorization system.
+I still would not call it perfect or fully proven at fine-grained scope level. But the earlier major blockers were addressed well enough that the implementation now looks credible and practically shippable.
