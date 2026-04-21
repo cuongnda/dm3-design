@@ -649,6 +649,8 @@ export function DevicesPage() {
     person_sync: true,
     access_rules: true,
     blacklist: false,
+    visitor_sync: false,
+    kiosk_config: false,
   });
   const [transmitting, setTransmitting] = useState(false);
   const [transmitJobId, setTransmitJobId] = useState<string | null>(null);
@@ -659,7 +661,7 @@ export function DevicesPage() {
   const openTransmit = (device: Device) => {
     setTransmitDevice(device);
     setTransmitJobId(null);
-    setTransmitTypes({ config: true, person_sync: true, access_rules: true, blacklist: false });
+    setTransmitTypes({ config: true, person_sync: true, access_rules: true, blacklist: false, visitor_sync: false, kiosk_config: false });
   };
   const closeTransmit = () => {
     if (!transmitting) {
@@ -1203,7 +1205,7 @@ export function DevicesPage() {
               {t('devices.transmit.description')}
             </p>
             {(() => {
-              const keys = ['config', 'person_sync', 'access_rules', 'blacklist'];
+              const keys = ['config', 'person_sync', 'access_rules', 'blacklist', 'visitor_sync', 'kiosk_config'];
               const allOn = keys.every((k) => transmitTypes[k]);
               return (
                 <button
@@ -1226,6 +1228,8 @@ export function DevicesPage() {
             { key: 'person_sync', label: t('devices.transmit.item.person_sync.label'), desc: t('devices.transmit.item.person_sync.desc') },
             { key: 'access_rules', label: t('devices.transmit.item.access_rules.label'), desc: t('devices.transmit.item.access_rules.desc') },
             { key: 'blacklist', label: t('devices.transmit.item.blacklist.label'), desc: t('devices.transmit.item.blacklist.desc') },
+            { key: 'visitor_sync', label: t('devices.transmit.item.visitor_sync.label'), desc: t('devices.transmit.item.visitor_sync.desc') },
+            { key: 'kiosk_config', label: t('devices.transmit.item.kiosk_config.label'), desc: t('devices.transmit.item.kiosk_config.desc') },
           ].map(({ key, label, desc }) => {
             const stat = transmitJob?.per_type?.[key];
             const checked = !!transmitTypes[key];
