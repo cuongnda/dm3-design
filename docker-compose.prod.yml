@@ -367,7 +367,9 @@ services:
       MTX_RTSPADDRESS: ":8554"
       # Advertise the server's public IP as ICE candidate so browsers can
       # reach WebRTC from outside Docker bridge network.
-      MTX_WEBRTCADDITIONALHOSTS: ${MEDIAMTX_PUBLIC_IP:-}
+      MTX_WEBRTCADDITIONALHOSTS: ${MEDIAMTX_PUBLIC_IP:-52.74.195.243}
+    ports:
+      - "8189:8189/udp"
     networks:
       - dm3-internal
     # mediamtx image is distroless (no wget/curl). We rely on the service
