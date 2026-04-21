@@ -35,7 +35,8 @@
         "OBJECT_STORE_SECRET_KEY": "dm3secret123",
         "OBJECT_STORE_BUCKET": "dm3",
         "OBJECT_STORE_USE_SSL": "false",
-        "OBJECT_STORE_AUTO_CREATE_BUCKET": "true"
+        "OBJECT_STORE_AUTO_CREATE_BUCKET": "true",
+        "CCTV_CREDENTIAL_KEY": "nzcgx1Q+dM/32/z/PQ1GJ6qnlDTF8uttoN8nRs0BXbA="
       }
     },
     {
@@ -68,7 +69,7 @@
       "program": "${workspaceFolder}/backend/cmd/device-gateway",
       "cwd": "${workspaceFolder}/backend",
       "env": {
-        "HTTP_PORT": "8002",
+        "HTTP_PORT": "8002",                                                                                                 
         "DATABASE_URL": "postgres://dm3:dm3secret@192.168.1.254:5433/dm3?sslmode=disable",
         "MQTT_BROKER": "tcp://192.168.1.254:1884",
         "MQTT_CLIENT_ID": "dm3-device-gateway-debug",
@@ -126,6 +127,63 @@
       }
     },
     {
+      "name": "Parking Service",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/backend/cmd/parking-svc",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "HTTP_PORT": "8007",
+        "DATABASE_URL": "postgres://dm3:dm3secret@192.168.1.254:5433/dm3?sslmode=disable",
+        "NATS_URL": "nats://192.168.1.254:4222",
+        "JWT_SECRET": "dm3-dev-secret-key"
+      }
+    },
+    {
+      "name": "CCTV Service",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/backend/cmd/cctv-svc",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "HTTP_PORT": "8008",
+        "DATABASE_URL": "postgres://dm3:dm3secret@192.168.1.254:5433/dm3?sslmode=disable",
+        "NATS_URL": "nats://192.168.1.254:4222",
+        "JWT_SECRET": "dm3-dev-secret-key",
+        "CCTV_CREDENTIAL_KEY": "nzcgx1Q+dM/32/z/PQ1GJ6qnlDTF8uttoN8nRs0BXbA=",
+        "MEDIAMTX_API_URL": "http://192.168.1.254:9997",
+        "MEDIAMTX_API_USER": "dm3admin",
+        "MEDIAMTX_API_PASS": "dm3public123",
+        "MEDIAMTX_WHEP_BASE": "http://192.168.1.254:8889",
+        "MEDIAMTX_HLS_BASE": "http://192.168.1.254:8888",
+        "MEDIAMTX_STREAM_USER": "dm3stream",
+        "MEDIAMTX_STREAM_PASS": "dm3public123",
+        "OBJECT_STORE_ENDPOINT": "192.168.1.254:9002",
+        "OBJECT_STORE_PUBLIC_ENDPOINT": "192.168.1.254:9002",
+        "OBJECT_STORE_ACCESS_KEY": "dm3admin",
+        "OBJECT_STORE_SECRET_KEY": "dm3secret123",
+        "OBJECT_STORE_BUCKET": "dm3",
+        "OBJECT_STORE_USE_SSL": "false",
+        "OBJECT_STORE_AUTO_CREATE_BUCKET": "true"
+      }
+    },
+    {
+      "name": "Attendance Service",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/backend/cmd/attend-svc",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "HTTP_PORT": "8010",
+        "DATABASE_URL": "postgres://dm3:dm3secret@192.168.1.254:5433/dm3?sslmode=disable",
+        "NATS_URL": "nats://192.168.1.254:4222",
+        "JWT_SECRET": "dm3-dev-secret-key"
+      }
+    },
+    {
       "name": "Frontend (React)",
       "type": "node",
       "request": "launch",
@@ -150,7 +208,10 @@
         "Access Service",
         "Device Gateway",
         "Visitor Service",
-        "Audit Service"
+        "Audit Service",
+        "Parking Service",
+        "CCTV Service",
+        "Attendance Service"
       ]
     }
   ]

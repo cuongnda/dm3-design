@@ -54,6 +54,17 @@
       "options": { "cwd": "${workspaceFolder}/apps/console" },
       "problemMatcher": [],
       "isBackground": true
+    },
+    {
+      "label": "Debug: Stop All Backend",
+      "type": "shell",
+      "command": "pkill -f __debug_bin; pkill -f 'dlv dap'; echo 'all backend debug processes killed'",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "dedicated",
+        "clear": true
+      }
     }
   ]
 }
