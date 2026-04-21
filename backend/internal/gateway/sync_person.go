@@ -39,15 +39,21 @@ type syncPersonUser struct {
 	Active      bool             `json:"active"`
 }
 
+// syncPersonCred is emitted with a stable shape regardless of credential
+// type — every object carries the same keys so the device can parse with
+// one schema and switch on `type`. Fields that don't apply to a given
+// `type` are sent as empty strings (never omitted). ValidFrom/ValidUntil
+// stay optional because they represent "no restriction" when missing —
+// distinct semantics from "empty string".
 type syncPersonCred struct {
-	Type       string `json:"type"`                   // card, face, fingerprint, qr, pin, uhf
-	UID        string `json:"uid,omitempty"`          // for card type
-	Template   string `json:"template,omitempty"`     // for face/fingerprint (base64)
-	Code       string `json:"code,omitempty"`         // for qr/pin
-	Version    string `json:"version,omitempty"`      // e.g. "arcface_v3"
-	Finger     string `json:"finger,omitempty"`       // e.g. "right_index" for fingerprint
-	ValidFrom  *int64 `json:"valid_from,omitempty"`   // epoch ms — credential-level start (overrides user-level when set)
-	ValidUntil *int64 `json:"valid_until,omitempty"`  // epoch ms — credential-level expiry (overrides user-level when set)
+	Type       string `json:"type"`                  // card, face, fingerprint, qr, pin, uhf
+	UID        string `json:"uid"`                   // card / uhf UID; "" for other types
+	Template   string `json:"template"`              // face/fingerprint base64 template; "" otherwise
+	Code       string `json:"code"`                  // qr/pin code; "" otherwise
+	Version    string `json:"version"`               // e.g. "arcface_v3" for face; "" otherwise
+	Finger     string `json:"finger"`                // e.g. "right_index" for fingerprint; "" otherwise
+	ValidFrom  *int64 `json:"valid_from,omitempty"`  // epoch ms — credential-level start (overrides user-level when set)
+	ValidUntil *int64 `json:"valid_until,omitempty"` // epoch ms — credential-level expiry (overrides user-level when set)
 }
 
 // buildSyncCred maps a credential type+value+validity from DB to the spec-compliant struct.

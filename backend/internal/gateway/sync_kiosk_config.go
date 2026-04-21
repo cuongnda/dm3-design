@@ -63,6 +63,15 @@ func (s *KioskConfigSyncer) PushKioskConfigJob(ctx context.Context, tenantID, de
 		jobCtx.Registry.SetTypeTotal(jobCtx.JobID, jobCtx.Type, 1)
 	}
 
+	// Health check: migration 000039 adds the device_id column — without it,
+	// the find-or-mint INSERT fails with a cryptic "column does not exist"
+	// error. Surface a one-line "run make migrate" message instead.
+	if err := s.ensureSchemaReady(ctx); err != nil {
+		slog.Error("kiosk_config: schema not ready",
+			"tenant", tenantID, "device", deviceID, "error", err)
+		return err
+	}
+
 	// Look up tenant code + device internal id. We do both in one round trip
 	// so a rogue tenant_id / device_id mismatch is caught before minting.
 	var (
@@ -77,13 +86,18 @@ func (s *KioskConfigSyncer) PushKioskConfigJob(ctx context.Context, tenantID, de
 	`, tenantID, deviceID).Scan(&tenantCode, &deviceDBID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("kiosk_config: device %s not found in tenant %s", deviceID, tenantID)
+			wrapped := fmt.Errorf("kiosk_config: device %s not found in tenant %s (check tenant_id on dm3_devices.devices)", deviceID, tenantID)
+			slog.Error("kiosk_config: lookup failed", "tenant", tenantID, "device", deviceID, "error", wrapped)
+			return wrapped
 		}
+		slog.Error("kiosk_config: lookup error", "tenant", tenantID, "device", deviceID, "error", err)
 		return fmt.Errorf("kiosk_config: lookup tenant/device: %w", err)
 	}
 
 	token, err := s.findOrMintDeviceToken(ctx, tenantID, deviceDBID)
 	if err != nil {
+		slog.Error("kiosk_config: token mint failed",
+			"tenant", tenantID, "device", deviceID, "device_db_id", deviceDBID, "error", err)
 		return fmt.Errorf("kiosk_config: token: %w", err)
 	}
 
@@ -96,6 +110,7 @@ func (s *KioskConfigSyncer) PushKioskConfigJob(ctx context.Context, tenantID, de
 
 	dataBytes, err := json.Marshal(payload)
 	if err != nil {
+		slog.Error("kiosk_config: marshal data failed", "device", deviceID, "error", err)
 		return fmt.Errorf("kiosk_config: marshal data: %w", err)
 	}
 
@@ -115,23 +130,55 @@ func (s *KioskConfigSyncer) PushKioskConfigJob(ctx context.Context, tenantID, de
 
 	envBytes, err := json.Marshal(envelope)
 	if err != nil {
+		slog.Error("kiosk_config: marshal envelope failed", "device", deviceID, "error", err)
 		return fmt.Errorf("kiosk_config: marshal envelope: %w", err)
 	}
 
 	topic := fmt.Sprintf("dm/%s/device/%s/cfg", tenantID, deviceID)
 	if err := s.mqtt.Publish(ctx, topic, 2, envBytes); err != nil {
-		return fmt.Errorf("kiosk_config: publish: %w", err)
+		slog.Error("kiosk_config: mqtt publish failed",
+			"tenant", tenantID, "device", deviceID, "topic", topic, "error", err)
+		return fmt.Errorf("kiosk_config: publish to %s: %w", topic, err)
 	}
 	if jobCtx != nil {
 		jobCtx.Registry.IncrementPublished(jobCtx.JobID, jobCtx.Type)
 	}
 
+	// Log a short, non-reversible token prefix so on-call can correlate with
+	// the kiosk's own applied-version log. Cleartext never hits the log.
+	safePrefix := token
+	if len(safePrefix) > len(kioskTokenPrefix)+8 {
+		safePrefix = safePrefix[:len(kioskTokenPrefix)+8] + "..."
+	}
 	slog.Info("kiosk_config: pushed",
 		"tenant", tenantID,
 		"device", deviceID,
 		"company_code", tenantCode,
-		"token_prefix", token[:len(kioskTokenPrefix)+8]+"...",
+		"token_prefix", safePrefix,
 	)
+	return nil
+}
+
+// ensureSchemaReady probes information_schema for the columns this syncer
+// depends on, producing a clear "please run migrations" error if a stale
+// binary is pointed at a partially-migrated DB. Cheap (single indexed query)
+// and only runs on the Transmit Data hot path, so the overhead is negligible.
+func (s *KioskConfigSyncer) ensureSchemaReady(ctx context.Context) error {
+	var hasDeviceIDCol bool
+	err := s.db.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_schema = 'dm3_auth'
+			  AND table_name = 'kiosk_tokens'
+			  AND column_name = 'device_id'
+		)
+	`).Scan(&hasDeviceIDCol)
+	if err != nil {
+		return fmt.Errorf("kiosk_config: schema probe failed: %w", err)
+	}
+	if !hasDeviceIDCol {
+		return fmt.Errorf("kiosk_config: dm3_auth.kiosk_tokens.device_id column is missing — migration 000039_kiosk_tokens_device_scope has not been applied. Run `make migrate` against this database")
+	}
 	return nil
 }
 
@@ -167,7 +214,8 @@ func (s *KioskConfigSyncer) findOrMintDeviceToken(ctx context.Context, tenantID,
 		 WHERE device_id = $1::uuid
 		   AND revoked_at IS NULL
 	`, deviceDBID); err != nil {
-		return "", fmt.Errorf("revoke prior: %w", err)
+		slog.Error("kiosk_config: revoke prior failed", "device_db_id", deviceDBID, "error", err)
+		return "", fmt.Errorf("revoke prior (device_db_id=%s): %w", deviceDBID, err)
 	}
 
 	clear, err := mintKioskTokenClear()
@@ -182,10 +230,13 @@ func (s *KioskConfigSyncer) findOrMintDeviceToken(ctx context.Context, tenantID,
 		VALUES
 		    ($1::uuid, $2::uuid, $3, $4)
 	`, tenantID, deviceDBID, "device:"+deviceDBID, hash); err != nil {
-		return "", fmt.Errorf("insert: %w", err)
+		slog.Error("kiosk_config: insert failed",
+			"tenant", tenantID, "device_db_id", deviceDBID, "error", err)
+		return "", fmt.Errorf("insert (tenant=%s device_db_id=%s): %w", tenantID, deviceDBID, err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
+		slog.Error("kiosk_config: commit failed", "error", err)
 		return "", fmt.Errorf("commit: %w", err)
 	}
 	return clear, nil
