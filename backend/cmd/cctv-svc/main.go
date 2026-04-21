@@ -228,6 +228,11 @@ func main() {
 	})
 
 	cctv.RegisterRoutes(r, handlers, cfg.JWTSecret)
+	cctv.RegisterStreamProxyRoutes(r, handlers, cfg.JWTSecret)
+
+	// TungSon VIID camera adapter (no JWT — camera auth by device_id)
+	tungsonHandlers := cctv.NewTungSonHandlers(database, auditLog, natsClient, objectStore)
+	cctv.RegisterTungSonRoutes(r, tungsonHandlers)
 
 	// Serve
 	addr := fmt.Sprintf(":%d", cfg.HTTPPort)
