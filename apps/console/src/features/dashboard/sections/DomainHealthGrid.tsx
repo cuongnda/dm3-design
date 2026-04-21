@@ -40,6 +40,8 @@ export function DomainHealthGrid(): React.ReactElement | null {
   const visitorEnabled = usePlugin('visitor');
   const attendanceEnabled = usePlugin('attendance');
   const parkingEnabled = usePlugin('parking');
+  const intercomEnabled = usePlugin('intercom');
+  const smartBuildingEnabled = usePlugin('smart_building');
 
   const cctv = useCctvSummary();
   const visitor = useVisitorSummary();
@@ -61,6 +63,13 @@ export function DomainHealthGrid(): React.ReactElement | null {
           ? `${offline} ${t('plugin.camerasOffline', 'offline')}`
           : t('plugin.allOnline', 'all online')
         : t('plugin.noData', 'No data available'),
+    });
+  }
+  if (intercomEnabled) {
+    secureItems.push({
+      module: t('modules.intercom', 'Intercom'),
+      status: 'ok',
+      detail: t('health.enabled', 'Enabled'),
     });
   }
 
@@ -96,6 +105,13 @@ export function DomainHealthGrid(): React.ReactElement | null {
       detail: parking.data
         ? `${pct}% ${t('health.full', 'full')}`
         : t('plugin.noData', 'No data available'),
+    });
+  }
+  if (smartBuildingEnabled) {
+    operateItems.push({
+      module: t('modules.smartBuilding', 'Smart Building'),
+      status: 'ok',
+      detail: t('health.enabled', 'Enabled'),
     });
   }
 

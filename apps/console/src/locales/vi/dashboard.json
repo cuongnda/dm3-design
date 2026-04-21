@@ -40,6 +40,7 @@
   "health.viewFacility": "Xem Cơ sở →",
   "health.online": "Trực tuyến",
   "health.full": "đã sử dụng",
+  "health.enabled": "Đã bật",
   "audit.title": "Hoạt động gần đây",
   "audit.viewAll": "Xem nhật ký →",
   "audit.emptyHint": "Chưa có hoạt động nào.",
@@ -56,6 +57,7 @@
   "modules.visitors": "Khách",
   "modules.attendance": "Chấm công",
   "modules.parking": "Bãi đỗ xe",
+  "modules.smartBuilding": "Tòa nhà thông minh",
   "plugin.parkingOccupancy": "Tỉ lệ đỗ xe",
   "plugin.parkingSpots": "chỗ",
   "plugin.visitorsWaiting": "Khách chờ",
@@ -93,5 +95,10 @@
   "insight.attendanceOnLeave": "Nghỉ phép",
   "insight.apiIntegration": "Tích hợp API",
   "insight.apiIntegrationHint": "Quản lý API token và OAuth client cho tích hợp bên thứ ba.",
-  "insight.viewApiTokens": "Quản lý Token →"
+  "insight.viewApiTokens": "Quản lý Token →",
+  "insight.intercom": "Intercom",
+  "insight.intercomHint": "Đàm thoại video kèm mở cửa từ xa. Định tuyến cuộc gọi đến đúng nhân viên.",
+  "insight.viewIntercom": "Mở Intercom →",
+  "insight.smartBuilding": "Tòa nhà thông minh",
+  "insight.smartBuildingHint": "HVAC, chiếu sáng và phân tích mật độ. Bảng điều khiển telemetry sắp ra mắt."
 }
