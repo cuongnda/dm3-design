@@ -29,6 +29,9 @@ backend/parking-svc
 backend/cctv-svc
 backend/bin/
 
+# Delve debug binaries (VS Code "Start Debugging" on a Go target)
+__debug_bin*
+
 # Editor & OS
 .DS_Store
 *.swp
