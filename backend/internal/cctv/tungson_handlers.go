@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -365,8 +366,10 @@ func (h *TungSonHandlers) HandleExtendFaceList(w http.ResponseWriter, r *http.Re
 		if credValue != nil && *credValue != "" {
 			faceBase64 = *credValue
 		} else if avatarURL != nil && *avatarURL != "" && h.objectStore != nil {
-			// Try to fetch avatar from object store
-			reader, _, getErr := h.objectStore.GetObject(ctx, *avatarURL)
+			// Avatar DB value is a public URL path (/photos/tenants/...),
+			// strip /photos/ prefix to get the MinIO object key.
+			objectKey := strings.TrimPrefix(*avatarURL, "/photos/")
+			reader, _, getErr := h.objectStore.GetObject(ctx, objectKey)
 			if getErr == nil && reader != nil {
 				data, readErr := io.ReadAll(reader)
 				_ = reader.Close()
