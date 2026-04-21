@@ -514,6 +514,11 @@ export interface EmergencyPlanDTO {
     updated_at: string;
 }
 
+export interface EmergencyIncidentAccessPoint {
+    id: string;
+    name: string;
+}
+
 export interface EmergencyIncidentDTO {
     id: string;
     plan_id: string;
@@ -527,6 +532,7 @@ export interface EmergencyIncidentDTO {
     duration_seconds?: number;
     target_summary: string;
     notes: string;
+    access_points?: EmergencyIncidentAccessPoint[];
 }
 
 export interface ActivateEmergencyResponse {
