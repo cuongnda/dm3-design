@@ -10,7 +10,7 @@ import {
   Video,
   VideoOff,
 } from 'lucide-react';
-import { getCameraStreamUrls, authenticatedUrl, type CameraDTO } from '@dm3/api-client';
+import { type CameraDTO } from '@dm3/api-client';
 import { SeverityPill, deriveSeverity, type Severity } from './CameraStatusBadge';
 
 interface Props {
@@ -35,15 +35,10 @@ async function startWhep(
   videoEl: HTMLVideoElement,
   signal: AbortSignal,
 ): Promise<RTCPeerConnection> {
-  const pc = new RTCPeerConnection({
-    // Use Google STUN only as fallback — local/LAN streams rarely need it.
-    // Keeping it ensures NAT traversal works in remote/VPN scenarios.
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-    iceCandidatePoolSize: 1,
-  });
+  const pc = new RTCPeerConnection();
 
-  pc.addTransceiver('video', { direction: 'recvonly' });
-  pc.addTransceiver('audio', { direction: 'recvonly' });
+  pc.addTransceiver('video', { direction: 'sendrecv' });
+  pc.addTransceiver('audio', { direction: 'sendrecv' });
 
   pc.ontrack = (ev) => {
     if (videoEl.srcObject !== ev.streams[0]) {
@@ -54,36 +49,16 @@ async function startWhep(
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  // Wait for ICE gathering to complete (or timeout after 1s).
-  // Most candidates are gathered in <200ms on LAN; the 1s cap avoids
-  // blocking on slow STUN responses while still collecting relay candidates.
-  await new Promise<void>((resolve) => {
-    if (pc.iceGatheringState === 'complete') { resolve(); return; }
-    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
-    const onStateChange = () => {
-      if (pc.iceGatheringState === 'complete') {
-        if (timeoutHandle !== null) clearTimeout(timeoutHandle);
-        pc.removeEventListener('icegatheringstatechange', onStateChange);
-        resolve();
-      }
-    };
-    pc.addEventListener('icegatheringstatechange', onStateChange);
-    timeoutHandle = setTimeout(() => {
-      pc.removeEventListener('icegatheringstatechange', onStateChange);
-      resolve();
-    }, 1000);
-  });
-
   if (signal.aborted) { pc.close(); throw new DOMException('Aborted', 'AbortError'); }
 
   const resp = await fetch(whepUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/sdp' },
-    body: pc.localDescription?.sdp,
+    body: offer.sdp,
     signal,
   });
 
-  if (!resp.ok) throw new Error(`WHEP ${resp.status}`);
+  if (resp.status !== 201) throw new Error(`WHEP ${resp.status}`);
   const sdpAnswer = await resp.text();
   await pc.setRemoteDescription({ type: 'answer', sdp: sdpAnswer });
 
@@ -151,10 +126,9 @@ export function LiveTile({ camera }: Props) {
       setState('connecting');
       setLastError(null);
 
-      // Build stream URLs directly from camera ID — avoids an extra API
-      // round-trip that added ~200-500ms before the WHEP handshake starts.
-      const whepUrl = authenticatedUrl(`/cctv/whep/${camera.id}/whep`);
-      const hlsUrl = authenticatedUrl(`/cctv/hls/${camera.id}/index.m3u8`);
+      // Build stream URLs directly — proxied through nginx/vite to MediaMTX.
+      const whepUrl = `/cctv/whep/${camera.id}/whep`;
+      const hlsUrl = `/cctv/hls/${camera.id}/index.m3u8`;
 
       const videoEl = videoRef.current;
       if (!videoEl) return;
