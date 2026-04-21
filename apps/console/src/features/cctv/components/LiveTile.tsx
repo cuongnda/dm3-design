@@ -10,7 +10,7 @@ import {
   Video,
   VideoOff,
 } from 'lucide-react';
-import { getCameraStreamUrls, type CameraDTO } from '@dm3/api-client';
+import { getCameraStreamUrls, authenticatedUrl, type CameraDTO } from '@dm3/api-client';
 import { SeverityPill, deriveSeverity, type Severity } from './CameraStatusBadge';
 
 interface Props {
@@ -162,7 +162,7 @@ export function LiveTile({ camera }: Props) {
 
       // Try WHEP first (sub-second latency).
       try {
-        const pc = await startWhep(urls.whep_url, videoEl, abortCtrl.signal);
+        const pc = await startWhep(authenticatedUrl(urls.whep_url), videoEl, abortCtrl.signal);
         pcRef.current = pc;
         if (!mounted) { pc.close(); pcRef.current = null; return; }
         setTransport('whep');
@@ -177,7 +177,7 @@ export function LiveTile({ camera }: Props) {
       // Fallback: HLS over HTTP.
       try {
         if (!urls.hls_url) throw new Error('No HLS URL');
-        const hls = attachHls(urls.hls_url, videoEl);
+        const hls = attachHls(authenticatedUrl(urls.hls_url), videoEl);
         if (!mounted) { hls?.destroy(); return; }
         hlsRef.current = hls;
         setTransport('hls');
