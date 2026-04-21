@@ -3,9 +3,12 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/mqtt"
@@ -83,7 +86,18 @@ func (s *AccessRulesSyncer) PushAccessRulesJob(ctx context.Context, tenantID, de
 		LIMIT 1
 	`, deviceID, tenantID).Scan(&accessPointID)
 	if err != nil {
-		return fmt.Errorf("access_rules: no access point for device %s: %w", deviceID, err)
+		// A device with no access_point linkage is structurally N/A for
+		// access_rules — e.g. LPR kiosks, cameras, and sensors don't sit on
+		// a door. Emit a single log and succeed silently so "select all"
+		// on Transmit Data doesn't turn into a loud error for those
+		// device types. All other errors (scan failure, DB down, etc.)
+		// still bubble up as before.
+		if errors.Is(err, pgx.ErrNoRows) {
+			slog.Info("access_rules: skipped — device has no access point",
+				"device", deviceID, "tenant", tenantID)
+			return nil
+		}
+		return fmt.Errorf("access_rules: lookup access point for device %s: %w", deviceID, err)
 	}
 
 	// Build passage_time from access_points.access_time_id (AP-level schedule).
