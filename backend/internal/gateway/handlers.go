@@ -1098,6 +1098,29 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	// oldest active card as the "primary" — good enough for a monitoring
 	// display; a future refinement would look up the credential that
 	// actually triggered the event if the consumer stores it.
+	// Device resolution (2026-04 fix):
+	//
+	// access_point_devices.access_device_id stores the UUID of
+	// dm3_devices.devices.id as TEXT (see internal/access/access_point_handlers.go
+	// and internal/access/nats_consumer.go — both join d.id::text = apd.access_device_id).
+	// The previous version here joined d.device_id against apd.access_device_id,
+	// comparing a human literal ("840100") against a UUID — never matched,
+	// so d.name came back empty and the raw UUID was returned as device_id.
+	//
+	// Resolution order, authoritative first:
+	//
+	//  1. d_pub — publisher resolved from ae.metadata->>'device_id', which
+	//     the NATS consumer sets from the MQTT envelope's evt.Src. This is
+	//     the device that ACTUALLY published the event, so it's the true
+	//     source of truth for the monitoring column.
+	//
+	//  2. d_link — first device bound to the event's access point via
+	//     access_point_devices. Used only when the event has no publisher
+	//     metadata (e.g. parking-svc ingests that don't come from MQTT).
+	//     An access point may have multiple readers; the earliest linked
+	//     device wins here, which is a best-effort display choice.
+	//
+	//  3. Raw metadata string, echoed unresolved when no devices row exists.
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT ae.id::text, ae.tenant_id::text,
 			COALESCE(ae.user_id::text,''),
@@ -1111,8 +1134,13 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 			COALESCE(NULLIF(c.value,''), ae.metadata->>'credential_value', ''),
 			COALESCE((SELECT array_agg(value) FROM jsonb_array_elements_text(ae.metadata->'credential_values') AS value), '{}'),
 			COALESCE(ae.metadata->'credentials', '[]'::jsonb),
-			COALESCE(NULLIF(ad.device_id,''), regexp_replace(ae.metadata->>'device_id', '^device:', ''), ''),
-			COALESCE(d.name,'')
+			COALESCE(
+				NULLIF(d_pub.device_id, ''),
+				NULLIF(d_link.device_id, ''),
+				regexp_replace(ae.metadata->>'device_id', '^device:', ''),
+				''
+			),
+			COALESCE(d_pub.name, d_link.name, '')
 		 FROM dm3_access.access_events ae
 		 LEFT JOIN dm3_identity.users u ON u.id = ae.user_id
 		 LEFT JOIN dm3_identity.departments dep ON dep.id = u.department_id
@@ -1122,16 +1150,19 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 			 ORDER BY created_at ASC
 			 LIMIT 1
 		 ) c ON true
+		 LEFT JOIN dm3_devices.devices d_pub
+		   ON d_pub.tenant_id = ae.tenant_id
+		  AND d_pub.device_id = regexp_replace(ae.metadata->>'device_id', '^device:', '')
+		  AND ae.metadata ? 'device_id'
 		 LEFT JOIN LATERAL (
-			 SELECT apd.access_device_id AS device_id
+			 SELECT d.device_id, d.name
 			 FROM dm3_access.access_point_devices apd
+			 JOIN dm3_devices.devices d ON d.id::text = apd.access_device_id
 			 WHERE apd.access_point_id = ae.access_point_id
+			   AND d.tenant_id = ae.tenant_id
 			 ORDER BY apd.created_at ASC
 			 LIMIT 1
-		 ) ad ON true
-		 LEFT JOIN dm3_devices.devices d
-		   ON d.device_id = COALESCE(NULLIF(ad.device_id,''), regexp_replace(ae.metadata->>'device_id', '^device:', ''))
-		  AND d.tenant_id = ae.tenant_id
+		 ) d_link ON true
 		 WHERE ae.tenant_id = $1::uuid
 		 ORDER BY ae.time DESC LIMIT $2 OFFSET $3`,
 		cid, limit, (page-1)*limit)
