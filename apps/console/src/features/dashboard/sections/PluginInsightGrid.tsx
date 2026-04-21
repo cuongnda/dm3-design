@@ -7,7 +7,6 @@ import { CctvDashCard } from '../cards/CctvDashCard';
 import { AttendanceDashCard } from '../cards/AttendanceDashCard';
 import { IntercomDashCard } from '../cards/IntercomDashCard';
 import { SmartBuildingDashCard } from '../cards/SmartBuildingDashCard';
-import { ApiIntegrationDashCard } from '../cards/ApiIntegrationDashCard';
 
 export function PluginInsightGrid(): React.ReactElement | null {
   const { t } = useTranslation('dashboard');
@@ -17,7 +16,6 @@ export function PluginInsightGrid(): React.ReactElement | null {
   const attendanceEnabled = usePlugin('attendance');
   const intercomEnabled = usePlugin('intercom');
   const smartBuildingEnabled = usePlugin('smart_building');
-  const apiIntegrationEnabled = usePlugin('api_integration');
 
   const cards: React.ReactElement[] = [];
   if (cctvEnabled) cards.push(<CctvDashCard key="cctv" />);
@@ -26,7 +24,6 @@ export function PluginInsightGrid(): React.ReactElement | null {
   if (parkingEnabled) cards.push(<ParkingDashCard key="parking" />);
   if (intercomEnabled) cards.push(<IntercomDashCard key="intercom" />);
   if (smartBuildingEnabled) cards.push(<SmartBuildingDashCard key="smart_building" />);
-  if (apiIntegrationEnabled) cards.push(<ApiIntegrationDashCard key="api_integration" />);
 
   if (cards.length === 0) {
     return null;
