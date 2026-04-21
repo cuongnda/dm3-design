@@ -17,6 +17,10 @@ type Department struct {
 	ID                  string  `json:"id" db:"id"`
 	TenantID           string  `json:"tenant_id" db:"tenant_id"`
 	ParentID            *string `json:"parent_id" db:"parent_id"`
+	// ParentName is resolved via LEFT JOIN on dm3_identity.departments
+	// so the console's list/detail views can render the parent without
+	// a follow-up fetch. NULL when the department is a root node.
+	ParentName          *string `json:"parent_name" db:"parent_name"`
 	Name                string  `json:"name" db:"name"`
 	Number              string  `json:"number" db:"number"`
 	DepartmentManagerID *string `json:"department_manager_id" db:"department_manager_id"`
@@ -164,13 +168,15 @@ func (h *UserManagementHandlers) ListDepartments(w http.ResponseWriter, r *http.
 
 	// Data query
 	dataQuery := fmt.Sprintf(`
-		SELECT 
-			d.id, d.tenant_id, d.parent_id, d.name, d.number,
+		SELECT
+			d.id, d.tenant_id, d.parent_id, parent.name as parent_name,
+			d.name, d.number,
 			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name,
 			COALESCE(user_counts.count, 0) as user_count,
 			d.created_at::text, d.updated_at::text, d.is_deleted
 		FROM dm3_identity.departments d
 		LEFT JOIN dm3_identity.users mgr ON d.department_manager_id = mgr.id
+		LEFT JOIN dm3_identity.departments parent ON d.parent_id = parent.id
 		LEFT JOIN (
 			SELECT department_id, COUNT(*) as count
 			FROM dm3_identity.users
@@ -194,7 +200,8 @@ func (h *UserManagementHandlers) ListDepartments(w http.ResponseWriter, r *http.
 	for rows.Next() {
 		var dept Department
 		err := rows.Scan(
-			&dept.ID, &dept.TenantID, &dept.ParentID, &dept.Name, &dept.Number,
+			&dept.ID, &dept.TenantID, &dept.ParentID, &dept.ParentName,
+			&dept.Name, &dept.Number,
 			&dept.DepartmentManagerID, &dept.ManagerName,
 			&dept.UserCount, &dept.CreatedAt, &dept.UpdatedAt,
 			&dept.IsDeleted,
@@ -275,14 +282,17 @@ func (h *UserManagementHandlers) CreateDepartment(w http.ResponseWriter, r *http
 	// Fetch created department
 	var dept Department
 	err = h.db.Pool.QueryRow(ctx, `
-		SELECT 
-			d.id, d.tenant_id, d.parent_id, d.name, d.number,
+		SELECT
+			d.id, d.tenant_id, d.parent_id, parent.name as parent_name,
+			d.name, d.number,
 			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name,
 			0 as user_count, d.created_at::text, d.updated_at::text, d.is_deleted
 		FROM dm3_identity.departments d
 		LEFT JOIN dm3_identity.users mgr ON d.department_manager_id = mgr.id
+		LEFT JOIN dm3_identity.departments parent ON d.parent_id = parent.id
 		WHERE d.id = $1`, departmentID).Scan(
-		&dept.ID, &dept.TenantID, &dept.ParentID, &dept.Name, &dept.Number,
+		&dept.ID, &dept.TenantID, &dept.ParentID, &dept.ParentName,
+		&dept.Name, &dept.Number,
 		&dept.DepartmentManagerID, &dept.ManagerName,
 		&dept.UserCount, &dept.CreatedAt, &dept.UpdatedAt,
 		&dept.IsDeleted,
@@ -311,13 +321,15 @@ func (h *UserManagementHandlers) GetDepartment(w http.ResponseWriter, r *http.Re
 
 	var dept Department
 	err := h.db.Pool.QueryRow(ctx, `
-		SELECT 
-			d.id, d.tenant_id, d.parent_id, d.name, d.number,
+		SELECT
+			d.id, d.tenant_id, d.parent_id, parent.name as parent_name,
+			d.name, d.number,
 			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name,
 			COALESCE(user_counts.count, 0) as user_count,
 			d.created_at::text, d.updated_at::text, d.is_deleted
 		FROM dm3_identity.departments d
 		LEFT JOIN dm3_identity.users mgr ON d.department_manager_id = mgr.id
+		LEFT JOIN dm3_identity.departments parent ON d.parent_id = parent.id
 		LEFT JOIN (
 			SELECT department_id, COUNT(*) as count
 			FROM dm3_identity.users
@@ -326,7 +338,8 @@ func (h *UserManagementHandlers) GetDepartment(w http.ResponseWriter, r *http.Re
 		) user_counts ON d.id = user_counts.department_id
 		WHERE d.id = $1 AND d.tenant_id = $3 AND d.is_deleted = false`,
 		departmentID, departmentID, companyID).Scan(
-		&dept.ID, &dept.TenantID, &dept.ParentID, &dept.Name, &dept.Number,
+		&dept.ID, &dept.TenantID, &dept.ParentID, &dept.ParentName,
+		&dept.Name, &dept.Number,
 		&dept.DepartmentManagerID, &dept.ManagerName,
 		&dept.UserCount, &dept.CreatedAt, &dept.UpdatedAt,
 		&dept.IsDeleted,
@@ -395,13 +408,15 @@ func (h *UserManagementHandlers) UpdateDepartment(w http.ResponseWriter, r *http
 	// Fetch updated department
 	var dept Department
 	err = h.db.Pool.QueryRow(ctx, `
-		SELECT 
-			d.id, d.tenant_id, d.parent_id, d.name, d.number,
+		SELECT
+			d.id, d.tenant_id, d.parent_id, parent.name as parent_name,
+			d.name, d.number,
 			d.department_manager_id, TRIM(COALESCE(mgr.first_name,'') || ' ' || COALESCE(mgr.last_name,'')) as manager_name,
 			COALESCE(user_counts.count, 0) as user_count,
 			d.created_at::text, d.updated_at::text, d.is_deleted
 		FROM dm3_identity.departments d
 		LEFT JOIN dm3_identity.users mgr ON d.department_manager_id = mgr.id
+		LEFT JOIN dm3_identity.departments parent ON d.parent_id = parent.id
 		LEFT JOIN (
 			SELECT department_id, COUNT(*) as count
 			FROM dm3_identity.users
@@ -410,7 +425,8 @@ func (h *UserManagementHandlers) UpdateDepartment(w http.ResponseWriter, r *http
 		) user_counts ON d.id = user_counts.department_id
 		WHERE d.id = $1 AND d.tenant_id = $2 AND d.is_deleted = false`,
 		departmentID, companyID).Scan(
-		&dept.ID, &dept.TenantID, &dept.ParentID, &dept.Name, &dept.Number,
+		&dept.ID, &dept.TenantID, &dept.ParentID, &dept.ParentName,
+		&dept.Name, &dept.Number,
 		&dept.DepartmentManagerID, &dept.ManagerName,
 		&dept.UserCount, &dept.CreatedAt, &dept.UpdatedAt,
 		&dept.IsDeleted,

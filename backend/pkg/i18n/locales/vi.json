@@ -29,6 +29,10 @@
   "validation.required_field": "{{field}} là bắt buộc",
   "validation.invalid_email": "Định dạng email không hợp lệ",
   "validation.first_last_name_required": "Họ và tên là bắt buộc",
+  "validation.name_required": "Tên là bắt buộc",
+  "validation.number_required": "Mã là bắt buộc",
+  "validation.number_exists": "Đã tồn tại phòng ban với mã này",
+  "validation.department_has_users": "Phòng ban này vẫn còn nhân viên. Hãy chuyển hoặc xóa họ trước khi xóa phòng ban.",
 
   "device.not_found": "Thiết bị không tìm thấy",
   "device.already_registered": "Thiết bị đã được đăng ký",

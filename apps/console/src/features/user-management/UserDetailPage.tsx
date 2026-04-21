@@ -523,9 +523,18 @@ function AddToGroupModal({ open, onOpenChange, userId, currentGroupIds, onAdded 
           <div className="flex flex-col items-center justify-center py-10 text-center">
             <ShieldCheck size={28} className="mb-2 text-muted-foreground/40" />
             <p className="text-[13px] text-muted-foreground">
-              {groups.length === 0
-                ? t('accessGroup.noGroups', 'No access groups available')
-                : t('accessGroup.allGroupsAssigned', 'User is already in all groups')}
+              {
+                // Three distinct empty states. The original code only
+                // distinguished "no groups exist" from "all assigned", so
+                // a non-matching search term fell into "all assigned" and
+                // misled operators into thinking the user already had
+                // every group — even when they'd just typo'd the name.
+                groups.length === 0
+                  ? t('accessGroup.noGroups', 'No access groups available')
+                  : search.trim()
+                    ? t('accessGroup.noSearchMatches', 'No access groups match your search')
+                    : t('accessGroup.allGroupsAssigned', 'User is already in all groups')
+              }
             </p>
           </div>
         ) : (

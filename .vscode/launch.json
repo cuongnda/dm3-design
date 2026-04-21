@@ -86,7 +86,29 @@
         "FIRMWARE_DOWNLOAD_URL": "http://192.168.1.254:8002",
         "EMQX_API_URL": "http://192.168.1.254:18084",
         "EMQX_API_USER": "admin",
-        "EMQX_API_PASSWORD": "dm3public123"
+        "EMQX_API_PASSWORD": "dm3public123",
+        "KIOSK_API_BASE_URL": "http://192.168.1.254:8006"
+      }
+    },
+    {
+      "name": "Visitor Service",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/backend/cmd/visitor-svc",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "HTTP_PORT": "8006",
+        "DATABASE_URL": "postgres://dm3:dm3secret@192.168.1.254:5433/dm3?sslmode=disable",
+        "NATS_URL": "nats://192.168.1.254:4222",
+        "JWT_SECRET": "dm3-dev-secret-key",
+        "OBJECT_STORE_ENDPOINT": "192.168.1.254:9002",
+        "OBJECT_STORE_PUBLIC_ENDPOINT": "192.168.1.254:9002",
+        "OBJECT_STORE_ACCESS_KEY": "dm3admin",
+        "OBJECT_STORE_SECRET_KEY": "dm3secret123",
+        "OBJECT_STORE_BUCKET": "dm3",
+        "OBJECT_STORE_USE_SSL": "false",
+        "OBJECT_STORE_AUTO_CREATE_BUCKET": "true"
       }
     },
     {
@@ -127,6 +149,7 @@
         "Identity Service",
         "Access Service",
         "Device Gateway",
+        "Visitor Service",
         "Audit Service"
       ]
     }

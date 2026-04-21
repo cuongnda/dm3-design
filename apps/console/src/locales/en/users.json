@@ -156,6 +156,9 @@
   "accessGroup.selectHint": "Select an access group to view access points",
   "accessGroup.zone": "Zone",
   "accessGroup.description": "Description",
+  "accessGroup.noGroups": "No access groups available",
+  "accessGroup.noSearchMatches": "No access groups match your search",
+  "accessGroup.allGroupsAssigned": "User is already in all groups",
   "toast.accessGroupUpdated": "Access group updated",
   "toast.accessGroupFailed": "Failed to update access group",
 

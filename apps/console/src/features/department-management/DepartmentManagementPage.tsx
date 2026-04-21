@@ -80,14 +80,22 @@ export function DepartmentManagementPage() {
             fetchDepartments();
             toast(t('toast.deleted'), 'success');
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Failed to delete department';
-            try {
-                const j = JSON.parse(msg.replace(/^API \d+: /, ''));
-                setDeleteError(j.message || j.error || msg);
-            } catch {
-                setDeleteError(msg.replace(/^API \d+: /, ''));
+            // apiFetch now returns the translated message directly on
+            // the Error (see lib/api.ts). Old belt-and-suspenders parsing
+            // stays as a fallback for any codepath that still throws a
+            // raw "API 400: {...}" string.
+            const raw = err instanceof Error ? err.message : 'Failed to delete department';
+            let friendly = raw;
+            if (raw.startsWith('API ')) {
+                try {
+                    const j = JSON.parse(raw.replace(/^API \d+: /, ''));
+                    friendly = j.message || j.error || raw;
+                } catch {
+                    friendly = raw.replace(/^API \d+: /, '');
+                }
             }
-            toast(msg, 'error');
+            setDeleteError(friendly);
+            toast(friendly, 'error');
         } finally {
             setDeleteLoading(false);
         }
