@@ -67,6 +67,19 @@ export const NAV_CONFIG: NavSection[] = [
     ],
   },
   {
+    key: 'access',
+    labelKey: 'nav.access',
+    labelFallback: 'ACCESS',
+    color: '#F59E0B',
+    items: [
+      { to: '/access/zones', icon: MapPin, labelKey: 'nav.zones', labelFallback: 'Zones', status: 'ready' },
+      { to: '/access/access-points', icon: Shield, labelKey: 'nav.accessPoints', labelFallback: 'Access Points', status: 'ready' },
+      { to: '/access/access-groups', icon: Users2, labelKey: 'nav.accessGroups', labelFallback: 'Access Groups', status: 'ready' },
+      { to: '/access/access-times', icon: Clock, labelKey: 'nav.accessTimes', labelFallback: 'Access Times', status: 'ready' },
+      { to: '/devices', icon: Cpu, labelKey: 'nav.devices', labelFallback: 'Devices', status: 'ready' },
+    ],
+  },
+  {
     key: 'visitors',
     labelKey: 'nav.visitorsSection',
     labelFallback: 'VISITORS',
@@ -134,19 +147,6 @@ export const NAV_CONFIG: NavSection[] = [
       { to: '/manage/attendance/reports', icon: BarChart3, labelKey: 'nav.attendanceReports', labelFallback: 'Reports', status: 'ready' },
       { to: '/manage/attendance/holidays', icon: CalendarClock, labelKey: 'nav.attendanceHolidays', labelFallback: 'Holidays', status: 'ready' },
       { to: '/manage/attendance/settings', icon: SlidersHorizontal, labelKey: 'nav.attendanceSettings', labelFallback: 'Settings', status: 'ready' },
-    ],
-  },
-  {
-    key: 'access',
-    labelKey: 'nav.access',
-    labelFallback: 'ACCESS',
-    color: '#F59E0B',
-    items: [
-      { to: '/access/zones', icon: MapPin, labelKey: 'nav.zones', labelFallback: 'Zones', status: 'ready' },
-      { to: '/access/access-points', icon: Shield, labelKey: 'nav.accessPoints', labelFallback: 'Access Points', status: 'ready' },
-      { to: '/access/access-groups', icon: Users2, labelKey: 'nav.accessGroups', labelFallback: 'Access Groups', status: 'ready' },
-      { to: '/access/access-times', icon: Clock, labelKey: 'nav.accessTimes', labelFallback: 'Access Times', status: 'ready' },
-      { to: '/devices', icon: Cpu, labelKey: 'nav.devices', labelFallback: 'Devices', status: 'ready' },
     ],
   },
 ];
