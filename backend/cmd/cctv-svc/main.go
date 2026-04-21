@@ -100,6 +100,12 @@ func main() {
 		slog.Error("failed to ensure DEVICES stream", "error", err)
 		os.Exit(1)
 	}
+	// IDENTITY stream is owned by identity-svc; ensure it exists so the
+	// face sync consumer can attach even if cctv-svc starts first.
+	if err := natsClient.EnsureStream(ctx, "IDENTITY", []string{"dm3.identity.>"}); err != nil {
+		slog.Error("failed to ensure IDENTITY stream", "error", err)
+		os.Exit(1)
+	}
 
 	// Start access-event consumer — creates placeholder event_clips rows when
 	// access events fire on access points that have cameras bound to them.
@@ -231,6 +237,17 @@ func main() {
 	// TungSon VIID camera adapter (no JWT — camera auth by device_id)
 	tungsonHandlers := cctv.NewTungSonHandlers(database, auditLog, natsClient, objectStore)
 	cctv.RegisterTungSonRoutes(r, tungsonHandlers)
+
+	// Face sync service + identity change consumer
+	faceSyncSvc := cctv.NewFaceSyncService(database, natsClient)
+	identitySyncConsumer := cctv.NewIdentityChangeSyncConsumer(database, natsClient, faceSyncSvc)
+	if err := identitySyncConsumer.Start(ctx); err != nil {
+		slog.Error("failed to start identity sync consumer", "error", err)
+		os.Exit(1)
+	}
+
+	// Register full-sync API endpoint (manager+ only, under /api/v1/cctv/)
+	cctv.RegisterSyncRoutes(r, faceSyncSvc, cfg.JWTSecret)
 
 	// Serve
 	addr := fmt.Sprintf(":%d", cfg.HTTPPort)
