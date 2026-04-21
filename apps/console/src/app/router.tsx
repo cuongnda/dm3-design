@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, useLocation } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useLocation, useParams } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { MainLayout } from '@dm3/ui';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -62,12 +62,6 @@ const AccessTimeFormPage = lazyWithRetry(() =>
   import('@/features/secure/access-control/access-time/AccessTimeFormPage').then((m) => ({ default: m.AccessTimeFormPage }))
 );
 
-const CCTVPage = lazyWithRetry(() =>
-  import('@/features/secure/cctv/CCTVPage').then((m) => ({ default: m.CCTVPage }))
-);
-const CameraDetailPage = lazyWithRetry(() =>
-  import('@/features/secure/cctv/CameraDetailPage').then((m) => ({ default: m.CameraDetailPage }))
-);
 const IntrusionPage = lazyWithRetry(() =>
   import('@/features/secure/intrusion/IntrusionPage').then((m) => ({ default: m.IntrusionPage }))
 );
@@ -305,6 +299,12 @@ const SystemSettingsPage = lazyWithRetry(() =>
   import('@/features/system/SystemSettingsPage').then((m) => ({ default: m.SystemSettingsPage }))
 );
 
+/** Legacy redirect: /secure/cctv/:id → /cctv/cameras?id=:id (plugin hub). */
+function LegacyCctvDetailRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/cctv/cameras${id ? `?id=${id}` : ''}`} replace />;
+}
+
 /** Suspense renders no DOM node; this wrapper keeps flex height so pages can min-h-0 + flex-1 into the viewport.
  *  ErrorBoundary resets automatically on navigation (key changes with pathname). */
 export function LazyWrap({ children }: { children: React.ReactNode }) {
@@ -382,8 +382,8 @@ export const Router = createBrowserRouter([
               { path: 'secure/access-control/access-time/new', element: <LazyWrap><AccessTimeFormPage /></LazyWrap> },
               { path: 'secure/access-control/access-time/:id', element: <LazyWrap><AccessTimeFormPage /></LazyWrap> },
               { path: 'secure/access-control/:id', element: <LazyWrap><DoorDetailPage /></LazyWrap> },
-              { path: 'secure/cctv', element: <LazyWrap><CCTVPage /></LazyWrap> },
-              { path: 'secure/cctv/:id', element: <LazyWrap><CameraDetailPage /></LazyWrap> },
+              { path: 'secure/cctv', element: <Navigate to="/cctv/live" replace /> },
+              { path: 'secure/cctv/:id', element: <LegacyCctvDetailRedirect /> },
               { path: 'secure/intrusion', element: <LazyWrap><IntrusionPage /></LazyWrap> },
               { path: 'secure/intercom', element: <LazyWrap><IntercomPage /></LazyWrap> },
               { path: 'secure/ai-detection', element: <LazyWrap><AIDetectionPage /></LazyWrap> },

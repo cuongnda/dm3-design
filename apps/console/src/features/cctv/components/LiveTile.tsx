@@ -227,7 +227,7 @@ export function LiveTile({ camera }: Props) {
   };
 
   const handleOpenCamera = () => {
-    navigate(`/secure/cctv/cameras?id=${camera.id}`);
+    navigate(`/cctv/cameras?id=${camera.id}`);
   };
 
   return (

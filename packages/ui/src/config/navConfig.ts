@@ -49,7 +49,6 @@ export const NAV_CONFIG: NavSection[] = [
     color: '#3B82F6',
     items: [
       { to: '/secure/access-control', icon: DoorOpen, labelKey: 'nav.accessControl', labelFallback: 'Access Control', status: 'ready' },
-      { to: '/secure/cctv', icon: Video, labelKey: 'nav.cctv', labelFallback: 'CCTV', status: 'ready' },
       { to: '/secure/intrusion', icon: ShieldAlert, labelKey: 'nav.intrusion', labelFallback: 'Intrusion', status: 'hidden' },
       { to: '/secure/intercom', icon: Phone, labelKey: 'nav.intercom', labelFallback: 'Intercom', status: 'hidden' },
       { to: '/secure/ai-detection', icon: Bot, labelKey: 'nav.aiDetection', labelFallback: 'AI Detection', status: 'coming-soon' },
