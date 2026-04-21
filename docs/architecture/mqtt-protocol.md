@@ -1,8 +1,9 @@
 # Duall Master 3.0 — MQTT Protocol Specification
 
 > IoT Device ↔ Server Communication Protocol
-> Version: 1.6 | Updated: 2026-04-21
+> Version: 1.7 | Updated: 2026-04-21
 > Changelog:
+> - v1.7 — Credential objects in `cfg.person_sync` now emit a **stable shape**: every entry carries the same keys (`uid`, `template`, `code`, `version`, `finger`) regardless of `type`, with unused fields sent as empty strings. Lets firmware parse with one schema instead of branching on which JSON key is present.
 > - v1.6 — §7.9 added: `cfg.kiosk_config` pushes `{api_base_url, company_code, kiosk_token}` to DM3-provisioned LPR kiosks so the `/register-visit` bearer is distributed by Transmit Data rather than manually pasted. Every push rotates the token.
 > - v1.5 — Kiosk walk-in registration adapter (`POST /register-visit` on visitor-svc, auth: kiosk bearer token) now lands license plates in `dm3_parking.parking_vehicles` per the existing parking plugin contract — **not** in `dm3_identity.credentials`. No new credential `type` value is added; vehicle access goes through the parking plugin's LPR event path (`matched_by='plate'`), door access continues to go through `cfg.visitor_sync`.
 > - v1.4 — `cfg.person_sync` and `cfg.visitor_sync` entries now carry an optional `avatar` field: a short-lived (~1h TTL) presigned MinIO GET URL that the device downloads directly, no device-JWT needed.
@@ -919,9 +920,9 @@ For offline/hybrid mode — push user credentials to device local storage.
         "name": "Nguyễn Văn A",
         "avatar": "https://minio.public.example.com/dm3/tenants/{tid}/identity/users/{uid}/avatar.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600&X-Amz-Signature=...",
         "credentials": [
-          {"type": "card", "uid": "AABBCCDD", "valid_from": 1739900000000, "valid_until": 1771436000000},
-          {"type": "face", "template": "base64_encoded", "version": "arcface_v3"},
-          {"type": "fingerprint", "template": "base64_encoded", "finger": "right_index"}
+          {"type": "card",        "uid": "AABBCCDD",     "template": "",              "code": "",         "version": "",            "finger": "",            "valid_from": 1739900000000, "valid_until": 1771436000000},
+          {"type": "face",        "uid": "",             "template": "base64_encoded","code": "",         "version": "arcface_v3",  "finger": ""},
+          {"type": "fingerprint", "uid": "",             "template": "base64_encoded","code": "",         "version": "",            "finger": "right_index"}
         ],
         "access_zones": ["zone-001", "zone-002"],
         "schedule_id": "sched-001",
@@ -955,6 +956,19 @@ For offline/hybrid mode — push user credentials to device local storage.
 The two messages share the same topic and arrive in publish order. The device MUST process them in the order they are received. Both messages produce their own `cfg.person_sync.ack` so the server can detect partial failure (e.g. `clear` succeeded but `full_sync` was lost — the operator would see only some users in the next status report).
 
 **Auto sync flow** *(unchanged)* — credential edits, role changes, etc. fan out via NATS → `IdentityConsumer` → `PushPersonSync`, which sends a single `full_sync` message. No `clear` is sent on the auto path because the user is making one small change and a destructive clear-then-resync would briefly leave the device with an empty user DB on every keystroke.
+
+**Credential object shape (stable across types)** — every entry in `credentials[]` carries the **same set of keys** regardless of `type`. Fields that don't apply to a given type are sent as empty strings (`""`), never omitted. This lets firmware parse credentials with a single deserialiser and switch on `type` after the fact, rather than branching on "does this JSON object have a `uid` field?":
+
+| Key | Card | Face | Fingerprint | QR | PIN | UHF |
+|---|---|---|---|---|---|---|
+| `type` | `"card"` | `"face"` | `"fingerprint"` | `"qr"` | `"pin"` | `"uhf"` |
+| `uid` | card UID | `""` | `""` | `""` | `""` | tag UID |
+| `template` | `""` | base64 face template | base64 fingerprint template | `""` | `""` | `""` |
+| `code` | `""` | `""` | `""` | QR payload | PIN digits | `""` |
+| `version` | `""` | `"arcface_v3"` (or variant) | `""` | `""` | `""` | `""` |
+| `finger` | `""` | `""` | e.g. `"right_index"` | `""` | `""` | `""` |
+
+`valid_from` / `valid_until` stay optional — omitted means "no restriction", which is semantically distinct from the empty string used for the type-keyed fields above. See "Credential-level validity" below.
 
 **Avatar** *(added 2026-04)* — each user MAY carry an `avatar` field containing a **presigned MinIO GET URL** that the device can download directly with a plain HTTP GET, no auth header required. The signature in the URL is the authentication. Field semantics:
 
@@ -1001,8 +1015,8 @@ Real-time blacklist updates pushed to devices with highest priority. Device must
         "user_id": "user-uuid",
         "name": "Nguyễn Văn X",
         "credentials": [
-          {"type": "card", "uid": "AABBCCDD"},
-          {"type": "face", "template": "base64_encoded"}
+          {"type": "card", "uid": "AABBCCDD",     "template": "",              "code": "", "version": "",           "finger": ""},
+          {"type": "face", "uid": "",             "template": "base64_encoded","code": "", "version": "arcface_v3", "finger": ""}
         ],
         "reason": "terminated|security_threat|lost_credential",
         "effective_from": 1740000000000,
@@ -1016,6 +1030,8 @@ Real-time blacklist updates pushed to devices with highest priority. Device must
 
 **QoS:** 2 (exactly-once — critical for security)
 **Priority:** Immediate — device must process before next access decision
+
+**Credential shape:** each object in `entries[].credentials[]` follows the same stable-key contract as `cfg.person_sync` — see §7.4 "Credential object shape (stable across types)" for the key matrix.
 
 ### 7.6 Access Rules Sync
 
@@ -1068,6 +1084,8 @@ Push access rules to devices for local decision-making. The payload encodes:
 ```
 
 Device logic: if `passage_time` is active for the current time → open for all (no credential check). Otherwise → for each user presenting a credential, grant if ANY of their `schedules` covers the current time. A user with no entry in `access_rules` for this device is denied.
+
+**Skip-for-non-door devices:** `cfg.access_rules` is only meaningful for devices wired to at least one `dm3_access.access_point_devices` row — i.e. door terminals and barrier controllers. LPR kiosks, cameras, and sensors have no access-point linkage and therefore nothing to push. When the server is asked to sync `access_rules` to such a device (e.g. an operator checks the box in Transmit Data for every device type), it logs `access_rules: skipped — device has no access point` and returns success, rather than surfacing a hard failure. See `backend/internal/gateway/sync_access_rules.go`.
 
 **Ack** (`dm/{tid}/device/{did}/cfg/ack`):
 ```json
@@ -1260,7 +1278,7 @@ Shares the same topic, QoS, and envelope as every other `cfg.*` message — no f
         "name": "Nguyễn Văn A",
         "avatar": "https://minio.public.example.com/dm3/tenants/{tid}/visitor/visitors/{visitor_id}/photo.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600&X-Amz-Signature=...",
         "credentials": [
-          {"type": "qr", "code": "VST-7c3a...", "valid_from": 1740000000000, "valid_until": 1740086400000}
+          {"type": "qr", "uid": "", "template": "", "code": "VST-7c3a...", "version": "", "finger": "", "valid_from": 1740000000000, "valid_until": 1740086400000}
         ],
         "access_zones": ["zone-uuid-1", "zone-uuid-2"],
         "valid_from": 1740000000000,
@@ -1282,7 +1300,7 @@ Shares the same topic, QoS, and envelope as every other `cfg.*` message — no f
 | `visitors[]` | array | Sent with `full_sync` and `upsert`. Empty for `remove` / `clear`. |
 | `visitors[].visit_id` | uuid | Unique per visit — this is the key the device stores under. |
 | `visitors[].avatar` | string | Presigned MinIO GET URL for the visitor photo (same format and ~1h TTL as the user-sync avatar — see §7.4 "Avatar"). Omitted when the visitor has no photo or when signing fails. |
-| `visitors[].credentials[]` | array | Same shape as `cfg.person_sync` entries (card uid, face template, qr code, etc). Visits with no active credential are filtered out — the device has nothing to match on. |
+| `visitors[].credentials[]` | array | Same stable-shape object as `cfg.person_sync` — every entry carries `type`/`uid`/`template`/`code`/`version`/`finger` with unused fields as `""`. See §7.4 "Credential object shape (stable across types)". Visits with no active credential are filtered out — the device has nothing to match on. |
 | `visitors[].access_zones[]` | uuid[] | Zones where the visitor is authorised. The device grants access only if its own zone intersects. |
 | `visitors[].valid_from` / `valid_until` | int (epoch ms) | From `dm3_visitor.visits.expected_arrival` / `expected_departure`. Device enforces locally. |
 | `removed_visit_ids[]` | uuid[] | Present only when `action=remove`. |

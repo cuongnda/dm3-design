@@ -166,6 +166,51 @@ Design note — why the token is **not** distributed via `Transmit Data`:
 3. Revocation: a revoked token must stop working instantly; a
    push-based model would add lag.
 
+The manual-paste path (above) is still supported — it's what an admin uses
+before a given kiosk has been DM3-provisioned, or to recover a kiosk whose
+locally stored token has drifted.
+
+**Automated distribution (Transmit Data → `cfg.kiosk_config`):** once a
+kiosk is bootstrap-provisioned and subscribed to
+`dm/{tenant}/device/{did}/cfg`, admins push the `{api_base_url,
+company_code, kiosk_token}` triple from the console's Transmit Data
+dialog. The server mints a fresh per-device token on each push (revoking
+the prior one in the same transaction) and the kiosk writes all three
+fields into `AppSettings` atomically. See §7.9 of
+`docs/architecture/mqtt-protocol.md` for the MQTT payload, and
+`backend/internal/gateway/sync_kiosk_config.go` for the server side.
+
+## Deployment — Required Server Config
+
+| Env var | Consumed by | Required | Purpose |
+| --- | --- | --- | --- |
+| `KIOSK_API_BASE_URL` | device-gateway | **yes for Transmit Data → `kiosk_config`** | Public origin of visitor-svc that the LPR kiosk will `POST /register-visit` to. Embedded verbatim in `cfg.kiosk_config` payloads. Must be reachable **from the kiosk machine** — `localhost` only works when device-gateway, visitor-svc, and the kiosk all run on the same host. For a LAN deployment use the LAN IP (e.g. `http://192.168.1.254:8006`). |
+| `VISITOR_SVC_PUBLIC_URL` | device-gateway | no | Legacy fallback consulted when `KIOSK_API_BASE_URL` is unset. Same semantics. |
+
+The gateway fails soft when the env var is missing: at startup the
+kiosk-config syncer stays uninitialised, and Transmit Data returns the
+error `kiosk_config disabled (KIOSK_API_BASE_URL not configured)` instead
+of publishing a broken URL.
+
+At first push per device, the syncer also probes
+`information_schema` to confirm migration `000039_kiosk_tokens_device_scope`
+has been applied. A missing `device_id` column on
+`dm3_auth.kiosk_tokens` yields the self-explanatory error
+`kiosk_config: ...device_id column is missing — migration 000039 has not
+been applied. Run `make migrate` against this database`.
+
+## UI Gating
+
+The Transmit Data dialog in `apps/console/src/features/devices/DevicesPage.tsx`
+only renders the `visitor_sync` and `kiosk_config` checkboxes when
+`device.model === 'lpr_desktop'`. Other device types (terminals,
+controllers, cameras, sensors) can't meaningfully consume either sync,
+so the checkboxes stay hidden to avoid operator confusion and phantom
+"failed" results. `access_rules` is still offered for every device type
+but now returns a logged no-op when the device has no
+`access_point_devices` linkage (the normal shape for a kiosk, camera,
+or sensor).
+
 Future work (not v1): QR-based config hand-off so an operator can scan
 `{ApiBaseUrl, CompanyCode, KioskToken}` into the kiosk in one step instead
 of pasting three fields.
@@ -191,7 +236,10 @@ The only online-required moments are:
 | Kiosk auth middleware | `backend/internal/visitor/kiosk_auth.go` |
 | Token admin CRUD | `backend/internal/visitor/kiosk_token_handlers.go` |
 | Route wiring | `backend/cmd/visitor-svc/main.go` |
-| Migration | `backend/pkg/db/migrations/000038_kiosk_tokens_and_visitor_defaults.up.sql` |
+| Migration (tokens) | `backend/pkg/db/migrations/000038_kiosk_tokens_and_visitor_defaults.up.sql` |
+| Migration (device scope) | `backend/pkg/db/migrations/000039_kiosk_tokens_device_scope.up.sql` |
+| Server-side MQTT push | `backend/internal/gateway/sync_kiosk_config.go` |
+| Client-side MQTT handler | `lpr-desktop-app/LPRApplication/DuallPlatform/Services/DuallBridge.cs` (`HandleKioskConfigAsync`) |
 | Visitor→device sync | `backend/internal/gateway/sync_visitor.go` |
 | Visitor NATS consumer | `backend/internal/gateway/visitor_consumer.go` |
 | Client register call | `lpr-desktop-app/LPRApplication/Services/VehicleEventService.cs:RegisterVisitorAsync` |
