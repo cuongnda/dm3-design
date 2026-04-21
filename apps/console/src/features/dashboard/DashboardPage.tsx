@@ -47,7 +47,7 @@ export function DashboardPage(): React.ReactElement {
   };
 
   return (
-    <div>
+    <div className="flex-1 min-h-0 overflow-y-auto">
       <PageHeader title={t('title')}>
         <div className="flex items-center gap-2">
           <span
