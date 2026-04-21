@@ -66,8 +66,22 @@ func TestMatchHanetWebhookTenant(t *testing.T) {
 		}
 	}
 
-	seedSettings(tenantA, "secretA", "place-a")
-	seedSettings(tenantB, "secretB", "place-b")
+	// Unique per-run place and secret suffixes so leftover rows from
+	// interrupted prior runs can't match the MD5 signature and fool the
+	// lookup into returning the wrong tenant.
+	var r [6]byte
+	if _, err := rand.Read(r[:]); err != nil {
+		t.Fatalf("rand: %v", err)
+	}
+	suffix := hex.EncodeToString(r[:])
+	placeA := "place-a-" + suffix
+	placeB := "place-b-" + suffix
+	placeC := "place-c-" + suffix
+	secretA := "secretA-" + suffix
+	secretB := "secretB-" + suffix
+
+	seedSettings(tenantA, secretA, placeA)
+	seedSettings(tenantB, secretB, placeB)
 
 	mkHash := func(secret, id string) string {
 		sum := md5.Sum([]byte(secret + id)) //nolint:gosec
@@ -81,12 +95,12 @@ func TestMatchHanetWebhookTenant(t *testing.T) {
 		placeID string
 		want    string
 	}{
-		{"tenant A valid", mkHash("secretA", "nonce1"), "nonce1", "place-a", tenantA},
-		{"tenant B valid", mkHash("secretB", "nonce2"), "nonce2", "place-b", tenantB},
-		{"wrong hash", "deadbeef", "nonce1", "place-a", ""},
-		{"wrong place", mkHash("secretA", "nonce1"), "nonce1", "place-b", ""},
-		{"swapped secret", mkHash("secretB", "nonce1"), "nonce1", "place-a", ""},
-		{"unknown place", mkHash("secretA", "nonce1"), "nonce1", "place-c", ""},
+		{"tenant A valid", mkHash(secretA, "nonce1"), "nonce1", placeA, tenantA},
+		{"tenant B valid", mkHash(secretB, "nonce2"), "nonce2", placeB, tenantB},
+		{"wrong hash", "deadbeef", "nonce1", placeA, ""},
+		{"wrong place", mkHash(secretA, "nonce1"), "nonce1", placeB, ""},
+		{"swapped secret", mkHash(secretB, "nonce1"), "nonce1", placeA, ""},
+		{"unknown place", mkHash(secretA, "nonce1"), "nonce1", placeC, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

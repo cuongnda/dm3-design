@@ -17,13 +17,21 @@ import (
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
-// hanetWebhookPayload covers the superset of fields Hanet posts to the
-// webhook URL. Both check-in and person-update events share the
-// `hash`/`id`/`placeID` triplet used for signature verification.
+// hanetWebhookPayload covers the fields Hanet posts to the webhook URL for
+// recognition events. Check-in events land here with one of two shapes:
 //
-// DMPW reference: dmpw-api/DataModel/Device/CameraModel.cs (CheckinDataWebhookModel
-// + HanetUserDataWebhookModel). data_type="person" → person DB change; any
-// other value is a check-in event on a Hanet camera.
+//   - Face event: PersonID is non-empty, PlateNumber is empty.
+//   - Plate event: PlateNumber is non-empty (Hanet LPR cameras).
+//
+// We accept the common plate-field aliases Hanet uses across firmware
+// versions (`plate_number`, `plateNumber`, `plate`, `licensePlate`) so a
+// firmware update doesn't silently break the dispatcher.
+//
+// The `hash`/`id`/`placeID` triplet is common to every payload and drives
+// tenancy — see matchHanetWebhookTenant.
+//
+// DMPW reference: dmpw-api/DataModel/Device/CameraModel.cs
+// (CheckinDataWebhookModel).
 type hanetWebhookPayload struct {
 	ActionType       string  `json:"action_type"`
 	DataType         string  `json:"data_type"`
@@ -41,7 +49,28 @@ type hanetWebhookPayload struct {
 	PlaceName        string  `json:"placeName"`
 	Time             int64   `json:"time"`
 	Temp             float64 `json:"temp"`
-	Avatar           string  `json:"avatar"` // person-update events carry the new avatar here instead of detected_image_url
+
+	// Plate fields — Hanet LPR firmware isn't consistent about which name
+	// it sends, so accept all four and resolve at dispatch time.
+	PlateNumber  string `json:"plate_number"`
+	PlateCamel   string `json:"plateNumber"`
+	Plate        string `json:"plate"`
+	LicensePlate string `json:"licensePlate"`
+
+	// Direction is filled on parking LPR events ("in" | "out"). Ignored on
+	// face events.
+	Direction string `json:"direction"`
+}
+
+// resolvedPlate returns the first non-empty plate field, uppercased and
+// whitespace-trimmed. Empty string = not a plate event.
+func (p hanetWebhookPayload) resolvedPlate() string {
+	for _, v := range []string{p.PlateNumber, p.PlateCamel, p.Plate, p.LicensePlate} {
+		if s := strings.ToUpper(strings.TrimSpace(v)); s != "" {
+			return s
+		}
+	}
+	return ""
 }
 
 // ReceiveHanetWebhook handles POST /api/v1/cctv/hanet/webhook.
@@ -52,17 +81,17 @@ type hanetWebhookPayload struct {
 // the request is silently dropped with 200 (per DMPW) so we don't leak the
 // presence/absence of specific secrets via a 401/404.
 //
-// Check-in events -> insert into dm3_access.access_events with decision =
-// 'granted' (Hanet only webhooks on successful match in its local DB).
-// Person-update events with action_type='delete' -> remove the matching
-// H_<user_code> credential so DM3 doesn't keep a stale external_ref.
+// Every recognized payload becomes one row in dm3_access.access_events,
+// with credential_type set from the payload shape:
+//
+//   - `face` when Hanet sent a personID (face match)
+//   - `plate_number` when Hanet sent any plate_* field (LPR match)
+//
+// `decision` is 'granted' for known subjects (local credential match) and
+// 'denied' for unknowns, with the reason code recording which path fired.
 func (h *CCTVHandlers) ReceiveHanetWebhook(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		httputil.JSON(w, http.StatusOK, map[string]any{"statusCode": 200, "returnCode": 1})
-		return
-	}
-	if len(body) == 0 {
+	if err != nil || len(body) == 0 {
 		httputil.JSON(w, http.StatusOK, map[string]any{"statusCode": 200, "returnCode": 1})
 		return
 	}
@@ -82,22 +111,13 @@ func (h *CCTVHandlers) ReceiveHanetWebhook(w http.ResponseWriter, r *http.Reques
 
 	tenantID, err := h.matchHanetWebhookTenant(r.Context(), p.Hash, p.ID, p.PlaceID)
 	if err != nil || tenantID == "" {
-		// Wrong hash, unknown place, or no Hanet-configured tenant.
-		// Log quietly and return 200 — leaking 4xx here would let a
-		// probe distinguish "no tenant has Hanet" from "hash mismatch".
 		slog.Info("hanet webhook: no matching tenant",
 			"place_id", p.PlaceID, "device_id", p.DeviceID, "err", err)
 		httputil.JSON(w, http.StatusOK, map[string]any{"statusCode": 200, "returnCode": 1})
 		return
 	}
 
-	switch {
-	case p.DataType == "person":
-		h.handleHanetPersonEvent(r.Context(), tenantID, p)
-	default:
-		h.handleHanetCheckin(r.Context(), tenantID, p)
-	}
-
+	h.handleHanetRecognition(r.Context(), tenantID, p)
 	httputil.JSON(w, http.StatusOK, map[string]any{"statusCode": 200, "returnCode": 1})
 }
 
@@ -140,12 +160,119 @@ func (h *CCTVHandlers) matchHanetWebhookTenant(ctx context.Context, hash, nonce,
 	return "", nil
 }
 
-// handleHanetCheckin writes a row to dm3_access.access_events when Hanet
-// reports a recognized face at a camera. Unknown persons (no local
-// credential) are logged but not persisted — DM3 has no "unknown face"
-// events table today.
-func (h *CCTVHandlers) handleHanetCheckin(ctx context.Context, tenantID string, p hanetWebhookPayload) {
-	// Resolve the local user by Hanet personID stored in credentials.external_ref.
+// handleHanetRecognition inserts one dm3_access.access_events row per
+// webhook, tagged with the correct credential_type derived from the
+// payload shape (plate vs face). Unknowns (no matching local credential)
+// still get a row — with decision=denied — so the monitoring page and
+// event log see every Hanet-camera trigger, not just the matched ones.
+//
+// Face events are routed to the existing H_<user_code> credential via
+// credentials.external_ref = personID. Plate events are routed to
+// dm3_parking.parking_vehicles.plate_number (the tenant's unified vehicle
+// registry), falling back to credentials.value = <plate> + type =
+// 'plate_number' for hand-created plate credentials.
+func (h *CCTVHandlers) handleHanetRecognition(ctx context.Context, tenantID string, p hanetWebhookPayload) {
+	plate := p.resolvedPlate()
+	isPlate := plate != ""
+
+	var (
+		credentialType string
+		credentialVal  string
+		userID         string
+		userName       string
+		userCode       string
+	)
+
+	if isPlate {
+		credentialType = "plate_number"
+		credentialVal = plate
+		userID, userName, userCode = h.lookupHanetVehicleOwner(ctx, tenantID, plate)
+	} else if p.PersonID != "" {
+		credentialType = "face"
+		credentialVal = p.PersonID
+		userID, userName, userCode = h.lookupHanetFaceUser(ctx, tenantID, p.PersonID)
+	} else {
+		slog.Warn("hanet webhook: payload has no personID and no plate; ignored",
+			"tenant", tenantID, "device_id", p.DeviceID)
+		return
+	}
+
+	// Direction: Hanet sends "in"/"out" on parking events; default "in" for
+	// face check-ins. The access_events table uses the same vocabulary.
+	direction := strings.ToLower(strings.TrimSpace(p.Direction))
+	if direction != "in" && direction != "out" {
+		direction = "in"
+	}
+
+	// Resolve access_point via the Hanet camera's device_id.
+	var accessPointID string
+	_ = h.db.Pool.QueryRow(ctx, `
+		SELECT ap.id::text
+		  FROM dm3_devices.devices d
+		  LEFT JOIN dm3_access.access_point_devices apd ON apd.access_device_id = d.id::text
+		  LEFT JOIN dm3_access.access_points ap ON ap.id = apd.access_point_id
+		 WHERE d.tenant_id = $1::uuid
+		   AND d.device_id = $2
+		 LIMIT 1`,
+		tenantID, p.DeviceID,
+	).Scan(&accessPointID)
+
+	evtTime := time.Now().UTC()
+	if p.Time > 0 {
+		evtTime = time.UnixMilli(p.Time).UTC()
+	}
+
+	decision := "granted"
+	reason := "hanet_match_" + credentialType
+	if userID == "" {
+		decision = "denied"
+		reason = "hanet_unknown_" + credentialType
+	}
+
+	metadata, _ := json.Marshal(map[string]any{
+		"source":             "hanet_webhook",
+		"event_kind":         credentialType, // "face" | "plate_number"
+		"credential_value":   credentialVal,
+		"hanet_person_id":    p.PersonID,
+		"hanet_person_name":  p.PersonName,
+		"hanet_person_type":  p.PersonType,
+		"hanet_plate_number": plate,
+		"hanet_place_id":     p.PlaceID,
+		"hanet_place_name":   p.PlaceName,
+		"hanet_device_id":    p.DeviceID,
+		"hanet_device_name":  p.DeviceName,
+		"detected_image_url": p.DetectedImageURL,
+	})
+
+	var uid any
+	if userID != "" {
+		uid = userID
+	}
+	_, err := h.db.Pool.Exec(ctx, `
+		INSERT INTO dm3_access.access_events (
+			time, tenant_id, access_point_id, user_id, user_name,
+			credential_type, direction, decision, reason, decided_locally, metadata
+		) VALUES (
+			$1, $2::uuid, NULLIF($3,'')::uuid, NULLIF($4,'')::uuid, NULLIF($5,''),
+			$6, $7, $8, $9, false, $10
+		)`,
+		evtTime, tenantID, accessPointID, uid, userName,
+		credentialType, direction, decision, reason, metadata,
+	)
+	if err != nil {
+		slog.Error("hanet webhook: access event insert failed",
+			"tenant", tenantID, "kind", credentialType, "value", credentialVal, "error", err)
+		return
+	}
+	slog.Info("hanet webhook: access event recorded",
+		"tenant", tenantID, "kind", credentialType, "value", credentialVal,
+		"user_id", userID, "user_code", userCode,
+		"device", p.DeviceID, "decision", decision, "direction", direction)
+}
+
+// lookupHanetFaceUser returns (user_id, full_name, user_code) for a Hanet
+// face event by matching credentials.external_ref. Empty strings on miss.
+func (h *CCTVHandlers) lookupHanetFaceUser(ctx context.Context, tenantID, personID string) (string, string, string) {
 	var userID, userName, userCode string
 	err := h.db.Pool.QueryRow(ctx, `
 		SELECT u.id::text,
@@ -158,122 +285,61 @@ func (h *CCTVHandlers) handleHanetCheckin(ctx context.Context, tenantID string, 
 		   AND c.external_ref = $2
 		   AND (u.is_deleted = false OR u.is_deleted IS NULL)
 		 LIMIT 1`,
-		tenantID, p.PersonID,
+		tenantID, personID,
 	).Scan(&userID, &userName, &userCode)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		slog.Warn("hanet webhook: user lookup failed", "tenant", tenantID, "person_id", p.PersonID, "error", err)
-		return
+		slog.Warn("hanet webhook: face user lookup failed",
+			"tenant", tenantID, "person_id", personID, "error", err)
 	}
+	return userID, userName, userCode
+}
 
-	// Resolve access_point via the Hanet device_id stored on the camera row.
-	// When the Hanet camera hasn't been linked to any access point, we still
-	// insert the event (access_point_id NULL) so it appears on monitoring.
-	var accessPointID *string
-	var cameraDeviceID *string
-	err = h.db.Pool.QueryRow(ctx, `
-		SELECT ap.id::text, d.device_id
-		  FROM dm3_devices.devices d
-		  JOIN dm3_cctv.cameras cam ON cam.device_id = d.id
-		  LEFT JOIN dm3_access.access_point_devices apd ON apd.access_device_id = d.id::text
-		  LEFT JOIN dm3_access.access_points ap ON ap.id = apd.access_point_id
-		 WHERE d.tenant_id = $1::uuid
-		   AND (d.device_id = $2 OR cam.rtsp_url LIKE '%' || $2 || '%')
+// lookupHanetVehicleOwner returns the registered owner of a plate for a
+// Hanet LPR event. Tries dm3_parking.parking_vehicles.plate_number first
+// (canonical vehicle registry per migration 000010), then falls back to a
+// hand-created plate_number credential in dm3_identity.credentials.
+// Empty strings on miss.
+func (h *CCTVHandlers) lookupHanetVehicleOwner(ctx context.Context, tenantID, plate string) (string, string, string) {
+	var userID, userName, userCode string
+	err := h.db.Pool.QueryRow(ctx, `
+		SELECT u.id::text,
+		       TRIM(CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,''))),
+		       COALESCE(u.user_code,'')
+		  FROM dm3_parking.parking_vehicles v
+		  JOIN dm3_identity.users u ON u.id = v.owner_id
+		 WHERE v.tenant_id = $1::uuid
+		   AND UPPER(v.plate_number) = $2
+		   AND (u.is_deleted = false OR u.is_deleted IS NULL)
 		 LIMIT 1`,
-		tenantID, p.DeviceID,
-	).Scan(&accessPointID, &cameraDeviceID)
+		tenantID, plate,
+	).Scan(&userID, &userName, &userCode)
+	if err == nil {
+		return userID, userName, userCode
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		slog.Debug("hanet webhook: parking_vehicles lookup failed",
+			"tenant", tenantID, "plate", plate, "error", err)
+	}
+	// Fallback: a plate stored as a credential (less common — usually
+	// people register cars in the parking module, not the credentials
+	// table, but handle it gracefully).
+	err = h.db.Pool.QueryRow(ctx, `
+		SELECT u.id::text,
+		       TRIM(CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,''))),
+		       COALESCE(u.user_code,'')
+		  FROM dm3_identity.credentials c
+		  JOIN dm3_identity.users u ON u.id = c.user_id
+		 WHERE c.tenant_id = $1::uuid
+		   AND c.type = 'plate_number'
+		   AND UPPER(c.value) = $2
+		   AND (u.is_deleted = false OR u.is_deleted IS NULL)
+		 LIMIT 1`,
+		tenantID, plate,
+	).Scan(&userID, &userName, &userCode)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		slog.Debug("hanet webhook: access_point lookup failed", "tenant", tenantID, "device_id", p.DeviceID, "error", err)
+		slog.Warn("hanet webhook: plate credential lookup failed",
+			"tenant", tenantID, "plate", plate, "error", err)
 	}
-
-	evtTime := time.Now().UTC()
-	if p.Time > 0 {
-		evtTime = time.UnixMilli(p.Time).UTC()
-	}
-	reason := "hanet_match"
-	decision := "granted"
-	if userID == "" {
-		// Unknown person (no local credential). Record the event but mark
-		// decision=denied so the monitoring page can show the unknown face.
-		// user_id stays NULL. DMPW routes these to a separate "UnknownPerson"
-		// events table; we reuse access_events for now.
-		decision = "denied"
-		reason = "hanet_unknown_person"
-	}
-
-	metadata, _ := json.Marshal(map[string]any{
-		"source":             "hanet_webhook",
-		"hanet_person_id":    p.PersonID,
-		"hanet_person_type":  p.PersonType,
-		"hanet_place_id":     p.PlaceID,
-		"hanet_place_name":   p.PlaceName,
-		"hanet_device_id":    p.DeviceID,
-		"hanet_device_name":  p.DeviceName,
-		"detected_image_url": p.DetectedImageURL,
-	})
-
-	var uid any
-	if userID != "" {
-		uid = userID
-	}
-	_, err = h.db.Pool.Exec(ctx, `
-		INSERT INTO dm3_access.access_events (
-			time, tenant_id, access_point_id, user_id, user_name,
-			credential_type, direction, decision, reason, decided_locally, metadata
-		) VALUES (
-			$1, $2::uuid, NULLIF($3,'')::uuid, NULLIF($4,'')::uuid, NULLIF($5,''),
-			'face', 'in', $6, $7, false, $8
-		)`,
-		evtTime, tenantID,
-		derefOrEmpty(accessPointID), uid, userName,
-		decision, reason, metadata,
-	)
-	if err != nil {
-		slog.Error("hanet webhook: access event insert failed",
-			"tenant", tenantID, "person_id", p.PersonID, "error", err)
-		return
-	}
-	slog.Info("hanet webhook: access event recorded",
-		"tenant", tenantID, "user_id", userID, "user_code", userCode,
-		"person_id", p.PersonID, "device", p.DeviceID, "decision", decision)
+	return userID, userName, userCode
 }
 
-// handleHanetPersonEvent reacts to person DB changes on the Hanet side. The
-// only case we care about today is deletion: if Hanet says a person is
-// gone, drop the matching H_<user_code> credential so DM3 isn't left with
-// a dangling external_ref. add/update events are logged and ignored —
-// DM3 is the source of truth for persons; Hanet shouldn't be adding people
-// behind our back.
-func (h *CCTVHandlers) handleHanetPersonEvent(ctx context.Context, tenantID string, p hanetWebhookPayload) {
-	action := strings.ToLower(strings.TrimSpace(p.ActionType))
-	if action != "delete" && action != "remove" {
-		slog.Info("hanet webhook: person event (non-delete) ignored",
-			"tenant", tenantID, "action", action, "person_id", p.PersonID)
-		return
-	}
-	if p.PersonID == "" {
-		return
-	}
-	cmd, err := h.db.Pool.Exec(ctx, `
-		DELETE FROM dm3_identity.credentials
-		 WHERE tenant_id = $1::uuid
-		   AND type = 'face'
-		   AND external_ref = $2
-		   AND value LIKE 'H\_%' ESCAPE '\'`,
-		tenantID, p.PersonID,
-	)
-	if err != nil {
-		slog.Error("hanet webhook: delete credential failed",
-			"tenant", tenantID, "person_id", p.PersonID, "error", err)
-		return
-	}
-	slog.Info("hanet webhook: credential removed after Hanet delete",
-		"tenant", tenantID, "person_id", p.PersonID, "rows", cmd.RowsAffected())
-}
-
-// derefOrEmpty returns "" for nil, matching the NULLIF($N,'') pattern above.
-func derefOrEmpty(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
