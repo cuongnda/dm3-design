@@ -88,10 +88,26 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 	}
 	tenantID := parts[2]
 
-	// Resolve the source (gateway device) UUID from src or subject.
+	// Resolve the source device UUID. The src field may be a UUID directly
+	// or "device:{rid}" format. Fall back to subject segment if empty.
 	srcDeviceID := evt.Src
 	if srcDeviceID == "" {
 		srcDeviceID = parts[3]
+	}
+	// Strip "device:" prefix if present (e.g. "device:840107" → "840107")
+	srcDeviceID = strings.TrimPrefix(srcDeviceID, "device:")
+	// If srcDeviceID is a short rid (not UUID), resolve to device UUID from DB
+	if !uuidRegex.MatchString(srcDeviceID) {
+		var deviceUUID string
+		err := c.db.Pool.QueryRow(ctx,
+			`SELECT id::text FROM dm3_devices.devices WHERE device_id = $1 AND tenant_id = $2::uuid LIMIT 1`,
+			srcDeviceID, tenantID,
+		).Scan(&deviceUUID)
+		if err != nil {
+			// Device not found — skip silently (not every device has CCTV)
+			return nil
+		}
+		srcDeviceID = deviceUUID
 	}
 
 	var payload accessLogData
