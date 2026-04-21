@@ -16,3 +16,4 @@ export * from './parking';
 export * from './cctv';
 export * from './access-points';
 export * from './attendance';
+export * from './audit';

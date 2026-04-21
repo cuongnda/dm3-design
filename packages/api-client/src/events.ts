@@ -56,6 +56,10 @@ export interface AccessEventRecord {
   reason?: string;
   confidence?: number;
   photo_ref?: string;
+  /** 5-min presigned MinIO GET URL — populated when photo_ref looks like an
+   * object key from the device media-upload flow. Empty for legacy
+   * /photos/... refs (use assetUrl(photo_ref) as a fallback). */
+  photo_url?: string;
   device_id?: string;
   device_name?: string;
   metadata?: Record<string, unknown>;

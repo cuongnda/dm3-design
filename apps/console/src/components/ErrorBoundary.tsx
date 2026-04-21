@@ -15,12 +15,26 @@ interface State {
   errorInfo?: ErrorInfo;
 }
 
+function isAuthError(error: unknown): boolean {
+  if (!error) return false;
+  const msg = error instanceof Error ? error.message : String(error);
+  // apiFetch throws `Error('Unauthorized')` and `API 401: ...` variants.
+  return msg === 'Unauthorized' || msg.startsWith('API 401');
+}
+
 export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false
   };
 
   public static getDerivedStateFromError(error: Error): State {
+    // Auth errors thrown from apiFetch are not bugs — they mean the token is
+    // gone or expired. apiFetch already fires `dm3:auth-expired`, which
+    // ProtectedRoute listens for (toast + SPA redirect). Swallow it here so
+    // the user never sees the generic red error page.
+    if (isAuthError(error)) {
+      return { hasError: false };
+    }
     return {
       hasError: true,
       error
@@ -28,8 +42,16 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    if (isAuthError(error)) {
+      // Ensure the redirect event fires even if the thrower skipped it.
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('dm3:auth-expired'));
+      }
+      return;
+    }
+
     console.error('ErrorBoundary caught an error:', error, errorInfo);
-    
+
     // Log to external service if needed
     this.props.onError?.(error, errorInfo);
 

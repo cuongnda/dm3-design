@@ -1,0 +1,53 @@
+# Traefik v3 static configuration for DM3 API gateway.
+#
+# Role: internal gateway between nginx (edge / SPA / TLS) and the 9 backend
+# services. nginx forwards /api/v1/* and /ws/* to Traefik on :80.
+# Traefik owns:
+#   - per-route-family rate limiting
+#   - CORS (mirrors nginx edge policy for API paths)
+#   - API-key gating for /api/v1/public/* (third-party integration plane)
+#   - service routing via the file provider (no Docker label scanning needed)
+#
+# Dynamic config lives in /etc/traefik/dynamic/*.yml.
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+api:
+  dashboard: true
+  # Dashboard is exposed on the internal :8080 entrypoint (not reachable from
+  # the host in prod). For local dev we expose 8080 via docker-compose.
+  insecure: true
+
+entryPoints:
+  web:
+    address: ":80"
+    # Honor forwarded headers coming from nginx so rate-limit keys on the
+    # real client IP, not the nginx container IP.
+    forwardedHeaders:
+      insecure: true
+  traefik:
+    address: ":8080"
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+log:
+  level: INFO
+  format: json
+
+accessLog:
+  format: json
+  fields:
+    headers:
+      defaultMode: drop
+      names:
+        X-Request-ID: keep
+        X-Forwarded-For: keep
+        X-Real-IP: keep
+
+ping:
+  entryPoint: traefik

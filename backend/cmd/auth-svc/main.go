@@ -156,12 +156,24 @@ func main() {
 	loginLimiter := bypassPrivate(httprate.Limit(5, 1*time.Minute, httprate.WithKeyFuncs(realIPKey)))
 	refreshLimiter := bypassPrivate(httprate.Limit(20, 1*time.Minute, httprate.WithKeyFuncs(realIPKey)))
 	passwordResetLimiter := bypassPrivate(httprate.Limit(3, 10*time.Minute, httprate.WithKeyFuncs(realIPKey)))
+	// OAuth2 token endpoint is unauthenticated (clients present credentials in
+	// the body); rate-limit to slow credential-stuffing against client_secrets.
+	oauthTokenLimiter := bypassPrivate(httprate.Limit(30, 1*time.Minute, httprate.WithKeyFuncs(realIPKey)))
 
 	r.With(loginLimiter).Post("/api/v1/auth/login", h.Login)
 	r.With(loginLimiter).Post("/api/v1/auth/login-step2", h.LoginStep2)
 	r.With(refreshLimiter).Post("/api/v1/auth/refresh", h.Refresh)
 	r.With(passwordResetLimiter).Post("/api/v1/auth/password/forgot", h.ForgotPassword)
 	r.With(passwordResetLimiter).Post("/api/v1/auth/password/reset", h.ResetPassword)
+
+	// OAuth2 token endpoint (RFC 6749). Currently implements client_credentials;
+	// password / refresh_token / device_code return unsupported_grant_type stubs.
+	r.With(oauthTokenLimiter).Post("/api/v1/auth/token", h.Token)
+
+	// Traefik forwardAuth callback for /api/v1/public/* — called internally by
+	// the gateway, not by clients. Intentionally has no auth middleware and no
+	// rate limit (Traefik is already the rate-limit boundary for public API).
+	r.Post("/api/v1/auth/validate-api-key", h.ValidateAPIKey)
 
 	// Protected routes — all under /api/v1/auth/ prefix
 	r.Group(func(pr chi.Router) {
@@ -173,6 +185,43 @@ func main() {
 		pr.Put("/api/v1/auth/me/password", h.ChangeMyPassword)
 		pr.Post("/api/v1/auth/device-token", h.DeviceToken)
 		pr.Get("/api/v1/auth/roles", h.ListRoles)
+
+		// API tokens + OAuth clients — gated behind the api_integration plugin.
+		// This feature is only exposed to tenants that have signed an
+		// integration agreement; system_admin toggles the plugin per tenant
+		// via /api/v1/auth/system/companies/{id}/plugins.
+		pr.Group(func(ar chi.Router) {
+			ar.Use(authsvc.RequirePlugin("api_integration"))
+
+			// API tokens — tenant-scoped CRUD. Tokens are validated by
+			// Traefik forwardAuth against /api/v1/auth/validate-api-key
+			// (which itself re-checks the plugin on every request).
+			ar.Get("/api/v1/auth/api-tokens", h.ListAPITokens)
+			ar.Post("/api/v1/auth/api-tokens", h.CreateAPIToken)
+			ar.Delete("/api/v1/auth/api-tokens/{id}", h.RevokeAPIToken)
+
+			// OAuth2 clients — tenant admins manage their own; system_admin
+			// can create system-wide clients (null tenant_id). Authorization
+			// is enforced inside the handlers.
+			ar.Get("/api/v1/auth/oauth-clients", h.ListOAuthClients)
+			ar.Post("/api/v1/auth/oauth-clients", h.CreateOAuthClient)
+			ar.Delete("/api/v1/auth/oauth-clients/{id}", h.RevokeOAuthClient)
+		})
+
+		// RBAC — company roles, permissions catalog, and assignments.
+		// Authorization is handled inside each handler: system_admin and
+		// primary_manager always pass; other callers must hold
+		// company.role.read (for GETs) or company.role.manage (for mutations).
+		pr.Get("/api/v1/rbac/permissions", h.ListRBACPermissions)
+		pr.Get("/api/v1/rbac/accounts", h.ListRBACEligibleAccounts)
+		pr.Get("/api/v1/rbac/roles", h.ListRBACRoles)
+		pr.Get("/api/v1/rbac/roles/{id}", h.GetRBACRole)
+		pr.Post("/api/v1/rbac/roles", h.CreateRBACRole)
+		pr.Put("/api/v1/rbac/roles/{id}", h.UpdateRBACRole)
+		pr.Delete("/api/v1/rbac/roles/{id}", h.DeleteRBACRole)
+		pr.Get("/api/v1/rbac/assignments", h.ListRBACAssignments)
+		pr.Post("/api/v1/rbac/assignments", h.CreateRBACAssignment)
+		pr.Delete("/api/v1/rbac/assignments/{id}", h.DeleteRBACAssignment)
 
 		// System admin only: company management + stats
 		pr.Group(func(sr chi.Router) {

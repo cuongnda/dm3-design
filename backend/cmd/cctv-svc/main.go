@@ -176,10 +176,12 @@ func main() {
 		var storeErr error
 		objectStore, storeErr = objectstore.NewMinIOStore(ctx, objectstore.Config{
 			Endpoint:         cfg.ObjectStoreEndpoint,
+			PublicEndpoint:   cfg.ObjectStorePublicEndpoint,
 			AccessKeyID:      cfg.ObjectStoreAccessKeyID,
 			SecretAccessKey:  cfg.ObjectStoreSecretAccessKey,
 			Bucket:           cfg.ObjectStoreBucket,
 			UseSSL:           cfg.ObjectStoreUseSSL,
+			PublicUseSSL:     cfg.ObjectStorePublicUseSSL,
 			AutoCreateBucket: cfg.ObjectStoreAutoCreateBucket,
 		})
 		if storeErr != nil {

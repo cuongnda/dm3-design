@@ -201,15 +201,27 @@ type Schedule struct {
 
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
+type HourlyBucket struct {
+	Hour    int `json:"hour"`
+	Granted int `json:"granted"`
+	Denied  int `json:"denied"`
+}
+
 type DashboardStats struct {
-	AccessDevicesOnline  int           `json:"access_devices_online"`
-	AccessDevicesOffline int           `json:"access_devices_offline"`
-	AccessDevicesWarning int           `json:"access_devices_warning"`
-	AccessDevicesTotal   int           `json:"access_devices_total"`
-	EventsToday          int           `json:"events_today"`
-	GrantedToday         int           `json:"granted_today"`
-	DeniedToday          int           `json:"denied_today"`
-	RecentEvents         []AccessEvent `json:"recent_events"`
+	AccessDevicesOnline  int            `json:"doors_online"`
+	AccessDevicesOffline int            `json:"doors_offline"`
+	AccessDevicesWarning int            `json:"doors_alarm"`
+	AccessDevicesTotal   int            `json:"doors_total"`
+	EventsToday          int            `json:"events_today"`
+	GrantedToday         int            `json:"granted_today"`
+	DeniedToday          int            `json:"denied_today"`
+	OnSiteCount          int            `json:"on_site_count"`
+	EntriesLastHour      int            `json:"entries_last_hour"`
+	DeniesLastHour       int            `json:"denies_last_hour"`
+	PeakHourLabel        string         `json:"peak_hour_label"`
+	PeakHourCount        int            `json:"peak_hour_count"`
+	Hourly               []HourlyBucket `json:"hourly"`
+	RecentEvents         []AccessEvent  `json:"recent_events"`
 }
 
 type SyncPackage struct {

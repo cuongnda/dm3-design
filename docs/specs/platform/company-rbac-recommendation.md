@@ -40,11 +40,20 @@ This is a **working recommendation**, not the final immutable architecture.
 
 ## Core Recommendation
 
-### Keep only 2 fixed human roles
-- `system_admin`
-- `primary_manager`
+### Keep 3 fixed human roles
+- `system_admin` — platform operators (Duali internal)
+- `primary_manager` — top authority inside a company
+- `member` — baseline authenticated tenant user (self-service only)
 
-### Everything else becomes company-defined
+### Why `member` is a fixed role, not a custom one
+Every authenticated tenant user needs the same minimum capabilities: view own access history, manage own face ID / dynamic QR / profile, receive own notifications. Making this a company-defined role would:
+- force every tenant to create it manually during onboarding
+- leak "read-own-data" logic into custom middleware bypasses (the exact anti-pattern this spec eliminates)
+- make the mobile app's onboarding UX tenant-dependent
+
+Defining `member` as a fixed role with a fixed seeded permission set and an implicit `self` scope solves all three. It's auto-granted when a user is created and cannot be revoked — it's the floor, not a grant.
+
+### Everything else (beyond baseline self-service) becomes company-defined
 Each company can create its own roles, for example:
 - Viewer
 - Receptionist
@@ -98,6 +107,14 @@ So the product should guide them with a manual, intuitive model first, then evol
 - can create/edit/delete company roles
 - can assign roles to company users
 - company bootstrap owner
+
+### `member`
+- baseline tenant user role
+- auto-granted at `self` scope on user creation
+- permissions are a fixed seeded set, all from the `core` plugin
+- enables mobile-app self-service without any admin action
+- never revoked; additive with custom role assignments
+- is the answer to "what can an ordinary employee do by default?"
 
 These are the only fixed human roles the platform should rely on long-term.
 
@@ -176,6 +193,34 @@ Use a stable action vocabulary:
 - `execute`
 - `export`
 - `configure`
+
+---
+
+## 5. Plugin gating is orthogonal to RBAC
+
+DM3 ships plugin-gated capabilities (visitor, parking, cctv, intercom, smart_building). A company without the plugin should not see those features at all — regardless of whether a user happens to hold a role with the matching permission.
+
+### The cleanest model: gate before permission
+```text
+Request → tenant boundary → plugin gate → permission → scope → allow/deny
+```
+
+This is the right order because:
+1. **Plugin state is cheaper to check** than walking role assignments
+2. **The error message is clearer** — "your company does not have visitor enabled" vs "you don't have permission"
+3. **It decouples commercial state from authorization state** — plugin toggles don't require re-editing roles
+
+### Why permissions carry a `plugin` tag instead of a separate gate
+Each permission catalog entry declares one owning plugin (`visitor.visit.manage` → `visitor`; `identity.user.read` → `core`). This means:
+- Admin UI can grey out permissions whose plugin is disabled (no clicks wasted)
+- Runtime gate is a single-lookup cost (no per-endpoint plugin logic)
+- Role definitions are plugin-state-independent: disabling a plugin doesn't corrupt role data; re-enabling restores function instantly
+
+### Why `member` permissions are always `core`
+If `member` depended on optional plugins, disabling a plugin would break mobile-app self-service for everyone. The `member` seeded permission set is strictly `plugin=core` by design: own profile, own history, own biometrics, own QR. These work on any commercial tier.
+
+### Toggle authority
+Plugin enable/disable is `system_admin` only. It's a billing/commercial decision, not a `primary_manager` operation. The admin UI exposes read-only visibility of enabled plugins so customers understand their current package.
 
 ---
 

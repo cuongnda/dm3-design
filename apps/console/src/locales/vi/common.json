@@ -47,6 +47,7 @@
   "nav.profile": "Hồ sơ",
   "actions.signOut": "Đăng xuất",
   "actions.signIn": "Đăng nhập",
+  "auth.sessionExpired": "Phiên đã hết hạn — vui lòng đăng nhập lại",
   "actions.search": "Tìm kiếm...",
   "actions.viewAll": "Xem tất cả →",
   "status.live": "Trực tiếp",

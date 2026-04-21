@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import {
   Activity, CheckCircle2, XCircle, AlertTriangle, DoorOpen,
   Radio, Pause, Play, Trash2, Search, CreditCard, ScanFace, QrCode, FingerprintPattern, KeyRound, ShieldQuestionMark,
@@ -211,6 +212,7 @@ export function LiveEventsPage() {
   const { t } = useTranslation('monitoring');
   const reasonLabel = useReasonLabel();
   const { connected, connecting } = useConnectionStatus();
+  const [searchParams] = useSearchParams();
 
   // Local merged timeline. Realtime store only keeps access events;
   // alarms and door state come from separate store slices. We merge
@@ -220,10 +222,16 @@ export function LiveEventsPage() {
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
 
-  // Filters
-  const [enabledKinds, setEnabledKinds] = useState<Set<RowKind>>(
-    new Set<RowKind>(['access', 'alarm', 'door']),
-  );
+  // Filters — seed from ?kind=... query param for deep-links from dashboard
+  // alerts CTAs ("/monitoring?kind=alarm"). Default: all kinds visible.
+  const [enabledKinds, setEnabledKinds] = useState<Set<RowKind>>(() => {
+    const kindParam = searchParams.get('kind');
+    const valid: RowKind[] = ['access', 'alarm', 'door'];
+    if (kindParam && (valid as string[]).includes(kindParam)) {
+      return new Set<RowKind>([kindParam as RowKind]);
+    }
+    return new Set<RowKind>(valid);
+  });
   const [filterDevice, setFilterDevice] = useState('');
   const [filterResult, setFilterResult] = useState('');
   const [search, setSearch] = useState('');

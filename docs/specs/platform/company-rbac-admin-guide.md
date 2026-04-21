@@ -34,9 +34,21 @@ Use this sentence in your head every time:
 - can assign roles
 - can change company settings
 
-These are the only fixed human roles.
+### Member (automatic baseline)
+- every active user in your company holds this role automatically
+- lets users use the mobile app for **their own data only**:
+  - view their own access history
+  - manage their own face ID, fingerprint, dynamic QR
+  - view and update their own profile
+- cannot see other users' data, cannot change company settings, cannot manage devices
+- cannot be revoked (it's the minimum, not a grant)
+- does not appear in role lists or the "Assign Role" dialog — it's always on
 
-Everything else should be created by the company.
+If a user should only use the mobile app for personal features, you do not need to assign anything. `Member` is already there.
+
+You only assign custom roles when the user needs to do more than personal self-service.
+
+These three are the only fixed roles. Everything else should be created by the company.
 
 ---
 
@@ -244,6 +256,34 @@ Questions to ask:
 ### Step 4: Save role
 At this stage, the role defines only **what** can be done.
 Not **where**.
+
+---
+
+## Why some permissions are greyed out
+
+DM3 has optional features called **plugins**:
+- Visitor management
+- Parking
+- CCTV
+- Intercom
+- Smart building
+
+Your company is subscribed to some of these, not necessarily all. The baseline features (users, devices, access, attendance, reports) are always available.
+
+### What you will see
+When you edit a role's permissions:
+- permissions from plugins your company **has** → selectable normally
+- permissions from plugins your company **does not have** → greyed out, cannot be selected, with a tooltip explaining why
+
+### If a plugin is turned off later
+- roles that already contain those permissions keep them, greyed out
+- affected users silently lose access to those features (they see "Upgrade" prompts in the app instead of errors)
+- if the plugin is re-enabled later, everything works again without editing roles
+
+### Who controls plugins
+Only Duali/internal platform staff can enable or disable plugins (it's part of your service plan). Primary Manager can see which plugins are on but cannot toggle them.
+
+You don't need to worry about this during role setup — the greyed-out state handles it automatically.
 
 ---
 

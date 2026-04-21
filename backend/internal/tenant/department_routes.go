@@ -2,11 +2,17 @@ package tenant
 
 import (
 	"github.com/go-chi/chi/v5"
+
+	"github.com/duali/dm3-backend/internal/authsvc"
 )
 
-// AddDepartmentRoutes adds department management routes
+// AddDepartmentRoutes adds department management routes.
+// Reads are open to any authenticated tenant user; writes require the
+// identity.department.manage permission via rbac.Check.
 func AddDepartmentRoutes(r chi.Router, h *UserManagementHandlers) {
 	r.Route("/api/v1/identity/departments", func(r chi.Router) {
+		r.Use(authsvc.RequireWritePermission("identity.department.manage"))
+
 		r.Get("/", h.ListDepartments)
 		r.Post("/", h.CreateDepartment)
 

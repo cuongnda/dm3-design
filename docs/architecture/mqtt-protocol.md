@@ -1,7 +1,14 @@
 # Duall Master 3.0 — MQTT Protocol Specification
 
 > IoT Device ↔ Server Communication Protocol
-> Version: 1.0 | Updated: 2026-02-19
+> Version: 1.6 | Updated: 2026-04-21
+> Changelog:
+> - v1.6 — §7.9 added: `cfg.kiosk_config` pushes `{api_base_url, company_code, kiosk_token}` to DM3-provisioned LPR kiosks so the `/register-visit` bearer is distributed by Transmit Data rather than manually pasted. Every push rotates the token.
+> - v1.5 — Kiosk walk-in registration adapter (`POST /register-visit` on visitor-svc, auth: kiosk bearer token) now lands license plates in `dm3_parking.parking_vehicles` per the existing parking plugin contract — **not** in `dm3_identity.credentials`. No new credential `type` value is added; vehicle access goes through the parking plugin's LPR event path (`matched_by='plate'`), door access continues to go through `cfg.visitor_sync`.
+> - v1.4 — `cfg.person_sync` and `cfg.visitor_sync` entries now carry an optional `avatar` field: a short-lived (~1h TTL) presigned MinIO GET URL that the device downloads directly, no device-JWT needed.
+> - v1.3 — §7.8 added: `cfg.visitor_sync` pushes active visits + temporary credentials to devices, driven by `dm3.visitor.*.visit.*` NATS events.
+> - v1.2 — `cmd.snapshot` now carries a server-presigned `upload_url` + `object_key` (§6.4); `OBJECT_STORE_PUBLIC_ENDPOINT` documented (§15.8) so presigned URLs can target a different host than the gateway uses internally.
+> - v1.1 — §15 added: media uploads moved to presigned MinIO PUT; `photo`/`plate_photo`/`clip_object_key` carry object keys, no longer base64.
 
 ---
 
@@ -401,12 +408,22 @@ All messages follow a standard envelope format:
     "person_detected": true,
     "temperature": 36.5,       // Optional: thermal reading (°C)
     "mask_detected": true,     // Optional: mask detection
-    "photo": "base64_jpeg",    // Optional: snapshot (max 100KB, compressed)
+    "photo": "events/<tenant>/<device>/snapshot/<uuid>.jpg",  // Optional: object key from §15 upload, NOT base64
+    "clip_object_key": "events/<tenant>/<device>/clip/<uuid>.mp4", // Optional: video clip object key from §15 upload
     "local_db_version": 42,    // Current user DB version on device
     "local_person_count": 4998 // Number of users in local DB
   }
 }
 ```
+
+**Media fields (`photo`, `clip_object_key`)** *(updated 2026-04)* — both are
+**MinIO object keys**, not embedded binary. Devices upload the bytes first
+via the presigned-URL flow in **§15 Media Uploads**, then publish the
+access.log MQTT event with the returned `object_key`. The legacy
+`"photo": "base64_jpeg"` payload format is no longer accepted; brokers and
+NATS bridges enforce the 256 KB envelope limit, so any media >1 MB never
+worked over MQTT in practice. Existing rows with base64-encoded `photo` are
+left untouched in `access_events.metadata`; new rows always store keys.
 
 **Field notes:**
 
@@ -480,7 +497,7 @@ All messages follow a standard envelope format:
     "door_id": "door-001",      // Optional
     "sensor_id": "sensor-001",  // Optional
     "details": "Door forced open without authorization",
-    "photo": "base64_jpeg"      // Optional: snapshot at alarm time
+    "photo": "events/<tenant>/<device>/snapshot/<uuid>.jpg"  // Optional: object key — see §15
   }
 }
 ```
@@ -496,7 +513,7 @@ All messages follow a standard envelope format:
     "name": "Trần Thị B",
     "id_number": "0123456789",  // Masked in transit
     "host_id": "user-uuid",
-    "photo": "base64_jpeg",
+    "photo": "events/<tenant>/<device>/snapshot/<uuid>.jpg",  // Object key — see §15
     "badge_printed": true,
     "access_zones": ["zone-lobby", "zone-meeting"],
     "valid_until": 1740003600000
@@ -527,7 +544,7 @@ All messages follow a standard envelope format:
   "data": {
     "action": "entry|exit",
     "plate_number": "30A-12345",
-    "plate_photo": "base64_jpeg",
+    "plate_photo": "events/<tenant>/<device>/snapshot/<uuid>.jpg",  // Object key — see §15
     "confidence": 0.98,
     "vehicle_type": "car|motorcycle|truck",
     "lane_id": "lane-001",
@@ -671,16 +688,44 @@ All messages follow a standard envelope format:
 
 ### 6.4 Capture Snapshot
 
+The server pre-signs the upload URL when issuing the command — the device
+just PUTs the JPEG bytes to MinIO and echoes back the object key. No HTTP
+round-trip from the device for the URL itself. This is the only command
+that carries a presigned URL today; see §15.5 for the rationale.
+
 ```json
 {
   "type": "cmd.snapshot",
   "data": {
     "camera": "main|secondary",
     "quality": 85,               // JPEG quality
-    "max_width": 1280
+    "max_width": 1280,
+    // ── Pre-signed upload (added 2026-04, server-issued) ──────────────────
+    "upload_url": "https://minio.example.com/dm3/events/...?X-Amz-Signature=...",
+    "object_key": "events/<tenant>/<device>/snapshot/<uuid>.jpg",
+    "upload_expires_at": "2026-04-20T12:34:56Z"  // RFC3339 UTC — typically 5 min
   }
 }
 ```
+
+**Device must:**
+
+1. Capture the JPEG.
+2. `PUT <upload_url>` with `Content-Type: image/jpeg` and the binary as the
+   body. The PUT URL is signed for the exact `image/jpeg` content type, so
+   any other Content-Type triggers `403 SignatureDoesNotMatch` from MinIO.
+3. Publish `cmd.snapshot.resp` with `data.photo = <object_key>` echoed back.
+
+The object key is **server-chosen** — devices MUST NOT modify it (the URL
+signature only covers that exact key). If the device cannot upload (camera
+error, MinIO unreachable), respond with `status: error` and a human-readable
+`error` field instead of inventing a different key.
+
+**Backwards compatibility:** if the gateway is run without object storage
+configured, `upload_url` and `object_key` are omitted from the command.
+Older firmware that doesn't understand these fields should fall back to its
+previous capture-and-respond path; the server will treat a `data.photo`
+that doesn't start with `events/` as a legacy reference.
 
 **Response:**
 ```json
@@ -689,7 +734,7 @@ All messages follow a standard envelope format:
   "ref": "original-msg-id",
   "status": "ok",
   "data": {
-    "photo": "base64_jpeg",
+    "photo": "events/<tenant>/<device>/snapshot/<uuid>.jpg",  // Echo of object_key from the command
     "width": 1280,
     "height": 720,
     "captured_at": 1740000001000
@@ -872,6 +917,7 @@ For offline/hybrid mode — push user credentials to device local storage.
       {
         "user_id": "user-uuid",
         "name": "Nguyễn Văn A",
+        "avatar": "https://minio.public.example.com/dm3/tenants/{tid}/identity/users/{uid}/avatar.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600&X-Amz-Signature=...",
         "credentials": [
           {"type": "card", "uid": "AABBCCDD", "valid_from": 1739900000000, "valid_until": 1771436000000},
           {"type": "face", "template": "base64_encoded", "version": "arcface_v3"},
@@ -909,6 +955,15 @@ For offline/hybrid mode — push user credentials to device local storage.
 The two messages share the same topic and arrive in publish order. The device MUST process them in the order they are received. Both messages produce their own `cfg.person_sync.ack` so the server can detect partial failure (e.g. `clear` succeeded but `full_sync` was lost — the operator would see only some users in the next status report).
 
 **Auto sync flow** *(unchanged)* — credential edits, role changes, etc. fan out via NATS → `IdentityConsumer` → `PushPersonSync`, which sends a single `full_sync` message. No `clear` is sent on the auto path because the user is making one small change and a destructive clear-then-resync would briefly leave the device with an empty user DB on every keystroke.
+
+**Avatar** *(added 2026-04)* — each user MAY carry an `avatar` field containing a **presigned MinIO GET URL** that the device can download directly with a plain HTTP GET, no auth header required. The signature in the URL is the authentication. Field semantics:
+
+- **Omitted / empty** when the user has no uploaded photo, or when the gateway could not sign the key (device sees no avatar; no broken URL is ever sent).
+- **Expiry:** ~1 hour from the moment the `cfg.person_sync` message is published (controlled by `gateway.AvatarPresignTTL`). Every subsequent sync refreshes the URL, so a device that stays online always has a live URL in hand. A device that's offline longer than the expiry must wait for the next sync to get a fresh one — the image bytes themselves can be cached locally using the URL path as the cache key (the path component stays stable across signatures; only the query-string signature rotates).
+- **Host:** resolved from `OBJECT_STORE_PUBLIC_ENDPOINT` (see §15.8) — the same address used for device media uploads, so a device that can PUT snapshots can also GET avatars.
+- **Scope:** only object keys under `tenants/{tid}/...` are signed. Any other shape of stored reference is ignored server-side.
+
+Used purely for on-device display (e.g. the "Welcome, X" screen after a successful match); face recognition still uses the `face` credential `template`, not this image.
 
 **Credential-level validity** *(added 2026-04)* — each credential entry MAY carry its own `valid_from` / `valid_until` (epoch ms). Semantics:
 
@@ -1186,6 +1241,141 @@ Each status change also creates:
 
 On `success`: the device's `firmware_version` in `dm3_devices.devices` is updated automatically.
 
+### 7.8 Visitor Sync
+
+Pushes the set of currently-valid visits (and their temporary credentials) to a device so it can grant access to visitors the same way it grants access to staff. Source of truth is `dm3_visitor.visits` × `dm3_visitor.temp_credentials`. Only visits with `status IN ('approved', 'checked_in')` whose `expected_departure` is in the future (or NULL) are sent, and only to devices wired to an access point whose `zone_id` appears in the visit's `access_areas`.
+
+Shares the same topic, QoS, and envelope as every other `cfg.*` message — no firmware or ACL changes are required beyond recognising the new `type`.
+
+```json
+{
+  "v": 1,
+  "type": "cfg.visitor_sync",
+  "data": {
+    "action": "full_sync|upsert|remove|clear",
+    "visitors": [
+      {
+        "visit_id": "uuid",
+        "visitor_id": "uuid",
+        "name": "Nguyễn Văn A",
+        "avatar": "https://minio.public.example.com/dm3/tenants/{tid}/visitor/visitors/{visitor_id}/photo.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600&X-Amz-Signature=...",
+        "credentials": [
+          {"type": "qr", "code": "VST-7c3a...", "valid_from": 1740000000000, "valid_until": 1740086400000}
+        ],
+        "access_zones": ["zone-uuid-1", "zone-uuid-2"],
+        "valid_from": 1740000000000,
+        "valid_until": 1740086400000,
+        "active": true
+      }
+    ],
+    "removed_visit_ids": ["uuid"],
+    "total_count": 1,
+    "batch": 1,
+    "batch_total": 1
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `action` | string | `full_sync` (replace the device's visitor cache), `upsert` (add/update a single visit), `remove` (drop the visits in `removed_visit_ids`), `clear` (wipe the visitor cache; sent as step 1 of the manual Transmit replace flow) |
+| `visitors[]` | array | Sent with `full_sync` and `upsert`. Empty for `remove` / `clear`. |
+| `visitors[].visit_id` | uuid | Unique per visit — this is the key the device stores under. |
+| `visitors[].avatar` | string | Presigned MinIO GET URL for the visitor photo (same format and ~1h TTL as the user-sync avatar — see §7.4 "Avatar"). Omitted when the visitor has no photo or when signing fails. |
+| `visitors[].credentials[]` | array | Same shape as `cfg.person_sync` entries (card uid, face template, qr code, etc). Visits with no active credential are filtered out — the device has nothing to match on. |
+| `visitors[].access_zones[]` | uuid[] | Zones where the visitor is authorised. The device grants access only if its own zone intersects. |
+| `visitors[].valid_from` / `valid_until` | int (epoch ms) | From `dm3_visitor.visits.expected_arrival` / `expected_departure`. Device enforces locally. |
+| `removed_visit_ids[]` | uuid[] | Present only when `action=remove`. |
+
+**Device logic:**
+- On `full_sync`: replace the entire local visitor cache with `visitors[]`.
+- On `upsert`: insert or update each entry by `visit_id`.
+- On `remove`: delete the listed `visit_id`s from the local cache.
+- On `clear`: drop every visit from the cache (followed by a `full_sync` in the manual Transmit flow).
+
+**Trigger points (server-side):**
+- `dm3.visitor.{tid}.visit.approved` / `reinvited` → full sync to every online device in tenant (via `VisitorConsumer`).
+- `dm3.visitor.{tid}.visit.checked_out|rejected|cancelled|no_show` → full sync so the visit drops out of the active set.
+- Manual **Transmit Data** with type=`visitor_sync` → `clear` + `full_sync` replace.
+- Device reconnect / heartbeat-triggered resync → `full_sync` only.
+
+**Ack** (`dm/{tid}/device/{did}/cfg/ack`, QoS 1):
+```json
+{
+  "v": 1,
+  "type": "cfg.visitor_sync.ack",
+  "ref": "original-msg-id",
+  "status": "ok",
+  "data": {
+    "synced_count": 12,
+    "failed_count": 0,
+    "local_total": 12
+  }
+}
+```
+
+**Notes:**
+- Visitors and regular users live in separate local caches on the device. A visit_id cannot collide with a user_id because the device stores them under different key spaces.
+- A visit with an empty `temp_credentials.value` is considered not-yet-provisioned and is filtered out server-side; it will be included in the next sync after an operator assigns a card / QR / badge.
+- Revoked credentials (`revoked_at IS NOT NULL`) are never sent.
+
+### 7.9 Kiosk Config
+
+Pushes the three settings an LPR kiosk (lpr-desktop-app) needs to call
+`POST /register-visit` on visitor-svc: the public API base URL, the tenant's
+company code, and a per-device bearer token. Lets operators register one
+or many kiosks without copy-pasting secrets between the DM3 console and
+each kiosk — the server mints the token server-side and delivers it
+in-band over the device's existing cfg channel.
+
+**Scope:** only kiosk-class devices do anything with this. Other device
+types see an unknown cfg.* type and drop it, which is safe by protocol
+convention (§7.1).
+
+```json
+{
+  "v": 1,
+  "type": "cfg.kiosk_config",
+  "data": {
+    "api_base_url": "http://dm3-gateway.local:8006",
+    "company_code": "DUALI-DEMO",
+    "kiosk_token":  "dm3kiosk_8f3a...<64 hex>",
+    "version": 1740000000
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `api_base_url` | string | Origin of visitor-svc. Device prepends this to `/register-visit`. |
+| `company_code` | string | `dm3_auth.tenants.code` for the device's tenant. Sent as the `?companyCode=` query param on every register call. |
+| `kiosk_token` | string | New long-lived bearer (`dm3kiosk_<64hex>`). **Every push mints a fresh token and revokes the previous one** — the cleartext exists only in this MQTT payload and in the device's local store. |
+| `version` | int | unix seconds at mint time. Devices MAY dedupe (ignore same-or-older version) across reconnect replays. |
+
+**Storage contract (device-side):**
+- Persist all three fields atomically. A partial write (e.g. new token but stale URL) is worse than ignoring the message.
+- Replace any previously-stored kiosk settings. There is no merge semantics — the server is the source of truth.
+- Subsequent `POST /register-visit` calls MUST use `Authorization: Bearer <kiosk_token>` verbatim and `?companyCode=<company_code>`.
+
+**Ack** (`dm/{tid}/device/{did}/cfg/ack`, QoS 1):
+```json
+{
+  "v": 1,
+  "type": "cfg.kiosk_config.ack",
+  "ref": "original-msg-id",
+  "status": "ok",
+  "data": {
+    "applied": true,
+    "version": 1740000000
+  }
+}
+```
+
+**Rotation model:** every `kiosk_config` push rotates the token. Operators can trigger a rotation by re-running **Transmit Data** with `type=kiosk_config` on the target device. The previous token's `revoked_at` is set in the same transaction as the new one's insert — the window where neither is valid is milliseconds and only inside the server's DB tx; the device never sees a gap because it holds both tokens until the new one lands and the ack is published.
+
+**Server config:**
+- `KIOSK_API_BASE_URL` (env var, read at startup) — the public origin for visitor-svc. If unset, the `kiosk_config` sync type rejects requests with a clear error rather than pushing a broken URL.
+
 ---
 
 ## 9. Offline-First Architecture & Sync
@@ -1359,6 +1549,8 @@ Guard Station              Server                 EMQX                  All Devi
 | `cmd.*` | 2 | No | High | 10s | 3x |
 | `cfg.full` | 2 | Yes | Normal | 60s | Until ack |
 | `cfg.person_sync` | 2 | No | Normal | 300s | Until ack |
+| `cfg.visitor_sync` | 2 | No | Normal | 300s | Until ack |
+| `cfg.kiosk_config` | 2 | No | Normal | 300s | Until ack |
 | `cfg.access_rules` | 2 | No | Normal | 60s | Until ack |
 | `cfg.blacklist` | 2 | No | Critical | 5s | Until ack |
 | `emergency.broadcast` | 2 | Yes | Critical | — | — |
@@ -1403,4 +1595,225 @@ Guard Station              Server                 EMQX                  All Devi
 | Medium building | 50 doors, 500 people | ~5,000 access + sensors | ~50 MB/day |
 | Large campus | 200 doors, 5,000 people | ~50,000 access + full telemetry | ~500 MB/day |
 
-*Excludes photo attachments. With snapshots: multiply by 3-5x.*
+*MQTT bandwidth excludes media — snapshots and clips travel out-of-band
+over HTTPS direct to MinIO (see §15). For sites that capture a snapshot
+on every access, add the per-event MinIO PUT bandwidth (typically
+30–200 KB/snapshot, 1–10 MB/clip) to your network plan.*
+
+---
+
+## 15. Media Uploads (Snapshots & Clips)
+
+> **All media — images and videos, regardless of size — uses one consistent
+> flow: presigned PUT directly to MinIO.** No binary payload ever travels
+> through the MQTT broker, the device-gateway, or NATS. The MQTT event
+> carries only the resulting object key.
+
+This section covers how a device attaches a snapshot or video clip to any
+event (`access.log`, `alarm.triggered`, `visitor.checkin`, `parking.plate`,
+or a `cmd.snapshot.resp`).
+
+### 15.1 Why not MQTT?
+
+| Concern | Why MQTT is wrong |
+|---|---|
+| Envelope size | Hard 256 KB cap on MQTT payloads. A 2 MB clip simply won't transit. |
+| Memory amplification | Broker → device-gateway → NATS → access-svc each deserializes the JSON. A 2 MB clip becomes ~3 MB after base64 and is held in memory in 4 places. |
+| NATS limits | Default 1 MB max message size on the `dm3.devices.>` stream. Raising it would penalize every small event. |
+| Resumable upload | MQTT QoS 1/2 retransmits the *whole* message on failure. HTTP/S3 supports range requests and multipart for >5 MB. |
+| Broker scaling | EMQX is tuned for many small messages, not few large ones. Image storms during an incident degrade access decisions for the whole tenant. |
+
+The two-step flow keeps `evt` payloads small (event + reference) while
+allowing arbitrarily large media to flow on a separate, scalable path.
+
+### 15.2 Flow
+
+```
+Device                   device-gateway                  MinIO
+   │                          │                            │
+   │ 1. POST /devices/{id}/media-url  ──────────────►      │
+   │    Authorization: Bearer <device JWT>                  │
+   │    { "kind": "snapshot",                               │
+   │      "content_type": "image/jpeg" }                    │
+   │                          │                            │
+   │ ◄── 200 OK ──────────────│                            │
+   │     { "upload_url": "https://minio.../...?Sig=...",   │
+   │       "object_key": "events/<tid>/<did>/snapshot/<uuid>.jpg",
+   │       "method": "PUT",                                 │
+   │       "expires_at": "..." }                            │
+   │                          │                            │
+   │ 2. PUT <upload_url> ─────────────────────────────────►│
+   │    Content-Type: image/jpeg                            │
+   │    Body: <binary jpg>                                  │
+   │                          │                            │
+   │ ◄────────────────── 200/204 from MinIO ───────────────│
+   │                          │                            │
+   │ 3. MQTT publish dm/{tid}/device/{did}/evt              │
+   │    { "type": "access.log",                             │
+   │      "data": { ..., "photo": "<object_key>" } }        │
+   │                          │                            │
+```
+
+### 15.3 Issue an upload URL
+
+```
+POST /api/v1/gateway/devices/{device_id}/media-url
+Host: <gateway>
+Authorization: Bearer <device JWT, did claim must equal {device_id}>
+Content-Type: application/json
+
+{
+  "kind": "snapshot",            // "snapshot" | "clip"
+  "content_type": "image/jpeg"   // see allow-list below
+}
+```
+
+**Allowed `(kind, content_type)` pairs:**
+
+| `kind` | `content_type` | Stored extension |
+|---|---|---|
+| `snapshot` | `image/jpeg` | `.jpg` |
+| `snapshot` | `image/png`  | `.png` |
+| `snapshot` | `image/webp` | `.webp` |
+| `clip`     | `video/mp4`  | `.mp4` |
+| `clip`     | `video/webm` | `.webm` |
+
+Other values are rejected with **400 Bad Request**.
+
+**Response (200 OK):**
+
+```json
+{
+  "upload_url": "https://minio.example.com/dm3/events/...?X-Amz-Signature=...",
+  "object_key": "events/<tenant_id>/<device_id>/snapshot/<uuid>.jpg",
+  "content_type": "image/jpeg",
+  "expires_at": "2026-04-20T15:00:00Z",
+  "method": "PUT"
+}
+```
+
+**Object key layout:** `events/<tenant_id>/<device_id>/<kind>/<uuid>.<ext>`
+
+The bucket is the same `OBJECT_STORE_BUCKET` already used for firmware
+and CCTV clips — there is no per-tenant bucket.
+
+**URL lifetime:** the URL is signed for **1 hour**. The device should
+upload immediately; the long expiry only exists to tolerate spotty
+links, not to be cached. There is no "extend expiry" endpoint — request
+a fresh URL if needed.
+
+**Auth errors:**
+
+| Status | Cause |
+|---|---|
+| `401 Unauthorized` | Missing/invalid/expired device JWT. Devices must refresh via `/refresh-token` (§2.7) before retrying. The 7-day grace window does NOT apply here — only fully valid tokens can mint upload URLs. |
+| `403 Forbidden` | `did` claim does not match the `{device_id}` path parameter. A device may only upload media for itself. |
+| `503 Service Unavailable` | Object storage not configured on the gateway (`OBJECT_STORE_*` env vars). Devices should buffer and retry later. |
+
+### 15.4 Upload to MinIO
+
+The device PUTs the binary to the returned `upload_url`:
+
+```
+PUT <upload_url>
+Content-Type: <same content_type the device requested>
+Content-Length: <size in bytes>
+Body: <binary>
+```
+
+- **The `Content-Type` header MUST match** the value declared in step 1.
+  MinIO bakes the content type into the presigned URL; mismatched headers
+  fail signature verification with **403 SignatureDoesNotMatch**.
+- **For files >5 MB**, devices SHOULD use multipart upload (S3 protocol).
+  MinIO supports it natively; minio-go and most S3 SDKs handle the chunking.
+  The presigned PUT URL signs only the single PUT — for multipart, request
+  a presigned multipart URL via a future endpoint extension.
+- The gateway never sees the bytes. There is no upload progress beacon
+  on the gateway side.
+
+### 15.5 Reference the upload from the MQTT event
+
+After a successful PUT, publish the event over MQTT with the object key
+in the appropriate field:
+
+| Event type | Field carrying the object key | Who issues the URL |
+|---|---|---|
+| `access.log` | `data.photo` (snapshot), `data.clip_object_key` (video) | Device, via §15.3 HTTP request |
+| `alarm.triggered` | `data.photo` | Device, via §15.3 HTTP request |
+| `visitor.checkin` | `data.photo` | Device, via §15.3 HTTP request |
+| `parking.plate` | `data.plate_photo` | Device, via §15.3 HTTP request |
+| **`cmd.snapshot.resp`** | **`data.photo`** | **Server — embedded in the `cmd.snapshot` command itself (see §6.4)** |
+
+Why the asymmetry: device-initiated events (`access.log`, `alarm`, …) need
+the device to ask first because the server can't predict when an event
+will fire. `cmd.snapshot` is server-initiated, so the gateway already
+knows the device + tenant when it generates the command — it pre-signs the
+URL and ships it with the command. **One round-trip total instead of two.**
+
+Devices MAY publish the event in parallel with the MinIO PUT (as long as
+the PUT eventually completes). The gateway stores the object key on the
+event row immediately; the frontend handles "image not yet available"
+by retrying the presigned GET.
+
+### 15.6 Render media on the frontend
+
+The console fetches a short-lived (5 min) presigned GET URL via the same
+pattern used today for CCTV clips (see `internal/cctv/clip_signer.go`).
+For snapshots, the matching helper lives on `objectstore.MinIOStore`
+(`PresignedGetURL`). The browser then loads the image/video directly
+from MinIO — no proxying through the gateway.
+
+### 15.7 Orphan cleanup
+
+If a device requests an upload URL, completes the PUT, but crashes
+before publishing the MQTT event, the object becomes an orphan: it
+exists in MinIO with no row pointing to it. A periodic job (planned —
+not yet implemented) walks `events/` and deletes objects whose key has
+no matching `access_event.metadata.photo` /
+`access_event.metadata.clip_object_key` /
+`event_clips.object_key` reference and is older than 24 h.
+
+Until that job ships, orphans are harmless except for storage cost.
+
+### 15.8 Configuration
+
+Env vars on every service that issues presigned URLs (`device-gateway`,
+`access-svc`, `identity-svc`, `cctv-svc`, `attend-svc`):
+
+| Var | Required | Notes |
+|---|---|---|
+| `OBJECT_STORE_ENDPOINT` | yes | host:port the **service** uses to call MinIO. In docker, usually `minio:9000`. In native local dev, `localhost:9002`. |
+| `OBJECT_STORE_PUBLIC_ENDPOINT` | optional but **strongly recommended in prod** | host:port baked into the URL handed to **devices and browsers**. Set when devices on the LAN/WAN can't reach the service-internal endpoint. Falls back to `OBJECT_STORE_ENDPOINT` when empty. |
+| `OBJECT_STORE_USE_SSL` | optional | `true` if the service-MinIO link is HTTPS. |
+| `OBJECT_STORE_PUBLIC_USE_SSL` | optional | scheme baked into the URL given to devices/browsers. Defaults to `OBJECT_STORE_USE_SSL`. |
+| `OBJECT_STORE_ACCESS_KEY` / `OBJECT_STORE_SECRET_KEY` | yes | Credentials with PUT/GET on the bucket. |
+| `OBJECT_STORE_BUCKET` | yes | Single bucket reused across tenants — keys are namespaced by tenant_id. |
+| `OBJECT_STORE_AUTO_CREATE_BUCKET` | optional | `true` once on first deploy, then `false`. |
+
+**Worked example — devices on a LAN with MinIO behind docker:**
+
+```
+# Gateway talks to MinIO over the docker bridge
+OBJECT_STORE_ENDPOINT=minio:9000
+OBJECT_STORE_USE_SSL=false
+
+# Devices on the LAN (Wi-Fi printers, terminals at 192.168.1.x) reach
+# MinIO via the host's LAN IP / forwarded port
+OBJECT_STORE_PUBLIC_ENDPOINT=192.168.1.254:9002
+OBJECT_STORE_PUBLIC_USE_SSL=false
+```
+
+A presigned URL handed to a device will then look like:
+`http://192.168.1.254:9002/dm3/events/<tid>/<did>/snapshot/<uuid>.jpg?X-Amz-Signature=...`
+— even though the gateway computed it via `minio:9000`. The S3 signature
+covers the path and headers, not the host, so swapping the endpoint at the
+client level produces a fully-valid URL the LAN device can hit directly.
+
+When `OBJECT_STORE_ENDPOINT` is unset on the gateway, `/media-url` returns
+**503**. The MQTT event flow is unaffected — devices that don't capture
+media keep working.
+
+Source of truth: `backend/internal/gateway/media_handlers.go`,
+`backend/pkg/objectstore/objectstore.go` (`PresignedPutURL`).
+
+---

@@ -71,6 +71,78 @@ func PasswordResetEmail(to string, data PasswordResetData) Message {
 	}
 }
 
+// AdminPasswordResetData holds template data for an admin-initiated reset.
+// Unlike PasswordResetEmail (which sends a link to a self-service flow),
+// this one carries the new password directly because an admin already
+// generated it and the user just needs to know what to type.
+type AdminPasswordResetData struct {
+	UserName    string
+	NewPassword string
+	LoginLink   string // optional — when empty, the email omits the button
+}
+
+// AdminPasswordResetEmail builds the notification mailed to a user whose
+// password was reset by an admin from the system console (see [SA-03]).
+func AdminPasswordResetEmail(to string, data AdminPasswordResetData) Message {
+	name := data.UserName
+	if name == "" {
+		name = to
+	}
+	loginButton := ""
+	if data.LoginLink != "" {
+		loginButton = fmt.Sprintf(`
+    <table width="100%%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+    <tr><td align="center">
+      <a href="%s" style="display:inline-block;background:#3B82F6;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:14px;font-weight:600;">
+        Sign in
+      </a>
+    </td></tr>
+    </table>`, data.LoginLink)
+	}
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#0B1120;font-family:Arial,Helvetica,sans-serif;">
+<table width="100%%" cellpadding="0" cellspacing="0" style="background:#0B1120;padding:40px 20px;">
+<tr><td align="center">
+<table width="520" cellpadding="0" cellspacing="0" style="background:#1a2332;border-radius:12px;overflow:hidden;">
+  <tr><td style="background:linear-gradient(135deg,#3B82F6,#8B5CF6);padding:32px;text-align:center;">
+    <h1 style="color:#fff;margin:0;font-size:24px;">Duall Master</h1>
+  </td></tr>
+  <tr><td style="padding:32px;">
+    <h2 style="color:#e2e8f0;margin:0 0 16px;">Your password was reset</h2>
+    <p style="color:#94a3b8;font-size:14px;line-height:1.6;">
+      Hi <strong style="color:#e2e8f0;">%s</strong>,
+    </p>
+    <p style="color:#94a3b8;font-size:14px;line-height:1.6;">
+      An administrator has reset your password. Use the temporary password below
+      to sign in, then change it from your profile settings.
+    </p>
+    <div style="background:#0f1825;border:1px solid #2d3748;border-radius:8px;padding:16px;margin:20px 0;">
+      <div style="color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Temporary password</div>
+      <code style="color:#e2e8f0;font-size:18px;font-family:'Courier New',monospace;letter-spacing:0.05em;">%s</code>
+    </div>%s
+    <p style="color:#f59e0b;font-size:12px;line-height:1.5;margin-top:16px;">
+      ⚠ For your security, change this password the next time you sign in.
+      If you didn't expect this reset, contact your administrator immediately.
+    </p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`,
+		escapeHTML(name),
+		escapeHTML(data.NewPassword),
+		loginButton,
+	)
+	return Message{
+		To:      []string{to},
+		Subject: "Your Duall Master password was reset",
+		HTML:    html,
+	}
+}
+
 // VisitorInvitationData holds template data for the visitor invitation email.
 type VisitorInvitationData struct {
 	VisitorName     string

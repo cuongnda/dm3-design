@@ -1,6 +1,6 @@
 # Implementation Status
 
-This document tracks the current implementation status of DM3 features. Updated: 2026-04-15 (auth hardening: per-IP rate-limiting on public auth endpoints, per-account lockout after repeated failures, password reset token flow — migrations 000017/000020; access event idempotency via partial unique index + `ON CONFLICT` for JetStream redeliveries — migration 000021; zones gained `type` column site/building/floor/room/zone — migration 000019; visitor `temp_credentials` gained revoked_at/revoked_reason — migration 000018; new Access History page under SECURE wired to real `/api/v1/access/events` list + CSV/Excel export; remote door control + bulk dispatch per MQTT §6.1; atomic camera + CCTV row provisioning from devices form).
+This document tracks the current implementation status of DM3 features. Updated: 2026-04-21 (attend-svc launched with full attendance/leave module — migrations 000029–000034: attendance records, shifts, leave requests, leave policies, leave balances, holidays, monthly summaries, overtime, external ID idempotency — plugin-gated with NATS consumer, HR webhooks, CSV/XLSX export to MinIO, monthly rollup cron; RBAC subsystem implemented — migration 000035: company_roles, company_role_permissions, user_role_assignments with scoped assignments (company/site/department/zone/self) — dual-claim JWT with FixedRole + scoped assignments; OAuth2 + API token plane — migration 000037: oauth_clients, oauth_api_tokens, oauth_device_codes — API tokens gated behind per-tenant plugin; Emergency feature enhanced — trigger time + affected access points on active banner; Traefik API gateway in place behind nginx with per-route rate-limit, CORS, security headers; Console: Dashboard redesign with situational awareness, plugin health strip, KPI chips; Roles & Permissions page in settings; API Integration page with multi-select scopes, token expiry picker, in-app API docs; removed modules: Maintenance, Guard Tour, Keys, IoT & Energy, Room Booking, Contractors, Deliveries; Intrusion + Intercom hidden until implementation).
 
 ---
 
@@ -20,11 +20,11 @@ This document tracks the current implementation status of DM3 features. Updated:
 
 | Layer | Status | Details |
 |-------|--------|---------|
-| Service Topology | ❌ Gap | 8 of ~20 specified services implemented. Evidence: `backend/cmd/` has 8 dirs (auth-svc, identity-svc, access-svc, device-gateway, audit-svc, visitor-svc on port 8006, parking-svc on port 8007, cctv-svc); `docs/architecture/system-architecture.md:281` specifies ~20 |
+| Service Topology | ⚠️ Partial | 9 of ~20 specified services implemented. Evidence: `backend/cmd/` has 9 dirs (auth-svc :8005, identity-svc :8004, access-svc :8003, device-gateway :8002, audit-svc :8001, visitor-svc :8006, parking-svc :8007, cctv-svc :8008, attend-svc :8010). Traefik API gateway in place. Remaining gaps: emergency-svc, intercom-svc, intrusion-svc, analytics-svc, and other domain services. |
 | Data Flow / MQTT Pipeline | ✅ Compliant | Topic `dm/{tid}/device/{did}/{cat}` confirmed. Envelope (v, id, ts) confirmed. NATS bridge confirmed. Evidence: `backend/internal/gateway/mqtt_handler.go:48-57, 27-35` |
 | Data Model / ER | ⚠️ Partial | Core access hierarchy implemented (`dm3_access`). Visitor module isolated into own schema: `dm3_visitor` (11 tables). Parking module isolated into own schema: `dm3_parking` (7 tables: parking_lots, parking_zones, parking_vehicles, parking_fee_rules, parking_passes, parking_sessions, parking_settings). **Vehicle registry unified into `dm3_parking.parking_vehicles`** (migration 000010 dropped `dm3_identity.vehicles`; parking_vehicles now owns triple credentials: plate + RFID + NFC + visitor_id link). `parking_zones.access_zone_id` soft-FK into `dm3_access.zones` (migration 000010). `dm3_access.access_devices` +`source`/`source_ref` for auto-registered barriers (migration 000011). `parking_settings.enforce_access_rules` opt-in cross-module policy check (migration 000012). **CCTV module isolated into own schema: `dm3_cctv`** (migration 000013 — `cameras` 1-1 extension of `dm3_devices.devices`, `event_clips` hypertable with soft FK to `dm3_access.access_events`, `cctv_settings`). `dm3_audit` schema active (audit_logs hypertable). Remaining gaps: contractors, rooms, maintenance, keys. See `docs/architecture/module-isolation.md`. |
-| Security | ⚠️ Partial | JWT auth, bcrypt, CORS, refresh-token replay detection confirmed. Missing: TLS config in docker-compose for EMQX, no rate limiting middleware found. |
-| Deployment | ✅ Compliant | All 6 infra services present in `backend/docker-compose.yml` with correct ports. Simulator is in a separate `simulator/docker-compose.yml` (minor split). No Traefik gateway config found. |
+| Security | ⚠️ Partial | JWT auth, bcrypt, CORS, refresh-token replay detection confirmed. Gateway-level rate limiting in place (Traefik — see `docs/architecture/api-gateway.md`). Missing: TLS config in docker-compose for EMQX. |
+| Deployment | ✅ Compliant | All 6 infra services present in `backend/docker-compose.yml` with correct ports. Simulator is in a separate `simulator/docker-compose.yml` (minor split). **Traefik API gateway in place** (`deploy/traefik/`) fronting the 9 backend services with per-route rate-limit, CORS, and API-key plane (stub until OAuth2). nginx still terminates TLS and serves the SPA. |
 
 ---
 
@@ -32,11 +32,13 @@ This document tracks the current implementation status of DM3 features. Updated:
 
 ### Backend Services (Go)
 
-- **auth-svc** (`backend/internal/authsvc/`) — JWT auth, bcrypt, refresh tokens, RBAC, two-step company login, password reset, per-IP rate limiting, per-account lockout
-  - Status: ✅ Compliant (v1) | Risk: Low
+- **auth-svc** (`backend/internal/authsvc/`) — JWT auth, bcrypt, refresh tokens, RBAC, OAuth2, API tokens, two-step company login, password reset, per-IP rate limiting, per-account lockout
+  - Status: ✅ Compliant (v2) | Risk: Low
   - Evidence: `handlers.go:824-840` — `generateAccessToken` emits sub, cid, email, name, role, exp, iat (15min TTL ✅); `handlers.go:565-590` — DeviceClaims with sub, cid, did, dtype, permissions (24h ✅); `handlers.go:366-372` — refresh token rotation + replay detection ✅; bcrypt confirmed at `handlers.go:166, 662, 767`
-  - Hardening (2026-04): per-IP rate limiting on public auth endpoints (`cmd/auth-svc/main.go`, commit `dd273972`); per-account lockout after `loginLockoutMaxFailures=5` failures for `loginLockoutDuration=15min` (`handlers.go:212-220` using `make_interval(secs => $3)` after a pgx encode bug was caught in integration test `internal/authsvc/lockout_test.go`); password reset token flow (migration 000017, `password_reset.go`).
-  - Deviation: `GET /api/v1/roles` returns generic `admin/operator/viewer` (handlers.go:797-800) but spec defines 5 roles: `system_admin, primary_manager, manager, operator, viewer`. Roles endpoint is stale.
+  - Hardening (2026-04): per-IP rate limiting on public auth endpoints (`cmd/auth-svc/main.go`, commit `dd273972`); per-account lockout after `loginLockoutMaxFailures=5` failures for `loginLockoutDuration=15min` (`handlers.go:212-220`); password reset token flow (migration 000017, `password_reset.go`).
+  - **RBAC subsystem** (migration 000035): `company_roles` / `company_role_permissions` / `user_role_assignments` — tenant-defined role bundles, scoped assignments (company/site/department/zone/self), permission catalog per service. Dual-claim JWT: `FixedRole` (system_admin/primary_manager/member) + scoped `assignments`. Console: Roles & Permissions page in Company Settings with human-friendly labels; 'site' scope hidden from UI; System Admin hidden from company role list.
+  - **OAuth2 + API tokens** (migration 000037): `oauth_clients` / `oauth_api_tokens` / `oauth_device_codes` — long-lived API tokens (prefix dm3_live_* or dm3_test_*), scoped, tenant-bound, looked up by SHA256 hash during Traefik forwardAuth for `/api/v1/public/*` plane. Console: API Integration page with multi-select scopes, token expiry picker, in-app API docs. Auto-token refresh on WS, soft redirect on expiry.
+  - Implemented: Two-step login ✅ | JWT issue/refresh ✅ | Password reset ✅ | Per-IP rate limiting ✅ | Per-account lockout ✅ | Company-scoped RBAC ✅ | Scoped role assignments ✅ | Permission checking middleware ✅ | OAuth2 clients ✅ | API token generation/validation ✅ | Device authorization flow (RFC 8628) ✅
 
 - **access-svc** (`backend/internal/access/`) — Access Group management, access point management, spatial zones with type taxonomy, managed zone maps, access rule sync, event processing with JetStream-redelivery dedup, event listing + CSV/Excel export, remote door control
   - Status: ✅ Compliant for current access scope | Risk: Low
@@ -72,6 +74,19 @@ This document tracks the current implementation status of DM3 features. Updated:
   - Status: ✅ Compliant | Risk: Low
   - Evidence: `cmd/audit-svc/main.go` — standalone service on port 8001; `internal/auditsvc/consumer.go` — NATS JetStream consumer with batch INSERT (50 entries / 100ms flush) to `dm3_audit.audit_logs` hypertable; `internal/auditsvc/handlers.go` — query API with pagination, filtering, CSV export, stats; all 4 other services publish audit events via `pkg/audit.Logger` → NATS `dm3.audit.>` subjects
   - Architecture: Events published asynchronously from all services via buffered channel → NATS JetStream → audit-svc consumer → TimescaleDB. Table is INSERT+SELECT only (tamper-proof). 2-year retention, 30-day compression.
+
+- **attend-svc** (`backend/cmd/attend-svc/`, `backend/internal/attend/`) — Standalone attendance & leave management service (port 8010)
+  - Status: ✅ Compliant (v1, module isolation) | Risk: Low
+  - Evidence: `backend/cmd/attend-svc/main.go` — standalone service with PostgreSQL, NATS streaming, MinIO integration, audit logging, health checks, graceful shutdown. Migrations 000029–000034 (dm3_attendance schema) confirmed.
+  - **Schema isolation**: All attendance tables in own `dm3_attendance` schema (independently deployable). See migrations 000029–000034.
+  - DB tables (dm3_attendance schema): `attendance_records`, `shifts`, `leave_requests`, `leave_policies`, `leave_balances`, `holidays`, `monthly_summaries`, `overtime`, `leave_external_id`
+  - **NATS consumer**: Subscribes to device-gateway events filtered by registered `attendance_devices`; publishes `attendance.checkin`, `attendance.checkout`, `attendance.overtime` events
+  - **HR integrations**: Leave-sync webhook, CSV/XLSX monthly export to MinIO bucket `tenants/{tenantId}/attendance/exports/`
+  - **Cron jobs**: BR-004 holiday skip + panic recovery, monthly summary rollup
+  - **Feature flag**: per-tenant `enabled_plugins` toggle (attendance plugin disabled by default)
+  - **Console**: Self-service /me/attendance and /me/leave pages + admin: holidays, leave policies, leave balances, team leave calendar, export reports
+  - API: 30+ endpoints under `/api/v1/attendance/` — records, shifts, leave CRUD, requests, policies, holidays, monthly stats, bulk check-in/out
+  - Audit entries on all mutations (create/update/delete leave records)
 
 ### Frontend Features (React/TypeScript)
 

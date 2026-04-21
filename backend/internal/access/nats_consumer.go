@@ -62,7 +62,10 @@ type accessLogData struct {
 	Decision             string            `json:"decision"`
 	Reason               string            `json:"reason"`
 	Confidence           *float64          `json:"confidence"`
-	PhotoRef             string            `json:"photo_ref"`
+	// The wire field is `photo` (mqtt-protocol.md §4.1). The Go field name and
+	// DB column stay `photo_ref` for backward compat — only the JSON tag needs
+	// to match what devices actually send.
+	PhotoRef             string            `json:"photo"`
 	Temperature          *float64          `json:"temperature"`
 	DecidedLocally       *bool             `json:"decided_locally"`
 	Metadata             map[string]any    `json:"metadata"`

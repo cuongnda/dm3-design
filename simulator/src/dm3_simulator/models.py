@@ -185,3 +185,7 @@ class SimulationConfig(BaseModel):
     heartbeat_interval: int = 30
     connect_delay: float = 0.1
     log_level: str = "info"
+    # Base URL for the device-gateway HTTP API (used by the media upload flow,
+    # mqtt-protocol.md §15). The simulator POSTs /devices/{id}/media-url here,
+    # then PUTs the placeholder JPEG directly to the returned MinIO URL.
+    gateway_url: str = "http://localhost:8002"

@@ -124,6 +124,9 @@ export function Multiselect({
       flexDirection: "column",
       overflow: "hidden",
       zIndex: 2147483647,
+      // Escape Radix Dialog's body `pointer-events: none` so the panel is
+      // interactive when this dropdown is rendered inside a modal.
+      pointerEvents: "auto",
     }
 
     setPanelStyle(
@@ -164,6 +167,33 @@ export function Multiselect({
     }
   }, [])
 
+  // When rendered inside a Radix Dialog / FocusScope, any focus movement
+  // onto the portalled panel is detected as "focus leaving the scope" and
+  // gets yanked back — which makes the search Input uncontrollable. Stop
+  // focus events at the capture phase so Radix's document-level listeners
+  // never see them.
+  React.useEffect(() => {
+    if (!open) return
+    const stopIfInPanel = (e: FocusEvent) => {
+      const target = e.target as Node | null
+      const related = e.relatedTarget as Node | null
+      const panel = panelRef.current
+      if (!panel) return
+      if (
+        (target && panel.contains(target)) ||
+        (related && panel.contains(related))
+      ) {
+        e.stopImmediatePropagation()
+      }
+    }
+    document.addEventListener("focusin", stopIfInPanel, true)
+    document.addEventListener("focusout", stopIfInPanel, true)
+    return () => {
+      document.removeEventListener("focusin", stopIfInPanel, true)
+      document.removeEventListener("focusout", stopIfInPanel, true)
+    }
+  }, [open])
+
   return (
     <div ref={rootRef} className={cn("relative", className)}>
       <button
@@ -202,6 +232,7 @@ export function Multiselect({
         createPortal(
           <div
             ref={panelRef}
+            data-slot="select-panel"
             style={panelStyle}
             className="rounded-md border border-border bg-card text-foreground shadow-xl"
           >

@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, useLocation } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useLocation, useParams } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { MainLayout } from '@dm3/ui';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -42,7 +42,7 @@ import { FirmwareDetailPage } from '@/features/system/FirmwareDetailPage';
 import { UserAccountListPage } from '@/features/system/UserAccountListPage';
 import { UserAccountDetailPage } from '@/features/system/UserAccountDetailPage';
 import { ProtectedRoute } from './ProtectedRoute';
-import { RoleBasedRoute } from './RoleBasedRoute';
+import { RoleBasedRoute, SystemAdminRoute } from './RoleBasedRoute';
 import { PluginGuard } from '@/components/common/PluginGuard';
 
 // Essential Security Features (legacy)
@@ -62,12 +62,6 @@ const AccessTimeFormPage = lazyWithRetry(() =>
   import('@/features/secure/access-control/access-time/AccessTimeFormPage').then((m) => ({ default: m.AccessTimeFormPage }))
 );
 
-const CCTVPage = lazyWithRetry(() =>
-  import('@/features/secure/cctv/CCTVPage').then((m) => ({ default: m.CCTVPage }))
-);
-const CameraDetailPage = lazyWithRetry(() =>
-  import('@/features/secure/cctv/CameraDetailPage').then((m) => ({ default: m.CameraDetailPage }))
-);
 const IntrusionPage = lazyWithRetry(() =>
   import('@/features/secure/intrusion/IntrusionPage').then((m) => ({ default: m.IntrusionPage }))
 );
@@ -125,6 +119,12 @@ const DepartmentManagementPage = lazyWithRetry(() =>
 );
 const DepartmentDetailPage = lazyWithRetry(() =>
   import('@/features/department-management/DepartmentDetailPage').then((m) => ({ default: m.DepartmentDetailPage }))
+);
+const RoleManagementPage = lazyWithRetry(() =>
+  import('@/features/role-management/RoleManagementPage').then((m) => ({ default: m.RoleManagementPage }))
+);
+const RoleDetailPage = lazyWithRetry(() =>
+  import('@/features/role-management/RoleDetailPage').then((m) => ({ default: m.RoleDetailPage }))
 );
 
 const VisitorsPage = lazyWithRetry(() =>
@@ -282,21 +282,28 @@ const TenantAuditLogPage = lazyWithRetry(() =>
 const EmailTemplatesPage = lazyWithRetry(() =>
   import('@/features/settings/EmailTemplatesPage').then((m) => ({ default: m.EmailTemplatesPage }))
 );
+const ApiTokensPage = lazyWithRetry(() =>
+  import('@/features/settings/ApiTokensPage').then((m) => ({ default: m.ApiTokensPage }))
+);
+const ApiDocsPage = lazyWithRetry(() =>
+  import('@/features/settings/ApiDocsPage').then((m) => ({ default: m.ApiDocsPage }))
+);
 
 // SYSTEM AUDIT
 const AuditLogPage = lazyWithRetry(() =>
   import('@/features/system/AuditLogPage').then((m) => ({ default: m.AuditLogPage }))
 );
 
-// ALERTS
-const AlertsPage = lazyWithRetry(() =>
-  import('@/features/alerts/AlertsPage').then((m) => ({ default: m.AlertsPage }))
-);
-
 // SYSTEM SETTINGS
 const SystemSettingsPage = lazyWithRetry(() =>
   import('@/features/system/SystemSettingsPage').then((m) => ({ default: m.SystemSettingsPage }))
 );
+
+/** Legacy redirect: /secure/cctv/:id → /cctv/cameras?id=:id (plugin hub). */
+function LegacyCctvDetailRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/cctv/cameras${id ? `?id=${id}` : ''}`} replace />;
+}
 
 /** Suspense renders no DOM node; this wrapper keeps flex height so pages can min-h-0 + flex-1 into the viewport.
  *  ErrorBoundary resets automatically on navigation (key changes with pathname). */
@@ -337,6 +344,8 @@ export const Router = createBrowserRouter([
     children: [
       {
         path: '/system',
+        element: <SystemAdminRoute />,
+        children: [{
         element: <SystemLayout />,
         children: [
           { index: true, element: <SystemDashboardPage /> },
@@ -353,6 +362,7 @@ export const Router = createBrowserRouter([
           { path: 'settings', element: <LazyWrap><SystemSettingsPage /></LazyWrap> },
           { path: 'audit', element: <LazyWrap><AuditLogPage /></LazyWrap> },
         ],
+        }],
       },
       {
         path: '/',
@@ -362,7 +372,7 @@ export const Router = createBrowserRouter([
             element: <MainLayout />,
             children: [
               { index: true, element: <DashboardPage /> },
-              { path: 'alerts', element: <LazyWrap><AlertsPage /></LazyWrap> },
+              { path: 'alerts', element: <Navigate to="/monitoring?kind=alarm" replace /> },
               { path: 'monitoring', element: <LazyWrap><LiveEventsPage /></LazyWrap> },
 
               // SECURE (legacy routes)
@@ -372,8 +382,8 @@ export const Router = createBrowserRouter([
               { path: 'secure/access-control/access-time/new', element: <LazyWrap><AccessTimeFormPage /></LazyWrap> },
               { path: 'secure/access-control/access-time/:id', element: <LazyWrap><AccessTimeFormPage /></LazyWrap> },
               { path: 'secure/access-control/:id', element: <LazyWrap><DoorDetailPage /></LazyWrap> },
-              { path: 'secure/cctv', element: <LazyWrap><CCTVPage /></LazyWrap> },
-              { path: 'secure/cctv/:id', element: <LazyWrap><CameraDetailPage /></LazyWrap> },
+              { path: 'secure/cctv', element: <Navigate to="/cctv/live" replace /> },
+              { path: 'secure/cctv/:id', element: <LegacyCctvDetailRedirect /> },
               { path: 'secure/intrusion', element: <LazyWrap><IntrusionPage /></LazyWrap> },
               { path: 'secure/intercom', element: <LazyWrap><IntercomPage /></LazyWrap> },
               { path: 'secure/ai-detection', element: <LazyWrap><AIDetectionPage /></LazyWrap> },
@@ -465,6 +475,10 @@ export const Router = createBrowserRouter([
               { path: 'settings', element: <LazyWrap><SettingsPage /></LazyWrap> },
               { path: 'settings/audit-log', element: <LazyWrap><TenantAuditLogPage /></LazyWrap> },
               { path: 'settings/email-templates', element: <LazyWrap><EmailTemplatesPage /></LazyWrap> },
+              { path: 'settings/api-tokens', element: <PluginGuard plugin="api_integration"><LazyWrap><ApiTokensPage /></LazyWrap></PluginGuard> },
+              { path: 'settings/api-docs', element: <PluginGuard plugin="api_integration"><LazyWrap><ApiDocsPage /></LazyWrap></PluginGuard> },
+              { path: 'settings/roles', element: <LazyWrap><RoleManagementPage /></LazyWrap> },
+              { path: 'settings/roles/:id', element: <LazyWrap><RoleDetailPage /></LazyWrap> },
             ],
           },
         ],

@@ -28,13 +28,24 @@ services:
       EMQX_LOADED_PLUGINS: "emqx_dashboard"
     volumes:
       - emqx_data:/opt/emqx/data
+    ports:
+      - "1884:1883"
+      - "8884:8883"
     networks:
       - dm3-internal
     healthcheck:
       test: ["CMD", "emqx", "ctl", "status"]
+      # EMQX 5.x on contended CI runners can take 60-90s to settle — the
+      # Erlang VM logs "long_schedule" warnings as the scheduler is
+      # blocked, and `emqx ctl status` is an RPC so it inherits that
+      # blocking. start_period tells Docker not to count failures in the
+      # first 90s against `retries`, giving the broker a real boot window.
+      # Interval + timeout stay conservative so steady-state probes are
+      # still fast.
+      start_period: 90s
       interval: 10s
-      timeout: 5s
-      retries: 10
+      timeout: 10s
+      retries: 20
 
   nats:
     image: nats:2.10-alpine
@@ -247,6 +258,7 @@ services:
       # Shared with cctv-svc: required to provision type=camera devices via
       # /api/v1/gateway/devices/provision (encrypts RTSP password at rest).
       CCTV_CREDENTIAL_KEY: ${CCTV_CREDENTIAL_KEY:?CCTV_CREDENTIAL_KEY must be set in .env (32+ chars)}
+      WS_ALLOWED_ORIGINS: "https://dm3.demasterpro.com,http://dm3.demasterpro.com"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -452,6 +464,8 @@ services:
         condition: service_healthy
       attend-svc:
         condition: service_healthy
+      emqx:
+        condition: service_healthy
     networks:
       - dm3-internal
       - dmpw-net  # join main proxy network for direct container routing
@@ -474,6 +488,8 @@ services:
       DM3_DEVICES: 5
       DM3_API_PORT: 9090
       DM3_BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET:-dm3-bootstrap-v1-dev-secret}
+      # Used by the §15 media upload flow — POST /devices/{id}/media-url
+      DM3_GATEWAY_URL: http://device-gateway:8002
     ports:
       - "9091:9090"
     depends_on:
