@@ -334,11 +334,17 @@ INSERT INTO dm3_access.access_events (tenant_id, time, access_point_id, user_id,
 -- ============================================================
 -- 14. VISITOR — Settings
 -- ============================================================
+-- default_host_user_id is REQUIRED for kiosk walk-in registration via the
+-- LPR/legacy adapter (internal/visitor/legacy_register_handler.go:171-181);
+-- without it the handler 412s before any row is written. Seed with Hoang
+-- Thi Em (a0000000-…-000000000005), whose seeded position is Receptionist.
 INSERT INTO dm3_visitor.visitor_settings (id, tenant_id, approval_required, auto_approve_returning, auto_approve_vip,
-  default_duration_hours, max_duration_hours, auto_checkout_hour, require_phone, badge_enabled, notify_host_on_arrival)
+  default_duration_hours, max_duration_hours, auto_checkout_hour, require_phone, badge_enabled, notify_host_on_arrival,
+  default_host_user_id, default_access_areas)
 VALUES (
   'f0000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
-  true, false, true, 8, 24, 22, true, true, true
+  true, false, true, 8, 24, 22, true, true, true,
+  'a0000000-0000-0000-0000-000000000005', '{}'::uuid[]
 ) ON CONFLICT DO NOTHING;
 
 -- ============================================================
