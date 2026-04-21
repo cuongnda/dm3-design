@@ -25,7 +25,7 @@ cd apps/console && npm run dev      # Console at http://localhost:3000
 ### Backend (Go — run from `backend/`)
 
 ```bash
-make build            # build all 8 binaries → bin/
+make build            # build all 9 binaries → bin/
 make test             # go test ./... -v -race
 make lint             # golangci-lint run ./...
 make migrate          # apply DB migrations (TimescaleDB :5433)
@@ -44,6 +44,7 @@ go run ./cmd/identity-svc/
 go run ./cmd/access-svc/
 go run ./cmd/device-gateway/
 go run ./cmd/audit-svc/
+go run ./cmd/attend-svc/
 ```
 
 Run a single test file:
@@ -96,11 +97,11 @@ pytest                               # everything
 
 ### Backend — Go monorepo (`backend/`)
 
-Eight services, all in one Go module (`github.com/duali/dm3-backend`):
+Nine services, all in one Go module (`github.com/duali/dm3-backend`):
 
 | Service | Port | Entry point | Responsibility |
 |---|---|---|---|
-| `auth-svc` | 8005 | `cmd/auth-svc/` | JWT auth, login, token refresh |
+| `auth-svc` | 8005 | `cmd/auth-svc/` | JWT auth, login, token refresh, RBAC, OAuth2, API tokens |
 | `identity-svc` | 8004 | `cmd/identity-svc/` | Users, companies, profiles |
 | `access-svc` | 8003 | `cmd/access-svc/` | Access rules, schedules, event logs |
 | `device-gateway` | 8002 | `cmd/device-gateway/` | MQTT bridge, device provisioning, WebSocket |
@@ -108,6 +109,7 @@ Eight services, all in one Go module (`github.com/duali/dm3-backend`):
 | `visitor-svc` | 8006 | `cmd/visitor-svc/` | Visitor management (plugin-gated, dm3_visitor schema) |
 | `parking-svc` | 8007 | `cmd/parking-svc/` | Parking management (plugin-gated, dm3_parking schema) |
 | `cctv-svc` | 8008 | `cmd/cctv-svc/` | CCTV cameras, clips, MediaMTX live streams (plugin-gated, dm3_cctv schema) |
+| `attend-svc` | 8010 | `cmd/attend-svc/` | Attendance, shifts, leave management (plugin-gated, dm3_attendance schema) |
 
 **Key internal packages:**
 - `internal/config/` — shared `Config` struct, loaded from env vars (defaults to dev values)
@@ -151,8 +153,8 @@ Domain colors: SECURE `#3B82F6` · MANAGE `#8B5CF6` · OPERATE `#F59E0B` · SMAR
 ### Database
 
 TimescaleDB on port `5433`, database `dm3`, user `dm3`, password `dm3secret`.  
-Schema is split into namespaced schemas: `dm3_auth`, `dm3_devices`, `dm3_access`, `dm3_identity`, `dm3_visitor`, `dm3_parking`, `dm3_cctv`, `dm3_audit`.  
-Migrations live in `backend/pkg/db/migrations/` (numbered `000001_*` … `000013_cctv_schema`).
+Schema is split into namespaced schemas: `dm3_auth`, `dm3_devices`, `dm3_access`, `dm3_identity`, `dm3_visitor`, `dm3_parking`, `dm3_cctv`, `dm3_attendance`, `dm3_audit`.  
+Migrations live in `backend/pkg/db/migrations/` (numbered `000001_*` … `000037_oauth_tokens`).
 
 ## Frontend Conventions
 

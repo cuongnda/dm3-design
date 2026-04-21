@@ -3,7 +3,7 @@
 **Status:** Reflects what is actually running, not the long-term vision.
 **Source of truth:** `docker-compose.prod.yml` on the `develop` branch.
 **Companion diagram:** [`diagrams/current-deployment.drawio`](../../diagrams/current-deployment.drawio)
-**Last verified:** 2026-04-13 (deployed to `dm3.demasterpro.com`)
+**Last verified:** 2026-04-21 (attend-svc :8010, RBAC, OAuth2, and API token plane landed)
 
 > For the aspirational architecture (full vertical apps, AI/ML pipeline, all integrations),
 > see [`system-architecture.md`](./system-architecture.md). This file is the **as-built**
@@ -13,11 +13,11 @@
 
 ## 1. What is actually deployed
 
-### 1.1 Backend services (8 Go binaries, one Go module)
+### 1.1 Backend services (9 Go binaries, one Go module)
 
 | Service          | Port | Schema          | Role                                                                |
 | ---------------- | ---- | --------------- | ------------------------------------------------------------------- |
-| `auth-svc`       | 8005 | `dm3_auth`      | login, JWT issue/refresh, two-step (company code → credentials)     |
+| `auth-svc`       | 8005 | `dm3_auth`      | login, JWT issue/refresh, RBAC, OAuth2, API tokens, two-step (company code → credentials) |
 | `identity-svc`   | 8004 | `dm3_identity`  | users, companies, departments, photos                               |
 | `access-svc`     | 8003 | `dm3_access`    | rules, schedules, doors, **access_events** (TimescaleDB hypertable) |
 | `device-gateway` | 8002 | `dm3_devices`   | MQTT bridge, device provisioning, WS push to webapp                 |
@@ -25,6 +25,7 @@
 | `visitor-svc`    | 8006 | `dm3_visitor`   | plugin-gated visitor management                                     |
 | `parking-svc`    | 8007 | `dm3_parking`   | plugin-gated parking sessions / ANPR-fed                            |
 | `cctv-svc`       | 8008 | `dm3_cctv`      | cameras, clips, MediaMTX control plane                              |
+| `attend-svc`     | 8010 | `dm3_attendance` | plugin-gated attendance, shifts, leave requests, monthly summaries |
 
 Init container (runs once, then exits):
 
