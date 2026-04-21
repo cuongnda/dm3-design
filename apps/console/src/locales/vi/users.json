@@ -156,6 +156,9 @@
   "accessGroup.selectHint": "Chọn nhóm truy cập để xem điểm ra vào",
   "accessGroup.zone": "Khu vực",
   "accessGroup.description": "Mô tả",
+  "accessGroup.noGroups": "Không có nhóm truy cập nào",
+  "accessGroup.noSearchMatches": "Không có nhóm truy cập nào khớp với tìm kiếm",
+  "accessGroup.allGroupsAssigned": "Người dùng đã thuộc tất cả các nhóm",
   "toast.accessGroupUpdated": "Đã cập nhật nhóm truy cập",
   "toast.accessGroupFailed": "Cập nhật nhóm truy cập thất bại",
 
