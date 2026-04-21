@@ -6,6 +6,18 @@ import (
 	"github.com/duali/dm3-backend/internal/authsvc"
 )
 
+// RegisterStreamProxyRoutes mounts WHEP/HLS proxy routes that forward to MediaMTX.
+// Uses AssetAuthMiddleware (supports ?token= query param since browsers can't set
+// Authorization headers on WebRTC/media requests).
+func RegisterStreamProxyRoutes(r chi.Router, h *CCTVHandlers, jwtSecret string) {
+	r.Group(func(pr chi.Router) {
+		pr.Use(authsvc.AssetAuthMiddleware(jwtSecret))
+		pr.Use(authsvc.RequireCompany())
+		pr.Post("/cctv/whep/{id}/whep", h.ProxyWHEP)
+		pr.Get("/cctv/hls/{id}/*", h.ProxyHLS)
+	})
+}
+
 // RegisterRoutes mounts all CCTV API routes under /api/v1/cctv on the given router.
 // It uses authsvc middlewares for JWT validation, company scoping, and plugin gating.
 func RegisterRoutes(r chi.Router, h *CCTVHandlers, jwtSecret string) {

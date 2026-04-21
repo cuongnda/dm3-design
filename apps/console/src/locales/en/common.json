@@ -133,6 +133,7 @@
   "cctv.cameras.fields.accessPoint": "Access Point",
   "cctv.cameras.fields.accessPointNone": "— None (not linked) —",
   "cctv.cameras.cols.accessPoint": "Access Point",
+  "cctv.cameras.fields.model": "Camera Model",
   "cctv.cameras.fields.brand": "Brand",
   "cctv.cameras.fields.recordingMode": "Recording Mode",
   "cctv.cameras.fields.preRoll": "Pre-roll",

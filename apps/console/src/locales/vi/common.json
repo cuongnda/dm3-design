@@ -133,6 +133,7 @@
   "cctv.cameras.fields.accessPoint": "Điểm truy cập",
   "cctv.cameras.fields.accessPointNone": "— Không liên kết —",
   "cctv.cameras.cols.accessPoint": "Điểm truy cập",
+  "cctv.cameras.fields.model": "Loại camera",
   "cctv.cameras.fields.brand": "Thương hiệu",
   "cctv.cameras.fields.recordingMode": "Chế độ ghi hình",
   "cctv.cameras.fields.preRoll": "Pre-roll",
