@@ -229,7 +229,26 @@ export async function apiFetch<T>(url: string, opts: RequestInit = {}): Promise<
 
     if (!res.ok) {
         const text = await res.text().catch(() => '');
-        throw new Error(`API ${res.status}: ${text}`);
+        // Backend errors from pkg/i18n/ErrorResponse look like
+        // {"error":"validation.x","message":"translated human string"}.
+        // Prefer the translated `message` so callers (toasts, modals) can
+        // surface it verbatim without re-parsing. Fall back to the raw text
+        // for non-JSON bodies or unexpected shapes.
+        let friendly = text;
+        try {
+            const parsed = JSON.parse(text);
+            if (parsed && typeof parsed === 'object') {
+                friendly = parsed.message || parsed.error || text;
+            }
+        } catch {
+            // not JSON — keep raw text
+        }
+        const err = new Error(friendly || `API ${res.status}`);
+        // Preserve the original pieces so advanced callers that want the
+        // machine-readable error key or the full body can still get at it.
+        (err as Error & { status?: number }).status = res.status;
+        (err as Error & { body?: string }).body = text;
+        throw err;
     }
 
     if (res.status === 204 || res.headers.get('content-length') === '0') {

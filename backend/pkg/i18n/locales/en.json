@@ -29,6 +29,10 @@
   "validation.required_field": "{{field}} is required",
   "validation.invalid_email": "Invalid email format",
   "validation.first_last_name_required": "First name and last name are required",
+  "validation.name_required": "Name is required",
+  "validation.number_required": "Number is required",
+  "validation.number_exists": "A department with this number already exists",
+  "validation.department_has_users": "This department still has users assigned. Reassign or remove them before deleting.",
 
   "device.not_found": "Device not found",
   "device.already_registered": "Device is already registered",
