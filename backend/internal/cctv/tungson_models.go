@@ -70,7 +70,7 @@ type VIIDFaceRecognitionRequest struct {
 type VIIDRecognitionResult struct {
 	DeviceID        string            `json:"DeviceID"`
 	PersonID        string            `json:"PersonID"`
-	Similarity      float64           `json:"Similarity"`
+	Similarity      string            `json:"Similarity"` // camera sends as string "0.828"
 	RecognitionTime string            `json:"RecognitionTime"`
 	SubImageList    *VIIDSubImageList `json:"SubImageList,omitempty"`
 }

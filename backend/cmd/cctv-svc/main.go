@@ -107,13 +107,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Start access-event consumer — creates placeholder event_clips rows when
-	// access events fire on access points that have cameras bound to them.
-	accessEventConsumer := cctv.NewAccessEventConsumer(database, natsClient)
-	if err := accessEventConsumer.Start(ctx); err != nil {
-		slog.Error("failed to start cctv access-event consumer", "error", err)
-		os.Exit(1)
-	}
+	// Clip extractor is wired below, after object store + cipher are ready.
+	// Declared here so the access-event consumer can reference it.
+	var clipExtractor *cctv.ClipExtractor
 
 	// Audit logger
 	auditLog := audit.New(natsClient, "cctv-svc")
@@ -158,6 +154,10 @@ func main() {
 		mediamtxClient = cctv.NoopMediaMTXClient{}
 		slog.Warn("MEDIAMTX_API_URL not set — using no-op MediaMTX client (dev mode)")
 	}
+
+	// Bootstrap: register all existing camera paths in MediaMTX (paths are in-memory,
+	// lost on MediaMTX restart). Runs async so it doesn't block startup.
+	go cctv.BootstrapMediaMTXPaths(ctx, database, mediamtxClient, cipher)
 
 	// Object store + clip signer
 	// ObjectStoreClipSigner uses the MinIO client directly for presigned URLs.
@@ -205,6 +205,25 @@ func main() {
 		slog.Info("clip signer configured", "bucket", cfg.ObjectStoreBucket)
 	} else {
 		slog.Warn("OBJECT_STORE_ENDPOINT not set — clip playback URLs will return object_key unchanged")
+	}
+
+	// Clip extractor — records RTSP video and uploads to MinIO.
+	// Requires both object store and cipher. When either is missing, the
+	// access-event consumer still creates placeholder rows but skips extraction.
+	if objectStore != nil {
+		clipExtractor = cctv.NewClipExtractor(database, objectStore, cipher)
+		slog.Info("cctv clip extractor enabled")
+	} else {
+		slog.Warn("object store not configured — clip extraction disabled (placeholders only)")
+	}
+
+	// Start access-event consumer — creates placeholder event_clips rows when
+	// access events fire on access points that have cameras bound to them.
+	// When clipExtractor is non-nil, it also spawns async clip extraction.
+	accessEventConsumer := cctv.NewAccessEventConsumer(database, natsClient, clipExtractor)
+	if err := accessEventConsumer.Start(ctx); err != nil {
+		slog.Error("failed to start cctv access-event consumer", "error", err)
+		os.Exit(1)
 	}
 
 	// HTTP handlers
