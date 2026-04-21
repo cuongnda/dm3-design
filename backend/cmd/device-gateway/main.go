@@ -132,6 +132,16 @@ func main() {
 			"error", err)
 	}
 
+	// Real-time CCTV → WebSocket push: subscribe to cctv-svc's face
+	// recognition and unknown face events and broadcast them to the
+	// monitoring page via the WebSocket hub. Fails soft — a missing CCTV
+	// stream is logged but does not abort startup.
+	cctvWSConsumer := gateway.NewCCTVWebSocketConsumer(database, natsClient, hub)
+	if err := cctvWSConsumer.Start(ctx); err != nil {
+		slog.Warn("cctv ws consumer not started; cctv events will not appear in realtime",
+			"error", err)
+	}
+
 	// Bootstrap MQTT handler
 	bootstrapHandler := gateway.NewBootstrapMQTTHandler(database, mqttClient, cfg)
 	bootstrapHandler.SetAppContext(ctx)

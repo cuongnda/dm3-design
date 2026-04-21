@@ -418,8 +418,16 @@ func (h *TungSonHandlers) HandleExtendFaceList(w http.ResponseWriter, r *http.Re
 // HandleFaceRecognition handles POST /VIID/Extend/ExtendFaceRecognition
 // Camera reports face match -> publish access event to NATS.
 func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.Request) {
+	bodyBytes, readErr := io.ReadAll(r.Body)
+	if readErr != nil {
+		httputil.Error(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+	slog.Debug("tungson: face recognition raw body", "size", len(bodyBytes), "body", string(bodyBytes[:min(len(bodyBytes), 500)]))
+
 	var req VIIDFaceRecognitionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
+		slog.Error("tungson: face recognition decode failed", "error", err, "body_prefix", string(bodyBytes[:min(len(bodyBytes), 200)]))
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -440,12 +448,15 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Upload snapshot to MinIO if available
+	// Upload snapshot to MinIO — use the largest available image.
+	// Camera may send 1 image (face crop) or 2 (face crop + full frame).
 	var photoRef string
-	if h.objectStore != nil && result.SubImageList != nil && len(result.SubImageList.SubImageInfoObject) >= 2 {
-		bigImage := result.SubImageList.SubImageInfoObject[1].Data
-		if bigImage != "" {
-			imgData, decErr := base64.StdEncoding.DecodeString(bigImage)
+	if h.objectStore != nil && result.SubImageList != nil && len(result.SubImageList.SubImageInfoObject) > 0 {
+		// Prefer last image (full frame) if multiple, else use first
+		idx := len(result.SubImageList.SubImageInfoObject) - 1
+		imgData64 := result.SubImageList.SubImageInfoObject[idx].Data
+		if imgData64 != "" {
+			imgData, decErr := base64.StdEncoding.DecodeString(imgData64)
 			if decErr == nil && len(imgData) > 0 {
 				key := fmt.Sprintf("cctv-faces/%s/%s/recognition/%s/%d_%s.jpg",
 					tenantID, deviceUUID,
@@ -455,10 +466,15 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 				)
 				if putErr := h.objectStore.PutObject(ctx, key, bytes.NewReader(imgData), int64(len(imgData)), "image/jpeg"); putErr == nil {
 					photoRef = key
+				} else {
+					slog.Warn("tungson: upload recognition photo failed", "error", putErr)
 				}
 			}
 		}
 	}
+
+	// Parse similarity string to float
+	similarity, _ := strconv.ParseFloat(result.Similarity, 64)
 
 	// Publish access.log event to NATS
 	eventID := uuid.New().String()
@@ -476,7 +492,7 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 			"decision":        "granted",
 			"decided_locally": true,
 			"user_id":         result.PersonID,
-			"confidence":      result.Similarity,
+			"confidence":      similarity,
 			"credentials":     []map[string]string{{"type": "face", "value": result.PersonID}},
 			"photo":           photoRef,
 		},
@@ -487,9 +503,13 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 		slog.Error("tungson: publish face recognition event failed", "error", err)
 	}
 
+	// Publish to the dedicated CCTV WebSocket subject so device-gateway's
+	// CCTVWebSocketConsumer can broadcast to the monitoring page in realtime.
+	h.publishWSEvent(ctx, tenantID, deviceUUID, "access.log", eventPayload)
+
 	slog.Info("tungson: face recognized",
 		"camera_id", cameraID, "user_id", result.PersonID,
-		"similarity", result.Similarity, "tenant_id", tenantID)
+		"similarity", similarity, "tenant_id", tenantID)
 
 	httputil.JSON(w, http.StatusOK, "ok")
 }
@@ -519,12 +539,13 @@ func (h *TungSonHandlers) HandleUnknownFace(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Upload snapshot
+	// Upload snapshot — use largest available image
 	var photoRef string
-	if h.objectStore != nil && face.SubImageList != nil && len(face.SubImageList.SubImageInfoObject) >= 2 {
-		bigImage := face.SubImageList.SubImageInfoObject[1].Data
-		if bigImage != "" {
-			imgData, decErr := base64.StdEncoding.DecodeString(bigImage)
+	if h.objectStore != nil && face.SubImageList != nil && len(face.SubImageList.SubImageInfoObject) > 0 {
+		idx := len(face.SubImageList.SubImageInfoObject) - 1
+		imgData64 := face.SubImageList.SubImageInfoObject[idx].Data
+		if imgData64 != "" {
+			imgData, decErr := base64.StdEncoding.DecodeString(imgData64)
 			if decErr == nil && len(imgData) > 0 {
 				key := fmt.Sprintf("cctv-faces/%s/%s/unknown/%s/%d.jpg",
 					tenantID, deviceUUID,
@@ -564,8 +585,40 @@ func (h *TungSonHandlers) HandleUnknownFace(w http.ResponseWriter, r *http.Reque
 		slog.Error("tungson: publish unknown face event failed", "error", err)
 	}
 
+	// Publish to the dedicated CCTV WebSocket subject so device-gateway's
+	// CCTVWebSocketConsumer can broadcast to the monitoring page in realtime.
+	h.publishWSEvent(ctx, tenantID, deviceUUID, "access.log", eventPayload)
+
 	slog.Info("tungson: unknown face detected", "camera_id", cameraID, "tenant_id", tenantID)
 	httputil.JSON(w, http.StatusOK, "ok")
+}
+
+// publishWSEvent publishes an event to the dedicated CCTV WebSocket NATS subject
+// (dm3.cctv.ws.{tenant_id}.{device_id}) so that device-gateway's
+// CCTVWebSocketConsumer can broadcast it to WebSocket clients.
+func (h *TungSonHandlers) publishWSEvent(ctx context.Context, tenantID, deviceUUID, eventType string, originalPayload []byte) {
+	// Parse the original payload to extract the data field for the WS envelope.
+	var envelope struct {
+		Data json.RawMessage `json:"data"`
+		TS   int64           `json:"ts"`
+	}
+	if err := json.Unmarshal(originalPayload, &envelope); err != nil {
+		slog.Warn("tungson: failed to parse payload for ws publish", "error", err)
+		return
+	}
+
+	wsPayload, _ := json.Marshal(map[string]any{
+		"type":      eventType,
+		"device_id": deviceUUID,
+		"tenant_id": tenantID,
+		"data":      envelope.Data,
+		"time_ms":   envelope.TS,
+	})
+
+	wsSubject := fmt.Sprintf("dm3.cctv.ws.%s.%s", tenantID, deviceUUID)
+	if err := h.nats.Publish(ctx, wsSubject, wsPayload); err != nil {
+		slog.Error("tungson: publish ws event failed", "error", err, "subject", wsSubject)
+	}
 }
 
 // HandleExtendConfirm handles POST /VIID/Extend/ExtendConfirm

@@ -23,19 +23,18 @@ var uuidRegex = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4
 
 // AccessEventConsumer subscribes to device access events on the DEVICES stream
 // and creates placeholder rows in dm3_cctv.event_clips for every camera bound
-// to the event's access point.
-//
-// Actual clip extraction (pre/post-roll encoding + MinIO upload) is intentionally
-// out of scope for P0. This consumer only wires up the data plane so that
-// downstream clip-playback and event-linking features have rows to read.
+// to the event's access point. When a ClipExtractor is configured, it also
+// spawns async clip extraction (ffmpeg RTSP → MP4 → MinIO) for each placeholder.
 type AccessEventConsumer struct {
-	db   *db.DB
-	nats *natsutil.Client
+	db        *db.DB
+	nats      *natsutil.Client
+	extractor *ClipExtractor // nil when clip extraction is disabled
 }
 
 // NewAccessEventConsumer constructs an AccessEventConsumer.
-func NewAccessEventConsumer(database *db.DB, natsClient *natsutil.Client) *AccessEventConsumer {
-	return &AccessEventConsumer{db: database, nats: natsClient}
+// extractor is optional — pass nil to create placeholder rows without extracting clips.
+func NewAccessEventConsumer(database *db.DB, natsClient *natsutil.Client, extractor *ClipExtractor) *AccessEventConsumer {
+	return &AccessEventConsumer{db: database, nats: natsClient, extractor: extractor}
 }
 
 // deviceEvent mirrors the envelope published by device-gateway to the DEVICES stream.
@@ -111,23 +110,26 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 		return nil
 	}
 
-	// Find the access_point_id associated with the source device. Access events
-	// originate from readers/controllers — not cameras — so we map the source
-	// device to its access point and then to any cameras bound to that point.
-	accessPointID, err := c.resolveAccessPointID(ctx, tenantID, srcDeviceID, payload.DoorID)
-	if err != nil {
-		slog.Error("cctv: failed to resolve access_point_id", "error", err, "src", srcDeviceID)
-		return err
-	}
-	if accessPointID == "" {
-		// No access point mapped — nothing to link clips to.
-		return nil
-	}
-
-	cameras, err := c.findCamerasForAccessPoint(ctx, tenantID, accessPointID)
-	if err != nil {
-		slog.Error("cctv: failed to find cameras for access point", "error", err, "access_point_id", accessPointID)
-		return err
+	// If the source device IS a camera, only create a clip for that camera
+	// (e.g. TungSon face recognition events originate from the camera itself).
+	// If the source is a terminal/controller, find all cameras on the same access point.
+	var cameras []string
+	if c.isCamera(ctx, tenantID, srcDeviceID) {
+		cameras = []string{srcDeviceID}
+	} else {
+		accessPointID, err := c.resolveAccessPointID(ctx, tenantID, srcDeviceID, payload.DoorID)
+		if err != nil {
+			slog.Error("cctv: failed to resolve access_point_id", "error", err, "src", srcDeviceID)
+			return err
+		}
+		if accessPointID == "" {
+			return nil
+		}
+		cameras, err = c.findCamerasForAccessPoint(ctx, tenantID, accessPointID)
+		if err != nil {
+			slog.Error("cctv: failed to find cameras for access point", "error", err, "access_point_id", accessPointID)
+			return err
+		}
 	}
 	if len(cameras) == 0 {
 		return nil
@@ -145,26 +147,28 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 	defer cancel()
 
 	for _, camDeviceID := range cameras {
-		// TODO(cctv): replace placeholder object_key with the real key produced
-		// by the clip-extraction pipeline (pre/post-roll encode + MinIO upload).
-		// For now we write a deterministic placeholder so downstream features
-		// can be wired against real rows.
 		placeholderKey := fmt.Sprintf("pending/%s/%s/%d.mp4", tenantID, camDeviceID, startedAt.UnixNano())
-		endedAt := startedAt // duration=0 until extractor fills in
-		if _, err := c.db.Pool.Exec(dbCtx,
+		var clipID string
+		if err := c.db.Pool.QueryRow(dbCtx,
 			`INSERT INTO dm3_cctv.event_clips
-				(tenant_id, device_id, access_event_id, started_at, ended_at, duration_ms, object_key, trigger)
-			 VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, 'access_event')`,
-			tenantID, camDeviceID, eventUUID, startedAt, endedAt, 0, placeholderKey,
-		); err != nil {
+				(tenant_id, device_id, access_event_id, started_at, duration_ms, object_key, trigger)
+			 VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, 'access_event')
+			 RETURNING id::text`,
+			tenantID, camDeviceID, eventUUID, startedAt, 0, placeholderKey,
+		).Scan(&clipID); err != nil {
 			slog.Error("cctv: insert event_clip failed", "error", err,
 				"tenant_id", tenantID, "camera_id", camDeviceID)
 			return err // Nak → JetStream redelivers
 		}
+
+		// Spawn async clip extraction if the extractor is wired.
+		if c.extractor != nil {
+			go c.extractor.ExtractClip(ctx, clipID, tenantID, camDeviceID)
+		}
 	}
 
 	slog.Debug("cctv: event_clips placeholders created",
-		"tenant_id", tenantID, "access_point_id", accessPointID, "count", len(cameras))
+		"tenant_id", tenantID, "count", len(cameras))
 	return nil
 }
 
@@ -260,4 +264,16 @@ func (c *AccessEventConsumer) findCamerasForAccessPoint(ctx context.Context, ten
 		out = append(out, id)
 	}
 	return out, rows.Err()
+}
+
+// isCamera returns true if the device is a camera (type='camera' in dm3_devices.devices).
+func (c *AccessEventConsumer) isCamera(ctx context.Context, tenantID, deviceID string) bool {
+	lookupCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	var isCamera bool
+	_ = c.db.Pool.QueryRow(lookupCtx,
+		`SELECT EXISTS(SELECT 1 FROM dm3_devices.devices WHERE id = $1::uuid AND tenant_id = $2::uuid AND type = 'camera')`,
+		deviceID, tenantID,
+	).Scan(&isCamera)
+	return isCamera
 }
