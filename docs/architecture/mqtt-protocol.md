@@ -558,6 +558,49 @@ left untouched in `access_events.metadata`; new rows always store keys.
 }
 ```
 
+### 4.8 Face Enrollment Result (`evt.face_result`)
+
+Terminals that enrol faces on-device (currently `df970`, `ba8300`, `bd8500`,
+`ra08`, `dq200`) publish this event after they try to build a face template
+from the avatar URL delivered in the preceding `cfg.person_sync` payload.
+
+Server behaviour:
+
+- On `status="success"` the server flips the user's `M_<user_code>` face
+  credential from `invalid` → `active` and re-publishes `person.changed` so
+  the credential fans out as `active` to every online device in the tenant.
+- On `status="failed"` the credential stays out of device sync and the
+  reason is captured for operators via the device-events timeline.
+- Late acks that arrive after a different device has already enrolled the
+  same user successfully are **silently dropped** (guarded by
+  `WHERE status='invalid'`) — the first success wins.
+- Acks that reference a soft-deleted user or a user in a different tenant
+  are dropped (tenant scope comes from the topic, not the payload, so a
+  rogue device cannot spoof other tenants).
+
+```json
+{
+  "type": "evt.face_result",
+  "data": {
+    "user_id": "11111111-2222-3333-4444-555555555555",
+    "credential_value": "M_000042",
+    "status": "success",        // "success" | "failed"
+    "reason": "",               // required on failure; e.g.
+                                //   no_face_detected
+                                //   low_quality
+                                //   multiple_faces
+                                //   bad_avatar_url
+                                //   template_build_error
+    "confidence": 0.93,         // optional, 0..1
+    "template_version": "arcface_v3"  // optional
+  }
+}
+```
+
+**QoS:** 1. Device should retry on broker NAK but MUST NOT publish twice
+for the same `(user_id, credential_value)` — the server treats duplicates
+as idempotent on success and ignored on failure.
+
 ---
 
 ## 6. Device Status (`sta`)

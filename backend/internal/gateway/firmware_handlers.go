@@ -34,7 +34,7 @@ import (
 
 var validDeviceTypes = []string{
 	// Terminal
-	"ra08", "ba8300", "df970", "dq200", "dq8500", "icu970",
+	"ra08", "ba8300", "df970", "dq200", "dq8500", "bd8500", "icu970",
 	// Controller
 	"icu300n", "ipopx", "itouch_pop_x", "icu400", "dqmini_plus",
 	// Camera

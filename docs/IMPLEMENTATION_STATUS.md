@@ -49,7 +49,8 @@ This document tracks the current implementation status of DM3 features. Updated:
 - **identity-svc** (`backend/internal/identity/`) — User/credential management, identity operations
   - Status: ✅ Compliant | Risk: Low
   - Evidence: Migration confirms `dm3_identity.users`, `dm3_identity.credentials`, `dm3_identity.user_groups`, `dm3_identity.departments` ✅
-  - Implemented: User CRUD ✅ | Credentials ✅ | Groups ✅ | Departments ✅
+  - Implemented: User CRUD ✅ | Credentials ✅ | Groups ✅ | Departments ✅ | Face enrollment roundtrip ✅
+  - **Face enrollment roundtrip** (migration 000043): user create + avatar upload in a tenant that owns a qualifying face-enrol terminal (df970/ba8300/bd8500/ra08/dq200) auto-seeds an `M_<user_code>` face credential at `status='invalid'`. Device-gateway consumes `evt.face_result` MQTT acks (`docs/architecture/mqtt-protocol.md` §4.8) to flip the credential to `'active'` (success) or `'failed'`. Avatar change resets to `'invalid'` so devices re-enrol against the new photo. Frontend hides pending/failed face credentials by default with a toggle.
   - Deviation: No `contractors`, `rooms`, or `maintenance` tables. These features are mock-UI only. Vehicle registry was relocated to `dm3_parking.parking_vehicles` (migration 000010) for unified triple-credential support.
 
 - **visitor-svc** (`backend/cmd/visitor-svc/`, `backend/internal/visitor/`) — Standalone visitor management service (port 8006)

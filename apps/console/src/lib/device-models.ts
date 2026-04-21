@@ -27,6 +27,7 @@ export const MODEL_CAPABILITIES: Record<string, VerifyMethodValue[]> = {
   df970:         ['face', 'nfc', 'qr', 'pin', 'fingerprint', 'vnid', 'plate_number', 'iris', 'nfc_phone'],
   dq200:         ['face', 'nfc', 'qr', 'pin', 'fingerprint', 'vnid', 'plate_number', 'iris', 'nfc_phone'],
   dq8500:        ['face', 'nfc', 'qr', 'pin', 'fingerprint', 'vnid', 'plate_number', 'iris', 'nfc_phone'],
+  bd8500:        ['face', 'nfc', 'qr', 'pin', 'fingerprint', 'vnid', 'plate_number', 'iris', 'nfc_phone'],
   icu970:        ['face', 'nfc', 'qr', 'pin', 'fingerprint', 'vnid', 'plate_number', 'iris', 'nfc_phone'],
   lpr_desktop:   ['face', 'nfc', 'qr', 'pin', 'fingerprint', 'vnid', 'plate_number', 'iris', 'nfc_phone', 'uhf'],
   // Controller — face, nfc, qr, pin
@@ -61,6 +62,7 @@ export const DEVICE_TYPE_MODELS: Record<string, { value: string; label: string }
     { value: 'df970', label: 'DF-970' },
     { value: 'dq200', label: 'DQ-200' },
     { value: 'dq8500', label: 'DQ-8500' },
+    { value: 'bd8500', label: 'BD-8500' },
     { value: 'icu970', label: 'ICU-970' },
     { value: 'lpr_desktop', label: 'LPR Desktop' },
   ],

@@ -6,7 +6,7 @@ import {
   KeyRound, Fingerprint, QrCode, Save, X, Info, DoorOpen, Car,
   ScanLine, Search, Unlink, Mail, Phone, Hash, Pencil, Radio,
   Building2, Calendar, Shield, Clock, Briefcase, MapPin, FileText,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Eye, EyeOff,
 } from 'lucide-react';
 import {
   Button, Input, Label, Badge, AppModal, Select, SelectOption,
@@ -629,6 +629,20 @@ export function UserDetailPage() {
   const [deletingCredId, setDeletingCredId] = useState<string | null>(null);
   const [selectedCreds, setSelectedCreds] = useState<Set<string>>(new Set());
   const [bulkDeleteCredLoading, setBulkDeleteCredLoading] = useState(false);
+  const [showPendingFaces, setShowPendingFaces] = useState(false);
+
+  // Pending / failed face credentials (M_<user_code>, status=invalid|failed)
+  // are seeded server-side when a user has an on-device face-enrol terminal
+  // in their tenant. They don't represent something the user did — they
+  // appear and disappear as the device acknowledges enrolment. Hide by
+  // default to keep the tab focused on credentials the user can manage.
+  const visibleCredentials = useMemo(() => {
+    if (showPendingFaces) return credentials;
+    return credentials.filter(
+      (c) => !(c.type === 'face' && (c.status === 'invalid' || c.status === 'failed'))
+    );
+  }, [credentials, showPendingFaces]);
+  const pendingFaceCount = credentials.length - visibleCredentials.length;
 
   const [showAssignVehicle, setShowAssignVehicle] = useState(false);
   const [unassigningVehicleId, setUnassigningVehicleId] = useState<string | null>(null);
@@ -1085,7 +1099,7 @@ export function UserDetailPage() {
             </TabsTrigger>}
             {!isNew && <TabsTrigger value="credentials" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-card-list">
               <CreditCard size={13} className="mr-1.5" />
-              {t('tab.cardList')} ({credentials.length})
+              {t('tab.cardList')} ({visibleCredentials.length})
             </TabsTrigger>}
             {!isNew && <TabsTrigger value="vehicles" className="text-[12px] px-3 whitespace-nowrap" data-testid="user-button-tab-vehicle">
               <Car size={13} className="mr-1.5" />
@@ -1100,6 +1114,20 @@ export function UserDetailPage() {
           {/* Context actions per tab */}
           {activeTab === 'credentials' && (
             <div className="flex items-center gap-2">
+              {pendingFaceCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-[12px] text-muted-foreground"
+                  onClick={() => setShowPendingFaces((v) => !v)}
+                  data-testid="user-toggle-show-pending-faces"
+                >
+                  {showPendingFaces ? <EyeOff size={13} className="mr-1" /> : <Eye size={13} className="mr-1" />}
+                  {showPendingFaces
+                    ? t('credential.hidePendingFaces', 'Hide pending ({{count}})', { count: pendingFaceCount })
+                    : t('credential.showPendingFaces', 'Show pending ({{count}})', { count: pendingFaceCount })}
+                </Button>
+              )}
               {selectedCreds.size > 0 && (
                 <Button
                   variant="ghost"
@@ -1141,7 +1169,7 @@ export function UserDetailPage() {
             <div className="flex justify-center py-12">
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
             </div>
-          ) : credentials.length === 0 ? (
+          ) : visibleCredentials.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <CreditCard size={36} className="mb-3 text-muted-foreground/40" />
               <p className="text-[13px] font-medium text-foreground">{t('credential.empty')}</p>
@@ -1167,7 +1195,7 @@ export function UserDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {credentials.map((cred) => {
+                    {visibleCredentials.map((cred) => {
                       const info = CREDENTIAL_ICON_MAP[cred.type] ?? CREDENTIAL_ICON_MAP.card;
                       const hasExpiry = !!cred.valid_until;
                       return (

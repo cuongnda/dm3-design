@@ -164,6 +164,7 @@ func main() {
 	// Audit logger (publishes to NATS → audit-svc)
 	auditLog := audit.New(natsClient, "device-gateway")
 	defer auditLog.Close()
+	mqttHandler.SetAuditLogger(auditLog)
 	audit.SetContextExtractor(audit.ContextExtractor{
 		ActorFromContext: func(ctx context.Context) (string, string) {
 			c := authsvc.ClaimsFromContext(ctx)

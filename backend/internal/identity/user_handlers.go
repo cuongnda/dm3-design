@@ -36,6 +36,18 @@ func (h *IdentityHandlers) UploadUserAvatar(w http.ResponseWriter, r *http.Reque
 
 	h.publishEvent("dm3.identity.user.updated", map[string]string{"id": userID, "avatar": assetURL})
 	h.audit.LogFromRequest(r, "identity.user.photo_upload", "user", userID, userID, "success", nil, map[string]any{"avatar": assetURL})
+
+	// Avatar changed → retract any prior enrolment (reset status to invalid
+	// so the old template stops syncing) then make sure the M_<user_code>
+	// row exists so the next face_result ack from a qualifying device can
+	// flip it back to active.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_, _ = h.resetFaceIDCardCredentialStatus(ctx, companyID, userID)
+		_, _ = h.ensureFaceIDCardCredential(ctx, companyID, userID)
+	}()
+
 	httputil.JSON(w, http.StatusOK, map[string]string{"avatar": assetURL})
 }
 
@@ -486,6 +498,16 @@ func (h *IdentityHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 		"email":     req.Email,
 	})
 	h.publishPersonChanged(companyID, userID, "user.create")
+
+	// Seed the auto-enrollment face credential for on-device face models
+	// (df970/ba8300/bd8500/ra08/dq200). No-op if the tenant has no such
+	// device; idempotent via partial unique index.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_, _ = h.ensureFaceIDCardCredential(ctx, companyID, userID)
+	}()
+
 	httputil.JSON(w, http.StatusCreated, map[string]interface{}{
 		"id":         userID,
 		"account_id": accountID,

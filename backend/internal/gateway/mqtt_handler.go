@@ -14,6 +14,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/duali/dm3-backend/internal/models"
+	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/natsutil"
 )
@@ -155,6 +156,7 @@ type MQTTHandler struct {
 	nats      *natsutil.Client
 	hub       *EventHub
 	sync      *SyncService
+	audit     *audit.Logger
 	appCtx    context.Context      // application-lifetime context for background goroutines
 	syncGroup singleflight.Group   // deduplicates concurrent auto-syncs per device
 }
@@ -172,6 +174,13 @@ func (h *MQTTHandler) SetAppContext(ctx context.Context) {
 // SetSyncService sets the sync service for auto-sync on heartbeat.
 func (h *MQTTHandler) SetSyncService(s *SyncService) {
 	h.sync = s
+}
+
+// SetAuditLogger wires in the audit logger used by handlers that change
+// tenant-scoped identity state in response to device messages (e.g. the
+// face_result ack that flips a credential from invalid to active).
+func (h *MQTTHandler) SetAuditLogger(l *audit.Logger) {
+	h.audit = l
 }
 
 // Handle is the callback for all MQTT subscriptions.
@@ -348,8 +357,151 @@ func (h *MQTTHandler) handleEvent(ctx context.Context, pt ParsedTopic, env MQTTE
 		h.handleDoorState(ctx, pt, env)
 	case env.Type == "alarm.triggered":
 		h.handleAlarm(ctx, pt, env)
+	case env.Type == "evt.face_result" || env.Type == "face.result" || env.Type == "face_result":
+		h.handleFaceResult(ctx, pt, env)
 	default:
 		slog.Info("mqtt: event", "type", env.Type, "device", pt.DeviceID)
+	}
+}
+
+// faceResultData is the payload on dm/{tid}/device/{did}/evt with
+// type="evt.face_result". Devices reply with this after attempting to
+// enrol a face template from the user's avatar URL they received via
+// cfg.person_sync. The server uses it to flip the M_<user_code> face
+// credential from 'invalid' to 'active' (on success) or 'failed'.
+//
+// See docs/architecture/mqtt-protocol.md §5.2.
+type faceResultData struct {
+	UserID          string   `json:"user_id"`          // dm3_identity.users.id (UUID)
+	CredentialValue string   `json:"credential_value"` // "M_<user_code>"
+	Status          string   `json:"status"`           // "success" | "failed"
+	Reason          string   `json:"reason,omitempty"` // e.g. no_face_detected, low_quality, multiple_faces, bad_avatar_url
+	Confidence      *float64 `json:"confidence,omitempty"`
+	TemplateVersion string   `json:"template_version,omitempty"`
+}
+
+func (h *MQTTHandler) handleFaceResult(ctx context.Context, pt ParsedTopic, env MQTTEnvelope) {
+	var data faceResultData
+	if err := json.Unmarshal(env.Data, &data); err != nil {
+		slog.Warn("mqtt: bad face_result data", "error", err, "device", pt.DeviceID)
+		return
+	}
+	if !uuidRegex.MatchString(data.UserID) {
+		slog.Warn("mqtt: face_result missing/invalid user_id", "device", pt.DeviceID, "user_id", data.UserID)
+		return
+	}
+	if !strings.HasPrefix(data.CredentialValue, "M_") {
+		slog.Warn("mqtt: face_result credential_value must start with M_", "device", pt.DeviceID, "value", data.CredentialValue)
+		return
+	}
+
+	var newStatus string
+	switch data.Status {
+	case "success":
+		newStatus = "active"
+	case "failed", "failure", "error":
+		newStatus = "failed"
+	default:
+		slog.Warn("mqtt: face_result unknown status", "device", pt.DeviceID, "status", data.Status)
+		return
+	}
+
+	// Tenant-scoped update guards against a rogue device that learned
+	// another tenant's user_id: the UPDATE matches zero rows and the
+	// handler is a no-op. Join users with is_deleted guard so stale acks
+	// for soft-deleted users are dropped silently. The status='invalid'
+	// guard prevents a late-arriving 'failed' ack from regressing a
+	// credential that a different device already enrolled as 'active'.
+	var credID string
+	err := h.db.Pool.QueryRow(ctx, `
+		UPDATE dm3_identity.credentials c
+		   SET status = $1, updated_at = now()
+		  FROM dm3_identity.users u
+		 WHERE u.id        = c.user_id
+		   AND c.tenant_id = $2::uuid
+		   AND c.user_id   = $3::uuid
+		   AND c.type      = 'face'
+		   AND c.value     = $4
+		   AND c.status    = 'invalid'
+		   AND (u.is_deleted = false OR u.is_deleted IS NULL)
+		RETURNING c.id
+	`, newStatus, pt.TenantID, data.UserID, data.CredentialValue).Scan(&credID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			slog.Info("mqtt: face_result dropped (no matching invalid credential)",
+				"tenant", pt.TenantID, "device", pt.DeviceID, "user_id", data.UserID, "value", data.CredentialValue)
+			return
+		}
+		slog.Error("mqtt: face_result update failed", "error", err, "device", pt.DeviceID)
+		return
+	}
+
+	slog.Info("face enrollment result",
+		"device", pt.DeviceID, "tenant", pt.TenantID, "user_id", data.UserID,
+		"credential", data.CredentialValue, "status", newStatus, "reason", data.Reason,
+	)
+
+	metaOK := map[string]any{
+		"user_id":          data.UserID,
+		"credential_value": data.CredentialValue,
+		"credential_id":    credID,
+		"status":           data.Status,
+	}
+	if data.Reason != "" {
+		metaOK["reason"] = data.Reason
+	}
+	if data.Confidence != nil {
+		metaOK["confidence"] = *data.Confidence
+	}
+	if data.TemplateVersion != "" {
+		metaOK["template_version"] = data.TemplateVersion
+	}
+	eventType := "face_enrolled"
+	description := "Face template enrolled from avatar"
+	if newStatus == "failed" {
+		eventType = "face_enroll_failed"
+		description = "Face enrollment failed: " + data.Reason
+	}
+	go InsertDeviceEvent(h.appCtx, h.db.Pool, DeviceEvent{
+		TenantID:    pt.TenantID,
+		DeviceID:    pt.DeviceID,
+		EventType:   eventType,
+		Description: description,
+		Metadata:    metaOK,
+	})
+
+	if h.audit != nil {
+		action := "identity.credential.face_enrolled"
+		if newStatus == "failed" {
+			action = "identity.credential.face_failed"
+		}
+		actorEmail := "device:" + pt.DeviceID
+		h.audit.Log(audit.Entry{
+			TenantID:   pt.TenantID,
+			ActorEmail: actorEmail,
+			Action:     action,
+			EntityType: "credential",
+			EntityID:   credID,
+			EntityName: data.CredentialValue,
+			Status:     "success",
+			NewValues:  metaOK,
+		})
+	}
+
+	// On success, re-publish person.changed so IdentityConsumer fans the
+	// now-active credential back out to every online device in the tenant
+	// (including the enrolling one — its local upsert is idempotent).
+	if newStatus == "active" && h.nats != nil {
+		payload, _ := json.Marshal(map[string]string{
+			"tenant_id": pt.TenantID,
+			"user_id":   data.UserID,
+			"reason":    "face_enrolled",
+		})
+		pubCtx, cancel := context.WithTimeout(h.appCtx, 5*time.Second)
+		defer cancel()
+		if err := h.nats.Publish(pubCtx, "dm3.identity.person.changed", payload); err != nil {
+			slog.Warn("mqtt: face_result person.changed publish failed", "error", err)
+		}
 	}
 }
 
