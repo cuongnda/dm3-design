@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
+	"github.com/duali/dm3-backend/internal/cctv"
 	"github.com/duali/dm3-backend/internal/models"
 	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
@@ -24,12 +25,13 @@ import (
 )
 
 type IdentityHandlers struct {
-	db      *db.DB
-	nats    *natsutil.Client
-	audit   *audit.Logger
-	objects objectstore.Store
-	email   *email.Client
-	appURL  string
+	db          *db.DB
+	nats        *natsutil.Client
+	audit       *audit.Logger
+	objects     objectstore.Store
+	email       *email.Client
+	appURL      string
+	hanetCipher *cctv.CredentialCipher // optional; set via SetHanetCipher when CCTV_CREDENTIAL_KEY is configured. When nil, Hanet enrollment no-ops.
 }
 
 func NewIdentityHandlers(database *db.DB, nats *natsutil.Client, auditLog *audit.Logger, objects objectstore.Store) *IdentityHandlers {

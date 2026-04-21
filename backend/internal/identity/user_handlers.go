@@ -40,12 +40,15 @@ func (h *IdentityHandlers) UploadUserAvatar(w http.ResponseWriter, r *http.Reque
 	// Avatar changed → retract any prior enrolment (reset status to invalid
 	// so the old template stops syncing) then make sure the M_<user_code>
 	// row exists so the next face_result ack from a qualifying device can
-	// flip it back to active.
+	// flip it back to active. For Hanet-integrated tenants also register
+	// (or re-register) the user with Hanet; the H_<user_code> credential
+	// is created on success and stores the Hanet personID in external_ref.
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		_, _ = h.resetFaceIDCardCredentialStatus(ctx, companyID, userID)
 		_, _ = h.ensureFaceIDCardCredential(ctx, companyID, userID)
+		_, _ = h.ensureHanetFaceCredential(ctx, companyID, userID)
 	}()
 
 	httputil.JSON(w, http.StatusOK, map[string]string{"avatar": assetURL})
@@ -502,10 +505,17 @@ func (h *IdentityHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	// Seed the auto-enrollment face credential for on-device face models
 	// (df970/ba8300/bd8500/ra08/dq200). No-op if the tenant has no such
 	// device; idempotent via partial unique index.
+	//
+	// If the tenant has Hanet fully configured and the user has an avatar,
+	// also register the person with Hanet and create the H_<user_code>
+	// credential. Avatar is required for Hanet — CreateUser only carries an
+	// avatar when the kiosk flow or API caller supplied one, so this is
+	// usually a no-op at create-time and fires later on avatar upload.
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		_, _ = h.ensureFaceIDCardCredential(ctx, companyID, userID)
+		_, _ = h.ensureHanetFaceCredential(ctx, companyID, userID)
 	}()
 
 	httputil.JSON(w, http.StatusCreated, map[string]interface{}{

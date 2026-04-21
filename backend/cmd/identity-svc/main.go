@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
+	"github.com/duali/dm3-backend/internal/cctv"
 	"github.com/duali/dm3-backend/internal/config"
 	"github.com/duali/dm3-backend/internal/identity"
 	"github.com/duali/dm3-backend/internal/tenant"
@@ -129,6 +130,23 @@ func main() {
 	// HTTP handlers
 	handlers := identity.NewIdentityHandlers(database, natsClient, auditLog, objectStore)
 	handlers.SetEmailClient(emailClient, cfg.AppURL)
+
+	// Hanet enrollment: share the CCTV AES key so identity-svc can decrypt
+	// the Hanet secrets stored in dm3_cctv.cctv_settings. Optional — if
+	// CCTV_CREDENTIAL_KEY is unset or invalid, Hanet enrollment no-ops on
+	// every user-create, and on-device (M_) enrollment still works. The
+	// key MUST match the value cctv-svc is using; otherwise decrypt fails.
+	if credKey := os.Getenv("CCTV_CREDENTIAL_KEY"); credKey != "" {
+		cipher, err := cctv.NewCredentialCipher(credKey)
+		if err != nil {
+			slog.Warn("hanet: CCTV_CREDENTIAL_KEY invalid; hanet enrollment disabled", "error", err)
+		} else {
+			handlers.SetHanetCipher(cipher)
+			slog.Info("hanet: credential cipher initialised; enrollment enabled")
+		}
+	} else {
+		slog.Info("hanet: CCTV_CREDENTIAL_KEY not set; enrollment disabled")
+	}
 	umHandlers := tenant.NewUserManagementHandlers(database, auditLog)
 
 	// HTTP routes
