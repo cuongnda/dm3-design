@@ -155,6 +155,10 @@ func main() {
 		slog.Warn("MEDIAMTX_API_URL not set — using no-op MediaMTX client (dev mode)")
 	}
 
+	// Bootstrap: register all existing camera paths in MediaMTX (paths are in-memory,
+	// lost on MediaMTX restart). Runs async so it doesn't block startup.
+	go cctv.BootstrapMediaMTXPaths(ctx, database, mediamtxClient, cipher)
+
 	// Object store + clip signer
 	// ObjectStoreClipSigner uses the MinIO client directly for presigned URLs.
 	// Falls back to the no-op signer when OBJECT_STORE_ENDPOINT is not set.
