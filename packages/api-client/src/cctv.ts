@@ -12,7 +12,9 @@ export interface CameraDTO {
   access_point_id?: string;
   name: string;
   status: string;
+  last_seen?: string;
   brand?: string;
+  model?: string;
   rtsp_url: string;
   rtsp_username?: string;
   recording_mode: 'event_only' | 'disabled';

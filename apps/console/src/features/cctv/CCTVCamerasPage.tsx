@@ -199,7 +199,7 @@ export function CCTVCamerasPage() {
       header: t('cctv.cols.lastFrame'),
       width: '130px',
       render: (r) => {
-        const rel = formatRelative(r.last_checked_at);
+        const rel = formatRelative(r.last_seen);
         const text =
           rel.text === '__never__'
             ? t('cctv.lastFrame.never')
