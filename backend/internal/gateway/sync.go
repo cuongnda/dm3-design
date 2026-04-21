@@ -17,6 +17,7 @@ import (
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/mqtt"
+	"github.com/duali/dm3-backend/pkg/objectstore"
 )
 
 // SyncService orchestrates device configuration sync via MQTT.
@@ -30,6 +31,7 @@ type SyncService struct {
 	Persons   *PersonSyncer
 	Rules     *AccessRulesSyncer
 	Blacklist *BlacklistSyncer
+	Visitors  *VisitorSyncer
 }
 
 func NewSyncService(database *db.DB, mqttClient *mqtt.Client) *SyncService {
@@ -40,6 +42,20 @@ func NewSyncService(database *db.DB, mqttClient *mqtt.Client) *SyncService {
 		Persons:   NewPersonSyncer(database, mqttClient),
 		Rules:     NewAccessRulesSyncer(database, mqttClient),
 		Blacklist: NewBlacklistSyncer(database, mqttClient),
+		Visitors:  NewVisitorSyncer(database, mqttClient),
+	}
+}
+
+// AttachAssetPresigner gives the sync service an object-store presigner so
+// that avatar / photo fields in person_sync and visitor_sync payloads can be
+// rewritten as short-lived signed GET URLs the device can fetch directly.
+// Call from main() after the MinIO client is initialised.
+func (s *SyncService) AttachAssetPresigner(p objectstore.GetURLPresigner) {
+	if s.Persons != nil {
+		s.Persons.assetPresigner = p
+	}
+	if s.Visitors != nil {
+		s.Visitors.assetPresigner = p
 	}
 }
 
@@ -73,7 +89,7 @@ func (s *SyncService) AttachHandlers(h *GatewayHandlers) { s.handlers = h }
 // validSyncTypes is the canonical list of supported sync targets. Order matters
 // for "all" — config goes first so the device has the right settings before any
 // downstream rules / persons / blacklist get evaluated.
-var validSyncTypes = []string{"config", "person_sync", "access_rules", "blacklist"}
+var validSyncTypes = []string{"config", "person_sync", "access_rules", "blacklist", "visitor_sync"}
 
 // PushSyncToDevice pushes all sync types to a device (auto path — used by
 // IdentityConsumer when a credential changes). Does NOT clear the local user
@@ -184,6 +200,33 @@ func (s *SyncService) pushSyncTypes(ctx context.Context, companyID, deviceDBID, 
 				results[t] = "error: " + berr.Error()
 				if job != nil {
 					s.Jobs.MarkTypeResult(job.ID, t, "error", berr.Error())
+				}
+				continue
+			}
+			results[t] = "ok"
+			if job != nil {
+				s.Jobs.MarkTypeResult(job.ID, t, "ok", "")
+			}
+		case "visitor_sync":
+			jc := jobCtxFor(t)
+			// Same two-step replace pattern as person_sync when the operator
+			// hits Transmit: clear the device's visitor cache, then send the
+			// authoritative full set.
+			if manual {
+				if cerr := s.Visitors.PushClearAllVisitorsJob(ctx, companyID, deviceID, jc); cerr != nil {
+					slog.Error("sync: visitor_sync clear failed", "device", deviceID, "error", cerr)
+					results[t] = "error: " + cerr.Error()
+					if job != nil {
+						s.Jobs.MarkTypeResult(job.ID, t, "error", cerr.Error())
+					}
+					continue
+				}
+			}
+			if verr := s.Visitors.PushVisitorSyncJob(ctx, companyID, deviceID, jc); verr != nil {
+				slog.Error("sync: visitor_sync failed", "device", deviceID, "error", verr)
+				results[t] = "error: " + verr.Error()
+				if job != nil {
+					s.Jobs.MarkTypeResult(job.ID, t, "error", verr.Error())
 				}
 				continue
 			}

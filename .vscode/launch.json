@@ -10,10 +10,10 @@
       "cwd": "${workspaceFolder}/backend",
       "env": {
         "HTTP_PORT": "8005",
-        "DATABASE_URL": "postgres://dm3:dm3secret@localhost:5433/dm3?sslmode=disable",
-        "NATS_URL": "nats://localhost:4222",
+        "DATABASE_URL": "postgres://dm3:dm3secret@192.168.1.254:5433/dm3?sslmode=disable",
+        "NATS_URL": "nats://192.168.1.254:4222",
         "JWT_SECRET": "dm3-dev-secret-key",
-        "VALKEY_URL": "localhost:6380"
+        "VALKEY_URL": "192.168.1.254:6380"
       }
     },
     {
@@ -25,11 +25,11 @@
       "cwd": "${workspaceFolder}/backend",
       "env": {
         "HTTP_PORT": "8004",
-        "DATABASE_URL": "postgres://dm3:dm3secret@localhost:5433/dm3?sslmode=disable",
-        "NATS_URL": "nats://localhost:4222",
+        "DATABASE_URL": "postgres://dm3:dm3secret@192.168.1.254:5433/dm3?sslmode=disable",
+        "NATS_URL": "nats://192.168.1.254:4222",
         "JWT_SECRET": "dm3-dev-secret-key",
-        "VALKEY_URL": "localhost:6380",
-        "OBJECT_STORE_ENDPOINT": "localhost:9002",
+        "VALKEY_URL": "192.168.1.254:6380",
+        "OBJECT_STORE_ENDPOINT": "192.168.1.254:9002",
         "OBJECT_STORE_PUBLIC_ENDPOINT": "192.168.1.254:9002",
         "OBJECT_STORE_ACCESS_KEY": "dm3admin",
         "OBJECT_STORE_SECRET_KEY": "dm3secret123",
@@ -47,11 +47,11 @@
       "cwd": "${workspaceFolder}/backend",
       "env": {
         "HTTP_PORT": "8003",
-        "DATABASE_URL": "postgres://dm3:dm3secret@localhost:5433/dm3?sslmode=disable",
-        "NATS_URL": "nats://localhost:4222",
+        "DATABASE_URL": "postgres://dm3:dm3secret@192.168.1.254:5433/dm3?sslmode=disable",
+        "NATS_URL": "nats://192.168.1.254:4222",
         "JWT_SECRET": "dm3-dev-secret-key",
-        "VALKEY_URL": "localhost:6380",
-        "OBJECT_STORE_ENDPOINT": "localhost:9002",
+        "VALKEY_URL": "192.168.1.254:6380",
+        "OBJECT_STORE_ENDPOINT": "192.168.1.254:9002",
         "OBJECT_STORE_PUBLIC_ENDPOINT": "192.168.1.254:9002",
         "OBJECT_STORE_ACCESS_KEY": "dm3admin",
         "OBJECT_STORE_SECRET_KEY": "dm3secret123",
@@ -69,14 +69,14 @@
       "cwd": "${workspaceFolder}/backend",
       "env": {
         "HTTP_PORT": "8002",
-        "DATABASE_URL": "postgres://dm3:dm3secret@localhost:5433/dm3?sslmode=disable",
-        "MQTT_BROKER": "tcp://localhost:1884",
+        "DATABASE_URL": "postgres://dm3:dm3secret@192.168.1.254:5433/dm3?sslmode=disable",
+        "MQTT_BROKER": "tcp://192.168.1.254:1884",
         "MQTT_CLIENT_ID": "dm3-device-gateway-debug",
-        "NATS_URL": "nats://localhost:4222",
+        "NATS_URL": "nats://192.168.1.254:4222",
         "JWT_SECRET": "dm3-dev-secret-key",
-        "VALKEY_URL": "localhost:6380",
+        "VALKEY_URL": "192.168.1.254:6380",
         "BOOTSTRAP_SECRET": "dm3-bootstrap-v1-dev-secret",
-        "OBJECT_STORE_ENDPOINT": "localhost:9002",
+        "OBJECT_STORE_ENDPOINT": "192.168.1.254:9002",
         "OBJECT_STORE_PUBLIC_ENDPOINT": "192.168.1.254:9002",
         "OBJECT_STORE_ACCESS_KEY": "dm3admin",
         "OBJECT_STORE_SECRET_KEY": "dm3secret123",
@@ -84,7 +84,7 @@
         "OBJECT_STORE_USE_SSL": "false",
         "OBJECT_STORE_AUTO_CREATE_BUCKET": "true",
         "FIRMWARE_DOWNLOAD_URL": "http://192.168.1.254:8002",
-        "EMQX_API_URL": "http://localhost:18084",
+        "EMQX_API_URL": "http://192.168.1.254:18084",
         "EMQX_API_USER": "admin",
         "EMQX_API_PASSWORD": "dm3public123"
       }
@@ -98,8 +98,8 @@
       "cwd": "${workspaceFolder}/backend",
       "env": {
         "HTTP_PORT": "8001",
-        "DATABASE_URL": "postgres://dm3:dm3secret@localhost:5433/dm3?sslmode=disable",
-        "NATS_URL": "nats://localhost:4222",
+        "DATABASE_URL": "postgres://dm3:dm3secret@192.168.1.254:5433/dm3?sslmode=disable",
+        "NATS_URL": "nats://192.168.1.254:4222",
         "JWT_SECRET": "dm3-dev-secret-key"
       }
     },

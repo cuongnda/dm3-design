@@ -88,6 +88,8 @@ func main() {
 	// Sync service
 	syncService := gateway.NewSyncService(database, mqttClient)
 	syncService.AttachHub(hub)
+	// Presigner for avatar URLs in cfg.person_sync / cfg.visitor_sync is wired
+	// below, after the MinIO client is initialised (see objectStore).
 
 	// MQTT message handler
 	mqttHandler := gateway.NewMQTTHandler(database, natsClient, hub)
@@ -117,6 +119,16 @@ func main() {
 	if err := identityConsumer.Start(ctx); err != nil {
 		slog.Error("failed to start identity consumer", "error", err)
 		os.Exit(1)
+	}
+
+	// Real-time visitor → device push: subscribe to visitor-svc's visit.*
+	// events and fan out a PushVisitorSync to every online device in the
+	// affected tenant. Fails soft — a missing VISITOR stream is logged but
+	// does not abort startup, since visitor is a plugin-gated feature.
+	visitorConsumer := gateway.NewVisitorConsumer(database, natsClient, syncService)
+	if err := visitorConsumer.Start(ctx); err != nil {
+		slog.Warn("visitor consumer not started; visitor_sync will not fire on events",
+			"error", err)
 	}
 
 	// Bootstrap MQTT handler
@@ -166,6 +178,7 @@ func main() {
 		slog.Error("failed to initialize object storage", "error", err)
 		os.Exit(1)
 	}
+	syncService.AttachAssetPresigner(objectStore)
 
 	// HTTP handlers
 	handlers := gateway.NewGatewayHandlers(database, mqttClient, auditLog).

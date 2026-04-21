@@ -1,8 +1,11 @@
 # Duall Master 3.0 — MQTT Protocol Specification
 
 > IoT Device ↔ Server Communication Protocol
-> Version: 1.2 | Updated: 2026-04-20
+> Version: 1.5 | Updated: 2026-04-21
 > Changelog:
+> - v1.5 — Kiosk walk-in registration adapter (`POST /register-visit` on visitor-svc, auth: kiosk bearer token) now lands license plates in `dm3_parking.parking_vehicles` per the existing parking plugin contract — **not** in `dm3_identity.credentials`. No new credential `type` value is added; vehicle access goes through the parking plugin's LPR event path (`matched_by='plate'`), door access continues to go through `cfg.visitor_sync`.
+> - v1.4 — `cfg.person_sync` and `cfg.visitor_sync` entries now carry an optional `avatar` field: a short-lived (~1h TTL) presigned MinIO GET URL that the device downloads directly, no device-JWT needed.
+> - v1.3 — §7.8 added: `cfg.visitor_sync` pushes active visits + temporary credentials to devices, driven by `dm3.visitor.*.visit.*` NATS events.
 > - v1.2 — `cmd.snapshot` now carries a server-presigned `upload_url` + `object_key` (§6.4); `OBJECT_STORE_PUBLIC_ENDPOINT` documented (§15.8) so presigned URLs can target a different host than the gateway uses internally.
 > - v1.1 — §15 added: media uploads moved to presigned MinIO PUT; `photo`/`plate_photo`/`clip_object_key` carry object keys, no longer base64.
 
@@ -913,6 +916,7 @@ For offline/hybrid mode — push user credentials to device local storage.
       {
         "user_id": "user-uuid",
         "name": "Nguyễn Văn A",
+        "avatar": "https://minio.public.example.com/dm3/tenants/{tid}/identity/users/{uid}/avatar.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600&X-Amz-Signature=...",
         "credentials": [
           {"type": "card", "uid": "AABBCCDD", "valid_from": 1739900000000, "valid_until": 1771436000000},
           {"type": "face", "template": "base64_encoded", "version": "arcface_v3"},
@@ -950,6 +954,15 @@ For offline/hybrid mode — push user credentials to device local storage.
 The two messages share the same topic and arrive in publish order. The device MUST process them in the order they are received. Both messages produce their own `cfg.person_sync.ack` so the server can detect partial failure (e.g. `clear` succeeded but `full_sync` was lost — the operator would see only some users in the next status report).
 
 **Auto sync flow** *(unchanged)* — credential edits, role changes, etc. fan out via NATS → `IdentityConsumer` → `PushPersonSync`, which sends a single `full_sync` message. No `clear` is sent on the auto path because the user is making one small change and a destructive clear-then-resync would briefly leave the device with an empty user DB on every keystroke.
+
+**Avatar** *(added 2026-04)* — each user MAY carry an `avatar` field containing a **presigned MinIO GET URL** that the device can download directly with a plain HTTP GET, no auth header required. The signature in the URL is the authentication. Field semantics:
+
+- **Omitted / empty** when the user has no uploaded photo, or when the gateway could not sign the key (device sees no avatar; no broken URL is ever sent).
+- **Expiry:** ~1 hour from the moment the `cfg.person_sync` message is published (controlled by `gateway.AvatarPresignTTL`). Every subsequent sync refreshes the URL, so a device that stays online always has a live URL in hand. A device that's offline longer than the expiry must wait for the next sync to get a fresh one — the image bytes themselves can be cached locally using the URL path as the cache key (the path component stays stable across signatures; only the query-string signature rotates).
+- **Host:** resolved from `OBJECT_STORE_PUBLIC_ENDPOINT` (see §15.8) — the same address used for device media uploads, so a device that can PUT snapshots can also GET avatars.
+- **Scope:** only object keys under `tenants/{tid}/...` are signed. Any other shape of stored reference is ignored server-side.
+
+Used purely for on-device display (e.g. the "Welcome, X" screen after a successful match); face recognition still uses the `face` credential `template`, not this image.
 
 **Credential-level validity** *(added 2026-04)* — each credential entry MAY carry its own `valid_from` / `valid_until` (epoch ms). Semantics:
 
@@ -1227,6 +1240,84 @@ Each status change also creates:
 
 On `success`: the device's `firmware_version` in `dm3_devices.devices` is updated automatically.
 
+### 7.8 Visitor Sync
+
+Pushes the set of currently-valid visits (and their temporary credentials) to a device so it can grant access to visitors the same way it grants access to staff. Source of truth is `dm3_visitor.visits` × `dm3_visitor.temp_credentials`. Only visits with `status IN ('approved', 'checked_in')` whose `expected_departure` is in the future (or NULL) are sent, and only to devices wired to an access point whose `zone_id` appears in the visit's `access_areas`.
+
+Shares the same topic, QoS, and envelope as every other `cfg.*` message — no firmware or ACL changes are required beyond recognising the new `type`.
+
+```json
+{
+  "v": 1,
+  "type": "cfg.visitor_sync",
+  "data": {
+    "action": "full_sync|upsert|remove|clear",
+    "visitors": [
+      {
+        "visit_id": "uuid",
+        "visitor_id": "uuid",
+        "name": "Nguyễn Văn A",
+        "avatar": "https://minio.public.example.com/dm3/tenants/{tid}/visitor/visitors/{visitor_id}/photo.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600&X-Amz-Signature=...",
+        "credentials": [
+          {"type": "qr", "code": "VST-7c3a...", "valid_from": 1740000000000, "valid_until": 1740086400000}
+        ],
+        "access_zones": ["zone-uuid-1", "zone-uuid-2"],
+        "valid_from": 1740000000000,
+        "valid_until": 1740086400000,
+        "active": true
+      }
+    ],
+    "removed_visit_ids": ["uuid"],
+    "total_count": 1,
+    "batch": 1,
+    "batch_total": 1
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `action` | string | `full_sync` (replace the device's visitor cache), `upsert` (add/update a single visit), `remove` (drop the visits in `removed_visit_ids`), `clear` (wipe the visitor cache; sent as step 1 of the manual Transmit replace flow) |
+| `visitors[]` | array | Sent with `full_sync` and `upsert`. Empty for `remove` / `clear`. |
+| `visitors[].visit_id` | uuid | Unique per visit — this is the key the device stores under. |
+| `visitors[].avatar` | string | Presigned MinIO GET URL for the visitor photo (same format and ~1h TTL as the user-sync avatar — see §7.4 "Avatar"). Omitted when the visitor has no photo or when signing fails. |
+| `visitors[].credentials[]` | array | Same shape as `cfg.person_sync` entries (card uid, face template, qr code, etc). Visits with no active credential are filtered out — the device has nothing to match on. |
+| `visitors[].access_zones[]` | uuid[] | Zones where the visitor is authorised. The device grants access only if its own zone intersects. |
+| `visitors[].valid_from` / `valid_until` | int (epoch ms) | From `dm3_visitor.visits.expected_arrival` / `expected_departure`. Device enforces locally. |
+| `removed_visit_ids[]` | uuid[] | Present only when `action=remove`. |
+
+**Device logic:**
+- On `full_sync`: replace the entire local visitor cache with `visitors[]`.
+- On `upsert`: insert or update each entry by `visit_id`.
+- On `remove`: delete the listed `visit_id`s from the local cache.
+- On `clear`: drop every visit from the cache (followed by a `full_sync` in the manual Transmit flow).
+
+**Trigger points (server-side):**
+- `dm3.visitor.{tid}.visit.approved` / `reinvited` → full sync to every online device in tenant (via `VisitorConsumer`).
+- `dm3.visitor.{tid}.visit.checked_out|rejected|cancelled|no_show` → full sync so the visit drops out of the active set.
+- Manual **Transmit Data** with type=`visitor_sync` → `clear` + `full_sync` replace.
+- Device reconnect / heartbeat-triggered resync → `full_sync` only.
+
+**Ack** (`dm/{tid}/device/{did}/cfg/ack`, QoS 1):
+```json
+{
+  "v": 1,
+  "type": "cfg.visitor_sync.ack",
+  "ref": "original-msg-id",
+  "status": "ok",
+  "data": {
+    "synced_count": 12,
+    "failed_count": 0,
+    "local_total": 12
+  }
+}
+```
+
+**Notes:**
+- Visitors and regular users live in separate local caches on the device. A visit_id cannot collide with a user_id because the device stores them under different key spaces.
+- A visit with an empty `temp_credentials.value` is considered not-yet-provisioned and is filtered out server-side; it will be included in the next sync after an operator assigns a card / QR / badge.
+- Revoked credentials (`revoked_at IS NOT NULL`) are never sent.
+
 ---
 
 ## 9. Offline-First Architecture & Sync
@@ -1400,6 +1491,7 @@ Guard Station              Server                 EMQX                  All Devi
 | `cmd.*` | 2 | No | High | 10s | 3x |
 | `cfg.full` | 2 | Yes | Normal | 60s | Until ack |
 | `cfg.person_sync` | 2 | No | Normal | 300s | Until ack |
+| `cfg.visitor_sync` | 2 | No | Normal | 300s | Until ack |
 | `cfg.access_rules` | 2 | No | Normal | 60s | Until ack |
 | `cfg.blacklist` | 2 | No | Critical | 5s | Until ack |
 | `emergency.broadcast` | 2 | Yes | Critical | — | — |

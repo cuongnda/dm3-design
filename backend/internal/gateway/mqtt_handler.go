@@ -631,6 +631,22 @@ func (h *MQTTHandler) handleConfigAck(_ context.Context, pt ParsedTopic, env MQT
 			"status", env.Status,
 		)
 
+	case "cfg.visitor_sync.ack":
+		var data struct {
+			SyncedCount int `json:"synced_count"`
+			FailedCount int `json:"failed_count"`
+			LocalTotal  int `json:"local_total"`
+		}
+		if err := json.Unmarshal(env.Data, &data); err == nil {
+			slog.Info("visitor_sync ack",
+				"device", pt.DeviceID,
+				"synced", data.SyncedCount,
+				"failed", data.FailedCount,
+				"local_total", data.LocalTotal,
+				"status", env.Status,
+			)
+		}
+
 	case "cfg.firmware.ack":
 		// Device reports firmware update progress/result.
 		// Expected statuses: downloading, installing, success, failed

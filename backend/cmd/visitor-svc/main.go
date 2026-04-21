@@ -20,6 +20,7 @@ import (
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/i18n"
 	"github.com/duali/dm3-backend/pkg/natsutil"
+	"github.com/duali/dm3-backend/pkg/objectstore"
 )
 
 func main() {
@@ -108,8 +109,29 @@ func main() {
 		CompanyIDFromContext: authsvc.CompanyIDFromContext,
 	})
 
+	// Object storage — optional. Used by the kiosk legacy-register endpoint
+	// to persist the inline base64 avatar payloads the .NET LPR app ships.
+	// When MinIO is unreachable (local dev without compose), we log and
+	// continue; the rest of visitor-svc works fine without avatars.
+	objectStore, objErr := objectstore.NewMinIOStore(ctx, objectstore.Config{
+		Endpoint:         cfg.ObjectStoreEndpoint,
+		PublicEndpoint:   cfg.ObjectStorePublicEndpoint,
+		AccessKeyID:      cfg.ObjectStoreAccessKeyID,
+		SecretAccessKey:  cfg.ObjectStoreSecretAccessKey,
+		Bucket:           cfg.ObjectStoreBucket,
+		UseSSL:           cfg.ObjectStoreUseSSL,
+		PublicUseSSL:     cfg.ObjectStorePublicUseSSL,
+		AutoCreateBucket: cfg.ObjectStoreAutoCreateBucket,
+	})
+	if objErr != nil {
+		slog.Warn("object storage unavailable; kiosk avatar uploads disabled", "error", objErr)
+	}
+
 	// HTTP handlers
 	visitorHandlers := visitor.NewVisitorHandlers(database, auditLog, lookupCache, natsClient)
+	if objectStore != nil {
+		visitorHandlers.SetObjectStore(objectStore)
+	}
 
 	// HTTP routes
 	r := httputil.NewRouter()
@@ -126,10 +148,29 @@ func main() {
 		httputil.JSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
 
+	// Bare-path alias for the legacy .NET LPR kiosk client, which was
+	// originally built against demasterpro.com and uses the path
+	// POST /register-visit (no prefix). Authenticated by a long-lived kiosk
+	// bearer token — see internal/visitor/kiosk_auth.go.
+	r.Group(func(kr chi.Router) {
+		kr.Use(visitor.KioskAuthMiddleware(database))
+		kr.Post("/register-visit", visitorHandlers.LegacyRegisterVisitor)
+	})
+
 	// Visitor management routes
 	r.Route("/api/v1/visitors", func(vr chi.Router) {
 		// Public: QR code lookup (no auth required)
 		vr.Get("/qr/{qr_token}", visitorHandlers.GetVisitByQR)
+
+		// Kiosk adapter: LPR / walk-in devices authenticate with a long-lived
+		// bearer token minted per tenant. The endpoint shape intentionally
+		// mirrors the legacy demasterpro.com /register-visit so deployed .NET
+		// clients can point at DM3 with no firmware change. See
+		// internal/visitor/legacy_register_handler.go.
+		vr.Group(func(kr chi.Router) {
+			kr.Use(visitor.KioskAuthMiddleware(database))
+			kr.Post("/legacy-register", visitorHandlers.LegacyRegisterVisitor)
+		})
 
 		// Authenticated routes
 		vr.Group(func(ar chi.Router) {
@@ -212,6 +253,16 @@ func main() {
 				sr.Use(authsvc.RequireWritePermission("company.settings.manage"))
 				sr.Get("/settings", visitorHandlers.GetSettings)
 				sr.Put("/settings", visitorHandlers.UpdateSettings)
+			})
+
+			// Kiosk tokens: admin-only. Mints long-lived bearer tokens for
+			// LPR / walk-in devices to call POST /register-visit. Cleartext
+			// is returned exactly once on create; only the hash is stored.
+			ar.Group(func(kr chi.Router) {
+				kr.Use(authsvc.RequirePermission("company.settings.manage"))
+				kr.Post("/kiosk-tokens", visitorHandlers.CreateKioskToken)
+				kr.Get("/kiosk-tokens", visitorHandlers.ListKioskTokens)
+				kr.Delete("/kiosk-tokens/{id}", visitorHandlers.RevokeKioskToken)
 			})
 		})
 	})

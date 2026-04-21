@@ -57,9 +57,11 @@ go test ./internal/authsvc/... -v -run TestName
 docker compose -f docker-compose.local.yml up -d timescaledb nats emqx valkey minio
 ```
 
-Required services: TimescaleDB `:5433`, NATS+JetStream `:4222`, EMQX MQTT `:1884`, Valkey (Redis-compatible, used by device-gateway), MinIO (object storage, used by identity-svc and access-svc).  
+Required services (host ports): TimescaleDB `:5433`, NATS+JetStream `:4222` (monitor `:8222`), EMQX MQTT `:1884` (dashboard `:18083`, admin/public), Valkey `:6380` (Redis-compatible, used by device-gateway), MinIO `:9002` (console `:9003`, used by identity-svc and access-svc). Simulator runs on `:9090`.  
 Backend env vars for Docker Compose are loaded from `deploy/env/local.env`.  
 For CCTV features, also start `mediamtx` (RTSP/WebRTC streaming).
+
+To debug all backend services at once in VSCode: open the repo → Run & Debug → **"All Backend Services"** (`.vscode/launch.json`).
 
 ### Automation tests (pytest — single test location for all black-box tests)
 
@@ -141,6 +143,15 @@ apps/
   # Planned verticals (not yet created): school, factory, apartment
 ```
 
+Other top-level directories worth knowing:
+- `simulator/` — Python asyncio device simulator (dockerized, port `9090`)
+- `dm3-terminal/` — Android access terminal (Kotlin + Compose, MQTT live)
+- `mockups/` — static mockups for webapp, mobile, terminal, guard-station
+- `website/` — marketing site
+- `deploy/env/` — environment files (`local.env`, `prod.env`) consumed by compose and backend binaries
+
+**Plugin gating:** `visitor-svc`, `parking-svc`, and `cctv-svc` are plugin-gated per tenant via the company's `plugins[]` config (e.g. `api_integration` toggles the in-app API docs page). RBAC and route registration in `internal/authsvc/plugins.go` and `internal/rbac/checker.go` enforce this — don't hardcode feature visibility in the frontend without also updating the plugin flag.
+
 **Strategy:** One backend, N frontend verticals. Fix shared logic in `packages/`; fix vertical-specific UI in the app only. New verticals fork from `console/`.
 
 **Console stack:** Vite + React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui + React Router v7 + Zustand 5 + TanStack Query 5 + i18next.
@@ -153,6 +164,21 @@ Domain colors: SECURE `#3B82F6` · MANAGE `#8B5CF6` · OPERATE `#F59E0B` · SMAR
 TimescaleDB on port `5433`, database `dm3`, user `dm3`, password `dm3secret`.  
 Schema is split into namespaced schemas: `dm3_auth`, `dm3_devices`, `dm3_access`, `dm3_identity`, `dm3_visitor`, `dm3_parking`, `dm3_cctv`, `dm3_audit`.  
 Migrations live in `backend/pkg/db/migrations/` (numbered `000001_*` … `000013_cctv_schema`).
+
+### Object storage
+
+Shared `dm3` MinIO bucket, accessed via a common objectstore abstraction in access-svc, identity-svc, and device-gateway. Object keys are tenant-prefixed; e.g. zone indoor maps live at `tenants/{tenant_id}/access/zones/{zone_id}/map.{ext}` and are served back through access-svc `/assets/...` routes. Preserve that key contract when adding new asset types.
+
+### Spatial zones
+
+Spatial zones are the canonical location and map owner for access control. The console uses a tree-first zone explorer, then a zone detail page with list and map views over the same zone-scoped access points — do not re-introduce map ownership on other entities.
+
+### Test accounts
+
+| Role | Email | Password |
+|---|---|---|
+| System Admin | `sysadmin@duali.com` | `sysadmin123` |
+| Company Admin (Duali Demo tenant) | `admin@duali.com` | `admin123` |
 
 ## Frontend Conventions
 
