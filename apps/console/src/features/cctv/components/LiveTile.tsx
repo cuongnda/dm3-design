@@ -36,7 +36,10 @@ async function startWhep(
   signal: AbortSignal,
 ): Promise<RTCPeerConnection> {
   const pc = new RTCPeerConnection({
+    // Use Google STUN only as fallback — local/LAN streams rarely need it.
+    // Keeping it ensures NAT traversal works in remote/VPN scenarios.
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    iceCandidatePoolSize: 1,
   });
 
   pc.addTransceiver('video', { direction: 'recvonly' });
@@ -51,7 +54,9 @@ async function startWhep(
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  // Wait for ICE gathering to complete (or timeout after 3s)
+  // Wait for ICE gathering to complete (or timeout after 1s).
+  // Most candidates are gathered in <200ms on LAN; the 1s cap avoids
+  // blocking on slow STUN responses while still collecting relay candidates.
   await new Promise<void>((resolve) => {
     if (pc.iceGatheringState === 'complete') { resolve(); return; }
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
@@ -66,7 +71,7 @@ async function startWhep(
     timeoutHandle = setTimeout(() => {
       pc.removeEventListener('icegatheringstatechange', onStateChange);
       resolve();
-    }, 3000);
+    }, 1000);
   });
 
   if (signal.aborted) { pc.close(); throw new DOMException('Aborted', 'AbortError'); }
@@ -145,24 +150,18 @@ export function LiveTile({ camera }: Props) {
     (async () => {
       setState('connecting');
       setLastError(null);
-      let urls;
-      try {
-        urls = await getCameraStreamUrls(camera.id);
-      } catch (err: unknown) {
-        if (mounted) {
-          setLastError(err instanceof Error ? err.message : 'Failed to fetch stream URL');
-          setState('error');
-        }
-        return;
-      }
-      if (!mounted) return;
+
+      // Build stream URLs directly from camera ID — avoids an extra API
+      // round-trip that added ~200-500ms before the WHEP handshake starts.
+      const whepUrl = authenticatedUrl(`/cctv/whep/${camera.id}/whep`);
+      const hlsUrl = authenticatedUrl(`/cctv/hls/${camera.id}/index.m3u8`);
 
       const videoEl = videoRef.current;
       if (!videoEl) return;
 
       // Try WHEP first (sub-second latency).
       try {
-        const pc = await startWhep(authenticatedUrl(urls.whep_url), videoEl, abortCtrl.signal);
+        const pc = await startWhep(whepUrl, videoEl, abortCtrl.signal);
         pcRef.current = pc;
         if (!mounted) { pc.close(); pcRef.current = null; return; }
         setTransport('whep');
@@ -176,8 +175,7 @@ export function LiveTile({ camera }: Props) {
 
       // Fallback: HLS over HTTP.
       try {
-        if (!urls.hls_url) throw new Error('No HLS URL');
-        const hls = attachHls(authenticatedUrl(urls.hls_url), videoEl);
+        const hls = attachHls(hlsUrl, videoEl);
         if (!mounted) { hls?.destroy(); return; }
         hlsRef.current = hls;
         setTransport('hls');
