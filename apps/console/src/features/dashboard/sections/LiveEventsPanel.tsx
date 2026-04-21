@@ -73,7 +73,7 @@ export function LiveEventsPanel(): React.ReactElement {
               isConnected ? 'bg-success animate-pulse' : 'bg-error',
             )}
           />
-          {t('events.title')} ({isConnected ? t('events.live') : t('events.cached')})
+          {t('events.title')}
         </div>
         <button
           type="button"

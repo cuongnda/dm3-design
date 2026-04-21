@@ -24,7 +24,20 @@ function HourlyBars({
   hourly: Array<{ hour: number; granted: number; denied: number }>;
   currentHour: number;
 }): React.ReactElement {
-  const max = Math.max(1, ...hourly.map((b) => b.granted + b.denied));
+  const totals = hourly.map((b) => b.granted + b.denied);
+  const hasAnyActivity = totals.some((v) => v > 0);
+  const max = Math.max(1, ...totals);
+
+  if (!hasAnyActivity) {
+    return (
+      <div className="flex items-center justify-center h-16 w-full border border-dashed border-border/50 rounded-md">
+        <span className="text-[11px] text-muted-foreground">
+          No activity yet today
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-end gap-[3px] h-16 w-full">
       {hourly.map((b) => {
@@ -160,7 +173,14 @@ export function HeroStrip(): React.ReactElement {
             </div>
           </div>
           <div className="flex flex-wrap gap-2 mt-4">
-            <span className="inline-flex items-center gap-1.5 text-[12px] bg-success/10 text-success px-2.5 py-1 rounded-md">
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded-md',
+                entriesLastHour > 0
+                  ? 'bg-success/10 text-success'
+                  : 'bg-muted/20 text-muted-foreground',
+              )}
+            >
               <ArrowUpRight size={12} />
               {entriesLastHour} {t('hero.inLastHour', 'in last hour')}
             </span>

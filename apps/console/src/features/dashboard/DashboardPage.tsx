@@ -6,7 +6,6 @@ import { PageHeader } from '@dm3/ui';
 import { cn } from '@/lib/utils';
 import { useRealtimeStore, useActiveAlarms } from '@dm3/api-client';
 import { HeroStrip } from './sections/HeroStrip';
-import { PluginKpiChips } from './sections/PluginKpiChips';
 import { PluginInsightGrid } from './sections/PluginInsightGrid';
 import { LiveEventsPanel } from './sections/LiveEventsPanel';
 import { ActiveAlertsPanel } from './sections/ActiveAlertsPanel';
@@ -90,7 +89,6 @@ export function DashboardPage(): React.ReactElement {
       </PageHeader>
 
       <HeroStrip />
-      <PluginKpiChips />
 
       {hasAlarms ? (
         <div className="grid grid-cols-1 lg:grid-cols-[1.8fr_1fr] gap-4 mb-6">
