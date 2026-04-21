@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, Bell, DoorOpen, Video, ShieldAlert, Phone,
+  LayoutDashboard, DoorOpen, Video, ShieldAlert, Phone,
   Bot, AlertTriangle, UserPlus, Clock,
   Building2, Car, Shield,
   UserCheck, MapPin, Users2, Cpu, ClipboardList, Eye, FileText,
@@ -39,8 +39,7 @@ export const NAV_CONFIG: NavSection[] = [
     color: '#64748B',
     items: [
       { to: '/', icon: LayoutDashboard, labelKey: 'nav.dashboard', labelFallback: 'Dashboard', status: 'ready' },
-      { to: '/monitoring', icon: Activity, labelKey: 'nav.monitoring', labelFallback: 'Monitoring', status: 'setup' },
-      { to: '/alerts', icon: Bell, labelKey: 'nav.alerts', labelFallback: 'Alerts', status: 'ready', badgeKey: 'alerts' },
+      { to: '/monitoring', icon: Activity, labelKey: 'nav.monitoring', labelFallback: 'Monitoring', status: 'setup', badgeKey: 'alerts' },
     ],
   },
   {

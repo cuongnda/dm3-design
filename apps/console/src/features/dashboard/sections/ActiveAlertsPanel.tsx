@@ -35,7 +35,7 @@ export function ActiveAlertsPanel(): React.ReactElement {
         <button
           type="button"
           data-testid="dashboard-section-active-alerts-cta"
-          onClick={() => navigate('/alerts')}
+          onClick={() => navigate('/monitoring?kind=alarm')}
           className="text-[12px] text-secure hover:underline"
         >
           {t('alerts.viewAll')}

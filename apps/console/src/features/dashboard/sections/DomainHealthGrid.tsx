@@ -106,7 +106,7 @@ export function DomainHealthGrid(): React.ReactElement | null {
       colorCls: 'text-secure',
       Icon: Lock,
       viewLink: t('health.viewSecurity'),
-      route: '/alerts',
+      route: '/monitoring?kind=alarm',
       items: secureItems,
     },
   ];

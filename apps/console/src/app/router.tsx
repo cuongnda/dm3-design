@@ -300,11 +300,6 @@ const AuditLogPage = lazyWithRetry(() =>
   import('@/features/system/AuditLogPage').then((m) => ({ default: m.AuditLogPage }))
 );
 
-// ALERTS
-const AlertsPage = lazyWithRetry(() =>
-  import('@/features/alerts/AlertsPage').then((m) => ({ default: m.AlertsPage }))
-);
-
 // SYSTEM SETTINGS
 const SystemSettingsPage = lazyWithRetry(() =>
   import('@/features/system/SystemSettingsPage').then((m) => ({ default: m.SystemSettingsPage }))
@@ -377,7 +372,7 @@ export const Router = createBrowserRouter([
             element: <MainLayout />,
             children: [
               { index: true, element: <DashboardPage /> },
-              { path: 'alerts', element: <LazyWrap><AlertsPage /></LazyWrap> },
+              { path: 'alerts', element: <Navigate to="/monitoring?kind=alarm" replace /> },
               { path: 'monitoring', element: <LazyWrap><LiveEventsPage /></LazyWrap> },
 
               // SECURE (legacy routes)
