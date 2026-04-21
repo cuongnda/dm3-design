@@ -18,6 +18,14 @@ func RegisterStreamProxyRoutes(r chi.Router, h *CCTVHandlers, jwtSecret string) 
 	})
 }
 
+// RegisterPublicRoutes mounts anonymous endpoints that third-party systems
+// post to without a DM3 JWT. Tenancy is established via payload-embedded
+// credentials (e.g. Hanet's MD5(client_secret + id) hash). Mount OUTSIDE
+// the JWT middleware chain — the handlers do their own auth.
+func RegisterPublicRoutes(r chi.Router, h *CCTVHandlers) {
+	r.Post("/api/v1/cctv/hanet/webhook", h.ReceiveHanetWebhook)
+}
+
 // RegisterRoutes mounts all CCTV API routes under /api/v1/cctv on the given router.
 // It uses authsvc middlewares for JWT validation, company scoping, and plugin gating.
 func RegisterRoutes(r chi.Router, h *CCTVHandlers, jwtSecret string) {
