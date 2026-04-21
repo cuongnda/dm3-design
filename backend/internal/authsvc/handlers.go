@@ -957,11 +957,13 @@ func (h *AuthHandlers) ChangeMyPassword(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Verify current password
-	var currentHash string
+	// Verify current password. We also grab the email because the UPDATE
+	// below scopes by email, not id — see the "all rows share password"
+	// invariant notes on the Login handler.
+	var currentHash, email string
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT password_hash FROM dm3_auth.accounts WHERE id = $1::uuid AND status != 'deleted'`,
-		claims.Sub).Scan(&currentHash)
+		`SELECT password_hash, email FROM dm3_auth.accounts WHERE id = $1::uuid AND status != 'deleted'`,
+		claims.Sub).Scan(&currentHash, &email)
 	if err != nil {
 		i18n.ErrorResponse(w, r, http.StatusNotFound, "user.not_found")
 		return
@@ -978,13 +980,43 @@ func (h *AuthHandlers) ChangeMyPassword(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Multi-tenant accounts: one email can have multiple rows in
+	// dm3_auth.accounts (one per tenant the user belongs to, plus an
+	// optional system_admin row with tenant_id NULL). The Login handler
+	// only verifies against accounts[0].passwordHash and assumes every
+	// row for this email stores the same hash (comment on Login line ~208).
+	// Updating by id would silently break that invariant whenever the
+	// current tenant's row isn't the one login picks first — the user
+	// would see "password changed successfully" but then fail to log in
+	// with the new password because login matched a different, still-stale
+	// hash. Updating by email keeps every row in sync. We also clear the
+	// lockout counters so a user who got locked out can recover by
+	// changing their password.
 	tag, err := h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_auth.accounts SET password_hash = $2, updated_at = now() WHERE id = $1::uuid AND status != 'deleted'`,
-		claims.Sub, string(hash))
+		`UPDATE dm3_auth.accounts
+		    SET password_hash = $2,
+		        failed_attempts = 0,
+		        locked_until = NULL,
+		        updated_at = now()
+		  WHERE email = $1 AND status != 'deleted'`,
+		email, string(hash))
 	if err != nil || tag.RowsAffected() == 0 {
 		i18n.ErrorResponse(w, r, http.StatusNotFound, "user.not_found")
 		return
 	}
+
+	// Revoke every refresh token the user holds so stolen tokens can't
+	// survive a password rotation. The user's current access token stays
+	// valid until its natural expiry (15m) — acceptable for a self-serve
+	// flow; device reprovisioning is handled by separate endpoints.
+	_, _ = h.db.Pool.Exec(r.Context(),
+		`UPDATE dm3_auth.refresh_tokens rt
+		    SET revoked = true
+		   FROM dm3_auth.accounts a
+		  WHERE rt.user_id = a.id
+		    AND a.email = $1
+		    AND rt.revoked = false`,
+		email)
 
 	w.WriteHeader(http.StatusNoContent)
 }
