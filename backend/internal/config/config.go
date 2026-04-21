@@ -66,6 +66,12 @@ type Config struct {
 	// Application URL (used in email links)
 	AppURL string
 
+	// KioskAPIBaseURL is the public origin of visitor-svc that LPR kiosks
+	// should POST /register-visit to. Embedded in cfg.kiosk_config pushes so
+	// operators don't need to paste the URL on every device. Defaults to
+	// AppURL when empty.
+	KioskAPIBaseURL string
+
 	// Bug Reporter (DV Tasks integration)
 	BugReporterEnabled   bool
 	BugReporterURL       string // DV Tasks API base URL
@@ -118,7 +124,8 @@ func Load() *Config {
 		SMTPFromAddr: env("SMTP_FROM_ADDR", ""),
 		SMTPUseTLS:   env("SMTP_USE_TLS", "true") != "false",
 
-		AppURL: env("APP_URL", "http://localhost:3000"),
+		AppURL:          env("APP_URL", "http://localhost:3000"),
+		KioskAPIBaseURL: env("KIOSK_API_BASE_URL", env("VISITOR_SVC_PUBLIC_URL", "http://localhost:8006")),
 
 		BugReporterEnabled:   env("BUG_REPORTER_ENABLED", "") == "true",
 		BugReporterURL:       env("BUG_REPORTER_URL", "https://tasks.duali.vn/api"),

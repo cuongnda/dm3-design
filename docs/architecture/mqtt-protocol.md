@@ -1,8 +1,9 @@
 # Duall Master 3.0 — MQTT Protocol Specification
 
 > IoT Device ↔ Server Communication Protocol
-> Version: 1.5 | Updated: 2026-04-21
+> Version: 1.6 | Updated: 2026-04-21
 > Changelog:
+> - v1.6 — §7.9 added: `cfg.kiosk_config` pushes `{api_base_url, company_code, kiosk_token}` to DM3-provisioned LPR kiosks so the `/register-visit` bearer is distributed by Transmit Data rather than manually pasted. Every push rotates the token.
 > - v1.5 — Kiosk walk-in registration adapter (`POST /register-visit` on visitor-svc, auth: kiosk bearer token) now lands license plates in `dm3_parking.parking_vehicles` per the existing parking plugin contract — **not** in `dm3_identity.credentials`. No new credential `type` value is added; vehicle access goes through the parking plugin's LPR event path (`matched_by='plate'`), door access continues to go through `cfg.visitor_sync`.
 > - v1.4 — `cfg.person_sync` and `cfg.visitor_sync` entries now carry an optional `avatar` field: a short-lived (~1h TTL) presigned MinIO GET URL that the device downloads directly, no device-JWT needed.
 > - v1.3 — §7.8 added: `cfg.visitor_sync` pushes active visits + temporary credentials to devices, driven by `dm3.visitor.*.visit.*` NATS events.
@@ -1318,6 +1319,63 @@ Shares the same topic, QoS, and envelope as every other `cfg.*` message — no f
 - A visit with an empty `temp_credentials.value` is considered not-yet-provisioned and is filtered out server-side; it will be included in the next sync after an operator assigns a card / QR / badge.
 - Revoked credentials (`revoked_at IS NOT NULL`) are never sent.
 
+### 7.9 Kiosk Config
+
+Pushes the three settings an LPR kiosk (lpr-desktop-app) needs to call
+`POST /register-visit` on visitor-svc: the public API base URL, the tenant's
+company code, and a per-device bearer token. Lets operators register one
+or many kiosks without copy-pasting secrets between the DM3 console and
+each kiosk — the server mints the token server-side and delivers it
+in-band over the device's existing cfg channel.
+
+**Scope:** only kiosk-class devices do anything with this. Other device
+types see an unknown cfg.* type and drop it, which is safe by protocol
+convention (§7.1).
+
+```json
+{
+  "v": 1,
+  "type": "cfg.kiosk_config",
+  "data": {
+    "api_base_url": "http://dm3-gateway.local:8006",
+    "company_code": "DUALI-DEMO",
+    "kiosk_token":  "dm3kiosk_8f3a...<64 hex>",
+    "version": 1740000000
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `api_base_url` | string | Origin of visitor-svc. Device prepends this to `/register-visit`. |
+| `company_code` | string | `dm3_auth.tenants.code` for the device's tenant. Sent as the `?companyCode=` query param on every register call. |
+| `kiosk_token` | string | New long-lived bearer (`dm3kiosk_<64hex>`). **Every push mints a fresh token and revokes the previous one** — the cleartext exists only in this MQTT payload and in the device's local store. |
+| `version` | int | unix seconds at mint time. Devices MAY dedupe (ignore same-or-older version) across reconnect replays. |
+
+**Storage contract (device-side):**
+- Persist all three fields atomically. A partial write (e.g. new token but stale URL) is worse than ignoring the message.
+- Replace any previously-stored kiosk settings. There is no merge semantics — the server is the source of truth.
+- Subsequent `POST /register-visit` calls MUST use `Authorization: Bearer <kiosk_token>` verbatim and `?companyCode=<company_code>`.
+
+**Ack** (`dm/{tid}/device/{did}/cfg/ack`, QoS 1):
+```json
+{
+  "v": 1,
+  "type": "cfg.kiosk_config.ack",
+  "ref": "original-msg-id",
+  "status": "ok",
+  "data": {
+    "applied": true,
+    "version": 1740000000
+  }
+}
+```
+
+**Rotation model:** every `kiosk_config` push rotates the token. Operators can trigger a rotation by re-running **Transmit Data** with `type=kiosk_config` on the target device. The previous token's `revoked_at` is set in the same transaction as the new one's insert — the window where neither is valid is milliseconds and only inside the server's DB tx; the device never sees a gap because it holds both tokens until the new one lands and the ack is published.
+
+**Server config:**
+- `KIOSK_API_BASE_URL` (env var, read at startup) — the public origin for visitor-svc. If unset, the `kiosk_config` sync type rejects requests with a clear error rather than pushing a broken URL.
+
 ---
 
 ## 9. Offline-First Architecture & Sync
@@ -1492,6 +1550,7 @@ Guard Station              Server                 EMQX                  All Devi
 | `cfg.full` | 2 | Yes | Normal | 60s | Until ack |
 | `cfg.person_sync` | 2 | No | Normal | 300s | Until ack |
 | `cfg.visitor_sync` | 2 | No | Normal | 300s | Until ack |
+| `cfg.kiosk_config` | 2 | No | Normal | 300s | Until ack |
 | `cfg.access_rules` | 2 | No | Normal | 60s | Until ack |
 | `cfg.blacklist` | 2 | No | Critical | 5s | Until ack |
 | `emergency.broadcast` | 2 | Yes | Critical | — | — |

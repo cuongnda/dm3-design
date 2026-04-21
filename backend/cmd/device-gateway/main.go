@@ -88,6 +88,7 @@ func main() {
 	// Sync service
 	syncService := gateway.NewSyncService(database, mqttClient)
 	syncService.AttachHub(hub)
+	syncService.AttachKioskConfig(cfg.KioskAPIBaseURL)
 	// Presigner for avatar URLs in cfg.person_sync / cfg.visitor_sync is wired
 	// below, after the MinIO client is initialised (see objectStore).
 
