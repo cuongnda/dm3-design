@@ -12,15 +12,17 @@ import (
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/email"
 	"github.com/duali/dm3-backend/pkg/natsutil"
+	"github.com/duali/dm3-backend/pkg/objectstore"
 )
 
 // VisitorHandlers holds the database dependency for all visitor routes.
 type VisitorHandlers struct {
-	db    *db.DB
-	audit *audit.Logger
-	email *email.Client
-	nats  *natsutil.Client
-	cache *LookupCache
+	db      *db.DB
+	audit   *audit.Logger
+	email   *email.Client
+	nats    *natsutil.Client
+	cache   *LookupCache
+	objects objectstore.Store // optional: kiosk avatar upload path
 }
 
 // NewVisitorHandlers constructs a VisitorHandlers with the given database pool.
@@ -37,6 +39,14 @@ func NewVisitorHandlers(database *db.DB, auditLog *audit.Logger, cache *LookupCa
 // SetEmailClient configures the email client for visitor invitation emails.
 func (h *VisitorHandlers) SetEmailClient(client *email.Client) {
 	h.email = client
+}
+
+// SetObjectStore configures the MinIO-backed store used by the kiosk
+// legacy-register endpoint to persist inline base64 avatar payloads. Leaving
+// it unset disables the kiosk endpoint's photo path — avatars from the LPR
+// device will be ignored rather than rejecting the registration outright.
+func (h *VisitorHandlers) SetObjectStore(store objectstore.Store) {
+	h.objects = store
 }
 
 // parsePagination extracts page and limit from query params.

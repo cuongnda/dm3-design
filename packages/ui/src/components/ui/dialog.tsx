@@ -59,6 +59,7 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        {...props}
         style={{
           position: 'fixed',
           top: '50%',
@@ -72,7 +73,30 @@ function DialogContent({
           showCloseButton && "[&_[data-slot=dialog-header]]:pr-14",
           className
         )}
-        {...props}
+        onPointerDownOutside={(event) => {
+          const target = event.target as HTMLElement | null
+          if (target?.closest('[data-slot="select-panel"]')) {
+            event.preventDefault()
+            return
+          }
+          props.onPointerDownOutside?.(event)
+        }}
+        onFocusOutside={(event) => {
+          const target = event.target as HTMLElement | null
+          if (target?.closest('[data-slot="select-panel"]')) {
+            event.preventDefault()
+            return
+          }
+          props.onFocusOutside?.(event)
+        }}
+        onInteractOutside={(event) => {
+          const target = event.target as HTMLElement | null
+          if (target?.closest('[data-slot="select-panel"]')) {
+            event.preventDefault()
+            return
+          }
+          props.onInteractOutside?.(event)
+        }}
       >
         {children}
         {showCloseButton && (

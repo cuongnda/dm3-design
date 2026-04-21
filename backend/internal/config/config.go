@@ -41,10 +41,12 @@ type Config struct {
 
 	// Object Storage (MinIO / S3-compatible) — used when PhotoStorage = "minio"
 	ObjectStoreEndpoint         string
+	ObjectStorePublicEndpoint   string // Optional. Address baked into presigned URLs. Falls back to ObjectStoreEndpoint when empty.
 	ObjectStoreAccessKeyID      string
 	ObjectStoreSecretAccessKey  string
 	ObjectStoreBucket           string
 	ObjectStoreUseSSL           bool
+	ObjectStorePublicUseSSL     bool // Optional. Scheme for presigned URLs. Falls back to ObjectStoreUseSSL when env var unset.
 	ObjectStoreAutoCreateBucket bool
 
 	// EMQX Dashboard API
@@ -63,6 +65,12 @@ type Config struct {
 
 	// Application URL (used in email links)
 	AppURL string
+
+	// KioskAPIBaseURL is the public origin of visitor-svc that LPR kiosks
+	// should POST /register-visit to. Embedded in cfg.kiosk_config pushes so
+	// operators don't need to paste the URL on every device. Defaults to
+	// AppURL when empty.
+	KioskAPIBaseURL string
 
 	// Bug Reporter (DV Tasks integration)
 	BugReporterEnabled   bool
@@ -96,10 +104,12 @@ func Load() *Config {
 		PhotoLocalDir: env("PHOTO_LOCAL_DIR", "./data/photos"),
 
 		ObjectStoreEndpoint:         env("OBJECT_STORE_ENDPOINT", "localhost:9002"),
+		ObjectStorePublicEndpoint:   env("OBJECT_STORE_PUBLIC_ENDPOINT", ""),
 		ObjectStoreAccessKeyID:      env("OBJECT_STORE_ACCESS_KEY", env("MINIO_ROOT_USER", "dm3admin")),
 		ObjectStoreSecretAccessKey:  env("OBJECT_STORE_SECRET_KEY", env("MINIO_ROOT_PASSWORD", "dm3secret123")),
 		ObjectStoreBucket:           env("OBJECT_STORE_BUCKET", "dm3"),
 		ObjectStoreUseSSL:           env("OBJECT_STORE_USE_SSL", "") == "true",
+		ObjectStorePublicUseSSL:     env("OBJECT_STORE_PUBLIC_USE_SSL", env("OBJECT_STORE_USE_SSL", "")) == "true",
 		ObjectStoreAutoCreateBucket: env("OBJECT_STORE_AUTO_CREATE_BUCKET", "false") == "true",
 
 		EMQXApiURL:      env("EMQX_API_URL", "http://localhost:18084"),
@@ -114,7 +124,8 @@ func Load() *Config {
 		SMTPFromAddr: env("SMTP_FROM_ADDR", ""),
 		SMTPUseTLS:   env("SMTP_USE_TLS", "true") != "false",
 
-		AppURL: env("APP_URL", "http://localhost:3000"),
+		AppURL:          env("APP_URL", "http://localhost:3000"),
+		KioskAPIBaseURL: env("KIOSK_API_BASE_URL", env("VISITOR_SVC_PUBLIC_URL", "http://localhost:8006")),
 
 		BugReporterEnabled:   env("BUG_REPORTER_ENABLED", "") == "true",
 		BugReporterURL:       env("BUG_REPORTER_URL", "https://tasks.duali.vn/api"),

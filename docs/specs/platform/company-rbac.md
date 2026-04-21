@@ -25,9 +25,10 @@ This replaces the older fixed-role model that tried to hardcode many company rol
 Only these fixed human roles are canonical:
 - `system_admin`
 - `primary_manager`
+- `member`
 
 ### Company-defined roles
-All other company access should be modeled as **custom company roles** created by the Primary Manager or an authorized company admin.
+All other company access (beyond the baseline `member` capabilities) should be modeled as **custom company roles** created by the Primary Manager or an authorized company admin.
 
 Examples:
 - Viewer
@@ -74,6 +75,19 @@ This is the core mental model for the product, documentation, and UI.
 - can create, edit, archive, and assign company roles
 - can manage all scopes within that company
 - is the default first user created when a company is created
+
+### `member`
+- baseline authenticated tenant user (the "everyone else" role)
+- automatically assigned to every newly created company user at `self` scope
+- intended primarily for mobile-app / self-service usage:
+  - view own access history and attendance records
+  - manage own personal data: face ID enrollment, fingerprint, dynamic QR, profile
+  - receive own visit/parking notifications
+  - view own credentials and assigned access groups (read-only)
+- cannot view or modify any other user's data
+- cannot manage devices, company settings, or any shared resource
+- additive: company admins stack custom roles on top of `member` to grant wider access
+- revoking `member` is not supported (it is the minimum role every active user holds)
 
 ## Company-Defined Roles
 
@@ -144,6 +158,18 @@ Examples:
 - `report.export`
 - `company.settings.manage`
 
+### Permission catalog
+Every canonical permission key belongs to the **permission catalog**, a single source of truth maintained in backend code (`backend/internal/rbac/catalog.go`). Each catalog entry carries:
+- `key` — e.g. `visitor.visit.manage`
+- `domain` — e.g. `visitor`
+- `resource` — e.g. `visit`
+- `action` — e.g. `manage`
+- `plugin` — which plugin owns this permission (see **Plugin Gating**)
+- `scope_types` — which scope types this permission can be assigned under
+- `description` — human-readable
+
+The catalog is the authoritative list. Roles cannot hold permission keys that are not in the catalog. Seeded `member` permissions are always `plugin=core`.
+
 ### Standard actions
 Use these actions consistently where possible:
 - `read`
@@ -196,7 +222,7 @@ Use these actions consistently where possible:
 
 ### Enums
 ```text
-FixedRoleEnum: system_admin | primary_manager
+FixedRoleEnum: system_admin | primary_manager | member
 ScopeTypeEnum: company | site | department | zone | self
 RoleStatusEnum: active | archived
 ```
@@ -217,12 +243,75 @@ Recommended built-in templates:
 Templates are not canonical global roles.
 They are only starting points that companies can copy and modify.
 
+## Plugin Gating
+
+Plugin enablement is **orthogonal to RBAC but evaluated first**. It is a commercial/packaging control that exists independently of who can do what.
+
+### Plugin values
+Plugins are stored on `dm3_auth.tenants.enabled_plugins` (array). Canonical values:
+- `core` — always enabled, cannot be disabled; the baseline DM3 capabilities
+- `visitor`
+- `parking`
+- `cctv`
+- `intercom`
+- `smart_building`
+
+### Evaluation order
+Every authorization decision flows through this pipeline in order:
+
+```text
+Request → [1] tenant boundary → [2] plugin gate → [3] permission check → [4] scope check → allow/deny
+```
+
+- **[1] tenant boundary**: resource's `tenant_id` must match caller's company (or caller is `system_admin`)
+- **[2] plugin gate**: the catalog entry for the required permission has a `plugin` field; if that plugin is not in the tenant's `enabled_plugins`, deny immediately
+- **[3] permission check**: caller must hold the required `permission_key` through at least one role assignment (or be `system_admin` / `primary_manager` / satisfy the `member` self-service rule)
+- **[4] scope check**: the matching assignment's `scope_type` and `scope_id` must cover the target resource
+
+### Catalog-plugin coupling
+Every entry in the permission catalog declares exactly one owning plugin. Examples:
+- `identity.user.read` → plugin `core`
+- `attendance.record.read` → plugin `core`
+- `visitor.visit.manage` → plugin `visitor`
+- `parking.ticket.read` → plugin `parking`
+- `cctv.camera.stream` → plugin `cctv`
+
+### Role storage is plugin-state-independent
+Role rows and `company_role_permissions` rows persist regardless of plugin enablement:
+- disabling a plugin does **not** cascade-delete permissions from existing roles
+- re-enabling restores functionality automatically without re-editing roles
+- this makes plugin toggling safe and reversible
+
+### Admin UI behavior
+- the permission selector shows all catalog entries, but permissions belonging to disabled plugins are greyed out and unselectable
+- roles that were created with now-disabled plugin permissions display those permissions greyed with an info tooltip
+- a badge on the role card indicates "N permissions from disabled plugins"
+
+### Runtime response semantics
+When the plugin gate denies a request:
+- HTTP response: `403 Forbidden`
+- response body: `{ "error": "plugin_not_enabled", "plugin": "visitor" }`
+- distinct from `403 forbidden` (permission missing) and `403 scope_mismatch` (wrong scope)
+- enables client UX to render "Upgrade your plan" vs "Contact your admin" vs "Wrong site"
+
+### Plugin toggle authority
+- `system_admin` only — enabling/disabling plugins is a platform/commercial concern, not a customer-editable setting
+- `primary_manager` can view the tenant's enabled plugins but cannot change them
+- self-service plugin subscription (customer-driven upgrade) is an explicit future feature, not covered by this spec
+
+### `member` role is always `core`-only
+The `member` fixed role's seeded permissions are exclusively `plugin=core`. This guarantees every authenticated tenant user can use the mobile app for self-service (own profile, own access history, own face ID, own dynamic QR) regardless of which plugins the company is paying for.
+
 ## Authorization Evaluation Rules
 
-Access is allowed when:
-1. the acting user is `system_admin`, or
-2. the acting user is `primary_manager` of the same company, or
-3. the acting user has at least one valid role assignment that grants the required permission within the target scope
+Access is allowed when, in order:
+1. the tenant boundary check passes (same company, or acting user is `system_admin`), AND
+2. the plugin gate passes (required permission's plugin is in the tenant's `enabled_plugins`), AND
+3. one of the following holds:
+   - the acting user is `system_admin`, or
+   - the acting user is `primary_manager` of the same company, or
+   - the acting user has at least one valid role assignment that grants the required permission within the target scope, or
+   - the acting user holds fixed role `member` AND the target resource is the user's own record AND the requested action falls within the canonical `member` self-service capabilities
 
 ### Additional rules
 - company boundary is always enforced first
@@ -265,6 +354,60 @@ Examples:
 - Zone Operator for Main Lobby
 
 This is canonical behavior and should be supported directly.
+
+## Assignment Lifecycle & Token Propagation
+
+Assignment create / update / delete and role permission edits all land in
+the database synchronously. They do **not** take effect instantly on
+sessions that are already logged in.
+
+### Why
+
+Permission decisions are made at the service layer against JWT claims.
+Each access token carries a snapshot of the caller's assignments and
+fixed role at issue time. Services do not round-trip to the database
+on every request to re-read RBAC — that would add latency and coupling
+on every call. The trade-off is that a change made in the admin UI
+only reaches a session when that session's access token is reissued.
+
+### When changes actually apply
+
+- **New assignment granted / permission added to a role** — takes
+  effect on the target account at the next access-token refresh
+  (default: up to ~15 min, matching the access-token TTL). The user
+  does not need to log out.
+- **Assignment revoked / permission removed / role deleted** — the
+  user's existing access token continues to honor the old grant until
+  it expires, because the token is self-contained. On the next
+  refresh, rbac.Check re-reads the DB and the revocation applies.
+- **`enabled_plugins` toggled on a company** — propagates the same way
+  as RBAC changes: next access-token refresh picks up the new plugin
+  state.
+- **Fixed role change on `dm3_auth.accounts.role`** — same refresh
+  delay. Changing a user to/from `primary_manager` or `member` does
+  not immediately re-bind their session.
+
+### If immediate revocation is required
+
+For an active incident (e.g. terminated employee, compromised account),
+escalate with one or both of:
+
+1. **Disable the account** in `dm3_auth.accounts` (status → inactive).
+   Refresh is rejected on inactive accounts, so the session dies at
+   the next refresh boundary at the latest.
+2. **Rotate the user's password / force re-login** via the admin UI.
+
+Do not rely on the RBAC UI alone for incident response — it is a
+configuration surface, not a kill-switch.
+
+### Guidance for feature specs
+
+When writing feature specs, state assumptions explicitly if instant
+revocation matters. Example:
+> *Auth: requires permission `access.emergency.execute` within
+> matching scope. Revocation of this permission takes effect on the
+> operator's next token refresh (≈15 min). For immediate revocation,
+> disable the operator account.*
 
 ## What is canonical vs non-canonical
 
@@ -321,11 +464,14 @@ Temporary shorthand is allowed in product docs/manuals, but implementation specs
 
 When a company is created:
 1. create company
-2. create first user with fixed role `primary_manager`
+2. create first user with fixed role `primary_manager` (also holds `member` implicitly for self-service actions)
 3. require password change on first login
 4. optionally suggest starter templates for role setup
 
 This is the canonical bootstrap process.
+
+### User creation default
+Every newly created company user is granted fixed role `member` at `self` scope by default. Additional custom roles (Viewer, Receptionist, Department Manager, etc.) stack additively on top. This guarantees every authenticated tenant user can at minimum use the mobile app for self-service without requiring the Primary Manager to grant it explicitly.
 
 ## MVP Boundaries
 

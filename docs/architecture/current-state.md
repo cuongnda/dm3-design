@@ -3,7 +3,7 @@
 **Status:** Reflects what is actually running, not the long-term vision.
 **Source of truth:** `docker-compose.prod.yml` on the `develop` branch.
 **Companion diagram:** [`diagrams/current-deployment.drawio`](../../diagrams/current-deployment.drawio)
-**Last verified:** 2026-04-13 (deployed to `dm3.demasterpro.com`)
+**Last verified:** 2026-04-21 (attend-svc :8010, RBAC, OAuth2, and API token plane landed)
 
 > For the aspirational architecture (full vertical apps, AI/ML pipeline, all integrations),
 > see [`system-architecture.md`](./system-architecture.md). This file is the **as-built**
@@ -13,11 +13,11 @@
 
 ## 1. What is actually deployed
 
-### 1.1 Backend services (8 Go binaries, one Go module)
+### 1.1 Backend services (9 Go binaries, one Go module)
 
 | Service          | Port | Schema          | Role                                                                |
 | ---------------- | ---- | --------------- | ------------------------------------------------------------------- |
-| `auth-svc`       | 8005 | `dm3_auth`      | login, JWT issue/refresh, two-step (company code → credentials)     |
+| `auth-svc`       | 8005 | `dm3_auth`      | login, JWT issue/refresh, RBAC, OAuth2, API tokens, two-step (company code → credentials) |
 | `identity-svc`   | 8004 | `dm3_identity`  | users, companies, departments, photos                               |
 | `access-svc`     | 8003 | `dm3_access`    | rules, schedules, doors, **access_events** (TimescaleDB hypertable) |
 | `device-gateway` | 8002 | `dm3_devices`   | MQTT bridge, device provisioning, WS push to webapp                 |
@@ -25,6 +25,7 @@
 | `visitor-svc`    | 8006 | `dm3_visitor`   | plugin-gated visitor management                                     |
 | `parking-svc`    | 8007 | `dm3_parking`   | plugin-gated parking sessions / ANPR-fed                            |
 | `cctv-svc`       | 8008 | `dm3_cctv`      | cameras, clips, MediaMTX control plane                              |
+| `attend-svc`     | 8010 | `dm3_attendance` | plugin-gated attendance, shifts, leave requests, monthly summaries |
 
 Init container (runs once, then exits):
 
@@ -58,7 +59,8 @@ and shipped. Treat them as roadmap.
 | `valkey`         | `valkey/valkey:8.0-alpine`     | Cache / device sessions / rate limit                       |
 | `minio`          | `minio/minio:latest`           | S3-compatible object store (CCTV clips today, blobs later) |
 | `mediamtx`       | `bluenviron/mediamtx:1.9.3`    | RTSP ingest + WebRTC/WHEP + LL-HLS egress                  |
-| `nginx`          | `nginx:alpine`                 | Reverse proxy; joins `dm3-internal` and external `dmpw-net` |
+| `traefik`        | `traefik:v3.1`                 | API gateway for `/api/v1/*` and `/ws/*` — rate-limit, CORS, security headers, API-key plane (stub) |
+| `nginx`          | `nginx:alpine`                 | Edge proxy — serves SPA + static + MediaMTX, forwards API to `traefik` |
 
 ### 1.4 Volumes
 
@@ -80,8 +82,12 @@ The numbering matches the arrows in `current-deployment.drawio`.
 ### Request plane (browser ⇄ services)
 
 1. **Browser → nginx** (HTTPS, via dmpw-net). nginx terminates TLS at the host proxy,
-   serves the webapp static bundle, and reverse-proxies `/api/*` to the appropriate
-   `*-svc` on `dm3-internal`. **(arrows ① ② ⑳)**
+   serves the webapp static bundle, and proxies direct: `/photos/` → identity-svc,
+   `/assets/tenants/` → access-svc, `/cctv/whep/` and `/cctv/hls/` → mediamtx.
+2. **nginx → traefik → `*-svc`** — everything under `/api/v1/*` and `/ws/*` is
+   forwarded to Traefik on `dm3-internal`. Traefik applies per-route rate-limit,
+   CORS, security headers, and request-ID propagation, then fans out to the
+   appropriate backend. See `docs/architecture/api-gateway.md` for the route map. **(arrows ① ② ⑳)**
 
 ### Device plane (MQTT)
 
@@ -155,6 +161,10 @@ If you only ever read the C4 doc, here is what is different on the ground today:
   (single bucket `${OBJECT_STORE_BUCKET:-dm3}`, prefixed by tenant).
 * **Reverse proxy:** the C4 doc does not show `nginx`. In reality nginx is the only
   thing on `dmpw-net`; everything else is reachable only on `dm3-internal`.
+* **API gateway:** the C4 doc does not show `traefik`. In reality Traefik sits
+  between nginx and the 9 backend services for all `/api/v1/*` and `/ws/*` traffic,
+  and owns per-route rate-limit, CORS, security headers, and the future API-key /
+  OAuth2 plane (`/api/v1/public/*`). See `docs/architecture/api-gateway.md`.
 
 ---
 

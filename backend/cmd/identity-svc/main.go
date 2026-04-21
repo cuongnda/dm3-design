@@ -100,10 +100,12 @@ func main() {
 	} else {
 		objectStore, err = objectstore.NewMinIOStore(ctx, objectstore.Config{
 			Endpoint:         cfg.ObjectStoreEndpoint,
+			PublicEndpoint:   cfg.ObjectStorePublicEndpoint,
 			AccessKeyID:      cfg.ObjectStoreAccessKeyID,
 			SecretAccessKey:  cfg.ObjectStoreSecretAccessKey,
 			Bucket:           cfg.ObjectStoreBucket,
 			UseSSL:           cfg.ObjectStoreUseSSL,
+			PublicUseSSL:     cfg.ObjectStorePublicUseSSL,
 			AutoCreateBucket: cfg.ObjectStoreAutoCreateBucket,
 		})
 		if err != nil {
@@ -157,9 +159,12 @@ func main() {
 		r.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
 		r.Use(authsvc.RequireCompany())
 
-		// Users: operator+viewer can read, manager+ can write
+		// Users: reads open to any authenticated tenant user;
+		// writes require identity.user.create/update/delete via rbac.
+		// RequireWritePermission enforces identity.user.manage-equivalent
+		// on POST/PUT/PATCH/DELETE and lets GETs pass through.
 		r.Group(func(pr chi.Router) {
-			pr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			pr.Use(authsvc.RequireWritePermission("identity.user.update"))
 			pr.Get("/users", handlers.ListUsers)
 			pr.Post("/users", handlers.CreateUser)
 			pr.Get("/users/sync", handlers.SyncUsers)
@@ -171,9 +176,9 @@ func main() {
 			pr.Post("/users/{id}/avatar", handlers.UploadUserAvatar)
 		})
 
-		// Credentials: operator+viewer can read, manager+ can write
+		// Credentials: reads open, writes require identity.credential.manage.
 		r.Group(func(cr chi.Router) {
-			cr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			cr.Use(authsvc.RequireWritePermission("identity.credential.manage"))
 			cr.Get("/users/{id}/credentials", handlers.ListCredentials)
 			cr.Post("/users/{id}/credentials", handlers.CreateCredential)
 			cr.Get("/users/{id}/credentials/{credID}", handlers.GetCredential)
@@ -181,9 +186,10 @@ func main() {
 			cr.Delete("/users/{id}/credentials/{credID}", handlers.DeleteCredential)
 		})
 
-		// User Groups: manager+ can write
+		// User Groups: reads open, writes require identity.user.update
+		// (groups are part of the user-management surface).
 		r.Group(func(gr chi.Router) {
-			gr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			gr.Use(authsvc.RequireWritePermission("identity.user.update"))
 			gr.Get("/groups", handlers.ListGroups)
 			gr.Post("/groups", handlers.CreateGroup)
 			gr.Get("/groups/{id}", handlers.GetGroup)
@@ -199,9 +205,10 @@ func main() {
 		// Stats: all roles can read
 		r.Get("/stats", handlers.GetStats)
 
-		// Email templates: manager+ can manage
+		// Email templates: reads open, writes require company.settings.manage
+		// (email templates are a company-level configuration surface).
 		r.Route("/email-templates", func(et chi.Router) {
-			et.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			et.Use(authsvc.RequireWritePermission("company.settings.manage"))
 			et.Get("/types", handlers.ListEmailTemplateTypes)
 			et.Get("/", handlers.ListEmailTemplates)
 			et.Post("/", handlers.CreateEmailTemplate)

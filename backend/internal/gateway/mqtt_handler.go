@@ -631,6 +631,40 @@ func (h *MQTTHandler) handleConfigAck(_ context.Context, pt ParsedTopic, env MQT
 			"status", env.Status,
 		)
 
+	case "cfg.visitor_sync.ack":
+		var data struct {
+			SyncedCount int `json:"synced_count"`
+			FailedCount int `json:"failed_count"`
+			LocalTotal  int `json:"local_total"`
+		}
+		if err := json.Unmarshal(env.Data, &data); err == nil {
+			slog.Info("visitor_sync ack",
+				"device", pt.DeviceID,
+				"synced", data.SyncedCount,
+				"failed", data.FailedCount,
+				"local_total", data.LocalTotal,
+				"status", env.Status,
+			)
+		}
+
+	case "cfg.kiosk_config.ack":
+		// Device confirms it persisted the new api_base_url / company_code /
+		// kiosk_token triple. We don't echo the token back in the ack — the
+		// device just reports the applied version so the server log shows
+		// the roundtrip landed.
+		var data struct {
+			Applied bool  `json:"applied"`
+			Version int64 `json:"version"`
+		}
+		if err := json.Unmarshal(env.Data, &data); err == nil {
+			slog.Info("kiosk_config ack",
+				"device", pt.DeviceID,
+				"applied", data.Applied,
+				"version", data.Version,
+				"status", env.Status,
+			)
+		}
+
 	case "cfg.firmware.ack":
 		// Device reports firmware update progress/result.
 		// Expected statuses: downloading, installing, success, failed

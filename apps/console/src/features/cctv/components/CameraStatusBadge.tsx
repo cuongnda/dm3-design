@@ -6,10 +6,12 @@ export type Severity = 'online' | 'degraded' | 'offline' | 'no-stream';
 
 const STALE_AFTER_MS = 5 * 60 * 1000;
 
-export function deriveSeverity(camera: Pick<CameraDTO, 'status' | 'last_checked_at'>): Severity {
+export function deriveSeverity(camera: Pick<CameraDTO, 'status' | 'last_seen' | 'last_checked_at'>): Severity {
   if (camera.status === 'offline' || camera.status === 'error') return 'offline';
-  if (!camera.last_checked_at) return 'no-stream';
-  const ageMs = Date.now() - new Date(camera.last_checked_at).getTime();
+  // Prefer last_seen (heartbeat) over last_checked_at (RTSP probe) for liveness
+  const lastContact = camera.last_seen ?? camera.last_checked_at;
+  if (!lastContact) return 'no-stream';
+  const ageMs = Date.now() - new Date(lastContact).getTime();
   if (ageMs > STALE_AFTER_MS) return 'degraded';
   return 'online';
 }

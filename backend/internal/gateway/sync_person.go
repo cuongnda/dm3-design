@@ -10,14 +10,16 @@ import (
 
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/mqtt"
+	"github.com/duali/dm3-backend/pkg/objectstore"
 )
 
 const personSyncBatchSize = 1000
 
 // PersonSyncer assembles and pushes cfg.person_sync messages to devices.
 type PersonSyncer struct {
-	db   *db.DB
-	mqtt *mqtt.Client
+	db             *db.DB
+	mqtt           *mqtt.Client
+	assetPresigner objectstore.GetURLPresigner // optional — nil in tests / local dev
 }
 
 func NewPersonSyncer(database *db.DB, mqttClient *mqtt.Client) *PersonSyncer {
@@ -26,14 +28,15 @@ func NewPersonSyncer(database *db.DB, mqttClient *mqtt.Client) *PersonSyncer {
 
 // syncPersonUser is a user in the person_sync payload (matches MQTT spec §7.3).
 type syncPersonUser struct {
-	UserID      string               `json:"user_id"`
-	Name        string               `json:"name"`
-	Credentials []syncPersonCred     `json:"credentials"`
-	AccessZones []string             `json:"access_zones"`
-	ScheduleID  *string              `json:"schedule_id,omitempty"`
-	ValidFrom   *int64               `json:"valid_from,omitempty"`
-	ValidUntil  *int64               `json:"valid_until,omitempty"`
-	Active      bool                 `json:"active"`
+	UserID      string           `json:"user_id"`
+	Name        string           `json:"name"`
+	Avatar      string           `json:"avatar,omitempty"` // public path (e.g. /photos/tenants/.../avatar.jpg); empty if unset
+	Credentials []syncPersonCred `json:"credentials"`
+	AccessZones []string         `json:"access_zones"`
+	ScheduleID  *string          `json:"schedule_id,omitempty"`
+	ValidFrom   *int64           `json:"valid_from,omitempty"`
+	ValidUntil  *int64           `json:"valid_until,omitempty"`
+	Active      bool             `json:"active"`
 }
 
 type syncPersonCred struct {
@@ -108,6 +111,7 @@ func (s *PersonSyncer) PushPersonSyncJob(ctx context.Context, tenantID, deviceID
 	// (apd.access_device_id is text storing dm3_devices.devices.id::text).
 	userRows, err := s.db.Pool.Query(ctx, `
 		SELECT u.id, CONCAT(u.first_name, ' ', u.last_name),
+		       COALESCE(u.avatar, ''),
 		       u.effective_date, u.expired_date
 		FROM dm3_identity.users u
 		WHERE u.tenant_id = $1::uuid
@@ -137,13 +141,14 @@ func (s *PersonSyncer) PushPersonSyncJob(ctx context.Context, tenantID, deviceID
 	type userRow struct {
 		ID         string
 		Name       string
+		Avatar     string
 		ValidFrom  *time.Time
 		ValidUntil *time.Time
 	}
 	var users []userRow
 	for userRows.Next() {
 		var u userRow
-		if err := userRows.Scan(&u.ID, &u.Name, &u.ValidFrom, &u.ValidUntil); err != nil {
+		if err := userRows.Scan(&u.ID, &u.Name, &u.Avatar, &u.ValidFrom, &u.ValidUntil); err != nil {
 			slog.Warn("person_sync: scan user", "error", err)
 			continue
 		}
@@ -286,6 +291,7 @@ func (s *PersonSyncer) PushPersonSyncJob(ctx context.Context, tenantID, deviceID
 		su := syncPersonUser{
 			UserID:      u.ID,
 			Name:        u.Name,
+			Avatar:      presignIdentityAsset(ctx, s.assetPresigner, u.Avatar),
 			Credentials: credsByUser[u.ID],
 			Active:      true,
 		}

@@ -15,8 +15,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/duali/dm3-backend/internal/rbac"
 	"github.com/duali/dm3-backend/pkg/audit"
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/email"
@@ -33,9 +35,24 @@ type AccessClaims struct {
 	Email          string   `json:"email"`
 	Name           string   `json:"name"`
 	Roles          []string `json:"roles"`
-	Role           string   `json:"role,omitempty"` // primary_manager, manager, operator, viewer, system_admin
+	Role           string   `json:"role,omitempty"` // legacy: primary_manager, manager, operator, viewer, system_admin
 	EnabledPlugins []string `json:"enabled_plugins,omitempty"`
+
+	// RBAC dual-claim (new canonical fields; legacy Role kept during migration window).
+	// See docs/specs/platform/company-rbac.md.
+	FixedRole   string            `json:"fixed_role,omitempty"` // system_admin | primary_manager | member
+	Assignments []AssignmentClaim `json:"assignments,omitempty"`
+
 	jwt.RegisteredClaims
+}
+
+// AssignmentClaim is a compact JSON shape for one role assignment carried in the JWT.
+// Short field names keep the access token size small.
+type AssignmentClaim struct {
+	RoleID      string   `json:"rid,omitempty"`
+	Permissions []string `json:"perms"`
+	ScopeType   string   `json:"stype"`
+	ScopeID     string   `json:"sid,omitempty"`
 }
 
 // TempClaims is a short-lived token for company selection (step 2 of login).
@@ -253,7 +270,7 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 		if first.companyID != nil {
 			cid = *first.companyID
 		}
-		accessToken, err := h.generateAccessToken(first.id, cid, first.email, first.fullName, first.roles, cid, first.role, nil)
+		accessToken, err := h.generateAccessToken(first.id, cid, first.email, first.fullName, first.roles, cid, first.role, nil, resolveFixedRole(first.role), nil)
 		if err != nil {
 			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 			return
@@ -318,7 +335,8 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		plugins, _ := h.fetchEnabledPlugins(r.Context(), c.ID)
-		accessToken, err := h.generateAccessToken(chosenAccount.id, c.ID, chosenAccount.email, chosenAccount.fullName, chosenAccount.roles, c.ID, c.Role, plugins)
+		assignments, _ := h.loadAssignments(r.Context(), chosenAccount.id)
+		accessToken, err := h.generateAccessToken(chosenAccount.id, c.ID, chosenAccount.email, chosenAccount.fullName, chosenAccount.roles, c.ID, c.Role, plugins, resolveFixedRole(chosenAccount.role), assignments)
 		if err != nil {
 			i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 			return
@@ -419,7 +437,8 @@ func (h *AuthHandlers) LoginStep2(w http.ResponseWriter, r *http.Request) {
 	}
 
 	plugins, _ := h.fetchEnabledPlugins(r.Context(), req.TenantID)
-	accessToken, err := h.generateAccessToken(account.id, req.TenantID, account.email, account.fullName, account.roles, req.TenantID, account.role, plugins)
+	assignments, _ := h.loadAssignments(r.Context(), account.id)
+	accessToken, err := h.generateAccessToken(account.id, req.TenantID, account.email, account.fullName, account.roles, req.TenantID, account.role, plugins, resolveFixedRole(account.role), assignments)
 	if err != nil {
 		i18n.ErrorResponse(w, r, http.StatusInternalServerError, "auth.token_generation_failed")
 		return
@@ -523,7 +542,8 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	refreshPlugins, _ := h.fetchEnabledPlugins(r.Context(), refreshTenantID)
-	accessToken, err := h.generateAccessToken(userID, tenantID, email, fullName, roles, refreshTenantID, refreshUserRole, refreshPlugins)
+	refreshAssignments, _ := h.loadAssignments(r.Context(), userID)
+	accessToken, err := h.generateAccessToken(userID, tenantID, email, fullName, roles, refreshTenantID, refreshUserRole, refreshPlugins, resolveFixedRole(refreshUserRole), refreshAssignments)
 	if err != nil {
 		slog.Error("Refresh: failed to generate access token", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal server error")
@@ -1063,7 +1083,7 @@ func (h *AuthHandlers) fetchEnabledPlugins(ctx context.Context, tenantID string)
 	return plugins, nil
 }
 
-func (h *AuthHandlers) generateAccessToken(userID, companyID, email, name string, roles []string, selectedCompanyID, role string, enabledPlugins []string) (string, error) {
+func (h *AuthHandlers) generateAccessToken(userID, companyID, email, name string, roles []string, selectedCompanyID, role string, enabledPlugins []string, fixedRole string, assignments []AssignmentClaim) (string, error) {
 	now := time.Now()
 	claims := AccessClaims{
 		Sub:            userID,
@@ -1073,6 +1093,8 @@ func (h *AuthHandlers) generateAccessToken(userID, companyID, email, name string
 		Roles:          roles,
 		Role:           role,
 		EnabledPlugins: enabledPlugins,
+		FixedRole:      fixedRole,
+		Assignments:    assignments,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(15 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -1082,6 +1104,60 @@ func (h *AuthHandlers) generateAccessToken(userID, companyID, email, name string
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(h.jwtSecret))
+}
+
+// resolveFixedRole maps the legacy accounts.role value to the canonical
+// FixedRole enum used by the RBAC pipeline. Legacy values (manager/operator/
+// viewer) fall back to `member`; they still receive authority via assignments.
+func resolveFixedRole(legacy string) string {
+	switch legacy {
+	case string(rbac.RoleSystemAdmin), string(rbac.RolePrimaryManager), string(rbac.RoleMember):
+		return legacy
+	default:
+		return string(rbac.RoleMember)
+	}
+}
+
+// loadAssignments returns the RBAC assignments carried by an account. Each
+// assignment is a row from dm3_auth.user_role_assignments joined with its
+// company_role_permissions so the JWT can be validated offline.
+func (h *AuthHandlers) loadAssignments(ctx context.Context, accountID string) ([]AssignmentClaim, error) {
+	if accountID == "" {
+		return nil, nil
+	}
+	rows, err := h.db.Pool.Query(ctx, `
+		SELECT ura.id::text,
+		       ura.role_id::text,
+		       ura.scope_type,
+		       COALESCE(ura.scope_id::text, ''),
+		       COALESCE(array_agg(crp.permission_key) FILTER (WHERE crp.permission_key IS NOT NULL), '{}')
+		  FROM dm3_auth.user_role_assignments ura
+		  LEFT JOIN dm3_auth.company_role_permissions crp ON crp.role_id = ura.role_id
+		 WHERE ura.account_id = $1::uuid
+		   AND (ura.effective_from IS NULL OR ura.effective_from <= now())
+		   AND (ura.effective_to   IS NULL OR ura.effective_to   >  now())
+		 GROUP BY ura.id, ura.role_id, ura.scope_type, ura.scope_id
+	`, accountID)
+	if err != nil {
+		return nil, fmt.Errorf("loadAssignments: %w", err)
+	}
+	defer rows.Close()
+
+	var out []AssignmentClaim
+	for rows.Next() {
+		var assignmentID, roleID, scopeType, scopeID string
+		var perms []string
+		if err := rows.Scan(&assignmentID, &roleID, &scopeType, &scopeID, &perms); err != nil {
+			return nil, fmt.Errorf("loadAssignments scan: %w", err)
+		}
+		out = append(out, AssignmentClaim{
+			RoleID:      roleID,
+			Permissions: perms,
+			ScopeType:   scopeType,
+			ScopeID:     scopeID,
+		})
+	}
+	return out, rows.Err()
 }
 
 func (h *AuthHandlers) createRefreshToken(r *http.Request, userID, companyID string) (string, error) {
@@ -1160,22 +1236,72 @@ func (h *AuthHandlers) ResetUserPassword(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	result, err := h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_auth.accounts SET password_hash = $1, updated_at = NOW() WHERE id = $2::uuid AND status != 'deleted'`,
-		string(hashedPassword), userID)
+	// Update ALL rows for this user's email — the codebase assumes every row
+	// sharing an email shares one password (Login picks accounts[0] and treats
+	// its hash as authoritative; partial updates leave other-company rows
+	// stuck on the old hash). RETURNING surfaces the email + name once, so we
+	// can email the user without a second round-trip.
+	//
+	// Also clear failed_attempts + locked_until: an admin reset is implicitly
+	// an unlock. Otherwise a user who got locked out from typing the previous
+	// (broken) password 5× sees "invalid credentials" even with the new one.
+	// See [SA-02].
+	var userEmail, userName string
+	err = h.db.Pool.QueryRow(r.Context(),
+		`UPDATE dm3_auth.accounts
+		    SET password_hash   = $1,
+		        failed_attempts = 0,
+		        locked_until    = NULL,
+		        updated_at      = NOW()
+		  WHERE email IN (
+		            SELECT email FROM dm3_auth.accounts
+		             WHERE id = $2::uuid AND status != 'deleted'
+		        )
+		    AND status != 'deleted'
+		RETURNING email, COALESCE(full_name, first_name, email)`,
+		string(hashedPassword), userID,
+	).Scan(&userEmail, &userName)
 	if err != nil {
+		// pgx returns ErrNoRows when nothing matched.
+		if err == pgx.ErrNoRows {
+			httputil.Error(w, http.StatusNotFound, "user not found")
+			return
+		}
 		httputil.Error(w, http.StatusInternalServerError, "failed to update password")
 		return
 	}
-	if result.RowsAffected() == 0 {
-		httputil.Error(w, http.StatusNotFound, "user not found")
-		return
+
+	// Email the new password to the user — best-effort. SMTP failures (no
+	// client configured, network down, bad credentials) must not fail the
+	// reset itself; the admin already sees the password in the response and
+	// can communicate it manually. We surface email_sent so the UI can show
+	// "emailed to user@example.com" vs "tell them yourself" without a guess.
+	// See [SA-03].
+	emailSent := false
+	if h.email != nil {
+		go func(addr, name, pw, loginURL string) {
+			msg := email.AdminPasswordResetEmail(addr, email.AdminPasswordResetData{
+				UserName:    name,
+				NewPassword: pw,
+				LoginLink:   loginURL,
+			})
+			if err := h.email.Send(msg); err != nil {
+				slog.Error("admin password reset: send email", "error", err, "email", addr)
+				return
+			}
+			slog.Info("admin password reset email sent", "email", addr)
+		}(userEmail, userName, newPassword, h.appURL)
+		emailSent = true
 	}
 
-	h.audit.LogFromRequest(r, "account.password_reset", "account", userID, userID, "success", nil, nil)
+	h.audit.LogFromRequest(r, "account.password_reset", "account", userID, userEmail, "success", nil, map[string]any{
+		"email_dispatched": emailSent,
+	})
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{
-		"password": newPassword,
-		"message":  "password reset successfully",
+		"password":   newPassword,
+		"email_sent": emailSent,
+		"email":      userEmail,
+		"message":    "password reset successfully",
 	})
 }
 
@@ -1209,8 +1335,19 @@ func (h *AuthHandlers) ChangeUserPassword(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// See ResetUserPassword — same rationale: update every row sharing this
+	// user's email and clear lockout state in the same transaction. [SA-02]
 	result, err := h.db.Pool.Exec(r.Context(),
-		`UPDATE dm3_auth.accounts SET password_hash = $1, updated_at = NOW() WHERE id = $2::uuid AND status != 'deleted'`,
+		`UPDATE dm3_auth.accounts
+		    SET password_hash   = $1,
+		        failed_attempts = 0,
+		        locked_until    = NULL,
+		        updated_at      = NOW()
+		  WHERE email IN (
+		            SELECT email FROM dm3_auth.accounts
+		             WHERE id = $2::uuid AND status != 'deleted'
+		        )
+		    AND status != 'deleted'`,
 		string(hashedPassword), userID)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "failed to update password")

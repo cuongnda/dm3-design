@@ -16,7 +16,7 @@ const testSecret = "test-secret-key"
 func TestGenerateAndValidateAccessToken(t *testing.T) {
 	h := &AuthHandlers{jwtSecret: testSecret}
 
-	tokenStr, err := h.generateAccessToken("user-1", "company-1", "test@example.com", "Test User", []string{"admin"}, "company-1", "admin", nil)
+	tokenStr, err := h.generateAccessToken("user-1", "company-1", "test@example.com", "Test User", []string{"admin"}, "company-1", "admin", nil, "", nil)
 	if err != nil {
 		t.Fatalf("generateAccessToken: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestAccessTokenExpired(t *testing.T) {
 
 func TestInvalidSecret(t *testing.T) {
 	h := &AuthHandlers{jwtSecret: testSecret}
-	tokenStr, _ := h.generateAccessToken("user-1", "company-1", "test@example.com", "Test", []string{"admin"}, "company-1", "admin", nil)
+	tokenStr, _ := h.generateAccessToken("user-1", "company-1", "test@example.com", "Test", []string{"admin"}, "company-1", "admin", nil, "", nil)
 
 	_, err := jwt.ParseWithClaims(tokenStr, &AccessClaims{}, func(t *jwt.Token) (interface{}, error) {
 		return []byte("wrong-secret"), nil
@@ -145,7 +145,7 @@ func TestAccessTokenContainsEnabledPlugins(t *testing.T) {
 	h := &AuthHandlers{jwtSecret: testSecret}
 	plugins := []string{"core", "visitor"}
 
-	tokenStr, err := h.generateAccessToken("user-1", "company-1", "test@example.com", "Test", []string{"admin"}, "company-1", "admin", plugins)
+	tokenStr, err := h.generateAccessToken("user-1", "company-1", "test@example.com", "Test", []string{"admin"}, "company-1", "admin", plugins, "", nil)
 	if err != nil {
 		t.Fatalf("generateAccessToken: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestAccessTokenContainsEnabledPlugins(t *testing.T) {
 func TestAccessTokenNilPluginsOmitted(t *testing.T) {
 	h := &AuthHandlers{jwtSecret: testSecret}
 
-	tokenStr, err := h.generateAccessToken("user-1", "company-1", "test@example.com", "Test", []string{"admin"}, "company-1", "admin", nil)
+	tokenStr, err := h.generateAccessToken("user-1", "company-1", "test@example.com", "Test", []string{"admin"}, "company-1", "admin", nil, "", nil)
 	if err != nil {
 		t.Fatalf("generateAccessToken: %v", err)
 	}

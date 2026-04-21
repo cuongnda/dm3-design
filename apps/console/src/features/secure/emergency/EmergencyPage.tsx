@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import {
   Flame, Lock, Unlock, HeartPulse, UserX, ShieldAlert, CheckCircle2,
   Plus, Play, Trash2, Edit, Settings2, DoorOpen, Zap, AlertTriangle,
-  ClipboardList, ShieldCheck, Siren,
+  ClipboardList, ShieldCheck, Siren, Clock, DoorClosed,
 } from 'lucide-react';
 import {
   fetchEmergencyPlans, deleteEmergencyPlan,
@@ -66,6 +66,22 @@ const actionLabel = (action: string) => actionLabels[action] || action;
 
 const POLL_INTERVAL = 5000;
 
+function formatElapsed(from: Date, now: Date): string {
+  const ms = Math.max(0, now.getTime() - from.getTime());
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function formatAbs(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 /* ── Main page ─────────────────────────────────────────────── */
 
 export function EmergencyPage() {
@@ -82,6 +98,12 @@ export function EmergencyPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [deletingPlan, setDeletingPlan] = useState<EmergencyPlanDTO | null>(null);
+  const [now, setNow] = useState<Date>(new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Activate modal
   const [activatingPlan, setActivatingPlan] = useState<EmergencyPlanDTO | null>(null);
@@ -269,27 +291,83 @@ export function EmergencyPage() {
       </PageHeader>
 
       {/* Active emergency banner */}
-      {activeIncidents.map((inc) => (
-        <div key={inc.id} className="shrink-0 rounded-lg border-2 border-error p-4 bg-error/5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex h-3 w-3 animate-pulse rounded-full bg-error" />
-              <div>
-                <span className="text-[16px] font-bold uppercase tracking-wide text-error">
-                  EMERGENCY: {inc.plan_name}
-                </span>
-                <p className="text-[12px] text-muted-foreground mt-0.5">
-                  {inc.target_summary} · by {inc.triggered_by_email}
-                </p>
+      {activeIncidents.map((inc) => {
+        const triggeredAt = new Date(inc.activated_at);
+        const aps = inc.access_points || [];
+        const visibleAps = aps.slice(0, 6);
+        const hiddenApCount = aps.length - visibleAps.length;
+        return (
+          <div
+            key={inc.id}
+            data-testid={`emergency-banner-${inc.id}`}
+            className="shrink-0 rounded-lg border-2 border-error p-4 bg-error/5"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3 min-w-0">
+                <span className="inline-flex h-3 w-3 mt-1.5 animate-pulse rounded-full bg-error shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-[16px] font-bold uppercase tracking-wide text-error">
+                    EMERGENCY: {inc.plan_name}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground mt-1">
+                    <span
+                      className="flex items-center gap-1.5 font-medium text-foreground"
+                      data-testid={`emergency-banner-${inc.id}-elapsed`}
+                      title={triggeredAt.toLocaleString()}
+                    >
+                      <Clock size={12} className="text-error" />
+                      Running {formatElapsed(triggeredAt, now)}
+                    </span>
+                    <span className="text-muted-foreground/60">·</span>
+                    <span>
+                      Triggered {formatAbs(triggeredAt)} by{' '}
+                      <span className="text-foreground">{inc.triggered_by_email || 'system'}</span>
+                    </span>
+                    <span className="text-muted-foreground/60">·</span>
+                    <span>
+                      Action: <span className="text-foreground font-medium">{actionLabel(inc.action)}</span>
+                    </span>
+                  </div>
+                </div>
               </div>
+              <Button
+                data-testid={`emergency-button-all-clear-${inc.id}`}
+                variant="outline"
+                className="border-success/30 bg-success/10 text-success shrink-0"
+                onClick={() => handleAllClear(inc)}
+              >
+                <CheckCircle2 size={14} className="mr-1.5" /> All Clear
+              </Button>
             </div>
-            <Button data-testid={`emergency-button-all-clear-${inc.id}`} variant="outline" className="border-success/30 bg-success/10 text-success"
-              onClick={() => handleAllClear(inc)}>
-              <CheckCircle2 size={14} className="mr-1.5" /> All Clear
-            </Button>
+
+            {aps.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-error/20">
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground uppercase tracking-wide mb-2">
+                  <DoorClosed size={12} />
+                  {aps.length} access {aps.length === 1 ? 'point' : 'points'} affected
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {visibleAps.map((ap) => (
+                    <span
+                      key={ap.id}
+                      data-testid={`emergency-banner-${inc.id}-ap-${ap.id}`}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-error/10 border border-error/20 text-[11px] text-foreground"
+                    >
+                      <DoorClosed size={10} className="text-error" />
+                      {ap.name}
+                    </span>
+                  ))}
+                  {hiddenApCount > 0 && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-muted/20 border border-border text-[11px] text-muted-foreground">
+                      +{hiddenApCount} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {/* Stats */}
       <div className="shrink-0 grid grid-cols-4 gap-3">

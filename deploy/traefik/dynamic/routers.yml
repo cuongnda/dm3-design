@@ -1,0 +1,172 @@
+# Router registry.
+#
+# Rules:
+#   - Path prefixes match the existing nginx map, 1:1 for parity.
+#   - Priority is explicit so CCTV test-connection regex beats the /cctv/
+#     prefix. Higher priority wins.
+#   - middlewares are applied in listed order (secure-headers → request-id →
+#     cors → rate-limit → optional api-key → service).
+#   - Services reference the registry in services.yml.
+
+http:
+  routers:
+    # ── Auth plane (tight rate limit) ────────────────────────────────────────
+    auth:
+      rule: "PathPrefix(`/api/v1/auth/`)"
+      service: auth-svc
+      entryPoints: [web]
+      middlewares:
+        - secure-headers
+        - request-id
+        - cors
+        - ratelimit-auth
+      priority: 100
+
+    # ── RBAC (same backend as auth, standard rate) ───────────────────────────
+    rbac:
+      rule: "PathPrefix(`/api/v1/rbac/`)"
+      service: auth-svc
+      entryPoints: [web]
+      middlewares:
+        - secure-headers
+        - request-id
+        - cors
+        - ratelimit-standard
+      priority: 100
+
+    # ── Identity ────────────────────────────────────────────────────────────
+    identity:
+      rule: "PathPrefix(`/api/v1/identity/`)"
+      service: identity-svc
+      entryPoints: [web]
+      middlewares:
+        - secure-headers
+        - request-id
+        - cors
+        - ratelimit-standard
+      priority: 100
+
+    # ── Access control ──────────────────────────────────────────────────────
+    access:
+      rule: "PathPrefix(`/api/v1/access/`)"
+      service: access-svc
+      entryPoints: [web]
+      middlewares:
+        - secure-headers
+        - request-id
+        - cors
+        - ratelimit-standard
+      priority: 100
+
+    # ── Device gateway (provisioning, commands, firmware) ────────────────────
+    gateway:
+      rule: "PathPrefix(`/api/v1/gateway/`)"
+      service: device-gateway
+      entryPoints: [web]
+      middlewares:
+        - secure-headers
+        - request-id
+        - cors
+        - ratelimit-standard
+      priority: 100
+
+    # ── Audit logs ──────────────────────────────────────────────────────────
+    audit:
+      rule: "PathPrefix(`/api/v1/audit/`)"
+      service: audit-svc
+      entryPoints: [web]
+      middlewares:
+        - secure-headers
+        - request-id
+        - cors
+        - ratelimit-reads
+      priority: 100
+
+    # ── Visitors ────────────────────────────────────────────────────────────
+    visitors:
+      rule: "PathPrefix(`/api/v1/visitors/`)"
+      service: visitor-svc
+      entryPoints: [web]
+      middlewares:
+        - secure-headers
+        - request-id
+        - cors
+        - ratelimit-standard
+      priority: 100
+
+    # ── Parking ─────────────────────────────────────────────────────────────
+    parking:
+      rule: "PathPrefix(`/api/v1/parking/`)"
+      service: parking-svc
+      entryPoints: [web]
+      middlewares:
+        - secure-headers
+        - request-id
+        - cors
+        - ratelimit-standard
+      priority: 100
+
+    # ── Attendance ──────────────────────────────────────────────────────────
+    attendance:
+      rule: "PathPrefix(`/api/v1/attendance/`)"
+      service: attend-svc
+      entryPoints: [web]
+      middlewares:
+        - secure-headers
+        - request-id
+        - cors
+        - ratelimit-standard
+      priority: 100
+
+    # ── CCTV test-connection (must beat /cctv/ prefix — priority 200) ────────
+    cctv-test-connection:
+      rule: "PathRegexp(`^/api/v1/cctv/cameras/[^/]+/test-connection$`)"
+      service: cctv-svc
+      entryPoints: [web]
+      middlewares:
+        - secure-headers
+        - request-id
+        - cors
+        - ratelimit-cctv-test
+      priority: 200
+
+    # ── CCTV general ────────────────────────────────────────────────────────
+    cctv:
+      rule: "PathPrefix(`/api/v1/cctv/`)"
+      service: cctv-svc
+      entryPoints: [web]
+      middlewares:
+        - secure-headers
+        - request-id
+        - cors
+        - ratelimit-reads
+      priority: 100
+
+    # ── WebSocket (device gateway) ───────────────────────────────────────────
+    ws:
+      rule: "PathPrefix(`/ws/`)"
+      service: device-gateway
+      entryPoints: [web]
+      middlewares:
+        - secure-headers
+      priority: 100
+
+    # ── Public API plane (API-key gated — third-party integrations) ──────────
+    #
+    # Currently stub — auth-svc /validate-api-key returns 404 until Option 1
+    # lands, so every /api/v1/public/* request is rejected with 401. This
+    # is intentional: the plane exists in the routing table today so clients
+    # can be pointed at `/api/v1/public/*` URLs in integration docs, and
+    # real auth will turn on without a URL change.
+    public:
+      rule: "PathPrefix(`/api/v1/public/`)"
+      service: auth-svc  # temporarily routes to auth-svc for the forwardAuth call
+      entryPoints: [web]
+      middlewares:
+        - secure-headers
+        - request-id
+        - cors
+        - ratelimit-public
+        - apikey-forwardauth
+        - strip-public-prefix
+      priority: 150

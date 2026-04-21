@@ -10,7 +10,7 @@ import {
   Video,
   VideoOff,
 } from 'lucide-react';
-import { getCameraStreamUrls, type CameraDTO } from '@dm3/api-client';
+import { type CameraDTO } from '@dm3/api-client';
 import { SeverityPill, deriveSeverity, type Severity } from './CameraStatusBadge';
 
 interface Props {
@@ -35,12 +35,10 @@ async function startWhep(
   videoEl: HTMLVideoElement,
   signal: AbortSignal,
 ): Promise<RTCPeerConnection> {
-  const pc = new RTCPeerConnection({
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-  });
+  const pc = new RTCPeerConnection();
 
-  pc.addTransceiver('video', { direction: 'recvonly' });
-  pc.addTransceiver('audio', { direction: 'recvonly' });
+  pc.addTransceiver('video', { direction: 'sendrecv' });
+  pc.addTransceiver('audio', { direction: 'sendrecv' });
 
   pc.ontrack = (ev) => {
     if (videoEl.srcObject !== ev.streams[0]) {
@@ -51,34 +49,16 @@ async function startWhep(
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  // Wait for ICE gathering to complete (or timeout after 3s)
-  await new Promise<void>((resolve) => {
-    if (pc.iceGatheringState === 'complete') { resolve(); return; }
-    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
-    const onStateChange = () => {
-      if (pc.iceGatheringState === 'complete') {
-        if (timeoutHandle !== null) clearTimeout(timeoutHandle);
-        pc.removeEventListener('icegatheringstatechange', onStateChange);
-        resolve();
-      }
-    };
-    pc.addEventListener('icegatheringstatechange', onStateChange);
-    timeoutHandle = setTimeout(() => {
-      pc.removeEventListener('icegatheringstatechange', onStateChange);
-      resolve();
-    }, 3000);
-  });
-
   if (signal.aborted) { pc.close(); throw new DOMException('Aborted', 'AbortError'); }
 
   const resp = await fetch(whepUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/sdp' },
-    body: pc.localDescription?.sdp,
+    body: offer.sdp,
     signal,
   });
 
-  if (!resp.ok) throw new Error(`WHEP ${resp.status}`);
+  if (resp.status !== 201) throw new Error(`WHEP ${resp.status}`);
   const sdpAnswer = await resp.text();
   await pc.setRemoteDescription({ type: 'answer', sdp: sdpAnswer });
 
@@ -145,24 +125,17 @@ export function LiveTile({ camera }: Props) {
     (async () => {
       setState('connecting');
       setLastError(null);
-      let urls;
-      try {
-        urls = await getCameraStreamUrls(camera.id);
-      } catch (err: unknown) {
-        if (mounted) {
-          setLastError(err instanceof Error ? err.message : 'Failed to fetch stream URL');
-          setState('error');
-        }
-        return;
-      }
-      if (!mounted) return;
+
+      // Build stream URLs directly — proxied through nginx/vite to MediaMTX.
+      const whepUrl = `/cctv/whep/${camera.id}/whep`;
+      const hlsUrl = `/cctv/hls/${camera.id}/index.m3u8`;
 
       const videoEl = videoRef.current;
       if (!videoEl) return;
 
       // Try WHEP first (sub-second latency).
       try {
-        const pc = await startWhep(urls.whep_url, videoEl, abortCtrl.signal);
+        const pc = await startWhep(whepUrl, videoEl, abortCtrl.signal);
         pcRef.current = pc;
         if (!mounted) { pc.close(); pcRef.current = null; return; }
         setTransport('whep');
@@ -176,8 +149,7 @@ export function LiveTile({ camera }: Props) {
 
       // Fallback: HLS over HTTP.
       try {
-        if (!urls.hls_url) throw new Error('No HLS URL');
-        const hls = attachHls(urls.hls_url, videoEl);
+        const hls = attachHls(hlsUrl, videoEl);
         if (!mounted) { hls?.destroy(); return; }
         hlsRef.current = hls;
         setTransport('hls');
@@ -227,7 +199,7 @@ export function LiveTile({ camera }: Props) {
   };
 
   const handleOpenCamera = () => {
-    navigate(`/secure/cctv/cameras?id=${camera.id}`);
+    navigate(`/cctv/cameras?id=${camera.id}`);
   };
 
   return (

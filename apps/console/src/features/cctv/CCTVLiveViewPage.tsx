@@ -300,7 +300,7 @@ export function CCTVLiveViewPage() {
   // Wall mode is a takeover: black backdrop, no page chrome.
   if (mode === 'wall') {
     return (
-      <div className="fixed inset-0 z-40 bg-black flex flex-col -m-6">
+      <div className="fixed inset-0 z-40 bg-black flex flex-col">
         <div className="flex items-center justify-between px-3 py-1.5 bg-black/80 border-b border-[#1E293B]">
           <div className="flex items-center gap-3">
             <ModeToggle mode={mode} onChange={handleModeChange} />
@@ -356,7 +356,7 @@ export function CCTVLiveViewPage() {
   const gridGap = compactMode ? 'gap-2' : 'gap-3';
 
   return (
-    <div className="flex h-full -m-6">
+    <div className="flex h-full min-h-0">
       {showSidebar && (
         <CameraSidebar
           cameras={allCameras}

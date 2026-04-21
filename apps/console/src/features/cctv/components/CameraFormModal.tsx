@@ -8,11 +8,22 @@ import {
   type CreateCameraRequest,
   type TestConnectionDTO,
 } from '@dm3/api-client';
+import { DEVICE_TYPE_MODELS } from '@/lib/device-models';
 
 type RecordingMode = 'event_only' | 'disabled';
 
+const CAMERA_MODELS = DEVICE_TYPE_MODELS['camera'] ?? [];
+
+const RTSP_PLACEHOLDERS: Record<string, string> = {
+  tungson: 'rtsp://{ip}:554/live_{device_id}_ch0_s0',
+  tbvision: 'rtsp://{ip}:554/stream1',
+  camera_dc: 'rtsp://{ip}:554/stream',
+  cctv: 'rtsp://{ip}:554/stream',
+};
+
 interface FormState {
   name: string;
+  model: string;
   rtsp_url: string;
   rtsp_username: string;
   rtsp_password: string;
@@ -30,6 +41,7 @@ function redactRtspCredentials(s: string | undefined): string {
 
 const emptyForm: FormState = {
   name: '',
+  model: '',
   rtsp_url: '',
   rtsp_username: '',
   rtsp_password: '',
@@ -77,6 +89,7 @@ export function CameraFormModal({
     if (editing) {
       setForm({
         name: editing.name,
+        model: (editing as any).model ?? '',
         rtsp_url: editing.rtsp_url,
         rtsp_username: editing.rtsp_username ?? '',
         rtsp_password: '', // never pre-fill password
@@ -95,12 +108,13 @@ export function CameraFormModal({
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSubmit = () => {
-    const data: CreateCameraRequest = {
+    const data: CreateCameraRequest & { model?: string } = {
       name: form.name,
       rtsp_url: form.rtsp_url,
       rtsp_username: form.rtsp_username || undefined,
       rtsp_password: form.rtsp_password || undefined,
       brand: form.brand || undefined,
+      model: form.model || undefined,
       access_point_id: form.access_point_id || undefined,
       recording_mode: form.recording_mode,
       pre_roll_sec: form.pre_roll_sec,
@@ -130,12 +144,27 @@ export function CameraFormModal({
         </div>
 
         <div>
+          <Label className="text-[12px]">{t('cctv.cameras.fields.model') || 'Camera Model'}</Label>
+          <select
+            className="mt-1 w-full h-8 rounded-md border border-border bg-background px-2 text-[13px]"
+            value={form.model}
+            onChange={(e) => set('model', e.target.value)}
+            data-testid="cctv-select-camera-model"
+          >
+            <option value="">-- Select model --</option>
+            {CAMERA_MODELS.map((m) => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
           <Label className="text-[12px]">{t('cctv.cameras.fields.rtspUrl')} *</Label>
           <Input
             className="mt-1 h-8 text-[13px] font-mono"
             value={form.rtsp_url}
             onChange={(e) => set('rtsp_url', e.target.value)}
-            placeholder="rtsp://192.168.1.100:554/stream"
+            placeholder={RTSP_PLACEHOLDERS[form.model] || 'rtsp://192.168.1.100:554/stream'}
             data-testid="cctv-input-rtsp-url"
           />
         </div>

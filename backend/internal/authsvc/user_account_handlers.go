@@ -17,9 +17,17 @@ import (
 
 // ─── User Account Models ─────────────────────────────────────────────────────
 
+// JSON wire format note: the user-accounts API exposes the column
+// dm3_auth.accounts.tenant_id as `company_id` because the console (and the
+// product surface in general) calls these "companies", not "tenants". The Go
+// field stays `TenantID` to match the DB column. Renaming the JSON tag back
+// to `tenant_id` will silently break the create/edit modals — last time it
+// happened (commit 5821cfa1, "rename companies table to tenants") new users
+// were inserted with NULL tenant_id and could not log in, returning
+// `auth.no_active_company` from /api/v1/auth/login. See [SA-01].
 type userAccountResponse struct {
 	ID        string            `json:"id"`
-	TenantID *string           `json:"tenant_id,omitempty"`
+	TenantID *string           `json:"company_id,omitempty"`
 	Email     string            `json:"email"`
 	Name      string            `json:"name"`
 	Roles     []string          `json:"roles"`
@@ -32,7 +40,7 @@ type userAccountResponse struct {
 }
 
 type userCompanyInfo struct {
-	TenantID   string `json:"tenant_id"`
+	TenantID    string `json:"company_id"`
 	CompanyName string `json:"company_name"`
 	CompanyCode string `json:"company_code"`
 	Role        string `json:"role"`
@@ -43,15 +51,15 @@ type createUserAccountRequest struct {
 	Email     string  `json:"email"`
 	Name      string  `json:"name"`
 	Role      string  `json:"role"`                // primary_manager, manager, operator, viewer
-	TenantID *string `json:"tenant_id,omitempty"` // null for system_admin
+	TenantID  *string `json:"company_id,omitempty"` // null for system_admin
 	SendEmail bool    `json:"send_email"`           // whether to send welcome email
 }
 
 type updateUserAccountRequest struct {
-	Name      *string `json:"name,omitempty"`
-	Role      *string `json:"role,omitempty"`
-	Status    *string `json:"status,omitempty"`
-	TenantID *string `json:"tenant_id,omitempty"`
+	Name     *string `json:"name,omitempty"`
+	Role     *string `json:"role,omitempty"`
+	Status   *string `json:"status,omitempty"`
+	TenantID *string `json:"company_id,omitempty"`
 }
 
 type createUserAccountResponse struct {

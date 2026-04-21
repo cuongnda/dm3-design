@@ -53,6 +53,9 @@ interface Device {
   id: string;
   name: string;
   type: string;
+  // Model is the canonical product SKU (df970, icu300n, lpr_desktop, ...).
+  // The Transmit Data dialog uses it to gate LPR-kiosk-only sync types.
+  model?: string;
   status: string;
   door_state?: string; // closed, open, held_open, forced, alarm
   location?: string;
@@ -649,6 +652,8 @@ export function DevicesPage() {
     person_sync: true,
     access_rules: true,
     blacklist: false,
+    visitor_sync: false,
+    kiosk_config: false,
   });
   const [transmitting, setTransmitting] = useState(false);
   const [transmitJobId, setTransmitJobId] = useState<string | null>(null);
@@ -659,7 +664,7 @@ export function DevicesPage() {
   const openTransmit = (device: Device) => {
     setTransmitDevice(device);
     setTransmitJobId(null);
-    setTransmitTypes({ config: true, person_sync: true, access_rules: true, blacklist: false });
+    setTransmitTypes({ config: true, person_sync: true, access_rules: true, blacklist: false, visitor_sync: false, kiosk_config: false });
   };
   const closeTransmit = () => {
     if (!transmitting) {
@@ -1203,7 +1208,15 @@ export function DevicesPage() {
               {t('devices.transmit.description')}
             </p>
             {(() => {
-              const keys = ['config', 'person_sync', 'access_rules', 'blacklist'];
+              // LPR kiosks (lpr_desktop) also receive visitor_sync and
+              // kiosk_config. Other device types don't speak the
+              // /register-visit HTTP flow, so hiding those checkboxes
+              // prevents operators from queueing a push that would just
+              // be dropped by the device.
+              const isLprKiosk = transmitDevice?.model === 'lpr_desktop';
+              const keys = isLprKiosk
+                ? ['config', 'person_sync', 'access_rules', 'blacklist', 'visitor_sync', 'kiosk_config']
+                : ['config', 'person_sync', 'access_rules', 'blacklist'];
               const allOn = keys.every((k) => transmitTypes[k]);
               return (
                 <button
@@ -1221,12 +1234,20 @@ export function DevicesPage() {
               );
             })()}
           </div>
-          {[
-            { key: 'config', label: t('devices.transmit.item.config.label'), desc: t('devices.transmit.item.config.desc') },
-            { key: 'person_sync', label: t('devices.transmit.item.person_sync.label'), desc: t('devices.transmit.item.person_sync.desc') },
-            { key: 'access_rules', label: t('devices.transmit.item.access_rules.label'), desc: t('devices.transmit.item.access_rules.desc') },
-            { key: 'blacklist', label: t('devices.transmit.item.blacklist.label'), desc: t('devices.transmit.item.blacklist.desc') },
-          ].map(({ key, label, desc }) => {
+          {(() => {
+            const isLprKiosk = transmitDevice?.model === 'lpr_desktop';
+            const base = [
+              { key: 'config', label: t('devices.transmit.item.config.label'), desc: t('devices.transmit.item.config.desc') },
+              { key: 'person_sync', label: t('devices.transmit.item.person_sync.label'), desc: t('devices.transmit.item.person_sync.desc') },
+              { key: 'access_rules', label: t('devices.transmit.item.access_rules.label'), desc: t('devices.transmit.item.access_rules.desc') },
+              { key: 'blacklist', label: t('devices.transmit.item.blacklist.label'), desc: t('devices.transmit.item.blacklist.desc') },
+            ];
+            const lprOnly = [
+              { key: 'visitor_sync', label: t('devices.transmit.item.visitor_sync.label'), desc: t('devices.transmit.item.visitor_sync.desc') },
+              { key: 'kiosk_config', label: t('devices.transmit.item.kiosk_config.label'), desc: t('devices.transmit.item.kiosk_config.desc') },
+            ];
+            return (isLprKiosk ? [...base, ...lprOnly] : base);
+          })().map(({ key, label, desc }) => {
             const stat = transmitJob?.per_type?.[key];
             const checked = !!transmitTypes[key];
             // Progress reflects max(published, acked). Firmware that doesn't

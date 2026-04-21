@@ -41,14 +41,14 @@ dm3/
 ├── packages/           # Shared frontend packages
 │   ├── ui/             # @dm3/ui — shadcn/ui components + custom
 │   └── api-client/     # @dm3/api-client — OpenAPI client + WebSocket + Zustand store
-├── backend/            # 🔧 Go monorepo — 5 services (auth, identity, access, device-gateway, audit)
+├── backend/            # 🔧 Go monorepo — 9 services (auth, identity, access, device-gateway, audit, visitor, parking, cctv, attend)
 └── diagrams/           # 📊 Architecture diagrams (draw.io)
 ```
 
 ## Tech Stack
 - **Frontend**: Vite + React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui + React Router v7 + Zustand 5 + TanStack Query 5 + i18next
-- **Backend**: Go 1.22 — 5 services (auth-svc :8005, identity-svc :8004, access-svc :8003, device-gateway :8002, audit-svc :8001)
-- **Database**: TimescaleDB :5433 (`dm3` db, schemas: dm3_auth, dm3_devices, dm3_access, dm3_identity, dm3_audit, dm3_operate)
+- **Backend**: Go 1.22 — 9 services (auth-svc :8005, identity-svc :8004, access-svc :8003, device-gateway :8002, audit-svc :8001, visitor-svc :8006, parking-svc :8007, cctv-svc :8008, attend-svc :8010)
+- **Database**: TimescaleDB :5433 (`dm3` db, schemas: dm3_auth, dm3_devices, dm3_access, dm3_identity, dm3_visitor, dm3_parking, dm3_cctv, dm3_attendance, dm3_audit)
 - **Messaging**: NATS JetStream :4222, EMQX MQTT :1884
 - **Mobile** (planned): Flutter
 - **IoT Protocol**: MQTT 5.0 via EMQX (offline-first, see docs/architecture/mqtt-protocol.md)

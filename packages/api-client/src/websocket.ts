@@ -1,4 +1,4 @@
-import { getToken } from './client';
+import { getToken, subscribeToken } from './client';
 
 // WebSocket Event Types that match the backend WSEvent struct
 export interface WSEvent {
@@ -135,6 +135,8 @@ export class WebSocketClient {
   private seenMessageIds = new Set<string>();
   private messageQueue: WSEvent[] = [];
   private options: WSConnectionOptions;
+  private unsubscribeToken?: () => void;
+  private currentToken: string | null = null;
 
   constructor(options: WSConnectionOptions = {}) {
     this.options = {
@@ -143,6 +145,27 @@ export class WebSocketClient {
       reconnectInterval: 5000, // Start with 5 seconds
       ...options,
     };
+
+    // Subscribe to token changes so a background refresh triggers a reconnect
+    // with the fresh token — avoids the "stale WS loops while HTTP already
+    // refreshed" race the user hit after tab-idle.
+    this.currentToken = getToken();
+    this.unsubscribeToken = subscribeToken((next) => {
+      if (next === this.currentToken) return;
+      this.currentToken = next;
+      if (!next) {
+        // Token cleared (logout / refresh failed). Stop trying.
+        this.options.autoReconnect = false;
+        this.clearReconnectTimeout();
+        if (this.ws) {
+          this.ws.close();
+          this.ws = null;
+        }
+        return;
+      }
+      // Fresh token: close current socket so reconnect uses the new one.
+      this.onTokenRefresh();
+    });
   }
 
   connect(): Promise<void> {
@@ -232,7 +255,12 @@ export class WebSocketClient {
     this.options.autoReconnect = false;
     this.clearReconnectTimeout();
     this.stopHeartbeat();
-    
+
+    if (this.unsubscribeToken) {
+      this.unsubscribeToken();
+      this.unsubscribeToken = undefined;
+    }
+
     if (this.ws) {
       this.ws.close();
       this.ws = null;

@@ -133,10 +133,12 @@ func main() {
 
 	objectStore, err := objectstore.NewMinIOStore(ctx, objectstore.Config{
 		Endpoint:         cfg.ObjectStoreEndpoint,
+		PublicEndpoint:   cfg.ObjectStorePublicEndpoint,
 		AccessKeyID:      cfg.ObjectStoreAccessKeyID,
 		SecretAccessKey:  cfg.ObjectStoreSecretAccessKey,
 		Bucket:           cfg.ObjectStoreBucket,
 		UseSSL:           cfg.ObjectStoreUseSSL,
+		PublicUseSSL:     cfg.ObjectStorePublicUseSSL,
 		AutoCreateBucket: cfg.ObjectStoreAutoCreateBucket,
 	})
 	if err != nil {
@@ -175,9 +177,10 @@ func main() {
 		r.Use(authsvc.AuthMiddleware(cfg.JWTSecret))
 		r.Use(authsvc.RequireCompany())
 
-		// Zones
+		// Zones: reads open, writes require access.point.manage
+		// (zones are the containers for access points).
 		r.Group(func(zr chi.Router) {
-			zr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			zr.Use(authsvc.RequireWritePermission("access.point.manage"))
 			zr.Get("/zones", handlers.ListZones)
 			zr.Post("/zones", handlers.CreateZone)
 			zr.Post("/zones/bulk-delete", handlers.BulkDeleteZones)
@@ -190,9 +193,9 @@ func main() {
 			zr.Post("/zones/{id}/map/upload", handlers.UploadZoneMap)
 		})
 
-		// Access Points
+		// Access Points: reads open, writes require access.point.manage
 		r.Group(func(apr chi.Router) {
-			apr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			apr.Use(authsvc.RequireWritePermission("access.point.manage"))
 			apr.Get("/access-points", handlers.ListAccessPoints)
 			apr.Post("/access-points", handlers.CreateAccessPoint)
 			apr.Post("/access-points/bulk-delete", handlers.BulkDeleteAccessPoints)
@@ -207,9 +210,10 @@ func main() {
 			apr.Delete("/access-points/{id}/access-groups/{groupId}", handlers.RemoveAccessPointGroup)
 		})
 
-		// Access Devices
+		// Access Devices: reads open, writes require access.point.manage
+		// (access devices are sub-resources of access points).
 		r.Group(func(dr chi.Router) {
-			dr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			dr.Use(authsvc.RequireWritePermission("access.point.manage"))
 			dr.Get("/access-devices", handlers.ListAccessDevices)
 			dr.Post("/access-devices", handlers.CreateAccessDevice)
 			dr.Post("/access-devices/bulk-delete", handlers.BulkDeleteAccessDevices)
@@ -219,9 +223,10 @@ func main() {
 			dr.Get("/access-devices/{id}/sync-package", handlers.GetSyncPackage)
 		})
 
-		// Access Groups
+		// Access Groups: reads open, writes require access.rule.manage
+		// (access groups are the policy layer that pairs users/rules/doors).
 		r.Group(func(agr chi.Router) {
-			agr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			agr.Use(authsvc.RequireWritePermission("access.rule.manage"))
 			agr.Get("/access-groups", handlers.ListAccessGroups)
 			agr.Post("/access-groups", handlers.CreateAccessGroup)
 			agr.Post("/access-groups/bulk-delete", handlers.BulkDeleteAccessGroups)
@@ -239,9 +244,9 @@ func main() {
 			agr.Delete("/access-groups/{id}/users/{userId}", handlers.RemoveUserFromGroup)
 		})
 
-		// Access Times
+		// Access Times: reads open, writes require access.rule.manage
 		r.Group(func(atr chi.Router) {
-			atr.Use(authsvc.RequireWriteRole("primary_manager", "manager", "system_admin"))
+			atr.Use(authsvc.RequireWritePermission("access.rule.manage"))
 			atr.Get("/access-times", handlers.ListAccessTimeTemplates)
 			atr.Post("/access-times", handlers.CreateAccessTimeTemplate)
 			atr.Post("/access-times/bulk-delete", handlers.BulkDeleteAccessTimes)
@@ -257,15 +262,26 @@ func main() {
 		// Dashboard stats: all roles can read
 		r.Get("/stats", handlers.GetStats)
 
-		// Emergency plans & incidents
-		r.Get("/emergency/plans", handlers.ListEmergencyPlans)
-		r.Post("/emergency/plans", handlers.CreateEmergencyPlan)
-		r.Put("/emergency/plans/{id}", handlers.UpdateEmergencyPlan)
-		r.Delete("/emergency/plans/{id}", handlers.DeleteEmergencyPlan)
-		r.Post("/emergency/activate", handlers.ActivateEmergency)
-		r.Post("/emergency/incidents/{id}/all-clear", handlers.AllClearEmergency)
-		r.Get("/emergency/incidents", handlers.ListEmergencyIncidents)
-		r.Get("/emergency/incidents/active", handlers.ListActiveEmergencies)
+		// Emergency plans: reads open, writes require access.emergency.manage
+		r.Group(func(er chi.Router) {
+			er.Use(authsvc.RequireWritePermission("access.emergency.manage"))
+			er.Get("/emergency/plans", handlers.ListEmergencyPlans)
+			er.Get("/emergency/plans/{id}", handlers.GetEmergencyPlan)
+			er.Post("/emergency/plans", handlers.CreateEmergencyPlan)
+			er.Put("/emergency/plans/{id}", handlers.UpdateEmergencyPlan)
+			er.Delete("/emergency/plans/{id}", handlers.DeleteEmergencyPlan)
+			er.Get("/emergency/incidents", handlers.ListEmergencyIncidents)
+			er.Get("/emergency/incidents/active", handlers.ListActiveEmergencies)
+		})
+
+		// Emergency execution: requires access.emergency.execute (always checked).
+		// RequirePermission (not RequireWritePermission) so even the read-pass-through
+		// loophole cannot bypass the check on these action endpoints.
+		r.Group(func(ex chi.Router) {
+			ex.Use(authsvc.RequirePermission("access.emergency.execute"))
+			ex.Post("/emergency/activate", handlers.ActivateEmergency)
+			ex.Post("/emergency/incidents/{id}/all-clear", handlers.AllClearEmergency)
+		})
 	})
 
 	// Start server

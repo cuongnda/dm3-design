@@ -9,6 +9,27 @@ const IDENTITY_URL = '/api/v1/identity';
 
 // ─── Token management ───────────────────────────────────────
 
+type TokenListener = (token: string | null) => void;
+const _tokenListeners = new Set<TokenListener>();
+
+/** Subscribe to token changes (set / clear). Returns an unsubscribe fn. */
+export function subscribeToken(listener: TokenListener): () => void {
+    _tokenListeners.add(listener);
+    return () => {
+        _tokenListeners.delete(listener);
+    };
+}
+
+function notifyTokenListeners(token: string | null) {
+    _tokenListeners.forEach((fn) => {
+        try {
+            fn(token);
+        } catch {
+            /* listener errors must not break auth flow */
+        }
+    });
+}
+
 export function getToken(): string | null {
     return localStorage.getItem('dm3-token');
 }
@@ -16,11 +37,116 @@ export function getToken(): string | null {
 export function setToken(token: string, refresh?: string) {
     localStorage.setItem('dm3-token', token);
     if (refresh) localStorage.setItem('dm3-refresh', refresh);
+    scheduleProactiveRefresh(token);
+    notifyTokenListeners(token);
 }
 
 export function clearToken() {
     localStorage.removeItem('dm3-token');
     localStorage.removeItem('dm3-refresh');
+    cancelProactiveRefresh();
+    notifyTokenListeners(null);
+}
+
+// ─── Proactive refresh ──────────────────────────────────────
+// Background silent refresh avoids the "click menu → 401 → error" experience.
+// Strategy:
+//  1. On every setToken(), decode JWT `exp` and schedule a setTimeout at
+//     (exp − 60s) that calls tryRefreshToken().
+//  2. On visibilitychange → visible, if token is already expired or
+//     near-expiry, refresh synchronously before any query fires.
+
+const REFRESH_SAFETY_MARGIN_S = 60;
+
+let _refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+function decodeExpSeconds(token: string): number | null {
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1] ?? ''));
+        const exp = (payload as { exp?: number }).exp;
+        return typeof exp === 'number' ? exp : null;
+    } catch {
+        return null;
+    }
+}
+
+function cancelProactiveRefresh() {
+    if (_refreshTimer) {
+        clearTimeout(_refreshTimer);
+        _refreshTimer = null;
+    }
+}
+
+function scheduleProactiveRefresh(token: string) {
+    cancelProactiveRefresh();
+    const exp = decodeExpSeconds(token);
+    if (exp === null) return;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const refreshInSec = exp - nowSec - REFRESH_SAFETY_MARGIN_S;
+    if (refreshInSec <= 0) {
+        // Already near/past expiry — refresh on next tick.
+        _refreshTimer = setTimeout(() => {
+            void proactiveRefresh();
+        }, 0);
+        return;
+    }
+    // Cap to ~24h to avoid 32-bit overflow on weird tokens.
+    const delayMs = Math.min(refreshInSec * 1000, 24 * 60 * 60 * 1000);
+    _refreshTimer = setTimeout(() => {
+        void proactiveRefresh();
+    }, delayMs);
+}
+
+async function proactiveRefresh() {
+    // Reuse single-flight dedup with reactive path.
+    if (!_refreshing)
+        _refreshing = tryRefreshToken().finally(() => {
+            _refreshing = null;
+        });
+    await _refreshing;
+}
+
+/**
+ * Register app-level listeners that keep the token fresh while the tab is
+ * open. Call once at bootstrap.
+ */
+export function setupAuthLifecycle() {
+    if (typeof window === 'undefined') return;
+    // Reschedule timer on fresh bootstrap (page load / hard reload).
+    const existing = getToken();
+    if (existing) scheduleProactiveRefresh(existing);
+
+    // When the tab becomes visible again after being idle, the setTimeout
+    // may not have fired reliably (browsers throttle background timers).
+    // Refresh eagerly if the token is close to expiry.
+    const onVisible = () => {
+        if (document.visibilityState !== 'visible') return;
+        const tok = getToken();
+        if (!tok) return;
+        const exp = decodeExpSeconds(tok);
+        if (exp === null) return;
+        const nowSec = Math.floor(Date.now() / 1000);
+        if (exp - nowSec <= REFRESH_SAFETY_MARGIN_S) {
+            void proactiveRefresh();
+        } else {
+            // Still valid but previous timer may have been suspended — reschedule.
+            scheduleProactiveRefresh(tok);
+        }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    // Cross-tab: if another tab refreshed the token, pick it up here.
+    window.addEventListener('storage', (e) => {
+        if (e.key !== 'dm3-token') return;
+        const next = e.newValue;
+        if (next) {
+            scheduleProactiveRefresh(next);
+            notifyTokenListeners(next);
+        } else {
+            cancelProactiveRefresh();
+            notifyTokenListeners(null);
+        }
+    });
 }
 
 // ─── Fetch wrapper ──────────────────────────────────────────
@@ -206,6 +332,12 @@ export interface Paginated<T> {
     limit: number;
 }
 
+export interface HourlyBucket {
+    hour: number;
+    granted: number;
+    denied: number;
+}
+
 export interface StatsDTO {
     doors_online: number;
     doors_offline: number;
@@ -214,6 +346,12 @@ export interface StatsDTO {
     events_today: number;
     granted_today: number;
     denied_today: number;
+    on_site_count: number;
+    entries_last_hour: number;
+    denies_last_hour: number;
+    peak_hour_label: string;
+    peak_hour_count: number;
+    hourly: HourlyBucket[];
     recent_events: EventDTO[];
 }
 
@@ -376,6 +514,11 @@ export interface EmergencyPlanDTO {
     updated_at: string;
 }
 
+export interface EmergencyIncidentAccessPoint {
+    id: string;
+    name: string;
+}
+
 export interface EmergencyIncidentDTO {
     id: string;
     plan_id: string;
@@ -389,6 +532,7 @@ export interface EmergencyIncidentDTO {
     duration_seconds?: number;
     target_summary: string;
     notes: string;
+    access_points?: EmergencyIncidentAccessPoint[];
 }
 
 export interface ActivateEmergencyResponse {
@@ -951,8 +1095,25 @@ export async function fetchSystemStats(): Promise<SystemStatsDTO> {
 // ─── Companies ──────────────────────────────────────────────
 
 export async function fetchCompanies(): Promise<CompanyDTO[]> {
-    const res = await apiFetch<{ data: CompanyDTO[] } | CompanyDTO[]>(`${AUTH_SYSTEM_URL}/companies`);
-    return Array.isArray(res) ? res : res.data;
+    // Backend caps `limit` at 100 and the companies list is the whole tenant
+    // registry (system-admin view), so walk every page until exhausted.
+    // Client-side search/sort in CompanyListPage depends on having the full set.
+    const limit = 100;
+    const all: CompanyDTO[] = [];
+    for (let page = 1; page <= 100; page++) {
+        const res = await apiFetch<{ data: CompanyDTO[]; total?: number } | CompanyDTO[]>(
+            `${AUTH_SYSTEM_URL}/companies?page=${page}&limit=${limit}`,
+        );
+        if (Array.isArray(res)) {
+            all.push(...res);
+            if (res.length < limit) break;
+        } else {
+            all.push(...res.data);
+            const total = typeof res.total === 'number' ? res.total : all.length;
+            if (all.length >= total || res.data.length < limit) break;
+        }
+    }
+    return all;
 }
 
 export async function fetchCompany(id: string): Promise<CompanyDTO> {
@@ -1590,4 +1751,137 @@ export async function acknowledgeNotification(id: string): Promise<NotificationD
 
 export async function deleteNotification(id: string): Promise<void> {
     return apiFetch<void>(`${NOTIFY_URL}/${id}`, { method: 'DELETE' });
+}
+
+// ─── RBAC — company roles, permissions, assignments ──────────────────────────
+
+const RBAC_URL = '/api/v1/rbac';
+
+export interface RbacPermissionDTO {
+    key: string;
+    domain: string;
+    resource?: string;
+    action: string;
+    plugin: string;
+    scope_types: string[];
+    description?: string;
+}
+
+export interface RbacRoleDTO {
+    id: string;
+    tenant_id: string;
+    name: string;
+    description?: string;
+    template_key?: string;
+    is_system_template_copy: boolean;
+    status: string;
+    permissions: string[];
+    assignment_count: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface RbacRoleWriteRequest {
+    name: string;
+    description?: string;
+    template_key?: string;
+    permissions: string[];
+    status?: string;
+}
+
+export interface RbacAssignmentDTO {
+    id: string;
+    account_id: string;
+    account_email?: string;
+    role_id: string;
+    role_name?: string;
+    scope_type: 'company' | 'site' | 'department' | 'zone' | 'self';
+    scope_id?: string | null;
+    effective_from?: string | null;
+    effective_to?: string | null;
+    created_at: string;
+}
+
+export interface RbacAssignmentCreateRequest {
+    account_id: string;
+    role_id: string;
+    scope_type: 'company' | 'site' | 'department' | 'zone' | 'self';
+    scope_id?: string | null;
+    effective_from?: string | null;
+    effective_to?: string | null;
+}
+
+export interface RbacEligibleAccountDTO {
+    id: string;
+    email: string;
+    full_name: string;
+    role: string;
+    status: string;
+}
+
+function rbacTenantQuery(tenantId?: string): string {
+    return tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : '';
+}
+
+export async function listRbacPermissions(): Promise<RbacPermissionDTO[]> {
+    const res = await apiFetch<{ data: RbacPermissionDTO[] }>(`${RBAC_URL}/permissions`);
+    return res.data;
+}
+
+export async function listRbacEligibleAccounts(tenantId?: string): Promise<RbacEligibleAccountDTO[]> {
+    const res = await apiFetch<{ data: RbacEligibleAccountDTO[] }>(`${RBAC_URL}/accounts${rbacTenantQuery(tenantId)}`);
+    return res.data;
+}
+
+export async function listRbacRoles(tenantId?: string): Promise<RbacRoleDTO[]> {
+    const res = await apiFetch<{ data: RbacRoleDTO[] }>(`${RBAC_URL}/roles${rbacTenantQuery(tenantId)}`);
+    return res.data;
+}
+
+export async function getRbacRole(id: string, tenantId?: string): Promise<RbacRoleDTO> {
+    return apiFetch<RbacRoleDTO>(`${RBAC_URL}/roles/${id}${rbacTenantQuery(tenantId)}`);
+}
+
+export async function createRbacRole(payload: RbacRoleWriteRequest, tenantId?: string): Promise<{ id: string }> {
+    return apiFetch<{ id: string }>(`${RBAC_URL}/roles${rbacTenantQuery(tenantId)}`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function updateRbacRole(id: string, payload: RbacRoleWriteRequest, tenantId?: string): Promise<{ id: string }> {
+    return apiFetch<{ id: string }>(`${RBAC_URL}/roles/${id}${rbacTenantQuery(tenantId)}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function deleteRbacRole(id: string, tenantId?: string): Promise<void> {
+    return apiFetch<void>(`${RBAC_URL}/roles/${id}${rbacTenantQuery(tenantId)}`, { method: 'DELETE' });
+}
+
+export async function listRbacAssignments(params?: {
+    accountId?: string;
+    roleId?: string;
+    tenantId?: string;
+}): Promise<RbacAssignmentDTO[]> {
+    const q = new URLSearchParams();
+    if (params?.accountId) q.set('account_id', params.accountId);
+    if (params?.roleId) q.set('role_id', params.roleId);
+    if (params?.tenantId) q.set('tenant_id', params.tenantId);
+    const qs = q.toString();
+    const url = `${RBAC_URL}/assignments${qs ? `?${qs}` : ''}`;
+    const res = await apiFetch<{ data: RbacAssignmentDTO[] }>(url);
+    return res.data;
+}
+
+export async function createRbacAssignment(payload: RbacAssignmentCreateRequest, tenantId?: string): Promise<{ id: string }> {
+    return apiFetch<{ id: string }>(`${RBAC_URL}/assignments${rbacTenantQuery(tenantId)}`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function deleteRbacAssignment(id: string, tenantId?: string): Promise<void> {
+    return apiFetch<void>(`${RBAC_URL}/assignments/${id}${rbacTenantQuery(tenantId)}`, { method: 'DELETE' });
 }

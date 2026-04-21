@@ -1,0 +1,153 @@
+# Middleware catalog.
+#
+# Rate-limit values are per-IP. Traefik's rateLimit middleware uses a token
+# bucket: `average` is the steady-state rate (req/sec after the burst is
+# exhausted), `burst` is the initial bucket size. `period` defaults to 1s.
+# We set period to 60s so the numbers read as req/min — matches nginx.
+#
+# Chain order (applied left-to-right by router):
+#   secure-headers → request-id → cors → <rate-limit> → <apikey?> → service
+
+http:
+  middlewares:
+    # ── Rate limiters ────────────────────────────────────────────────────────
+
+    # Auth endpoints (login, token refresh, RBAC lookups) — tight.
+    # ~20 req/min/IP, burst 10. Covers brute-force against /login + /token.
+    ratelimit-auth:
+      rateLimit:
+        average: 20
+        period: 60s
+        burst: 10
+        sourceCriterion:
+          ipStrategy:
+            depth: 1  # trust one X-Forwarded-For hop (from nginx)
+
+    # Standard CRUD surface — generous.
+    # 120 req/min/IP, burst 60.
+    ratelimit-standard:
+      rateLimit:
+        average: 120
+        period: 60s
+        burst: 60
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # Read-heavy surface (audit, cctv listings) — moderate.
+    # 60 req/min/IP, burst 30.
+    ratelimit-reads:
+      rateLimit:
+        average: 60
+        period: 60s
+        burst: 30
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # CCTV test-connection — severe (credential-probe abuse vector).
+    # 6 req/min/IP, burst 3. Matches legacy nginx `limit_req_zone cctv_test`.
+    ratelimit-cctv-test:
+      rateLimit:
+        average: 6
+        period: 60s
+        burst: 3
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # Public API (third-party integration plane) — strict per-IP baseline.
+    # Real per-client limits will be enforced at the API-key layer once
+    # Option 1 (OAuth2 / API tokens) lands. For now, IP-only caps abuse.
+    ratelimit-public:
+      rateLimit:
+        average: 60
+        period: 60s
+        burst: 30
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # ── Security headers ─────────────────────────────────────────────────────
+    #
+    # STS is enabled at 1 year once TLS termination lives on Traefik. Today
+    # nginx terminates TLS, so we leave STS to nginx and only set the
+    # policy headers here.
+    secure-headers:
+      headers:
+        contentTypeNosniff: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        frameDeny: true
+        customResponseHeaders:
+          X-XSS-Protection: "0"  # CSP is the modern control; X-XSS-Protection is deprecated
+        permissionsPolicy: "camera=(), microphone=(), geolocation=()"
+
+    # ── Request ID propagation ───────────────────────────────────────────────
+    # If nginx already injected X-Request-ID, pass through. Otherwise Traefik
+    # generates one via the default `TraefikReqID` mechanism. Services should
+    # log whichever value arrives.
+    request-id:
+      headers:
+        customRequestHeaders:
+          # Traefik does not auto-generate request IDs; downstream services
+          # (shared middleware) already fall back to uuid if absent.
+          X-Gateway: "traefik"
+
+    # ── CORS ─────────────────────────────────────────────────────────────────
+    # Local-dev permissive list — mirrors nginx $cors_allow_origin map.
+    # In prod this tightens to the real Console origin(s).
+    cors:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Authorization
+          - Content-Type
+          - X-Company-ID
+          - X-Request-ID
+          - X-API-Key
+        accessControlAllowOriginListRegex:
+          - "^https?://localhost(:[0-9]+)?$"
+          - "^https?://127\\.0\\.0\\.1(:[0-9]+)?$"
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 600
+        addVaryHeader: true
+
+    # ── API-key gate (stub until OAuth2 lands) ──────────────────────────────
+    #
+    # forwardAuth calls auth-svc `/api/v1/auth/validate-api-key`. That
+    # endpoint does NOT exist yet — it returns 404 today, which Traefik
+    # treats as "deny" and the gateway responds with 401. That is the
+    # desired behaviour for the /api/v1/public/* plane until the OAuth2
+    # migration (Option 1) ships the endpoint.
+    #
+    # Once live, auth-svc will:
+    #   - look up the X-API-Key hash in oauth_api_tokens
+    #   - check scope against the request path
+    #   - emit X-Tenant-ID, X-Client-ID headers for downstream services
+    apikey-forwardauth:
+      forwardAuth:
+        address: "http://auth-svc:8005/api/v1/auth/validate-api-key"
+        trustForwardHeader: true
+        authRequestHeaders:
+          - X-API-Key
+          - X-Request-ID
+          - X-Forwarded-For
+        authResponseHeaders:
+          - X-Tenant-ID
+          - X-Client-ID
+          - X-Scope
+
+    # ── Strip /api/v1/public prefix before forwarding ────────────────────────
+    # Public routes share the same backend paths as the authenticated ones;
+    # the only difference is the auth plane. Strip `/api/v1/public` to
+    # avoid doubling up (e.g. /api/v1/public/identity/users → /api/v1/identity/users).
+    strip-public-prefix:
+      replacePathRegex:
+        regex: "^/api/v1/public(/.*)$"
+        replacement: "/api/v1${1}"

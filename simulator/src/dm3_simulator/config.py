@@ -63,6 +63,7 @@ def load_config(
         "DM3_EVENT_RATE": ("event_rate", float),
         "DM3_LOG_LEVEL": ("log_level", str),
         "DM3_API_PORT": ("api_port", int),
+        "DM3_GATEWAY_URL": ("gateway_url", str),
     }
     for env_key, (field, cast) in env_map.items():
         val = os.environ.get(env_key)
