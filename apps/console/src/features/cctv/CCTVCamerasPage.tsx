@@ -85,6 +85,9 @@ export function CCTVCamerasPage() {
       qc.invalidateQueries({ queryKey: ['cctv-cameras-all'] });
       closeModal();
     },
+    onError: (err: Error) => {
+      toast(err.message?.replace(/^API \d+: /, '') || 'Failed to create camera', 'error');
+    },
   });
 
   const updateMutation = useMutation({
@@ -93,6 +96,9 @@ export function CCTVCamerasPage() {
       qc.invalidateQueries({ queryKey: ['cctv-cameras'] });
       qc.invalidateQueries({ queryKey: ['cctv-cameras-all'] });
       closeModal();
+    },
+    onError: (err: Error) => {
+      toast(err.message?.replace(/^API \d+: /, '') || 'Failed to update camera', 'error');
     },
   });
 

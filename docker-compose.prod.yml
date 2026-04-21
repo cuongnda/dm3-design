@@ -365,6 +365,9 @@ services:
       MTX_HLSADDRESS: ":8888"
       MTX_HLSVARIANT: "lowLatency"
       MTX_RTSPADDRESS: ":8554"
+      # Advertise the server's public IP as ICE candidate so browsers can
+      # reach WebRTC from outside Docker bridge network.
+      MTX_WEBRTCADDITIONALHOSTS: ${MEDIAMTX_PUBLIC_IP:-}
     networks:
       - dm3-internal
     # mediamtx image is distroless (no wget/curl). We rely on the service
@@ -387,8 +390,9 @@ services:
       MEDIAMTX_API_URL: "http://mediamtx:9997"
       MEDIAMTX_API_USER: ${MEDIAMTX_API_USER:-}
       MEDIAMTX_API_PASS: ${MEDIAMTX_API_PASS:-}
-      MEDIAMTX_WHEP_BASE: ${MEDIAMTX_WHEP_BASE:-https://dm3-cctv.demasterpro.com}
-      MEDIAMTX_HLS_BASE: ${MEDIAMTX_HLS_BASE:-https://dm3-cctv.demasterpro.com}
+      MEDIAMTX_WHEP_BASE: ${MEDIAMTX_WHEP_BASE:-/cctv/whep}
+      MEDIAMTX_HLS_BASE: ${MEDIAMTX_HLS_BASE:-/cctv/hls}
+      CCTV_ALLOW_PRIVATE_RTSP: "true"
       # Object store for CCTV clips (S3-compatible MinIO).
       OBJECT_STORE_ENDPOINT: minio:9000
       OBJECT_STORE_ACCESS_KEY: ${MINIO_ROOT_USER:-dm3admin}

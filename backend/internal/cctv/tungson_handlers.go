@@ -337,7 +337,7 @@ func (h *TungSonHandlers) HandleExtendFaceList(w http.ResponseWriter, r *http.Re
 		var firstName, deptName string
 		var avatarURL *string
 		err := h.db.Pool.QueryRow(ctx,
-			`SELECT COALESCE(u.first_name,''), COALESCE(d.name,''), u.avatar_url
+			`SELECT COALESCE(u.first_name,''), COALESCE(d.name,''), u.avatar
 			 FROM dm3_identity.users u
 			 LEFT JOIN dm3_identity.departments d ON d.id = u.department_id
 			 WHERE u.id = $1::uuid AND u.tenant_id = $2::uuid`,

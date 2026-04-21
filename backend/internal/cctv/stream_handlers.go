@@ -119,8 +119,14 @@ func proxyStreamRequest(w http.ResponseWriter, r *http.Request, targetURL string
 		return
 	}
 
-	// Copy relevant headers
-	proxyReq.Header.Set("Content-Type", r.Header.Get("Content-Type"))
+	// Copy all request headers (Content-Type, Accept, If-Match, etc.)
+	for k, vs := range r.Header {
+		for _, v := range vs {
+			proxyReq.Header.Add(k, v)
+		}
+	}
+	// Override auth with stream credentials
+	proxyReq.Header.Del("Authorization")
 	if streamUser != "" {
 		proxyReq.SetBasicAuth(streamUser, streamPass)
 	}

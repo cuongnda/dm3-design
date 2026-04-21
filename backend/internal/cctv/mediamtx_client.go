@@ -52,8 +52,9 @@ type mediamtxPathBody struct {
 	SourceOnDemand bool   `json:"sourceOnDemand"`
 }
 
-// UpsertPath creates or replaces a path configuration on MediaMTX.
-// Uses POST /v3/config/paths/add/{name} — MediaMTX replaces if it exists.
+// UpsertPath creates or updates a path configuration on MediaMTX.
+// Tries POST /v3/config/paths/add/{name} first; if path already exists (400),
+// falls back to PATCH /v3/config/paths/patch/{name}.
 func (c *HTTPMediaMTXClient) UpsertPath(ctx context.Context, name string, cfg PathConfig) error {
 	body, err := json.Marshal(mediamtxPathBody{
 		Source:         cfg.Source,
@@ -63,24 +64,46 @@ func (c *HTTPMediaMTXClient) UpsertPath(ctx context.Context, name string, cfg Pa
 		return fmt.Errorf("mediamtx: marshal path config: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/v3/config/paths/add/%s", c.baseURL, name)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	// Try add first
+	addURL := fmt.Sprintf("%s/v3/config/paths/add/%s", c.baseURL, name)
+	addReq, err := http.NewRequestWithContext(ctx, http.MethodPost, addURL, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("mediamtx: create request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	addReq.Header.Set("Content-Type", "application/json")
 	if c.user != "" {
-		req.SetBasicAuth(c.user, c.pass)
+		addReq.SetBasicAuth(c.user, c.pass)
 	}
 
-	resp, err := c.client.Do(req)
+	resp, err := c.client.Do(addReq)
 	if err != nil {
 		return fmt.Errorf("mediamtx: upsert path %q: %w", name, err)
 	}
-	defer resp.Body.Close()
+	resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("mediamtx: upsert path %q returned status %d", name, resp.StatusCode)
+	if resp.StatusCode < 400 {
+		return nil // Created successfully
+	}
+
+	// Path exists — update via PATCH
+	patchURL := fmt.Sprintf("%s/v3/config/paths/patch/%s", c.baseURL, name)
+	patchReq, err := http.NewRequestWithContext(ctx, http.MethodPatch, patchURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("mediamtx: create patch request: %w", err)
+	}
+	patchReq.Header.Set("Content-Type", "application/json")
+	if c.user != "" {
+		patchReq.SetBasicAuth(c.user, c.pass)
+	}
+
+	resp2, err := c.client.Do(patchReq)
+	if err != nil {
+		return fmt.Errorf("mediamtx: patch path %q: %w", name, err)
+	}
+	defer resp2.Body.Close()
+
+	if resp2.StatusCode >= 400 {
+		return fmt.Errorf("mediamtx: patch path %q returned status %d", name, resp2.StatusCode)
 	}
 	return nil
 }
