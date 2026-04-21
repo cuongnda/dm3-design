@@ -38,6 +38,8 @@ export const MODEL_CAPABILITIES: Record<string, VerifyMethodValue[]> = {
   // Camera — face only
   camera_dc:     ['face'],
   cctv:          ['face'],
+  tungson:       ['face'],
+  tbvision:      ['face', 'plate_number'],
   // Sensor / Reader — none
   door_sensor:   [],
   de960:         [],
@@ -72,6 +74,8 @@ export const DEVICE_TYPE_MODELS: Record<string, { value: string; label: string }
   camera: [
     { value: 'camera_dc', label: 'DC-300' },
     { value: 'cctv', label: 'CCTV' },
+    { value: 'tungson', label: 'TungSon' },
+    { value: 'tbvision', label: 'TBVision' },
   ],
   sensor: [
     { value: 'door_sensor', label: 'Door Sensor' },

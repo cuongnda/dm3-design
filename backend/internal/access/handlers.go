@@ -797,10 +797,56 @@ func (h *AccessHandlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='offline' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesOffline)
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='warning' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesWarning)
 
-	today := time.Now().Truncate(24 * time.Hour)
+	now := time.Now()
+	today := now.Truncate(24 * time.Hour)
+	hourAgo := now.Add(-1 * time.Hour)
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND tenant_id = $2::uuid`, today, cid).Scan(&stats.EventsToday)
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='granted' AND tenant_id = $2::uuid`, today, cid).Scan(&stats.GrantedToday)
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='denied' AND tenant_id = $2::uuid`, today, cid).Scan(&stats.DeniedToday)
+
+	// On-site count: today's ingress minus egress, granted only.
+	_ = h.db.Pool.QueryRow(r.Context(), `
+		SELECT
+			COUNT(*) FILTER (WHERE direction = 'in')
+			- COUNT(*) FILTER (WHERE direction = 'out')
+		FROM dm3_access.access_events
+		WHERE time >= $1 AND decision = 'granted' AND tenant_id = $2::uuid`,
+		today, cid).Scan(&stats.OnSiteCount)
+	if stats.OnSiteCount < 0 {
+		stats.OnSiteCount = 0
+	}
+
+	// Activity in the last hour.
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='granted' AND tenant_id = $2::uuid`, hourAgo, cid).Scan(&stats.EntriesLastHour)
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='denied' AND tenant_id = $2::uuid`, hourAgo, cid).Scan(&stats.DeniesLastHour)
+
+	// Hourly buckets for today (0..current hour).
+	stats.Hourly = make([]models.HourlyBucket, 24)
+	for i := 0; i < 24; i++ {
+		stats.Hourly[i] = models.HourlyBucket{Hour: i}
+	}
+	hourlyRows, err := h.db.Pool.Query(r.Context(), `
+		SELECT EXTRACT(HOUR FROM time)::int AS h,
+			COUNT(*) FILTER (WHERE decision='granted') AS g,
+			COUNT(*) FILTER (WHERE decision='denied') AS d
+		FROM dm3_access.access_events
+		WHERE time >= $1 AND tenant_id = $2::uuid
+		GROUP BY h ORDER BY h`, today, cid)
+	if err == nil {
+		defer hourlyRows.Close()
+		for hourlyRows.Next() {
+			var h, g, d int
+			if err := hourlyRows.Scan(&h, &g, &d); err == nil && h >= 0 && h < 24 {
+				stats.Hourly[h].Granted = g
+				stats.Hourly[h].Denied = d
+				total := g + d
+				if total > stats.PeakHourCount {
+					stats.PeakHourCount = total
+					stats.PeakHourLabel = fmt.Sprintf("%02d:00", h)
+				}
+			}
+		}
+	}
 
 	recentQuery := `SELECT id, tenant_id, time, access_point_id, user_id, user_name, credential_type,
 		 direction, decision, reason, metadata

@@ -280,6 +280,8 @@ Zooming into `access-svc`. **Note:** access-svc is NOT a real-time decision engi
 
 **Total: ~20 microservices** (deploy selectively based on licensed modules).
 
+**Currently deployed (2026-04-21):** 9 services active (auth-svc, identity-svc, access-svc, device-gateway, audit-svc, visitor-svc, parking-svc, cctv-svc, attend-svc). Remaining services (emergency-svc, intercom-svc, intrusion-svc, booking-svc, patrol-svc, key-svc, maint-svc, iot-svc, automate-svc, report-svc, ai-asst-svc, anomaly-svc, vision-svc, notif-svc, company-mgmt subsystem) are roadmap or in development.
+
 ### 2.2 Service Communication Patterns
 
 ```

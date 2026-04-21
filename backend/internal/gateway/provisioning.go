@@ -572,6 +572,8 @@ var validDeviceModels = []struct{ Model, Type string }{
 	// camera
 	{"camera_dc", "camera"},
 	{"cctv", "camera"},
+	{"tungson", "camera"},
+	{"tbvision", "camera"},
 	// sensor / reader
 	{"door_sensor", "sensor"},
 	{"de960", "sensor"},

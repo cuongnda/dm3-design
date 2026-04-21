@@ -332,6 +332,12 @@ export interface Paginated<T> {
     limit: number;
 }
 
+export interface HourlyBucket {
+    hour: number;
+    granted: number;
+    denied: number;
+}
+
 export interface StatsDTO {
     doors_online: number;
     doors_offline: number;
@@ -340,6 +346,12 @@ export interface StatsDTO {
     events_today: number;
     granted_today: number;
     denied_today: number;
+    on_site_count: number;
+    entries_last_hour: number;
+    denies_last_hour: number;
+    peak_hour_label: string;
+    peak_hour_count: number;
+    hourly: HourlyBucket[];
     recent_events: EventDTO[];
 }
 
@@ -502,6 +514,11 @@ export interface EmergencyPlanDTO {
     updated_at: string;
 }
 
+export interface EmergencyIncidentAccessPoint {
+    id: string;
+    name: string;
+}
+
 export interface EmergencyIncidentDTO {
     id: string;
     plan_id: string;
@@ -515,6 +532,7 @@ export interface EmergencyIncidentDTO {
     duration_seconds?: number;
     target_summary: string;
     notes: string;
+    access_points?: EmergencyIncidentAccessPoint[];
 }
 
 export interface ActivateEmergencyResponse {

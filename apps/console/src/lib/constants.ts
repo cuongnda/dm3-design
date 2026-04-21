@@ -35,7 +35,7 @@ export const ROUTES = {
   // SECURE
   accessControl: '/secure/access-control',
   accessTime: '/secure/access-control/access-time',
-  cctv: '/secure/cctv',
+  cctv: '/cctv/live',
   intrusion: '/secure/intrusion',
   intercom: '/secure/intercom',
   aiDetection: '/secure/ai-detection',

@@ -1,13 +1,13 @@
 <mxfile host="Electron" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.6.6 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36" version="29.6.6">
   <diagram name="DM3 Current ER Diagram" id="er-diagram">
-    <mxGraphModel dx="1357" dy="997" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="2900" pageHeight="5100" math="0" shadow="0">
+    <mxGraphModel dx="1357" dy="997" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="2900" pageHeight="5800" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
         <mxCell id="title" parent="1" style="text;html=1;fontSize=24;fontStyle=1;align=center;fillColor=none;strokeColor=none;fontColor=#0B1120;" value="Duall Master 3.0 — ER Diagram (Current Schema)" vertex="1">
           <mxGeometry height="40" width="1000" x="950" y="20" as="geometry" />
         </mxCell>
-        <mxCell id="subtitle" parent="1" style="text;html=1;fontSize=12;align=center;fillColor=none;strokeColor=none;fontColor=#6B7280;" value="Source of truth: backend/pkg/db/migrations/ · Schemas: dm3_auth, dm3_devices, dm3_access, dm3_identity, dm3_visitor, dm3_parking, dm3_cctv, dm3_audit, dm3_attendance · Updated 2026-04-20 (migrations 001–034; latest: 033 leave_requests.external_id, 034 attendance_records.overtime_review_note)" vertex="1">
+        <mxCell id="subtitle" parent="1" style="text;html=1;fontSize=12;align=center;fillColor=none;strokeColor=none;fontColor=#6B7280;" value="Source of truth: backend/pkg/db/migrations/ · Schemas: dm3_auth, dm3_devices, dm3_access, dm3_identity, dm3_visitor, dm3_parking, dm3_cctv, dm3_audit, dm3_attendance · Updated 2026-04-21 (migrations 001–037; latest: 035 RBAC tables, 037 OAuth + API tokens — dm3_auth extended panel at bottom)" vertex="1">
           <mxGeometry height="25" width="1400" x="750" y="55" as="geometry" />
         </mxCell>
         <mxCell id="auth-bg" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F4F6;strokeColor=#D1D5DB;dashed=1;arcSize=4;" value="" vertex="1">
@@ -452,6 +452,51 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="rel-att-records-events" edge="1" parent="1" source="att_records" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#F59E0B;strokeWidth=2;dashed=1;dashPattern=2 2;endArrow=ERmany;startArrow=ERmany;startSize=12;endSize=12;" target="access_events">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rbac-oauth-bg" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F4F6;strokeColor=#D1D5DB;dashed=1;arcSize=4;" value="" vertex="1">
+          <mxGeometry height="720" width="2400" x="40" y="5020" as="geometry" />
+        </mxCell>
+        <mxCell id="rbac-oauth-label" parent="1" style="text;html=1;fontSize=12;fontStyle=1;align=left;fillColor=none;strokeColor=none;fontColor=#6B7280;" value="dm3_auth — extended: RBAC (migration 035) + OAuth / API tokens (migration 037)" vertex="1">
+          <mxGeometry height="20" width="900" x="55" y="5028" as="geometry" />
+        </mxCell>
+        <mxCell id="company_roles" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;strokeWidth=2;verticalAlign=top;spacingTop=0;" value="&lt;b style=&#39;color:#6B7280&#39;&gt;company_roles&lt;/b&gt;&lt;hr size=&#39;1&#39;/&gt;&lt;div style=&#39;text-align:left;font-size:11px;padding:4px&#39;&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → tenants ON DELETE CASCADE&lt;br/&gt;name : VARCHAR(150) NOT NULL&lt;br/&gt;description : TEXT&lt;br/&gt;template_key : VARCHAR(100)&lt;br/&gt;is_system_template_copy : BOOL def false&lt;br/&gt;status : CHECK (active | archived)&lt;br/&gt;created_by / updated_by : UUID&lt;br/&gt;created_at / updated_at&lt;br/&gt;&lt;br/&gt;&lt;i style=&#39;font-size:10px&#39;&gt;⚡ UNIQUE (tenant_id, name)&lt;br/&gt;⚡ idx on tenant_id, status&lt;/i&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="260" width="260" x="60" y="5070" as="geometry" />
+        </mxCell>
+        <mxCell id="company_role_permissions" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;strokeWidth=2;verticalAlign=top;spacingTop=0;" value="&lt;b style=&#39;color:#6B7280&#39;&gt;company_role_permissions&lt;/b&gt;&lt;hr size=&#39;1&#39;/&gt;&lt;div style=&#39;text-align:left;font-size:11px;padding:4px&#39;&gt;🔑 id : UUID PK&lt;br/&gt;🔗 role_id → company_roles ON DELETE CASCADE&lt;br/&gt;permission_key : VARCHAR(150) NOT NULL&lt;br/&gt;created_at : TIMESTAMPTZ&lt;br/&gt;&lt;br/&gt;&lt;i style=&#39;font-size:10px&#39;&gt;⚡ UNIQUE (role_id, permission_key)&lt;br/&gt;⚡ idx on role_id, permission_key&lt;br/&gt;📖 keys from internal/rbac/catalog.go&lt;/i&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="200" width="260" x="360" y="5070" as="geometry" />
+        </mxCell>
+        <mxCell id="user_role_assignments" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;strokeWidth=2;verticalAlign=top;spacingTop=0;" value="&lt;b style=&#39;color:#6B7280&#39;&gt;user_role_assignments&lt;/b&gt;&lt;hr size=&#39;1&#39;/&gt;&lt;div style=&#39;text-align:left;font-size:11px;padding:4px&#39;&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → tenants ON DELETE CASCADE&lt;br/&gt;🔗 account_id → accounts ON DELETE CASCADE&lt;br/&gt;🔗 role_id → company_roles ON DELETE CASCADE&lt;br/&gt;scope_type : CHECK (company | site | department | zone | self)&lt;br/&gt;scope_id : UUID&lt;br/&gt;effective_from : TIMESTAMPTZ&lt;br/&gt;effective_to : TIMESTAMPTZ&lt;br/&gt;created_by : UUID · created_at&lt;br/&gt;&lt;br/&gt;&lt;i style=&#39;font-size:10px&#39;&gt;⚡ idx on account_id · role_id · tenant_id&lt;br/&gt;⚡ idx on (scope_type, scope_id)&lt;br/&gt;✅ CHECK: company|self ⇒ scope_id NULL&lt;br/&gt;✅ CHECK: site|dept|zone ⇒ scope_id NOT NULL&lt;/i&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="320" width="300" x="660" y="5070" as="geometry" />
+        </mxCell>
+        <mxCell id="oauth_clients" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;strokeWidth=2;verticalAlign=top;spacingTop=0;" value="&lt;b style=&#39;color:#6B7280&#39;&gt;oauth_clients&lt;/b&gt;&lt;hr size=&#39;1&#39;/&gt;&lt;div style=&#39;text-align:left;font-size:11px;padding:4px&#39;&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → tenants ON DELETE CASCADE (nullable = system-wide)&lt;br/&gt;client_id : VARCHAR(64) UNIQUE&lt;br/&gt;client_secret_hash : VARCHAR(128) (bcrypt)&lt;br/&gt;name : VARCHAR(100) · description : TEXT&lt;br/&gt;redirect_uris : TEXT[]&lt;br/&gt;grant_types : TEXT[] CHECK subset of&lt;br/&gt;&amp;nbsp;&amp;nbsp;(client_credentials | authorization_code | refresh_token | urn:…:device_code)&lt;br/&gt;scopes : TEXT[]&lt;br/&gt;rate_limit_tier : CHECK (basic | standard | premium | unlimited)&lt;br/&gt;status : CHECK (active | revoked | expired)&lt;br/&gt;created_by · created_at · revoked_at&lt;br/&gt;&lt;br/&gt;&lt;i style=&#39;font-size:10px&#39;&gt;⚡ idx on tenant_id · client_id · status&lt;/i&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="340" width="320" x="60" y="5390" as="geometry" />
+        </mxCell>
+        <mxCell id="oauth_api_tokens" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;strokeWidth=2;verticalAlign=top;spacingTop=0;" value="&lt;b style=&#39;color:#6B7280&#39;&gt;oauth_api_tokens&lt;/b&gt;&lt;hr size=&#39;1&#39;/&gt;&lt;div style=&#39;text-align:left;font-size:11px;padding:4px&#39;&gt;🔑 id : UUID PK&lt;br/&gt;🔗 tenant_id → tenants ON DELETE CASCADE&lt;br/&gt;🔗 account_id → accounts ON DELETE CASCADE&lt;br/&gt;🔗 client_id → oauth_clients ON DELETE SET NULL&lt;br/&gt;name : VARCHAR(100)&lt;br/&gt;token_prefix : VARCHAR(16) (dm3_live_* / dm3_test_*)&lt;br/&gt;token_hash : VARCHAR(128) UNIQUE (sha256)&lt;br/&gt;scopes : TEXT[]&lt;br/&gt;ip_whitelist : INET[] (nullable)&lt;br/&gt;rate_limit_tier : CHECK (basic | standard | premium | unlimited)&lt;br/&gt;environment : CHECK (live | test)&lt;br/&gt;status : CHECK (active | revoked | expired)&lt;br/&gt;last_used_at · last_used_ip · usage_count&lt;br/&gt;expires_at (null = never) · created_at&lt;br/&gt;revoked_at · revoked_by · revoke_reason&lt;br/&gt;&lt;br/&gt;&lt;i style=&#39;font-size:10px&#39;&gt;⚡ idx on tenant · account · hash · status&lt;br/&gt;⚡ partial idx on expires_at WHERE NOT NULL&lt;br/&gt;🛡️ used by Traefik /auth/validate-api-key&lt;/i&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="420" width="340" x="420" y="5390" as="geometry" />
+        </mxCell>
+        <mxCell id="oauth_device_codes" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;strokeWidth=2;verticalAlign=top;spacingTop=0;" value="&lt;b style=&#39;color:#6B7280&#39;&gt;oauth_device_codes&lt;/b&gt;&lt;hr size=&#39;1&#39;/&gt;&lt;div style=&#39;text-align:left;font-size:11px;padding:4px&#39;&gt;🔑 id : UUID PK&lt;br/&gt;🔗 client_id → oauth_clients ON DELETE CASCADE&lt;br/&gt;🔗 tenant_id → tenants ON DELETE SET NULL (post-approval)&lt;br/&gt;🔗 approved_by → accounts ON DELETE SET NULL&lt;br/&gt;device_code : VARCHAR(128) UNIQUE&lt;br/&gt;user_code : VARCHAR(16) UNIQUE (e.g. WDJB-MJHT)&lt;br/&gt;scopes : TEXT[]&lt;br/&gt;verification_uri : VARCHAR(200)&lt;br/&gt;interval_seconds : INT def 5&lt;br/&gt;expires_at : TIMESTAMPTZ&lt;br/&gt;approved_at : TIMESTAMPTZ&lt;br/&gt;last_polled_at : TIMESTAMPTZ&lt;br/&gt;status : CHECK (pending | approved | denied | expired)&lt;br/&gt;created_at&lt;br/&gt;&lt;br/&gt;&lt;i style=&#39;font-size:10px&#39;&gt;⚡ idx on device_code · user_code · expires_at&lt;br/&gt;📟 RFC 8628 flow for headless devices&lt;/i&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="380" width="320" x="820" y="5390" as="geometry" />
+        </mxCell>
+        <mxCell id="rel-crp-cr" edge="1" parent="1" source="company_role_permissions" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6B7280;endArrow=ERone;startArrow=ERmany;startSize=12;endSize=12;" target="company_roles">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel-ura-cr" edge="1" parent="1" source="user_role_assignments" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6B7280;endArrow=ERone;startArrow=ERmany;startSize=12;endSize=12;" target="company_roles">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel-ura-accounts" edge="1" parent="1" source="user_role_assignments" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6B7280;dashed=1;dashPattern=4 4;endArrow=ERone;startArrow=ERmany;startSize=12;endSize=12;" target="accounts">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel-oat-oc" edge="1" parent="1" source="oauth_api_tokens" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6B7280;endArrow=ERone;startArrow=ERmany;startSize=12;endSize=12;" target="oauth_clients">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel-oat-accounts" edge="1" parent="1" source="oauth_api_tokens" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6B7280;dashed=1;dashPattern=4 4;endArrow=ERone;startArrow=ERmany;startSize=12;endSize=12;" target="accounts">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel-odc-oc" edge="1" parent="1" source="oauth_device_codes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6B7280;endArrow=ERone;startArrow=ERmany;startSize=12;endSize=12;" target="oauth_clients">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel-oc-tenants" edge="1" parent="1" source="oauth_clients" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6B7280;dashed=1;dashPattern=4 4;endArrow=ERone;startArrow=ERmany;startSize=12;endSize=12;" target="tenants">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
       </root>

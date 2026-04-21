@@ -37,22 +37,28 @@ type emergencyPlan struct {
 }
 
 type emergencyIncident struct {
-	ID               string     `json:"id"`
-	TenantID         string     `json:"tenant_id"`
-	Time             time.Time  `json:"time"`
-	PlanID           string     `json:"plan_id"`
-	PlanName         string     `json:"plan_name"`
-	Action           string     `json:"action"`
-	Status           string     `json:"status"` // active | all_clear | cancelled
-	TriggeredBy      *string    `json:"triggered_by,omitempty"`
-	TriggeredByEmail string     `json:"triggered_by_email"`
-	AllClearBy       *string    `json:"all_clear_by,omitempty"`
-	AllClearByEmail  string     `json:"all_clear_by_email"`
-	ActivatedAt      time.Time  `json:"activated_at"`
-	ResolvedAt       *time.Time `json:"resolved_at,omitempty"`
-	DurationSeconds  *int       `json:"duration_seconds,omitempty"`
-	TargetSummary    string     `json:"target_summary"`
-	Notes            string     `json:"notes"`
+	ID               string           `json:"id"`
+	TenantID         string           `json:"tenant_id"`
+	Time             time.Time        `json:"time"`
+	PlanID           string           `json:"plan_id"`
+	PlanName         string           `json:"plan_name"`
+	Action           string           `json:"action"`
+	Status           string           `json:"status"` // active | all_clear | cancelled
+	TriggeredBy      *string          `json:"triggered_by,omitempty"`
+	TriggeredByEmail string           `json:"triggered_by_email"`
+	AllClearBy       *string          `json:"all_clear_by,omitempty"`
+	AllClearByEmail  string           `json:"all_clear_by_email"`
+	ActivatedAt      time.Time        `json:"activated_at"`
+	ResolvedAt       *time.Time       `json:"resolved_at,omitempty"`
+	DurationSeconds  *int             `json:"duration_seconds,omitempty"`
+	TargetSummary    string           `json:"target_summary"`
+	Notes            string           `json:"notes"`
+	AccessPoints     []incidentAPRef `json:"access_points,omitempty"`
+}
+
+type incidentAPRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // ─── List Plans ─────────────────────────────────────────────────────────────
@@ -540,7 +546,8 @@ func (h *AccessHandlers) ListActiveEmergencies(w http.ResponseWriter, r *http.Re
 		`SELECT id, tenant_id, time, plan_id, plan_name, action, status,
 		        triggered_by, COALESCE(triggered_by_email,''),
 		        all_clear_by, COALESCE(all_clear_by_email,''),
-		        activated_at, resolved_at, duration_seconds, target_summary, notes
+		        activated_at, resolved_at, duration_seconds, target_summary, notes,
+		        COALESCE(metadata, '{}'::jsonb)
 		   FROM dm3_access.emergency_incidents
 		  WHERE tenant_id = $1::uuid AND status = 'active'
 		  ORDER BY time DESC`, cid)
@@ -552,19 +559,65 @@ func (h *AccessHandlers) ListActiveEmergencies(w http.ResponseWriter, r *http.Re
 	defer rows.Close()
 
 	incidents := []emergencyIncident{}
+	incidentAPIDs := map[int][]string{} // incident index → access point IDs
+	allAPIDs := map[string]struct{}{}
+
 	for rows.Next() {
 		var inc emergencyIncident
+		var metadataRaw []byte
 		if err := rows.Scan(&inc.ID, &inc.TenantID, &inc.Time, &inc.PlanID, &inc.PlanName,
 			&inc.Action, &inc.Status,
 			&inc.TriggeredBy, &inc.TriggeredByEmail,
 			&inc.AllClearBy, &inc.AllClearByEmail,
 			&inc.ActivatedAt, &inc.ResolvedAt, &inc.DurationSeconds,
-			&inc.TargetSummary, &inc.Notes); err != nil {
+			&inc.TargetSummary, &inc.Notes, &metadataRaw); err != nil {
 			slog.Error("ListActiveEmergencies: scan failed", "error", err)
 			continue
 		}
+		var meta struct {
+			AccessPointIDs []string `json:"access_point_ids"`
+		}
+		_ = json.Unmarshal(metadataRaw, &meta)
+		incidentAPIDs[len(incidents)] = meta.AccessPointIDs
+		for _, id := range meta.AccessPointIDs {
+			allAPIDs[id] = struct{}{}
+		}
 		incidents = append(incidents, inc)
 	}
+
+	// Resolve access point names in one query
+	names := map[string]string{}
+	if len(allAPIDs) > 0 {
+		ids := make([]string, 0, len(allAPIDs))
+		for id := range allAPIDs {
+			ids = append(ids, id)
+		}
+		nameRows, err := h.db.Pool.Query(r.Context(),
+			`SELECT id::text, name FROM dm3_access.access_points
+			  WHERE tenant_id = $1::uuid AND id = ANY($2::uuid[])`, cid, ids)
+		if err == nil {
+			defer nameRows.Close()
+			for nameRows.Next() {
+				var id, name string
+				if err := nameRows.Scan(&id, &name); err == nil {
+					names[id] = name
+				}
+			}
+		}
+	}
+
+	for idx := range incidents {
+		refs := []incidentAPRef{}
+		for _, id := range incidentAPIDs[idx] {
+			name := names[id]
+			if name == "" {
+				name = id
+			}
+			refs = append(refs, incidentAPRef{ID: id, Name: name})
+		}
+		incidents[idx].AccessPoints = refs
+	}
+
 	httputil.JSON(w, http.StatusOK, incidents)
 }
 

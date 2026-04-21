@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader, DataTable, type Column, Button } from '@dm3/ui';
 import { useTranslation } from 'react-i18next';
+import { toast } from '@/lib/toast';
 import {
   Plus,
   Trash2,
@@ -105,7 +106,19 @@ export function CCTVCamerasPage() {
 
   const testMutation = useMutation({
     mutationFn: (id: string) => testCameraConnection(id),
-    onSuccess: (result) => setTestResult(result),
+    onSuccess: (result, id) => {
+      setTestResult(result);
+      // Show toast when testing from list (modal not open)
+      if (!modalOpen) {
+        const cam = cameras.find((c) => c.id === id);
+        const name = cam?.name ?? id;
+        if (result.ok) {
+          toast(`${name}: Connection OK · ${result.latency_ms}ms${result.codec ? ` · ${result.codec}` : ''}`, 'success');
+        } else {
+          toast(`${name}: Connection failed${result.error ? ` — ${result.error}` : ''}`, 'error');
+        }
+      }
+    },
   });
 
   const closeModal = () => {
@@ -186,7 +199,7 @@ export function CCTVCamerasPage() {
       header: t('cctv.cols.lastFrame'),
       width: '130px',
       render: (r) => {
-        const rel = formatRelative(r.last_checked_at);
+        const rel = formatRelative(r.last_seen);
         const text =
           rel.text === '__never__'
             ? t('cctv.lastFrame.never')
