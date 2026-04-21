@@ -50,9 +50,13 @@ services:
       - dm3-local
     healthcheck:
       test: ["CMD", "emqx", "ctl", "status"]
+      # EMQX needs ~60-90s to settle on contended hosts — see the prod
+      # compose for the full explanation. Same tuning here so dev-laptop
+      # stacks don't flake when the machine is loaded.
+      start_period: 90s
       interval: 10s
-      timeout: 5s
-      retries: 10
+      timeout: 10s
+      retries: 20
 
   nats:
     image: nats:2.10-alpine
