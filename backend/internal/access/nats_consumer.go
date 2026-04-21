@@ -24,6 +24,19 @@ func toUUIDPtr(s string) *string {
 	return &s
 }
 
+// isOwnTenantMediaKey reports whether `key` is a server-issued media object
+// key that belongs to (tenantID, deviceID). Accepts anything under
+// `events/<tenant>/<device>/` — kind ("snapshot"|"clip") and filename are
+// not re-validated here because media_handlers.go already enforces the
+// allow-list at the presign endpoint. Legacy base64 payloads (no `events/`
+// prefix) are NOT matched; callers decide whether to drop or keep them.
+func isOwnTenantMediaKey(key, tenantID, deviceID string) bool {
+	if key == "" || tenantID == "" || deviceID == "" {
+		return false
+	}
+	return strings.HasPrefix(key, "events/"+tenantID+"/"+deviceID+"/")
+}
+
 type NATSConsumer struct {
 	db   *db.DB
 	nats *natsutil.Client
@@ -66,6 +79,11 @@ type accessLogData struct {
 	// DB column stay `photo_ref` for backward compat — only the JSON tag needs
 	// to match what devices actually send.
 	PhotoRef             string            `json:"photo"`
+	// ClipObjectKey is the MinIO object key for an optional video clip
+	// attached to the access event (mqtt-protocol.md §4.1). There is no
+	// dedicated DB column — it is persisted under metadata.clip_object_key
+	// and fetched by the same presigned-GET flow as photo_ref.
+	ClipObjectKey        string            `json:"clip_object_key"`
 	Temperature          *float64          `json:"temperature"`
 	DecidedLocally       *bool             `json:"decided_locally"`
 	Metadata             map[string]any    `json:"metadata"`
@@ -254,6 +272,34 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 	if deviceID != "" {
 		ald.Metadata["device_id"] = deviceID
 	}
+
+	// Guard against cross-tenant media references: a compromised device in
+	// tenant A publishing access.log with data.photo pointing at tenant B's
+	// object key would otherwise leak B's image to A's monitoring page via
+	// the server-issued presigned GET. Media keys are always server-issued
+	// as events/<tenant_id>/<device_id>/<kind>/<uuid>.<ext> (see
+	// docs/architecture/mqtt-protocol.md §15 and internal/gateway/media_handlers.go),
+	// so anything that doesn't match that prefix is either spoofed or legacy
+	// base64. Clear the reference and keep the event — data loss beats a
+	// silent tenant-leak, and legacy base64 rows are already tolerated as a
+	// pass-through per §4.1 ("Existing rows with base64-encoded photo are
+	// left untouched").
+	if ald.PhotoRef != "" && !isOwnTenantMediaKey(ald.PhotoRef, tenantID, deviceID) {
+		slog.Warn("nats: rejecting cross-tenant media reference on access.log",
+			"tenant_id", tenantID, "device_id", deviceID,
+			"photo_ref", ald.PhotoRef, "event_id", evt.ID)
+		ald.PhotoRef = ""
+	}
+	if ald.ClipObjectKey != "" {
+		if isOwnTenantMediaKey(ald.ClipObjectKey, tenantID, deviceID) {
+			ald.Metadata["clip_object_key"] = ald.ClipObjectKey
+		} else {
+			slog.Warn("nats: rejecting cross-tenant clip reference on access.log",
+				"tenant_id", tenantID, "device_id", deviceID,
+				"clip_object_key", ald.ClipObjectKey, "event_id", evt.ID)
+		}
+	}
+
 	metadataJSON, _ := json.Marshal(ald.Metadata)
 
 	// Use a bounded context for DB operations so they cannot hang indefinitely.

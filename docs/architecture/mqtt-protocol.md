@@ -505,6 +505,13 @@ left untouched in `access_events.metadata`; new rows always store keys.
 
 ### 4.5 Visitor Event
 
+> **Server status (2026-04):** bridged to NATS + live-monitoring WebSocket
+> only. **No server-side persistence or business logic consumes this event
+> type today.** The visitor check-in lifecycle (rows in `dm3_visitor.visits`
+> etc.) is driven by the HTTP API + kiosk flow (`internal/visitor/*`), not
+> by MQTT. Firmware MAY publish for live-monitoring visibility, but MUST
+> NOT assume the row in the visitor DB will be created from this event.
+
 ```json
 {
   "type": "visitor.checkin",
@@ -524,6 +531,11 @@ left untouched in `access_events.metadata`; new rows always store keys.
 
 ### 4.6 Sensor Reading
 
+> **Server status (2026-04):** bridged to NATS + live-monitoring WebSocket
+> only. **No server-side persistence.** There is no `sensor_readings`
+> table today. Firmware MAY publish for real-time display, but expect no
+> historical retention until a consumer is added.
+
 ```json
 {
   "type": "sensor.reading",
@@ -538,6 +550,14 @@ left untouched in `access_events.metadata`; new rows always store keys.
 ```
 
 ### 4.7 Parking Event
+
+> **Server status (2026-04):** bridged to NATS + live-monitoring WebSocket
+> only. **No server-side persistence from MQTT.** Parking sessions today
+> flow through parking-svc's HTTP API — LPR kiosks call the REST adapter
+> (`internal/visitor/legacy_register_handler.go`) and parking-svc publishes
+> its own `dm3.parking.*.access.*` events into `dm3_access.access_events`
+> via `ParkingAccessConsumer`. The MQTT `parking.plate` event below is a
+> live-monitoring hook only and WILL NOT create a parking_session row.
 
 ```json
 {

@@ -589,6 +589,21 @@ func (h *MQTTHandler) handleAlarm(_ context.Context, pt ParsedTopic, env MQTTEnv
 
 	var data map[string]any
 	_ = json.Unmarshal(env.Data, &data)
+	// Same cross-tenant media-reference guard the access-svc consumer does.
+	// A compromised device publishing an alarm with data.photo pointing at
+	// another tenant's object key would otherwise plant a leak into
+	// device_events.metadata. Clear the field; keep the alarm row.
+	// Canonical impl lives in internal/access/nats_consumer.go
+	// (isOwnTenantMediaKey) — duplicated here because the two packages can't
+	// cleanly share internal helpers (uuidRegex is similarly duplicated).
+	if photo, _ := data["photo"].(string); photo != "" {
+		prefix := "events/" + pt.TenantID + "/" + pt.DeviceID + "/"
+		if !strings.HasPrefix(photo, prefix) {
+			slog.Warn("mqtt: rejecting cross-tenant media reference on alarm",
+				"tenant", pt.TenantID, "device", pt.DeviceID, "photo", photo)
+			delete(data, "photo")
+		}
+	}
 	go InsertDeviceEvent(h.appCtx, h.db.Pool, DeviceEvent{
 		TenantID:    pt.TenantID,
 		DeviceID:    pt.DeviceID,
