@@ -49,6 +49,23 @@ export interface CCTVSettingsDTO {
   storage_quota_gb: number;
   created_at: string;
   updated_at: string;
+
+  // Hanet integration. Secrets are never returned in plaintext — only
+  // `has_*` booleans so the UI can show "configured" state without echoing
+  // the token back. To replace a secret, PUT a new string in the
+  // corresponding `hanet_*` field on UpdateCCTVSettingsRequest; to clear,
+  // PUT the empty string.
+  hanet_client_id: string;
+  hanet_server_url: string;
+  hanet_place_id: string;
+  has_hanet_client_secret: boolean;
+  has_hanet_access_token: boolean;
+  has_hanet_refresh_token: boolean;
+}
+
+export interface HanetPlaceDTO {
+  id: string;
+  name: string;
 }
 
 export interface StreamUrlsDTO {
@@ -102,6 +119,17 @@ export interface UpdateCCTVSettingsRequest {
   pre_roll_sec_default?: number;
   post_roll_sec_default?: number;
   storage_quota_gb?: number;
+
+  // Hanet fields. Field semantics per key:
+  //   - omit        -> keep current value
+  //   - empty ""    -> clear (NULL on the server)
+  //   - non-empty   -> replace (encrypted on the server before storage)
+  hanet_client_id?: string;
+  hanet_client_secret?: string;
+  hanet_access_token?: string;
+  hanet_refresh_token?: string;
+  hanet_server_url?: string;
+  hanet_place_id?: string;
 }
 
 export interface ListCamerasParams {
@@ -189,4 +217,13 @@ export function getCCTVSettings(): Promise<CCTVSettingsDTO> {
 
 export function updateCCTVSettings(data: UpdateCCTVSettingsRequest): Promise<CCTVSettingsDTO> {
   return apiFetch(`${BASE}/settings`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+// ─── Hanet ───────────────────────────────────────────────────────────────────
+
+/** Forwards to Hanet /place/getPlaces using the tenant's saved access token.
+ *  Backend handles token refresh on 401 transparently; a 412 response
+ *  indicates no access token is configured yet. */
+export function listHanetPlaces(): Promise<HanetPlaceDTO[]> {
+  return apiFetch(`${BASE}/hanet/places`);
 }

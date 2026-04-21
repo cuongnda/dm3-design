@@ -34,6 +34,10 @@ func RegisterRoutes(r chi.Router, h *CCTVHandlers, jwtSecret string) {
 		r.Get("/clips/{id}", h.GetClip)
 		r.Get("/clips/{id}/playback", h.GetClipPlayback)
 		r.Get("/settings", h.GetSettings)
+		// Hanet places passthrough — proxies to {server}/place/getPlaces
+		// using the tenant's saved access token. Guarded by plugin + tenant
+		// middleware above; refresh-on-401 handled inside the handler.
+		r.Get("/hanet/places", h.ListHanetPlaces)
 
 		// Camera management writes — CRUD, settings, and connection testing
 		r.Group(func(pr chi.Router) {

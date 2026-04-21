@@ -2,6 +2,7 @@ package cctv
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -77,33 +78,84 @@ func parsePagination(r *http.Request) (page, limit int, err error) {
 
 // getOrCreateSettings retrieves or lazily creates the CCTV settings row for a tenant.
 func (h *CCTVHandlers) getOrCreateSettings(ctx context.Context, tenantID string) (CCTVSettings, error) {
-	var s CCTVSettings
-	err := h.db.Pool.QueryRow(ctx, `
-		SELECT tenant_id, retention_days, retention_days_max, pre_roll_sec_default, post_roll_sec_default, storage_quota_gb, created_at, updated_at
-		FROM dm3_cctv.cctv_settings
-		WHERE tenant_id = $1::uuid`, tenantID,
-	).Scan(&s.TenantID, &s.RetentionDays, &s.RetentionDaysMax, &s.PreRollSecDefault, &s.PostRollSecDefault, &s.StorageQuotaGB, &s.CreatedAt, &s.UpdatedAt)
+	s, err := h.scanSettings(ctx, tenantID)
 	if err == nil {
 		return s, nil
 	}
 
 	// Insert default settings row
-	err = h.db.Pool.QueryRow(ctx, `
-		INSERT INTO dm3_cctv.cctv_settings (tenant_id, retention_days, retention_days_max, pre_roll_sec_default, post_roll_sec_default, storage_quota_gb)
-		VALUES ($1::uuid, 14, 90, 10, 20, 100)
-		ON CONFLICT (tenant_id) DO NOTHING
-		RETURNING tenant_id, retention_days, retention_days_max, pre_roll_sec_default, post_roll_sec_default, storage_quota_gb, created_at, updated_at`,
+	_, err = h.db.Pool.Exec(ctx, `
+		INSERT INTO dm3_cctv.cctv_settings (tenant_id)
+		VALUES ($1::uuid)
+		ON CONFLICT (tenant_id) DO NOTHING`,
 		tenantID,
-	).Scan(&s.TenantID, &s.RetentionDays, &s.RetentionDaysMax, &s.PreRollSecDefault, &s.PostRollSecDefault, &s.StorageQuotaGB, &s.CreatedAt, &s.UpdatedAt)
+	)
 	if err != nil {
-		// ON CONFLICT DO NOTHING fired; re-query
-		err = h.db.Pool.QueryRow(ctx, `
-			SELECT tenant_id, retention_days, retention_days_max, pre_roll_sec_default, post_roll_sec_default, storage_quota_gb, created_at, updated_at
-			FROM dm3_cctv.cctv_settings
-			WHERE tenant_id = $1::uuid`, tenantID,
-		).Scan(&s.TenantID, &s.RetentionDays, &s.RetentionDaysMax, &s.PreRollSecDefault, &s.PostRollSecDefault, &s.StorageQuotaGB, &s.CreatedAt, &s.UpdatedAt)
+		return CCTVSettings{}, err
 	}
-	return s, err
+	return h.scanSettings(ctx, tenantID)
+}
+
+// scanSettings reads the full cctv_settings row and maps the encrypted Hanet
+// columns into bool flags on the returned struct. Tokens themselves never
+// leave this package.
+func (h *CCTVHandlers) scanSettings(ctx context.Context, tenantID string) (CCTVSettings, error) {
+	var s CCTVSettings
+	var clientID, serverURL, placeID *string
+	var clientSecretEnc, accessTokenEnc, refreshTokenEnc []byte
+	err := h.db.Pool.QueryRow(ctx, `
+		SELECT tenant_id, retention_days, retention_days_max,
+		       pre_roll_sec_default, post_roll_sec_default, storage_quota_gb,
+		       created_at, updated_at,
+		       hanet_client_id, hanet_server_url, hanet_place_id,
+		       hanet_client_secret_enc, hanet_access_token_enc, hanet_refresh_token_enc
+		FROM dm3_cctv.cctv_settings
+		WHERE tenant_id = $1::uuid`, tenantID,
+	).Scan(
+		&s.TenantID, &s.RetentionDays, &s.RetentionDaysMax,
+		&s.PreRollSecDefault, &s.PostRollSecDefault, &s.StorageQuotaGB,
+		&s.CreatedAt, &s.UpdatedAt,
+		&clientID, &serverURL, &placeID,
+		&clientSecretEnc, &accessTokenEnc, &refreshTokenEnc,
+	)
+	if err != nil {
+		return s, err
+	}
+	if clientID != nil {
+		s.HanetClientID = *clientID
+	}
+	if serverURL != nil {
+		s.HanetServerURL = *serverURL
+	}
+	if placeID != nil {
+		s.HanetPlaceID = *placeID
+	}
+	s.HasClientSecret = len(clientSecretEnc) > 0
+	s.HasAccessToken = len(accessTokenEnc) > 0
+	s.HasRefreshToken = len(refreshTokenEnc) > 0
+	return s, nil
+}
+
+// getHanetAccessToken returns the decrypted current access token for a tenant
+// (or "" if unset). Errors are returned so the caller can distinguish
+// "never configured" from "decrypt failed" — if decrypt fails, the caller
+// should clear the stored ciphertext rather than silently masking the issue.
+func (h *CCTVHandlers) getHanetAccessToken(ctx context.Context, tenantID string) (string, error) {
+	if h.cipher == nil {
+		return "", errors.New("cctv: credential cipher not configured")
+	}
+	var enc []byte
+	err := h.db.Pool.QueryRow(ctx,
+		`SELECT hanet_access_token_enc FROM dm3_cctv.cctv_settings WHERE tenant_id = $1::uuid`,
+		tenantID,
+	).Scan(&enc)
+	if err != nil {
+		return "", err
+	}
+	if len(enc) == 0 {
+		return "", nil
+	}
+	return h.cipher.Decrypt(enc)
 }
 
 // composeRTSPURLWithAuth builds the full RTSP URL including credentials for MediaMTX source.

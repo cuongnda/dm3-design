@@ -66,6 +66,12 @@ type EventClip struct {
 }
 
 // CCTVSettings stores per-tenant CCTV configuration.
+//
+// Hanet tokens (client_secret, access_token, refresh_token) are encrypted at
+// rest. On the wire we expose only presence flags (HasClientSecret, etc.) so
+// the plaintext never leaves the handler. The client_id is a public
+// identifier — fine to return in full. `HanetPlaceID` is the tenant's
+// currently-selected place (a string as Hanet returns it).
 type CCTVSettings struct {
 	TenantID           string    `json:"tenant_id"`
 	RetentionDays      int       `json:"retention_days"`
@@ -75,4 +81,19 @@ type CCTVSettings struct {
 	StorageQuotaGB     int       `json:"storage_quota_gb"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
+
+	// ─── Hanet integration (2026-04) ────────────────────────────────────────
+	HanetClientID     string `json:"hanet_client_id"`
+	HanetServerURL    string `json:"hanet_server_url"`
+	HanetPlaceID      string `json:"hanet_place_id"`
+	HasClientSecret   bool   `json:"has_hanet_client_secret"`
+	HasAccessToken    bool   `json:"has_hanet_access_token"`
+	HasRefreshToken   bool   `json:"has_hanet_refresh_token"`
+}
+
+// HanetPlace is one entry from Hanet's /place/getPlaces endpoint, forwarded
+// to the frontend as the option list for the placeId selector.
+type HanetPlace struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
@@ -33,12 +34,27 @@ func (h *CCTVHandlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Nullable pointer types let us distinguish three intents per field:
+	//   - absent from JSON body  -> keep the current DB value
+	//   - empty string           -> clear the DB value (NULL)
+	//   - non-empty string       -> replace
+	//
+	// For the Hanet secrets we encrypt before storing; a plaintext empty
+	// string is the signal to NULL the encrypted column, not a request to
+	// encrypt an empty token.
 	var req struct {
 		RetentionDays      *int `json:"retention_days"`
 		RetentionDaysMax   *int `json:"retention_days_max"`
 		PreRollSecDefault  *int `json:"pre_roll_sec_default"`
 		PostRollSecDefault *int `json:"post_roll_sec_default"`
 		StorageQuotaGB     *int `json:"storage_quota_gb"`
+
+		HanetClientID     *string `json:"hanet_client_id"`
+		HanetClientSecret *string `json:"hanet_client_secret"`
+		HanetAccessToken  *string `json:"hanet_access_token"`
+		HanetRefreshToken *string `json:"hanet_refresh_token"`
+		HanetServerURL    *string `json:"hanet_server_url"`
+		HanetPlaceID      *string `json:"hanet_place_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
@@ -52,6 +68,14 @@ func (h *CCTVHandlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	if req.PostRollSecDefault != nil && (*req.PostRollSecDefault < 0 || *req.PostRollSecDefault > 120) {
 		httputil.Error(w, http.StatusBadRequest, "post_roll_sec_default must be between 0 and 120")
 		return
+	}
+	if req.HanetServerURL != nil {
+		trimmed := strings.TrimSpace(*req.HanetServerURL)
+		if trimmed != "" && !strings.HasPrefix(trimmed, "http://") && !strings.HasPrefix(trimmed, "https://") {
+			httputil.Error(w, http.StatusBadRequest, "hanet_server_url must start with http:// or https://")
+			return
+		}
+		req.HanetServerURL = &trimmed
 	}
 
 	// Ensure settings row exists first
@@ -72,25 +96,103 @@ func (h *CCTVHandlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var s CCTVSettings
-	err = h.db.Pool.QueryRow(r.Context(), `
+	// Encrypt Hanet secrets on the way in. A nil pointer means "don't touch";
+	// a non-nil pointer to "" clears the column; a non-nil non-empty value
+	// encrypts and replaces. We pass those via three-valued variables where
+	// a nil []byte means "no change" and an empty []byte means "set NULL".
+	var (
+		clientSecretEnc *[]byte
+		accessTokenEnc  *[]byte
+		refreshTokenEnc *[]byte
+	)
+	encField := func(plain *string) (*[]byte, error) {
+		if plain == nil {
+			return nil, nil
+		}
+		if strings.TrimSpace(*plain) == "" {
+			empty := []byte{}
+			return &empty, nil
+		}
+		if h.cipher == nil {
+			return nil, errHanetCipherMissing
+		}
+		ct, err := h.cipher.Encrypt(*plain)
+		if err != nil {
+			return nil, err
+		}
+		return &ct, nil
+	}
+	var encErr error
+	if clientSecretEnc, encErr = encField(req.HanetClientSecret); encErr != nil {
+		slog.Error("encrypt hanet client secret", "error", encErr)
+		httputil.Error(w, http.StatusServiceUnavailable, "credential cipher unavailable")
+		return
+	}
+	if accessTokenEnc, encErr = encField(req.HanetAccessToken); encErr != nil {
+		slog.Error("encrypt hanet access token", "error", encErr)
+		httputil.Error(w, http.StatusServiceUnavailable, "credential cipher unavailable")
+		return
+	}
+	if refreshTokenEnc, encErr = encField(req.HanetRefreshToken); encErr != nil {
+		slog.Error("encrypt hanet refresh token", "error", encErr)
+		httputil.Error(w, http.StatusServiceUnavailable, "credential cipher unavailable")
+		return
+	}
+
+	// COALESCE handles the "don't touch" leg. For the encrypted columns we
+	// bind a *[]byte — nil pointer -> SQL NULL, which flips COALESCE to the
+	// existing column value. Empty-byte pointer -> we translate to explicit
+	// NULL so the COALESCE picks up the clearing intent. Postgres has no
+	// native way to say "replace with NULL via COALESCE" otherwise.
+	encOrNil := func(p *[]byte) any {
+		if p == nil {
+			return nil
+		}
+		if len(*p) == 0 {
+			return nil
+		}
+		return *p
+	}
+	clearFlagSecret := clientSecretEnc != nil && len(*clientSecretEnc) == 0
+	clearFlagAccess := accessTokenEnc != nil && len(*accessTokenEnc) == 0
+	clearFlagRefresh := refreshTokenEnc != nil && len(*refreshTokenEnc) == 0
+
+	_, err = h.db.Pool.Exec(r.Context(), `
 		UPDATE dm3_cctv.cctv_settings SET
-			retention_days      = COALESCE($2, retention_days),
-			retention_days_max  = COALESCE($3, retention_days_max),
-			pre_roll_sec_default  = COALESCE($4, pre_roll_sec_default),
-			post_roll_sec_default = COALESCE($5, post_roll_sec_default),
-			storage_quota_gb    = COALESCE($6, storage_quota_gb),
-			updated_at          = now()
-		WHERE tenant_id = $1::uuid
-		RETURNING tenant_id, retention_days, retention_days_max, pre_roll_sec_default, post_roll_sec_default, storage_quota_gb, created_at, updated_at`,
-		cid, req.RetentionDays, req.RetentionDaysMax, req.PreRollSecDefault, req.PostRollSecDefault, req.StorageQuotaGB,
-	).Scan(&s.TenantID, &s.RetentionDays, &s.RetentionDaysMax, &s.PreRollSecDefault, &s.PostRollSecDefault, &s.StorageQuotaGB, &s.CreatedAt, &s.UpdatedAt)
+			retention_days         = COALESCE($2, retention_days),
+			retention_days_max     = COALESCE($3, retention_days_max),
+			pre_roll_sec_default   = COALESCE($4, pre_roll_sec_default),
+			post_roll_sec_default  = COALESCE($5, post_roll_sec_default),
+			storage_quota_gb       = COALESCE($6, storage_quota_gb),
+			hanet_client_id        = COALESCE($7, hanet_client_id),
+			hanet_server_url       = COALESCE($8, hanet_server_url),
+			hanet_place_id         = COALESCE($9, hanet_place_id),
+			hanet_client_secret_enc = CASE WHEN $13 THEN NULL  ELSE COALESCE($10, hanet_client_secret_enc) END,
+			hanet_access_token_enc  = CASE WHEN $14 THEN NULL  ELSE COALESCE($11, hanet_access_token_enc)  END,
+			hanet_refresh_token_enc = CASE WHEN $15 THEN NULL  ELSE COALESCE($12, hanet_refresh_token_enc) END,
+			updated_at             = now()
+		WHERE tenant_id = $1::uuid`,
+		cid,
+		req.RetentionDays, req.RetentionDaysMax, req.PreRollSecDefault, req.PostRollSecDefault, req.StorageQuotaGB,
+		req.HanetClientID, req.HanetServerURL, req.HanetPlaceID,
+		encOrNil(clientSecretEnc), encOrNil(accessTokenEnc), encOrNil(refreshTokenEnc),
+		clearFlagSecret, clearFlagAccess, clearFlagRefresh,
+	)
 	if err != nil {
 		slog.Error("update cctv settings error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
+	s, err := h.scanSettings(r.Context(), cid)
+	if err != nil {
+		slog.Error("read cctv settings after update", "error", err)
+		httputil.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Audit diff never includes raw token material — the struct serialized
+	// here only has HasX flags, not the ciphertext or plaintext.
 	h.audit.LogFromRequest(r, "cctv.settings.update", "cctv_settings", s.TenantID, "", "success", current, s)
 	httputil.JSON(w, http.StatusOK, s)
 }
