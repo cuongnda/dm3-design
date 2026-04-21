@@ -184,7 +184,21 @@ func (h *MQTTHandler) Handle(topic string, payload []byte) {
 
 	var env MQTTEnvelope
 	if err := json.Unmarshal(payload, &env); err != nil {
-		slog.Warn("mqtt: bad envelope", "topic", topic, "error", err)
+		// Include a payload preview so operators can see what the firmware
+		// is actually publishing. Legacy demasterpro firmware ships CSV /
+		// comma-separated heartbeats that fail the DM3 envelope parse
+		// here; without the raw bytes in the log it's impossible to tell
+		// whether the device is silent or just non-compliant.
+		preview := string(payload)
+		const maxPreview = 300
+		if len(preview) > maxPreview {
+			preview = preview[:maxPreview] + "..."
+		}
+		slog.Warn("mqtt: bad envelope",
+			"topic", topic,
+			"error", err,
+			"payload", preview,
+		)
 		return
 	}
 
@@ -567,6 +581,27 @@ func (h *MQTTHandler) handleStatus(ctx context.Context, pt ParsedTopic, env MQTT
 			})
 		}
 		slog.Info("device offline (LWT)", "device", pt.DeviceID)
+
+	default:
+		// Unknown sta envelope type. Before this branch existed the message
+		// was silently consumed — devices with non-spec firmware (e.g. a
+		// custom 'heartbeat' / 'online' / 'status' envelope) would publish
+		// but the server never updated last_seen, so the heartbeat checker
+		// perpetually marked them offline. Warn with the raw type + a
+		// preview of the payload so on-call can see what firmware is
+		// actually sending and decide whether to adapt the firmware or the
+		// server to match. Preview is truncated to keep the log readable.
+		preview := string(env.Data)
+		const maxPreview = 200
+		if len(preview) > maxPreview {
+			preview = preview[:maxPreview] + "..."
+		}
+		slog.Warn("mqtt sta: unknown envelope type",
+			"device", pt.DeviceID,
+			"tenant", pt.TenantID,
+			"type", env.Type,
+			"payload", preview,
+		)
 	}
 }
 

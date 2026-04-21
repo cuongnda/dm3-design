@@ -1140,24 +1140,7 @@ func (h *BootstrapMQTTHandler) validateHMAC(payload []byte, providedHMAC string)
 	mac := hmac.New(sha256.New, []byte(h.cfg.BootstrapSecret))
 	mac.Write(canonical)
 	expected := hex.EncodeToString(mac.Sum(nil))
-	ok := hmac.Equal([]byte(expected), []byte(providedHMAC))
-	if !ok {
-		slog.Warn("bootstrap: HMAC debug",
-			"raw_payload", string(payload),
-			"canonical", string(canonical),
-			"expected", expected,
-			"provided", providedHMAC,
-			"secret_prefix", firstN(h.cfg.BootstrapSecret, 8),
-			"secret_len", len(h.cfg.BootstrapSecret))
-	}
-	return ok
-}
-
-func firstN(s string, n int) string {
-	if len(s) < n {
-		return s
-	}
-	return s[:n]
+	return hmac.Equal([]byte(expected), []byte(providedHMAC))
 }
 
 func (h *BootstrapMQTTHandler) publishResponse(ctx context.Context, rid, msgType, status, message string) {

@@ -191,11 +191,26 @@ function Select({
   const handleSelect = (nextValue: string) => {
     if (!isControlled) setInternalValue(nextValue)
     onValueChange?.(nextValue)
+    // The Select panel is portaled, so consumers nested inside clickable
+    // rows often call `e.stopPropagation()` / `e.preventDefault()` in
+    // their onChange to keep the row from swallowing the pick. The
+    // synthesized event has to expose those as no-op methods or the call
+    // throws (TypeError: e.stopPropagation is not a function) and the
+    // rest of the handler never runs — users then report "the value
+    // won't change", typically stuck on whatever default the row starts
+    // with. Exposing empty stubs keeps the call safe and costs nothing.
+    const noop = () => undefined
     onChange?.({
       type: "change",
       target: { value: nextValue, name } as EventTarget & HTMLSelectElement,
       currentTarget: { value: nextValue, name } as EventTarget & HTMLSelectElement,
-    } as React.ChangeEvent<HTMLSelectElement>)
+      stopPropagation: noop,
+      preventDefault: noop,
+      nativeEvent: { stopPropagation: noop, preventDefault: noop } as unknown as Event,
+      isPropagationStopped: () => false,
+      isDefaultPrevented: () => false,
+      persist: noop,
+    } as unknown as React.ChangeEvent<HTMLSelectElement>)
     setOpen(false)
     setSearch("")
   }
