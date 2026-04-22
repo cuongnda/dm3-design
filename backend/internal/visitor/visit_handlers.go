@@ -20,6 +20,21 @@ import (
 	"github.com/duali/dm3-backend/pkg/httputil"
 )
 
+// ListVisits returns a paginated list of scheduled visits for the caller's tenant.
+//
+// @Summary      List visits
+// @Description  Plugin-gated (visitor). Requires visitor.visit.manage on writes; reads open to any visitor-enabled user.
+// @Tags         Visitors
+// @Produce      json
+// @Param        page     query  int     false  "Page number"  default(1)
+// @Param        limit    query  int     false  "Page size"    default(50)
+// @Param        status   query  string  false  "Filter by visit status"
+// @Param        date     query  string  false  "Filter by expected_arrival date (YYYY-MM-DD)"
+// @Param        host_id  query  string  false  "Filter by host user UUID"
+// @Success      200  {object}  map[string]interface{}  "Paginated list"
+// @Failure      403  {object}  httputil.ErrorResponse
+// @Router       /visitors [get]
+// @Security     BearerAuth
 func (h *VisitorHandlers) ListVisits(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	if cid == "" {
@@ -113,6 +128,16 @@ func (h *VisitorHandlers) ListVisits(w http.ResponseWriter, r *http.Request) {
 	httputil.Paginated(w, visits, total, page, limit)
 }
 
+// GetVisit returns a single visit by id.
+//
+// @Summary      Get a visit
+// @Tags         Visitors
+// @Produce      json
+// @Param        id   path   string  true  "Visit UUID"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      404  {object}  httputil.ErrorResponse
+// @Router       /visitors/{id} [get]
+// @Security     BearerAuth
 func (h *VisitorHandlers) GetVisit(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	if cid == "" {
@@ -186,6 +211,19 @@ type createVisitRequest struct {
 	VehiclePlate      *string    `json:"vehicle_plate"`
 }
 
+// CreateVisit schedules a new visit in the caller's tenant.
+//
+// @Summary      Create a visit
+// @Description  Sends an email invitation to the visitor with a QR code if email is provided. Plugin-gated (visitor), requires visitor.visit.manage.
+// @Tags         Visitors
+// @Accept       json
+// @Produce      json
+// @Param        body  body   map[string]interface{}  true  "Visit payload (first_name, last_name, email, expected_arrival, host_user_id, etc.)"
+// @Success      201   {object}  map[string]interface{}
+// @Failure      400   {object}  httputil.ErrorResponse
+// @Failure      403   {object}  httputil.ErrorResponse
+// @Router       /visitors [post]
+// @Security     BearerAuth
 func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	if cid == "" {
@@ -362,6 +400,18 @@ type updateVisitRequest struct {
 	Notes             *string    `json:"notes"`
 }
 
+// UpdateVisit updates a visit by id.
+//
+// @Summary      Update a visit
+// @Tags         Visitors
+// @Accept       json
+// @Produce      json
+// @Param        id    path   string                  true  "Visit UUID"
+// @Param        body  body   map[string]interface{}  true  "Fields to update"
+// @Success      200   {object}  map[string]interface{}
+// @Failure      404   {object}  httputil.ErrorResponse
+// @Router       /visitors/{id} [put]
+// @Security     BearerAuth
 func (h *VisitorHandlers) UpdateVisit(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	if cid == "" {
@@ -654,6 +704,19 @@ type checkinRequest struct {
 	BadgeNumber     *string `json:"badge_number"`
 }
 
+// CheckinVisit marks a visit as checked-in (visitor arrived).
+//
+// @Summary      Check in a visit
+// @Description  Captures arrival time and optional arrival metadata (photo, badge). Transitions visit.status to checked_in.
+// @Tags         Visitors
+// @Accept       json
+// @Produce      json
+// @Param        id   path   string                  true  "Visit UUID"
+// @Param        body body   map[string]interface{}  false "Optional check-in metadata"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      404  {object}  httputil.ErrorResponse
+// @Router       /visitors/{id}/checkin [post]
+// @Security     BearerAuth
 func (h *VisitorHandlers) CheckinVisit(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	if cid == "" {

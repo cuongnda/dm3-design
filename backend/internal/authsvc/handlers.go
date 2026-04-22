@@ -164,6 +164,20 @@ const (
 	loginLockoutDuration    = 15 * time.Minute
 )
 
+// Login authenticates a user and returns access + refresh JWTs.
+//
+// @Summary      Log in
+// @Description  Step-1 of the two-step login flow. If the user belongs to multiple companies, returns a list of companies instead of tokens and the caller must follow up with POST /auth/login-step2 specifying company_code. Rate-limited per IP.
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body   map[string]interface{}  true  "{ email, password }"
+// @Success      200   {object}  map[string]interface{}  "Either { access_token, refresh_token, user } or { companies: [] } when disambiguation is needed"
+// @Failure      400   {object}  httputil.ErrorResponse
+// @Failure      401   {object}  httputil.ErrorResponse
+// @Failure      423   {object}  httputil.ErrorResponse  "Account locked after 5 failed attempts (15 min cooldown)"
+// @Failure      429   {object}  httputil.ErrorResponse  "Too many requests"
+// @Router       /auth/login [post]
 func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -473,6 +487,19 @@ type refreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+// Refresh exchanges a valid refresh token for a new access+refresh pair.
+//
+// @Summary      Refresh session tokens
+// @Description  Supports a 7-day grace period for expired refresh tokens so offline terminals can still sync. Rate-limited per IP.
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body   map[string]interface{}  true  "{ refresh_token }"
+// @Success      200   {object}  map[string]interface{}  "{ access_token, refresh_token }"
+// @Failure      400   {object}  httputil.ErrorResponse
+// @Failure      401   {object}  httputil.ErrorResponse
+// @Failure      429   {object}  httputil.ErrorResponse
+// @Router       /auth/refresh [post]
 func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req refreshRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -576,6 +603,16 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Logout invalidates the caller's refresh token.
+//
+// @Summary      Log out
+// @Description  Revokes the refresh token so it can no longer be exchanged. The access token continues to work until it expires naturally (short-lived).
+// @Tags         Auth
+// @Produce      json
+// @Success      204  "No Content"
+// @Failure      401  {object}  httputil.ErrorResponse
+// @Router       /auth/logout [post]
+// @Security     BearerAuth
 func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromContext(r.Context())
 	if claims == nil {
@@ -593,6 +630,16 @@ func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Me returns the authenticated user's profile + roles + tenant.
+//
+// @Summary      Get my profile
+// @Description  Returns the caller's profile together with roles and tenant plugin config. Used by the console on every page load to hydrate the session.
+// @Tags         Auth
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Failure      401  {object}  httputil.ErrorResponse
+// @Router       /auth/me [get]
+// @Security     BearerAuth
 func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromContext(r.Context())
 	if claims == nil {

@@ -20,6 +20,21 @@ import (
 
 // ─── Access Groups ────────────────────────────────────────────────────────────
 
+// ListAccessGroups returns a paginated list of access groups in the caller's tenant.
+//
+// @Summary      List access groups
+// @Description  Access groups bundle access points + time templates + users. Paginated, filterable by name.
+// @Tags         Access
+// @Produce      json
+// @Param        page       query  int     false  "Page number (default 1)"  minimum(1)
+// @Param        limit      query  int     false  "Page size (default 20)"   minimum(1)  maximum(100)
+// @Param        search     query  string  false  "Filter by name (ILIKE)"
+// @Param        sort_by    query  string  false  "Sort field"  Enums(name, created_at, access_point_count, user_count)
+// @Param        sort_order query  string  false  "Sort direction"  Enums(asc, desc)
+// @Success      200  {object}  map[string]interface{}  "Paginated list"
+// @Failure      403  {object}  httputil.ErrorResponse
+// @Router       /access/groups [get]
+// @Security     BearerAuth
 func (h *AccessHandlers) ListAccessGroups(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
@@ -97,6 +112,16 @@ func (h *AccessHandlers) ListAccessGroups(w http.ResponseWriter, r *http.Request
 	httputil.Paginated(w, groups, total, page, limit)
 }
 
+// GetAccessGroup returns a single access group by id.
+//
+// @Summary      Get an access group
+// @Tags         Access
+// @Produce      json
+// @Param        id   path  string  true  "Access group ID (UUID)"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      404  {object}  httputil.ErrorResponse
+// @Router       /access/groups/{id} [get]
+// @Security     BearerAuth
 func (h *AccessHandlers) GetAccessGroup(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
@@ -159,6 +184,17 @@ type createAccessGroupRequest struct {
 	Type         int     `json:"type"`
 }
 
+// CreateAccessGroup creates an access group in the caller's tenant.
+//
+// @Summary      Create an access group
+// @Tags         Access
+// @Accept       json
+// @Produce      json
+// @Param        body  body  createAccessGroupRequest  true  "Access group fields"
+// @Success      201   {object}  map[string]interface{}
+// @Failure      400   {object}  httputil.ErrorResponse
+// @Router       /access/groups [post]
+// @Security     BearerAuth
 func (h *AccessHandlers) CreateAccessGroup(w http.ResponseWriter, r *http.Request) {
 	var req createAccessGroupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -199,6 +235,18 @@ type updateAccessGroupRequest struct {
 	IsDefault    *bool   `json:"is_default"`
 }
 
+// UpdateAccessGroup updates an access group by id.
+//
+// @Summary      Update an access group
+// @Tags         Access
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string                    true  "Access group ID (UUID)"
+// @Param        body  body  updateAccessGroupRequest  true  "Fields to update (all optional)"
+// @Success      200   {object}  map[string]interface{}
+// @Failure      404   {object}  httputil.ErrorResponse
+// @Router       /access/groups/{id} [put]
+// @Security     BearerAuth
 func (h *AccessHandlers) UpdateAccessGroup(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
@@ -238,6 +286,17 @@ func (h *AccessHandlers) UpdateAccessGroup(w http.ResponseWriter, r *http.Reques
 	httputil.JSON(w, http.StatusOK, g)
 }
 
+// DeleteAccessGroup soft-deletes an access group by id.
+//
+// @Summary      Delete an access group
+// @Description  Soft delete. Users currently assigned to this group keep their assignment records but those records become inactive.
+// @Tags         Access
+// @Produce      json
+// @Param        id   path  string  true  "Access group ID (UUID)"
+// @Success      204  "No Content"
+// @Failure      404  {object}  httputil.ErrorResponse
+// @Router       /access/groups/{id} [delete]
+// @Security     BearerAuth
 func (h *AccessHandlers) DeleteAccessGroup(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())

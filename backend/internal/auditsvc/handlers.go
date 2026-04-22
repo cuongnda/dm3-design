@@ -210,6 +210,29 @@ const auditSelectCols = `id, time, tenant_id, actor_id, actor_email, actor_ip::t
 	status, old_values, new_values, metadata`
 
 // ListAuditLogs handles GET /api/v1/audit/logs or /api/v1/audit/tenant/logs.
+//
+// @Summary      List audit log entries
+// @Description  Returns a paginated list of audit log entries. Tenant users see only their own tenant's entries; system admins see all. Supports filtering by actor, service, action, entity_type, status, and time range.
+// @Tags         Audit
+// @Produce      json
+// @Param        page         query  int     false  "Page number (1-indexed)"  default(1)
+// @Param        limit        query  int     false  "Page size (max 200)"      default(50)
+// @Param        tenant_id    query  string  false  "Filter by tenant UUID (system admin only)"
+// @Param        actor_id     query  string  false  "Filter by actor user UUID"
+// @Param        actor_email  query  string  false  "Filter by actor email (partial match)"
+// @Param        service      query  string  false  "Filter by emitting service (e.g. auth-svc)"
+// @Param        action       query  string  false  "Filter by action (e.g. user.create)"
+// @Param        entity_type  query  string  false  "Filter by entity type (e.g. user, device)"
+// @Param        entity_id    query  string  false  "Filter by entity UUID"
+// @Param        status       query  string  false  "Filter by status (success, failure)"
+// @Param        from         query  string  false  "ISO-8601 start timestamp"
+// @Param        to           query  string  false  "ISO-8601 end timestamp"
+// @Success      200  {object}  map[string]interface{}  "Paginated list with data and pagination envelope"
+// @Failure      401  {object}  httputil.ErrorResponse
+// @Failure      403  {object}  httputil.ErrorResponse
+// @Failure      500  {object}  httputil.ErrorResponse
+// @Router       /audit/logs [get]
+// @Security     BearerAuth
 func (h *AuditHandlers) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	page, limit := parseAuditPagination(r)
 	offset := (page - 1) * limit
@@ -258,6 +281,17 @@ func (h *AuditHandlers) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetAuditLog handles GET /api/v1/audit/logs/{id}.
+//
+// @Summary      Get an audit log entry
+// @Description  Returns a single audit log entry by id. Tenant users can only read entries from their own tenant.
+// @Tags         Audit
+// @Produce      json
+// @Param        id   path   string  true  "Audit log entry UUID"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      403  {object}  httputil.ErrorResponse
+// @Failure      404  {object}  httputil.ErrorResponse
+// @Router       /audit/logs/{id} [get]
+// @Security     BearerAuth
 func (h *AuditHandlers) GetAuditLog(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	admin := h.claims.IsAdmin(r.Context())
@@ -288,6 +322,26 @@ func (h *AuditHandlers) GetAuditLog(w http.ResponseWriter, r *http.Request) {
 }
 
 // ExportAuditLogs handles GET /api/v1/audit/export or /api/v1/audit/tenant/export.
+//
+// @Summary      Export audit log entries as CSV
+// @Description  Streams matching audit log entries as CSV. Supports the same filters as list. Capped at 50,000 rows per export.
+// @Tags         Audit
+// @Produce      text/csv
+// @Param        tenant_id    query  string  false  "Filter by tenant UUID (system admin only)"
+// @Param        actor_id     query  string  false  "Filter by actor user UUID"
+// @Param        actor_email  query  string  false  "Filter by actor email (partial match)"
+// @Param        service      query  string  false  "Filter by emitting service"
+// @Param        action       query  string  false  "Filter by action"
+// @Param        entity_type  query  string  false  "Filter by entity type"
+// @Param        entity_id    query  string  false  "Filter by entity UUID"
+// @Param        status       query  string  false  "Filter by status"
+// @Param        from         query  string  false  "ISO-8601 start timestamp"
+// @Param        to           query  string  false  "ISO-8601 end timestamp"
+// @Success      200  {string}  string  "CSV file download"
+// @Failure      401  {object}  httputil.ErrorResponse
+// @Failure      403  {object}  httputil.ErrorResponse
+// @Router       /audit/export [get]
+// @Security     BearerAuth
 func (h *AuditHandlers) ExportAuditLogs(w http.ResponseWriter, r *http.Request) {
 	where, args, idx := h.buildAuditWhere(r, h.claims.IsAdmin(r.Context()))
 

@@ -99,6 +99,19 @@ func scanDeviceRows(rows pgx.Rows) ([]models.Device, error) {
 
 // ─── List Devices (company-scoped) ──────────────────────────────────────────
 
+// ListDevices returns devices (door controllers, terminals, cameras) in the caller's tenant.
+//
+// @Summary      List devices
+// @Description  Each row includes online status, firmware version, and a comma-separated list of the access points the device is bound to.
+// @Tags         Devices
+// @Produce      json
+// @Param        status  query  string  false  "Filter by connection status"  Enums(online, offline, warning)
+// @Param        type    query  string  false  "Filter by device type"        Enums(terminal, controller, camera, sensor)
+// @Param        search  query  string  false  "Filter by device id, name, or location"
+// @Success      200     {object}  map[string]interface{}  "Paginated list"
+// @Failure      403     {object}  httputil.ErrorResponse
+// @Router       /gateway/devices [get]
+// @Security     BearerAuth
 func (h *GatewayHandlers) ListDevices(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	if cid == "" {
@@ -258,6 +271,19 @@ type createDeviceRequest struct {
 	Location string `json:"location"`
 }
 
+// CreateDevice registers a new device manually (non-provisioning path).
+//
+// @Summary      Create a device
+// @Description  For production use, prefer the provisioning QR flow. This endpoint is a direct write for integrations that manage device inventory externally.
+// @Tags         Devices
+// @Accept       json
+// @Produce      json
+// @Param        body  body  map[string]interface{}  true  "Device fields: device_id (hardware id, required), name, type, model, location, firmware_version"
+// @Success      201   {object}  map[string]interface{}
+// @Failure      400   {object}  httputil.ErrorResponse
+// @Failure      409   {object}  httputil.ErrorResponse  "device_id already registered"
+// @Router       /gateway/devices [post]
+// @Security     BearerAuth
 func (h *GatewayHandlers) CreateDevice(w http.ResponseWriter, r *http.Request) {
 	var req createDeviceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -300,6 +326,16 @@ func (h *GatewayHandlers) CreateDevice(w http.ResponseWriter, r *http.Request) {
 
 // ─── Get Device ─────────────────────────────────────────────────────────────
 
+// GetDevice returns a single device by id.
+//
+// @Summary      Get a device
+// @Tags         Devices
+// @Produce      json
+// @Param        id   path  string  true  "Device ID (UUID)"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      404  {object}  httputil.ErrorResponse
+// @Router       /gateway/devices/{id} [get]
+// @Security     BearerAuth
 func (h *GatewayHandlers) GetDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
@@ -444,6 +480,19 @@ func (h *GatewayHandlers) decodeUpdateDevice(w http.ResponseWriter, r *http.Requ
 	return req, true
 }
 
+// UpdateDevice updates a device by id.
+//
+// @Summary      Update a device
+// @Description  Partial update. Changes to verify_methods or open_relay_ms take effect after the next config sync cycle.
+// @Tags         Devices
+// @Accept       json
+// @Produce      json
+// @Param        id    path   string                  true  "Device ID (UUID)"
+// @Param        body  body   map[string]interface{}  true  "Device fields to update"
+// @Success      200   {object}  map[string]interface{}
+// @Failure      404   {object}  httputil.ErrorResponse
+// @Router       /gateway/devices/{id} [put]
+// @Security     BearerAuth
 func (h *GatewayHandlers) UpdateDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())
@@ -610,6 +659,17 @@ func (h *GatewayHandlers) UpdateDeviceGlobal(w http.ResponseWriter, r *http.Requ
 
 // ─── Delete Device ──────────────────────────────────────────────────────────
 
+// DeleteDevice removes a device by id.
+//
+// @Summary      Delete a device
+// @Description  Permanently removes the device. Any offline cached credentials on the device remain until it syncs and discovers it has been revoked.
+// @Tags         Devices
+// @Produce      json
+// @Param        id   path   string  true  "Device ID (UUID)"
+// @Success      200  {object}  map[string]string  "status: deleted"
+// @Failure      404  {object}  httputil.ErrorResponse
+// @Router       /gateway/devices/{id} [delete]
+// @Security     BearerAuth
 func (h *GatewayHandlers) DeleteDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	cid := authsvc.CompanyIDFromContext(r.Context())

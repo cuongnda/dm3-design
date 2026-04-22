@@ -188,6 +188,18 @@ func ipMatches(caller string, whitelist []string) bool {
 // ─── API Token CRUD ──────────────────────────────────────────────────────────
 
 // ListAPITokens returns all tokens in the caller's tenant.
+//
+// @Summary      List API tokens
+// @Description  Returns every API token issued for the caller's tenant. The raw token
+// @Description  secret is only shown once at creation time; this endpoint returns the
+// @Description  non-secret metadata (prefix, scopes, usage counters, etc.).
+// @Tags         API Tokens
+// @Produce      json
+// @Success      200  {array}   apiToken
+// @Failure      401  {object}  httputil.ErrorResponse  "Missing or invalid bearer token"
+// @Failure      403  {object}  httputil.ErrorResponse  "api_integration plugin not enabled"
+// @Router       /auth/api-tokens [get]
+// @Security     BearerAuth
 func (h *AuthHandlers) ListAPITokens(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromContext(r.Context())
 	if claims == nil || claims.CID == "" {

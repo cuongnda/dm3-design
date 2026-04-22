@@ -1,7 +1,8 @@
-.PHONY: build test lint docker-up docker-down migrate seed seed-api dev clean
+.PHONY: build test lint docker-up docker-down migrate seed seed-api dev clean swag swag-check api-pdf
 
 SERVICES := device-gateway access-svc identity-svc auth-svc audit-svc visitor-svc parking-svc cctv-svc attend-svc
 BIN_DIR := bin
+SWAG := $(shell go env GOPATH)/bin/swag
 
 build:
 	@mkdir -p $(BIN_DIR)
@@ -10,6 +11,29 @@ build:
 		go build -o $(BIN_DIR)/$$svc ./cmd/$$svc/; \
 	done
 	@echo "Build complete"
+
+# swag regenerates docs/swagger.{json,yaml,.go} from swaggo annotations on
+# auth-svc handlers. The generated files are committed so the spec stays
+# reviewable in PRs; CI runs `make swag-check` to catch drift.
+swag:
+	@if [ ! -x "$(SWAG)" ]; then \
+		echo "Installing swaggo/swag..."; \
+		go install github.com/swaggo/swag/cmd/swag@latest; \
+	fi
+	@echo "Regenerating OpenAPI spec from auth-svc annotations..."
+	@$(SWAG) init -g cmd/auth-svc/main.go -o docs --outputTypes json,yaml --parseDependency --parseInternal --quiet
+
+# swag-check fails if `make swag` produces a diff — use in CI to enforce that
+# annotations and the committed spec stay in sync.
+swag-check: swag
+	@git diff --exit-code -- docs/ || (echo "ERROR: OpenAPI spec drift detected. Run 'make swag' and commit docs/." && exit 1)
+
+# api-pdf renders docs/swagger.json into a Duall-branded PDF at
+# docs/api-reference.pdf. Requires: node (for npx @redocly/cli) and
+# python3 with playwright (pip install playwright && playwright install chromium).
+api-pdf: swag
+	@echo "Building branded API PDF..."
+	@python3 scripts/build-api-pdf.py
 
 test:
 	go test ./... -v -race

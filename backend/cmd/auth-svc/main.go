@@ -54,6 +54,44 @@ func bypassPrivate(limiter func(http.Handler) http.Handler) func(http.Handler) h
 	}
 }
 
+// @title           Duall Master API
+// @version         3.0
+// @description     Multi-tenant access control and smart building platform API.
+// @description
+// @description     All endpoints are tenant-scoped through the `Authorization: Bearer dm3_live_...`
+// @description     or `dm3_test_...` API token. Issue tokens from Settings → API Integration.
+// @description     Tokens prefixed `dm3_live_` act on production data; `dm3_test_` are sandbox.
+// @description
+// @description     The default rate limit is 60 requests/minute per token. Responses use a
+// @description     consistent envelope: success responses return the resource directly, errors
+// @description     return `{ "error": "<code>", "message": "<human readable>" }`.
+// @termsOfService  https://duali.com/terms
+//
+// @contact.name    Duall Master Support
+// @contact.url     https://duali.com/support
+// @contact.email   support@duali.com
+//
+// @license.name    Proprietary
+//
+// @BasePath        /api/v1
+//
+// @securityDefinitions.apikey BearerAuth
+// @in                         header
+// @name                       Authorization
+// @description                API token in the form `Bearer dm3_live_...` or `Bearer dm3_test_...`.
+//
+// @tag.name   Identity
+// @tag.description Users, companies, and profiles scoped to your tenant.
+// @tag.name   Access
+// @tag.description Access groups, rules, and schedules.
+// @tag.name   Devices
+// @tag.description Door controllers, readers, and gateways.
+// @tag.name   Events
+// @tag.description Real-time and historical access events.
+// @tag.name   Audit
+// @tag.description Immutable record of every change and auth event.
+// @tag.name   API Tokens
+// @tag.description Manage API tokens that authenticate integrations against the public API.
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	cfg := config.Load()
@@ -199,6 +237,11 @@ func main() {
 			ar.Get("/api/v1/auth/api-tokens", h.ListAPITokens)
 			ar.Post("/api/v1/auth/api-tokens", h.CreateAPIToken)
 			ar.Delete("/api/v1/auth/api-tokens/{id}", h.RevokeAPIToken)
+
+			// OpenAPI spec for the in-app Scalar viewer. Gated behind the
+			// same plugin as the API tokens UI so tenants without integration
+			// access can't discover the public API surface.
+			ar.Get("/api/v1/openapi.json", ServeOpenAPISpec)
 
 			// OAuth2 clients — tenant admins manage their own; system_admin
 			// can create system-wide clients (null tenant_id). Authorization
