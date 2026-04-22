@@ -56,6 +56,24 @@ func (h *IdentityHandlers) UploadUserAvatar(w http.ResponseWriter, r *http.Reque
 
 // ─── User CRUD ────────────────────────────────────────────────────────────────
 
+// ListUsers returns a page of users in the caller's tenant.
+//
+// @Summary      List users
+// @Description  Paginated list of users, filterable by search term, status, and department.
+// @Tags         Identity
+// @Produce      json
+// @Param        page           query  int     false  "Page number (default 1)"                       minimum(1)
+// @Param        limit          query  int     false  "Page size (default 20, max 100)"               minimum(1) maximum(100)
+// @Param        search         query  string  false  "Search by name or email"
+// @Param        status         query  []string  false  "Filter by status (repeatable)"               collectionFormat(multi)
+// @Param        department_id  query  []string  false  "Filter by department id (repeatable)"        collectionFormat(multi)
+// @Param        sort_by        query  string  false  "Sort field"                                    Enums(full_name, email, created_at, updated_at)
+// @Param        sort_order     query  string  false  "Sort direction"                                Enums(asc, desc)
+// @Success      200            {object}  map[string]interface{}  "Paginated user list with total count"
+// @Failure      400            {object}  httputil.ErrorResponse
+// @Failure      401            {object}  httputil.ErrorResponse
+// @Router       /identity/users [get]
+// @Security     BearerAuth
 func (h *IdentityHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 	if companyID == "" {
@@ -232,6 +250,18 @@ func (h *IdentityHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetUser returns a single user by id within the caller's tenant.
+//
+// @Summary      Get a user
+// @Description  Fetch the full user record including department, access group membership, and credentials metadata.
+// @Tags         Identity
+// @Produce      json
+// @Param        id   path  string  true  "User ID (UUID)"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      401  {object}  httputil.ErrorResponse
+// @Failure      404  {object}  httputil.ErrorResponse  "User not found or not in tenant"
+// @Router       /identity/users/{id} [get]
+// @Security     BearerAuth
 func (h *IdentityHandlers) GetUser(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	companyID := authsvc.CompanyIDFromContext(r.Context())
@@ -318,6 +348,20 @@ func (h *IdentityHandlers) GetUser(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// CreateUser creates a user in the caller's tenant.
+//
+// @Summary      Create a user
+// @Description  Creates a user record. Required fields are first_name, last_name, and either email or emp_number. Optional credentials (card, PIN, biometric) can be attached via the separate credentials endpoints.
+// @Tags         Identity
+// @Accept       json
+// @Produce      json
+// @Param        body  body   map[string]interface{}  true  "User fields: first_name, last_name, email, phone, department_id, position, status, access_group_id, effective_date, expired_date"
+// @Success      201   {object}  map[string]interface{}
+// @Failure      400   {object}  httputil.ErrorResponse  "Validation error"
+// @Failure      401   {object}  httputil.ErrorResponse
+// @Failure      409   {object}  httputil.ErrorResponse  "Email or employee number already exists"
+// @Router       /identity/users [post]
+// @Security     BearerAuth
 func (h *IdentityHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	companyID := authsvc.CompanyIDFromContext(r.Context())
 	if companyID == "" {
@@ -526,6 +570,20 @@ func (h *IdentityHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// UpdateUser updates an existing user by id.
+//
+// @Summary      Update a user
+// @Description  Partial update — only fields present in the body are updated. Omit a field to leave it unchanged.
+// @Tags         Identity
+// @Accept       json
+// @Produce      json
+// @Param        id    path   string                  true  "User ID (UUID)"
+// @Param        body  body   map[string]interface{}  true  "Subset of user fields to update"
+// @Success      200   {object}  map[string]interface{}
+// @Failure      400   {object}  httputil.ErrorResponse
+// @Failure      404   {object}  httputil.ErrorResponse
+// @Router       /identity/users/{id} [put]
+// @Security     BearerAuth
 func (h *IdentityHandlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	companyID := authsvc.CompanyIDFromContext(r.Context())
@@ -683,6 +741,17 @@ func (h *IdentityHandlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "user updated successfully"})
 }
 
+// DeleteUser soft-deletes a user by id.
+//
+// @Summary      Delete a user
+// @Description  Soft delete — the user record is marked deleted and hidden from list/get endpoints, but retained for audit integrity. Associated credentials are revoked immediately.
+// @Tags         Identity
+// @Produce      json
+// @Param        id   path  string  true  "User ID (UUID)"
+// @Success      204  "No Content"
+// @Failure      404  {object}  httputil.ErrorResponse
+// @Router       /identity/users/{id} [delete]
+// @Security     BearerAuth
 func (h *IdentityHandlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	companyID := authsvc.CompanyIDFromContext(r.Context())

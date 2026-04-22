@@ -47,6 +47,22 @@ verify:backend:
     - develop
     - /^v\d+\.\d+\.\d+$/
 
+# Catches drift between swaggo annotations and the committed OpenAPI spec at
+# backend/docs/. If a dev edits handler annotations but forgets to run
+# `make swag`, this job regenerates the spec and fails the build on diff.
+verify:openapi:
+  stage: verify
+  image: golang:1.24
+  script:
+    - echo "=== Verifying OpenAPI spec is in sync with annotations ==="
+    - cd backend
+    - go install github.com/swaggo/swag/cmd/swag@latest
+    - make swag-check
+  only:
+    - develop
+    - merge_requests
+    - /^v\d+\.\d+\.\d+$/
+
 verify:frontend:
   stage: verify
   script:

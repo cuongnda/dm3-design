@@ -1,0 +1,829 @@
+basePath: /api/v1
+definitions:
+  access.createAccessGroupRequest:
+    properties:
+      access_time_id:
+        type: string
+      description:
+        type: string
+      is_default:
+        type: boolean
+      name:
+        type: string
+      type:
+        type: integer
+    type: object
+  access.updateAccessGroupRequest:
+    properties:
+      access_time_id:
+        type: string
+      description:
+        type: string
+      is_default:
+        type: boolean
+      name:
+        type: string
+    type: object
+  github_com_duali_dm3-backend_pkg_httputil.ErrorResponse:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+    type: object
+  internal_authsvc.apiToken:
+    properties:
+      created_at:
+        type: string
+      environment:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      ip_whitelist:
+        items:
+          type: string
+        type: array
+      last_used_at:
+        type: string
+      last_used_ip:
+        type: string
+      name:
+        type: string
+      prefix:
+        type: string
+      rate_limit_tier:
+        type: string
+      scopes:
+        items:
+          type: string
+        type: array
+      status:
+        type: string
+      usage_count:
+        type: integer
+    type: object
+info:
+  contact:
+    email: support@duali.com
+    name: Duall Master Support
+    url: https://duali.com/support
+  description: |-
+    Multi-tenant access control and smart building platform API.
+
+    All endpoints are tenant-scoped through the `Authorization: Bearer dm3_live_...`
+    or `dm3_test_...` API token. Issue tokens from Settings → API Integration.
+    Tokens prefixed `dm3_live_` act on production data; `dm3_test_` are sandbox.
+
+    The default rate limit is 60 requests/minute per token. Responses use a
+    consistent envelope: success responses return the resource directly, errors
+    return `{ "error": "<code>", "message": "<human readable>" }`.
+  license:
+    name: Proprietary
+  termsOfService: https://duali.com/terms
+  title: Duall Master API
+  version: "1.0"
+paths:
+  /access/groups:
+    get:
+      description: Access groups bundle access points + time templates + users. Paginated,
+        filterable by name.
+      parameters:
+      - description: Page number (default 1)
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - description: Page size (default 20)
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - description: Filter by name (ILIKE)
+        in: query
+        name: search
+        type: string
+      - description: Sort field
+        enum:
+        - name
+        - created_at
+        - access_point_count
+        - user_count
+        in: query
+        name: sort_by
+        type: string
+      - description: Sort direction
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sort_order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List access groups
+      tags:
+      - Access
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Access group fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/access.createAccessGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create an access group
+      tags:
+      - Access
+  /access/groups/{id}:
+    delete:
+      description: Soft delete. Users currently assigned to this group keep their
+        assignment records but those records become inactive.
+      parameters:
+      - description: Access group ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete an access group
+      tags:
+      - Access
+    get:
+      parameters:
+      - description: Access group ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get an access group
+      tags:
+      - Access
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Access group ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update (all optional)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/access.updateAccessGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update an access group
+      tags:
+      - Access
+  /audit/export:
+    get:
+      description: Streams matching audit log entries as CSV. Supports the same filters
+        as list. Capped at 50,000 rows per export.
+      parameters:
+      - description: Filter by tenant UUID (system admin only)
+        in: query
+        name: tenant_id
+        type: string
+      - description: Filter by actor user UUID
+        in: query
+        name: actor_id
+        type: string
+      - description: Filter by actor email (partial match)
+        in: query
+        name: actor_email
+        type: string
+      - description: Filter by emitting service
+        in: query
+        name: service
+        type: string
+      - description: Filter by action
+        in: query
+        name: action
+        type: string
+      - description: Filter by entity type
+        in: query
+        name: entity_type
+        type: string
+      - description: Filter by entity UUID
+        in: query
+        name: entity_id
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: ISO-8601 start timestamp
+        in: query
+        name: from
+        type: string
+      - description: ISO-8601 end timestamp
+        in: query
+        name: to
+        type: string
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: CSV file download
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Export audit log entries as CSV
+      tags:
+      - Audit
+  /audit/logs:
+    get:
+      description: Returns a paginated list of audit log entries. Tenant users see
+        only their own tenant's entries; system admins see all. Supports filtering
+        by actor, service, action, entity_type, status, and time range.
+      parameters:
+      - default: 1
+        description: Page number (1-indexed)
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: Page size (max 200)
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by tenant UUID (system admin only)
+        in: query
+        name: tenant_id
+        type: string
+      - description: Filter by actor user UUID
+        in: query
+        name: actor_id
+        type: string
+      - description: Filter by actor email (partial match)
+        in: query
+        name: actor_email
+        type: string
+      - description: Filter by emitting service (e.g. auth-svc)
+        in: query
+        name: service
+        type: string
+      - description: Filter by action (e.g. user.create)
+        in: query
+        name: action
+        type: string
+      - description: Filter by entity type (e.g. user, device)
+        in: query
+        name: entity_type
+        type: string
+      - description: Filter by entity UUID
+        in: query
+        name: entity_id
+        type: string
+      - description: Filter by status (success, failure)
+        in: query
+        name: status
+        type: string
+      - description: ISO-8601 start timestamp
+        in: query
+        name: from
+        type: string
+      - description: ISO-8601 end timestamp
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list with data and pagination envelope
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List audit log entries
+      tags:
+      - Audit
+  /audit/logs/{id}:
+    get:
+      description: Returns a single audit log entry by id. Tenant users can only read
+        entries from their own tenant.
+      parameters:
+      - description: Audit log entry UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get an audit log entry
+      tags:
+      - Audit
+  /auth/api-tokens:
+    get:
+      description: |-
+        Returns every API token issued for the caller's tenant. The raw token
+        secret is only shown once at creation time; this endpoint returns the
+        non-secret metadata (prefix, scopes, usage counters, etc.).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/internal_authsvc.apiToken'
+            type: array
+        "401":
+          description: Missing or invalid bearer token
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "403":
+          description: api_integration plugin not enabled
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List API tokens
+      tags:
+      - API Tokens
+  /gateway/devices:
+    get:
+      description: Each row includes online status, firmware version, and a comma-separated
+        list of the access points the device is bound to.
+      parameters:
+      - description: Filter by connection status
+        enum:
+        - online
+        - offline
+        - warning
+        in: query
+        name: status
+        type: string
+      - description: Filter by device type
+        enum:
+        - terminal
+        - controller
+        - camera
+        - sensor
+        in: query
+        name: type
+        type: string
+      - description: Filter by device id, name, or location
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List devices
+      tags:
+      - Devices
+    post:
+      consumes:
+      - application/json
+      description: For production use, prefer the provisioning QR flow. This endpoint
+        is a direct write for integrations that manage device inventory externally.
+      parameters:
+      - description: 'Device fields: device_id (hardware id, required), name, type,
+          model, location, firmware_version'
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "409":
+          description: device_id already registered
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a device
+      tags:
+      - Devices
+  /gateway/devices/{id}:
+    delete:
+      description: Permanently removes the device. Any offline cached credentials
+        on the device remain until it syncs and discovers it has been revoked.
+      parameters:
+      - description: Device ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'status: deleted'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a device
+      tags:
+      - Devices
+    get:
+      parameters:
+      - description: Device ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a device
+      tags:
+      - Devices
+    put:
+      consumes:
+      - application/json
+      description: Partial update. Changes to verify_methods or open_relay_ms take
+        effect after the next config sync cycle.
+      parameters:
+      - description: Device ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Device fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a device
+      tags:
+      - Devices
+  /identity/users:
+    get:
+      description: Paginated list of users, filterable by search term, status, and
+        department.
+      parameters:
+      - description: Page number (default 1)
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - description: Page size (default 20, max 100)
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - description: Search by name or email
+        in: query
+        name: search
+        type: string
+      - collectionFormat: multi
+        description: Filter by status (repeatable)
+        in: query
+        items:
+          type: string
+        name: status
+        type: array
+      - collectionFormat: multi
+        description: Filter by department id (repeatable)
+        in: query
+        items:
+          type: string
+        name: department_id
+        type: array
+      - description: Sort field
+        enum:
+        - full_name
+        - email
+        - created_at
+        - updated_at
+        in: query
+        name: sort_by
+        type: string
+      - description: Sort direction
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sort_order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated user list with total count
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List users
+      tags:
+      - Identity
+    post:
+      consumes:
+      - application/json
+      description: Creates a user record. Required fields are first_name, last_name,
+        and either email or emp_number. Optional credentials (card, PIN, biometric)
+        can be attached via the separate credentials endpoints.
+      parameters:
+      - description: 'User fields: first_name, last_name, email, phone, department_id,
+          position, status, access_group_id, effective_date, expired_date'
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "409":
+          description: Email or employee number already exists
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a user
+      tags:
+      - Identity
+  /identity/users/{id}:
+    delete:
+      description: Soft delete — the user record is marked deleted and hidden from
+        list/get endpoints, but retained for audit integrity. Associated credentials
+        are revoked immediately.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a user
+      tags:
+      - Identity
+    get:
+      description: Fetch the full user record including department, access group membership,
+        and credentials metadata.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "404":
+          description: User not found or not in tenant
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a user
+      tags:
+      - Identity
+    put:
+      consumes:
+      - application/json
+      description: Partial update — only fields present in the body are updated. Omit
+        a field to leave it unchanged.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Subset of user fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a user
+      tags:
+      - Identity
+securityDefinitions:
+  BearerAuth:
+    description: API token in the form `Bearer dm3_live_...` or `Bearer dm3_test_...`.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
