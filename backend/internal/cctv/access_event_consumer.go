@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -196,38 +197,65 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 		eventUUID = &payload.EventID
 	}
 
+	// Fan out per-camera work in parallel — each camera is a self-contained
+	// rule lookup + (at most) one INSERT + one junction write. Processing
+	// serially would make the NATS handler's latency O(num_cameras), which
+	// matters when 20+ cameras hang off the same access point. A WaitGroup
+	// bounded implicitly by the camera list (≤ dozens in practice) is cheap
+	// and avoids adding another worker pool for light DB-only work.
+	//
+	// TODO(refactor): if we ever see tenants with >100 cameras on an AP,
+	// convert this to a small semaphore (say 16) to avoid DB connection
+	// saturation under burst traffic.
+	var wg sync.WaitGroup
 	for _, camDeviceID := range cameras {
-		rule, err := ResolveRule(ctx, c.db, RuleMatchInput{
-			TenantID:       tenantID,
-			CameraDeviceID: camDeviceID,
-			AccessPointID:  accessPointID,
-			Decision:       payload.Decision,
-			EventType:      evt.Type,
-		})
-		if err != nil {
-			slog.Warn("cctv: rule resolve failed, skipping camera", "error", err,
-				"camera_device_id", camDeviceID)
-			continue
-		}
-		if !rule.RecordEnabled && !rule.SnapshotEnabled {
-			continue
-		}
+		wg.Add(1)
+		go func(camDeviceID string) {
+			defer wg.Done()
+			c.captureForCamera(ctx, tenantID, accessPointID, camDeviceID, payload, evt, eventUUID, eventTS, maxClipDuration)
+		}(camDeviceID)
+	}
+	wg.Wait()
+	return nil
+}
 
-		if rule.RecordEnabled {
-			if err := c.captureClip(ctx, tenantID, camDeviceID, eventUUID, eventTS, rule, maxClipDuration); err != nil {
-				slog.Error("cctv: capture clip failed", "error", err,
-					"camera_device_id", camDeviceID)
-				// Don't return — one camera failure shouldn't block others in the fan-out.
-			}
-		}
-		if rule.SnapshotEnabled {
-			if err := c.captureSnapshot(ctx, tenantID, camDeviceID, eventUUID, eventTS, rule); err != nil {
-				slog.Error("cctv: capture snapshot failed", "error", err,
-					"camera_device_id", camDeviceID)
-			}
+func (c *AccessEventConsumer) captureForCamera(
+	ctx context.Context,
+	tenantID, accessPointID, camDeviceID string,
+	payload accessLogData,
+	evt deviceEvent,
+	eventUUID *string,
+	eventTS time.Time,
+	maxClipDuration time.Duration,
+) {
+	rule, err := ResolveRule(ctx, c.db, RuleMatchInput{
+		TenantID:       tenantID,
+		CameraDeviceID: camDeviceID,
+		AccessPointID:  accessPointID,
+		Decision:       payload.Decision,
+		EventType:      evt.Type,
+	})
+	if err != nil {
+		slog.Warn("cctv: rule resolve failed, skipping camera", "error", err,
+			"camera_device_id", camDeviceID)
+		return
+	}
+	if !rule.RecordEnabled && !rule.SnapshotEnabled {
+		return
+	}
+
+	if rule.RecordEnabled {
+		if err := c.captureClip(ctx, tenantID, camDeviceID, eventUUID, eventTS, rule, maxClipDuration); err != nil {
+			slog.Error("cctv: capture clip failed", "error", err,
+				"camera_device_id", camDeviceID)
 		}
 	}
-	return nil
+	if rule.SnapshotEnabled {
+		if err := c.captureSnapshot(ctx, tenantID, camDeviceID, eventUUID, eventTS, rule); err != nil {
+			slog.Error("cctv: capture snapshot failed", "error", err,
+				"camera_device_id", camDeviceID)
+		}
+	}
 }
 
 // captureClip implements the coalescing state machine for video capture. It

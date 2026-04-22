@@ -25,6 +25,9 @@ export interface CameraDTO {
   updated_at: string;
 }
 
+export type ClipMediaType = 'clip' | 'snapshot';
+export type ClipStatus = 'pending' | 'recording' | 'finalized' | 'degraded' | 'failed';
+
 export interface ClipDTO {
   id: string;
   tenant_id: string;
@@ -37,6 +40,9 @@ export interface ClipDTO {
   storage_ref?: string;
   thumbnail_ref?: string;
   size_bytes?: number;
+  media_type: ClipMediaType;
+  status: ClipStatus;
+  trigger?: string;
   created_at: string;
 }
 
@@ -83,6 +89,8 @@ export interface StreamUrlsDTO {
 
 export interface ClipPlaybackDTO {
   playback_url: string;
+  media_type?: ClipMediaType;
+  status?: ClipStatus;
   started_at: string;
   ended_at?: string;
   duration_ms?: number;

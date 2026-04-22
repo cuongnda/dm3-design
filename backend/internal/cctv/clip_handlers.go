@@ -48,6 +48,8 @@ type clipResponseDTO struct {
 	EndedAt       *time.Time `json:"ended_at,omitempty"`
 	DurationSec   *int       `json:"duration_sec,omitempty"`
 	StorageRef    string     `json:"storage_ref"`
+	MediaType     string     `json:"media_type"` // 'clip' | 'snapshot'
+	Status        string     `json:"status"`     // pending | recording | finalized | degraded | failed
 	Trigger       string     `json:"trigger"`
 	CreatedAt     time.Time  `json:"created_at"`
 }
@@ -60,6 +62,14 @@ func toClipResponse(c EventClip, cameraName *string) clipResponseDTO {
 		v := *c.DurationMs / 1000
 		durationSec = &v
 	}
+	mediaType := c.MediaType
+	if mediaType == "" {
+		mediaType = "clip"
+	}
+	status := c.Status
+	if status == "" {
+		status = "finalized"
+	}
 	return clipResponseDTO{
 		ID:            c.ID,
 		TenantID:      c.TenantID,
@@ -70,6 +80,8 @@ func toClipResponse(c EventClip, cameraName *string) clipResponseDTO {
 		EndedAt:       c.EndedAt,
 		DurationSec:   durationSec,
 		StorageRef:    c.ObjectKey,
+		MediaType:     mediaType,
+		Status:        status,
 		Trigger:       c.Trigger,
 		CreatedAt:     c.CreatedAt,
 	}
@@ -134,7 +146,7 @@ func (h *CCTVHandlers) ListClips(w http.ResponseWriter, r *http.Request) {
 	listArgs := append(args, limit, offset)
 	rows, err := h.db.Pool.Query(r.Context(), `
 		SELECT ec.id, ec.tenant_id, ec.device_id, ec.access_event_id, ec.started_at, ec.ended_at,
-		       ec.duration_ms, ec.object_key, ec.trigger, ec.created_at,
+		       ec.duration_ms, ec.object_key, ec.trigger, ec.media_type, ec.status, ec.created_at,
 		       d.name
 		FROM dm3_cctv.event_clips ec
 		LEFT JOIN dm3_devices.devices d
@@ -154,7 +166,8 @@ func (h *CCTVHandlers) ListClips(w http.ResponseWriter, r *http.Request) {
 		var cameraName *string
 		if err := rows.Scan(
 			&clip.ID, &clip.TenantID, &clip.DeviceID, &clip.AccessEventID,
-			&clip.StartedAt, &clip.EndedAt, &clip.DurationMs, &clip.ObjectKey, &clip.Trigger, &clip.CreatedAt,
+			&clip.StartedAt, &clip.EndedAt, &clip.DurationMs, &clip.ObjectKey, &clip.Trigger,
+			&clip.MediaType, &clip.Status, &clip.CreatedAt,
 			&cameraName,
 		); err != nil {
 			logInternalError(w, "list clips scan error", err)
@@ -262,12 +275,17 @@ func (h *CCTVHandlers) CreateClip(w http.ResponseWriter, r *http.Request) {
 
 	var clip EventClip
 	err := h.db.Pool.QueryRow(r.Context(), `
-		INSERT INTO dm3_cctv.event_clips (tenant_id, device_id, access_event_id, started_at, ended_at, object_key, trigger)
-		VALUES ($1::uuid, $2::uuid, $3::uuid, $4::timestamptz, $5::timestamptz, $6, $7)
-		RETURNING id, tenant_id, device_id, access_event_id, started_at, ended_at, duration_ms, object_key, trigger, created_at`,
+		INSERT INTO dm3_cctv.event_clips
+		  (tenant_id, device_id, access_event_id, started_at, ended_at, object_key, trigger,
+		   media_type, status)
+		VALUES ($1::uuid, $2::uuid, $3::uuid, $4::timestamptz, $5::timestamptz, $6, $7,
+		        'clip', 'finalized')
+		RETURNING id, tenant_id, device_id, access_event_id, started_at, ended_at, duration_ms,
+		          object_key, trigger, media_type, status, created_at`,
 		cid, req.DeviceID, req.AccessEventID, req.StartedAt, req.EndedAt, objectKey, trigger,
 	).Scan(&clip.ID, &clip.TenantID, &clip.DeviceID, &clip.AccessEventID,
-		&clip.StartedAt, &clip.EndedAt, &clip.DurationMs, &clip.ObjectKey, &clip.Trigger, &clip.CreatedAt)
+		&clip.StartedAt, &clip.EndedAt, &clip.DurationMs, &clip.ObjectKey, &clip.Trigger,
+		&clip.MediaType, &clip.Status, &clip.CreatedAt)
 	if err != nil {
 		logInternalError(w, "create clip error", err)
 		return
@@ -346,6 +364,18 @@ func (h *CCTVHandlers) GetClipPlayback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Pending / recording rows have a placeholder object key (nothing uploaded
+	// yet) — refuse with 409 so the UI can render a "Processing…" affordance
+	// instead of handing back a URL that will 404 on MinIO.
+	if clip.Status == "pending" || clip.Status == "recording" {
+		httputil.Error(w, http.StatusConflict, "media not ready yet; try again shortly")
+		return
+	}
+	if clip.Status == "failed" {
+		httputil.Error(w, http.StatusGone, "media capture failed for this event")
+		return
+	}
+
 	playbackURL, err := h.signer.Sign(r.Context(), clip.ObjectKey)
 	if err != nil {
 		logInternalError(w, "sign clip playback url error", err)
@@ -354,6 +384,8 @@ func (h *CCTVHandlers) GetClipPlayback(w http.ResponseWriter, r *http.Request) {
 
 	httputil.JSON(w, http.StatusOK, map[string]any{
 		"playback_url": playbackURL,
+		"media_type":   clip.MediaType,
+		"status":       clip.Status,
 		"started_at":   clip.StartedAt,
 		"ended_at":     clip.EndedAt,
 		"duration_ms":  clip.DurationMs,
@@ -363,7 +395,8 @@ func (h *CCTVHandlers) GetClipPlayback(w http.ResponseWriter, r *http.Request) {
 // fetchClip retrieves a single EventClip by id, scoped to tenant.
 func (h *CCTVHandlers) fetchClip(r *http.Request, tenantID, clipID string) (EventClip, error) {
 	row := h.db.Pool.QueryRow(r.Context(), `
-		SELECT id, tenant_id, device_id, access_event_id, started_at, ended_at, duration_ms, object_key, trigger, created_at
+		SELECT id, tenant_id, device_id, access_event_id, started_at, ended_at, duration_ms,
+		       object_key, trigger, media_type, status, created_at
 		FROM dm3_cctv.event_clips
 		WHERE id = $1::uuid AND tenant_id = $2::uuid`,
 		clipID, tenantID,
@@ -378,7 +411,7 @@ func (h *CCTVHandlers) fetchClipWithCamera(r *http.Request, tenantID, clipID str
 	var cameraName *string
 	err := h.db.Pool.QueryRow(r.Context(), `
 		SELECT ec.id, ec.tenant_id, ec.device_id, ec.access_event_id, ec.started_at, ec.ended_at,
-		       ec.duration_ms, ec.object_key, ec.trigger, ec.created_at,
+		       ec.duration_ms, ec.object_key, ec.trigger, ec.media_type, ec.status, ec.created_at,
 		       d.name
 		FROM dm3_cctv.event_clips ec
 		LEFT JOIN dm3_devices.devices d
@@ -387,7 +420,8 @@ func (h *CCTVHandlers) fetchClipWithCamera(r *http.Request, tenantID, clipID str
 		clipID, tenantID,
 	).Scan(
 		&clip.ID, &clip.TenantID, &clip.DeviceID, &clip.AccessEventID,
-		&clip.StartedAt, &clip.EndedAt, &clip.DurationMs, &clip.ObjectKey, &clip.Trigger, &clip.CreatedAt,
+		&clip.StartedAt, &clip.EndedAt, &clip.DurationMs, &clip.ObjectKey, &clip.Trigger,
+		&clip.MediaType, &clip.Status, &clip.CreatedAt,
 		&cameraName,
 	)
 	return clip, cameraName, err
@@ -397,7 +431,8 @@ func scanClip(row scannable) (EventClip, error) {
 	var clip EventClip
 	err := row.Scan(
 		&clip.ID, &clip.TenantID, &clip.DeviceID, &clip.AccessEventID,
-		&clip.StartedAt, &clip.EndedAt, &clip.DurationMs, &clip.ObjectKey, &clip.Trigger, &clip.CreatedAt,
+		&clip.StartedAt, &clip.EndedAt, &clip.DurationMs, &clip.ObjectKey, &clip.Trigger,
+		&clip.MediaType, &clip.Status, &clip.CreatedAt,
 	)
 	return clip, err
 }

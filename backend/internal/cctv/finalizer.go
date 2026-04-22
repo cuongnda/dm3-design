@@ -74,13 +74,24 @@ func (f *ClipFinalizer) tick(ctx context.Context) {
 
 	// Claim up to 32 ready clips per tick. We flip status to 'recording' here
 	// so re-scans inside the same tick or in a sibling process skip them.
+	//
+	// The status='recording' branch in the WHERE clause reclaims rows stuck
+	// after a crash: if the previous cctv-svc exited while extracting, the
+	// row is stuck at 'recording' forever. We re-enqueue once updated_at is
+	// older than 5 minutes (well beyond any legitimate ffmpeg run).
+	//
+	// TODO(refactor): replace the 5-minute heuristic with a heartbeat column
+	// updated by the extractor so we can reclaim faster without risk of
+	// racing a still-running worker.
 	rows, err := f.db.Pool.Query(claimCtx, `
 		WITH ready AS (
 		  SELECT id FROM dm3_cctv.event_clips
 		   WHERE media_type = 'clip'
-		     AND status = 'pending'
 		     AND end_at IS NOT NULL
-		     AND end_at <= now()
+		     AND (
+		           (status = 'pending'   AND end_at <= now())
+		        OR (status = 'recording' AND updated_at < now() - interval '5 minutes')
+		         )
 		   ORDER BY end_at ASC
 		   LIMIT 32
 		   FOR UPDATE SKIP LOCKED

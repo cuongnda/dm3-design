@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader, DataTable, type Column, Button, AppModal } from '@dm3/ui';
 import { useTranslation } from 'react-i18next';
-import { Trash2, Play, Download, Film } from 'lucide-react';
+import { Trash2, Play, Download, Film, Image as ImageIcon, Loader2, AlertTriangle } from 'lucide-react';
 import {
   listCameras,
   listClips,
@@ -62,12 +62,44 @@ export function CCTVClipsPage() {
 
   const columns: Column<ClipDTO>[] = [
     {
+      key: 'media_type',
+      header: '',
+      width: '32px',
+      render: (r) => (
+        <span className="text-muted-foreground" title={`${r.media_type} · ${r.status}`}>
+          {r.media_type === 'snapshot' ? <ImageIcon size={14} /> : <Film size={14} />}
+        </span>
+      ),
+    },
+    {
       key: 'camera_name',
       header: t('cctv.clips.cols.camera'),
       width: '160px',
       render: (r) => (
         <span className="text-[13px] font-medium">{r.camera_name ?? t('cctv.common.unknownCamera')}</span>
       ),
+    },
+    {
+      key: 'status',
+      header: '',
+      width: '90px',
+      render: (r) => {
+        if (r.status === 'pending' || r.status === 'recording') {
+          return (
+            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Loader2 size={12} className="animate-spin" /> Processing
+            </span>
+          );
+        }
+        if (r.status === 'failed') {
+          return (
+            <span className="inline-flex items-center gap-1 text-[11px] text-destructive">
+              <AlertTriangle size={12} /> Failed
+            </span>
+          );
+        }
+        return null;
+      },
     },
     {
       key: 'started_at',
@@ -109,11 +141,11 @@ export function CCTVClipsPage() {
             size="xs"
             variant="ghost"
             onClick={() => playMutation.mutate(r)}
-            disabled={playMutation.isPending}
+            disabled={playMutation.isPending || r.status === 'pending' || r.status === 'recording' || r.status === 'failed'}
             data-testid={`cctv-button-play-clip-${r.id}`}
-            aria-label={t('cctv.clips.play')}
+            aria-label={r.media_type === 'snapshot' ? 'Open image' : t('cctv.clips.play')}
           >
-            <Play size={14} />
+            {r.media_type === 'snapshot' ? <ImageIcon size={14} /> : <Play size={14} />}
           </Button>
           <Button
             size="xs"
@@ -195,13 +227,22 @@ export function CCTVClipsPage() {
       >
         <div className="space-y-3">
           {playUrl ? (
-            <video
-              src={playUrl}
-              controls
-              autoPlay
-              className="w-full rounded-lg bg-black"
-              data-testid="cctv-video-clip-player"
-            />
+            playingClip?.media_type === 'snapshot' ? (
+              <img
+                src={playUrl}
+                className="w-full rounded-lg bg-black object-contain max-h-[70vh]"
+                data-testid="cctv-img-snapshot-viewer"
+                alt="snapshot"
+              />
+            ) : (
+              <video
+                src={playUrl}
+                controls
+                autoPlay
+                className="w-full rounded-lg bg-black"
+                data-testid="cctv-video-clip-player"
+              />
+            )
           ) : (
             <div className="text-center py-8 text-muted-foreground">{t('cctv.common.loading')}</div>
           )}
