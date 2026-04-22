@@ -70,6 +70,7 @@ type Device struct {
 	DoorState       *string        `json:"door_state,omitempty"`
 	LastSeen        *time.Time     `json:"last_seen,omitempty"`
 	AccessPoints    *string        `json:"access_points,omitempty"`
+	AccessPointID   *string        `json:"access_point_id,omitempty"`
 	Config          map[string]any `json:"config,omitempty"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`

@@ -314,7 +314,66 @@ func (h *GatewayHandlers) GetDevice(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
 	}
+	// Attach the device's current access-point binding (first one if
+	// multiple) so the edit page can preselect it in the AP dropdown.
+	if apID, apErr := fetchDeviceAccessPointID(r.Context(), h.db, d.ID, d.TenantID); apErr == nil && apID != "" {
+		ap := apID
+		d.AccessPointID = &ap
+	}
 	httputil.JSON(w, http.StatusOK, d)
+}
+
+// fetchDeviceAccessPointID returns the first access-point UUID bound to the
+// device, or "" when there is no binding. A device can technically appear in
+// multiple access points (in/out readers on a door), so picking the first is
+// a UI convenience — the full set is still managed from the Access Points
+// page. Errors other than "no rows" bubble up.
+func fetchDeviceAccessPointID(ctx context.Context, database *db.DB, deviceID, tenantID string) (string, error) {
+	var apID string
+	err := database.Pool.QueryRow(ctx,
+		`SELECT access_point_id::text
+		 FROM dm3_access.access_point_devices
+		 WHERE access_device_id = $1 AND tenant_id = $2::uuid
+		 ORDER BY created_at ASC
+		 LIMIT 1`,
+		deviceID, tenantID,
+	).Scan(&apID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return apID, err
+}
+
+// applyDeviceAccessPointBinding replaces all existing bindings for the given
+// device with a single binding to newAPID. When newAPID is empty the device
+// is simply detached from every access point. Scoped to tenantID so a
+// system-admin edit still can't leak bindings across tenants.
+func applyDeviceAccessPointBinding(ctx context.Context, database *db.DB, deviceID, tenantID, newAPID string) error {
+	tx, err := database.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM dm3_access.access_point_devices
+		 WHERE access_device_id = $1 AND tenant_id = $2::uuid`,
+		deviceID, tenantID,
+	); err != nil {
+		return fmt.Errorf("clear bindings: %w", err)
+	}
+	if newAPID != "" {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO dm3_access.access_point_devices
+			   (tenant_id, access_point_id, access_device_id, role)
+			 VALUES ($2::uuid, $3::uuid, $1, 'reader_in')
+			 ON CONFLICT (access_point_id, access_device_id) DO NOTHING`,
+			deviceID, tenantID, newAPID,
+		); err != nil {
+			return fmt.Errorf("insert binding: %w", err)
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 // ─── Update Device ──────────────────────────────────────────────────────────
@@ -328,6 +387,10 @@ type updateDeviceRequest struct {
 	Timezone      *string   `json:"timezone"`
 	VerifyMethods *[]string `json:"verify_methods"`
 	VerifyLogic   *string   `json:"verify_logic"`
+	// AccessPointID, when non-nil, replaces the device's access-point
+	// bindings with the single UUID supplied. An empty string detaches the
+	// device from every access point. A nil pointer leaves bindings alone.
+	AccessPointID *string `json:"access_point_id"`
 }
 
 // updateDeviceSQL builds the UPDATE statement + args for a device row,
@@ -395,6 +458,19 @@ func (h *GatewayHandlers) UpdateDevice(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
+	}
+	if req.AccessPointID != nil {
+		if err := applyDeviceAccessPointBinding(r.Context(), h.db, d.ID, d.TenantID, *req.AccessPointID); err != nil {
+			slog.Error("UpdateDevice: apply access point binding failed", "error", err, "device_id", d.ID)
+			httputil.Error(w, http.StatusInternalServerError, "failed to update access point binding")
+			return
+		}
+		ap := *req.AccessPointID
+		if ap != "" {
+			d.AccessPointID = &ap
+		} else {
+			d.AccessPointID = nil
+		}
 	}
 	h.audit.LogFromRequest(r, "device.update", "device", d.ID, d.Name, "success", nil, d)
 	h.pushDeviceConfig(r.Context(), d)
@@ -482,6 +558,10 @@ func (h *GatewayHandlers) GetDeviceGlobal(w http.ResponseWriter, r *http.Request
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
 	}
+	if apID, apErr := fetchDeviceAccessPointID(r.Context(), h.db, d.ID, d.TenantID); apErr == nil && apID != "" {
+		ap := apID
+		d.AccessPointID = &ap
+	}
 	httputil.JSON(w, http.StatusOK, d)
 }
 
@@ -500,6 +580,19 @@ func (h *GatewayHandlers) UpdateDeviceGlobal(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
+	}
+	if req.AccessPointID != nil {
+		if err := applyDeviceAccessPointBinding(r.Context(), h.db, d.ID, d.TenantID, *req.AccessPointID); err != nil {
+			slog.Error("UpdateDeviceGlobal: apply access point binding failed", "error", err, "device_id", d.ID)
+			httputil.Error(w, http.StatusInternalServerError, "failed to update access point binding")
+			return
+		}
+		ap := *req.AccessPointID
+		if ap != "" {
+			d.AccessPointID = &ap
+		} else {
+			d.AccessPointID = nil
+		}
 	}
 	h.audit.LogFromRequest(r, "device.update", "device", d.ID, d.Name, "success", nil, d)
 	h.pushDeviceConfig(r.Context(), d)
