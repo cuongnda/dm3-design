@@ -712,6 +712,18 @@ func (h *IdentityHandlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		"tenant_id": companyID,
 	})
 	h.publishPersonChanged(companyID, userID, "user.delete")
+
+	// Fire-and-forget Hanet cleanup: every H_* face credential for this user
+	// maps to a Hanet personID in external_ref; ask Hanet to delete those so
+	// their cameras stop recognising the now-deleted user. The local rows
+	// stay in the DB (soft-delete), but that's fine — PushPersonSync filters
+	// on status='active' and is_deleted=false so they won't be pushed.
+	go func(tenantID, uid string) {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		h.removeUserHanetEnrolments(ctx, tenantID, uid)
+	}(companyID, userID)
+
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "user deleted successfully"})
 }
 
@@ -750,6 +762,20 @@ func (h *IdentityHandlers) BulkDeleteUsers(w http.ResponseWriter, r *http.Reques
 	}
 
 	h.audit.LogFromRequest(r, "identity.user.bulk_delete", "user", "", fmt.Sprintf("%d users", len(req.IDs)), "success", nil, map[string]any{"ids": req.IDs})
+
+	// Same fire-and-forget Hanet cleanup as DeleteUser, applied per user.
+	// Sequential rather than parallel — a deleted batch of 50 users would
+	// otherwise hammer partner.hanet.ai; one-at-a-time keeps us polite and
+	// still well under any sane ops timeline.
+	ids := append([]string(nil), req.IDs...)
+	go func(tenantID string, ids []string) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		for _, uid := range ids {
+			h.removeUserHanetEnrolments(ctx, tenantID, uid)
+		}
+	}(companyID, ids)
+
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{"deleted": len(req.IDs)})
 }
 

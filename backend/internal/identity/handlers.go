@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -257,20 +258,42 @@ func (h *IdentityHandlers) DeleteCredential(w http.ResponseWriter, r *http.Reque
 	userID := chi.URLParam(r, "id")
 	credID := chi.URLParam(r, "credID")
 
-	// RETURNING tenant_id so we can fan out a sync event without a
-	// second roundtrip to look it up.
-	var tenantID string
+	// RETURNING tenant_id + type + value + external_ref so we can fan out a
+	// sync event AND decide whether to delete the paired remote person on
+	// Hanet. external_ref is the Hanet personID for H_* face credentials and
+	// NULL otherwise.
+	var tenantID, credType, credValue string
+	var externalRef *string
 	err := h.db.Pool.QueryRow(r.Context(),
 		`DELETE FROM dm3_identity.credentials
 		 WHERE id = $1::uuid AND user_id = $2::uuid
-		 RETURNING tenant_id`, credID, userID,
-	).Scan(&tenantID)
+		 RETURNING tenant_id, type, value, external_ref`, credID, userID,
+	).Scan(&tenantID, &credType, &credValue, &externalRef)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "credential not found")
 		return
 	}
 	h.audit.LogFromRequest(r, "identity.credential.delete", "credential", credID, credID, "success", nil, nil)
 	h.publishPersonChanged(tenantID, userID, "credential.delete")
+
+	// Fire-and-forget Hanet cleanup for H_* face credentials. We don't block
+	// the API response on the upstream HTTP round-trip, and a Hanet failure
+	// here doesn't undo the local delete — the person's face should stop
+	// working on DM3 immediately; syncing that removal to Hanet is a separate
+	// concern logged for operators.
+	if credType == "face" && strings.HasPrefix(credValue, "H_") && externalRef != nil && *externalRef != "" {
+		personID := *externalRef
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := h.removeHanetPerson(ctx, tenantID, personID); err != nil {
+				// Logged inside removeHanetPerson paths too; keep a caller-side
+				// breadcrumb so the credential_id + personID appear together.
+				_ = err
+			}
+		}()
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 

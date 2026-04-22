@@ -358,6 +358,132 @@ func (h *IdentityHandlers) hanetRegisterOnce2(ctx context.Context, endpoint, acc
 	return id, err
 }
 
+// removeHanetPerson deletes `personID` from the tenant's Hanet place. Best
+// effort: logs and returns the error on upstream failure, but callers should
+// not abort their DM3-side deletion if this fails — the local record has to
+// be removed regardless, and a stale entry on Hanet is an operational concern
+// (cleaned up manually from their console) rather than a data-integrity one.
+//
+// Skips silently when the tenant has no Hanet config or the cipher isn't
+// wired, so test / dev environments don't spam errors.
+func (h *IdentityHandlers) removeHanetPerson(ctx context.Context, tenantID, personID string) error {
+	if h.hanetCipher == nil || tenantID == "" || personID == "" {
+		return nil
+	}
+	cfg, ready, err := h.loadHanetConfig(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	if !ready {
+		return nil
+	}
+	endpoint := strings.TrimRight(cfg.ServerURL, "/") + "/person/removePersonByID"
+	status, err := h.hanetRemoveOnce(ctx, endpoint, cfg.AccessToken, cfg.PlaceID, personID)
+	if err == nil {
+		return nil
+	}
+	if status != http.StatusUnauthorized {
+		return err
+	}
+	// 401 → refresh + retry once, same pattern as hanetRegisterPerson.
+	newAccess, refreshErr := h.refreshHanetAccessToken(ctx, tenantID, cfg)
+	if refreshErr != nil {
+		return fmt.Errorf("401 and refresh failed: %w", refreshErr)
+	}
+	_, err = h.hanetRemoveOnce(ctx, endpoint, newAccess, cfg.PlaceID, personID)
+	return err
+}
+
+// hanetRemoveOnce POSTs application/x-www-form-urlencoded `token/placeID/personID`
+// to /person/removePersonByID. Returns (status, error); status is the HTTP
+// status (or Hanet's 401-equivalent returnCode=2 mapped to 401) so the caller's
+// refresh-retry path can key on it.
+func (h *IdentityHandlers) hanetRemoveOnce(ctx context.Context, endpoint, accessToken, placeID, personID string) (int, error) {
+	form := url.Values{}
+	form.Set("token", accessToken)
+	form.Set("placeID", placeID)
+	form.Set("personID", personID)
+
+	ctx, cancel := context.WithTimeout(ctx, hanetHTTPTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return resp.StatusCode, fmt.Errorf("hanet remove status %d: %s", resp.StatusCode, trimPayload(raw))
+	}
+	var env struct {
+		ReturnCode    json.Number `json:"returnCode"`
+		ReturnMessage string      `json:"returnMessage"`
+	}
+	if err := json.Unmarshal(raw, &env); err != nil {
+		return resp.StatusCode, fmt.Errorf("decode hanet envelope: %w", err)
+	}
+	// returnCode=1 = OK in Hanet's docs. Treat 2 as 401-equivalent so the
+	// caller's refresh path kicks in.
+	if env.ReturnCode.String() == "1" {
+		return resp.StatusCode, nil
+	}
+	if env.ReturnCode.String() == "2" {
+		return http.StatusUnauthorized, fmt.Errorf("hanet: %s", env.ReturnMessage)
+	}
+	return resp.StatusCode, fmt.Errorf("hanet returnCode=%s: %s", env.ReturnCode.String(), env.ReturnMessage)
+}
+
+// removeUserHanetEnrolments looks up every H_* face credential for a user
+// and asks Hanet to delete each one. Intended for the user-delete path; the
+// DB rows themselves get removed by the outer DELETE/soft-delete.
+//
+// Returns the count of Hanet calls attempted (not the count that succeeded);
+// errors are logged internally so the caller can make the DB change even if
+// Hanet is unreachable.
+func (h *IdentityHandlers) removeUserHanetEnrolments(ctx context.Context, tenantID, userID string) int {
+	if h.hanetCipher == nil {
+		return 0
+	}
+	rows, err := h.db.Pool.Query(ctx, `
+		SELECT COALESCE(external_ref,'')
+		  FROM dm3_identity.credentials
+		 WHERE tenant_id = $1::uuid AND user_id = $2::uuid
+		   AND type = 'face' AND value LIKE 'H\_%' ESCAPE '\'`,
+		tenantID, userID,
+	)
+	if err != nil {
+		slog.Warn("hanet remove: list user credentials failed",
+			"tenant_id", tenantID, "user_id", userID, "error", err)
+		return 0
+	}
+	defer rows.Close()
+	var personIDs []string
+	for rows.Next() {
+		var ref string
+		if err := rows.Scan(&ref); err != nil {
+			continue
+		}
+		if ref != "" {
+			personIDs = append(personIDs, ref)
+		}
+	}
+	for _, pid := range personIDs {
+		if err := h.removeHanetPerson(ctx, tenantID, pid); err != nil {
+			slog.Warn("hanet remove: person delete failed",
+				"tenant_id", tenantID, "user_id", userID, "person_id", pid, "error", err)
+		}
+	}
+	return len(personIDs)
+}
+
 // buildHanetRegisterBody writes a multipart body matching the Hanet API
 // contract (mirrored from dmpw-api Helpers.PostFormDataFile): fields first,
 // then the `file` part carrying the JPEG bytes.
