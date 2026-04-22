@@ -63,6 +63,7 @@ interface Device {
   firmware_version?: string;
   site_id?: string;
   last_seen?: string;
+  access_points?: string | null;
   config?: DeviceConfig;
   created_at: string;
   updated_at: string;
@@ -801,6 +802,19 @@ export function DevicesPage() {
         render: (d) => <span className="text-[13px]">{d.location || '—'}</span>,
       },
       {
+        key: 'access_points',
+        header: t('devices.column.accessPoint'),
+        sortable: true,
+        render: (d) => (
+          <span
+            className="text-[13px] text-muted-foreground truncate block max-w-[220px]"
+            title={d.access_points ?? undefined}
+          >
+            {d.access_points || '—'}
+          </span>
+        ),
+      },
+      {
         key: 'status',
         header: t('devices.column.status'),
         width: '110px',
@@ -1086,6 +1100,7 @@ export function DevicesPage() {
             { value: 'name', label: 'Device' },
             { value: 'type', label: 'Type' },
             { value: 'location', label: 'Location' },
+            { value: 'access_points', label: 'Access Point' },
             { value: 'status', label: 'Status' },
             { value: 'firmware_version', label: 'Firmware' },
           ]}

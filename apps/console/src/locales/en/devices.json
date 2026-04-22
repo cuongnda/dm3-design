@@ -17,6 +17,7 @@
   "devices.column.device": "Device",
   "devices.column.type": "Type",
   "devices.column.location": "Location",
+  "devices.column.accessPoint": "Access Point",
   "devices.column.status": "Status",
   "devices.column.doorState": "Door State",
   "devices.column.firmware": "Firmware",

@@ -106,22 +106,36 @@ func (h *GatewayHandlers) ListDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := `SELECT ` + deviceColumns + ` FROM dm3_devices.devices WHERE tenant_id = $1::uuid`
+	// A device can be bound to multiple access points through
+	// dm3_access.access_point_devices (access_device_id is TEXT holding
+	// devices.id). We aggregate all linked access point names into a single
+	// comma-separated string so the list endpoint stays a flat row.
+	query := `SELECT d.id, d.tenant_id, d.device_id, COALESCE(d.name,''), d.type, d.status,
+		COALESCE(d.model,''), COALESCE(d.firmware_version,''), COALESCE(d.location,''),
+		d.ip_address, d.mac_address,
+		COALESCE(d.timezone,'Asia/Ho_Chi_Minh'), COALESCE(d.open_relay_ms,3000),
+		d.verify_methods, COALESCE(d.verify_logic,'or'),
+		d.door_state, d.last_seen, d.created_at, d.updated_at,
+		(SELECT STRING_AGG(ap.name, ', ' ORDER BY ap.name)
+		 FROM dm3_access.access_point_devices apd
+		 JOIN dm3_access.access_points ap ON ap.id = apd.access_point_id
+		 WHERE apd.access_device_id = d.id::text AND apd.tenant_id = d.tenant_id) AS access_points
+		FROM dm3_devices.devices d WHERE d.tenant_id = $1::uuid`
 	args := []any{cid}
 	argIdx := 2
 
 	if s := r.URL.Query().Get("status"); s != "" {
-		query += fmt.Sprintf(" AND status = $%d", argIdx)
+		query += fmt.Sprintf(" AND d.status = $%d", argIdx)
 		args = append(args, s)
 		argIdx++
 	}
 	if t := r.URL.Query().Get("type"); t != "" {
-		query += fmt.Sprintf(" AND type = $%d", argIdx)
+		query += fmt.Sprintf(" AND d.type = $%d", argIdx)
 		args = append(args, t)
 		argIdx++
 	}
 
-	query += " ORDER BY created_at DESC LIMIT 200"
+	query += " ORDER BY d.created_at DESC LIMIT 200"
 
 	rows, err := h.db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
@@ -131,14 +145,28 @@ func (h *GatewayHandlers) ListDevices(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	devices, err := scanDeviceRows(rows)
-	if err != nil {
-		slog.Error("ListDevices: scan failed", "error", err)
+	devices := []models.Device{}
+	for rows.Next() {
+		var d models.Device
+		if err := rows.Scan(
+			&d.ID, &d.TenantID, &d.DeviceID, &d.Name, &d.Type, &d.Status,
+			&d.Model, &d.FirmwareVersion, &d.Location,
+			&d.IPAddress, &d.MACAddress,
+			&d.Timezone, &d.OpenRelayMs,
+			&d.VerifyMethods, &d.VerifyLogic,
+			&d.DoorState, &d.LastSeen, &d.CreatedAt, &d.UpdatedAt,
+			&d.AccessPoints,
+		); err != nil {
+			slog.Error("ListDevices: scan failed", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
+		devices = append(devices, d)
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("ListDevices: rows error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, "internal server error")
 		return
-	}
-	if devices == nil {
-		devices = []models.Device{}
 	}
 	httputil.JSON(w, http.StatusOK, devices)
 }

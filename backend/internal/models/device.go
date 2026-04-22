@@ -69,6 +69,7 @@ type Device struct {
 	VerifyLogic     string         `json:"verify_logic,omitempty"`
 	DoorState       *string        `json:"door_state,omitempty"`
 	LastSeen        *time.Time     `json:"last_seen,omitempty"`
+	AccessPoints    *string        `json:"access_points,omitempty"`
 	Config          map[string]any `json:"config,omitempty"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`

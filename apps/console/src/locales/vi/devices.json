@@ -17,6 +17,7 @@
   "devices.column.device": "Thiết bị",
   "devices.column.type": "Loại",
   "devices.column.location": "Vị trí",
+  "devices.column.accessPoint": "Điểm truy cập",
   "devices.column.status": "Trạng thái",
   "devices.column.doorState": "Trạng thái cửa",
   "devices.column.firmware": "Firmware",
