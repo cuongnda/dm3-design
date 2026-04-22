@@ -184,6 +184,8 @@ OVERVIEW_VI = (
 # ─── Per-endpoint Vietnamese summary & description overrides ────────────────
 # Keyed by "METHOD /path". Falls back to spec text if missing.
 SUMMARY_VI = {
+    "GET /access/events": "Lịch sử truy cập",
+    "GET /access/events/export": "Xuất lịch sử truy cập ra CSV/XLSX",
     "GET /access/groups": "Danh sách nhóm truy cập",
     "POST /access/groups": "Tạo nhóm truy cập",
     "GET /access/groups/{id}": "Lấy thông tin nhóm truy cập",
@@ -257,7 +259,12 @@ COMMON_VI = {
     "filter by active status": "Lọc theo trạng thái hoạt động",
     "filter by actor email (partial match)": "Lọc theo email người thao tác (khớp một phần)",
     "filter by actor user uuid": "Lọc theo UUID người thao tác",
+    "filter by access point uuid": "Lọc theo UUID điểm truy cập",
     "filter by bound access point uuid": "Lọc theo UUID điểm truy cập liên kết",
+    "filter by credential type": "Lọc theo loại thông tin xác thực",
+    "filter by credential type (face, card, pin, qr, plate)":
+        "Lọc theo loại thông tin xác thực (face, card, pin, qr, plate)",
+    "filter by decision (granted, denied)": "Lọc theo quyết định (granted, denied)",
     "filter by connection status": "Lọc theo trạng thái kết nối",
     "filter by department id (repeatable)": "Lọc theo ID phòng ban (có thể lặp lại)",
     "filter by device id, name, or location": "Lọc theo ID thiết bị, tên, hoặc vị trí",
@@ -338,8 +345,12 @@ COMMON_VI = {
     "not found or already suspended": "Không tìm thấy hoặc đã bị tạm ngưng",
     "ok": "OK",
     "paginated list": "Danh sách có phân trang",
+    "paginated list of access events": "Danh sách sự kiện truy cập có phân trang",
     "paginated list with data and pagination envelope":
         "Danh sách có phân trang kèm envelope dữ liệu và phân trang",
+    "csv or xlsx file download": "Tải về tệp CSV hoặc XLSX",
+    "result exceeds 50,000 row export limit": "Vượt giới hạn xuất 50.000 dòng",
+    "output format (csv or xlsx, default csv)": "Định dạng đầu ra (csv hoặc xlsx, mặc định csv)",
     "paginated user list with total count": "Danh sách người dùng có phân trang kèm tổng số",
     "status: deleted": "status: deleted",
     "too many requests": "Vượt giới hạn tần suất",
@@ -359,6 +370,15 @@ def translate_common(text: str) -> str:
 
 
 DESC_VI = {
+    "GET /access/events":
+        "Trả về lịch sử sự kiện truy cập có phân trang cho tenant của người "
+        "gọi. Hỗ trợ lọc theo điểm truy cập, người dùng, loại quyết định "
+        "(granted/denied), loại thông tin xác thực và khoảng thời gian "
+        "ISO-8601. Kết quả sắp xếp theo thời gian mới nhất trước.",
+    "GET /access/events/export":
+        "Xuất lịch sử sự kiện truy cập của tenant dưới dạng CSV hoặc XLSX "
+        "theo luồng stream. Nhận các tham số lọc giống endpoint danh sách. "
+        "Giới hạn tối đa 50.000 dòng mỗi lần xuất.",
     "GET /access/groups":
         "Nhóm truy cập kết hợp các điểm truy cập, mẫu thời gian và người dùng. "
         "Có phân trang, lọc được theo tên.",

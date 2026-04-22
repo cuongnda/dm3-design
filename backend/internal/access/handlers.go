@@ -327,6 +327,26 @@ func (h *AccessHandlers) DeleteSchedule(w http.ResponseWriter, r *http.Request) 
 
 // ─── Events ──────────────────────────────────────────────────────────────────
 
+// ListEvents returns paginated access event history for the caller's tenant.
+//
+// @Summary      List access events (history)
+// @Description  Returns paginated access event history for the caller's tenant. Supports filtering by access point, user, decision, credential type, and an ISO-8601 time window. Results are sorted newest first.
+// @Tags         Access
+// @Produce      json
+// @Param        page             query  integer  false  "Page number (default 1)"
+// @Param        limit            query  integer  false  "Page size (default 20, max 100)"
+// @Param        access_point_id  query  string   false  "Filter by access point UUID"
+// @Param        user_id          query  string   false  "Filter by user UUID"
+// @Param        decision         query  string   false  "Filter by decision (granted, denied)"
+// @Param        credential_type  query  string   false  "Filter by credential type (face, card, pin, qr, plate)"
+// @Param        from             query  string   false  "ISO-8601 start timestamp"
+// @Param        to               query  string   false  "ISO-8601 end timestamp"
+// @Success      200  {object}  map[string]any  "Paginated list of access events"
+// @Failure      401  {object}  map[string]any  "Missing or invalid bearer token"
+// @Failure      403  {object}  map[string]any  "Forbidden"
+// @Failure      500  {object}  map[string]any  "Internal server error"
+// @Security     BearerAuth
+// @Router       /access/events [get]
 func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
@@ -501,6 +521,27 @@ const exportRowCap = 50_000
 // ExportEvents streams access event data as CSV or XLSX.
 // Accepts the same filter params as ListEvents plus format=csv|xlsx (default csv).
 // Returns 413 if the filtered result would exceed exportRowCap rows.
+//
+// @Summary      Export access events (history)
+// @Description  Streams access event history for the caller's tenant as CSV or XLSX. Accepts the same filters as the list endpoint. Hard-capped at 50,000 rows per export.
+// @Tags         Access
+// @Produce      text/csv
+// @Produce      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+// @Param        format           query  string   false  "Output format (csv or xlsx, default csv)"
+// @Param        access_point_id  query  string   false  "Filter by access point UUID"
+// @Param        user_id          query  string   false  "Filter by user UUID"
+// @Param        decision         query  string   false  "Filter by decision (granted, denied)"
+// @Param        credential_type  query  string   false  "Filter by credential type"
+// @Param        from             query  string   false  "ISO-8601 start timestamp"
+// @Param        to               query  string   false  "ISO-8601 end timestamp"
+// @Success      200  {file}    file            "CSV or XLSX file download"
+// @Failure      400  {object}  map[string]any  "Bad request"
+// @Failure      401  {object}  map[string]any  "Missing or invalid bearer token"
+// @Failure      403  {object}  map[string]any  "Forbidden"
+// @Failure      413  {object}  map[string]any  "Result exceeds 50,000 row export limit"
+// @Failure      500  {object}  map[string]any  "Internal server error"
+// @Security     BearerAuth
+// @Router       /access/events/export [get]
 func (h *AccessHandlers) ExportEvents(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	if cid == "" {

@@ -85,6 +85,144 @@ info:
   title: Duall Master API
   version: "3.0"
 paths:
+  /access/events:
+    get:
+      description: Returns paginated access event history for the caller's tenant.
+        Supports filtering by access point, user, decision, credential type, and an
+        ISO-8601 time window. Results are sorted newest first.
+      parameters:
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Page size (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by access point UUID
+        in: query
+        name: access_point_id
+        type: string
+      - description: Filter by user UUID
+        in: query
+        name: user_id
+        type: string
+      - description: Filter by decision (granted, denied)
+        in: query
+        name: decision
+        type: string
+      - description: Filter by credential type (face, card, pin, qr, plate)
+        in: query
+        name: credential_type
+        type: string
+      - description: ISO-8601 start timestamp
+        in: query
+        name: from
+        type: string
+      - description: ISO-8601 end timestamp
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list of access events
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Missing or invalid bearer token
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List access events (history)
+      tags:
+      - Access
+  /access/events/export:
+    get:
+      description: Streams access event history for the caller's tenant as CSV or
+        XLSX. Accepts the same filters as the list endpoint. Hard-capped at 50,000
+        rows per export.
+      parameters:
+      - description: Output format (csv or xlsx, default csv)
+        in: query
+        name: format
+        type: string
+      - description: Filter by access point UUID
+        in: query
+        name: access_point_id
+        type: string
+      - description: Filter by user UUID
+        in: query
+        name: user_id
+        type: string
+      - description: Filter by decision (granted, denied)
+        in: query
+        name: decision
+        type: string
+      - description: Filter by credential type
+        in: query
+        name: credential_type
+        type: string
+      - description: ISO-8601 start timestamp
+        in: query
+        name: from
+        type: string
+      - description: ISO-8601 end timestamp
+        in: query
+        name: to
+        type: string
+      produces:
+      - text/csv
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        "200":
+          description: CSV or XLSX file download
+          schema:
+            type: file
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Missing or invalid bearer token
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "413":
+          description: Result exceeds 50,000 row export limit
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Export access events (history)
+      tags:
+      - Access
   /access/groups:
     get:
       description: Access groups bundle access points + time templates + users. Paginated,
