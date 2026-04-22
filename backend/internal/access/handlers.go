@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/xuri/excelize/v2"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
@@ -384,7 +385,7 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	// LEFT JOIN to pick one device per access point (the one with the earliest junction entry).
 	// access_point_devices.access_device_id is TEXT; access_devices.id is UUID — cast to compare.
 	query := fmt.Sprintf(`
-		SELECT e.id, e.tenant_id, e.time,
+		SELECT e.id, COALESCE(e.event_id,''), e.tenant_id, e.time,
 		       COALESCE(e.access_point_id::text,''),
 		       COALESCE(e.user_id::text,''), COALESCE(e.user_name,''), COALESCE(e.credential_type,''),
 		       COALESCE(e.direction,''), e.decision, COALESCE(e.reason,''), e.confidence,
@@ -415,7 +416,7 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	presigner, _ := h.objects.(objectstore.GetURLPresigner)
 	for rows.Next() {
 		var e eventResponse
-		if err := rows.Scan(&e.ID, &e.TenantID, &e.Time, &e.AccessPointID,
+		if err := rows.Scan(&e.ID, &e.EventID, &e.TenantID, &e.Time, &e.AccessPointID,
 			&e.UserID, &e.UserName, &e.CredentialType, &e.Direction, &e.Decision,
 			&e.Reason, &e.Confidence, &e.PhotoRef, &e.Metadata,
 			&e.DeviceID, &e.DeviceName); err != nil {
@@ -431,7 +432,117 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+
+	// Attach CCTV media captured by cctv-svc (per-camera thumbnails + clips)
+	// for every event on this page. We batch-fetch in one query indexed by
+	// the device-side event_id text so 20 events → 1 round trip, not 20.
+	attachCCTVMedia(r.Context(), h.db.Pool, presigner, events)
+
 	httputil.Paginated(w, events, total, page, limit)
+}
+
+// attachCCTVMedia populates eventResponse.CCTVMedia for a page of access
+// events by joining dm3_cctv.event_clip_events + dm3_cctv.event_clips. A single
+// SELECT covers all events on the page; presigning happens in-loop and is
+// cheap (local HMAC). Safe to call with empty events — no query fired.
+//
+// TODO(refactor): paginate per-event if any event grows > ~50 cameras linked
+// (coalescer caps bursts on the same camera, but an AP with many cameras
+// could still produce a large set). Sorting is camera_name asc for UI stability.
+func attachCCTVMedia(ctx context.Context, pool *pgxpool.Pool, presigner objectstore.GetURLPresigner, events []eventResponse) {
+	if len(events) == 0 {
+		return
+	}
+	idx := make(map[string]*eventResponse, len(events))
+	ids := make([]string, 0, len(events))
+	for i := range events {
+		if events[i].EventID == "" {
+			continue
+		}
+		idx[events[i].EventID] = &events[i]
+		ids = append(ids, events[i].EventID)
+	}
+	if len(ids) == 0 {
+		return
+	}
+
+	queryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	rows, err := pool.Query(queryCtx, `
+		SELECT j.access_event_id::text,
+		       ec.id::text, ec.device_id::text, COALESCE(d.name,''),
+		       ec.media_type, ec.status,
+		       COALESCE(ec.object_key,''),
+		       COALESCE(ec.thumbnail_ref,'')
+		  FROM dm3_cctv.event_clip_events j
+		  JOIN dm3_cctv.event_clips ec ON ec.id = j.clip_id
+		  LEFT JOIN dm3_devices.devices d ON d.id = ec.device_id
+		 WHERE j.access_event_id::text = ANY($1::text[])
+		 ORDER BY d.name NULLS LAST, ec.created_at`,
+		ids,
+	)
+	if err != nil {
+		slog.Warn("access: attach cctv media query failed", "error", err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			eventID      string
+			clipID       string
+			cameraID     string
+			cameraName   string
+			mediaType    string
+			status       string
+			objectKey    string
+			thumbRef     string
+		)
+		if err := rows.Scan(&eventID, &clipID, &cameraID, &cameraName, &mediaType, &status, &objectKey, &thumbRef); err != nil {
+			slog.Warn("access: attach cctv media scan failed", "error", err)
+			continue
+		}
+		evt, ok := idx[eventID]
+		if !ok {
+			continue
+		}
+		media := cctvMediaDTO{
+			ClipID:     clipID,
+			CameraID:   cameraID,
+			CameraName: cameraName,
+			MediaType:  mediaType,
+			Status:     status,
+		}
+		// Thumbnail: prefer the dedicated preview key, else the object itself
+		// when it's already a snapshot (JPG). Clip rows mid-extraction may
+		// still have only the thumbnail — fine, playback URL stays empty.
+		switch {
+		case thumbRef != "":
+			media.ThumbnailURL = presignOrEmpty(queryCtx, presigner, thumbRef)
+		case mediaType == "snapshot" && status == "finalized":
+			media.ThumbnailURL = presignOrEmpty(queryCtx, presigner, objectKey)
+		}
+		// Playback URL: only the real object, never the pending placeholder.
+		if status == "finalized" && !strings.HasPrefix(objectKey, "pending/") {
+			media.PlaybackURL = presignOrEmpty(queryCtx, presigner, objectKey)
+		}
+		evt.CCTVMedia = append(evt.CCTVMedia, media)
+	}
+}
+
+// presignOrEmpty is a tiny wrapper that swallows presign errors — the UI has
+// fallbacks for missing URLs and surfacing these to the user is worse than
+// just dropping the link for this one tile.
+func presignOrEmpty(ctx context.Context, presigner objectstore.GetURLPresigner, key string) string {
+	if key == "" || presigner == nil {
+		return ""
+	}
+	u, err := presigner.PresignedGetURL(ctx, key, 5*time.Minute)
+	if err != nil {
+		return ""
+	}
+	return u.String()
 }
 
 // presignPhotoIfMinIOKey returns a 5-minute presigned GET URL when photoRef is
@@ -460,8 +571,25 @@ func presignPhotoIfMinIOKey(ctx context.Context, presigner objectstore.GetURLPre
 	return u.String()
 }
 
+// cctvMediaDTO carries one camera's capture for this access event so the
+// access-history UI can render all thumbnails inline (device-side + per-camera).
+// playback_url is presigned against object_key (mp4 for media_type=clip,
+// jpg for media_type=snapshot). thumbnail_url is the preview JPG — for clip
+// rows that's a separate thumbnail_ref; for snapshot rows it falls back to
+// the same object_key so the UI treats all tiles uniformly.
+type cctvMediaDTO struct {
+	ClipID       string `json:"clip_id"`
+	CameraID     string `json:"camera_id"`
+	CameraName   string `json:"camera_name,omitempty"`
+	MediaType    string `json:"media_type"` // clip | snapshot
+	Status       string `json:"status"`
+	ThumbnailURL string `json:"thumbnail_url,omitempty"`
+	PlaybackURL  string `json:"playback_url,omitempty"`
+}
+
 type eventResponse struct {
 	ID             string         `json:"id"`
+	EventID        string         `json:"event_id,omitempty"` // device-side NATS event UUID (links to CCTV junction)
 	TenantID       string         `json:"tenant_id"`
 	Time           time.Time      `json:"time"`
 	AccessPointID  string         `json:"access_point_id,omitempty"`
@@ -475,6 +603,7 @@ type eventResponse struct {
 	Reason         string         `json:"reason,omitempty"`
 	Confidence     *float64       `json:"confidence,omitempty"`
 	PhotoRef       string         `json:"photo_ref,omitempty"`
+	CCTVMedia      []cctvMediaDTO `json:"cctv_media,omitempty"`
 	// PhotoURL is a 5-minute presigned MinIO GET URL, populated when PhotoRef
 	// looks like an object key (events/<tid>/<did>/...). For legacy /photos/
 	// refs (identity-svc avatars) this stays empty and the frontend falls

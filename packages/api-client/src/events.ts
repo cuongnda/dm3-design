@@ -43,8 +43,19 @@ export function listEvents(params?: ListEventsParams): Promise<Paginated<AccessE
 
 // ─── Access Events (new paginated API with full field set) ──────────────────
 
+export interface CCTVMediaItem {
+  clip_id: string;
+  camera_id: string;
+  camera_name?: string;
+  media_type: 'clip' | 'snapshot';
+  status: 'pending' | 'recording' | 'finalized' | 'degraded' | 'failed';
+  thumbnail_url?: string;
+  playback_url?: string;
+}
+
 export interface AccessEventRecord {
   id: string;
+  event_id?: string;
   tenant_id: string;
   time: string;
   access_point_id?: string;
@@ -60,6 +71,10 @@ export interface AccessEventRecord {
    * object key from the device media-upload flow. Empty for legacy
    * /photos/... refs (use assetUrl(photo_ref) as a fallback). */
   photo_url?: string;
+  /** Per-camera captures from cctv-svc for this event (thumbnails + clips).
+   * Populated when the access point has cameras bound and CCTV rules
+   * matched. */
+  cctv_media?: CCTVMediaItem[];
   device_id?: string;
   device_name?: string;
   metadata?: Record<string, unknown>;
