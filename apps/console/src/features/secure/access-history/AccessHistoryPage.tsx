@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { subDays } from 'date-fns';
 import {
   Download, History, RotateCcw, X, ImageOff, ChevronsUpDown, Check,
+  CreditCard, KeyRound, ScanFace, Car, QrCode, Radio, Fingerprint,
 } from 'lucide-react';
 import {
   listAccessEvents,
@@ -102,6 +103,74 @@ function DirectionBadge({ direction, t }: { direction?: string; t: (k: string) =
   return (
     <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium capitalize ${cls}`}>
       {label}
+    </span>
+  );
+}
+
+// ─── Credential cell (icon + actual credential id) ─────────────────────────
+
+const CREDENTIAL_ICONS: Record<string, { Icon: typeof CreditCard; tint: string }> = {
+  card: { Icon: CreditCard, tint: 'text-sky-400' },
+  card_uid: { Icon: CreditCard, tint: 'text-sky-400' },
+  pin: { Icon: KeyRound, tint: 'text-amber-400' },
+  face: { Icon: ScanFace, tint: 'text-violet-400' },
+  face_template: { Icon: ScanFace, tint: 'text-violet-400' },
+  fingerprint: { Icon: Fingerprint, tint: 'text-emerald-400' },
+  plate: { Icon: Car, tint: 'text-orange-400' },
+  qr: { Icon: QrCode, tint: 'text-cyan-400' },
+  uhf: { Icon: Radio, tint: 'text-pink-400' },
+};
+
+/** Shorten long credential ids (e.g. face templates, long UIDs) for table display. */
+function truncateCredentialId(value: string, max = 18): string {
+  if (value.length <= max) return value;
+  const head = Math.ceil((max - 1) / 2);
+  const tail = Math.floor((max - 1) / 2);
+  return `${value.slice(0, head)}…${value.slice(-tail)}`;
+}
+
+function CredentialCell({
+  type,
+  metadata,
+}: {
+  type?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  if (!type) return <span className="text-muted-foreground">—</span>;
+
+  const key = type.toLowerCase();
+  const { Icon, tint } = CREDENTIAL_ICONS[key] ?? {
+    Icon: CreditCard,
+    tint: 'text-muted-foreground',
+  };
+
+  // Device payloads carry the real credential value under metadata.credential_value
+  // (legacy single factor) or metadata.credential_values[] (multi-factor).
+  const rawValue = (() => {
+    if (!metadata || typeof metadata !== 'object') return '';
+    const single = (metadata as Record<string, unknown>).credential_value;
+    if (typeof single === 'string' && single.trim() !== '') return single.trim();
+    const list = (metadata as Record<string, unknown>).credential_values;
+    if (Array.isArray(list) && list.length > 0) {
+      const first = list[0];
+      if (typeof first === 'string' && first.trim() !== '') return first.trim();
+      if (first && typeof first === 'object' && 'value' in first) {
+        const v = (first as { value?: unknown }).value;
+        if (typeof v === 'string' && v.trim() !== '') return v.trim();
+      }
+    }
+    return '';
+  })();
+
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-muted text-[11px] font-medium max-w-[200px]"
+      title={rawValue ? `${type} · ${rawValue}` : type}
+    >
+      <Icon className={cn('h-3.5 w-3.5 shrink-0', tint)} />
+      <span className="font-mono truncate">
+        {rawValue ? truncateCredentialId(rawValue) : type}
+      </span>
     </span>
   );
 }
@@ -836,11 +905,10 @@ export function AccessHistoryPage() {
                         {event.user_name || '—'}
                       </TableCell>
                       <TableCell className="px-4 text-[12px]">
-                        {event.credential_type ? (
-                          <span className="inline-block px-2 py-0.5 rounded bg-muted text-[11px] font-medium capitalize">
-                            {event.credential_type}
-                          </span>
-                        ) : '—'}
+                        <CredentialCell
+                          type={event.credential_type}
+                          metadata={event.metadata}
+                        />
                       </TableCell>
                       <TableCell className="px-4">
                         <DirectionBadge direction={event.direction} t={t} />
