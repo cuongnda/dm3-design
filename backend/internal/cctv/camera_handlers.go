@@ -296,10 +296,8 @@ func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 		rtspUsername = *req.RTSPUsername
 	}
 	sourceURL := composeRTSPURLWithAuth(trimmedURL, rtspUsername, decryptedPass)
-	if err := h.mediamtx.UpsertPath(r.Context(), deviceUUID, PathConfig{
-		Source:         sourceURL,
-		SourceOnDemand: false,
-	}); err != nil {
+	cfg := applyRecordDefaults(PathConfig{Source: sourceURL, SourceOnDemand: false}, pathRecordDefaults(r.Context(), h.db, cid))
+	if err := h.mediamtx.UpsertPath(r.Context(), deviceUUID, cfg); err != nil {
 		slog.Warn("cctv: mediamtx upsert path failed (non-fatal)", "device_id", deviceUUID, "error", err)
 	}
 
@@ -592,10 +590,8 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 		rtspUsernameStr = *rtspUsername
 	}
 	sourceURL := composeRTSPURLWithAuth(rtspURL, rtspUsernameStr, decryptedPass)
-	if err := h.mediamtx.UpsertPath(r.Context(), id, PathConfig{
-		Source:         sourceURL,
-		SourceOnDemand: false,
-	}); err != nil {
+	cfg := applyRecordDefaults(PathConfig{Source: sourceURL, SourceOnDemand: false}, pathRecordDefaults(r.Context(), h.db, cid))
+	if err := h.mediamtx.UpsertPath(r.Context(), id, cfg); err != nil {
 		slog.Warn("cctv: mediamtx upsert path failed (non-fatal)", "device_id", id, "error", err)
 	}
 

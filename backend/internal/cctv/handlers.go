@@ -106,6 +106,8 @@ func (h *CCTVHandlers) scanSettings(ctx context.Context, tenantID string) (CCTVS
 	err := h.db.Pool.QueryRow(ctx, `
 		SELECT tenant_id, retention_days, retention_days_max,
 		       pre_roll_sec_default, post_roll_sec_default, storage_quota_gb,
+		       rolling_buffer_sec, max_clip_duration_sec, max_concurrent_extractions,
+		       default_snapshot_enabled, default_record_enabled,
 		       created_at, updated_at,
 		       hanet_client_id, hanet_server_url, hanet_place_id,
 		       hanet_client_secret_enc, hanet_access_token_enc, hanet_refresh_token_enc
@@ -114,6 +116,8 @@ func (h *CCTVHandlers) scanSettings(ctx context.Context, tenantID string) (CCTVS
 	).Scan(
 		&s.TenantID, &s.RetentionDays, &s.RetentionDaysMax,
 		&s.PreRollSecDefault, &s.PostRollSecDefault, &s.StorageQuotaGB,
+		&s.RollingBufferSec, &s.MaxClipDurationSec, &s.MaxConcurrentExtractions,
+		&s.DefaultSnapshotEnabled, &s.DefaultRecordEnabled,
 		&s.CreatedAt, &s.UpdatedAt,
 		&clientID, &serverURL, &placeID,
 		&clientSecretEnc, &accessTokenEnc, &refreshTokenEnc,

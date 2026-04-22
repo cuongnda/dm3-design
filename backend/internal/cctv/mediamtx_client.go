@@ -28,9 +28,21 @@ type MediaMTXPathStatus struct {
 }
 
 // PathConfig is the configuration sent to MediaMTX for a stream path.
+//
+// Record* fields, when Record=true, configure MediaMTX to write a rolling
+// on-disk buffer of the stream. Combined with a short RecordDeleteAfter this
+// gives us a capped pre-roll buffer the extractor can splice from when
+// finalizing a coalesced clip. See migration 000048 comment block.
 type PathConfig struct {
 	Source         string // rtsp://user:pass@host:port/path (composed by caller)
 	SourceOnDemand bool   // true — start stream only when a client connects
+
+	// Rolling buffer knobs
+	Record                bool   // enable on-disk recording (fMP4 segments)
+	RecordFormat          string // "fmp4" | "mpegts"  — empty falls back to MediaMTX default
+	RecordPath            string // optional override for per-path record path template
+	RecordSegmentDuration string // e.g. "5s"
+	RecordDeleteAfter     string // e.g. "30s" — MUST be ≥ buffer window the consumer expects
 }
 
 // HTTPMediaMTXClient is an HTTP implementation of MediaMTXClient.
@@ -56,9 +68,17 @@ func NewHTTPMediaMTXClient(baseURL, user, pass string) *HTTPMediaMTXClient {
 	}
 }
 
+// mediamtxPathBody mirrors the JSON MediaMTX expects in its path config API.
+// omitempty on the record-related fields means we only send them when enabled,
+// letting MediaMTX apply its default (usually disabled) otherwise.
 type mediamtxPathBody struct {
-	Source         string `json:"source"`
-	SourceOnDemand bool   `json:"sourceOnDemand"`
+	Source                string `json:"source"`
+	SourceOnDemand        bool   `json:"sourceOnDemand"`
+	Record                bool   `json:"record,omitempty"`
+	RecordFormat          string `json:"recordFormat,omitempty"`
+	RecordPath            string `json:"recordPath,omitempty"`
+	RecordSegmentDuration string `json:"recordSegmentDuration,omitempty"`
+	RecordDeleteAfter     string `json:"recordDeleteAfter,omitempty"`
 }
 
 // UpsertPath creates or updates a path configuration on MediaMTX.
@@ -66,8 +86,13 @@ type mediamtxPathBody struct {
 // falls back to PATCH /v3/config/paths/patch/{name}.
 func (c *HTTPMediaMTXClient) UpsertPath(ctx context.Context, name string, cfg PathConfig) error {
 	body, err := json.Marshal(mediamtxPathBody{
-		Source:         cfg.Source,
-		SourceOnDemand: cfg.SourceOnDemand,
+		Source:                cfg.Source,
+		SourceOnDemand:        cfg.SourceOnDemand,
+		Record:                cfg.Record,
+		RecordFormat:          cfg.RecordFormat,
+		RecordPath:            cfg.RecordPath,
+		RecordSegmentDuration: cfg.RecordSegmentDuration,
+		RecordDeleteAfter:     cfg.RecordDeleteAfter,
 	})
 	if err != nil {
 		return fmt.Errorf("mediamtx: marshal path config: %w", err)

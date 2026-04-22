@@ -47,6 +47,14 @@ export interface CCTVSettingsDTO {
   pre_roll_sec_default: number;
   post_roll_sec_default: number;
   storage_quota_gb: number;
+
+  // Event capture knobs (migration 000048)
+  rolling_buffer_sec: number;
+  max_clip_duration_sec: number;
+  max_concurrent_extractions: number;
+  default_snapshot_enabled: boolean;
+  default_record_enabled: boolean;
+
   created_at: string;
   updated_at: string;
 
@@ -120,6 +128,13 @@ export interface UpdateCCTVSettingsRequest {
   post_roll_sec_default?: number;
   storage_quota_gb?: number;
 
+  // Event capture knobs (migration 000048)
+  rolling_buffer_sec?: number;
+  max_clip_duration_sec?: number;
+  max_concurrent_extractions?: number;
+  default_snapshot_enabled?: boolean;
+  default_record_enabled?: boolean;
+
   // Hanet fields. Field semantics per key:
   //   - omit        -> keep current value
   //   - empty ""    -> clear (NULL on the server)
@@ -130,6 +145,46 @@ export interface UpdateCCTVSettingsRequest {
   hanet_refresh_token?: string;
   hanet_server_url?: string;
   hanet_place_id?: string;
+}
+
+// ─── Event rules ──────────────────────────────────────────────────────────
+// See backend migration 000048 for scope precedence (camera > access_point >
+// tenant) and resolver semantics.
+
+export type EventRuleScope = 'tenant' | 'access_point' | 'camera';
+
+export interface EventRuleDTO {
+  id: string;
+  tenant_id: string;
+  scope_kind: EventRuleScope;
+  access_point_id?: string;
+  camera_device_id?: string;
+  decisions: string[];   // empty = match any
+  event_types: string[]; // empty = match any
+  snapshot_enabled: boolean;
+  record_enabled: boolean;
+  pre_roll_sec: number;
+  post_roll_sec: number;
+  priority: number;
+  enabled: boolean;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EventRuleInput {
+  scope_kind: EventRuleScope;
+  access_point_id?: string | null;
+  camera_device_id?: string | null;
+  decisions?: string[];
+  event_types?: string[];
+  snapshot_enabled?: boolean;
+  record_enabled?: boolean;
+  pre_roll_sec?: number;
+  post_roll_sec?: number;
+  priority?: number;
+  enabled?: boolean;
+  notes?: string | null;
 }
 
 export interface ListCamerasParams {
@@ -237,4 +292,22 @@ export function updateCCTVSettings(data: UpdateCCTVSettingsRequest): Promise<CCT
  *  indicates no access token is configured yet. */
 export function listHanetPlaces(): Promise<HanetPlaceDTO[]> {
   return apiFetch(`${BASE}/hanet/places`);
+}
+
+// ─── Event rules ─────────────────────────────────────────────────────────────
+
+export function listEventRules(): Promise<EventRuleDTO[]> {
+  return apiFetch(`${BASE}/event-rules`);
+}
+
+export function createEventRule(data: EventRuleInput): Promise<EventRuleDTO> {
+  return apiFetch(`${BASE}/event-rules`, { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateEventRule(id: string, data: EventRuleInput): Promise<EventRuleDTO> {
+  return apiFetch(`${BASE}/event-rules/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export function deleteEventRule(id: string): Promise<void> {
+  return apiFetch(`${BASE}/event-rules/${id}`, { method: 'DELETE' });
 }

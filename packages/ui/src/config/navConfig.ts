@@ -125,6 +125,7 @@ export const NAV_CONFIG: NavSection[] = [
       { to: '/cctv/cameras', icon: Video, labelKey: 'nav.cctvCameras', labelFallback: 'Cameras', status: 'ready' },
       { to: '/cctv/live', icon: Eye, labelKey: 'nav.cctvLive', labelFallback: 'Live', status: 'ready' },
       { to: '/cctv/clips', icon: ClipboardList, labelKey: 'nav.cctvClips', labelFallback: 'Clips', status: 'ready' },
+      { to: '/cctv/event-rules', icon: SlidersHorizontal, labelKey: 'nav.cctvEventRules', labelFallback: 'Event Rules', status: 'ready' },
       { to: '/cctv/settings', icon: SlidersHorizontal, labelKey: 'nav.cctvSettings', labelFallback: 'Settings', status: 'ready' },
     ],
   },

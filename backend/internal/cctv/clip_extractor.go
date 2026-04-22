@@ -44,62 +44,78 @@ type cameraRTSPInfo struct {
 	PostRollSec    int
 }
 
-// ExtractClip records pre_roll + post_roll seconds of video from a camera's RTSP
-// stream, uploads the resulting MP4 to MinIO, and updates the event_clips row.
+// ExtractClip records video for the coalesced window (started_at..end_at) of
+// the clip row, uploads the resulting MP4 to MinIO, and transitions the row
+// to 'finalized' (or 'failed' / 'degraded').
 //
-// This method runs asynchronously — it is designed to be called in a goroutine
-// after the placeholder clip row has been inserted. It never returns an error
-// to the caller; failures are logged and recorded in the DB row.
+// Runs asynchronously via the ExtractionWorkerPool. Never returns an error to
+// the caller; failures are logged and persisted in the DB row.
+//
+// TODO(pre-roll): this path pulls from live RTSP starting at "now" which means
+// the recorded clip only covers `(now, end_at)`, not `(started_at, end_at)` as
+// the row suggests. True pre-roll requires splicing from a rolling-buffer
+// source — MediaMTX with `record: true` + small `recordDeleteAfter`. When a
+// record directory is available, substitute this ffmpeg call with a concat
+// demux over the fMP4 segments inside [started_at, end_at] plus a tail live
+// pull until `end_at`. See migration 000048 comment block.
 func (e *ClipExtractor) ExtractClip(ctx context.Context, clipID, tenantID, cameraDeviceID string) {
 	log := slog.With("clip_id", clipID, "tenant_id", tenantID, "camera_device_id", cameraDeviceID)
 
-	// Guard: object store is required for upload.
 	if e.objectStore == nil {
 		log.Warn("cctv: clip extractor skipped — object store not configured")
+		e.markClipFailed(ctx, clipID, "object store not configured")
 		return
 	}
 
-	// 1. Query camera RTSP URL + credentials + pre/post roll from DB.
+	// Load the actual capture window the consumer wrote on the row.
+	startedAt, endAt, ok := e.fetchClipWindow(ctx, clipID)
+	if !ok {
+		log.Warn("cctv: clip extractor could not load clip window")
+		e.markClipFailed(ctx, clipID, "clip row not found")
+		return
+	}
+
 	info, err := e.fetchCameraRTSPInfo(ctx, tenantID, cameraDeviceID)
 	if err != nil {
 		log.Error("cctv: clip extractor failed to fetch camera info", "error", err)
-		e.markClipError(ctx, clipID, fmt.Sprintf("fetch camera info: %v", err))
+		e.markClipFailed(ctx, clipID, fmt.Sprintf("fetch camera info: %v", err))
 		return
 	}
 
 	if info.RTSPUrl == "" {
 		log.Warn("cctv: clip extractor skipped — camera has no RTSP URL")
-		e.markClipError(ctx, clipID, "camera has no rtsp_url")
+		e.markClipFailed(ctx, clipID, "camera has no rtsp_url")
 		return
 	}
 
-	// 2. Decrypt RTSP password if present.
 	var password string
 	if len(info.RTSPPasswordEnc) > 0 {
 		if e.cipher == nil {
 			log.Warn("cctv: clip extractor skipped — credential cipher not configured but camera has encrypted password")
-			e.markClipError(ctx, clipID, "credential cipher not configured")
+			e.markClipFailed(ctx, clipID, "credential cipher not configured")
 			return
 		}
 		password, err = e.cipher.Decrypt(info.RTSPPasswordEnc)
 		if err != nil {
 			log.Error("cctv: clip extractor failed to decrypt RTSP password", "error", err)
-			e.markClipError(ctx, clipID, fmt.Sprintf("decrypt password: %v", err))
+			e.markClipFailed(ctx, clipID, fmt.Sprintf("decrypt password: %v", err))
 			return
 		}
 	}
 
-	// 3. Build RTSP URL with credentials.
 	var username string
 	if info.RTSPUsername != nil {
 		username = *info.RTSPUsername
 	}
 	authedURL := composeRTSPURLWithAuth(info.RTSPUrl, username, password)
 
-	// 4. Calculate recording duration.
-	duration := info.PreRollSec + info.PostRollSec
-	if duration <= 0 {
-		duration = 30 // sensible default: 30 seconds
+	// Duration to pull. If the coalesced window has already elapsed entirely
+	// (e.g. finalizer was delayed), clamp to a minimum 5s so we at least
+	// capture the post-burst tail instead of producing an empty file.
+	duration := int(time.Until(endAt).Seconds())
+	if duration < 5 {
+		_ = startedAt // silence unused until rolling-buffer path lands
+		duration = 5
 	}
 
 	// 5. Run ffmpeg to record the clip.
@@ -141,7 +157,7 @@ func (e *ClipExtractor) ExtractClip(ctx context.Context, clipID, tenantID, camer
 			"error", err,
 			"stderr", errMsg,
 		)
-		e.markClipError(ctx, clipID, fmt.Sprintf("ffmpeg: %v — %s", err, errMsg))
+		e.markClipFailed(ctx, clipID, fmt.Sprintf("ffmpeg: %v — %s", err, errMsg))
 		return
 	}
 
@@ -149,7 +165,7 @@ func (e *ClipExtractor) ExtractClip(ctx context.Context, clipID, tenantID, camer
 	fileInfo, err := os.Stat(tmpFile)
 	if err != nil {
 		log.Error("cctv: clip extractor failed to stat temp file", "error", err)
-		e.markClipError(ctx, clipID, fmt.Sprintf("stat temp file: %v", err))
+		e.markClipFailed(ctx, clipID, fmt.Sprintf("stat temp file: %v", err))
 		return
 	}
 
@@ -158,7 +174,7 @@ func (e *ClipExtractor) ExtractClip(ctx context.Context, clipID, tenantID, camer
 	f, err := os.Open(tmpFile)
 	if err != nil {
 		log.Error("cctv: clip extractor failed to open temp file", "error", err)
-		e.markClipError(ctx, clipID, fmt.Sprintf("open temp file: %v", err))
+		e.markClipFailed(ctx, clipID, fmt.Sprintf("open temp file: %v", err))
 		return
 	}
 	defer f.Close()
@@ -168,11 +184,11 @@ func (e *ClipExtractor) ExtractClip(ctx context.Context, clipID, tenantID, camer
 
 	if err := e.objectStore.PutObject(uploadCtx, objectKey, f, fileInfo.Size(), "video/mp4"); err != nil {
 		log.Error("cctv: clip extractor failed to upload to object store", "error", err)
-		e.markClipError(ctx, clipID, fmt.Sprintf("upload: %v", err))
+		e.markClipFailed(ctx, clipID, fmt.Sprintf("upload: %v", err))
 		return
 	}
 
-	// 7. Update the event_clips row with actual metadata.
+	// 7. Update the event_clips row — final state.
 	durationMs := duration * 1000
 	endedAt := time.Now()
 
@@ -181,7 +197,7 @@ func (e *ClipExtractor) ExtractClip(ctx context.Context, clipID, tenantID, camer
 
 	_, err = e.db.Pool.Exec(updateCtx,
 		`UPDATE dm3_cctv.event_clips
-		 SET object_key = $1, duration_ms = $2, ended_at = $3, updated_at = now()
+		 SET object_key = $1, duration_ms = $2, ended_at = $3, status = 'finalized', updated_at = now()
 		 WHERE id = $4::uuid`,
 		objectKey, durationMs, endedAt, clipID,
 	)
@@ -215,25 +231,48 @@ func (e *ClipExtractor) fetchCameraRTSPInfo(ctx context.Context, tenantID, camer
 	return info, nil
 }
 
-// markClipError records a clip extraction failure in the DB so operators can
-// diagnose issues without trawling logs. The clip row keeps its placeholder
-// state but gains an error_message.
-func (e *ClipExtractor) markClipError(ctx context.Context, clipID, errMsg string) {
+// markClipFailed records a clip extraction failure in the DB so operators can
+// diagnose issues without trawling logs. Flips status to 'failed' so dashboards
+// and list queries can filter broken captures.
+func (e *ClipExtractor) markClipFailed(ctx context.Context, clipID, errMsg string) {
 	updateCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	// Truncate very long error messages to avoid blowing column limits.
 	if len(errMsg) > 1000 {
 		errMsg = errMsg[:1000]
 	}
 
 	_, err := e.db.Pool.Exec(updateCtx,
 		`UPDATE dm3_cctv.event_clips
-		 SET error_message = $1, updated_at = now()
+		 SET error_message = $1, status = 'failed', updated_at = now()
 		 WHERE id = $2::uuid`,
 		errMsg, clipID,
 	)
 	if err != nil {
 		slog.Error("cctv: failed to record clip extraction error", "clip_id", clipID, "error", err)
 	}
+}
+
+// fetchClipWindow reads started_at / end_at (the coalesced window written by
+// the consumer) from the clip row. Returns ok=false when the row is missing.
+func (e *ClipExtractor) fetchClipWindow(ctx context.Context, clipID string) (time.Time, time.Time, bool) {
+	queryCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	var startedAt time.Time
+	var endAt *time.Time
+	err := e.db.Pool.QueryRow(queryCtx,
+		`SELECT started_at, end_at FROM dm3_cctv.event_clips WHERE id = $1::uuid`,
+		clipID,
+	).Scan(&startedAt, &endAt)
+	if err != nil {
+		return time.Time{}, time.Time{}, false
+	}
+	if endAt == nil {
+		// Pre-coalescing rows (manual exports etc.) — fall back to now + 10s
+		// so extraction still proceeds with a sane tail.
+		t := time.Now().Add(10 * time.Second)
+		endAt = &t
+	}
+	return startedAt, *endAt, true
 }

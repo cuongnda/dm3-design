@@ -1,0 +1,403 @@
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { AppModal, Button, Input, Label, PageHeader } from '@dm3/ui';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
+import {
+  listEventRules,
+  createEventRule,
+  updateEventRule,
+  deleteEventRule,
+  listAccessPoints,
+  listCameras,
+  type EventRuleDTO,
+  type EventRuleInput,
+  type EventRuleScope,
+} from '@dm3/api-client';
+
+// Decision vocabulary mirrors the access-svc consumer. New values added there
+// will still be accepted by the backend (rules filter via array contains) —
+// this list is purely the UI picker. TODO: serve via /vocab endpoint.
+const DECISIONS = ['granted', 'denied', 'unknown', 'duress'] as const;
+
+// Event types the consumer currently forwards. `access.log` is today's only
+// live one — listed extras are for forward-compatibility so rules can be
+// authored once and "light up" when the consumer broadens its filter.
+const EVENT_TYPES = ['access.log', 'face.match', 'face.unknown', 'door.forced'] as const;
+
+const emptyInput: EventRuleInput = {
+  scope_kind: 'tenant',
+  access_point_id: null,
+  camera_device_id: null,
+  decisions: [],
+  event_types: [],
+  snapshot_enabled: true,
+  record_enabled: true,
+  pre_roll_sec: 10,
+  post_roll_sec: 20,
+  priority: 1000,
+  enabled: true,
+};
+
+export function CCTVEventRulesPage() {
+  const qc = useQueryClient();
+  const { data: rules = [], isLoading } = useQuery({
+    queryKey: ['cctv-event-rules'],
+    queryFn: () => listEventRules(),
+  });
+  const { data: accessPointsResp } = useQuery({
+    queryKey: ['access-points-all'],
+    queryFn: () => listAccessPoints({ limit: 500 }),
+  });
+  const { data: camerasResp } = useQuery({
+    queryKey: ['cctv-cameras-all'],
+    queryFn: () => listCameras({ limit: 500 }),
+  });
+
+  const accessPoints = accessPointsResp?.data ?? [];
+  const cameras = camerasResp?.data ?? [];
+
+  const [editing, setEditing] = useState<EventRuleDTO | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  const createMutation = useMutation({
+    mutationFn: (data: EventRuleInput) => createEventRule(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cctv-event-rules'] });
+      setCreating(false);
+    },
+  });
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: EventRuleInput }) => updateEventRule(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cctv-event-rules'] });
+      setEditing(null);
+    },
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteEventRule(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['cctv-event-rules'] }),
+  });
+
+  const scopeLabel = (r: EventRuleDTO) => {
+    if (r.scope_kind === 'tenant') return 'All cameras';
+    if (r.scope_kind === 'access_point') {
+      const ap = accessPoints.find((a) => a.id === r.access_point_id);
+      return `AP: ${ap?.name ?? r.access_point_id}`;
+    }
+    const cam = cameras.find((c) => c.id === r.camera_device_id);
+    return `Cam: ${cam?.name ?? r.camera_device_id}`;
+  };
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <PageHeader
+        title="Event Rules"
+        description="Quyết định từng event access sẽ tạo snapshot và/hoặc record video. Scope ưu tiên: camera > access point > tenant."
+      >
+        <Button size="sm" onClick={() => setCreating(true)} data-testid="cctv-button-new-rule">
+          <Plus size={16} className="mr-1" /> New Rule
+        </Button>
+      </PageHeader>
+
+      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+        {isLoading ? (
+          <div className="py-12 text-center text-muted-foreground">Loading…</div>
+        ) : rules.length === 0 ? (
+          <div className="py-12 text-center text-muted-foreground text-[13px]">
+            Chưa có rule nào. Nếu không có rule, tenant default trong Settings sẽ áp dụng cho mọi event.
+          </div>
+        ) : (
+          <table className="w-full text-[13px]">
+            <thead className="text-left text-muted-foreground text-[12px]">
+              <tr>
+                <th className="py-2 pr-3">Scope</th>
+                <th className="py-2 pr-3">Decisions</th>
+                <th className="py-2 pr-3">Event Types</th>
+                <th className="py-2 pr-3">Snapshot</th>
+                <th className="py-2 pr-3">Record</th>
+                <th className="py-2 pr-3">Pre/Post</th>
+                <th className="py-2 pr-3">Priority</th>
+                <th className="py-2 pr-3">Enabled</th>
+                <th className="py-2 pr-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rules.map((r) => (
+                <tr key={r.id} className="border-t border-border">
+                  <td className="py-2 pr-3">{scopeLabel(r)}</td>
+                  <td className="py-2 pr-3">{r.decisions.length ? r.decisions.join(', ') : '*'}</td>
+                  <td className="py-2 pr-3">{r.event_types.length ? r.event_types.join(', ') : '*'}</td>
+                  <td className="py-2 pr-3">{r.snapshot_enabled ? '✓' : '—'}</td>
+                  <td className="py-2 pr-3">{r.record_enabled ? '✓' : '—'}</td>
+                  <td className="py-2 pr-3">{r.pre_roll_sec}s / {r.post_roll_sec}s</td>
+                  <td className="py-2 pr-3">{r.priority}</td>
+                  <td className="py-2 pr-3">{r.enabled ? '✓' : '—'}</td>
+                  <td className="py-2 pr-3 text-right">
+                    <Button size="xs" variant="ghost" onClick={() => setEditing(r)} data-testid={`cctv-button-edit-rule-${r.id}`}>
+                      <Pencil size={14} />
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      className="text-destructive"
+                      onClick={() => {
+                        if (window.confirm('Delete this rule?')) {
+                          deleteMutation.mutate(r.id);
+                        }
+                      }}
+                      data-testid={`cctv-button-delete-rule-${r.id}`}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <RuleFormModal
+        open={creating || !!editing}
+        initial={editing ? inputFromRule(editing) : emptyInput}
+        accessPoints={accessPoints.map((a) => ({ id: a.id, name: a.name }))}
+        cameras={cameras.map((c) => ({ id: c.id, name: c.name }))}
+        submitting={createMutation.isPending || updateMutation.isPending}
+        onCancel={() => {
+          setCreating(false);
+          setEditing(null);
+        }}
+        onSubmit={(data) => {
+          if (editing) updateMutation.mutate({ id: editing.id, data });
+          else createMutation.mutate(data);
+        }}
+      />
+    </div>
+  );
+}
+
+function inputFromRule(r: EventRuleDTO): EventRuleInput {
+  return {
+    scope_kind: r.scope_kind,
+    access_point_id: r.access_point_id ?? null,
+    camera_device_id: r.camera_device_id ?? null,
+    decisions: r.decisions,
+    event_types: r.event_types,
+    snapshot_enabled: r.snapshot_enabled,
+    record_enabled: r.record_enabled,
+    pre_roll_sec: r.pre_roll_sec,
+    post_roll_sec: r.post_roll_sec,
+    priority: r.priority,
+    enabled: r.enabled,
+    notes: r.notes ?? null,
+  };
+}
+
+interface RuleFormProps {
+  open: boolean;
+  initial: EventRuleInput;
+  accessPoints: { id: string; name: string }[];
+  cameras: { id: string; name: string }[];
+  submitting: boolean;
+  onCancel: () => void;
+  onSubmit: (data: EventRuleInput) => void;
+}
+
+function RuleFormModal({ open, initial, accessPoints, cameras, submitting, onCancel, onSubmit }: RuleFormProps) {
+  const [form, setForm] = useState<EventRuleInput>(initial);
+
+  // Reset form whenever the modal opens with a new initial (create vs edit).
+  // Using a key on AppModal would work too but this is fewer re-renders.
+  // Note: intentional dep on `open` + `initial` identity change.
+  if (open && form !== initial && !(form as any).__touched) {
+    setForm({ ...initial, ...(form as any) });
+  }
+
+  const set = <K extends keyof EventRuleInput>(k: K, v: EventRuleInput[K]) => {
+    setForm((prev) => ({ ...prev, [k]: v, __touched: true } as EventRuleInput));
+  };
+
+  const toggleMulti = (list: string[] | undefined, value: string): string[] => {
+    const next = new Set(list ?? []);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    return Array.from(next);
+  };
+
+  return (
+    <AppModal open={open} onOpenChange={(v) => { if (!v) onCancel(); }} title="Event Rule">
+      <div className="space-y-3">
+        <div>
+          <Label className="text-[12px]">Scope</Label>
+          <select
+            className="mt-1 w-full h-8 rounded-md border border-border bg-background px-2 text-[13px]"
+            value={form.scope_kind}
+            onChange={(e) => {
+              const s = e.target.value as EventRuleScope;
+              setForm((prev) => ({
+                ...prev,
+                scope_kind: s,
+                access_point_id: s === 'access_point' ? prev.access_point_id ?? null : null,
+                camera_device_id: s === 'camera' ? prev.camera_device_id ?? null : null,
+                __touched: true,
+              } as EventRuleInput));
+            }}
+          >
+            <option value="tenant">Tenant (mọi camera)</option>
+            <option value="access_point">Access point (mọi camera trong 1 điểm)</option>
+            <option value="camera">Camera cụ thể</option>
+          </select>
+        </div>
+
+        {form.scope_kind === 'access_point' && (
+          <div>
+            <Label className="text-[12px]">Access Point</Label>
+            <select
+              className="mt-1 w-full h-8 rounded-md border border-border bg-background px-2 text-[13px]"
+              value={form.access_point_id ?? ''}
+              onChange={(e) => set('access_point_id', e.target.value || null)}
+            >
+              <option value="">-- chọn --</option>
+              {accessPoints.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+        )}
+
+        {form.scope_kind === 'camera' && (
+          <div>
+            <Label className="text-[12px]">Camera</Label>
+            <select
+              className="mt-1 w-full h-8 rounded-md border border-border bg-background px-2 text-[13px]"
+              value={form.camera_device_id ?? ''}
+              onChange={(e) => set('camera_device_id', e.target.value || null)}
+            >
+              <option value="">-- chọn --</option>
+              {cameras.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        )}
+
+        <div>
+          <Label className="text-[12px]">Decisions (trống = match mọi decision)</Label>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {DECISIONS.map((d) => {
+              const active = (form.decisions ?? []).includes(d);
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => set('decisions', toggleMulti(form.decisions, d))}
+                  className={`px-2 py-1 rounded border text-[12px] ${active ? 'bg-primary text-primary-foreground border-primary' : 'border-border'}`}
+                >{d}</button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <Label className="text-[12px]">Event Types (trống = match mọi type)</Label>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {EVENT_TYPES.map((t) => {
+              const active = (form.event_types ?? []).includes(t);
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => set('event_types', toggleMulti(form.event_types, t))}
+                  className={`px-2 py-1 rounded border text-[12px] ${active ? 'bg-primary text-primary-foreground border-primary' : 'border-border'}`}
+                >{t}</button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex items-center gap-2 text-[13px]">
+            <input
+              type="checkbox"
+              checked={!!form.snapshot_enabled}
+              onChange={(e) => set('snapshot_enabled', e.target.checked)}
+            /> Snapshot
+          </label>
+          <label className="flex items-center gap-2 text-[13px]">
+            <input
+              type="checkbox"
+              checked={!!form.record_enabled}
+              onChange={(e) => set('record_enabled', e.target.checked)}
+            /> Record video
+          </label>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-[12px]">Pre-roll (s)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={120}
+              className="mt-1 h-8 text-[13px]"
+              value={form.pre_roll_sec ?? 10}
+              onChange={(e) => set('pre_roll_sec', Number(e.target.value))}
+            />
+          </div>
+          <div>
+            <Label className="text-[12px]">Post-roll (s)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={300}
+              className="mt-1 h-8 text-[13px]"
+              value={form.post_roll_sec ?? 20}
+              onChange={(e) => set('post_roll_sec', Number(e.target.value))}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-[12px]">Priority (nhỏ = ưu tiên cao)</Label>
+            <Input
+              type="number"
+              className="mt-1 h-8 text-[13px]"
+              value={form.priority ?? 1000}
+              onChange={(e) => set('priority', Number(e.target.value))}
+            />
+          </div>
+          <label className="flex items-center gap-2 mt-6 text-[13px]">
+            <input
+              type="checkbox"
+              checked={form.enabled !== false}
+              onChange={(e) => set('enabled', e.target.checked)}
+            /> Enabled
+          </label>
+        </div>
+
+        <div>
+          <Label className="text-[12px]">Notes</Label>
+          <Input
+            className="mt-1 h-8 text-[13px]"
+            value={form.notes ?? ''}
+            onChange={(e) => set('notes', e.target.value || null)}
+          />
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
+          <Button
+            size="sm"
+            disabled={submitting}
+            onClick={() => {
+              // Strip the UI-only __touched flag before sending.
+              const clean: EventRuleInput = { ...form };
+              delete (clean as any).__touched;
+              onSubmit(clean);
+            }}
+            className="bg-[#3B82F6] hover:bg-[#2563EB]"
+          >
+            {submitting ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      </div>
+    </AppModal>
+  );
+}

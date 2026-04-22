@@ -211,20 +211,33 @@ func main() {
 		slog.Warn("OBJECT_STORE_ENDPOINT not set — clip playback URLs will return object_key unchanged")
 	}
 
-	// Clip extractor — records RTSP video and uploads to MinIO.
-	// Requires both object store and cipher. When either is missing, the
-	// access-event consumer still creates placeholder rows but skips extraction.
+	// Clip + snapshot extractors — require object store. Worker pool bounds
+	// ffmpeg concurrency across both paths so event bursts can't spawn
+	// unbounded concat jobs. Default pool size 8 matches migration 000048's
+	// cctv_settings.max_concurrent_extractions default; tenant-specific sizing
+	// is a TODO — the pool is process-wide, not per-tenant, so we'd need to
+	// either cap the biggest tenant or shard the consumer.
+	var snapshotExtractor *cctv.SnapshotExtractor
+	var workerPool *cctv.ExtractionWorkerPool
 	if objectStore != nil {
 		clipExtractor = cctv.NewClipExtractor(database, objectStore, cipher)
-		slog.Info("cctv clip extractor enabled")
+		snapshotExtractor = cctv.NewSnapshotExtractor(database, objectStore, cipher)
+		workerPool = cctv.NewExtractionWorkerPool(8)
+		slog.Info("cctv extractors + worker pool enabled", "max_concurrent", 8)
 	} else {
-		slog.Warn("object store not configured — clip extraction disabled (placeholders only)")
+		slog.Warn("object store not configured — clip & snapshot extraction disabled (placeholders only)")
 	}
 
-	// Start access-event consumer — creates placeholder event_clips rows when
-	// access events fire on access points that have cameras bound to them.
-	// When clipExtractor is non-nil, it also spawns async clip extraction.
-	accessEventConsumer := cctv.NewAccessEventConsumer(database, natsClient, clipExtractor)
+	// Finalizer: drains pending→finalized for coalesced clips. Runs forever
+	// until ctx cancellation. Only meaningful when both extractor + workers
+	// are present.
+	if finalizer := cctv.NewClipFinalizer(database, clipExtractor, workerPool); finalizer != nil {
+		go finalizer.Run(ctx)
+	}
+
+	// Start access-event consumer — drives the capture pipeline governed by
+	// dm3_cctv.event_rules. Coalesces bursts, dispatches to extractors.
+	accessEventConsumer := cctv.NewAccessEventConsumer(database, natsClient, clipExtractor, snapshotExtractor, workerPool)
 	if err := accessEventConsumer.Start(ctx); err != nil {
 		slog.Error("failed to start cctv access-event consumer", "error", err)
 		os.Exit(1)

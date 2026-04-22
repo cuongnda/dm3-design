@@ -213,6 +213,9 @@ const CCTVClipsPage = lazyWithRetry(() =>
 const CCTVSettingsPage = lazyWithRetry(() =>
   import('@/features/cctv/CCTVSettingsPage').then((m) => ({ default: m.CCTVSettingsPage }))
 );
+const CCTVEventRulesPage = lazyWithRetry(() =>
+  import('@/features/cctv/CCTVEventRulesPage').then((m) => ({ default: m.CCTVEventRulesPage }))
+);
 
 // OPERATE
 const ParkingDashboardPage = lazyWithRetry(() =>
@@ -452,6 +455,7 @@ export const Router = createBrowserRouter([
               { path: 'cctv/live', element: <PluginGuard plugin="cctv"><LazyWrap><CCTVLiveViewPage /></LazyWrap></PluginGuard> },
               { path: 'cctv/clips', element: <PluginGuard plugin="cctv"><LazyWrap><CCTVClipsPage /></LazyWrap></PluginGuard> },
               { path: 'cctv/settings', element: <PluginGuard plugin="cctv"><LazyWrap><CCTVSettingsPage /></LazyWrap></PluginGuard> },
+              { path: 'cctv/event-rules', element: <PluginGuard plugin="cctv"><LazyWrap><CCTVEventRulesPage /></LazyWrap></PluginGuard> },
 
               // PARKING
               { path: 'parking', element: <PluginGuard plugin="parking"><LazyWrap><ParkingDashboardPage /></LazyWrap></PluginGuard> },
