@@ -83,7 +83,7 @@ info:
     name: Proprietary
   termsOfService: https://duali.com/terms
   title: Duall Master API
-  version: "1.0"
+  version: "3.0"
 paths:
   /access/groups:
     get:

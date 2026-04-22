@@ -55,7 +55,7 @@ func bypassPrivate(limiter func(http.Handler) http.Handler) func(http.Handler) h
 }
 
 // @title           Duall Master API
-// @version         1.0
+// @version         3.0
 // @description     Multi-tenant access control and smart building platform API.
 // @description
 // @description     All endpoints are tenant-scoped through the `Authorization: Bearer dm3_live_...`
