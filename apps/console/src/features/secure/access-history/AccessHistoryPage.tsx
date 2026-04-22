@@ -2,11 +2,11 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { format as formatDate, subDays, startOfDay } from 'date-fns';
+import { format as formatDate, subDays, startOfDay, endOfDay } from 'date-fns';
 import {
   Download, History, RotateCcw, X, ImageOff, ChevronsUpDown, Check,
   CreditCard, KeyRound, ScanFace, Car, QrCode, Radio, Fingerprint,
-  Copy, CheckCircle2,
+  Copy, CheckCircle2, CalendarRange,
 } from 'lucide-react';
 import {
   listAccessEvents,
@@ -30,7 +30,7 @@ import {
   TableHead,
   TableCell,
   TablePaginationFooter,
-  DatetimePicker,
+  Calendar,
   AppModal,
   DropdownMenu,
   DropdownMenuContent,
@@ -624,7 +624,7 @@ function PersonSelect({ value, onChange }: PersonSelectProps) {
   );
 }
 
-// ─── Date presets ───────────────────────────────────────────────────────────
+// ─── Date range + presets combined control ──────────────────────────────────
 
 type PresetKey = 'today' | '24h' | '7d' | '30d';
 
@@ -649,30 +649,32 @@ function buildPresetRange(key: PresetKey): { from: string; to: string } {
   return { from: from.toISOString(), to };
 }
 
-interface DatePresetsProps {
-  fromIso: string;
-  toIso: string;
-  onPick: (from: string, to: string) => void;
+function detectPreset(fromIso: string, toIso: string): PresetKey | null {
+  const now = Date.now();
+  const toMs = new Date(toIso).getTime();
+  const fromMs = new Date(fromIso).getTime();
+  // Allow up to 90s drift to match "now".
+  if (Math.abs(now - toMs) > 90_000) return null;
+  const span = toMs - fromMs;
+  const hour = 60 * 60 * 1000;
+  if (Math.abs(span - 24 * hour) < 5 * 60_000) return '24h';
+  if (Math.abs(span - 7 * 24 * hour) < 30 * 60_000) return '7d';
+  if (Math.abs(span - 30 * 24 * hour) < 60 * 60_000) return '30d';
+  if (fromMs === startOfDay(new Date(toMs)).getTime()) return 'today';
+  return null;
 }
 
-function DatePresets({ fromIso, toIso, onPick }: DatePresetsProps) {
-  const { t } = useTranslation('secure');
+interface RangeWithPresetsProps {
+  fromIso: string;
+  toIso: string;
+  onChange: (fromIso: string, toIso: string) => void;
+}
 
-  const activeKey: PresetKey | null = useMemo(() => {
-    const now = Date.now();
-    const toMs = new Date(toIso).getTime();
-    const fromMs = new Date(fromIso).getTime();
-    // Allow up to 90s drift (for slow renders) when matching "now" to current moment.
-    const nowSlack = 90_000;
-    if (Math.abs(now - toMs) > nowSlack) return null;
-    const span = toMs - fromMs;
-    const hour = 60 * 60 * 1000;
-    if (Math.abs(span - 24 * hour) < 5 * 60_000) return '24h';
-    if (Math.abs(span - 7 * 24 * hour) < 30 * 60_000) return '7d';
-    if (Math.abs(span - 30 * 24 * hour) < 60 * 60_000) return '30d';
-    if (fromMs === startOfDay(new Date(toMs)).getTime()) return 'today';
-    return null;
-  }, [fromIso, toIso]);
+function RangeWithPresets({ fromIso, toIso, onChange }: RangeWithPresetsProps) {
+  const { t } = useTranslation('secure');
+  const [open, setOpen] = useState(false);
+
+  const activeKey = useMemo(() => detectPreset(fromIso, toIso), [fromIso, toIso]);
 
   const presets: { key: PresetKey; label: string }[] = [
     { key: 'today', label: t('accessHistory.filters.preset.today') },
@@ -681,33 +683,98 @@ function DatePresets({ fromIso, toIso, onPick }: DatePresetsProps) {
     { key: '30d', label: t('accessHistory.filters.preset.30d') },
   ];
 
+  const triggerLabel = useMemo(() => {
+    if (activeKey) {
+      return presets.find((p) => p.key === activeKey)?.label ?? '';
+    }
+    const f = new Date(fromIso);
+    const tDate = new Date(toIso);
+    const fLabel = isNaN(f.getTime()) ? '—' : formatDate(f, 'yyyy-MM-dd');
+    const tLabel = isNaN(tDate.getTime()) ? '—' : formatDate(tDate, 'yyyy-MM-dd');
+    return `${fLabel} → ${tLabel}`;
+  }, [activeKey, fromIso, toIso, presets]);
+
+  const calendarRange = useMemo(() => {
+    const s = new Date(fromIso);
+    const e = new Date(toIso);
+    return {
+      start: isNaN(s.getTime()) ? null : s,
+      end: isNaN(e.getTime()) ? null : e,
+    };
+  }, [fromIso, toIso]);
+
+  function handlePreset(key: PresetKey) {
+    const r = buildPresetRange(key);
+    onChange(r.from, r.to);
+    setOpen(false);
+  }
+
+  function handleCalendarRange(next: { start: Date | null; end: Date | null }) {
+    if (!next.start) return;
+    // Start of the selected start-date, end of the selected end-date (or same
+    // day when the user has only picked one side).
+    const startIso = startOfDay(next.start).toISOString();
+    const endDate = next.end ?? next.start;
+    const endIso = endOfDay(endDate).toISOString();
+    onChange(startIso, endIso);
+  }
+
   return (
     <div className="flex flex-col gap-1">
       <Label className="text-[11px]">{t('accessHistory.filters.rangeLabel')}</Label>
-      <div className="flex items-center gap-1">
-        {presets.map((p) => {
-          const active = activeKey === p.key;
-          return (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => {
-                const r = buildPresetRange(p.key);
-                onPick(r.from, r.to);
-              }}
-              data-testid={`access-history-preset-${p.key}`}
-              className={cn(
-                'h-9 px-2.5 rounded-md text-[12px] font-medium border transition-colors',
-                active
-                  ? 'border-primary/60 bg-primary/10 text-primary'
-                  : 'border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
-            >
-              {p.label}
-            </button>
-          );
-        })}
-      </div>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            data-testid="access-history-range-trigger"
+            className="h-9 min-w-[240px] justify-between text-[13px] font-normal gap-2"
+          >
+            <span className="inline-flex items-center gap-2 truncate">
+              <CalendarRange className="size-4 text-muted-foreground shrink-0" />
+              <span className="truncate">{triggerLabel}</span>
+            </span>
+            <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          className="p-0 w-auto"
+          align="start"
+          data-testid="access-history-range-popover"
+        >
+          <div className="flex">
+            <div className="flex flex-col gap-0.5 border-r border-border/60 p-2 w-[150px]">
+              {presets.map((p) => {
+                const active = activeKey === p.key;
+                return (
+                  <button
+                    key={p.key}
+                    type="button"
+                    onClick={() => handlePreset(p.key)}
+                    data-testid={`access-history-preset-${p.key}`}
+                    className={cn(
+                      'h-8 px-2.5 rounded-md text-[12px] font-medium text-left transition-colors',
+                      active
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="p-2">
+              <Calendar
+                mode="range"
+                rangeValue={calendarRange}
+                onSelectRange={handleCalendarRange}
+                className="w-78"
+              />
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
@@ -1094,38 +1161,12 @@ export function AccessHistoryPage() {
       <div className="bg-card border border-border rounded-lg p-3">
         <div className="flex flex-wrap gap-2 items-end">
 
-          {/* Quick presets */}
-          <DatePresets
+          {/* Date range + presets (single compact control) */}
+          <RangeWithPresets
             fromIso={fromIso}
             toIso={toIso}
-            onPick={(from, to) => updateParams({ from, to, page: '' })}
+            onChange={(from, to) => updateParams({ from, to, page: '' })}
           />
-
-          {/* From */}
-          <div className="flex flex-col gap-1">
-            <Label className="text-[11px]">{t('accessHistory.filters.from')}</Label>
-            <DatetimePicker
-              value={fromIso}
-              onChange={(v) => {
-                updateParams({ from: v ?? '', page: '' });
-              }}
-              placeholder={t('accessHistory.filters.from')}
-              className="w-[190px]"
-            />
-          </div>
-
-          {/* To */}
-          <div className="flex flex-col gap-1">
-            <Label className="text-[11px]">{t('accessHistory.filters.to')}</Label>
-            <DatetimePicker
-              value={toIso}
-              onChange={(v) => {
-                updateParams({ to: v ?? '', page: '' });
-              }}
-              placeholder={t('accessHistory.filters.to')}
-              className="w-[190px]"
-            />
-          </div>
 
           {/* Access Point */}
           <div className="flex flex-col gap-1">
