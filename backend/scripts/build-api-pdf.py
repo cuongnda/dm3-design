@@ -116,6 +116,8 @@ L = {
     "col_desc": "Mô tả",
     "col_status": "Mã",
     "col_example": "Ví dụ",
+    "sample_response": "Ví dụ phản hồi",
+    "sample_request": "Ví dụ yêu cầu",
     "no_desc": "(chưa có mô tả)",
     "page": "Trang",
     "generated": "Tài liệu tự sinh từ nguồn — Duall Master 3.0",
@@ -605,6 +607,151 @@ def render_request_body(body: dict | None) -> str:
     return "".join(parts)
 
 
+# ─── Per-endpoint sample responses (pretty-printed JSON) ────────────────────
+# Keyed by "METHOD /path". Shown as a code block under the response table.
+SAMPLES_VI: dict[str, str] = {
+    "POST /auth/login": """{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6...",
+  "user": {
+    "id": "3f7b0a52-9b1c-4e6a-9d21-0c4d5a9f8e10",
+    "email": "admin@duali.com",
+    "first_name": "Nguyen",
+    "last_name": "Admin",
+    "role": "company_admin",
+    "tenant_id": "e1d2c3b4-a5f6-4789-0123-456789abcdef"
+  }
+}""",
+    "GET /auth/me": """{
+  "id": "3f7b0a52-9b1c-4e6a-9d21-0c4d5a9f8e10",
+  "email": "admin@duali.com",
+  "first_name": "Nguyen",
+  "last_name": "Admin",
+  "role": "company_admin",
+  "tenant_id": "e1d2c3b4-a5f6-4789-0123-456789abcdef",
+  "plugins": ["visitor", "parking", "cctv", "attendance", "api_integration"]
+}""",
+    "GET /access/events": """{
+  "data": [
+    {
+      "id": "9f81e0b4-c2a7-4ee9-8b30-1c1a2b3c4d5e",
+      "tenant_id": "e1d2c3b4-a5f6-4789-0123-456789abcdef",
+      "time": "2026-04-22T08:15:42Z",
+      "access_point_id": "a1b2c3d4-e5f6-7890-1234-56789abcdef0",
+      "device_id": "d0e1f2a3-b4c5-6789-0123-456789abcdef",
+      "device_name": "Cửa chính - Tầng 1",
+      "user_id": "3f7b0a52-9b1c-4e6a-9d21-0c4d5a9f8e10",
+      "user_name": "Nguyen Van A",
+      "credential_type": "face",
+      "direction": "in",
+      "decision": "granted",
+      "reason": "",
+      "confidence": 0.972,
+      "photo_ref": "events/e1d2c3b4/d0e1f2a3/2026-04-22/9f81e0b4.jpg",
+      "photo_url": "https://minio.local/dm3/events/...?X-Amz-Signature=...",
+      "metadata": {"temperature": 36.5, "mask": true}
+    }
+  ],
+  "total": 12843,
+  "page": 1,
+  "limit": 20
+}""",
+    "GET /access/events/export": """# CSV response (format=csv)
+Time,Access Point ID,Device Name,User Name,Credential Type,Direction,Decision,Reason
+2026-04-22T08:15:42Z,a1b2c3d4-e5f6-7890-1234-56789abcdef0,Cửa chính - Tầng 1,Nguyen Van A,face,in,granted,
+2026-04-22T08:16:03Z,a1b2c3d4-e5f6-7890-1234-56789abcdef0,Cửa chính - Tầng 1,Tran Thi B,card,in,denied,expired
+...""",
+    "GET /access/groups": """{
+  "data": [
+    {
+      "id": "b2c3d4e5-f6a7-8901-2345-6789abcdef01",
+      "tenant_id": "e1d2c3b4-a5f6-4789-0123-456789abcdef",
+      "name": "Nhân viên văn phòng",
+      "description": "Truy cập toàn bộ tầng văn phòng 24/7",
+      "access_point_ids": ["a1b2c3d4-e5f6-7890-1234-56789abcdef0"],
+      "user_count": 42,
+      "created_at": "2026-01-15T09:00:00Z",
+      "updated_at": "2026-04-10T14:22:11Z"
+    }
+  ],
+  "total": 8,
+  "page": 1,
+  "limit": 20
+}""",
+    "GET /identity/users": """{
+  "data": [
+    {
+      "id": "3f7b0a52-9b1c-4e6a-9d21-0c4d5a9f8e10",
+      "tenant_id": "e1d2c3b4-a5f6-4789-0123-456789abcdef",
+      "email": "user@duali.com",
+      "first_name": "Nguyen",
+      "last_name": "Van A",
+      "employee_number": "EMP-0042",
+      "department_id": "d1e2f3a4-b5c6-7890-1234-56789abcdef0",
+      "position": "Kỹ sư phần mềm",
+      "status": "active",
+      "access_group_id": "b2c3d4e5-f6a7-8901-2345-6789abcdef01",
+      "created_at": "2026-01-15T09:00:00Z"
+    }
+  ],
+  "total": 156,
+  "page": 1,
+  "limit": 20
+}""",
+    "GET /gateway/devices": """{
+  "data": [
+    {
+      "id": "d0e1f2a3-b4c5-6789-0123-456789abcdef",
+      "tenant_id": "e1d2c3b4-a5f6-4789-0123-456789abcdef",
+      "device_id": "DM3-TERM-0042",
+      "name": "Cửa chính - Tầng 1",
+      "type": "access_terminal",
+      "model": "DM3-Terminal-V2",
+      "location": "Tòa nhà A - Tầng 1",
+      "firmware_version": "3.0.12",
+      "status": "online",
+      "last_seen_at": "2026-04-22T08:20:01Z"
+    }
+  ],
+  "total": 24,
+  "page": 1,
+  "limit": 20
+}""",
+    "GET /audit/logs": """{
+  "data": [
+    {
+      "id": "aaaabbbb-cccc-dddd-eeee-ffff00001111",
+      "time": "2026-04-22T08:15:42Z",
+      "tenant_id": "e1d2c3b4-a5f6-4789-0123-456789abcdef",
+      "actor_user_id": "3f7b0a52-9b1c-4e6a-9d21-0c4d5a9f8e10",
+      "actor_email": "admin@duali.com",
+      "service": "identity-svc",
+      "action": "user.create",
+      "entity_type": "user",
+      "entity_id": "newuser-0042",
+      "status": "success",
+      "ip_address": "203.0.113.17",
+      "metadata": {"email": "user@duali.com"}
+    }
+  ],
+  "total": 8421,
+  "page": 1,
+  "limit": 20
+}""",
+}
+
+
+def render_sample(path: str, method: str) -> str:
+    key = f"{method.upper()} {path}"
+    sample = SAMPLES_VI.get(key)
+    if not sample:
+        return ""
+    return (
+        f'<div class="subsection">{L["sample_response"]}</div>'
+        f'<pre class="sample">{esc(sample)}</pre>'
+    )
+
+
 def render_responses(responses: dict) -> str:
     if not responses:
         return ""
@@ -681,6 +828,7 @@ def render_operation(path: str, method: str, op: dict) -> str:
     parts.append(render_parameters(params))
     parts.append(render_request_body(op.get("requestBody")))
     parts.append(render_responses(op.get("responses") or {}))
+    parts.append(render_sample(path, method))
     parts.append("</article>")
     return "".join(parts)
 
@@ -1010,6 +1158,22 @@ table.params td {{
     color: #374151;
 }}
 table.params tr:last-child td {{ border-bottom: none; }}
+
+/* ─ sample response code block ─ */
+pre.sample {{
+    background: #0F172A;
+    color: #E2E8F0;
+    border: 1px solid #1E293B;
+    border-radius: 4pt;
+    padding: 8pt 10pt;
+    font-family: "SF Mono", "Menlo", "Courier New", monospace;
+    font-size: 8.5pt;
+    line-height: 1.45;
+    margin: 4pt 0 10pt;
+    white-space: pre-wrap;
+    word-break: break-word;
+    page-break-inside: avoid;
+}}
 table.params td.param-name {{
     font-family: "SF Mono", monospace;
     color: #111827;
