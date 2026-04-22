@@ -1,4 +1,4 @@
-.PHONY: build test lint docker-up docker-down migrate seed seed-api dev clean swag swag-check
+.PHONY: build test lint docker-up docker-down migrate seed seed-api dev clean swag swag-check api-pdf
 
 SERVICES := device-gateway access-svc identity-svc auth-svc audit-svc visitor-svc parking-svc cctv-svc attend-svc
 BIN_DIR := bin
@@ -27,6 +27,13 @@ swag:
 # annotations and the committed spec stay in sync.
 swag-check: swag
 	@git diff --exit-code -- docs/ || (echo "ERROR: OpenAPI spec drift detected. Run 'make swag' and commit docs/." && exit 1)
+
+# api-pdf renders docs/swagger.json into a Duall-branded PDF at
+# docs/api-reference.pdf. Requires: node (for npx @redocly/cli) and
+# python3 with playwright (pip install playwright && playwright install chromium).
+api-pdf: swag
+	@echo "Building branded API PDF..."
+	@python3 scripts/build-api-pdf.py
 
 test:
 	go test ./... -v -race
