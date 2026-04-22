@@ -166,8 +166,10 @@ func (h *CCTVHandlers) matchHanetWebhookTenant(ctx context.Context, hash, nonce,
 // still get a row — with decision=denied — so the monitoring page and
 // event log see every Hanet-camera trigger, not just the matched ones.
 //
-// Face events are routed to the existing H_<user_code> credential via
-// credentials.external_ref = personID. Plate events are routed to
+// Face events are routed to the existing H_<personID> credential via
+// credentials.external_ref = personID (equivalent lookup — the value and
+// external_ref both carry the personID since migration 000045 switched
+// the value from H_<user_code>). Plate events are routed to
 // dm3_parking.parking_vehicles.plate_number (the tenant's unified vehicle
 // registry), falling back to credentials.value = <plate> + type =
 // 'plate_number' for hand-created plate credentials.

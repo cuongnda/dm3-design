@@ -46,16 +46,18 @@ func (h *IdentityHandlers) SetHanetCipher(c *cctv.CredentialCipher) {
 // ensureHanetFaceCredential sends the user's avatar to Hanet /person/register
 // when the tenant has a complete Hanet config (client_id, client_secret,
 // access_token, refresh_token, place_id all set). On success it upserts a
-// credential row `{type:'face', value:'H_<user_code>', status:'active',
-// external_ref:<hanet_personID>}` — same semantic as ensureFaceIDCardCredential
-// but for Hanet-managed cameras instead of on-device terminals.
+// credential row `{type:'face', value:'H_<personID>', status:'active',
+// external_ref:<hanet_personID>}` — the value is keyed by Hanet's personID
+// (returned by /person/register) so downstream systems that receive this
+// credential via cfg.person_sync can match it directly against Hanet
+// webhook payloads without an extra mapping table.
 //
 // Returns (true, nil) on a new registration, (false, nil) if the preconditions
 // aren't met (no cipher, no hanet config, no avatar) or the credential
 // already exists, (false, err) on decrypt / network / Hanet API failures.
 //
 // Side effects:
-//   - UPSERTs credentials.H_<user_code> on success (ON CONFLICT DO NOTHING
+//   - UPSERTs credentials.H_<personID> on success (ON CONFLICT DO NOTHING
 //     via the partial unique index from migration 000045).
 //   - Rotates cctv_settings.hanet_access_token_enc if Hanet 401s and we
 //     successfully refresh.
@@ -92,17 +94,16 @@ func (h *IdentityHandlers) ensureHanetFaceCredential(ctx context.Context, tenant
 		return false, nil
 	}
 
-	var userCode, fullName, position, avatarKey string
+	var fullName, position, avatarKey string
 	err = h.db.Pool.QueryRow(ctx, `
-		SELECT COALESCE(NULLIF(user_code,''), id::text),
-		       TRIM(CONCAT(COALESCE(first_name,''),' ',COALESCE(last_name,''))),
+		SELECT TRIM(CONCAT(COALESCE(first_name,''),' ',COALESCE(last_name,''))),
 		       COALESCE(position,''),
 		       COALESCE(avatar,'')
 		  FROM dm3_identity.users
 		 WHERE id = $1::uuid AND tenant_id = $2::uuid
 		   AND (is_deleted = false OR is_deleted IS NULL)`,
 		userID, tenantID,
-	).Scan(&userCode, &fullName, &position, &avatarKey)
+	).Scan(&fullName, &position, &avatarKey)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
@@ -129,7 +130,12 @@ func (h *IdentityHandlers) ensureHanetFaceCredential(ctx context.Context, tenant
 		return false, err
 	}
 
-	value := "H_" + userCode
+	// Credential value is the Hanet personID (returned by /person/register)
+	// prefixed with H_ so it's visually distinguishable from M_ (on-device
+	// enrolment) and plain card UIDs. downstream consumers (e.g. LPR Desktop)
+	// can match this value directly against the personID in Hanet webhook
+	// payloads without an extra external_ref lookup.
+	value := "H_" + personID
 	var credID string
 	err = h.db.Pool.QueryRow(ctx, `
 		INSERT INTO dm3_identity.credentials (

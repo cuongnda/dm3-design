@@ -1,12 +1,14 @@
 -- External reference column on credentials. Stores the opaque identifier
 -- assigned by a third-party face / access system (Hanet personID today,
 -- others later) so we can call those systems back to update or delete the
--- remote person row. The user-facing credential `value` stays semantic
--- (H_<user_code>, M_<user_code>, etc.); external_ref holds the foreign id.
+-- remote person row. For Hanet the user-facing credential `value` is
+-- `H_<personID>` (the same personID as external_ref) so downstream
+-- consumers can match the value directly against Hanet webhook payloads
+-- without an extra join; on-device enrolment still uses M_<user_code>.
 --
 -- Partial unique index on (tenant_id, user_id) WHERE type='face' AND value
--- LIKE 'H\_%' mirrors the existing H_<M> / M_<user_code> idempotency guard
--- so concurrent create/edit can't double-register a user with Hanet.
+-- LIKE 'H\_%' mirrors the existing M_<user_code> idempotency guard so
+-- concurrent create/edit can't double-register a user with Hanet.
 
 ALTER TABLE dm3_identity.credentials
     ADD COLUMN IF NOT EXISTS external_ref VARCHAR(200);
