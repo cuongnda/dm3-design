@@ -132,6 +132,28 @@ func (c *Client) Publish(ctx context.Context, topic string, qos byte, payload []
 	return err
 }
 
+// PublishRetained publishes `payload` with the RETAIN flag. Use this for
+// messages where the *latest state* matters more than the delivery moment —
+// e.g. cfg.device_update: the broker keeps the most recent config per
+// device-cfg topic, and a device reconnecting after being offline picks up
+// the current settings immediately instead of missing the change forever.
+//
+// Caveats:
+//   - Only the latest retained message per topic is kept. A burst of config
+//     updates collapses to the last one — fine for cfg.device_update (the
+//     device just needs the current state), wrong for audit streams.
+//   - To clear a retained message, publish a zero-length payload with
+//     retain=true to the same topic.
+func (c *Client) PublishRetained(ctx context.Context, topic string, qos byte, payload []byte) error {
+	_, err := c.cm.Publish(ctx, &paho.Publish{
+		Topic:   topic,
+		QoS:     qos,
+		Payload: payload,
+		Retain:  true,
+	})
+	return err
+}
+
 func (c *Client) Disconnect(ctx context.Context) error {
 	return c.cm.Disconnect(ctx)
 }

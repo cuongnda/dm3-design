@@ -5,6 +5,7 @@ import { Search, Monitor, Camera, Cpu, Settings, Terminal, Gauge, Edit, Send, Hi
 import { Button, Card, CardContent, Input, AppModal, Label, Select, Tabs, TabsList, TabsTrigger, TabsContent, DataTable, type Column, TablePaginationFooter, Checkbox } from '@dm3/ui';
 import { useRealtimeStore } from '@dm3/api-client';
 import { apiFetch, fetchDeviceHistory, type DeviceHistoryEvent } from '@/lib/api';
+import { ALL_DEVICE_MODELS } from '@/lib/device-models';
 import { toast } from '@/lib/toast';
 
 // --- Types ---
@@ -63,6 +64,7 @@ interface Device {
   firmware_version?: string;
   site_id?: string;
   last_seen?: string;
+  access_points?: string | null;
   config?: DeviceConfig;
   created_at: string;
   updated_at: string;
@@ -795,10 +797,34 @@ export function DevicesPage() {
         ),
       },
       {
+        key: 'model',
+        header: t('devices.column.model'),
+        width: '130px',
+        sortable: true,
+        render: (d) => {
+          if (!d.model) return <span className="text-[13px] text-muted-foreground">—</span>;
+          const hit = ALL_DEVICE_MODELS.find((m) => m.value === d.model);
+          return <span className="text-[13px]">{hit?.label ?? d.model}</span>;
+        },
+      },
+      {
         key: 'location',
         header: t('devices.column.location'),
         sortable: true,
         render: (d) => <span className="text-[13px]">{d.location || '—'}</span>,
+      },
+      {
+        key: 'access_points',
+        header: t('devices.column.accessPoint'),
+        sortable: true,
+        render: (d) => (
+          <span
+            className="text-[13px] text-muted-foreground truncate block max-w-[220px]"
+            title={d.access_points ?? undefined}
+          >
+            {d.access_points || '—'}
+          </span>
+        ),
       },
       {
         key: 'status',
@@ -1085,7 +1111,9 @@ export function DevicesPage() {
           sortColumns={[
             { value: 'name', label: 'Device' },
             { value: 'type', label: 'Type' },
+            { value: 'model', label: 'Model' },
             { value: 'location', label: 'Location' },
+            { value: 'access_points', label: 'Access Point' },
             { value: 'status', label: 'Status' },
             { value: 'firmware_version', label: 'Firmware' },
           ]}

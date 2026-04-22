@@ -1,0 +1,72 @@
+# Shrinks the build context for every `docker build` run from the repo root
+# (apps/console/Dockerfile and automation/Dockerfile).
+#
+# NOTE: `.git/` is intentionally NOT excluded — automation/Dockerfile copies
+# it in so tests can detect changed modules via `git diff`. For build contexts
+# that don't need .git, prefer a per-Dockerfile `<Dockerfile>.dockerignore`.
+
+# Node / workspace build artifacts
+node_modules
+**/node_modules
+**/dist
+**/build
+**/.turbo
+**/.next
+**/.vite
+**/.cache
+**/coverage
+**/.eslintcache
+**/tsconfig.tsbuildinfo
+
+# Go build artifacts & local infra data
+backend/bin
+backend/tmp
+backend/data
+backend/logs
+backend/coverage.txt
+backend/*.out
+
+# Docs, research, design assets — not consumed by any prod image
+docs
+mockups
+website
+diagrams
+graphify-out
+research
+
+# Android app is built separately
+dm3-terminal
+
+# Local env / secrets (compose reads these from the host, not from context)
+.env
+.env.*
+!.env.example
+
+# IDE / OS metadata
+.vscode
+.idea
+*.swp
+.DS_Store
+Thumbs.db
+
+# CI / git tooling files (the files themselves aren't needed at runtime)
+.gitlab-ci.yml
+.github
+.githooks
+.cursorrules
+.claude
+
+# Logs
+*.log
+**/*.log
+
+# Python caches (for automation context)
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+automation/test-results
+automation/playwright-report
+automation/videos
+automation/screenshots

@@ -39,7 +39,10 @@ verify:backend:
   stage: verify
   script:
     - echo "=== Verifying backend build ==="
-    - docker build --target builder -f backend/Dockerfile -t dm3-backend-ci ./backend
+    # Build the final runtime image with the name Compose will use, so the
+    # deploy stage finds it already in the local image store and skips the
+    # rebuild entirely. The builder stage is cached as part of this.
+    - docker build -f backend/Dockerfile -t dm3-backend:local ./backend
   only:
     - develop
     - /^v\d+\.\d+\.\d+$/
@@ -48,7 +51,10 @@ verify:frontend:
   stage: verify
   script:
     - echo "=== Verifying frontend build ==="
-    - docker build -f apps/console/Dockerfile -t dm3-console-ci .
+    # Use the same tag Compose assigns (<project>-webapp) so the deploy stage
+    # reuses this build. COMPOSE_PROJECT_NAME defaults to the repo directory
+    # name; set it explicitly here to match the runner's working dir.
+    - docker build -f apps/console/Dockerfile -t dm3-webapp:local .
   only:
     - develop
     - /^v\d+\.\d+\.\d+$/
@@ -72,7 +78,11 @@ deploy:staging:
     - bash scripts/check-deploy-env.sh
     - docker compose -f docker-compose.prod.yml --profile test down --timeout 30 || true
     - *compose_cleanup
-    - docker compose -f docker-compose.prod.yml --profile test build --no-cache
+    # Build with cache enabled. The verify stage has already warmed the cache
+    # for the backend + frontend images on the same runner, so this usually
+    # resolves to near-instant layer reuse. Compose only rebuilds services
+    # whose Dockerfile inputs actually changed.
+    - docker compose -f docker-compose.prod.yml --profile test build
     - docker compose -f docker-compose.prod.yml up -d --remove-orphans
     - sleep 15
     - echo "=== Service status ==="
@@ -102,7 +112,10 @@ deploy:production:
     - bash scripts/check-deploy-env.sh
     - docker compose -f docker-compose.prod.yml down --timeout 30 || true
     - *compose_cleanup
-    - docker compose -f docker-compose.prod.yml build --no-cache
+    # Build with cache; verify stage has already warmed the image store.
+    # If a forced-fresh rebuild is ever needed, trigger `docker builder prune`
+    # manually on the runner instead of burning cache on every deploy.
+    - docker compose -f docker-compose.prod.yml build
     - docker compose -f docker-compose.prod.yml up -d --remove-orphans
     - sleep 15
     - docker compose -f docker-compose.prod.yml ps

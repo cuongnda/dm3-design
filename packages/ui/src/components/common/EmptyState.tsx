@@ -96,7 +96,7 @@ export function EmptyState({
       </div>
       <h3 className="text-[14px] font-semibold text-foreground">{title}</h3>
       {description ? (
-        <p className="max-w-sm text-[12px] text-muted-foreground">
+        <p className="mx-auto max-w-sm text-center text-[12px] text-muted-foreground">
           {description}
         </p>
       ) : null}

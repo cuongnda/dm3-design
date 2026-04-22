@@ -62,6 +62,48 @@ type syncPersonCred struct {
 	ValidUntil *int64 `json:"valid_until,omitempty"` // epoch ms — credential-level expiry (overrides user-level when set)
 }
 
+// tightenCredentialWindows returns `creds` with each entry's valid_from /
+// valid_until intersected with the user-level effective / expired dates.
+// "Tighter" means max(credFrom, userFrom) and min(credUntil, userUntil).
+//
+// Bug fix: without this, a user whose effective_date is 2026-05-01 whose
+// card was created today (credential.valid_from = now()) gets pushed with
+// two disjoint windows — card valid today, user valid from May 1. Firmware
+// that only honours credential-level dates grants access immediately. We
+// collapse them here so the credential itself says "not valid until May 1",
+// leaving nothing for the device to ignore.
+func tightenCredentialWindows(creds []syncPersonCred, userFrom, userUntil *time.Time) []syncPersonCred {
+	if userFrom == nil && userUntil == nil {
+		return creds
+	}
+	var userFromMs, userUntilMs *int64
+	if userFrom != nil {
+		ms := userFrom.UnixMilli()
+		userFromMs = &ms
+	}
+	if userUntil != nil {
+		ms := userUntil.UnixMilli()
+		userUntilMs = &ms
+	}
+	out := make([]syncPersonCred, len(creds))
+	for i, c := range creds {
+		if userFromMs != nil {
+			if c.ValidFrom == nil || *c.ValidFrom < *userFromMs {
+				v := *userFromMs
+				c.ValidFrom = &v
+			}
+		}
+		if userUntilMs != nil {
+			if c.ValidUntil == nil || *c.ValidUntil > *userUntilMs {
+				v := *userUntilMs
+				c.ValidUntil = &v
+			}
+		}
+		out[i] = c
+	}
+	return out
+}
+
 // buildSyncCred maps a credential type+value+validity from DB to the spec-compliant struct.
 func buildSyncCred(credType, credValue string, validFrom, validUntil *time.Time) syncPersonCred {
 	c := syncPersonCred{Type: credType}
@@ -302,12 +344,21 @@ func (s *PersonSyncer) PushPersonSyncJob(ctx context.Context, tenantID, deviceID
 	// 5. Build sync users
 	syncUsers := make([]syncPersonUser, 0, len(users))
 	for _, u := range users {
+		// Intersect each credential's validity window with the user's
+		// effective_date / expired_date so the device can't grant access
+		// outside the user-level envelope, even if firmware forgets to
+		// cross-check user-level dates. Same "tighter bound wins" pattern
+		// visit_handlers.go uses for visitor temp credentials. We emit the
+		// user-level dates separately too (su.ValidFrom / su.ValidUntil)
+		// for firmware that does honour them — belt and suspenders.
+		creds := tightenCredentialWindows(credsByUser[u.ID], u.ValidFrom, u.ValidUntil)
+
 		su := syncPersonUser{
 			UserID:      u.ID,
 			UserCode:    u.UserCode,
 			Name:        u.Name,
 			Avatar:      presignIdentityAsset(ctx, s.assetPresigner, u.Avatar),
-			Credentials: credsByUser[u.ID],
+			Credentials: creds,
 			Active:      true,
 		}
 		if su.Credentials == nil {

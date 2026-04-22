@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Check, Terminal, Cpu, Camera, Gauge, Monitor, Settings2, Search, ShieldCheck, Save, X } from 'lucide-react';
-import { fetchSystemDevice, updateSystemDevice, fetchDevice, updateDevice, fetchCompanies, type CompanyDTO } from '@/lib/api';
+import { ArrowLeft, Check, Terminal, Cpu, Camera, Gauge, Monitor, Settings2, Search, ShieldCheck, Save, X, DoorOpen } from 'lucide-react';
+import { fetchSystemDevice, updateSystemDevice, fetchDevice, updateDevice, fetchCompanies, fetchAccessPoints, type CompanyDTO, type AccessPointDTO } from '@/lib/api';
 import { DEVICE_TYPE_MODELS, VERIFY_METHODS, getModelCapabilities, type VerifyMethodValue } from '@/lib/device-models';
 import { Button, Input, Select, Label } from '@dm3/ui';
 import { toast } from '@/lib/toast';
@@ -110,6 +110,7 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
   const listPath = isSystemAdmin ? '/system/devices' : '/devices';
 
   const [companies, setCompanies] = useState<CompanyDTO[]>([]);
+  const [accessPoints, setAccessPoints] = useState<AccessPointDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [error, setError] = useState('');
@@ -119,19 +120,24 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
   // Editable fields.
   const [form, setForm] = useState({ name: '', location: '' });
   const [config, setConfig] = useState<DeviceConfig>({ model: '', open_relay_ms: 3000, timezone: 'Asia/Ho_Chi_Minh', verify_methods: [], verify_logic: 'or' });
+  // Access-point binding — single-select. Empty string = unbound.
+  const [accessPointID, setAccessPointID] = useState<string>('');
+  const [initialAccessPointID, setInitialAccessPointID] = useState<string>('');
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
     (async () => {
       try {
-        const [deviceRaw, comps] = await Promise.all([
+        const [deviceRaw, comps, apRes] = await Promise.all([
           loadDevice(id),
           isSystemAdmin ? fetchCompanies() : Promise.resolve([] as CompanyDTO[]),
+          fetchAccessPoints(1, 200).catch(() => ({ data: [] as AccessPointDTO[] })),
         ]);
         if (cancelled) return;
         const device = deviceRaw as unknown as Record<string, unknown>;
         setCompanies(comps);
+        setAccessPoints(apRes.data ?? []);
         setIdentity({
           device_id: (device.device_id as string | undefined) ?? '',
           type: (device.type as string | undefined) ?? '',
@@ -148,6 +154,9 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
           verify_methods: (device.verify_methods as VerifyMethodValue[] | undefined) ?? [],
           verify_logic: (device.verify_logic === 'and' ? 'and' : 'or'),
         });
+        const currentAPID = (device.access_point_id as string | undefined) ?? '';
+        setAccessPointID(currentAPID);
+        setInitialAccessPointID(currentAPID);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : t('editDevice.error.loadFailed'));
       } finally {
@@ -186,7 +195,7 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
     setLoading(true);
     setError('');
     try {
-      await (saveDevice as (id: string, data: Record<string, unknown>) => Promise<unknown>)(id, {
+      const payload: Record<string, unknown> = {
         name: form.name.trim(),
         location: form.location.trim(),
         model: config.model || null,
@@ -194,7 +203,11 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
         timezone: config.timezone,
         verify_methods: config.verify_methods ?? [],
         verify_logic: config.verify_logic,
-      });
+      };
+      if (accessPointID !== initialAccessPointID) {
+        payload.access_point_id = accessPointID;
+      }
+      await (saveDevice as (id: string, data: Record<string, unknown>) => Promise<unknown>)(id, payload);
       toast(t('editDevice.success.message'), 'success');
       navigate(listPath);
     } catch (err) {
@@ -293,6 +306,30 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
             </div>
           </div>
         </Section>
+
+        {/* Access Point binding — company-scoped only. System admin view lists
+            devices across all tenants, but access points are tenant-scoped. */}
+        {!isSystemAdmin && (
+          <Section icon={DoorOpen} title={t('editDevice.accessPoint.title')} desc={t('editDevice.accessPoint.desc')}>
+            <div>
+              <Label className="text-[12px]">{t('editDevice.accessPoint.label')}</Label>
+              <Select
+                data-testid="editdevice-select-accesspoint"
+                value={accessPointID}
+                onValueChange={setAccessPointID}
+                disabled={loading}
+                placeholder={t('editDevice.accessPoint.placeholder')}
+                className="mt-1"
+              >
+                <option value="">{t('editDevice.accessPoint.none')}</option>
+                {accessPoints.map(ap => (
+                  <option key={ap.id} value={ap.id}>{ap.name}</option>
+                ))}
+              </Select>
+              <p className="text-[11px] text-muted-foreground mt-1">{t('editDevice.accessPoint.hint')}</p>
+            </div>
+          </Section>
+        )}
 
         {/* Device Config */}
         <Section icon={Settings2} title={t('createDevice.config.title')} desc={t('createDevice.config.desc')}>

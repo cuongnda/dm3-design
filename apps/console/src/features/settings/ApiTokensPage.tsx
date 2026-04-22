@@ -238,7 +238,7 @@ export function ApiTokensPage() {
                   </div>
                 ) : tokens.length === 0 ? (
                   <EmptyState
-                    icon={KeyRound}
+                    icon={<KeyRound size={32} strokeWidth={1.2} />}
                     title={t('apiTokens.emptyTokensTitle', 'No API tokens yet')}
                     description={t('apiTokens.emptyTokensDesc', 'Create a token to give an integration programmatic access.')}
                   />
@@ -312,7 +312,7 @@ export function ApiTokensPage() {
                   </div>
                 ) : clients.length === 0 ? (
                   <EmptyState
-                    icon={KeyRound}
+                    icon={<KeyRound size={32} strokeWidth={1.2} />}
                     title={t('apiTokens.emptyClientsTitle', 'No OAuth clients yet')}
                     description={t('apiTokens.emptyClientsDesc', 'Create an OAuth client for server-to-server integrations.')}
                   />

@@ -8,10 +8,12 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/internal/cctv"
@@ -179,6 +181,35 @@ func (h *IdentityHandlers) CreateCredential(w http.ResponseWriter, r *http.Reque
 		req.ValidUntil = &maxDate
 	}
 
+	// Reject duplicate credential values within a tenant — a value must map
+	// to exactly one user regardless of type. The unique index
+	// idx_credentials_tenant_value_unique (migration 000046) is the
+	// race-safe authority, but pre-checking lets us surface a friendly 409
+	// with the existing user's name instead of a bare "unique_violation"
+	// DB error.
+	{
+		var otherUserID, otherName, otherType string
+		err := h.db.Pool.QueryRow(r.Context(),
+			`SELECT c.user_id::text, c.type,
+			        TRIM(CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,'')))
+			   FROM dm3_identity.credentials c
+			   JOIN dm3_identity.users u ON u.id = c.user_id
+			  WHERE c.tenant_id = $1::uuid AND c.value = $2
+			  LIMIT 1`,
+			tenantID, req.Value,
+		).Scan(&otherUserID, &otherType, &otherName)
+		if err == nil {
+			httputil.Error(w, http.StatusConflict,
+				fmt.Sprintf("value already assigned to user %s as %s", otherName, otherType))
+			return
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			slog.Error("create credential: duplicate check failed", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+	}
+
 	var c models.Credential
 	err := h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO dm3_identity.credentials (tenant_id, user_id, type, value, status, valid_from, valid_until, updated_at)
@@ -188,6 +219,13 @@ func (h *IdentityHandlers) CreateCredential(w http.ResponseWriter, r *http.Reque
 	).Scan(&c.ID, &c.TenantID, &c.UserID, &c.Type, &c.Value, &c.Status,
 		&c.ValidFrom, &c.ValidUntil, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
+		// Race-case: two concurrent creates between the pre-check and the
+		// insert. The DB index catches it; re-surface as 409 so the admin
+		// sees a consistent "already assigned" message rather than a 500.
+		if isUniqueViolation(err) {
+			httputil.Error(w, http.StatusConflict, "value already assigned to another user")
+			return
+		}
 		slog.Error("create credential error", "error", err)
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -195,6 +233,14 @@ func (h *IdentityHandlers) CreateCredential(w http.ResponseWriter, r *http.Reque
 	h.audit.LogFromRequest(r, "identity.credential.create", "credential", c.ID, c.Type, "success", nil, map[string]any{"type": c.Type, "user_id": userID})
 	h.publishPersonChanged(tenantID, userID, "credential.create")
 	httputil.JSON(w, http.StatusCreated, c)
+}
+
+// isUniqueViolation reports whether err is a Postgres 23505 unique_violation.
+// Duplicated here (rather than shared with gateway's helper of the same name)
+// because internal packages can't easily cross-import private helpers.
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 func (h *IdentityHandlers) GetCredential(w http.ResponseWriter, r *http.Request) {
@@ -225,6 +271,44 @@ func (h *IdentityHandlers) UpdateCredential(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Pre-check: if the admin is changing the value, make sure no OTHER
+	// credential in the same tenant already owns it. Skipped when value is
+	// blank (= "don't change value" in the COALESCE below) so edits that
+	// only touch status/expiry stay cheap.
+	if req.Value != "" {
+		// Snapshot the current row so we know which tenant to check against.
+		var currentTenantID string
+		if err := h.db.Pool.QueryRow(r.Context(),
+			`SELECT tenant_id::text FROM dm3_identity.credentials
+			  WHERE id = $1::uuid AND user_id = $2::uuid`,
+			credID, userID,
+		).Scan(&currentTenantID); err != nil {
+			httputil.Error(w, http.StatusNotFound, "credential not found")
+			return
+		}
+		var otherName, otherType string
+		err := h.db.Pool.QueryRow(r.Context(),
+			`SELECT TRIM(CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,''))),
+			        c.type
+			   FROM dm3_identity.credentials c
+			   JOIN dm3_identity.users u ON u.id = c.user_id
+			  WHERE c.tenant_id = $1::uuid AND c.value = $2
+			    AND c.id <> $3::uuid
+			  LIMIT 1`,
+			currentTenantID, req.Value, credID,
+		).Scan(&otherName, &otherType)
+		if err == nil {
+			httputil.Error(w, http.StatusConflict,
+				fmt.Sprintf("value already assigned to user %s as %s", otherName, otherType))
+			return
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			slog.Error("update credential: duplicate check failed", "error", err)
+			httputil.Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+	}
+
 	// Backfill defaults for NULL validity after update: if the admin
 	// didn't send valid_from/valid_until AND the stored row is still
 	// NULL, snap to the same sentinels CreateCredential uses
@@ -245,6 +329,10 @@ func (h *IdentityHandlers) UpdateCredential(w http.ResponseWriter, r *http.Reque
 	).Scan(&c.ID, &c.TenantID, &c.UserID, &c.Type, &c.Value, &c.Status,
 		&c.ValidFrom, &c.ValidUntil, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
+		if isUniqueViolation(err) {
+			httputil.Error(w, http.StatusConflict, "value already assigned to another user")
+			return
+		}
 		httputil.Error(w, http.StatusNotFound, "credential not found")
 		return
 	}
@@ -257,20 +345,42 @@ func (h *IdentityHandlers) DeleteCredential(w http.ResponseWriter, r *http.Reque
 	userID := chi.URLParam(r, "id")
 	credID := chi.URLParam(r, "credID")
 
-	// RETURNING tenant_id so we can fan out a sync event without a
-	// second roundtrip to look it up.
-	var tenantID string
+	// RETURNING tenant_id + type + value + external_ref so we can fan out a
+	// sync event AND decide whether to delete the paired remote person on
+	// Hanet. external_ref is the Hanet personID for H_* face credentials and
+	// NULL otherwise.
+	var tenantID, credType, credValue string
+	var externalRef *string
 	err := h.db.Pool.QueryRow(r.Context(),
 		`DELETE FROM dm3_identity.credentials
 		 WHERE id = $1::uuid AND user_id = $2::uuid
-		 RETURNING tenant_id`, credID, userID,
-	).Scan(&tenantID)
+		 RETURNING tenant_id, type, value, external_ref`, credID, userID,
+	).Scan(&tenantID, &credType, &credValue, &externalRef)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "credential not found")
 		return
 	}
 	h.audit.LogFromRequest(r, "identity.credential.delete", "credential", credID, credID, "success", nil, nil)
 	h.publishPersonChanged(tenantID, userID, "credential.delete")
+
+	// Fire-and-forget Hanet cleanup for H_* face credentials. We don't block
+	// the API response on the upstream HTTP round-trip, and a Hanet failure
+	// here doesn't undo the local delete — the person's face should stop
+	// working on DM3 immediately; syncing that removal to Hanet is a separate
+	// concern logged for operators.
+	if credType == "face" && strings.HasPrefix(credValue, "H_") && externalRef != nil && *externalRef != "" {
+		personID := *externalRef
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := h.removeHanetPerson(ctx, tenantID, personID); err != nil {
+				// Logged inside removeHanetPerson paths too; keep a caller-side
+				// breadcrumb so the credential_id + personID appear together.
+				_ = err
+			}
+		}()
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
