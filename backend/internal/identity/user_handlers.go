@@ -668,6 +668,18 @@ func (h *IdentityHandlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		"tenant_id": companyID,
 	})
 	h.publishPersonChanged(companyID, userID, "user.update")
+
+	// Backfill credential rows if they're missing. Both helpers short-circuit
+	// when the credential already exists, so profile-only edits are cheap.
+	// This catches users created before Hanet was configured: the first Save
+	// after wiring up the integration performs the /person/register call.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		_, _ = h.ensureFaceIDCardCredential(ctx, companyID, userID)
+		_, _ = h.ensureHanetFaceCredential(ctx, companyID, userID)
+	}()
+
 	httputil.JSON(w, http.StatusOK, map[string]string{"message": "user updated successfully"})
 }
 
