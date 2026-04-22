@@ -85,18 +85,33 @@ func (c *HTTPMediaMTXClient) UpsertPath(ctx context.Context, name string, cfg Pa
 		return nil // Created successfully
 	}
 
-	// Path exists — update via PATCH
-	patchURL := fmt.Sprintf("%s/v3/config/paths/patch/%s", c.baseURL, name)
-	patchReq, err := http.NewRequestWithContext(ctx, http.MethodPatch, patchURL, bytes.NewReader(body))
+	slog.Debug("mediamtx: POST add failed, deleting and re-adding", "path", name, "status", resp.StatusCode)
+
+	// Path exists — delete first, then re-add
+	delURL := fmt.Sprintf("%s/v3/config/paths/delete/%s", c.baseURL, name)
+	delReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, delURL, nil)
 	if err != nil {
-		return fmt.Errorf("mediamtx: create patch request: %w", err)
+		return fmt.Errorf("mediamtx: create delete request: %w", err)
 	}
-	patchReq.Header.Set("Content-Type", "application/json")
 	if c.user != "" {
-		patchReq.SetBasicAuth(c.user, c.pass)
+		delReq.SetBasicAuth(c.user, c.pass)
+	}
+	delResp, err := c.client.Do(delReq)
+	if err == nil {
+		delResp.Body.Close()
 	}
 
-	resp2, err := c.client.Do(patchReq)
+	// Re-add
+	addReq2, err := http.NewRequestWithContext(ctx, http.MethodPost, addURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("mediamtx: create re-add request: %w", err)
+	}
+	addReq2.Header.Set("Content-Type", "application/json")
+	if c.user != "" {
+		addReq2.SetBasicAuth(c.user, c.pass)
+	}
+
+	resp2, err := c.client.Do(addReq2)
 	if err != nil {
 		return fmt.Errorf("mediamtx: patch path %q: %w", name, err)
 	}
