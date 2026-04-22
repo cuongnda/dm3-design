@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS dm3_identity.idx_credentials_tenant_value_unique;
