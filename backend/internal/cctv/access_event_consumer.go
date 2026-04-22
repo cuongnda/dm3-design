@@ -244,13 +244,32 @@ func (c *AccessEventConsumer) captureForCamera(
 		return
 	}
 
-	if rule.RecordEnabled {
-		if err := c.captureClip(ctx, tenantID, camDeviceID, eventUUID, eventTS, rule, maxClipDuration); err != nil {
+	// Shape of the row depends on which flags the rule set. We keep the
+	// 1-row-per-(camera,event) invariant so UI can show "event → N media
+	// across cameras" cleanly; when a rule enables both, the snapshot lives
+	// as a thumbnail on the same clip row rather than producing a twin row.
+	switch {
+	case rule.RecordEnabled:
+		clipID, err := c.captureClip(ctx, tenantID, camDeviceID, eventUUID, eventTS, rule, maxClipDuration)
+		if err != nil {
 			slog.Error("cctv: capture clip failed", "error", err,
 				"camera_device_id", camDeviceID)
+			return
 		}
-	}
-	if rule.SnapshotEnabled {
+		if rule.SnapshotEnabled && clipID != "" && c.snapshotExtrator != nil {
+			// Dispatch thumbnail capture alongside the pending clip. We pass
+			// the same clip_id so the extractor updates thumbnail_ref on that
+			// row instead of creating a new one.
+			capID := clipID
+			if c.workers != nil {
+				c.workers.Submit(ctx, func(jobCtx context.Context) {
+					c.snapshotExtrator.ExtractThumbnail(jobCtx, capID, tenantID, camDeviceID)
+				})
+			} else {
+				go c.snapshotExtrator.ExtractThumbnail(ctx, capID, tenantID, camDeviceID)
+			}
+		}
+	case rule.SnapshotEnabled:
 		if err := c.captureSnapshot(ctx, tenantID, camDeviceID, eventUUID, eventTS, rule); err != nil {
 			slog.Error("cctv: capture snapshot failed", "error", err,
 				"camera_device_id", camDeviceID)
@@ -279,7 +298,7 @@ func (c *AccessEventConsumer) captureClip(
 	eventTS time.Time,
 	rule EffectiveRule,
 	maxClipDuration time.Duration,
-) error {
+) (string, error) {
 	dbCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
@@ -315,10 +334,10 @@ func (c *AccessEventConsumer) captureClip(
 
 	if err == nil {
 		// Extended — just link the event to the existing clip.
-		return c.linkEventToClip(dbCtx, tenantID, extClipID, extStartedAt, accessEventID)
+		return extClipID, c.linkEventToClip(dbCtx, tenantID, extClipID, extStartedAt, accessEventID)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("coalesce lookup: %w", err)
+		return "", fmt.Errorf("coalesce lookup: %w", err)
 	}
 
 	// No open clip — start a new pending row. started_at rewinds pre_roll into
@@ -337,10 +356,13 @@ func (c *AccessEventConsumer) captureClip(
 		tenantID, cameraDeviceID, accessEventID, startedAt, newEndAt, placeholderKey, rule.RuleID,
 	).Scan(&newClipID)
 	if err != nil {
-		return fmt.Errorf("insert pending clip: %w", err)
+		return "", fmt.Errorf("insert pending clip: %w", err)
 	}
 
-	return c.linkEventToClip(dbCtx, tenantID, newClipID, startedAt, accessEventID)
+	if err := c.linkEventToClip(dbCtx, tenantID, newClipID, startedAt, accessEventID); err != nil {
+		return newClipID, err
+	}
+	return newClipID, nil
 }
 
 // captureSnapshot inserts a snapshot row and dispatches immediate extraction.

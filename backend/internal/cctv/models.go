@@ -62,9 +62,10 @@ type EventClip struct {
 	EndAt         *time.Time `json:"end_at,omitempty"` // coalescing deadline
 	DurationMs    *int       `json:"duration_ms,omitempty"`
 	ObjectKey     string     `json:"object_key"`
-	MediaType     string     `json:"media_type"` // 'clip' | 'snapshot'
-	Status        string     `json:"status"`     // pending | recording | finalized | degraded | failed
-	Trigger       string     `json:"trigger"`    // 'access_event' | 'manual' | 'api'
+	ThumbnailRef  *string    `json:"thumbnail_ref,omitempty"` // JPG preview for media_type=clip rows
+	MediaType     string     `json:"media_type"`              // 'clip' | 'snapshot'
+	Status        string     `json:"status"`                  // pending | recording | finalized | degraded | failed
+	Trigger       string     `json:"trigger"`                 // 'access_event' | 'manual' | 'api'
 	RuleID        *string    `json:"rule_id,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 }

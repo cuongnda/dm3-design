@@ -154,6 +154,101 @@ func (s *SnapshotExtractor) ExtractSnapshot(ctx context.Context, clipID, tenantI
 	log.Info("cctv: snapshot complete", "object_key", objectKey, "file_size", fileInfo.Size())
 }
 
+// ExtractThumbnail captures a single JPG frame and writes its key to
+// event_clips.thumbnail_ref for an already-existing clip row. This is the
+// path used when a rule enables BOTH record and snapshot — one event_clips
+// row carries the video + a thumbnail, rather than producing a separate
+// snapshot row. Failures are logged but do not touch the clip row's status:
+// missing a thumbnail is a soft degrade, the clip itself is independent.
+func (s *SnapshotExtractor) ExtractThumbnail(ctx context.Context, clipID, tenantID, cameraDeviceID string) {
+	log := slog.With("clip_id", clipID, "tenant_id", tenantID, "camera_device_id", cameraDeviceID, "media_type", "thumbnail")
+
+	if s.objectStore == nil {
+		return
+	}
+
+	info, err := s.fetchCameraInfo(ctx, tenantID, cameraDeviceID)
+	if err != nil {
+		log.Warn("cctv: thumbnail fetch camera failed", "error", err)
+		return
+	}
+	if info.RTSPUrl == "" {
+		return
+	}
+
+	var password string
+	if len(info.RTSPPasswordEnc) > 0 && s.cipher != nil {
+		password, _ = s.cipher.Decrypt(info.RTSPPasswordEnc)
+	}
+	username := ""
+	if info.RTSPUsername != nil {
+		username = *info.RTSPUsername
+	}
+	authedURL := composeRTSPURLWithAuth(info.RTSPUrl, username, password)
+
+	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("cctv-thumb-%s.jpg", clipID))
+	defer os.Remove(tmpFile)
+
+	ffmpegCtx, ffmpegCancel := context.WithTimeout(ctx, 15*time.Second)
+	defer ffmpegCancel()
+
+	//nolint:gosec // authedURL derives from tenant-controlled DB values
+	cmd := exec.CommandContext(ffmpegCtx, "ffmpeg",
+		"-rtsp_transport", "tcp",
+		"-i", authedURL,
+		"-frames:v", "1",
+		"-q:v", "4",
+		"-y", tmpFile,
+	)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	log.Info("cctv: thumbnail starting ffmpeg", "rtsp_url", redactRTSPCredentials(authedURL))
+	if err := cmd.Run(); err != nil {
+		log.Warn("cctv: thumbnail ffmpeg failed (non-fatal)",
+			"error", err, "stderr", truncate(stderr.String(), 500))
+		return
+	}
+
+	fi, err := os.Stat(tmpFile)
+	if err != nil {
+		return
+	}
+	f, err := os.Open(tmpFile)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	objectKey := fmt.Sprintf("cctv-thumbnails/%s/%s.jpg", tenantID, clipID)
+	uploadCtx, uploadCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer uploadCancel()
+	if err := s.objectStore.PutObject(uploadCtx, objectKey, f, fi.Size(), "image/jpeg"); err != nil {
+		log.Warn("cctv: thumbnail upload failed (non-fatal)", "error", err)
+		return
+	}
+
+	updateCtx, updateCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer updateCancel()
+	if _, err := s.db.Pool.Exec(updateCtx,
+		`UPDATE dm3_cctv.event_clips
+		 SET thumbnail_ref = $1, updated_at = now()
+		 WHERE id = $2::uuid`,
+		objectKey, clipID,
+	); err != nil {
+		log.Warn("cctv: thumbnail persist failed", "error", err)
+		return
+	}
+	log.Info("cctv: thumbnail complete", "object_key", objectKey, "file_size", fi.Size())
+}
+
+// truncate is a small helper used to keep stderr excerpts in logs bounded.
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
+}
+
 func (s *SnapshotExtractor) fetchCameraInfo(ctx context.Context, tenantID, cameraDeviceID string) (cameraRTSPInfo, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()

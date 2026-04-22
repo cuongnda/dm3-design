@@ -39,6 +39,7 @@ export interface ClipDTO {
   duration_sec?: number;
   storage_ref?: string;
   thumbnail_ref?: string;
+  thumbnail_url?: string;
   size_bytes?: number;
   media_type: ClipMediaType;
   status: ClipStatus;
@@ -89,6 +90,7 @@ export interface StreamUrlsDTO {
 
 export interface ClipPlaybackDTO {
   playback_url: string;
+  thumbnail_url?: string;
   media_type?: ClipMediaType;
   status?: ClipStatus;
   started_at: string;

@@ -62,14 +62,22 @@ export function CCTVClipsPage() {
 
   const columns: Column<ClipDTO>[] = [
     {
-      key: 'media_type',
+      key: 'thumbnail',
       header: '',
-      width: '32px',
-      render: (r) => (
-        <span className="text-muted-foreground" title={`${r.media_type} · ${r.status}`}>
-          {r.media_type === 'snapshot' ? <ImageIcon size={14} /> : <Film size={14} />}
-        </span>
-      ),
+      width: '60px',
+      render: (r) =>
+        r.thumbnail_url ? (
+          <img
+            src={r.thumbnail_url}
+            alt=""
+            className="h-8 w-14 rounded object-cover bg-black"
+            loading="lazy"
+          />
+        ) : (
+          <span className="inline-flex h-8 w-14 items-center justify-center rounded bg-muted text-muted-foreground" title={`${r.media_type} · ${r.status}`}>
+            {r.media_type === 'snapshot' ? <ImageIcon size={14} /> : <Film size={14} />}
+          </span>
+        ),
     },
     {
       key: 'camera_name',
@@ -237,6 +245,7 @@ export function CCTVClipsPage() {
             ) : (
               <video
                 src={playUrl}
+                poster={playingClip?.thumbnail_url}
                 controls
                 autoPlay
                 className="w-full rounded-lg bg-black"
