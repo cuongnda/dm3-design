@@ -485,6 +485,11 @@ services:
         condition: service_healthy
       emqx:
         condition: service_healthy
+      # nginx proxies the MinIO console (dm3-minio.demasterpro.com server block)
+      # and resolves upstreams once at config-load; without this dependency the
+      # container dies with "host not found in upstream 'minio'" on cold start.
+      minio:
+        condition: service_healthy
     networks:
       - dm3-internal
       - dmpw-net  # join main proxy network for direct container routing
