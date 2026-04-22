@@ -542,6 +542,292 @@ paths:
       summary: List API tokens
       tags:
       - API Tokens
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Step-1 of the two-step login flow. If the user belongs to multiple
+        companies, returns a list of companies instead of tokens and the caller must
+        follow up with POST /auth/login-step2 specifying company_code. Rate-limited
+        per IP.
+      parameters:
+      - description: '{ email, password }'
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'Either { access_token, refresh_token, user } or { companies:
+            [] } when disambiguation is needed'
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "423":
+          description: Account locked after 5 failed attempts (15 min cooldown)
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "429":
+          description: Too many requests
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      summary: Log in
+      tags:
+      - Auth
+  /auth/logout:
+    post:
+      description: Revokes the refresh token so it can no longer be exchanged. The
+        access token continues to work until it expires naturally (short-lived).
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Log out
+      tags:
+      - Auth
+  /auth/me:
+    get:
+      description: Returns the caller's profile together with roles and tenant plugin
+        config. Used by the console on every page load to hydrate the session.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get my profile
+      tags:
+      - Auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Supports a 7-day grace period for expired refresh tokens so offline
+        terminals can still sync. Rate-limited per IP.
+      parameters:
+      - description: '{ refresh_token }'
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{ access_token, refresh_token }'
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      summary: Refresh session tokens
+      tags:
+      - Auth
+  /auth/system/companies:
+    get:
+      description: System admin only. Each company is a tenant; the list controls
+        who can log into the platform.
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: Page size
+        in: query
+        name: limit
+        type: integer
+      - description: Partial match on name or code
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Not a system admin
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List companies
+      tags:
+      - Companies
+    post:
+      consumes:
+      - application/json
+      description: System admin only. Creates a new tenant with its plugin config,
+        seeds the tenant's dm3_* schema defaults, and optionally invites an initial
+        admin user.
+      parameters:
+      - description: Company payload (name, code, plugins[], admin email, etc.)
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a company
+      tags:
+      - Companies
+  /auth/system/companies/{id}:
+    delete:
+      description: System admin only. Marks the tenant as suspended; existing sessions
+        stay valid until their JWT expires but new logins are blocked.
+      parameters:
+      - description: Company UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "404":
+          description: Not found or already suspended
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Soft-delete a company
+      tags:
+      - Companies
+    get:
+      parameters:
+      - description: Company UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a company
+      tags:
+      - Companies
+    put:
+      consumes:
+      - application/json
+      description: Plugin toggles apply on the next user login for that tenant — existing
+        sessions keep their old plugin set until their access token is refreshed.
+      parameters:
+      - description: Company UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a company
+      tags:
+      - Companies
   /cctv/cameras:
     get:
       description: Plugin-gated (cctv). Reads open to any cctv-enabled user; writes

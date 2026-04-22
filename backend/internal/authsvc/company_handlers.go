@@ -72,6 +72,19 @@ type adminInfo struct {
 
 // ─── List Companies ──────────────────────────────────────────────────────────
 
+// ListCompanies returns a paginated list of all tenants (system admin only).
+//
+// @Summary      List companies
+// @Description  System admin only. Each company is a tenant; the list controls who can log into the platform.
+// @Tags         Companies
+// @Produce      json
+// @Param        page    query  int     false  "Page number"  default(1)
+// @Param        limit   query  int     false  "Page size"    default(50)
+// @Param        search  query  string  false  "Partial match on name or code"
+// @Success      200  {object}  map[string]interface{}  "Paginated list"
+// @Failure      403  {object}  httputil.ErrorResponse  "Not a system admin"
+// @Router       /auth/system/companies [get]
+// @Security     BearerAuth
 func (h *AuthHandlers) ListCompanies(w http.ResponseWriter, r *http.Request) {
 	page, limit := parsePagination(r)
 	offset := (page - 1) * limit
@@ -106,6 +119,19 @@ func (h *AuthHandlers) ListCompanies(w http.ResponseWriter, r *http.Request) {
 
 // ─── Create Company ──────────────────────────────────────────────────────────
 
+// CreateCompany provisions a new tenant (system admin only).
+//
+// @Summary      Create a company
+// @Description  System admin only. Creates a new tenant with its plugin config, seeds the tenant's dm3_* schema defaults, and optionally invites an initial admin user.
+// @Tags         Companies
+// @Accept       json
+// @Produce      json
+// @Param        body  body   map[string]interface{}  true  "Company payload (name, code, plugins[], admin email, etc.)"
+// @Success      201  {object}  map[string]interface{}
+// @Failure      400  {object}  httputil.ErrorResponse
+// @Failure      403  {object}  httputil.ErrorResponse
+// @Router       /auth/system/companies [post]
+// @Security     BearerAuth
 func (h *AuthHandlers) CreateCompany(w http.ResponseWriter, r *http.Request) {
 	var req createCompanyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -194,6 +220,17 @@ func (h *AuthHandlers) CreateCompany(w http.ResponseWriter, r *http.Request) {
 
 // ─── Get Company ─────────────────────────────────────────────────────────────
 
+// GetCompany returns a single company by id (system admin only).
+//
+// @Summary      Get a company
+// @Tags         Companies
+// @Produce      json
+// @Param        id   path   string  true  "Company UUID"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      403  {object}  httputil.ErrorResponse
+// @Failure      404  {object}  httputil.ErrorResponse
+// @Router       /auth/system/companies/{id} [get]
+// @Security     BearerAuth
 func (h *AuthHandlers) GetCompany(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var c companyResponse
@@ -217,6 +254,20 @@ func (h *AuthHandlers) GetCompany(w http.ResponseWriter, r *http.Request) {
 
 // ─── Update Company ──────────────────────────────────────────────────────────
 
+// UpdateCompany updates a company by id (system admin only).
+//
+// @Summary      Update a company
+// @Description  Plugin toggles apply on the next user login for that tenant — existing sessions keep their old plugin set until their access token is refreshed.
+// @Tags         Companies
+// @Accept       json
+// @Produce      json
+// @Param        id    path   string                  true  "Company UUID"
+// @Param        body  body   map[string]interface{}  true  "Fields to update"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      403  {object}  httputil.ErrorResponse
+// @Failure      404  {object}  httputil.ErrorResponse
+// @Router       /auth/system/companies/{id} [put]
+// @Security     BearerAuth
 func (h *AuthHandlers) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req updateCompanyRequest
@@ -253,6 +304,18 @@ func (h *AuthHandlers) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 
 // ─── Delete Company (soft) ───────────────────────────────────────────────────
 
+// DeleteCompany soft-deletes a company by flipping its status to suspended (system admin only).
+//
+// @Summary      Soft-delete a company
+// @Description  System admin only. Marks the tenant as suspended; existing sessions stay valid until their JWT expires but new logins are blocked.
+// @Tags         Companies
+// @Produce      json
+// @Param        id   path   string  true  "Company UUID"
+// @Success      204  "No Content"
+// @Failure      403  {object}  httputil.ErrorResponse
+// @Failure      404  {object}  httputil.ErrorResponse  "Not found or already suspended"
+// @Router       /auth/system/companies/{id} [delete]
+// @Security     BearerAuth
 func (h *AuthHandlers) DeleteCompany(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	tag, err := h.db.Pool.Exec(r.Context(),
