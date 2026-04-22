@@ -93,7 +93,7 @@ export interface TestConnectionDTO {
 export interface CreateCameraRequest {
   name: string;
   access_point_id?: string;
-  rtsp_url: string;
+  rtsp_url?: string;
   rtsp_username?: string;
   rtsp_password?: string;
   brand?: string;
@@ -175,6 +175,17 @@ export function createCamera(data: CreateCameraRequest): Promise<CameraDTO> {
 
 export function updateCamera(id: string, data: UpdateCameraRequest): Promise<CameraDTO> {
   return apiFetch(`${BASE}/cameras/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export interface DeleteCameraPreview {
+  camera_name: string;
+  event_clips: number;
+  sync_queue_entries: number;
+  access_point_links: number;
+}
+
+export function deleteCameraPreview(id: string): Promise<DeleteCameraPreview> {
+  return apiFetch(`${BASE}/cameras/${id}/delete-preview`);
 }
 
 export function deleteCamera(id: string): Promise<void> {

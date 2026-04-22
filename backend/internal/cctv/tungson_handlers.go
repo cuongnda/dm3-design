@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -313,19 +314,19 @@ func (h *TungSonHandlers) HandleExtendFaceList(w http.ResponseWriter, r *http.Re
 	for _, entry := range entries {
 		if entry.Action == "delete" {
 			// Delete: only need PersonID and Type=2
-			var firstName string
-			var deptName string
+			var firstName, deptName, userCode string
 			_ = h.db.Pool.QueryRow(ctx,
-				`SELECT COALESCE(u.first_name,''), COALESCE(d.name,'')
+				`SELECT COALESCE(u.first_name,''), COALESCE(d.name,''), COALESCE(u.user_code,'')
 				 FROM dm3_identity.users u
 				 LEFT JOIN dm3_identity.departments d ON d.id = u.department_id
 				 WHERE u.id = $1::uuid AND u.tenant_id = $2::uuid`,
 				entry.UserID, tenantID,
-			).Scan(&firstName, &deptName)
+			).Scan(&firstName, &deptName, &userCode)
 
+			cardID := fmt.Sprintf("DC_%s", userCode)
 			persons = append(persons, VIIDPerson{
-				TaskID:   entry.UserID,
-				PersonID: entry.UserID,
+				TaskID:   cardID,
+				PersonID: cardID,
 				Name:     firstName,
 				GroupID:  deptName,
 				Type:     2, // delete
@@ -335,15 +336,15 @@ func (h *TungSonHandlers) HandleExtendFaceList(w http.ResponseWriter, r *http.Re
 		}
 
 		// Add: fetch user info + face credential
-		var firstName, deptName string
+		var firstName, deptName, userCode string
 		var avatarURL *string
 		err := h.db.Pool.QueryRow(ctx,
-			`SELECT COALESCE(u.first_name,''), COALESCE(d.name,''), u.avatar
+			`SELECT COALESCE(u.first_name,''), COALESCE(d.name,''), u.avatar, COALESCE(u.user_code,'')
 			 FROM dm3_identity.users u
 			 LEFT JOIN dm3_identity.departments d ON d.id = u.department_id
 			 WHERE u.id = $1::uuid AND u.tenant_id = $2::uuid`,
 			entry.UserID, tenantID,
-		).Scan(&firstName, &deptName, &avatarURL)
+		).Scan(&firstName, &deptName, &avatarURL, &userCode)
 		if err != nil {
 			slog.Warn("tungson: user not found for sync", "user_id", entry.UserID, "error", err)
 			sentIDs = append(sentIDs, entry.ID)
@@ -379,9 +380,10 @@ func (h *TungSonHandlers) HandleExtendFaceList(w http.ResponseWriter, r *http.Re
 			}
 		}
 
+		cardID := fmt.Sprintf("DC_%s", userCode)
 		person := VIIDPerson{
-			TaskID:   entry.UserID,
-			PersonID: entry.UserID,
+			TaskID:   cardID,
+			PersonID: cardID,
 			Name:     firstName,
 			GroupID:  deptName,
 			Type:     0, // add
@@ -448,6 +450,17 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Resolve PersonID (DC_{user_code}) back to user UUID
+	userCode := strings.TrimPrefix(result.PersonID, "DC_")
+	var userUUID string
+	_ = h.db.Pool.QueryRow(ctx,
+		`SELECT id::text FROM dm3_identity.users WHERE user_code = $1 AND tenant_id = $2::uuid`,
+		userCode, tenantID,
+	).Scan(&userUUID)
+	if userUUID == "" {
+		userUUID = result.PersonID // fallback to raw PersonID
+	}
+
 	// Upload snapshot to MinIO — use the largest available image.
 	// Camera may send 1 image (face crop) or 2 (face crop + full frame).
 	var photoRef string
@@ -462,7 +475,7 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 					tenantID, deviceUUID,
 					time.Now().Format("2006-01-02"),
 					time.Now().UnixMilli(),
-					result.PersonID,
+					userUUID,
 				)
 				if putErr := h.objectStore.PutObject(ctx, key, bytes.NewReader(imgData), int64(len(imgData)), "image/jpeg"); putErr == nil {
 					photoRef = key
@@ -491,9 +504,9 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 			"direction":       "entry",
 			"decision":        "granted",
 			"decided_locally": true,
-			"user_id":         result.PersonID,
+			"user_id":         userUUID,
 			"confidence":      similarity,
-			"credentials":     []map[string]string{{"type": "face", "value": result.PersonID}},
+			"credentials":     []map[string]string{{"type": "face", "value": userUUID}},
 			"photo":           photoRef,
 		},
 	})
@@ -503,12 +516,12 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 		slog.Error("tungson: publish face recognition event failed", "error", err)
 	}
 
-	// Publish to the dedicated CCTV WebSocket subject so device-gateway's
-	// CCTVWebSocketConsumer can broadcast to the monitoring page in realtime.
-	h.publishWSEvent(ctx, tenantID, deviceUUID, "access.log", eventPayload)
+	// Publish to WebSocket with presigned photo URL for realtime display
+	photoURL := h.presignPhoto(ctx, photoRef)
+	h.publishWSEventWithPhoto(ctx, tenantID, deviceUUID, eventPayload, photoURL)
 
 	slog.Info("tungson: face recognized",
-		"camera_id", cameraID, "user_id", result.PersonID,
+		"camera_id", cameraID, "user_id", userUUID,
 		"similarity", similarity, "tenant_id", tenantID)
 
 	httputil.JSON(w, http.StatusOK, "ok")
@@ -585,19 +598,35 @@ func (h *TungSonHandlers) HandleUnknownFace(w http.ResponseWriter, r *http.Reque
 		slog.Error("tungson: publish unknown face event failed", "error", err)
 	}
 
-	// Publish to the dedicated CCTV WebSocket subject so device-gateway's
-	// CCTVWebSocketConsumer can broadcast to the monitoring page in realtime.
-	h.publishWSEvent(ctx, tenantID, deviceUUID, "access.log", eventPayload)
+	// Publish to WebSocket with presigned photo URL for realtime display
+	unknownPhotoURL := h.presignPhoto(ctx, photoRef)
+	h.publishWSEventWithPhoto(ctx, tenantID, deviceUUID, eventPayload, unknownPhotoURL)
 
 	slog.Info("tungson: unknown face detected", "camera_id", cameraID, "tenant_id", tenantID)
 	httputil.JSON(w, http.StatusOK, "ok")
 }
 
-// publishWSEvent publishes an event to the dedicated CCTV WebSocket NATS subject
-// (dm3.cctv.ws.{tenant_id}.{device_id}) so that device-gateway's
-// CCTVWebSocketConsumer can broadcast it to WebSocket clients.
-func (h *TungSonHandlers) publishWSEvent(ctx context.Context, tenantID, deviceUUID, eventType string, originalPayload []byte) {
-	// Parse the original payload to extract the data field for the WS envelope.
+// presignPhoto generates a presigned GET URL for a MinIO photo key.
+func (h *TungSonHandlers) presignPhoto(ctx context.Context, photoRef string) string {
+	if photoRef == "" || h.objectStore == nil {
+		return ""
+	}
+	presigner, ok := h.objectStore.(interface {
+		PresignedGetURL(ctx context.Context, key string, expires time.Duration) (*url.URL, error)
+	})
+	if !ok {
+		return ""
+	}
+	u, err := presigner.PresignedGetURL(ctx, photoRef, 5*time.Minute)
+	if err != nil {
+		slog.Warn("tungson: presign photo failed", "key", photoRef, "error", err)
+		return ""
+	}
+	return u.String()
+}
+
+// publishWSEventWithPhoto publishes event to WebSocket with photo_url included.
+func (h *TungSonHandlers) publishWSEventWithPhoto(ctx context.Context, tenantID, deviceUUID string, originalPayload []byte, photoURL string) {
 	var envelope struct {
 		Data json.RawMessage `json:"data"`
 		TS   int64           `json:"ts"`
@@ -607,11 +636,17 @@ func (h *TungSonHandlers) publishWSEvent(ctx context.Context, tenantID, deviceUU
 		return
 	}
 
+	// Inject photo_url into data
+	var dataMap map[string]any
+	if err := json.Unmarshal(envelope.Data, &dataMap); err == nil && photoURL != "" {
+		dataMap["photo_url"] = photoURL
+	}
+
 	wsPayload, _ := json.Marshal(map[string]any{
-		"type":      eventType,
+		"type":      "access.log",
 		"device_id": deviceUUID,
 		"tenant_id": tenantID,
-		"data":      envelope.Data,
+		"data":      dataMap,
 		"time_ms":   envelope.TS,
 	})
 
@@ -634,26 +669,53 @@ func (h *TungSonHandlers) HandleExtendConfirm(w http.ResponseWriter, r *http.Req
 	confirms := req.ConfirmListObject.ConfirmObject
 	for _, confirm := range confirms {
 		cameraID := confirm.DeviceID
-		_, deviceUUID, err := h.lookupCamera(ctx, cameraID)
+		tenantID, deviceUUID, err := h.lookupCamera(ctx, cameraID)
 		if err != nil {
 			continue
 		}
 
+		// TaskID is now DC_{user_code} format — extract user_code to find user
+		cardID := confirm.TaskID
+		userCode := strings.TrimPrefix(cardID, "DC_")
+
+		// Lookup user UUID by user_code
+		var userID string
+		lookupErr := h.db.Pool.QueryRow(ctx,
+			`SELECT id::text FROM dm3_identity.users WHERE user_code = $1 AND tenant_id = $2::uuid`,
+			userCode, tenantID,
+		).Scan(&userID)
+		if lookupErr != nil {
+			slog.Warn("tungson: confirm user not found by code", "card_id", cardID, "user_code", userCode)
+			continue
+		}
+
 		if confirm.StatusCode == 0 {
-			// Success
+			// Success — update queue
 			_, _ = h.db.Pool.Exec(ctx,
 				`UPDATE dm3_cctv.camera_face_sync_queue
 				 SET status = 'confirmed', confirmed_at = now()
 				 WHERE camera_device_id = $1::uuid AND user_id = $2::uuid AND status = 'sent'`,
-				deviceUUID, confirm.TaskID,
+				deviceUUID, userID,
 			)
+
+			// Create face credential DC_{user_code} for this user
+			// Uses the partial unique index idx_credentials_face_dc_card
+			// (tenant_id, user_id) WHERE type='face' AND value LIKE 'DC_%'
+			_, _ = h.db.Pool.Exec(ctx,
+				`INSERT INTO dm3_identity.credentials (tenant_id, user_id, type, value, status)
+				 VALUES ($1::uuid, $2::uuid, 'face', $3, 'active')
+				 ON CONFLICT (tenant_id, user_id) WHERE type = 'face' AND value LIKE 'DC\_%' ESCAPE '\'
+				 DO UPDATE SET status = 'active', updated_at = now()`,
+				tenantID, userID, cardID,
+			)
+			slog.Info("tungson: face credential created", "user_id", userID, "card_id", cardID)
 		} else {
 			// Failed
 			_, _ = h.db.Pool.Exec(ctx,
 				`UPDATE dm3_cctv.camera_face_sync_queue
 				 SET status = 'failed', error_message = 'camera rejected'
 				 WHERE camera_device_id = $1::uuid AND user_id = $2::uuid AND status = 'sent'`,
-				deviceUUID, confirm.TaskID,
+				deviceUUID, userID,
 			)
 		}
 	}

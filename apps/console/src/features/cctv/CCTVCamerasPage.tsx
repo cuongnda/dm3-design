@@ -19,6 +19,7 @@ import {
   createCamera,
   updateCamera,
   deleteCamera,
+  deleteCameraPreview,
   testCameraConnection,
   type CameraDTO,
   type CreateCameraRequest,
@@ -288,9 +289,23 @@ export function CCTVCamerasPage() {
             size="xs"
             variant="ghost"
             className="text-destructive"
-            onClick={() => {
-              if (window.confirm(t('cctv.cameras.confirmDelete', { name: r.name }))) {
-                deleteMutation.mutate(r.id);
+            onClick={async () => {
+              try {
+                const preview = await deleteCameraPreview(r.id);
+                const warnings: string[] = [];
+                if (preview.event_clips > 0) warnings.push(`${preview.event_clips} video clip(s)`);
+                if (preview.access_point_links > 0) warnings.push(`${preview.access_point_links} access point link(s)`);
+                if (preview.sync_queue_entries > 0) warnings.push(`${preview.sync_queue_entries} sync queue entry(ies)`);
+                const detail = warnings.length > 0
+                  ? `\n\nThe following will also be permanently deleted:\n• ${warnings.join('\n• ')}`
+                  : '';
+                if (window.confirm(`Delete camera "${preview.camera_name}"?${detail}`)) {
+                  deleteMutation.mutate(r.id);
+                }
+              } catch {
+                if (window.confirm(t('cctv.cameras.confirmDelete', { name: r.name }))) {
+                  deleteMutation.mutate(r.id);
+                }
               }
             }}
             data-testid={`cctv-button-delete-camera-${r.id}`}

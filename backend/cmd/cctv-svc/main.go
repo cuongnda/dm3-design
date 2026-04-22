@@ -159,6 +159,10 @@ func main() {
 	// lost on MediaMTX restart). Runs async so it doesn't block startup.
 	go cctv.BootstrapMediaMTXPaths(ctx, database, mediamtxClient, cipher)
 
+	// Camera liveness: poll MediaMTX for RTSP stream readiness and sweep stale
+	// tungson heartbeats. Keeps dm3_devices.devices.status in sync with reality.
+	cctv.RunStatusMonitor(ctx, database, mediamtxClient)
+
 	// Object store + clip signer
 	// ObjectStoreClipSigner uses the MinIO client directly for presigned URLs.
 	// Falls back to the no-op signer when OBJECT_STORE_ENDPOINT is not set.

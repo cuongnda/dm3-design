@@ -16,6 +16,15 @@ type MediaMTXClient interface {
 	UpsertPath(ctx context.Context, name string, cfg PathConfig) error
 	DeletePath(ctx context.Context, name string) error
 	PathExists(ctx context.Context, name string) (bool, error)
+	ListPaths(ctx context.Context) ([]MediaMTXPathStatus, error)
+}
+
+// MediaMTXPathStatus is the subset of the /v3/paths/list response we care about
+// for camera liveness tracking. Ready=true means MediaMTX currently has an
+// active RTSP source publishing to the path.
+type MediaMTXPathStatus struct {
+	Name  string
+	Ready bool
 }
 
 // PathConfig is the configuration sent to MediaMTX for a stream path.
@@ -174,6 +183,46 @@ func (c *HTTPMediaMTXClient) PathExists(ctx context.Context, name string) (bool,
 	return true, nil
 }
 
+// ListPaths fetches the runtime status of all paths from MediaMTX.
+// Uses GET /v3/paths/list (paginated; we fetch with a large page size since
+// path counts in practice are small).
+func (c *HTTPMediaMTXClient) ListPaths(ctx context.Context) ([]MediaMTXPathStatus, error) {
+	url := fmt.Sprintf("%s/v3/paths/list?itemsPerPage=1000", c.baseURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("mediamtx: create list request: %w", err)
+	}
+	if c.user != "" {
+		req.SetBasicAuth(c.user, c.pass)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("mediamtx: list paths: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("mediamtx: list paths returned status %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Items []struct {
+			Name  string `json:"name"`
+			Ready bool   `json:"ready"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return nil, fmt.Errorf("mediamtx: decode list response: %w", err)
+	}
+
+	out := make([]MediaMTXPathStatus, 0, len(body.Items))
+	for _, it := range body.Items {
+		out = append(out, MediaMTXPathStatus{Name: it.Name, Ready: it.Ready})
+	}
+	return out, nil
+}
+
 // NoopMediaMTXClient is a no-op implementation for tests and dev environments
 // where MediaMTX is not available. It logs and returns nil for all operations.
 type NoopMediaMTXClient struct{}
@@ -191,4 +240,8 @@ func (NoopMediaMTXClient) DeletePath(ctx context.Context, name string) error {
 func (NoopMediaMTXClient) PathExists(ctx context.Context, name string) (bool, error) {
 	slog.Debug("mediamtx noop: PathExists", "name", name)
 	return true, nil
+}
+
+func (NoopMediaMTXClient) ListPaths(ctx context.Context) ([]MediaMTXPathStatus, error) {
+	return nil, nil
 }

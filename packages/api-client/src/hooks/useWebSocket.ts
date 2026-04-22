@@ -89,14 +89,6 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
           const accessEvent = transformAccessEvent(data, event);
           addAccessEvent(accessEvent);
 
-          // Show toast for denied access
-          if (data.decision === 'denied' && enableToasts) {
-            showToast(
-              'Access Denied',
-              'warning',
-              `${data.person_name || 'Unknown person'} at ${data.door_id || 'unknown door'}`
-            );
-          }
         },
         onDeviceStatus: (data, event) => {
           const deviceStatus = transformDeviceStatus(data, event);

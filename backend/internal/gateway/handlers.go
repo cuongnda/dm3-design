@@ -1249,7 +1249,8 @@ func presignEventPhoto(ctx context.Context, presigner objectstore.GetURLPresigne
 	if photoRef == "" || presigner == nil {
 		return ""
 	}
-	if !strings.HasPrefix(photoRef, "events/") {
+	// Accept gateway media keys (events/) and cctv-svc media keys (cctv-faces/)
+	if !strings.HasPrefix(photoRef, "events/") && !strings.HasPrefix(photoRef, "cctv-faces/") {
 		return ""
 	}
 	u, err := presigner.PresignedGetURL(ctx, photoRef, 5*time.Minute)

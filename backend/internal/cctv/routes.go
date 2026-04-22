@@ -38,6 +38,7 @@ func RegisterRoutes(r chi.Router, h *CCTVHandlers, jwtSecret string) {
 		r.Get("/cameras", h.ListCameras)
 		r.Get("/cameras/{id}", h.GetCamera)
 		r.Get("/cameras/{id}/whep", h.GetWHEPEndpoint)
+		r.Get("/cameras/{id}/delete-preview", h.DeleteCameraPreview)
 		r.Get("/clips", h.ListClips)
 		r.Get("/clips/{id}", h.GetClip)
 		r.Get("/clips/{id}/playback", h.GetClipPlayback)
