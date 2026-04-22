@@ -5,6 +5,7 @@ import { Search, Monitor, Camera, Cpu, Settings, Terminal, Gauge, Edit, Send, Hi
 import { Button, Card, CardContent, Input, AppModal, Label, Select, Tabs, TabsList, TabsTrigger, TabsContent, DataTable, type Column, TablePaginationFooter, Checkbox } from '@dm3/ui';
 import { useRealtimeStore } from '@dm3/api-client';
 import { apiFetch, fetchDeviceHistory, type DeviceHistoryEvent } from '@/lib/api';
+import { ALL_DEVICE_MODELS } from '@/lib/device-models';
 import { toast } from '@/lib/toast';
 
 // --- Types ---
@@ -796,6 +797,17 @@ export function DevicesPage() {
         ),
       },
       {
+        key: 'model',
+        header: t('devices.column.model'),
+        width: '130px',
+        sortable: true,
+        render: (d) => {
+          if (!d.model) return <span className="text-[13px] text-muted-foreground">—</span>;
+          const hit = ALL_DEVICE_MODELS.find((m) => m.value === d.model);
+          return <span className="text-[13px]">{hit?.label ?? d.model}</span>;
+        },
+      },
+      {
         key: 'location',
         header: t('devices.column.location'),
         sortable: true,
@@ -1099,6 +1111,7 @@ export function DevicesPage() {
           sortColumns={[
             { value: 'name', label: 'Device' },
             { value: 'type', label: 'Type' },
+            { value: 'model', label: 'Model' },
             { value: 'location', label: 'Location' },
             { value: 'access_points', label: 'Access Point' },
             { value: 'status', label: 'Status' },

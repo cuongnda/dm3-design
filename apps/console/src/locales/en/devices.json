@@ -16,6 +16,7 @@
   "devices.list.retry": "Retry",
   "devices.column.device": "Device",
   "devices.column.type": "Type",
+  "devices.column.model": "Model",
   "devices.column.location": "Location",
   "devices.column.accessPoint": "Access Point",
   "devices.column.status": "Status",

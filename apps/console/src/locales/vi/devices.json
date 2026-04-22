@@ -16,6 +16,7 @@
   "devices.list.retry": "Thử lại",
   "devices.column.device": "Thiết bị",
   "devices.column.type": "Loại",
+  "devices.column.model": "Dòng máy",
   "devices.column.location": "Vị trí",
   "devices.column.accessPoint": "Điểm truy cập",
   "devices.column.status": "Trạng thái",
