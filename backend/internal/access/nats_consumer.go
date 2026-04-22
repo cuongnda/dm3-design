@@ -34,7 +34,9 @@ func isOwnTenantMediaKey(key, tenantID, deviceID string) bool {
 	if key == "" || tenantID == "" || deviceID == "" {
 		return false
 	}
-	return strings.HasPrefix(key, "events/"+tenantID+"/"+deviceID+"/")
+	// Accept both gateway media keys (events/) and cctv-svc media keys (cctv-faces/)
+	return strings.HasPrefix(key, "events/"+tenantID+"/"+deviceID+"/") ||
+		strings.HasPrefix(key, "cctv-faces/"+tenantID+"/"+deviceID+"/")
 }
 
 type NATSConsumer struct {

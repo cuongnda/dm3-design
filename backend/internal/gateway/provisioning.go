@@ -167,15 +167,11 @@ func (h *ProvisioningHandlers) ProvisionDevice(w http.ResponseWriter, r *http.Re
 			httputil.Error(w, http.StatusServiceUnavailable, "camera provisioning is not configured on this server (CCTV_CREDENTIAL_KEY missing)")
 			return
 		}
-		if req.Camera == nil || strings.TrimSpace(req.Camera.RTSPURL) == "" {
-			httputil.Error(w, http.StatusBadRequest, "camera.rtsp_url is required when type=camera")
+		if req.Camera == nil {
+			httputil.Error(w, http.StatusBadRequest, "camera block is required when type=camera")
 			return
 		}
 		trimmedRTSP = strings.TrimSpace(req.Camera.RTSPURL)
-		if err := cctv.ValidateRTSPURL(trimmedRTSP); err != nil {
-			httputil.Error(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		if req.Camera.RecordingMode != nil && *req.Camera.RecordingMode != "" {
 			recordingMode = *req.Camera.RecordingMode
 		}

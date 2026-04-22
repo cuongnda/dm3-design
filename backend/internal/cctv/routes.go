@@ -38,10 +38,12 @@ func RegisterRoutes(r chi.Router, h *CCTVHandlers, jwtSecret string) {
 		r.Get("/cameras", h.ListCameras)
 		r.Get("/cameras/{id}", h.GetCamera)
 		r.Get("/cameras/{id}/whep", h.GetWHEPEndpoint)
+		r.Get("/cameras/{id}/delete-preview", h.DeleteCameraPreview)
 		r.Get("/clips", h.ListClips)
 		r.Get("/clips/{id}", h.GetClip)
 		r.Get("/clips/{id}/playback", h.GetClipPlayback)
 		r.Get("/settings", h.GetSettings)
+		r.Get("/event-rules", h.ListEventRules)
 		// Hanet places passthrough — proxies to {server}/place/getPlaces
 		// using the tenant's saved access token. Guarded by plugin + tenant
 		// middleware above; refresh-on-401 handled inside the handler.
@@ -55,6 +57,9 @@ func RegisterRoutes(r chi.Router, h *CCTVHandlers, jwtSecret string) {
 			pr.Delete("/cameras/{id}", h.DeleteCamera)
 			pr.Post("/cameras/{id}/test-connection", h.TestCameraConnection)
 			pr.Put("/settings", h.UpdateSettings)
+			pr.Post("/event-rules", h.CreateEventRule)
+			pr.Put("/event-rules/{id}", h.UpdateEventRule)
+			pr.Delete("/event-rules/{id}", h.DeleteEventRule)
 		})
 
 		// Clip export writes — create and delete clips

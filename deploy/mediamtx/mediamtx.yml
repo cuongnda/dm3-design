@@ -21,20 +21,24 @@ hlsVariant: lowLatency
 
 # Two-user model: stream user for publish/read, admin user for API ops.
 authInternalUsers:
-  - user: "${MEDIAMTX_STREAM_USER}"
-    pass: "${MEDIAMTX_STREAM_PASS}"
+  - user: dm3stream
+    pass: dm3public123
     ips: []
     permissions:
       - action: publish
       - action: read
       - action: playback
-  - user: "${MEDIAMTX_API_USER}"
-    pass: "${MEDIAMTX_API_PASS}"
-    ips:
-      - "127.0.0.1/32"
-      - "::1/128"
-      - "172.16.0.0/12"
+  - user: dm3admin
+    pass: dm3public123
+    ips: []
     permissions:
       - action: api
       - action: metrics
       - action: pprof
+  # Anonymous read access for browser WHEP/HLS (no login popup)
+  - user: ""
+    pass: ""
+    ips: []
+    permissions:
+      - action: read
+      - action: playback

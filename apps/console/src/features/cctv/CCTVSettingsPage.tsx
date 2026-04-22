@@ -184,6 +184,81 @@ export function CCTVSettingsPage() {
           </div>
         </section>
 
+        {/*
+          Event capture section — governs the rolling buffer, coalescer cap,
+          worker pool size, and the tenant-wide default action taken when no
+          event_rule matches. Per-event fine-grained rules live in the
+          separate Event Rules page; these are the fallbacks.
+        */}
+        <section className="rounded-lg border border-border p-4">
+          <h3 className="text-[13px] font-semibold mb-3">Event capture</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-[12px]">Rolling buffer (s) — 0 disables</Label>
+              <Input
+                type="number"
+                className="mt-1 h-8 text-[13px]"
+                min={0}
+                max={300}
+                value={form.rolling_buffer_sec ?? 30}
+                onChange={(e) => update('rolling_buffer_sec', Number(e.target.value))}
+                data-testid="cctv-input-rolling-buffer"
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Disk dung lượng thường trực ≈ bitrate × giá trị này × số cam.
+              </p>
+            </div>
+            <div>
+              <Label className="text-[12px]">Max clip duration (s)</Label>
+              <Input
+                type="number"
+                className="mt-1 h-8 text-[13px]"
+                min={30}
+                max={3600}
+                value={form.max_clip_duration_sec ?? 600}
+                onChange={(e) => update('max_clip_duration_sec', Number(e.target.value))}
+                data-testid="cctv-input-max-clip-duration"
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Coalesced clip đạt ngưỡng này sẽ finalize và clip mới được mở.
+              </p>
+            </div>
+            <div>
+              <Label className="text-[12px]">Max concurrent extractions</Label>
+              <Input
+                type="number"
+                className="mt-1 h-8 text-[13px]"
+                min={1}
+                max={64}
+                value={form.max_concurrent_extractions ?? 8}
+                onChange={(e) => update('max_concurrent_extractions', Number(e.target.value))}
+                data-testid="cctv-input-max-concurrent-extractions"
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Cap số ffmpeg job cùng lúc khi có event burst.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 pt-5">
+              <label className="flex items-center gap-2 text-[13px]">
+                <input
+                  type="checkbox"
+                  checked={form.default_record_enabled ?? true}
+                  onChange={(e) => update('default_record_enabled', e.target.checked)}
+                  data-testid="cctv-check-default-record"
+                /> Default: record video on access events
+              </label>
+              <label className="flex items-center gap-2 text-[13px]">
+                <input
+                  type="checkbox"
+                  checked={form.default_snapshot_enabled ?? false}
+                  onChange={(e) => update('default_snapshot_enabled', e.target.checked)}
+                  data-testid="cctv-check-default-snapshot"
+                /> Default: snapshot on access events
+              </label>
+            </div>
+          </div>
+        </section>
+
         {/* ── Hanet integration ────────────────────────────────────────── */}
         <section className="rounded-lg border border-border p-4">
           <h3 className="text-[13px] font-semibold mb-1">

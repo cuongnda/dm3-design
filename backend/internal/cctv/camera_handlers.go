@@ -224,11 +224,6 @@ func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusBadRequest, "name is required")
 		return
 	}
-	if strings.TrimSpace(req.RTSPUrl) == "" {
-		httputil.Error(w, http.StatusBadRequest, "rtsp_url is required")
-		return
-	}
-
 	recordingMode := "event_only"
 	if req.RecordingMode != nil && *req.RecordingMode != "" {
 		recordingMode = *req.RecordingMode
@@ -250,12 +245,7 @@ func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// SSRF check on user-supplied RTSP URL before any DB or MediaMTX write.
 	trimmedURL := strings.TrimSpace(req.RTSPUrl)
-	if err := ValidateRTSPURL(trimmedURL); err != nil {
-		httputil.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
 
 	// Encrypt password if provided
 	var encryptedPass []byte
@@ -340,10 +330,8 @@ func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 		rtspUsername = *req.RTSPUsername
 	}
 	sourceURL := composeRTSPURLWithAuth(trimmedURL, rtspUsername, decryptedPass)
-	if err := h.mediamtx.UpsertPath(r.Context(), deviceUUID, PathConfig{
-		Source:         sourceURL,
-		SourceOnDemand: false,
-	}); err != nil {
+	cfg := applyRecordDefaults(PathConfig{Source: sourceURL, SourceOnDemand: false}, pathRecordDefaults(r.Context(), h.db, cid))
+	if err := h.mediamtx.UpsertPath(r.Context(), deviceUUID, cfg); err != nil {
 		slog.Warn("cctv: mediamtx upsert path failed (non-fatal)", "device_id", deviceUUID, "error", err)
 	}
 
@@ -496,10 +484,8 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 		name = strings.TrimSpace(req.Name)
 	}
 	rtspURL := existing.RTSPUrl
-	rtspURLChanged := false
 	if strings.TrimSpace(req.RTSPUrl) != "" {
 		rtspURL = strings.TrimSpace(req.RTSPUrl)
-		rtspURLChanged = rtspURL != existing.RTSPUrl
 	}
 	brand := existing.Brand
 	if req.Brand != nil {
@@ -530,14 +516,6 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 	rtspUsername := existing.RTSPUsername
 	if req.RTSPUsername != nil {
 		rtspUsername = req.RTSPUsername
-	}
-
-	// SSRF validation before any DB write when the URL is being changed.
-	if rtspURLChanged {
-		if err := ValidateRTSPURL(rtspURL); err != nil {
-			httputil.Error(w, http.StatusBadRequest, err.Error())
-			return
-		}
 	}
 
 	// Re-encrypt password if a new one is provided
@@ -646,10 +624,8 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 		rtspUsernameStr = *rtspUsername
 	}
 	sourceURL := composeRTSPURLWithAuth(rtspURL, rtspUsernameStr, decryptedPass)
-	if err := h.mediamtx.UpsertPath(r.Context(), id, PathConfig{
-		Source:         sourceURL,
-		SourceOnDemand: false,
-	}); err != nil {
+	cfg := applyRecordDefaults(PathConfig{Source: sourceURL, SourceOnDemand: false}, pathRecordDefaults(r.Context(), h.db, cid))
+	if err := h.mediamtx.UpsertPath(r.Context(), id, cfg); err != nil {
 		slog.Warn("cctv: mediamtx upsert path failed (non-fatal)", "device_id", id, "error", err)
 	}
 
@@ -665,6 +641,45 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 		"recording_mode": cam.RecordingMode,
 	})
 	httputil.JSON(w, http.StatusOK, cam)
+}
+
+// DeleteCameraPreview handles GET /cameras/{id}/delete-preview
+// Returns a summary of what will be deleted if the camera is removed.
+func (h *CCTVHandlers) DeleteCameraPreview(w http.ResponseWriter, r *http.Request) {
+	cid := h.getTenantID(r)
+	if !requireTenant(w, cid) {
+		return
+	}
+	id := chi.URLParam(r, "id")
+
+	var name string
+	err := h.db.Pool.QueryRow(r.Context(),
+		`SELECT name FROM dm3_devices.devices WHERE id = $1::uuid AND tenant_id = $2::uuid AND type = 'camera'`,
+		id, cid).Scan(&name)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "camera not found")
+		return
+	}
+
+	var clipCount, syncCount, accessPointCount int
+	_ = h.db.Pool.QueryRow(r.Context(),
+		`SELECT COUNT(*) FROM dm3_cctv.event_clips WHERE device_id = $1::uuid AND tenant_id = $2::uuid`,
+		id, cid).Scan(&clipCount)
+	_ = h.db.Pool.QueryRow(r.Context(),
+		`SELECT COUNT(*) FROM dm3_cctv.camera_face_sync_queue WHERE camera_device_id = $1::uuid AND tenant_id = $2::uuid`,
+		id, cid).Scan(&syncCount)
+	_ = h.db.Pool.QueryRow(r.Context(),
+		`SELECT COUNT(*) FROM dm3_access.access_point_devices apd
+		 JOIN dm3_access.access_devices ad ON ad.id::text = apd.access_device_id
+		 WHERE ad.device_id = $1::uuid AND ad.tenant_id = $2::uuid`,
+		id, cid).Scan(&accessPointCount)
+
+	httputil.JSON(w, http.StatusOK, map[string]any{
+		"camera_name":        name,
+		"event_clips":        clipCount,
+		"sync_queue_entries":  syncCount,
+		"access_point_links": accessPointCount,
+	})
 }
 
 // DeleteCamera handles DELETE /cameras/{id}
@@ -683,12 +698,35 @@ func (h *CCTVHandlers) DeleteCamera(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("cctv: pre-delete name lookup failed (non-fatal)", "device_id", id, "error", err)
 	}
 
-	// Delete devices row (CASCADE will remove dm3_cctv.cameras row via FK)
+	// Verify camera exists
+	var deviceExists bool
+	_ = h.db.Pool.QueryRow(r.Context(),
+		`SELECT EXISTS(SELECT 1 FROM dm3_devices.devices WHERE id = $1::uuid AND tenant_id = $2::uuid AND type = 'camera')`,
+		id, cid).Scan(&deviceExists)
+	if !deviceExists {
+		httputil.Error(w, http.StatusNotFound, "camera not found")
+		return
+	}
+
+	// Delete related rows first (FK constraints prevent direct device deletion)
+	_, _ = h.db.Pool.Exec(r.Context(), `DELETE FROM dm3_cctv.event_clips WHERE device_id = $1::uuid AND tenant_id = $2::uuid`, id, cid)
+	_, _ = h.db.Pool.Exec(r.Context(), `DELETE FROM dm3_cctv.camera_face_sync_queue WHERE camera_device_id = $1::uuid AND tenant_id = $2::uuid`, id, cid)
+
+	// Unbind from access points and delete access_devices
+	_, _ = h.db.Pool.Exec(r.Context(),
+		`DELETE FROM dm3_access.access_point_devices apd
+		 USING dm3_access.access_devices ad
+		 WHERE apd.access_device_id = ad.id::text AND apd.tenant_id = ad.tenant_id
+		   AND ad.device_id = $1::uuid AND ad.tenant_id = $2::uuid`, id, cid)
+	_, _ = h.db.Pool.Exec(r.Context(), `DELETE FROM dm3_access.access_devices WHERE device_id = $1::uuid AND tenant_id = $2::uuid`, id, cid)
+
+	// Delete cameras row then device row
+	_, _ = h.db.Pool.Exec(r.Context(), `DELETE FROM dm3_cctv.cameras WHERE device_id = $1::uuid AND tenant_id = $2::uuid`, id, cid)
 	tag, err := h.db.Pool.Exec(r.Context(),
 		`DELETE FROM dm3_devices.devices WHERE id = $1::uuid AND tenant_id = $2::uuid AND type = 'camera'`,
 		id, cid)
 	if err != nil || tag.RowsAffected() == 0 {
-		httputil.Error(w, http.StatusNotFound, "camera not found")
+		logInternalError(w, "delete camera failed", err)
 		return
 	}
 

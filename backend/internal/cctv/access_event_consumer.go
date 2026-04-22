@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -21,20 +22,54 @@ import (
 // dependency).
 var uuidRegex = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
+// defaultMaxClipDurationSec is the hard cap applied when the tenant has no
+// cctv_settings row. Matches the migration default.
+const defaultMaxClipDurationSec = 600
+
 // AccessEventConsumer subscribes to device access events on the DEVICES stream
-// and creates placeholder rows in dm3_cctv.event_clips for every camera bound
-// to the event's access point. When a ClipExtractor is configured, it also
-// spawns async clip extraction (ffmpeg RTSP → MP4 → MinIO) for each placeholder.
+// and drives the CCTV capture pipeline (snapshots + coalesced clips) governed
+// by dm3_cctv.event_rules.
+//
+// Capture timeline (record path):
+//   - Incoming event → resolve rule per camera → if record_enabled:
+//       - find any open clip for that camera → extend its end_at (coalesce),
+//         OR insert a new pending clip with end_at = now + post_roll.
+//   - A separate Finalizer goroutine picks up pending clips whose end_at has
+//     passed and submits them to the worker pool for ffmpeg concat + upload.
+//
+// Snapshot path bypasses coalescing — each event that matches a snapshot-enabled
+// rule inserts a fresh `media_type='snapshot'` row and is dispatched to the
+// snapshot extractor immediately. They finish in <1s and are cheap.
+//
+// TODO(refactor): ResolveRule runs once per (camera, event). For bursts fanning
+// out to many cameras the per-camera query count grows — consider caching
+// tenant rules in memory with a listen/notify invalidation channel.
 type AccessEventConsumer struct {
-	db        *db.DB
-	nats      *natsutil.Client
-	extractor *ClipExtractor // nil when clip extraction is disabled
+	db               *db.DB
+	nats             *natsutil.Client
+	clipExtractor    *ClipExtractor
+	snapshotExtrator *SnapshotExtractor
+	workers          *ExtractionWorkerPool
 }
 
-// NewAccessEventConsumer constructs an AccessEventConsumer.
-// extractor is optional — pass nil to create placeholder rows without extracting clips.
-func NewAccessEventConsumer(database *db.DB, natsClient *natsutil.Client, extractor *ClipExtractor) *AccessEventConsumer {
-	return &AccessEventConsumer{db: database, nats: natsClient, extractor: extractor}
+// NewAccessEventConsumer wires the consumer. Any of clip/snapshot extractors
+// or workers may be nil — capture stages with a nil dependency are logged and
+// skipped instead of crashing. This keeps the consumer usable in dev setups
+// where the object store or ffmpeg isn't configured.
+func NewAccessEventConsumer(
+	database *db.DB,
+	natsClient *natsutil.Client,
+	clipExtractor *ClipExtractor,
+	snapshotExtractor *SnapshotExtractor,
+	workers *ExtractionWorkerPool,
+) *AccessEventConsumer {
+	return &AccessEventConsumer{
+		db:               database,
+		nats:             natsClient,
+		clipExtractor:    clipExtractor,
+		snapshotExtrator: snapshotExtractor,
+		workers:          workers,
+	}
 }
 
 // deviceEvent mirrors the envelope published by device-gateway to the DEVICES stream.
@@ -47,10 +82,13 @@ type deviceEvent struct {
 	Data    json.RawMessage `json:"data"`
 }
 
-// accessLogData is the subset of the access.log payload we care about.
+// accessLogData is the subset of the access.log payload we care about for
+// capture decisions. Decision drives rule matching; DoorID is used as the
+// fallback access point resolver when src is empty.
 type accessLogData struct {
-	EventID string `json:"event_id"`
-	DoorID  string `json:"door_id"`
+	EventID  string `json:"event_id"`
+	DoorID   string `json:"door_id"`
+	Decision string `json:"decision"`
 }
 
 // Start subscribes to dm3.devices.*.*.evt on the DEVICES stream with queue
@@ -74,13 +112,14 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 		return nil // ack bad messages
 	}
 
-	// Only react to access log events — other device events (heartbeat, etc.)
-	// are not relevant for clip creation.
 	if evt.Type != "access.log" {
+		// TODO(refactor): open the filter to face.match / face.unknown /
+		// door.forced when rules start referencing them. Right now the rule
+		// event_types filter still accepts those values — this switch is the
+		// only reason they wouldn't reach the resolver.
 		return nil
 	}
 
-	// Extract tenant_id from subject: dm3.devices.{tenant_id}.{device_id}.evt
 	parts := strings.SplitN(subject, ".", 5)
 	if len(parts) < 5 || !uuidRegex.MatchString(parts[2]) {
 		slog.Warn("cctv: invalid subject format", "subject", subject)
@@ -88,15 +127,11 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 	}
 	tenantID := parts[2]
 
-	// Resolve the source device UUID. The src field may be a UUID directly
-	// or "device:{rid}" format. Fall back to subject segment if empty.
 	srcDeviceID := evt.Src
 	if srcDeviceID == "" {
 		srcDeviceID = parts[3]
 	}
-	// Strip "device:" prefix if present (e.g. "device:840107" → "840107")
 	srcDeviceID = strings.TrimPrefix(srcDeviceID, "device:")
-	// If srcDeviceID is a short rid (not UUID), resolve to device UUID from DB
 	if !uuidRegex.MatchString(srcDeviceID) {
 		var deviceUUID string
 		err := c.db.Pool.QueryRow(ctx,
@@ -104,7 +139,6 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 			srcDeviceID, tenantID,
 		).Scan(&deviceUUID)
 		if err != nil {
-			// Device not found — skip silently (not every device has CCTV)
 			return nil
 		}
 		srcDeviceID = deviceUUID
@@ -116,7 +150,6 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 		return nil
 	}
 
-	// Plugin-gate: skip silently if the tenant does not have the cctv plugin enabled.
 	enabled, err := c.tenantHasCCTVPlugin(ctx, tenantID)
 	if err != nil {
 		slog.Error("cctv: plugin check failed", "error", err, "tenant_id", tenantID)
@@ -126,21 +159,22 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 		return nil
 	}
 
-	// If the source device IS a camera, only create a clip for that camera
-	// (e.g. TungSon face recognition events originate from the camera itself).
-	// If the source is a terminal/controller, find all cameras on the same access point.
-	var cameras []string
+	var (
+		cameras       []string
+		accessPointID string
+	)
 	if c.isCamera(ctx, tenantID, srcDeviceID) {
 		cameras = []string{srcDeviceID}
 	} else {
-		accessPointID, err := c.resolveAccessPointID(ctx, tenantID, srcDeviceID, payload.DoorID)
+		apID, err := c.resolveAccessPointID(ctx, tenantID, srcDeviceID, payload.DoorID)
 		if err != nil {
 			slog.Error("cctv: failed to resolve access_point_id", "error", err, "src", srcDeviceID)
 			return err
 		}
-		if accessPointID == "" {
+		if apID == "" {
 			return nil
 		}
+		accessPointID = apID
 		cameras, err = c.findCamerasForAccessPoint(ctx, tenantID, accessPointID)
 		if err != nil {
 			slog.Error("cctv: failed to find cameras for access point", "error", err, "access_point_id", accessPointID)
@@ -151,7 +185,11 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 		return nil
 	}
 
-	startedAt := time.UnixMilli(evt.TS)
+	// Resolve max_clip_duration once per event — used by the coalescer to stop
+	// growing a clip past the tenant's cap.
+	maxClipDuration := c.loadMaxClipDuration(ctx, tenantID)
+
+	eventTS := time.UnixMilli(evt.TS)
 	var eventUUID *string
 	if evt.ID != "" && uuidRegex.MatchString(evt.ID) {
 		eventUUID = &evt.ID
@@ -159,33 +197,260 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 		eventUUID = &payload.EventID
 	}
 
-	dbCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
+	// Fan out per-camera work in parallel — each camera is a self-contained
+	// rule lookup + (at most) one INSERT + one junction write. Processing
+	// serially would make the NATS handler's latency O(num_cameras), which
+	// matters when 20+ cameras hang off the same access point. A WaitGroup
+	// bounded implicitly by the camera list (≤ dozens in practice) is cheap
+	// and avoids adding another worker pool for light DB-only work.
+	//
+	// TODO(refactor): if we ever see tenants with >100 cameras on an AP,
+	// convert this to a small semaphore (say 16) to avoid DB connection
+	// saturation under burst traffic.
+	var wg sync.WaitGroup
 	for _, camDeviceID := range cameras {
-		placeholderKey := fmt.Sprintf("pending/%s/%s/%d.mp4", tenantID, camDeviceID, startedAt.UnixNano())
-		var clipID string
-		if err := c.db.Pool.QueryRow(dbCtx,
-			`INSERT INTO dm3_cctv.event_clips
-				(tenant_id, device_id, access_event_id, started_at, duration_ms, object_key, trigger)
-			 VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, 'access_event')
-			 RETURNING id::text`,
-			tenantID, camDeviceID, eventUUID, startedAt, 0, placeholderKey,
-		).Scan(&clipID); err != nil {
-			slog.Error("cctv: insert event_clip failed", "error", err,
-				"tenant_id", tenantID, "camera_id", camDeviceID)
-			return err // Nak → JetStream redelivers
-		}
+		wg.Add(1)
+		go func(camDeviceID string) {
+			defer wg.Done()
+			c.captureForCamera(ctx, tenantID, accessPointID, camDeviceID, payload, evt, eventUUID, eventTS, maxClipDuration)
+		}(camDeviceID)
+	}
+	wg.Wait()
+	return nil
+}
 
-		// Spawn async clip extraction if the extractor is wired.
-		if c.extractor != nil {
-			go c.extractor.ExtractClip(ctx, clipID, tenantID, camDeviceID)
-		}
+func (c *AccessEventConsumer) captureForCamera(
+	ctx context.Context,
+	tenantID, accessPointID, camDeviceID string,
+	payload accessLogData,
+	evt deviceEvent,
+	eventUUID *string,
+	eventTS time.Time,
+	maxClipDuration time.Duration,
+) {
+	rule, err := ResolveRule(ctx, c.db, RuleMatchInput{
+		TenantID:       tenantID,
+		CameraDeviceID: camDeviceID,
+		AccessPointID:  accessPointID,
+		Decision:       payload.Decision,
+		EventType:      evt.Type,
+	})
+	if err != nil {
+		slog.Warn("cctv: rule resolve failed, skipping camera", "error", err,
+			"camera_device_id", camDeviceID)
+		return
+	}
+	if !rule.RecordEnabled && !rule.SnapshotEnabled {
+		return
 	}
 
-	slog.Debug("cctv: event_clips placeholders created",
-		"tenant_id", tenantID, "count", len(cameras))
+	// Shape of the row depends on which flags the rule set. We keep the
+	// 1-row-per-(camera,event) invariant so UI can show "event → N media
+	// across cameras" cleanly; when a rule enables both, the snapshot lives
+	// as a thumbnail on the same clip row rather than producing a twin row.
+	switch {
+	case rule.RecordEnabled:
+		clipID, err := c.captureClip(ctx, tenantID, camDeviceID, eventUUID, eventTS, rule, maxClipDuration)
+		if err != nil {
+			slog.Error("cctv: capture clip failed", "error", err,
+				"camera_device_id", camDeviceID)
+			return
+		}
+		if rule.SnapshotEnabled && clipID != "" && c.snapshotExtrator != nil {
+			// Dispatch thumbnail capture alongside the pending clip. We pass
+			// the same clip_id so the extractor updates thumbnail_ref on that
+			// row instead of creating a new one.
+			capID := clipID
+			if c.workers != nil {
+				c.workers.Submit(ctx, func(jobCtx context.Context) {
+					c.snapshotExtrator.ExtractThumbnail(jobCtx, capID, tenantID, camDeviceID)
+				})
+			} else {
+				go c.snapshotExtrator.ExtractThumbnail(ctx, capID, tenantID, camDeviceID)
+			}
+		}
+	case rule.SnapshotEnabled:
+		if err := c.captureSnapshot(ctx, tenantID, camDeviceID, eventUUID, eventTS, rule); err != nil {
+			slog.Error("cctv: capture snapshot failed", "error", err,
+				"camera_device_id", camDeviceID)
+		}
+	}
+}
+
+// captureClip implements the coalescing state machine for video capture. It
+// either extends an in-flight pending clip for the camera (burst merging) or
+// starts a brand-new pending clip.
+//
+// Coalescing rules:
+//   - An "open" clip is status in {pending, recording} AND end_at > now AND
+//     media_type = 'clip'.
+//   - If extending would push the resulting duration past maxClipDuration,
+//     we force a new clip instead — this prevents runaway clips during
+//     perpetual door-open events.
+//
+// All writes happen in a single Postgres round trip for the common path
+// (extend via UPDATE ... RETURNING, fallback to INSERT). The junction write
+// happens after we know the clip id.
+func (c *AccessEventConsumer) captureClip(
+	ctx context.Context,
+	tenantID, cameraDeviceID string,
+	accessEventID *string,
+	eventTS time.Time,
+	rule EffectiveRule,
+	maxClipDuration time.Duration,
+) (string, error) {
+	dbCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	newEndAt := time.Now().Add(time.Duration(rule.PostRollSec) * time.Second)
+
+	// Try to extend an open clip first — row-level lock keeps concurrent events
+	// from racing. The LIMIT 1 + FOR UPDATE SKIP LOCKED combination means a
+	// simultaneous event just falls through to the INSERT branch below.
+	var (
+		extClipID    string
+		extStartedAt time.Time
+	)
+	err := c.db.Pool.QueryRow(dbCtx, `
+		WITH candidate AS (
+		  SELECT id, started_at FROM dm3_cctv.event_clips
+		   WHERE tenant_id = $1::uuid
+		     AND device_id = $2::uuid
+		     AND media_type = 'clip'
+		     AND status IN ('pending','recording')
+		     AND end_at > now()
+		     AND (now() - started_at) < make_interval(secs => $4)
+		   ORDER BY started_at DESC
+		   LIMIT 1
+		   FOR UPDATE SKIP LOCKED
+		)
+		UPDATE dm3_cctv.event_clips c
+		   SET end_at = GREATEST(c.end_at, $3), updated_at = now()
+		  FROM candidate
+		 WHERE c.id = candidate.id
+		RETURNING c.id::text, c.started_at`,
+		tenantID, cameraDeviceID, newEndAt, int(maxClipDuration.Seconds()),
+	).Scan(&extClipID, &extStartedAt)
+
+	if err == nil {
+		// Extended — just link the event to the existing clip.
+		return extClipID, c.linkEventToClip(dbCtx, tenantID, extClipID, extStartedAt, accessEventID)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return "", fmt.Errorf("coalesce lookup: %w", err)
+	}
+
+	// No open clip — start a new pending row. started_at rewinds pre_roll into
+	// the past so the finalizer knows which rolling-buffer range to splice.
+	startedAt := eventTS.Add(-time.Duration(rule.PreRollSec) * time.Second)
+	placeholderKey := fmt.Sprintf("pending/%s/%s/%d.mp4", tenantID, cameraDeviceID, startedAt.UnixNano())
+
+	var newClipID string
+	err = c.db.Pool.QueryRow(dbCtx, `
+		INSERT INTO dm3_cctv.event_clips
+		  (tenant_id, device_id, access_event_id, started_at, ended_at, end_at,
+		   duration_ms, object_key, trigger, media_type, status, rule_id)
+		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $4, $5, 0, $6, 'access_event',
+		        'clip', 'pending', $7::uuid)
+		RETURNING id::text`,
+		tenantID, cameraDeviceID, accessEventID, startedAt, newEndAt, placeholderKey, rule.RuleID,
+	).Scan(&newClipID)
+	if err != nil {
+		return "", fmt.Errorf("insert pending clip: %w", err)
+	}
+
+	if err := c.linkEventToClip(dbCtx, tenantID, newClipID, startedAt, accessEventID); err != nil {
+		return newClipID, err
+	}
+	return newClipID, nil
+}
+
+// captureSnapshot inserts a snapshot row and dispatches immediate extraction.
+// Snapshots are never coalesced — each event gets its own still frame.
+func (c *AccessEventConsumer) captureSnapshot(
+	ctx context.Context,
+	tenantID, cameraDeviceID string,
+	accessEventID *string,
+	eventTS time.Time,
+	rule EffectiveRule,
+) error {
+	if c.snapshotExtrator == nil {
+		// Extractor not wired (e.g. no object store) — skip silently.
+		return nil
+	}
+
+	dbCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	placeholderKey := fmt.Sprintf("pending/%s/%s/%d.jpg", tenantID, cameraDeviceID, eventTS.UnixNano())
+	var clipID string
+	err := c.db.Pool.QueryRow(dbCtx, `
+		INSERT INTO dm3_cctv.event_clips
+		  (tenant_id, device_id, access_event_id, started_at, ended_at, end_at,
+		   duration_ms, object_key, trigger, media_type, status, rule_id)
+		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $4, $4, 0, $5, 'access_event',
+		        'snapshot', 'pending', $6::uuid)
+		RETURNING id::text`,
+		tenantID, cameraDeviceID, accessEventID, eventTS, placeholderKey, rule.RuleID,
+	).Scan(&clipID)
+	if err != nil {
+		return fmt.Errorf("insert pending snapshot: %w", err)
+	}
+
+	if err := c.linkEventToClip(dbCtx, tenantID, clipID, eventTS, accessEventID); err != nil {
+		return err
+	}
+
+	// Hand off to the worker pool. Failures are persisted in the row by the
+	// extractor; we don't block the event loop here.
+	if c.workers != nil {
+		c.workers.Submit(ctx, func(jobCtx context.Context) {
+			c.snapshotExtrator.ExtractSnapshot(jobCtx, clipID, tenantID, cameraDeviceID)
+		})
+	} else {
+		go c.snapshotExtrator.ExtractSnapshot(ctx, clipID, tenantID, cameraDeviceID)
+	}
 	return nil
+}
+
+// linkEventToClip adds the junction row so one clip can represent a burst of
+// access events. ON CONFLICT is idempotent — replay-safe.
+func (c *AccessEventConsumer) linkEventToClip(
+	ctx context.Context,
+	tenantID, clipID string,
+	clipStartedAt time.Time,
+	accessEventID *string,
+) error {
+	if accessEventID == nil {
+		return nil
+	}
+	_, err := c.db.Pool.Exec(ctx, `
+		INSERT INTO dm3_cctv.event_clip_events (clip_id, clip_started_at, access_event_id, tenant_id)
+		VALUES ($1::uuid, $2, $3::uuid, $4::uuid)
+		ON CONFLICT (clip_id, access_event_id) DO NOTHING`,
+		clipID, clipStartedAt, *accessEventID, tenantID,
+	)
+	if err != nil {
+		return fmt.Errorf("link event to clip: %w", err)
+	}
+	return nil
+}
+
+// loadMaxClipDuration pulls the tenant's cap from cctv_settings. Fall back to
+// the package default when the row is missing — keeps the pipeline moving
+// even for newly created tenants.
+func (c *AccessEventConsumer) loadMaxClipDuration(ctx context.Context, tenantID string) time.Duration {
+	lookupCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+	var secs int
+	err := c.db.Pool.QueryRow(lookupCtx,
+		`SELECT max_clip_duration_sec FROM dm3_cctv.cctv_settings WHERE tenant_id = $1::uuid`,
+		tenantID,
+	).Scan(&secs)
+	if err != nil || secs <= 0 {
+		return time.Duration(defaultMaxClipDurationSec) * time.Second
+	}
+	return time.Duration(secs) * time.Second
 }
 
 // tenantHasCCTVPlugin returns true when the tenant's enabled_plugins column
@@ -213,7 +478,6 @@ func (c *AccessEventConsumer) resolveAccessPointID(ctx context.Context, tenantID
 	lookupCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	// Preferred path: source device UUID → access_device → access_point.
 	if srcDeviceID != "" {
 		var apID string
 		err := c.db.Pool.QueryRow(lookupCtx,
@@ -233,7 +497,6 @@ func (c *AccessEventConsumer) resolveAccessPointID(ctx context.Context, tenantID
 		}
 	}
 
-	// Fallback: door_id field from payload is an access_point UUID (legacy shape).
 	if uuidRegex.MatchString(doorID) {
 		var apID string
 		err := c.db.Pool.QueryRow(lookupCtx,
@@ -252,8 +515,7 @@ func (c *AccessEventConsumer) resolveAccessPointID(ctx context.Context, tenantID
 }
 
 // findCamerasForAccessPoint returns camera device IDs bound to the given access
-// point for the tenant. Cameras are identified as devices of type 'camera'
-// that are also linked as access_devices on that access point.
+// point for the tenant.
 func (c *AccessEventConsumer) findCamerasForAccessPoint(ctx context.Context, tenantID, accessPointID string) ([]string, error) {
 	lookupCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
@@ -293,3 +555,4 @@ func (c *AccessEventConsumer) isCamera(ctx context.Context, tenantID, deviceID s
 	).Scan(&isCamera)
 	return isCamera
 }
+

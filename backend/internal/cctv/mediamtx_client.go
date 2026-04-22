@@ -16,12 +16,33 @@ type MediaMTXClient interface {
 	UpsertPath(ctx context.Context, name string, cfg PathConfig) error
 	DeletePath(ctx context.Context, name string) error
 	PathExists(ctx context.Context, name string) (bool, error)
+	ListPaths(ctx context.Context) ([]MediaMTXPathStatus, error)
+}
+
+// MediaMTXPathStatus is the subset of the /v3/paths/list response we care about
+// for camera liveness tracking. Ready=true means MediaMTX currently has an
+// active RTSP source publishing to the path.
+type MediaMTXPathStatus struct {
+	Name  string
+	Ready bool
 }
 
 // PathConfig is the configuration sent to MediaMTX for a stream path.
+//
+// Record* fields, when Record=true, configure MediaMTX to write a rolling
+// on-disk buffer of the stream. Combined with a short RecordDeleteAfter this
+// gives us a capped pre-roll buffer the extractor can splice from when
+// finalizing a coalesced clip. See migration 000048 comment block.
 type PathConfig struct {
 	Source         string // rtsp://user:pass@host:port/path (composed by caller)
 	SourceOnDemand bool   // true — start stream only when a client connects
+
+	// Rolling buffer knobs
+	Record                bool   // enable on-disk recording (fMP4 segments)
+	RecordFormat          string // "fmp4" | "mpegts"  — empty falls back to MediaMTX default
+	RecordPath            string // optional override for per-path record path template
+	RecordSegmentDuration string // e.g. "5s"
+	RecordDeleteAfter     string // e.g. "30s" — MUST be ≥ buffer window the consumer expects
 }
 
 // HTTPMediaMTXClient is an HTTP implementation of MediaMTXClient.
@@ -47,9 +68,17 @@ func NewHTTPMediaMTXClient(baseURL, user, pass string) *HTTPMediaMTXClient {
 	}
 }
 
+// mediamtxPathBody mirrors the JSON MediaMTX expects in its path config API.
+// omitempty on the record-related fields means we only send them when enabled,
+// letting MediaMTX apply its default (usually disabled) otherwise.
 type mediamtxPathBody struct {
-	Source         string `json:"source"`
-	SourceOnDemand bool   `json:"sourceOnDemand"`
+	Source                string `json:"source"`
+	SourceOnDemand        bool   `json:"sourceOnDemand"`
+	Record                bool   `json:"record,omitempty"`
+	RecordFormat          string `json:"recordFormat,omitempty"`
+	RecordPath            string `json:"recordPath,omitempty"`
+	RecordSegmentDuration string `json:"recordSegmentDuration,omitempty"`
+	RecordDeleteAfter     string `json:"recordDeleteAfter,omitempty"`
 }
 
 // UpsertPath creates or updates a path configuration on MediaMTX.
@@ -57,8 +86,13 @@ type mediamtxPathBody struct {
 // falls back to PATCH /v3/config/paths/patch/{name}.
 func (c *HTTPMediaMTXClient) UpsertPath(ctx context.Context, name string, cfg PathConfig) error {
 	body, err := json.Marshal(mediamtxPathBody{
-		Source:         cfg.Source,
-		SourceOnDemand: cfg.SourceOnDemand,
+		Source:                cfg.Source,
+		SourceOnDemand:        cfg.SourceOnDemand,
+		Record:                cfg.Record,
+		RecordFormat:          cfg.RecordFormat,
+		RecordPath:            cfg.RecordPath,
+		RecordSegmentDuration: cfg.RecordSegmentDuration,
+		RecordDeleteAfter:     cfg.RecordDeleteAfter,
 	})
 	if err != nil {
 		return fmt.Errorf("mediamtx: marshal path config: %w", err)
@@ -174,6 +208,46 @@ func (c *HTTPMediaMTXClient) PathExists(ctx context.Context, name string) (bool,
 	return true, nil
 }
 
+// ListPaths fetches the runtime status of all paths from MediaMTX.
+// Uses GET /v3/paths/list (paginated; we fetch with a large page size since
+// path counts in practice are small).
+func (c *HTTPMediaMTXClient) ListPaths(ctx context.Context) ([]MediaMTXPathStatus, error) {
+	url := fmt.Sprintf("%s/v3/paths/list?itemsPerPage=1000", c.baseURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("mediamtx: create list request: %w", err)
+	}
+	if c.user != "" {
+		req.SetBasicAuth(c.user, c.pass)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("mediamtx: list paths: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("mediamtx: list paths returned status %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Items []struct {
+			Name  string `json:"name"`
+			Ready bool   `json:"ready"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return nil, fmt.Errorf("mediamtx: decode list response: %w", err)
+	}
+
+	out := make([]MediaMTXPathStatus, 0, len(body.Items))
+	for _, it := range body.Items {
+		out = append(out, MediaMTXPathStatus{Name: it.Name, Ready: it.Ready})
+	}
+	return out, nil
+}
+
 // NoopMediaMTXClient is a no-op implementation for tests and dev environments
 // where MediaMTX is not available. It logs and returns nil for all operations.
 type NoopMediaMTXClient struct{}
@@ -191,4 +265,8 @@ func (NoopMediaMTXClient) DeletePath(ctx context.Context, name string) error {
 func (NoopMediaMTXClient) PathExists(ctx context.Context, name string) (bool, error) {
 	slog.Debug("mediamtx noop: PathExists", "name", name)
 	return true, nil
+}
+
+func (NoopMediaMTXClient) ListPaths(ctx context.Context) ([]MediaMTXPathStatus, error) {
+	return nil, nil
 }

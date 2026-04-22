@@ -59,10 +59,47 @@ type EventClip struct {
 	AccessEventID *string    `json:"access_event_id,omitempty"`
 	StartedAt     time.Time  `json:"started_at"`
 	EndedAt       *time.Time `json:"ended_at,omitempty"`
+	EndAt         *time.Time `json:"end_at,omitempty"` // coalescing deadline
 	DurationMs    *int       `json:"duration_ms,omitempty"`
 	ObjectKey     string     `json:"object_key"`
-	Trigger       string     `json:"trigger"` // 'access_event' | 'manual' | 'api'
+	ThumbnailRef  *string    `json:"thumbnail_ref,omitempty"` // JPG preview for media_type=clip rows
+	MediaType     string     `json:"media_type"`              // 'clip' | 'snapshot'
+	Status        string     `json:"status"`                  // pending | recording | finalized | degraded | failed
+	Trigger       string     `json:"trigger"`                 // 'access_event' | 'manual' | 'api'
+	RuleID        *string    `json:"rule_id,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
+}
+
+// EventRule is a tenant-configurable directive for capturing media on an
+// access event. See migration 000048 for scope precedence semantics.
+type EventRule struct {
+	ID              string    `json:"id"`
+	TenantID        string    `json:"tenant_id"`
+	ScopeKind       string    `json:"scope_kind"` // 'tenant' | 'access_point' | 'camera'
+	AccessPointID   *string   `json:"access_point_id,omitempty"`
+	CameraDeviceID  *string   `json:"camera_device_id,omitempty"`
+	Decisions       []string  `json:"decisions"`   // empty = match any
+	EventTypes      []string  `json:"event_types"` // empty = match any
+	SnapshotEnabled bool      `json:"snapshot_enabled"`
+	RecordEnabled   bool      `json:"record_enabled"`
+	PreRollSec      int       `json:"pre_roll_sec"`
+	PostRollSec     int       `json:"post_roll_sec"`
+	Priority        int       `json:"priority"`
+	Enabled         bool      `json:"enabled"`
+	Notes           *string   `json:"notes,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// EffectiveRule is the resolver's output — the concrete decision applied to
+// an event. Derived either from a matching EventRule row or from the tenant
+// defaults in dm3_cctv.cctv_settings when nothing matched.
+type EffectiveRule struct {
+	SnapshotEnabled bool
+	RecordEnabled   bool
+	PreRollSec      int
+	PostRollSec     int
+	RuleID          *string // nil when derived from settings fallback
 }
 
 // CCTVSettings stores per-tenant CCTV configuration.
@@ -79,8 +116,16 @@ type CCTVSettings struct {
 	PreRollSecDefault  int       `json:"pre_roll_sec_default"`
 	PostRollSecDefault int       `json:"post_roll_sec_default"`
 	StorageQuotaGB     int       `json:"storage_quota_gb"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+
+	// ─── Event capture rework (migration 000048) ──────────────────────────
+	RollingBufferSec         int  `json:"rolling_buffer_sec"`
+	MaxClipDurationSec       int  `json:"max_clip_duration_sec"`
+	MaxConcurrentExtractions int  `json:"max_concurrent_extractions"`
+	DefaultSnapshotEnabled   bool `json:"default_snapshot_enabled"`
+	DefaultRecordEnabled     bool `json:"default_record_enabled"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 
 	// ─── Hanet integration (2026-04) ────────────────────────────────────────
 	HanetClientID     string `json:"hanet_client_id"`

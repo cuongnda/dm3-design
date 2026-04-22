@@ -49,6 +49,13 @@ func (h *CCTVHandlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		PostRollSecDefault *int `json:"post_roll_sec_default"`
 		StorageQuotaGB     *int `json:"storage_quota_gb"`
 
+		// Event capture knobs — migration 000048
+		RollingBufferSec         *int  `json:"rolling_buffer_sec"`
+		MaxClipDurationSec       *int  `json:"max_clip_duration_sec"`
+		MaxConcurrentExtractions *int  `json:"max_concurrent_extractions"`
+		DefaultSnapshotEnabled   *bool `json:"default_snapshot_enabled"`
+		DefaultRecordEnabled     *bool `json:"default_record_enabled"`
+
 		HanetClientID     *string `json:"hanet_client_id"`
 		HanetClientSecret *string `json:"hanet_client_secret"`
 		HanetAccessToken  *string `json:"hanet_access_token"`
@@ -67,6 +74,18 @@ func (h *CCTVHandlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.PostRollSecDefault != nil && (*req.PostRollSecDefault < 0 || *req.PostRollSecDefault > 120) {
 		httputil.Error(w, http.StatusBadRequest, "post_roll_sec_default must be between 0 and 120")
+		return
+	}
+	if req.RollingBufferSec != nil && (*req.RollingBufferSec < 0 || *req.RollingBufferSec > 300) {
+		httputil.Error(w, http.StatusBadRequest, "rolling_buffer_sec must be between 0 and 300")
+		return
+	}
+	if req.MaxClipDurationSec != nil && (*req.MaxClipDurationSec < 30 || *req.MaxClipDurationSec > 3600) {
+		httputil.Error(w, http.StatusBadRequest, "max_clip_duration_sec must be between 30 and 3600")
+		return
+	}
+	if req.MaxConcurrentExtractions != nil && (*req.MaxConcurrentExtractions < 1 || *req.MaxConcurrentExtractions > 64) {
+		httputil.Error(w, http.StatusBadRequest, "max_concurrent_extractions must be between 1 and 64")
 		return
 	}
 	if req.HanetServerURL != nil {
@@ -159,24 +178,31 @@ func (h *CCTVHandlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 	_, err = h.db.Pool.Exec(r.Context(), `
 		UPDATE dm3_cctv.cctv_settings SET
-			retention_days         = COALESCE($2, retention_days),
-			retention_days_max     = COALESCE($3, retention_days_max),
-			pre_roll_sec_default   = COALESCE($4, pre_roll_sec_default),
-			post_roll_sec_default  = COALESCE($5, post_roll_sec_default),
-			storage_quota_gb       = COALESCE($6, storage_quota_gb),
-			hanet_client_id        = COALESCE($7, hanet_client_id),
-			hanet_server_url       = COALESCE($8, hanet_server_url),
-			hanet_place_id         = COALESCE($9, hanet_place_id),
-			hanet_client_secret_enc = CASE WHEN $13 THEN NULL  ELSE COALESCE($10, hanet_client_secret_enc) END,
-			hanet_access_token_enc  = CASE WHEN $14 THEN NULL  ELSE COALESCE($11, hanet_access_token_enc)  END,
-			hanet_refresh_token_enc = CASE WHEN $15 THEN NULL  ELSE COALESCE($12, hanet_refresh_token_enc) END,
-			updated_at             = now()
+			retention_days              = COALESCE($2, retention_days),
+			retention_days_max          = COALESCE($3, retention_days_max),
+			pre_roll_sec_default        = COALESCE($4, pre_roll_sec_default),
+			post_roll_sec_default       = COALESCE($5, post_roll_sec_default),
+			storage_quota_gb            = COALESCE($6, storage_quota_gb),
+			hanet_client_id             = COALESCE($7, hanet_client_id),
+			hanet_server_url            = COALESCE($8, hanet_server_url),
+			hanet_place_id              = COALESCE($9, hanet_place_id),
+			hanet_client_secret_enc     = CASE WHEN $13 THEN NULL ELSE COALESCE($10, hanet_client_secret_enc) END,
+			hanet_access_token_enc      = CASE WHEN $14 THEN NULL ELSE COALESCE($11, hanet_access_token_enc)  END,
+			hanet_refresh_token_enc     = CASE WHEN $15 THEN NULL ELSE COALESCE($12, hanet_refresh_token_enc) END,
+			rolling_buffer_sec          = COALESCE($16, rolling_buffer_sec),
+			max_clip_duration_sec       = COALESCE($17, max_clip_duration_sec),
+			max_concurrent_extractions  = COALESCE($18, max_concurrent_extractions),
+			default_snapshot_enabled    = COALESCE($19, default_snapshot_enabled),
+			default_record_enabled      = COALESCE($20, default_record_enabled),
+			updated_at                  = now()
 		WHERE tenant_id = $1::uuid`,
 		cid,
 		req.RetentionDays, req.RetentionDaysMax, req.PreRollSecDefault, req.PostRollSecDefault, req.StorageQuotaGB,
 		req.HanetClientID, req.HanetServerURL, req.HanetPlaceID,
 		encOrNil(clientSecretEnc), encOrNil(accessTokenEnc), encOrNil(refreshTokenEnc),
 		clearFlagSecret, clearFlagAccess, clearFlagRefresh,
+		req.RollingBufferSec, req.MaxClipDurationSec, req.MaxConcurrentExtractions,
+		req.DefaultSnapshotEnabled, req.DefaultRecordEnabled,
 	)
 	if err != nil {
 		slog.Error("update cctv settings error", "error", err)
