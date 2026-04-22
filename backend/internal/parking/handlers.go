@@ -473,6 +473,21 @@ func (h *ParkingHandlers) GetParkingZone(w http.ResponseWriter, r *http.Request)
 
 // ---- Vehicle handlers ----
 
+// ListParkingVehicles returns a paginated list of parking vehicles.
+//
+// @Summary      List parking vehicles
+// @Description  Plugin-gated (parking). Reads open to any parking-enabled user; writes require parking.vehicle.manage.
+// @Tags         Parking
+// @Produce      json
+// @Param        page          query  int     false  "Page number"     default(1)
+// @Param        limit         query  int     false  "Page size"       default(50)
+// @Param        search        query  string  false  "Partial match on plate, owner name, or phone"
+// @Param        vehicle_type  query  string  false  "Filter by vehicle type"
+// @Param        is_active     query  bool    false  "Filter by active status"
+// @Success      200  {object}  map[string]interface{}  "Paginated list"
+// @Failure      403  {object}  httputil.ErrorResponse
+// @Router       /parking/vehicles [get]
+// @Security     BearerAuth
 func (h *ParkingHandlers) ListParkingVehicles(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	if cid == "" {
@@ -576,6 +591,17 @@ func (h *ParkingHandlers) ListParkingVehicles(w http.ResponseWriter, r *http.Req
 	httputil.Paginated(w, vehicles, total, page, limit)
 }
 
+// CreateParkingVehicle registers a new vehicle.
+//
+// @Summary      Create a parking vehicle
+// @Tags         Parking
+// @Accept       json
+// @Produce      json
+// @Param        body  body   map[string]interface{}  true  "Vehicle payload (plate, owner_name, phone, vehicle_type, pass_id, etc.)"
+// @Success      201   {object}  map[string]interface{}
+// @Failure      400   {object}  httputil.ErrorResponse
+// @Router       /parking/vehicles [post]
+// @Security     BearerAuth
 func (h *ParkingHandlers) CreateParkingVehicle(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	if cid == "" {
@@ -783,6 +809,22 @@ func (h *ParkingHandlers) CreateParkingFeeRule(w http.ResponseWriter, r *http.Re
 
 // ---- Session handlers ----
 
+// ListParkingSessions returns a paginated list of parking sessions.
+//
+// @Summary      List parking sessions
+// @Description  Plugin-gated (parking). A session is an entry/exit ticket. Reads open; writes require parking.ticket.manage.
+// @Tags         Parking
+// @Produce      json
+// @Param        page    query  int     false  "Page number"  default(1)
+// @Param        limit   query  int     false  "Page size"    default(50)
+// @Param        status  query  string  false  "Filter by session status (active, exited, voided)"
+// @Param        plate   query  string  false  "Filter by vehicle plate"
+// @Param        from    query  string  false  "ISO-8601 start of entry window"
+// @Param        to      query  string  false  "ISO-8601 end of entry window"
+// @Success      200  {object}  map[string]interface{}  "Paginated list"
+// @Failure      403  {object}  httputil.ErrorResponse
+// @Router       /parking/sessions [get]
+// @Security     BearerAuth
 func (h *ParkingHandlers) ListParkingSessions(w http.ResponseWriter, r *http.Request) {
 	cid := authsvc.CompanyIDFromContext(r.Context())
 	if cid == "" {

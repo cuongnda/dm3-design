@@ -250,6 +250,18 @@ func (h *AttendanceHandlers) fetchMeLeaveRequests(
 // Ignores any caller-supplied user_id and binds to claims.Sub. Reuses the
 // shared createLeaveRequest helper so half-day and balance invariants stay
 // identical to the admin path.
+//
+// @Summary      Submit a leave request
+// @Description  Submits a leave request for the authenticated user. Any caller-supplied user_id is ignored.
+// @Tags         Attendance
+// @Accept       json
+// @Produce      json
+// @Param        body  body   map[string]interface{}  true  "Leave request (policy_id, start_date, end_date, half_day, reason)"
+// @Success      201   {object}  map[string]interface{}
+// @Failure      400   {object}  httputil.ErrorResponse
+// @Failure      401   {object}  httputil.ErrorResponse
+// @Router       /attendance/me/leave/requests [post]
+// @Security     BearerAuth
 func (h *AttendanceHandlers) CreateMeLeaveRequest(w http.ResponseWriter, r *http.Request) {
 	tenantID := authsvc.CompanyIDFromContext(r.Context())
 	claims := authsvc.ClaimsFromContext(r.Context())

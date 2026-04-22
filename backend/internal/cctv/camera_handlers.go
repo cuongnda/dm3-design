@@ -60,6 +60,19 @@ var validCameraStatuses = map[string]struct{}{
 
 // ListCameras handles GET /cameras
 // Supports: ?access_point_id=, ?status=, ?page=, ?limit=
+//
+// @Summary      List cameras
+// @Description  Plugin-gated (cctv). Reads open to any cctv-enabled user; writes require cctv.camera.manage.
+// @Tags         CCTV
+// @Produce      json
+// @Param        page              query  int     false  "Page number"  default(1)
+// @Param        limit             query  int     false  "Page size"    default(50)
+// @Param        access_point_id   query  string  false  "Filter by bound access point UUID"
+// @Param        status            query  string  false  "Filter by status (online, offline, error)"
+// @Success      200  {object}  map[string]interface{}  "Paginated list"
+// @Failure      403  {object}  httputil.ErrorResponse
+// @Router       /cctv/cameras [get]
+// @Security     BearerAuth
 func (h *CCTVHandlers) ListCameras(w http.ResponseWriter, r *http.Request) {
 	cid := h.getTenantID(r)
 	if !requireTenant(w, cid) {
@@ -155,6 +168,15 @@ func (h *CCTVHandlers) ListCameras(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetCamera handles GET /cameras/{id}
+//
+// @Summary      Get a camera
+// @Tags         CCTV
+// @Produce      json
+// @Param        id   path   string  true  "Camera UUID"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      404  {object}  httputil.ErrorResponse
+// @Router       /cctv/cameras/{id} [get]
+// @Security     BearerAuth
 func (h *CCTVHandlers) GetCamera(w http.ResponseWriter, r *http.Request) {
 	cid := h.getTenantID(r)
 	if !requireTenant(w, cid) {
@@ -175,6 +197,18 @@ func (h *CCTVHandlers) GetCamera(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateCamera handles POST /cameras
+//
+// @Summary      Create a camera
+// @Description  Registers an RTSP/WebRTC source. For Hanet integration, provide the Hanet device id instead of a raw RTSP URL.
+// @Tags         CCTV
+// @Accept       json
+// @Produce      json
+// @Param        body  body   map[string]interface{}  true  "Camera payload (name, type, rtsp_url or hanet_device_id, access_point_id, etc.)"
+// @Success      201   {object}  map[string]interface{}
+// @Failure      400   {object}  httputil.ErrorResponse
+// @Failure      403   {object}  httputil.ErrorResponse
+// @Router       /cctv/cameras [post]
+// @Security     BearerAuth
 func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 	cid := h.getTenantID(r)
 	if !requireTenant(w, cid) {

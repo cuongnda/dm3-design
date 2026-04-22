@@ -54,6 +54,17 @@ type MeAttendanceResponse struct {
 }
 
 // MeAttendance returns the authenticated user's attendance over a date window.
+//
+// @Summary      My attendance
+// @Description  Plugin-gated (attendance). Returns the caller's own attendance records over the requested window.
+// @Tags         Attendance
+// @Produce      json
+// @Param        from  query  string  false  "ISO date (YYYY-MM-DD) start of window. Defaults to first day of current month."
+// @Param        to    query  string  false  "ISO date (YYYY-MM-DD) end of window. Defaults to today."
+// @Success      200  {object}  map[string]interface{}
+// @Failure      401  {object}  httputil.ErrorResponse
+// @Router       /attendance/me/attendance [get]
+// @Security     BearerAuth
 func (h *AttendanceHandlers) MeAttendance(w http.ResponseWriter, r *http.Request) {
 	tenantID := authsvc.CompanyIDFromContext(r.Context())
 	claims := authsvc.ClaimsFromContext(r.Context())

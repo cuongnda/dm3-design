@@ -245,6 +245,98 @@ paths:
       summary: Update an access group
       tags:
       - Access
+  /attendance/holidays:
+    get:
+      description: Plugin-gated (attendance). Reads open to any attendance-enabled
+        user.
+      parameters:
+      - description: Filter by year (defaults to current year)
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List holidays
+      tags:
+      - Attendance
+  /attendance/me/attendance:
+    get:
+      description: Plugin-gated (attendance). Returns the caller's own attendance
+        records over the requested window.
+      parameters:
+      - description: ISO date (YYYY-MM-DD) start of window. Defaults to first day
+          of current month.
+        in: query
+        name: from
+        type: string
+      - description: ISO date (YYYY-MM-DD) end of window. Defaults to today.
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: My attendance
+      tags:
+      - Attendance
+  /attendance/me/leave/requests:
+    post:
+      consumes:
+      - application/json
+      description: Submits a leave request for the authenticated user. Any caller-supplied
+        user_id is ignored.
+      parameters:
+      - description: Leave request (policy_id, start_date, end_date, half_day, reason)
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Submit a leave request
+      tags:
+      - Attendance
   /audit/export:
     get:
       description: Streams matching audit log entries as CSV. Supports the same filters
@@ -450,6 +542,106 @@ paths:
       summary: List API tokens
       tags:
       - API Tokens
+  /cctv/cameras:
+    get:
+      description: Plugin-gated (cctv). Reads open to any cctv-enabled user; writes
+        require cctv.camera.manage.
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: Page size
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by bound access point UUID
+        in: query
+        name: access_point_id
+        type: string
+      - description: Filter by status (online, offline, error)
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List cameras
+      tags:
+      - CCTV
+    post:
+      consumes:
+      - application/json
+      description: Registers an RTSP/WebRTC source. For Hanet integration, provide
+        the Hanet device id instead of a raw RTSP URL.
+      parameters:
+      - description: Camera payload (name, type, rtsp_url or hanet_device_id, access_point_id,
+          etc.)
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a camera
+      tags:
+      - CCTV
+  /cctv/cameras/{id}:
+    get:
+      parameters:
+      - description: Camera UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a camera
+      tags:
+      - CCTV
   /gateway/devices:
     get:
       description: Each row includes online status, firmware version, and a comma-separated
@@ -820,6 +1012,299 @@ paths:
       summary: Update a user
       tags:
       - Identity
+  /parking/sessions:
+    get:
+      description: Plugin-gated (parking). A session is an entry/exit ticket. Reads
+        open; writes require parking.ticket.manage.
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: Page size
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by session status (active, exited, voided)
+        in: query
+        name: status
+        type: string
+      - description: Filter by vehicle plate
+        in: query
+        name: plate
+        type: string
+      - description: ISO-8601 start of entry window
+        in: query
+        name: from
+        type: string
+      - description: ISO-8601 end of entry window
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List parking sessions
+      tags:
+      - Parking
+  /parking/vehicles:
+    get:
+      description: Plugin-gated (parking). Reads open to any parking-enabled user;
+        writes require parking.vehicle.manage.
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: Page size
+        in: query
+        name: limit
+        type: integer
+      - description: Partial match on plate, owner name, or phone
+        in: query
+        name: search
+        type: string
+      - description: Filter by vehicle type
+        in: query
+        name: vehicle_type
+        type: string
+      - description: Filter by active status
+        in: query
+        name: is_active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List parking vehicles
+      tags:
+      - Parking
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Vehicle payload (plate, owner_name, phone, vehicle_type, pass_id,
+          etc.)
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a parking vehicle
+      tags:
+      - Parking
+  /visitors:
+    get:
+      description: Plugin-gated (visitor). Requires visitor.visit.manage on writes;
+        reads open to any visitor-enabled user.
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: Page size
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by visit status
+        in: query
+        name: status
+        type: string
+      - description: Filter by expected_arrival date (YYYY-MM-DD)
+        in: query
+        name: date
+        type: string
+      - description: Filter by host user UUID
+        in: query
+        name: host_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List visits
+      tags:
+      - Visitors
+    post:
+      consumes:
+      - application/json
+      description: Sends an email invitation to the visitor with a QR code if email
+        is provided. Plugin-gated (visitor), requires visitor.visit.manage.
+      parameters:
+      - description: Visit payload (first_name, last_name, email, expected_arrival,
+          host_user_id, etc.)
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a visit
+      tags:
+      - Visitors
+  /visitors/{id}:
+    get:
+      parameters:
+      - description: Visit UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a visit
+      tags:
+      - Visitors
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Visit UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a visit
+      tags:
+      - Visitors
+  /visitors/{id}/checkin:
+    post:
+      consumes:
+      - application/json
+      description: Captures arrival time and optional arrival metadata (photo, badge).
+        Transitions visit.status to checked_in.
+      parameters:
+      - description: Visit UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Optional check-in metadata
+        in: body
+        name: body
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_duali_dm3-backend_pkg_httputil.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Check in a visit
+      tags:
+      - Visitors
 securityDefinitions:
   BearerAuth:
     description: API token in the form `Bearer dm3_live_...` or `Bearer dm3_test_...`.

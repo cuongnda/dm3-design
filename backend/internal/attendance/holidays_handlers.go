@@ -23,6 +23,16 @@ type holidayPayload struct {
 
 // ListHolidays returns holidays for the caller's tenant, optionally filtered
 // by year (defaults to current year) to keep payloads small.
+//
+// @Summary      List holidays
+// @Description  Plugin-gated (attendance). Reads open to any attendance-enabled user.
+// @Tags         Attendance
+// @Produce      json
+// @Param        year  query  int  false  "Filter by year (defaults to current year)"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      401  {object}  httputil.ErrorResponse
+// @Router       /attendance/holidays [get]
+// @Security     BearerAuth
 func (h *AttendanceHandlers) ListHolidays(w http.ResponseWriter, r *http.Request) {
 	tenantID := authsvc.CompanyIDFromContext(r.Context())
 	if tenantID == "" {
