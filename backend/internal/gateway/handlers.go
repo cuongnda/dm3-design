@@ -534,7 +534,16 @@ func (h *GatewayHandlers) pushDeviceConfigJob(ctx context.Context, d models.Devi
 	}
 
 	topic := fmt.Sprintf("dm/%s/device/%s/cfg", d.TenantID, d.DeviceID)
-	if err := h.mqtt.Publish(ctx, topic, 2, envBytes); err != nil {
+	// Retain=true so the broker keeps the latest cfg.device_update per
+	// device-cfg topic. Without retain, a change applied while the device
+	// is offline gets silently dropped — the device never sees it even
+	// after reconnecting. This is how the reported timezone-change-not-
+	// reaching-device bug manifested: admin edits while the terminal is
+	// briefly offline → MQTT fan-out finds no subscribers → message is
+	// gone → terminal comes back and keeps using the old timezone until
+	// the next edit (or manual "Transmit data"). One subscriber per cfg
+	// topic (the device itself) means retained has no fan-out concern.
+	if err := h.mqtt.PublishRetained(ctx, topic, 2, envBytes); err != nil {
 		slog.Error("pushDeviceConfig: mqtt publish failed",
 			"error", err, "topic", topic, "device_id", d.DeviceID)
 		return
