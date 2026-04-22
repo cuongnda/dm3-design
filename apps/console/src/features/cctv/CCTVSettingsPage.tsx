@@ -268,30 +268,34 @@ export function CCTVSettingsPage() {
                 </Button>
               </div>
               {settings?.has_hanet_access_token ? (
+                // Children must be a flat list of <SelectOption>. Don't wrap
+                // the populated branch in a Fragment — @dm3/ui's Select uses
+                // React.Children.toArray, which keeps Fragments as a single
+                // element and then concatenates all inner labels into one
+                // option (the "all 8 places merged into 1 row" bug).
                 <Select
                   value={form.hanet_place_id ?? ''}
                   onValueChange={(v) => update('hanet_place_id', v)}
                   data-testid="cctv-select-hanet-place"
                   disabled={places.length === 0}
                 >
-                  {places.length === 0 ? (
+                  {places.length === 0 && (
                     <SelectOption value="">
                       {placesQuery.isFetching
                         ? t('cctv.settings.hanetPlacesLoading', 'Loading places…')
                         : t('cctv.settings.hanetPlacesEmpty', 'No places returned by Hanet')}
                     </SelectOption>
-                  ) : (
-                    <>
-                      <SelectOption value="">
-                        {t('cctv.settings.hanetPlacesChoose', '— select a place —')}
-                      </SelectOption>
-                      {places.map((p) => (
-                        <SelectOption key={p.id} value={p.id}>
-                          {p.name} ({p.id})
-                        </SelectOption>
-                      ))}
-                    </>
                   )}
+                  {places.length > 0 && (
+                    <SelectOption value="">
+                      {t('cctv.settings.hanetPlacesChoose', '— select a place —')}
+                    </SelectOption>
+                  )}
+                  {places.map((p) => (
+                    <SelectOption key={p.id} value={p.id}>
+                      {p.name} ({p.id})
+                    </SelectOption>
+                  ))}
                 </Select>
               ) : (
                 <p className="text-[11px] text-muted-foreground italic">
