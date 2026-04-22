@@ -444,7 +444,12 @@ func presignPhotoIfMinIOKey(ctx context.Context, presigner objectstore.GetURLPre
 	if photoRef == "" || presigner == nil {
 		return ""
 	}
-	if !strings.HasPrefix(photoRef, "events/") {
+	// Accept the two tenant-scoped MinIO prefixes we emit today:
+	//   events/       — terminal / generic device media (MQTT §15 flow)
+	//   cctv-faces/   — TungSon VIID face captures (internal/cctv/tungson_handlers.go)
+	// Legacy "/photos/..." avatar refs still fall through to assetUrl() on the
+	// client, so the page never blanks when a photo can't be presigned.
+	if !strings.HasPrefix(photoRef, "events/") && !strings.HasPrefix(photoRef, "cctv-faces/") {
 		return ""
 	}
 	u, err := presigner.PresignedGetURL(ctx, photoRef, 5*time.Minute)
