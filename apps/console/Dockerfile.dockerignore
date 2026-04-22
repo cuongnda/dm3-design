@@ -1,0 +1,17 @@
+# Dockerfile-specific ignore for apps/console/Dockerfile.
+# Inherits root .dockerignore patterns; adds things only the frontend can skip.
+
+.git
+.gitignore
+.gitattributes
+
+# Backend is never consumed by the console build
+backend
+simulator
+automation
+deploy
+scripts
+
+# Apps we don't build here
+packages/*/dist
+packages/*/build

@@ -1,3 +1,13 @@
+# ── Shared build config ─────────────────────────────────────────────────────
+# All backend services share a single Dockerfile and produce a single image.
+# Declaring one named image lets Compose build once and reuse it across all
+# 10 services instead of rebuilding the identical artifact per service.
+x-backend-build: &backend-build
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  image: dm3-backend:local
+
 services:
   # ── Infrastructure ─────────────────────────────────────────────────────────
 
@@ -97,9 +107,7 @@ services:
   # ── Migration (init container — runs once then exits) ──────────────────────
 
   migrate:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    <<: *backend-build
     container_name: dm3-migrate
     environment:
       SERVICE_NAME: migrate
@@ -114,9 +122,7 @@ services:
   # ── Backend services ───────────────────────────────────────────────────────
 
   auth-svc:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    <<: *backend-build
     container_name: dm3-auth-svc
     restart: unless-stopped
     environment:
@@ -147,9 +153,7 @@ services:
       retries: 5
 
   identity-svc:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    <<: *backend-build
     container_name: dm3-identity-svc
     restart: unless-stopped
     environment:
@@ -189,9 +193,7 @@ services:
       retries: 5
 
   access-svc:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    <<: *backend-build
     container_name: dm3-access-svc
     restart: unless-stopped
     environment:
@@ -215,9 +217,7 @@ services:
       retries: 5
 
   audit-svc:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    <<: *backend-build
     container_name: dm3-audit-svc
     restart: unless-stopped
     environment:
@@ -240,9 +240,7 @@ services:
       retries: 5
 
   device-gateway:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    <<: *backend-build
     container_name: dm3-device-gateway
     restart: unless-stopped
     environment:
@@ -277,9 +275,7 @@ services:
       retries: 5
 
   visitor-svc:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    <<: *backend-build
     container_name: dm3-visitor-svc
     restart: unless-stopped
     environment:
@@ -303,9 +299,7 @@ services:
       retries: 5
 
   parking-svc:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    <<: *backend-build
     container_name: dm3-parking-svc
     restart: unless-stopped
     environment:
@@ -329,9 +323,7 @@ services:
       retries: 5
 
   attend-svc:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    <<: *backend-build
     container_name: dm3-attend-svc
     restart: unless-stopped
     environment:
@@ -390,9 +382,7 @@ services:
     # against the :9997 API instead of a docker healthcheck.
 
   cctv-svc:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    <<: *backend-build
     container_name: dm3-cctv-svc
     restart: unless-stopped
     environment:
@@ -438,6 +428,7 @@ services:
     build:
       context: .
       dockerfile: apps/console/Dockerfile
+    image: dm3-webapp:local
     container_name: dm3-webapp
     restart: unless-stopped
     environment:
@@ -505,6 +496,7 @@ services:
     build:
       context: ./simulator
       dockerfile: Dockerfile
+    image: dm3-simulator:local
     container_name: dm3-simulator
     restart: unless-stopped
     environment:
@@ -531,6 +523,7 @@ services:
     build:
       context: .
       dockerfile: automation/Dockerfile
+    image: dm3-automation:local
     container_name: dm3-automation
     restart: unless-stopped
     environment:
