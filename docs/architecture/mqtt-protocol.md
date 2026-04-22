@@ -1,8 +1,9 @@
 # Duall Master 3.0 — MQTT Protocol Specification
 
 > IoT Device ↔ Server Communication Protocol
-> Version: 1.7 | Updated: 2026-04-21
+> Version: 1.8 | Updated: 2026-04-22
 > Changelog:
+> - v1.8 — `cfg.person_sync` entries now carry `user_code` alongside `user_id`. Face-enrol terminals (df970/ba8300/bd8500/ra08/dq200) need this to build `credential_value: "M_<user_code>"` on their `evt.face_result` ack — without it the server could never flip the M_ credential to `active`.
 > - v1.7 — Credential objects in `cfg.person_sync` now emit a **stable shape**: every entry carries the same keys (`uid`, `template`, `code`, `version`, `finger`) regardless of `type`, with unused fields sent as empty strings. Lets firmware parse with one schema instead of branching on which JSON key is present.
 > - v1.6 — §7.9 added: `cfg.kiosk_config` pushes `{api_base_url, company_code, kiosk_token}` to DM3-provisioned LPR kiosks so the `/register-visit` bearer is distributed by Transmit Data rather than manually pasted. Every push rotates the token.
 > - v1.5 — Kiosk walk-in registration adapter (`POST /register-visit` on visitor-svc, auth: kiosk bearer token) now lands license plates in `dm3_parking.parking_vehicles` per the existing parking plugin contract — **not** in `dm3_identity.credentials`. No new credential `type` value is added; vehicle access goes through the parking plugin's LPR event path (`matched_by='plate'`), door access continues to go through `cfg.visitor_sync`.
@@ -980,6 +981,7 @@ For offline/hybrid mode — push user credentials to device local storage.
     "users": [
       {
         "user_id": "user-uuid",
+        "user_code": "000042",
         "name": "Nguyễn Văn A",
         "avatar": "https://minio.public.example.com/dm3/tenants/{tid}/identity/users/{uid}/avatar.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600&X-Amz-Signature=...",
         "credentials": [

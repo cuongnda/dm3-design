@@ -28,7 +28,13 @@ func NewPersonSyncer(database *db.DB, mqttClient *mqtt.Client) *PersonSyncer {
 
 // syncPersonUser is a user in the person_sync payload (matches MQTT spec §7.3).
 type syncPersonUser struct {
-	UserID      string           `json:"user_id"`
+	UserID string `json:"user_id"`
+	// UserCode is the short per-tenant identifier from dm3_identity.users.user_code.
+	// Required by face-enrol terminals (df970/ba8300/bd8500/ra08/dq200) so
+	// they can build `credential_value: "M_<user_code>"` for the evt.face_result
+	// ack — without it the server can never flip the M_ credential from
+	// 'invalid' to 'active' and the face template never lands on the device.
+	UserCode    string           `json:"user_code"`
 	Name        string           `json:"name"`
 	Avatar      string           `json:"avatar,omitempty"` // public path (e.g. /photos/tenants/.../avatar.jpg); empty if unset
 	Credentials []syncPersonCred `json:"credentials"`
@@ -116,7 +122,8 @@ func (s *PersonSyncer) PushPersonSyncJob(ctx context.Context, tenantID, deviceID
 	// We use the same join semantics as PushAccessRules to stay consistent
 	// (apd.access_device_id is text storing dm3_devices.devices.id::text).
 	userRows, err := s.db.Pool.Query(ctx, `
-		SELECT u.id, CONCAT(u.first_name, ' ', u.last_name),
+		SELECT u.id, COALESCE(u.user_code, ''),
+		       CONCAT(u.first_name, ' ', u.last_name),
 		       COALESCE(u.avatar, ''),
 		       u.effective_date, u.expired_date
 		FROM dm3_identity.users u
@@ -146,6 +153,7 @@ func (s *PersonSyncer) PushPersonSyncJob(ctx context.Context, tenantID, deviceID
 
 	type userRow struct {
 		ID         string
+		UserCode   string
 		Name       string
 		Avatar     string
 		ValidFrom  *time.Time
@@ -154,7 +162,7 @@ func (s *PersonSyncer) PushPersonSyncJob(ctx context.Context, tenantID, deviceID
 	var users []userRow
 	for userRows.Next() {
 		var u userRow
-		if err := userRows.Scan(&u.ID, &u.Name, &u.Avatar, &u.ValidFrom, &u.ValidUntil); err != nil {
+		if err := userRows.Scan(&u.ID, &u.UserCode, &u.Name, &u.Avatar, &u.ValidFrom, &u.ValidUntil); err != nil {
 			slog.Warn("person_sync: scan user", "error", err)
 			continue
 		}
@@ -296,6 +304,7 @@ func (s *PersonSyncer) PushPersonSyncJob(ctx context.Context, tenantID, deviceID
 	for _, u := range users {
 		su := syncPersonUser{
 			UserID:      u.ID,
+			UserCode:    u.UserCode,
 			Name:        u.Name,
 			Avatar:      presignIdentityAsset(ctx, s.assetPresigner, u.Avatar),
 			Credentials: credsByUser[u.ID],
