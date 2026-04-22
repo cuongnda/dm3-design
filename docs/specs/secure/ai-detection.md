@@ -5,7 +5,14 @@
 
 ## Overview
 
-AI Detection provides intelligent video analytics by processing camera feeds through on-premise ML models. It detects security-relevant events — intrusion, loitering, tailgating, abandoned objects, crowd formation, face recognition, license plate recognition, and behavioral anomalies. Events are classified, scored by confidence, and routed to operators for review. False positive handling is a core workflow: operators can mark events as false positives to improve future detection quality. The system runs on-premise using ONNX Runtime / YOLO models via `vision-svc` (Python/FastAPI), consuming RTSP sub-streams from go2rtc.
+AI Detection provides intelligent video analytics through a **hybrid provider architecture** that supports three execution modes: **camera-native AI**, **edge AI**, and **central AI**. It detects security-relevant events — intrusion, loitering, tailgating, abandoned objects, crowd formation, face recognition, license plate recognition, people counting, line crossing, wrong-direction movement, and behavioral anomalies. Events are classified, scored by confidence, normalized into a common DM3 event schema, and routed to operators for review. False positive handling is a core workflow: operators can mark events as false positives to improve future detection quality.
+
+The base architecture must support mixed real-world deployments where some cameras have built-in AI and others do not. DM3 therefore owns the **event model, rule model, and review workflow**, while inference can happen in one of three places:
+- **Camera-native AI:** camera or NVR generates analytics events directly
+- **Edge AI:** a local box such as Jetson or x86 edge gateway analyzes nearby RTSP streams
+- **Central AI:** `vision-svc` (Python/FastAPI) processes RTSP sub-streams from go2rtc using ONNX Runtime / YOLO models
+
+This avoids hard-coupling the product to a single AI engine or camera vendor.
 
 ## Data Models
 
@@ -18,6 +25,9 @@ AI Detection provides intelligent video analytics by processing camera feeds thr
 | camera_id | uuid | yes | - | Source camera |
 | camera_name | string(100) | no | null | Denormalized |
 | location | string(200) | no | null | Denormalized from camera |
+| provider_type | AIProviderTypeEnum | yes | central_ai | camera_native / edge_ai / central_ai |
+| provider_id | string(100) | no | null | Provider instance identifier (camera model, edge node, vision-svc worker) |
+| source_event_id | string(200) | no | null | Upstream event ID from camera/NVR/edge engine |
 | detection_type | DetectionTypeEnum | yes | - | Event classification |
 | detection_subtype | string(50) | no | null | Specific sub-category |
 | severity | DetectionSeverityEnum | yes | medium | Severity assessment |
@@ -31,6 +41,11 @@ AI Detection provides intelligent video analytics by processing camera feeds thr
 | plate_number | string(20) | no | null | Detected license plate |
 | object_class | string(50) | no | null | Detected object class (YOLO) |
 | object_count | int | no | null | Count for crowd/people counting |
+| line_id | string(100) | no | null | Logical line definition for line-crossing / direction rules |
+| zone_id | uuid | no | null | Logical zone/ROI that triggered the event |
+| direction | string(50) | no | null | in / out / left_to_right / right_to_left / toward / away |
+| track_id | string(100) | no | null | Stable track identifier when provider supports tracking |
+| count_delta | int | no | null | Delta value for counting events (+1, -1) |
 | false_positive | boolean | yes | false | Marked as false positive |
 | false_positive_by | uuid | no | null | User who marked FP |
 | false_positive_at | timestamp | no | null | When marked FP |
@@ -40,9 +55,10 @@ AI Detection provides intelligent video analytics by processing camera feeds thr
 | action_taken | string(200) | no | null | What action was taken |
 | linked_alarm_id | uuid | no | null | Created intrusion alarm |
 | linked_access_event_id | uuid | no | null | Related access event |
-| model_id | string(50) | no | null | ML model identifier + version |
-| inference_time_ms | int | no | null | ML inference time |
-| metadata | jsonb | no | {} | Extra data (tracking ID, trajectory, etc.) |
+| model_id | string(50) | no | null | ML model identifier + version, if inference-based |
+| inference_time_ms | int | no | null | ML inference time, if available |
+| raw_payload | jsonb | no | {} | Original vendor/provider payload for debugging and traceability |
+| metadata | jsonb | no | {} | Extra normalized data (trajectory, dwell_time_ms, provider stats, etc.) |
 
 ### AIDetectionRule
 | Field | Type | Required | Default | Description |
@@ -53,9 +69,11 @@ AI Detection provides intelligent video analytics by processing camera feeds thr
 | name | string(100) | yes | - | e.g. "Phát hiện xâm nhập - Hàng rào" |
 | detection_type | DetectionTypeEnum | yes | - | What to detect |
 | camera_ids | uuid[] | yes | - | Which cameras to analyze |
+| execution_mode | RuleExecutionModeEnum | yes | native_first | native_first / edge_only / central_only / hybrid |
 | enabled | boolean | yes | true | Active toggle |
 | confidence_threshold | float | yes | 0.70 | Min confidence to report |
 | roi_zones | jsonb | no | null | Regions of interest `[{points: [{x,y}...], name: "zone1"}]` |
+| line_definitions | jsonb | no | null | Logical line config for line crossing / wrong direction |
 | schedule_id | uuid | no | null | Only active during schedule |
 | cooldown_ms | int | yes | 60000 | Min time between same-type events for same camera |
 | severity_override | DetectionSeverityEnum | no | null | Override default severity |
@@ -65,9 +83,30 @@ AI Detection provides intelligent video analytics by processing camera feeds thr
 | notify_users | uuid[] | no | [] | Specific users to notify |
 | loitering_threshold_ms | int | no | 300000 | For loitering: time before trigger (5 min default) |
 | crowd_threshold_count | int | no | 10 | For crowd: min people count |
+| direction_mode | string(50) | no | null | Allowed direction config for wrong-direction and line-crossing rules |
 | metadata | jsonb | no | {} | Extra type-specific config |
 | created_at | timestamp | yes | now() | Creation time |
 | updated_at | timestamp | yes | now() | Last update |
+
+### AICameraCapability
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| camera_id | uuid | yes | - | Camera reference |
+| native_motion | boolean | yes | false | Camera/NVR can emit motion events |
+| native_person_detection | boolean | yes | false | Built-in person detection |
+| native_people_count | boolean | yes | false | Built-in people counting |
+| native_line_crossing | boolean | yes | false | Built-in line-crossing analytics |
+| native_wrong_direction | boolean | yes | false | Built-in direction analytics |
+| native_face_recognition | boolean | yes | false | Built-in face recognition |
+| native_plate_recognition | boolean | yes | false | Built-in LPR |
+| rtsp_available | boolean | yes | true | RTSP available for external inference |
+| onvif_events | boolean | yes | false | Supports ONVIF analytics/event feed |
+| webhook_events | boolean | yes | false | Supports vendor webhook / push event delivery |
+| edge_ai_supported | boolean | yes | true | Camera can be assigned to edge AI node |
+| central_ai_supported | boolean | yes | true | Camera can be assigned to central AI |
+| preferred_mode | RuleExecutionModeEnum | yes | native_first | Default execution preference |
+| last_verified_at | timestamp | no | null | Last capability probe |
+| metadata | jsonb | no | {} | Vendor-specific capability detail |
 
 ### AIModel
 | Field | Type | Required | Default | Description |
@@ -87,9 +126,11 @@ AI Detection provides intelligent video analytics by processing camera feeds thr
 
 ### Enums
 ```
-DetectionTypeEnum: intrusion | loitering | tailgating | abandoned_object | crowd | face_match | face_unknown | plate_recognized | plate_unknown | fighting | running | falling | fire_smoke | uniform | helmet | object_removed | perimeter_breach
+DetectionTypeEnum: intrusion | loitering | tailgating | abandoned_object | crowd | people_count | line_crossing | wrong_direction | face_match | face_unknown | plate_recognized | plate_unknown | fighting | running | falling | fire_smoke | smoking | uniform | helmet | object_removed | perimeter_breach
 DetectionSeverityEnum: critical | high | medium | low | info
-AIModelTypeEnum: object_detection | face_recognition | plate_recognition | pose_estimation | anomaly_detection
+AIProviderTypeEnum: camera_native | edge_ai | central_ai
+RuleExecutionModeEnum: native_first | edge_only | central_only | hybrid
+AIModelTypeEnum: object_detection | face_recognition | plate_recognition | pose_estimation | anomaly_detection | tracking
 AIModelStatusEnum: active | inactive | loading | error
 ```
 
@@ -191,7 +232,7 @@ AIModelStatusEnum: active | inactive | loading | error
     "notify_roles": ["guard"]
   }
   ```
-- **Side effects:** Audit log, vision-svc pipeline reconfiguration
+- **Side effects:** Audit log, provider routing update, and reconfiguration of the selected execution target (`vision-svc`, edge node, or native event adapter)
 - **Response 201:** Created rule
 
 ### PUT /api/v1/ai/rules/{id}
@@ -240,15 +281,17 @@ AIModelStatusEnum: active | inactive | loading | error
 
 | Topic | Direction | QoS | Payload Schema | Description |
 |-------|-----------|-----|----------------|-------------|
-| N/A — vision-svc uses NATS internally | internal | - | - | AI events are published via NATS `ai.detection.*`, not MQTT |
+| N/A — AI events are normalized server-side and published via NATS | internal | - | - | Native camera, edge AI, and central AI all converge into the same DM3 event bus |
 
 **NATS Subjects (internal):**
 | Subject | Direction | Description |
 |---------|-----------|-------------|
-| `ai.detection.event` | vision-svc → alert-svc | New AI detection event |
-| `ai.detection.face_match` | vision-svc → access-svc | Face recognized in video feed |
-| `ai.detection.plate` | vision-svc → parking-svc | License plate detected |
-| `ai.detection.rule_config` | access-svc → vision-svc | Detection rule configuration update |
+| `ai.detection.raw` | native adapter / edge node / vision-svc → ai pipeline | Raw provider event before normalization |
+| `ai.detection.event` | ai pipeline → alert-svc and consumers | New normalized AI detection event |
+| `ai.detection.face_match` | ai pipeline → access-svc | Face recognized in video feed |
+| `ai.detection.plate` | ai pipeline → parking-svc | License plate detected |
+| `ai.detection.rule_config` | access-svc → providers | Detection rule configuration update |
+| `ai.detection.provider.heartbeat` | edge node / adapter / vision-svc → platform | Provider/node health status |
 
 ## Business Rules
 
@@ -258,6 +301,10 @@ AIModelStatusEnum: active | inactive | loading | error
 4. **BR-AI-004 — Auto-Alarm Creation:** When `auto_create_alarm=true` on a rule, and confidence >= threshold, an AlarmEvent is automatically created in the intrusion detection system with the appropriate zone and severity.
 5. **BR-AI-005 — Auto-Clip Extraction:** When `auto_extract_clip=true`, a 30-second video clip (15s before, 15s after detection) is automatically extracted and linked to the event.
 6. **BR-AI-006 — ROI Zones:** Detection rules can define regions of interest within the camera frame. Only objects/events within ROI trigger alerts. Objects outside ROI are ignored. Useful for excluding roads, trees, etc.
+7. **BR-AI-007 — Hybrid Provider Routing:** DM3 chooses execution based on camera capability and rule `execution_mode`. `native_first` prefers camera/NVR-generated analytics when supported, otherwise falls back to edge AI, then central AI.
+8. **BR-AI-008 — Provider-Agnostic Event Model:** Regardless of source, all analytics events must be normalized into `AIDetectionEvent` before entering operator workflows, alerting, reporting, or automation.
+9. **BR-AI-009 — Deduplication Across Providers:** When native AI and external AI can both emit equivalent events for the same camera/time window, DM3 deduplicates by camera, detection type, time proximity, and track/zone metadata to avoid duplicate alerts.
+10. **BR-AI-010 — Graceful Degradation:** If edge AI node is offline or overloaded, eligible cameras may fail over to central AI. If central AI is unavailable, native camera/NVR events continue to be accepted when supported.
 7. **BR-AI-007 — Schedule-Based Detection:** Rules with `schedule_id` only run during scheduled periods. e.g., loitering detection only active after business hours. Reduces false positives during busy periods.
 8. **BR-AI-008 — Loitering Duration:** Loitering detection requires a user to remain in the ROI for `loitering_threshold_ms` (default 5 min). Tracking persists across frames. User leaving and returning resets the timer.
 9. **BR-AI-009 — Crowd Counting Threshold:** Crowd events trigger when user count in ROI exceeds `crowd_threshold_count`. The `object_count` field stores the actual count.
@@ -285,12 +332,12 @@ AIModelStatusEnum: active | inactive | loading | error
 
 ## Offline Behavior
 
-- **Device-side:** AI Detection runs server-side on `vision-svc`. There is no on-device AI processing in the base architecture. If the server (or vision-svc) is down, AI detection stops. Cameras and NVRs continue recording; AI events are simply not generated.
-- **Edge AI (future):** Phase 4 roadmap includes edge AI processing on cameras with on-board ONNX inference. When available, cameras will process locally and report events via MQTT, similar to access control's offline-first model.
-- **Sync strategy:** N/A for current architecture. AI rules are stored server-side only.
-- **Reconnection:** When vision-svc restarts, it resumes processing all configured camera feeds from current time. No historical catch-up (missed frames are missed).
-- **Local storage:** N/A. All AI processing is server-side. Events and snapshots stored in TimescaleDB and MinIO.
-- **Graceful degradation:** If GPU is unavailable, vision-svc falls back to CPU inference at reduced frame rate (1 FPS instead of 5 FPS). Critical cameras get priority.
+- **Device-side:** AI Detection supports three execution locations: camera-native AI, edge AI nodes, and central `vision-svc`. Cameras and NVRs continue recording regardless of DM3 server connectivity.
+- **Edge AI:** Edge nodes can continue local inference during upstream WAN/server interruptions, buffering events for later delivery if configured. This is especially useful for people counting, line crossing, and site-local alerting.
+- **Sync strategy:** Rules remain server-authoritative, but providers cache their assigned rules and capability state for short-term continuity.
+- **Reconnection:** When `vision-svc` or an edge node restarts, it resumes processing currently assigned camera feeds from current time. No historical catch-up unless explicitly supported by the provider.
+- **Local storage:** Native AI and edge AI providers may buffer events transiently. Canonical persisted events and snapshots still live in TimescaleDB and MinIO after normalization.
+- **Graceful degradation:** If GPU is unavailable, `vision-svc` falls back to CPU inference at reduced frame rate (1 FPS instead of 5 FPS). If edge AI node is unavailable, DM3 may reroute supported cameras to central AI. If central AI is unavailable, native camera/NVR events continue to be accepted when available.
 
 ## UI Pages
 
@@ -315,10 +362,12 @@ AIModelStatusEnum: active | inactive | loading | error
 ## Integration Points
 
 - **Depends on:**
-  - `video-svc` / go2rtc — RTSP sub-stream feed for analysis
+  - `video-svc` / go2rtc — RTSP sub-stream feed for central or edge analysis
+  - camera/NVR vendor adapters — native analytics events via ONVIF, webhook, SDK, or polling
+  - edge AI nodes — Jetson or x86 gateways for site-local inference
   - `identity-svc` — Face recognition database (face templates for known users)
   - MinIO — Snapshot and clip storage
-  - GPU hardware — NVIDIA GPU recommended for real-time inference
+  - GPU hardware — NVIDIA GPU recommended for real-time central inference
 - **Consumed by:**
   - `alarm-svc` — Auto-created intrusion alarms
   - `access-svc` — Face match → blacklist alert, VIP notification
@@ -329,11 +378,14 @@ AIModelStatusEnum: active | inactive | loading | error
 - **External:**
   - ONNX Runtime / TensorRT for model inference
   - Pre-trained models: YOLOv8 (object detection), ArcFace (face recognition), LPRNet (plate recognition)
+  - camera vendor AI event protocols (ONVIF analytics, vendor webhooks, proprietary SDKs)
 
 ## Notes
 
-- vision-svc processes camera sub-streams at 5 FPS (configurable). Main stream is too heavy for AI at scale.
-- GPU recommendation: NVIDIA RTX 3060+ for small deployments (<20 cameras), RTX 4090 / A4000 for medium (20-50), A100 for large (50+).
+- `vision-svc` processes camera sub-streams at 5 FPS by default (configurable). Main stream is too heavy for AI at scale.
+- Hybrid routing is the default architectural direction: use native camera analytics first when good enough, edge AI for site-local fallback/latency, and central AI for cameras without built-in analytics or when heavier models are needed.
+- GPU recommendation for central inference: NVIDIA RTX 3060+ for small deployments (<20 cameras), RTX 4090 / A4000 for medium (20-50), A100 for large (50+).
+- Edge AI nodes may use Jetson or x86 hardware. Typical early rollout starts with simple features such as people counting and line crossing before advanced behavior detection.
 - Face recognition requires explicit opt-in per site due to privacy regulations. PDPA/GDPR compliance required.
 - License plate format is Vietnam-specific by default (e.g., "30A-12345", "51G-123.45"). Regex patterns configurable per site.
 - False positive rate target: <15% after initial tuning period (2 weeks). Achieved through ROI tuning, schedule constraints, and confidence threshold adjustment.

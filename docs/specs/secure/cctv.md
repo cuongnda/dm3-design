@@ -5,7 +5,14 @@
 
 ## Overview
 
-The CCTV system provides unified video surveillance management across multi-brand IP cameras and NVRs. It supports live viewing (multi-camera grid with PTZ control), recorded playback with timeline search, event-linked video clips, and NVR health monitoring. Video streaming uses **go2rtc** as the RTSP→WebRTC/HLS proxy for low-latency browser viewing. Cameras are managed server-side; recording happens on NVRs. The system integrates with Access Control (event-linked clips) and AI Detection (video analytics feed).
+The CCTV system provides unified video surveillance management across multi-brand IP cameras and NVRs. It supports live viewing (multi-camera grid with PTZ control), recorded playback with timeline search, event-linked video clips, and NVR health monitoring. Video streaming uses **go2rtc** as the RTSP→WebRTC/HLS proxy for low-latency browser viewing. Cameras are managed server-side; recording happens on NVRs. The system integrates with Access Control (event-linked clips) and AI Detection.
+
+For video analytics, CCTV must support a **hybrid architecture**:
+- cameras or NVRs with built-in analytics can send native events directly
+- edge AI nodes can process site-local RTSP streams
+- central `vision-svc` can analyze RTSP sub-streams for cameras without built-in AI
+
+CCTV owns camera inventory, stream access, and capability metadata. AI Detection owns the normalized event model and detection-rule workflow.
 
 ## Data Models
 
@@ -38,7 +45,10 @@ The CCTV system provides unified video surveillance management across multi-bran
 | ptz_capable | boolean | yes | false | PTZ support |
 | audio_enabled | boolean | yes | false | Audio capture |
 | has_ir | boolean | yes | false | Infrared/night vision |
-| ai_enabled | boolean | yes | false | Feed to AI detection |
+| ai_enabled | boolean | yes | false | Analytics enabled for this camera |
+| ai_mode | AIExecutionModeEnum | yes | native_first | native_first / edge_only / central_only / hybrid / disabled |
+| native_ai_capabilities | jsonb | no | {} | Built-in analytics support (line crossing, people count, person detect, etc.) |
+| edge_node_id | uuid | no | null | Assigned edge AI node if using edge processing |
 | recording_mode | RecordingModeEnum | yes | continuous | Recording behavior |
 | retention_days | int | yes | 30 | Recording retention |
 | go2rtc_stream_id | string(100) | no | null | go2rtc stream identifier |
@@ -112,6 +122,7 @@ CameraStatusEnum: online | offline | recording | error
 NVRStatusEnum: online | offline | error | maintenance
 StorageHealthEnum: healthy | warning | critical | full
 RecordingModeEnum: continuous | motion | event | schedule | off
+AIExecutionModeEnum: native_first | edge_only | central_only | hybrid | disabled
 ClipTriggerEnum: manual | access_event | ai_event | alarm | motion
 ClipStatusEnum: pending | extracting | ready | failed | expired
 ```
@@ -347,6 +358,8 @@ ClipStatusEnum: pending | extracting | ready | failed | expired
 10. **BR-CC-010 — ONVIF Discovery:** On NVR creation, system probes ONVIF to discover connected cameras and auto-populates camera entries. Admin reviews and confirms.
 11. **BR-CC-011 — Playback Gap Detection:** When requesting playback, system reports recording gaps so the UI can display them on the timeline. Gaps are detected from NVR recording metadata.
 12. **BR-CC-012 — Camera Tamper Alert:** Camera built-in tamper detection (covered, moved, defocused) triggers immediate critical alert with snapshot.
+13. **BR-CC-013 — Capability-Aware AI Routing:** Each camera stores analytics capability metadata. When AI is enabled, DM3 routes the camera according to `ai_mode` and current capability state, preferring native analytics when configured and supported.
+14. **BR-CC-014 — Mixed Fleet Support:** DM3 must support deployments where some cameras emit native AI events and others only provide RTSP streams. CCTV inventory therefore records both stream connectivity and analytics capability.
 
 ## Permissions Matrix
 
@@ -412,9 +425,11 @@ ClipStatusEnum: pending | extracting | ready | failed | expired
   - `intercom-svc` — Door station video feed
   - `automate-svc` — Camera events trigger automation rules
   - `patrol-svc` — Guard can view cameras from mobile during patrol
+  - edge AI nodes — RTSP source, capability metadata, and camera assignment
 - **External:**
   - IP cameras (ONVIF, proprietary SDKs for Hikvision/Dahua)
   - NVRs (ONVIF, ISAPI, proprietary APIs)
+  - edge AI gateways (Jetson, x86) for local analytics processing
 
 ## Notes
 
@@ -422,4 +437,5 @@ ClipStatusEnum: pending | extracting | ready | failed | expired
 - Camera passwords should be rotated regularly. System can auto-rotate if camera supports ONVIF password change.
 - For large deployments (100+ cameras), consider multiple go2rtc instances with load balancing.
 - Sub-streams (lower resolution, ~720p) should be used for grid view and AI analytics. Main stream for single camera view and clip extraction.
+- AI architecture is hybrid by default: native analytics where available, edge AI when site-local processing is useful, central AI for unsupported cameras or heavier models.
 - NVR storage calculation: 1080p@25fps H.265 ≈ 1.5 TB/camera/month. Plan accordingly.
