@@ -381,6 +381,7 @@ services:
       MTX_AUTHINTERNALUSERS_1_PERMISSIONS_0_ACTION: "read"
       MTX_AUTHINTERNALUSERS_1_PERMISSIONS_1_ACTION: "playback"
     ports:
+      - "8889:8889"
       - "8189:8189/udp"
     networks:
       - dm3-internal
