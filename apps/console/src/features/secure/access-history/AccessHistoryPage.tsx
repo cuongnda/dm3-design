@@ -2,16 +2,18 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { subDays } from 'date-fns';
+import { format as formatDate, subDays, startOfDay } from 'date-fns';
 import {
   Download, History, RotateCcw, X, ImageOff, ChevronsUpDown, Check,
   CreditCard, KeyRound, ScanFace, Car, QrCode, Radio, Fingerprint,
+  Copy, CheckCircle2,
 } from 'lucide-react';
 import {
   listAccessEvents,
   exportAccessEvents,
   listAccessPoints,
   listPersons,
+  type AccessEventRecord,
   type ListAccessEventsParams,
   type CCTVMediaItem,
 } from '@dm3/api-client';
@@ -71,6 +73,33 @@ function defaultToIso(): string {
   return new Date().toISOString();
 }
 
+// ─── Deterministic datetime formatting ──────────────────────────────────────
+
+/** Short IANA-ish timezone token derived from the browser (e.g. "UTC+07", "GMT-05"). */
+function getTimezoneLabel(): string {
+  try {
+    const parts = new Intl.DateTimeFormat(undefined, {
+      timeZoneName: 'shortOffset',
+    }).formatToParts(new Date());
+    const tz = parts.find((p) => p.type === 'timeZoneName')?.value;
+    if (tz) return tz;
+  } catch {
+    // fall through
+  }
+  const offsetMin = -new Date().getTimezoneOffset();
+  const sign = offsetMin >= 0 ? '+' : '-';
+  const abs = Math.abs(offsetMin);
+  const hh = String(Math.floor(abs / 60)).padStart(2, '0');
+  const mm = String(abs % 60).padStart(2, '0');
+  return `UTC${sign}${hh}:${mm}`;
+}
+
+function formatEventTime(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return formatDate(d, 'yyyy-MM-dd HH:mm:ss');
+}
+
 // ─── Decision badge ─────────────────────────────────────────────────────────
 
 function DecisionBadge({ decision, t }: { decision: string; t: (k: string) => string }) {
@@ -107,7 +136,7 @@ function DirectionBadge({ direction, t }: { direction?: string; t: (k: string) =
   );
 }
 
-// ─── Credential cell (icon + actual credential id) ─────────────────────────
+// ─── Credential helpers ─────────────────────────────────────────────────────
 
 const CREDENTIAL_ICONS: Record<string, { Icon: typeof CreditCard; tint: string }> = {
   card: { Icon: CreditCard, tint: 'text-sky-400' },
@@ -129,6 +158,22 @@ function truncateCredentialId(value: string, max = 18): string {
   return `${value.slice(0, head)}…${value.slice(-tail)}`;
 }
 
+function extractCredentialValue(metadata?: Record<string, unknown>): string {
+  if (!metadata || typeof metadata !== 'object') return '';
+  const single = (metadata as Record<string, unknown>).credential_value;
+  if (typeof single === 'string' && single.trim() !== '') return single.trim();
+  const list = (metadata as Record<string, unknown>).credential_values;
+  if (Array.isArray(list) && list.length > 0) {
+    const first = list[0];
+    if (typeof first === 'string' && first.trim() !== '') return first.trim();
+    if (first && typeof first === 'object' && 'value' in first) {
+      const v = (first as { value?: unknown }).value;
+      if (typeof v === 'string' && v.trim() !== '') return v.trim();
+    }
+  }
+  return '';
+}
+
 function CredentialCell({
   type,
   metadata,
@@ -144,23 +189,7 @@ function CredentialCell({
     tint: 'text-muted-foreground',
   };
 
-  // Device payloads carry the real credential value under metadata.credential_value
-  // (legacy single factor) or metadata.credential_values[] (multi-factor).
-  const rawValue = (() => {
-    if (!metadata || typeof metadata !== 'object') return '';
-    const single = (metadata as Record<string, unknown>).credential_value;
-    if (typeof single === 'string' && single.trim() !== '') return single.trim();
-    const list = (metadata as Record<string, unknown>).credential_values;
-    if (Array.isArray(list) && list.length > 0) {
-      const first = list[0];
-      if (typeof first === 'string' && first.trim() !== '') return first.trim();
-      if (first && typeof first === 'object' && 'value' in first) {
-        const v = (first as { value?: unknown }).value;
-        if (typeof v === 'string' && v.trim() !== '') return v.trim();
-      }
-    }
-    return '';
-  })();
+  const rawValue = extractCredentialValue(metadata);
 
   return (
     <span
@@ -172,6 +201,38 @@ function CredentialCell({
         {rawValue ? truncateCredentialId(rawValue) : type}
       </span>
     </span>
+  );
+}
+
+// ─── Copy button (used in detail drawer) ────────────────────────────────────
+
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const onCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard blocked — ignore silently
+    }
+  }, [value]);
+
+  return (
+    <button
+      type="button"
+      onClick={onCopy}
+      title={label}
+      aria-label={label}
+      className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+    >
+      {copied ? (
+        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+      ) : (
+        <Copy className="h-3.5 w-3.5" />
+      )}
+    </button>
   );
 }
 
@@ -244,8 +305,12 @@ function MediaCell({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
         className="relative flex items-center h-8"
+        title={t('accessHistory.photo.view')}
         aria-label={t('accessHistory.photo.view')}
       >
         {visible.map((tile, i) => (
@@ -358,6 +423,7 @@ interface AccessPointSelectProps {
 }
 
 function AccessPointSelect({ value, onChange }: AccessPointSelectProps) {
+  const { t } = useTranslation('secure');
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -399,23 +465,23 @@ function AccessPointSelect({ value, onChange }: AccessPointSelectProps) {
           aria-expanded={open}
           disabled={isLoading}
           data-testid="access-history-select-access-point"
-          className="w-[200px] h-9 justify-between text-[13px] font-normal"
+          className="w-[220px] h-9 justify-between text-[13px] font-normal"
         >
           <span className="truncate text-left">
-            {selected ? selected.name : 'All access points'}
+            {selected ? selected.name : t('accessHistory.filters.accessPointAll')}
           </span>
           <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[240px] p-0" align="start">
+      <PopoverContent className="w-[260px] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Search access points..."
+            placeholder={t('accessHistory.filters.accessPointSearch')}
             value={search}
             onValueChange={setSearch}
           />
           <CommandList>
-            <CommandEmpty>No access points found.</CommandEmpty>
+            <CommandEmpty>{t('accessHistory.filters.accessPointEmpty')}</CommandEmpty>
             <CommandGroup>
               <CommandItem
                 value="__all__"
@@ -423,7 +489,7 @@ function AccessPointSelect({ value, onChange }: AccessPointSelectProps) {
                 className="text-[13px]"
               >
                 <Check className={cn('mr-2 size-4', !value ? 'opacity-100' : 'opacity-0')} />
-                All access points
+                {t('accessHistory.filters.accessPointAll')}
               </CommandItem>
               {filtered.map((ap) => (
                 <CommandItem
@@ -452,6 +518,7 @@ interface PersonSelectProps {
 }
 
 function PersonSelect({ value, onChange }: PersonSelectProps) {
+  const { t } = useTranslation('secure');
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
@@ -465,7 +532,6 @@ function PersonSelect({ value, onChange }: PersonSelectProps) {
 
   const items = data?.data ?? [];
 
-  // Keep selected person visible even when not in the current result set
   const { data: selectedData } = useQuery({
     queryKey: ['persons-filter-selected', value],
     queryFn: () => listPersons({ limit: 1, search: value }),
@@ -502,29 +568,29 @@ function PersonSelect({ value, onChange }: PersonSelectProps) {
           role="combobox"
           aria-expanded={open}
           data-testid="access-history-select-user"
-          className="w-[200px] h-9 justify-between text-[13px] font-normal"
+          className="w-[220px] h-9 justify-between text-[13px] font-normal"
         >
           <span className="truncate text-left">
-            {selected ? getDisplayName(selected) : 'All users'}
+            {selected ? getDisplayName(selected) : t('accessHistory.filters.userAll')}
           </span>
           <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[240px] p-0" align="start">
+      <PopoverContent className="w-[260px] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Search users..."
+            placeholder={t('accessHistory.filters.userSearch')}
             value={search}
             onValueChange={setSearch}
           />
           <CommandList>
             {isLoading ? (
               <div className="px-3 py-4 text-center text-[13px] text-muted-foreground">
-                Loading...
+                {t('accessHistory.filters.loading')}
               </div>
             ) : (
               <>
-                <CommandEmpty>No users found.</CommandEmpty>
+                <CommandEmpty>{t('accessHistory.filters.userEmpty')}</CommandEmpty>
                 <CommandGroup>
                   <CommandItem
                     value="__all__"
@@ -532,7 +598,7 @@ function PersonSelect({ value, onChange }: PersonSelectProps) {
                     className="text-[13px]"
                   >
                     <Check className={cn('mr-2 size-4', !value ? 'opacity-100' : 'opacity-0')} />
-                    All users
+                    {t('accessHistory.filters.userAll')}
                   </CommandItem>
                   {items.map((person) => {
                     const name = getDisplayName(person);
@@ -558,6 +624,286 @@ function PersonSelect({ value, onChange }: PersonSelectProps) {
   );
 }
 
+// ─── Date presets ───────────────────────────────────────────────────────────
+
+type PresetKey = 'today' | '24h' | '7d' | '30d';
+
+function buildPresetRange(key: PresetKey): { from: string; to: string } {
+  const now = new Date();
+  const to = now.toISOString();
+  let from: Date;
+  switch (key) {
+    case 'today':
+      from = startOfDay(now);
+      break;
+    case '24h':
+      from = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      break;
+    case '7d':
+      from = subDays(now, 7);
+      break;
+    case '30d':
+      from = subDays(now, 30);
+      break;
+  }
+  return { from: from.toISOString(), to };
+}
+
+interface DatePresetsProps {
+  fromIso: string;
+  toIso: string;
+  onPick: (from: string, to: string) => void;
+}
+
+function DatePresets({ fromIso, toIso, onPick }: DatePresetsProps) {
+  const { t } = useTranslation('secure');
+
+  const activeKey: PresetKey | null = useMemo(() => {
+    const now = Date.now();
+    const toMs = new Date(toIso).getTime();
+    const fromMs = new Date(fromIso).getTime();
+    // Allow up to 90s drift (for slow renders) when matching "now" to current moment.
+    const nowSlack = 90_000;
+    if (Math.abs(now - toMs) > nowSlack) return null;
+    const span = toMs - fromMs;
+    const hour = 60 * 60 * 1000;
+    if (Math.abs(span - 24 * hour) < 5 * 60_000) return '24h';
+    if (Math.abs(span - 7 * 24 * hour) < 30 * 60_000) return '7d';
+    if (Math.abs(span - 30 * 24 * hour) < 60 * 60_000) return '30d';
+    if (fromMs === startOfDay(new Date(toMs)).getTime()) return 'today';
+    return null;
+  }, [fromIso, toIso]);
+
+  const presets: { key: PresetKey; label: string }[] = [
+    { key: 'today', label: t('accessHistory.filters.preset.today') },
+    { key: '24h', label: t('accessHistory.filters.preset.24h') },
+    { key: '7d', label: t('accessHistory.filters.preset.7d') },
+    { key: '30d', label: t('accessHistory.filters.preset.30d') },
+  ];
+
+  return (
+    <div className="flex flex-col gap-1">
+      <Label className="text-[11px]">{t('accessHistory.filters.rangeLabel')}</Label>
+      <div className="flex items-center gap-1">
+        {presets.map((p) => {
+          const active = activeKey === p.key;
+          return (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => {
+                const r = buildPresetRange(p.key);
+                onPick(r.from, r.to);
+              }}
+              data-testid={`access-history-preset-${p.key}`}
+              className={cn(
+                'h-9 px-2.5 rounded-md text-[12px] font-medium border transition-colors',
+                active
+                  ? 'border-primary/60 bg-primary/10 text-primary'
+                  : 'border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Detail drawer ──────────────────────────────────────────────────────────
+
+interface DetailRowProps {
+  label: string;
+  children: React.ReactNode;
+  copyValue?: string;
+  copyLabel?: string;
+}
+
+function DetailRow({ label, children, copyValue, copyLabel }: DetailRowProps) {
+  return (
+    <div className="grid grid-cols-[140px_1fr_auto] gap-3 items-start py-2 border-b border-border/60 last:border-b-0">
+      <div className="text-[11px] uppercase tracking-wider text-muted-foreground pt-0.5">
+        {label}
+      </div>
+      <div className="text-[13px] text-foreground break-words min-w-0">{children}</div>
+      <div className="pt-0.5">
+        {copyValue ? <CopyButton value={copyValue} label={copyLabel ?? 'Copy'} /> : null}
+      </div>
+    </div>
+  );
+}
+
+interface EventDetailModalProps {
+  event: AccessEventRecord | null;
+  onClose: () => void;
+  accessPointName: (id?: string) => string;
+}
+
+function EventDetailModal({ event, onClose, accessPointName }: EventDetailModalProps) {
+  const { t } = useTranslation('secure');
+  const open = !!event;
+
+  if (!event) return null;
+
+  const credentialValue = extractCredentialValue(event.metadata);
+  const photoUrl = event.photo_url || (event.photo_ref ? assetUrl(event.photo_ref) : '');
+  const copyLabel = t('accessHistory.detail.copy');
+  const noValue = t('accessHistory.detail.noValue');
+  const metadataString = event.metadata
+    ? JSON.stringify(event.metadata, null, 2)
+    : '';
+
+  return (
+    <AppModal
+      open={open}
+      onOpenChange={(next) => { if (!next) onClose(); }}
+      title={t('accessHistory.detail.title')}
+      size="lg"
+      showCancelButton
+      cancelLabel={t('accessHistory.detail.close')}
+      onCancel={onClose}
+    >
+      <div
+        className="flex flex-col gap-4 max-h-[70vh] overflow-y-auto pr-1"
+        data-testid="access-history-detail-modal"
+      >
+        {/* Photo + time + decision header */}
+        <div className="flex items-start gap-4">
+          <div className="h-24 w-24 shrink-0 overflow-hidden rounded border border-border bg-muted flex items-center justify-center">
+            {photoUrl ? (
+              <img
+                src={photoUrl}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <ImageOff className="text-muted-foreground" size={24} />
+            )}
+          </div>
+          <div className="flex-1 min-w-0 flex flex-col gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-[13px]">{formatEventTime(event.time)}</span>
+              <span className="text-[11px] text-muted-foreground">{getTimezoneLabel()}</span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <DecisionBadge decision={event.decision} t={t} />
+              <DirectionBadge direction={event.direction} t={t} />
+            </div>
+          </div>
+        </div>
+
+        {/* Detail rows */}
+        <div className="flex flex-col">
+          <DetailRow label={t('accessHistory.detail.eventId')} copyValue={event.id} copyLabel={copyLabel}>
+            <span className="font-mono text-[12px]">{event.id}</span>
+          </DetailRow>
+
+          <DetailRow
+            label={t('accessHistory.detail.accessPoint')}
+            copyValue={event.access_point_id || undefined}
+            copyLabel={copyLabel}
+          >
+            {event.access_point_id ? (
+              <>
+                <div>{accessPointName(event.access_point_id)}</div>
+                <div className="font-mono text-[11px] text-muted-foreground">
+                  {event.access_point_id}
+                </div>
+              </>
+            ) : (
+              <span className="text-muted-foreground">{noValue}</span>
+            )}
+          </DetailRow>
+
+          <DetailRow
+            label={t('accessHistory.detail.device')}
+            copyValue={event.device_id || undefined}
+            copyLabel={copyLabel}
+          >
+            {event.device_name || event.device_id ? (
+              <>
+                <div>{event.device_name || noValue}</div>
+                {event.device_id && (
+                  <div className="font-mono text-[11px] text-muted-foreground">
+                    {event.device_id}
+                  </div>
+                )}
+              </>
+            ) : (
+              <span className="text-muted-foreground">{noValue}</span>
+            )}
+          </DetailRow>
+
+          <DetailRow
+            label={t('accessHistory.detail.user')}
+            copyValue={event.user_id || undefined}
+            copyLabel={copyLabel}
+          >
+            {event.user_name || event.user_id ? (
+              <>
+                <div>{event.user_name || noValue}</div>
+                {event.user_id && (
+                  <div className="font-mono text-[11px] text-muted-foreground">
+                    {event.user_id}
+                  </div>
+                )}
+              </>
+            ) : (
+              <span className="text-muted-foreground">{noValue}</span>
+            )}
+          </DetailRow>
+
+          <DetailRow label={t('accessHistory.detail.credential')}>
+            {event.credential_type ? (
+              <CredentialCell type={event.credential_type} metadata={event.metadata} />
+            ) : (
+              <span className="text-muted-foreground">{noValue}</span>
+            )}
+          </DetailRow>
+
+          {credentialValue && (
+            <DetailRow
+              label={t('accessHistory.detail.credentialValue')}
+              copyValue={credentialValue}
+              copyLabel={copyLabel}
+            >
+              <span className="font-mono text-[12px] break-all">{credentialValue}</span>
+            </DetailRow>
+          )}
+
+          <DetailRow label={t('accessHistory.detail.reason')}>
+            {event.reason ? (
+              <span className="whitespace-pre-wrap">{event.reason}</span>
+            ) : (
+              <span className="text-muted-foreground">{noValue}</span>
+            )}
+          </DetailRow>
+
+          {typeof event.confidence === 'number' && (
+            <DetailRow label={t('accessHistory.detail.confidence')}>
+              <span className="font-mono">{(event.confidence * 100).toFixed(1)}%</span>
+            </DetailRow>
+          )}
+
+          {metadataString && (
+            <DetailRow
+              label={t('accessHistory.detail.metadata')}
+              copyValue={metadataString}
+              copyLabel={copyLabel}
+            >
+              <pre className="text-[11px] font-mono bg-muted/40 border border-border/60 rounded p-2 overflow-x-auto max-h-52">
+                {metadataString}
+              </pre>
+            </DetailRow>
+          )}
+        </div>
+      </div>
+    </AppModal>
+  );
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export function AccessHistoryPage() {
@@ -574,17 +920,15 @@ export function AccessHistoryPage() {
   const credentialTypeParam = searchParams.get('credential_type') ?? '';
   const pageParam = Number(searchParams.get('page') ?? '1') || 1;
 
-  // ISO strings used directly with DatetimePicker (which takes string | null).
-  // Memoize the default window once per mount — calling defaultFromIso() /
-  // defaultToIso() inline produced a fresh `new Date().toISOString()` on every
-  // render, churning the React Query queryKey and causing an infinite refetch
-  // loop (isLoading never settled, so the empty-state never appeared).
   const defaultRange = useMemo(
     () => ({ from: defaultFromIso(), to: defaultToIso() }),
     [],
   );
   const fromIso = validIso(fromParam) ?? defaultRange.from;
   const toIso = validIso(toParam) ?? defaultRange.to;
+
+  // Selected event for detail drawer
+  const [selectedEvent, setSelectedEvent] = useState<AccessEventRecord | null>(null);
 
   function updateParams(patch: Record<string, string>) {
     setSearchParams((prev) => {
@@ -605,7 +949,6 @@ export function AccessHistoryPage() {
   }
 
   function clearFilters() {
-    // Recompute a fresh "now-7d..now" window on explicit user action.
     setSearchParams(new URLSearchParams({
       from: defaultFromIso(),
       to: defaultToIso(),
@@ -634,9 +977,6 @@ export function AccessHistoryPage() {
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
-  // Resolve access_point_id → human-readable name. Reuses the same queryKey +
-  // staleTime as the filter combobox (`access-points-filter`) so React Query
-  // dedupes to a single fetch per page load.
   const { data: accessPointsData } = useQuery({
     queryKey: ['access-points-filter'],
     queryFn: () => listAccessPoints({ limit: 200 }),
@@ -649,6 +989,19 @@ export function AccessHistoryPage() {
     }
     return map;
   }, [accessPointsData]);
+
+  const resolveAccessPointName = useCallback(
+    (id?: string) => (id ? accessPointNameById.get(id) ?? id : '—'),
+    [accessPointNameById],
+  );
+
+  // Stable timezone label shown next to time column & in detail drawer.
+  const timezoneLabel = useMemo(() => getTimezoneLabel(), []);
+
+  // Filter-bar filters-active flag (drives empty-state copy & clear shortcut).
+  const hasActiveFilters = !!(
+    accessPointParam || userIdParam || decisionParam || credentialTypeParam
+  );
 
   // ─── Export ───────────────────────────────────────────────────────────────
 
@@ -713,7 +1066,7 @@ export function AccessHistoryPage() {
               ) : (
                 <>
                   <Download size={13} />
-                  Export
+                  {t('accessHistory.export.button')}
                 </>
               )}
             </Button>
@@ -740,6 +1093,13 @@ export function AccessHistoryPage() {
       {/* Filter bar */}
       <div className="bg-card border border-border rounded-lg p-3">
         <div className="flex flex-wrap gap-2 items-end">
+
+          {/* Quick presets */}
+          <DatePresets
+            fromIso={fromIso}
+            toIso={toIso}
+            onPick={(from, to) => updateParams({ from, to, page: '' })}
+          />
 
           {/* From */}
           <div className="flex flex-col gap-1">
@@ -846,7 +1206,14 @@ export function AccessHistoryPage() {
             <Table noWrapper data-testid="access-history-table-events">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.time')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">
+                    <span className="inline-flex items-center gap-1.5">
+                      {t('accessHistory.columns.time')}
+                      <span className="text-[10px] font-mono normal-case text-muted-foreground/70">
+                        {timezoneLabel}
+                      </span>
+                    </span>
+                  </TableHead>
                   <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.accessPoint')}</TableHead>
                   <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.device')}</TableHead>
                   <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.user')}</TableHead>
@@ -865,12 +1232,19 @@ export function AccessHistoryPage() {
                     <TableCell colSpan={9} className="px-4 py-12">
                       <EmptyState
                         icon={<History size={32} strokeWidth={1.2} />}
-                        title={(accessPointParam || userIdParam || decisionParam || credentialTypeParam) ? 'No events match these filters' : t('accessHistory.empty.title')}
-                        description={(accessPointParam || userIdParam || decisionParam || credentialTypeParam)
-                          ? 'Try broadening the date range, choosing a different access point or user, or clear the filters to see every event.'
-                          : 'Access events appear here the moment a credential is presented at an access point. Check that devices are online and that access rules are assigned to users.'}
-                        primaryAction={(accessPointParam || userIdParam || decisionParam || credentialTypeParam)
-                          ? { label: 'Clear filters', variant: 'outline', onClick: clearFilters, 'data-testid': 'access-history-button-clear-empty' }
+                        title={hasActiveFilters
+                          ? t('accessHistory.empty.filteredTitle')
+                          : t('accessHistory.empty.title')}
+                        description={hasActiveFilters
+                          ? t('accessHistory.empty.filteredSubtitle')
+                          : t('accessHistory.empty.subtitle')}
+                        primaryAction={hasActiveFilters
+                          ? {
+                              label: t('accessHistory.empty.clearFilters'),
+                              variant: 'outline',
+                              onClick: clearFilters,
+                              'data-testid': 'access-history-button-clear-empty',
+                            }
                           : undefined}
                         compact
                       />
@@ -881,10 +1255,11 @@ export function AccessHistoryPage() {
                     <TableRow
                       key={event.id}
                       data-testid={`access-history-row-${event.id}`}
-                      className="hover:bg-muted/30 transition-colors"
+                      onClick={() => setSelectedEvent(event)}
+                      className="hover:bg-muted/40 transition-colors cursor-pointer"
                     >
                       <TableCell className="px-4 text-[12px] text-muted-foreground whitespace-nowrap font-mono">
-                        {new Date(event.time).toLocaleString()}
+                        {formatEventTime(event.time)}
                       </TableCell>
                       <TableCell className="px-4 text-[12px]">
                         {event.access_point_id
@@ -916,10 +1291,13 @@ export function AccessHistoryPage() {
                       <TableCell className="px-4">
                         <DecisionBadge decision={event.decision} t={t} />
                       </TableCell>
-                      <TableCell className="px-4 text-[12px] text-muted-foreground max-w-[200px] truncate">
+                      <TableCell
+                        className="px-4 text-[12px] text-muted-foreground max-w-[220px] truncate"
+                        title={event.reason || undefined}
+                      >
                         {event.reason || '—'}
                       </TableCell>
-                      <TableCell className="px-4">
+                      <TableCell className="px-4" onClick={(e) => e.stopPropagation()}>
                         <MediaCell
                           photoUrl={event.photo_url}
                           photoRef={event.photo_ref}
@@ -948,6 +1326,12 @@ export function AccessHistoryPage() {
           />
         )}
       </div>
+
+      <EventDetailModal
+        event={selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+        accessPointName={resolveAccessPointName}
+      />
     </div>
   );
 }
