@@ -194,7 +194,8 @@ func main() {
 
 	// HTTP handlers
 	handlers := gateway.NewGatewayHandlers(database, mqttClient, auditLog).
-		WithMediaPresigner(objectStore)
+		WithMediaPresigner(objectStore).
+		WithAssetPresigner(objectStore)
 	syncService.AttachHandlers(handlers)
 	provHandlers := gateway.NewProvisioningHandlers(database, mqttClient, cfg, auditLog)
 

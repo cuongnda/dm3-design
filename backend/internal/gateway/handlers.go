@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -19,13 +20,15 @@ import (
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/mqtt"
+	"github.com/duali/dm3-backend/pkg/objectstore"
 )
 
 type GatewayHandlers struct {
 	db             *db.DB
 	mqtt           *mqtt.Client
 	audit          *audit.Logger
-	mediaPresigner MediaPresigner // optional; when set, cmd.snapshot embeds a presigned PUT URL
+	mediaPresigner MediaPresigner             // optional; when set, cmd.snapshot embeds a presigned PUT URL
+	assetPresigner objectstore.GetURLPresigner // optional; when set, ListEvents returns presigned photo_url
 }
 
 func NewGatewayHandlers(database *db.DB, mqttClient *mqtt.Client, auditLog *audit.Logger) *GatewayHandlers {
@@ -39,6 +42,16 @@ func NewGatewayHandlers(database *db.DB, mqttClient *mqtt.Client, auditLog *audi
 // behavior, useful for dev environments without object storage.
 func (h *GatewayHandlers) WithMediaPresigner(p MediaPresigner) *GatewayHandlers {
 	h.mediaPresigner = p
+	return h
+}
+
+// WithAssetPresigner lets ListEvents turn the `photo_ref` MinIO object key
+// stored on each access_events row into a short-lived presigned GET URL.
+// Without it, the monitor page falls back to assetUrl(photo_ref) which only
+// works for legacy /photos/... avatar refs, not the per-event object keys
+// kiosk/LPR devices upload under events/<tenant>/<device>/snapshot/....
+func (h *GatewayHandlers) WithAssetPresigner(p objectstore.GetURLPresigner) *GatewayHandlers {
+	h.assetPresigner = p
 	return h
 }
 
@@ -1140,7 +1153,8 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 				regexp_replace(ae.metadata->>'device_id', '^device:', ''),
 				''
 			),
-			COALESCE(d_pub.name, d_link.name, '')
+			COALESCE(d_pub.name, d_link.name, ''),
+			COALESCE(ae.photo_ref,'')
 		 FROM dm3_access.access_events ae
 		 LEFT JOIN dm3_identity.users u ON u.id = ae.user_id
 		 LEFT JOIN dm3_identity.departments dep ON dep.id = u.department_id
@@ -1182,6 +1196,7 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 			Confidence                                       float64
 			Time                                             any
 			Department, CardID, DeviceID, DeviceName         string
+			PhotoRef                                         string
 			CardIDs                                          []string
 			CredentialsJSON                                  []byte
 		}
@@ -1190,6 +1205,7 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 			&e.CredentialType, &e.DoorID, &e.Direction, &e.Decision,
 			&e.Reason, &e.Confidence, &e.Time,
 			&e.Department, &e.CardID, &e.CardIDs, &e.CredentialsJSON, &e.DeviceID, &e.DeviceName,
+			&e.PhotoRef,
 		); err != nil {
 			slog.Error("ListEvents: scan failed", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal server error")
@@ -1215,9 +1231,33 @@ func (h *GatewayHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 			"card_id":         e.CardID,
 			"card_ids":        e.CardIDs,
 			"credentials":     decodeCredentialsJSON(e.CredentialsJSON),
+			"photo_ref":       e.PhotoRef,
+			"photo_url":       presignEventPhoto(r.Context(), h.assetPresigner, e.PhotoRef),
 		})
 	}
 	httputil.JSON(w, http.StatusOK, events)
+}
+
+// presignEventPhoto returns a 5-minute presigned GET URL when photoRef is
+// a MinIO object key uploaded via the device media-url flow (see
+// docs/architecture/mqtt-protocol.md §15). Returns empty string for legacy
+// /photos/... refs, empty input, or when no presigner is wired. On presign
+// error, logs and returns empty so the frontend can fall back to
+// assetUrl(photo_ref). This mirrors access-svc's presignPhotoIfMinIOKey;
+// duplicated here because gateway and access-svc can't share private helpers.
+func presignEventPhoto(ctx context.Context, presigner objectstore.GetURLPresigner, photoRef string) string {
+	if photoRef == "" || presigner == nil {
+		return ""
+	}
+	if !strings.HasPrefix(photoRef, "events/") {
+		return ""
+	}
+	u, err := presigner.PresignedGetURL(ctx, photoRef, 5*time.Minute)
+	if err != nil {
+		slog.Warn("gateway ListEvents: presign photo failed", "key", photoRef, "error", err)
+		return ""
+	}
+	return u.String()
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

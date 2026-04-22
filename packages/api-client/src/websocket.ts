@@ -33,6 +33,12 @@ export interface AccessEventData {
   user_code?: string;
   avatar?: string;
   device_name?: string;
+  // Event snapshot captured by the device. `photo` is the raw MinIO object key
+  // (events/<tenant>/<device>/snapshot/<uuid>.<ext>) the firmware publishes on
+  // access.log. The server does NOT presign it for the WebSocket broadcast —
+  // subscribers should fall back to the REST ListEvents endpoint for a
+  // short-lived GET URL, or treat this as a key to request on demand.
+  photo?: string;
 }
 
 export interface DoorStateData {

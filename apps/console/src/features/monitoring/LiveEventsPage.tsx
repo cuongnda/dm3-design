@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Activity, CheckCircle2, XCircle, AlertTriangle, DoorOpen,
   Radio, Pause, Play, Trash2, Search, CreditCard, ScanFace, QrCode, FingerprintPattern, KeyRound, ShieldQuestionMark,
+  ImageOff,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -13,7 +14,7 @@ import {
   type RealtimeAlarm,
   type DoorStatus,
 } from '@dm3/api-client';
-import { Button, Input, Select, SelectOption, PageHeader } from '@dm3/ui';
+import { Button, Input, Select, SelectOption, PageHeader, AppModal } from '@dm3/ui';
 import { apiFetch, assetUrl } from '@/lib/api';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -40,6 +41,8 @@ interface TimelineRow {
   cardIds?: string[];       // legacy — flat list of values
   credentials?: Array<{ type: string; value: string }>; // access events only — typed N-step verify chain
   credentialType?: string;  // legacy — single type (used as fallback when credentials[] absent)
+  photoUrl?: string;        // access events only — 5-min presigned MinIO GET URL from gateway ListEvents
+  photoRef?: string;        // access events only — raw MinIO object key, used as fallback via assetUrl()
 }
 
 // ─── Backend event shape (matches handlers.ListEvents) ─────────────────────
@@ -61,6 +64,8 @@ interface BackendEvent {
   card_ids?: string[];
   credentials?: Array<{ type: string; value: string }>;
   credential_type?: string;
+  photo_ref?: string;
+  photo_url?: string;
 }
 
 async function fetchBackendEvents(): Promise<TimelineRow[]> {
@@ -85,6 +90,8 @@ async function fetchBackendEvents(): Promise<TimelineRow[]> {
     cardIds: Array.isArray(e.card_ids) && e.card_ids.length > 0 ? e.card_ids : undefined,
     credentials: Array.isArray(e.credentials) && e.credentials.length > 0 ? e.credentials : undefined,
     credentialType: e.credential_type || undefined,
+    photoUrl: e.photo_url || undefined,
+    photoRef: e.photo_ref || undefined,
   }));
 }
 
@@ -107,6 +114,11 @@ function accessToRow(e: RealtimeAccessEvent): TimelineRow {
     cardIds: e.cardIds,
     credentials: e.credentials,
     credentialType: e.credentialType,
+    // Realtime store only carries the raw object key — no presigned URL on
+    // the WebSocket hop. The next fetchBackendEvents() refresh fills in
+    // photoUrl; until then, the cell hides if photoRef isn't a legacy
+    // /photos/ path (assetUrl only handles those).
+    photoRef: e.photoRef,
   };
 }
 
@@ -132,6 +144,63 @@ function doorToRow(d: DoorStatus, doorId: string): TimelineRow {
     result: d.state,
     detail: d.forced ? 'forced' : undefined,
   };
+}
+
+// ─── Photo thumbnail ───────────────────────────────────────────────────────
+
+// Renders a clickable thumbnail for an access event's snapshot. Prefers the
+// server-presigned MinIO GET URL (new device-upload flow, §15); falls back to
+// assetUrl(photoRef) for legacy /photos/ avatar refs. Returns em dash when
+// neither is present.
+function PhotoCell({
+  photoUrl,
+  photoRef,
+  viewLabel,
+  modalLabel,
+}: {
+  photoUrl?: string;
+  photoRef?: string;
+  viewLabel: string;
+  modalLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const url = photoUrl || (photoRef ? assetUrl(photoRef) : '');
+  if (!url) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="h-8 w-8 overflow-hidden rounded border border-border bg-muted flex items-center justify-center hover:opacity-80 transition-opacity"
+        title={viewLabel}
+        aria-label={viewLabel}
+      >
+        <img
+          src={url}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={(e) => {
+            const el = e.currentTarget as HTMLImageElement;
+            el.style.display = 'none';
+            if (el.nextElementSibling) {
+              (el.nextElementSibling as HTMLElement).style.display = 'flex';
+            }
+          }}
+        />
+        <span className="hidden items-center justify-center text-muted-foreground">
+          <ImageOff size={14} />
+        </span>
+      </button>
+
+      <AppModal open={open} onOpenChange={setOpen} title={modalLabel} size="lg">
+        <div className="flex items-center justify-center bg-muted rounded overflow-hidden">
+          <img src={url} alt={modalLabel} className="max-h-[60vh] object-contain" />
+        </div>
+      </AppModal>
+    </>
+  );
 }
 
 // ─── Styling helpers ───────────────────────────────────────────────────────
@@ -408,6 +477,7 @@ export function LiveEventsPage() {
               <th className="px-3 py-2 font-medium w-32">{t('columns.time')}</th>
               <th className="px-3 py-2 font-medium w-24">{t('columns.type')}</th>
               <th className="px-3 py-2 font-medium w-48">{t('columns.device')}</th>
+              <th className="px-3 py-2 font-medium w-16">{t('columns.photo')}</th>
               <th className="px-3 py-2 font-medium">{t('columns.name')}</th>
               <th className="px-3 py-2 font-medium">{t('columns.department')}</th>
               <th className="px-3 py-2 font-medium font-mono">{t('columns.cardId')}</th>
@@ -418,7 +488,7 @@ export function LiveEventsPage() {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-16 text-center text-muted-foreground">
+                <td colSpan={9} className="px-3 py-16 text-center text-muted-foreground">
                   <Activity size={24} className="mx-auto mb-2 opacity-40" />
                   {connected ? t('empty.waiting') : t('empty.disconnected')}
                 </td>
@@ -449,6 +519,18 @@ export function LiveEventsPage() {
                           <span className="text-[10px] font-mono text-muted-foreground truncate">{r.deviceId || ''}</span>
                         </div>
                       ) : '—'}
+                    </td>
+                    <td className="px-3 py-1.5">
+                      {r.kind === 'access' ? (
+                        <PhotoCell
+                          photoUrl={r.photoUrl}
+                          photoRef={r.photoRef}
+                          viewLabel={t('photo.view')}
+                          modalLabel={t('photo.modal')}
+                        />
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </td>
                     <td className="px-3 py-1.5 max-w-[220px]">
                       {r.kind === 'access' && r.subject !== '—' ? (

@@ -32,11 +32,16 @@
     "time": "Time",
     "type": "Type",
     "device": "Device",
+    "photo": "Photo",
     "name": "Name",
     "department": "Department",
     "cardId": "Card ID",
     "result": "Result",
     "detail": "Detail"
+  },
+  "photo": {
+    "view": "View photo",
+    "modal": "Event photo"
   },
   "empty": {
     "waiting": "Waiting for events…",

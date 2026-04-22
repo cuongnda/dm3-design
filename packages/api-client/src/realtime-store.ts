@@ -25,6 +25,11 @@ export interface RealtimeAccessEvent {
   cardIds?: string[];
   /** Typed credentials list for N-step verify; each entry has its own type. */
   credentials?: Array<{ type: string; value: string }>;
+  /** Raw MinIO object key from `data.photo` on the access.log payload.
+   *  Empty for events without an attached snapshot. The WebSocket broadcast
+   *  never carries a presigned URL — consumers render via assetUrl() or by
+   *  refetching the event from the REST ListEvents endpoint. */
+  photoRef?: string;
 }
 
 // Named RealtimeDeviceStatus to avoid collision with DeviceStatus const in types/enums
@@ -227,6 +232,7 @@ export function transformAccessEvent(data: AccessEventData, event: WSEvent): Rea
     cardId: data.card_id || undefined,
     cardIds: Array.isArray(data.card_ids) && data.card_ids.length > 0 ? data.card_ids : undefined,
     credentials: Array.isArray(data.credentials) && data.credentials.length > 0 ? data.credentials : undefined,
+    photoRef: data.photo || undefined,
   };
 }
 

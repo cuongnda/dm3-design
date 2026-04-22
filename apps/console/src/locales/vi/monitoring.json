@@ -32,11 +32,16 @@
     "time": "Thời gian",
     "type": "Loại",
     "device": "Thiết bị",
+    "photo": "Ảnh",
     "name": "Tên",
     "department": "Phòng ban",
     "cardId": "Mã thẻ",
     "result": "Kết quả",
     "detail": "Chi tiết"
+  },
+  "photo": {
+    "view": "Xem ảnh",
+    "modal": "Ảnh sự kiện"
   },
   "empty": {
     "waiting": "Đang chờ sự kiện…",

@@ -249,23 +249,45 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 		deviceID = parts[3]
 	}
 
-	// Resolve access_point_id from the literal device_id. apd.access_device_id
-	// is a text column storing dm3_devices.devices.id (uuid as text), so we
-	// must translate the literal device_id ("840107") to its uuid via devices.
+	// Resolve access_point_id AND the device UUID from the literal device_id.
+	// apd.access_device_id is a text column storing dm3_devices.devices.id
+	// (uuid as text), so we must translate the literal device_id ("840107")
+	// to its uuid via devices. The UUID is also needed for the media-key
+	// prefix check below: the media-url endpoint issues keys scoped by the
+	// JWT `did` (UUID), but evt.Src carries the short device_id, so the two
+	// never match without this lookup.
 	var accessPointID *string
+	var deviceUUID string
 	if deviceID != "" {
 		lookupCtx, lookupCancel := context.WithTimeout(ctx, 2*time.Second)
 		err := c.db.Pool.QueryRow(lookupCtx,
-			`SELECT ap.id::text FROM dm3_access.access_points ap
+			`SELECT ap.id::text, d.id::text FROM dm3_access.access_points ap
 			 JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
 			 JOIN dm3_devices.devices d ON d.id::text = apd.access_device_id
 			 WHERE d.device_id = $1 AND ap.tenant_id = $2::uuid
 			 LIMIT 1`,
 			deviceID, tenantID,
-		).Scan(&accessPointID)
+		).Scan(&accessPointID, &deviceUUID)
 		lookupCancel()
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			slog.Error("nats: failed to resolve access_point_id", "error", err, "device_id", deviceID, "tenant_id", tenantID)
+		}
+		// Fallback: device may exist in dm3_devices but not yet be linked to
+		// an access_point. We still want the UUID so media-key validation
+		// passes on a freshly-provisioned device whose access-point wiring
+		// is pending.
+		if deviceUUID == "" {
+			fbCtx, fbCancel := context.WithTimeout(ctx, 2*time.Second)
+			err := c.db.Pool.QueryRow(fbCtx,
+				`SELECT id::text FROM dm3_devices.devices
+				 WHERE device_id = $1 AND tenant_id = $2::uuid
+				 LIMIT 1`,
+				deviceID, tenantID,
+			).Scan(&deviceUUID)
+			fbCancel()
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				slog.Warn("nats: failed to resolve device uuid", "error", err, "device_id", deviceID, "tenant_id", tenantID)
+			}
 		}
 	}
 
@@ -277,21 +299,35 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 	// tenant A publishing access.log with data.photo pointing at tenant B's
 	// object key would otherwise leak B's image to A's monitoring page via
 	// the server-issued presigned GET. Media keys are always server-issued
-	// as events/<tenant_id>/<device_id>/<kind>/<uuid>.<ext> (see
+	// as events/<tenant_id>/<device_uuid>/<kind>/<uuid>.<ext> (see
 	// docs/architecture/mqtt-protocol.md §15 and internal/gateway/media_handlers.go),
 	// so anything that doesn't match that prefix is either spoofed or legacy
 	// base64. Clear the reference and keep the event — data loss beats a
 	// silent tenant-leak, and legacy base64 rows are already tolerated as a
 	// pass-through per §4.1 ("Existing rows with base64-encoded photo are
 	// left untouched").
-	if ald.PhotoRef != "" && !isOwnTenantMediaKey(ald.PhotoRef, tenantID, deviceID) {
+	//
+	// The media-url endpoint scopes keys by the JWT `did` (UUID), but evt.Src
+	// is the short device_id. Accept both prefixes so kiosks that publish
+	// with the short id (e.g. LPR desktop app) still pass validation.
+	mediaAcceptable := func(key string) bool {
+		if isOwnTenantMediaKey(key, tenantID, deviceID) {
+			return true
+		}
+		if deviceUUID != "" && isOwnTenantMediaKey(key, tenantID, deviceUUID) {
+			return true
+		}
+		return false
+	}
+
+	if ald.PhotoRef != "" && !mediaAcceptable(ald.PhotoRef) {
 		slog.Warn("nats: rejecting cross-tenant media reference on access.log",
-			"tenant_id", tenantID, "device_id", deviceID,
+			"tenant_id", tenantID, "device_id", deviceID, "device_uuid", deviceUUID,
 			"photo_ref", ald.PhotoRef, "event_id", evt.ID)
 		ald.PhotoRef = ""
 	}
 	if ald.ClipObjectKey != "" {
-		if isOwnTenantMediaKey(ald.ClipObjectKey, tenantID, deviceID) {
+		if mediaAcceptable(ald.ClipObjectKey) {
 			ald.Metadata["clip_object_key"] = ald.ClipObjectKey
 		} else {
 			slog.Warn("nats: rejecting cross-tenant clip reference on access.log",
