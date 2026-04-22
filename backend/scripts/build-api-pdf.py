@@ -166,6 +166,312 @@ METHOD_COLORS = {
     "OPTIONS": "#64748B",
 }
 
+# ─── Vietnamese overview (replaces spec's English info.description) ──────────
+OVERVIEW_VI = (
+    "API nền tảng kiểm soát truy cập & tòa nhà thông minh, triển khai theo mô "
+    "hình đa tenant.<br><br>"
+    "Toàn bộ endpoint được giới hạn phạm vi theo tenant thông qua header "
+    "<code>Authorization: Bearer dm3_live_...</code> hoặc <code>dm3_test_...</code>. "
+    "Phát hành token tại <i>Settings → API Integration</i>. Token có tiền tố "
+    "<code>dm3_live_</code> tác động lên dữ liệu thật; <code>dm3_test_</code> là "
+    "môi trường sandbox.<br><br>"
+    "Giới hạn mặc định là 60 yêu cầu/phút trên mỗi token. Phản hồi theo cấu trúc "
+    "nhất quán: phản hồi thành công trả về tài nguyên trực tiếp, phản hồi lỗi trả "
+    "về <code>{ &quot;error&quot;: &quot;&lt;code&gt;&quot;, "
+    "&quot;message&quot;: &quot;&lt;human readable&gt;&quot; }</code>."
+)
+
+# ─── Per-endpoint Vietnamese summary & description overrides ────────────────
+# Keyed by "METHOD /path". Falls back to spec text if missing.
+SUMMARY_VI = {
+    "GET /access/groups": "Danh sách nhóm truy cập",
+    "POST /access/groups": "Tạo nhóm truy cập",
+    "GET /access/groups/{id}": "Lấy thông tin nhóm truy cập",
+    "PUT /access/groups/{id}": "Cập nhật nhóm truy cập",
+    "DELETE /access/groups/{id}": "Xóa nhóm truy cập",
+    "GET /attendance/holidays": "Danh sách ngày nghỉ lễ",
+    "GET /attendance/me/attendance": "Chấm công của tôi",
+    "POST /attendance/me/leave/requests": "Gửi đơn xin nghỉ phép",
+    "GET /audit/export": "Xuất nhật ký kiểm toán ra CSV",
+    "GET /audit/logs": "Danh sách nhật ký kiểm toán",
+    "GET /audit/logs/{id}": "Lấy một bản ghi kiểm toán",
+    "GET /auth/api-tokens": "Danh sách token API",
+    "POST /auth/login": "Đăng nhập",
+    "POST /auth/logout": "Đăng xuất",
+    "GET /auth/me": "Lấy hồ sơ của tôi",
+    "POST /auth/refresh": "Làm mới token phiên",
+    "GET /auth/system/companies": "Danh sách công ty",
+    "POST /auth/system/companies": "Tạo công ty",
+    "GET /auth/system/companies/{id}": "Lấy thông tin công ty",
+    "PUT /auth/system/companies/{id}": "Cập nhật công ty",
+    "DELETE /auth/system/companies/{id}": "Xóa mềm một công ty",
+    "GET /cctv/cameras": "Danh sách camera",
+    "POST /cctv/cameras": "Tạo camera",
+    "GET /cctv/cameras/{id}": "Lấy thông tin camera",
+    "GET /gateway/devices": "Danh sách thiết bị",
+    "POST /gateway/devices": "Tạo thiết bị",
+    "GET /gateway/devices/{id}": "Lấy thông tin thiết bị",
+    "PUT /gateway/devices/{id}": "Cập nhật thiết bị",
+    "DELETE /gateway/devices/{id}": "Xóa thiết bị",
+    "GET /identity/users": "Danh sách người dùng",
+    "POST /identity/users": "Tạo người dùng",
+    "GET /identity/users/{id}": "Lấy thông tin người dùng",
+    "PUT /identity/users/{id}": "Cập nhật người dùng",
+    "DELETE /identity/users/{id}": "Xóa người dùng",
+    "GET /parking/sessions": "Danh sách phiên đỗ xe",
+    "GET /parking/vehicles": "Danh sách phương tiện đỗ xe",
+    "POST /parking/vehicles": "Tạo phương tiện đỗ xe",
+    "GET /visitors": "Danh sách lượt khách",
+    "POST /visitors": "Tạo lượt khách",
+    "GET /visitors/{id}": "Lấy thông tin lượt khách",
+    "PUT /visitors/{id}": "Cập nhật lượt khách",
+    "POST /visitors/{id}/checkin": "Ghi nhận khách đến",
+}
+
+# Common parameter / response descriptions emitted by swag annotations.
+# Keys are matched case-insensitively; fragments match exactly.
+COMMON_VI = {
+    # ── identifiers ────────────────────────────────────────────────────────
+    "access group id (uuid)": "ID nhóm truy cập (UUID)",
+    "audit log entry uuid": "UUID bản ghi kiểm toán",
+    "camera uuid": "UUID camera",
+    "company uuid": "UUID công ty",
+    "device id (uuid)": "ID thiết bị (UUID)",
+    "user id (uuid)": "ID người dùng (UUID)",
+    "visit uuid": "UUID lượt khách",
+
+    # ── pagination / sorting ──────────────────────────────────────────────
+    "page number": "Số trang",
+    "page number (1-indexed)": "Số trang (bắt đầu từ 1)",
+    "page number (default 1)": "Số trang (mặc định 1)",
+    "page size": "Kích thước trang",
+    "page size (default 20)": "Kích thước trang (mặc định 20)",
+    "page size (default 20, max 100)": "Kích thước trang (mặc định 20, tối đa 100)",
+    "page size (max 200)": "Kích thước trang (tối đa 200)",
+    "sort field": "Trường sắp xếp",
+    "sort direction": "Hướng sắp xếp",
+
+    # ── filters ────────────────────────────────────────────────────────────
+    "filter by action": "Lọc theo hành động",
+    "filter by action (e.g. user.create)": "Lọc theo hành động (ví dụ: user.create)",
+    "filter by active status": "Lọc theo trạng thái hoạt động",
+    "filter by actor email (partial match)": "Lọc theo email người thao tác (khớp một phần)",
+    "filter by actor user uuid": "Lọc theo UUID người thao tác",
+    "filter by bound access point uuid": "Lọc theo UUID điểm truy cập liên kết",
+    "filter by connection status": "Lọc theo trạng thái kết nối",
+    "filter by department id (repeatable)": "Lọc theo ID phòng ban (có thể lặp lại)",
+    "filter by device id, name, or location": "Lọc theo ID thiết bị, tên, hoặc vị trí",
+    "filter by device type": "Lọc theo loại thiết bị",
+    "filter by emitting service": "Lọc theo dịch vụ phát sinh",
+    "filter by emitting service (e.g. auth-svc)": "Lọc theo dịch vụ phát sinh (ví dụ: auth-svc)",
+    "filter by entity uuid": "Lọc theo UUID đối tượng",
+    "filter by entity type": "Lọc theo loại đối tượng",
+    "filter by entity type (e.g. user, device)": "Lọc theo loại đối tượng (ví dụ: user, device)",
+    "filter by expected_arrival date (yyyy-mm-dd)": "Lọc theo ngày dự kiến đến (YYYY-MM-DD)",
+    "filter by host user uuid": "Lọc theo UUID người tiếp đón",
+    "filter by name (ilike)": "Lọc theo tên (ILIKE)",
+    "filter by session status (active, exited, voided)": "Lọc theo trạng thái phiên (active, exited, voided)",
+    "filter by status": "Lọc theo trạng thái",
+    "filter by status (online, offline, error)": "Lọc theo trạng thái (online, offline, error)",
+    "filter by status (repeatable)": "Lọc theo trạng thái (có thể lặp lại)",
+    "filter by status (success, failure)": "Lọc theo trạng thái (success, failure)",
+    "filter by tenant uuid (system admin only)": "Lọc theo UUID tenant (chỉ dành cho quản trị hệ thống)",
+    "filter by vehicle plate": "Lọc theo biển số xe",
+    "filter by vehicle type": "Lọc theo loại phương tiện",
+    "filter by visit status": "Lọc theo trạng thái lượt khách",
+    "filter by year (defaults to current year)": "Lọc theo năm (mặc định là năm hiện tại)",
+    "partial match on name or code": "Khớp một phần theo tên hoặc mã",
+    "partial match on plate, owner name, or phone": "Khớp một phần theo biển số, tên chủ xe, hoặc số điện thoại",
+    "search by name or email": "Tìm theo tên hoặc email",
+
+    # ── time windows ───────────────────────────────────────────────────────
+    "iso date (yyyy-mm-dd) end of window. defaults to today.":
+        "Ngày ISO (YYYY-MM-DD) kết thúc khoảng. Mặc định là hôm nay.",
+    "iso date (yyyy-mm-dd) start of window. defaults to first day of current month.":
+        "Ngày ISO (YYYY-MM-DD) bắt đầu khoảng. Mặc định là ngày đầu tháng hiện tại.",
+    "iso-8601 end of entry window": "Mốc kết thúc (ISO-8601)",
+    "iso-8601 end timestamp": "Thời điểm kết thúc (ISO-8601)",
+    "iso-8601 start of entry window": "Mốc bắt đầu (ISO-8601)",
+    "iso-8601 start timestamp": "Thời điểm bắt đầu (ISO-8601)",
+
+    # ── request bodies ─────────────────────────────────────────────────────
+    "access group fields": "Trường dữ liệu của nhóm truy cập",
+    "camera payload (name, type, rtsp_url or hanet_device_id, access_point_id, etc.)":
+        "Dữ liệu camera (name, type, rtsp_url hoặc hanet_device_id, access_point_id, v.v.)",
+    "company payload (name, code, plugins[], admin email, etc.)":
+        "Dữ liệu công ty (name, code, plugins[], email quản trị, v.v.)",
+    "device fields to update": "Trường cần cập nhật cho thiết bị",
+    "device fields: device_id (hardware id, required), name, type, model, location, firmware_version":
+        "Trường thiết bị: device_id (id phần cứng, bắt buộc), name, type, model, location, firmware_version",
+    "fields to update": "Trường cần cập nhật",
+    "fields to update (all optional)": "Trường cần cập nhật (đều tùy chọn)",
+    "leave request (policy_id, start_date, end_date, half_day, reason)":
+        "Đơn xin nghỉ (policy_id, start_date, end_date, half_day, reason)",
+    "optional check-in metadata": "Thông tin check-in tùy chọn",
+    "subset of user fields to update": "Tập con trường người dùng cần cập nhật",
+    "user fields: first_name, last_name, email, phone, department_id, position, status, access_group_id, effective_date, expired_date":
+        "Trường người dùng: first_name, last_name, email, phone, department_id, position, status, access_group_id, effective_date, expired_date",
+    "vehicle payload (plate, owner_name, phone, vehicle_type, pass_id, etc.)":
+        "Dữ liệu phương tiện (plate, owner_name, phone, vehicle_type, pass_id, v.v.)",
+    "visit payload (first_name, last_name, email, expected_arrival, host_user_id, etc.)":
+        "Dữ liệu lượt khách (first_name, last_name, email, expected_arrival, host_user_id, v.v.)",
+    "{ email, password }": "{ email, password }",
+    "{ refresh_token }": "{ refresh_token }",
+
+    # ── response phrases ───────────────────────────────────────────────────
+    "account locked after 5 failed attempts (15 min cooldown)":
+        "Tài khoản bị khóa sau 5 lần đăng nhập sai (tạm khóa 15 phút)",
+    "api_integration plugin not enabled": "Plugin api_integration chưa được bật",
+    "bad request": "Yêu cầu không hợp lệ",
+    "created": "Đã tạo",
+    "csv file download": "Tải về tệp CSV",
+    "device_id already registered": "device_id đã được đăng ký",
+    "either { access_token, refresh_token, user } or { companies: [] } when disambiguation is needed":
+        "Trả về { access_token, refresh_token, user } hoặc { companies: [] } khi cần chọn công ty",
+    "email or employee number already exists": "Email hoặc mã nhân viên đã tồn tại",
+    "forbidden": "Từ chối truy cập",
+    "internal server error": "Lỗi máy chủ nội bộ",
+    "missing or invalid bearer token": "Thiếu hoặc sai bearer token",
+    "no content": "Không có nội dung",
+    "not a system admin": "Không phải quản trị hệ thống",
+    "not found": "Không tìm thấy",
+    "not found or already suspended": "Không tìm thấy hoặc đã bị tạm ngưng",
+    "ok": "OK",
+    "paginated list": "Danh sách có phân trang",
+    "paginated list with data and pagination envelope":
+        "Danh sách có phân trang kèm envelope dữ liệu và phân trang",
+    "paginated user list with total count": "Danh sách người dùng có phân trang kèm tổng số",
+    "status: deleted": "status: deleted",
+    "too many requests": "Vượt giới hạn tần suất",
+    "unauthorized": "Chưa xác thực",
+    "user not found or not in tenant": "Không tìm thấy người dùng hoặc không thuộc tenant",
+    "validation error": "Lỗi kiểm tra dữ liệu",
+    "{ access_token, refresh_token }": "{ access_token, refresh_token }",
+}
+
+
+def translate_common(text: str) -> str:
+    """Look up a common English phrase in COMMON_VI (case-insensitive)."""
+    if not text:
+        return text
+    key = text.strip().lower()
+    return COMMON_VI.get(key, text)
+
+
+DESC_VI = {
+    "GET /access/groups":
+        "Nhóm truy cập kết hợp các điểm truy cập, mẫu thời gian và người dùng. "
+        "Có phân trang, lọc được theo tên.",
+    "DELETE /access/groups/{id}":
+        "Xóa mềm. Người dùng đang thuộc nhóm này vẫn giữ bản ghi phân công nhưng "
+        "các bản ghi đó trở nên không còn hiệu lực.",
+    "GET /attendance/holidays":
+        "Thuộc plugin chấm công. Quyền đọc mở cho mọi người dùng đã bật plugin.",
+    "GET /attendance/me/attendance":
+        "Thuộc plugin chấm công. Trả về các bản ghi chấm công của chính người "
+        "gọi trong khoảng thời gian yêu cầu.",
+    "POST /attendance/me/leave/requests":
+        "Gửi đơn xin nghỉ phép cho người dùng đã xác thực. Trường user_id do "
+        "phía gọi truyền vào sẽ bị bỏ qua.",
+    "GET /audit/export":
+        "Trả về các bản ghi kiểm toán phù hợp dưới dạng CSV theo luồng stream. "
+        "Hỗ trợ cùng bộ lọc với endpoint danh sách. Giới hạn tối đa 50.000 dòng "
+        "mỗi lần xuất.",
+    "GET /audit/logs":
+        "Trả về danh sách có phân trang các bản ghi kiểm toán. Người dùng tenant "
+        "chỉ xem được bản ghi của tenant mình; quản trị hệ thống xem tất cả. Hỗ "
+        "trợ lọc theo actor, service, action, entity_type, thời gian…",
+    "GET /audit/logs/{id}":
+        "Trả về một bản ghi kiểm toán theo id. Người dùng tenant chỉ đọc được "
+        "các bản ghi thuộc tenant của mình.",
+    "GET /auth/api-tokens":
+        "Trả về tất cả token API đã phát hành cho tenant của người gọi. Chuỗi "
+        "bí mật chỉ hiển thị một lần khi tạo; endpoint này chỉ trả về phần "
+        "metadata (prefix, scope, thông tin sử dụng…).",
+    "POST /auth/login":
+        "Bước 1 của luồng đăng nhập hai bước. Nếu người dùng thuộc nhiều công "
+        "ty, hệ thống trả về danh sách công ty thay vì token và phía gọi phải "
+        "thực hiện tiếp POST /auth/login-step2.",
+    "POST /auth/logout":
+        "Thu hồi refresh token để không thể dùng đổi token tiếp. Access token "
+        "vẫn hoạt động cho tới khi hết hạn tự nhiên (thời gian sống ngắn).",
+    "GET /auth/me":
+        "Trả về hồ sơ của người gọi kèm theo vai trò và cấu hình plugin của "
+        "tenant. Console gọi mỗi lần tải trang để khôi phục phiên.",
+    "POST /auth/refresh":
+        "Hỗ trợ khoảng ân hạn 7 ngày đối với refresh token hết hạn để các "
+        "terminal offline vẫn đồng bộ được. Có giới hạn tần suất theo IP.",
+    "GET /auth/system/companies":
+        "Chỉ dành cho quản trị hệ thống. Mỗi công ty là một tenant; danh sách "
+        "này kiểm soát ai có thể đăng nhập vào nền tảng.",
+    "POST /auth/system/companies":
+        "Chỉ dành cho quản trị hệ thống. Tạo tenant mới kèm cấu hình plugin, "
+        "khởi tạo dữ liệu mặc định trong các schema dm3_* của tenant, và có thể "
+        "mời một quản trị viên ban đầu.",
+    "PUT /auth/system/companies/{id}":
+        "Thay đổi cấu hình plugin sẽ áp dụng ở lần đăng nhập kế tiếp của tenant "
+        "đó — các phiên đang chạy giữ nguyên tập plugin cũ cho đến khi access "
+        "token được làm mới.",
+    "DELETE /auth/system/companies/{id}":
+        "Chỉ dành cho quản trị hệ thống. Đánh dấu tenant ở trạng thái tạm ngưng; "
+        "các phiên đang chạy tiếp tục hợp lệ cho đến khi JWT hết hạn nhưng các "
+        "lần đăng nhập mới sẽ bị chặn.",
+    "GET /cctv/cameras":
+        "Thuộc plugin CCTV. Quyền đọc mở cho mọi người dùng đã bật plugin; "
+        "quyền ghi yêu cầu cctv.camera.manage.",
+    "POST /cctv/cameras":
+        "Đăng ký một nguồn RTSP/WebRTC. Với tích hợp Hanet, cung cấp id thiết "
+        "bị Hanet thay vì URL RTSP thô.",
+    "GET /gateway/devices":
+        "Mỗi dòng bao gồm trạng thái online, phiên bản firmware và danh sách "
+        "các điểm truy cập được gán cho thiết bị.",
+    "POST /gateway/devices":
+        "Với môi trường thật, khuyến nghị dùng luồng provisioning bằng mã QR. "
+        "Endpoint này là đường ghi trực tiếp, phục vụ các tích hợp tự quản lý "
+        "thiết bị từ bên ngoài.",
+    "PUT /gateway/devices/{id}":
+        "Cập nhật một phần. Thay đổi verify_methods hoặc open_relay_ms có hiệu "
+        "lực sau chu kỳ đồng bộ cấu hình kế tiếp.",
+    "DELETE /gateway/devices/{id}":
+        "Xóa vĩnh viễn thiết bị. Các thông tin xác thực được cache offline trên "
+        "thiết bị vẫn tồn tại cho tới khi thiết bị đồng bộ và phát hiện mình đã "
+        "bị thu hồi.",
+    "GET /identity/users":
+        "Danh sách người dùng có phân trang, lọc được theo từ khóa tìm kiếm, "
+        "trạng thái và phòng ban.",
+    "POST /identity/users":
+        "Tạo bản ghi người dùng. Các trường bắt buộc gồm first_name, last_name, "
+        "và ít nhất một trong email hoặc emp_number. Thông tin xác thực tùy "
+        "chọn (thẻ, PIN, sinh trắc học) được gắn qua endpoint credentials "
+        "riêng biệt.",
+    "GET /identity/users/{id}":
+        "Lấy toàn bộ thông tin người dùng, bao gồm phòng ban, thành viên trong "
+        "nhóm truy cập và metadata của các thông tin xác thực.",
+    "PUT /identity/users/{id}":
+        "Cập nhật một phần — chỉ các trường có trong body được cập nhật. Bỏ "
+        "qua một trường để giữ nguyên giá trị cũ.",
+    "DELETE /identity/users/{id}":
+        "Xóa mềm — bản ghi người dùng được đánh dấu đã xóa và ẩn khỏi các "
+        "endpoint danh sách/chi tiết, nhưng vẫn lưu giữ để đảm bảo tính toàn "
+        "vẹn của nhật ký kiểm toán. Các thông tin xác thực liên quan bị thu "
+        "hồi ngay lập tức.",
+    "GET /parking/sessions":
+        "Thuộc plugin đỗ xe. Một phiên là một vé vào/ra. Quyền đọc mở; quyền "
+        "ghi yêu cầu parking.ticket.manage.",
+    "GET /parking/vehicles":
+        "Thuộc plugin đỗ xe. Quyền đọc mở cho mọi người dùng đã bật plugin; "
+        "quyền ghi yêu cầu parking.vehicle.manage.",
+    "GET /visitors":
+        "Thuộc plugin khách. Quyền ghi yêu cầu visitor.visit.manage; quyền đọc "
+        "mở cho mọi người dùng đã bật plugin.",
+    "POST /visitors":
+        "Gửi email mời kèm mã QR đến khách nếu có địa chỉ email. Thuộc plugin "
+        "khách, yêu cầu visitor.visit.manage.",
+    "POST /visitors/{id}/checkin":
+        "Ghi nhận thời điểm đến và metadata tùy chọn (ảnh, thẻ). Chuyển "
+        "visit.status sang trạng thái checked_in.",
+}
+
 # ─── utils ──────────────────────────────────────────────────────────────────
 
 
@@ -248,7 +554,9 @@ def render_parameters(params: list) -> str:
             type_s = schema_to_type(schema)
             required = "✓" if p.get("required") else "—"
             required_cls = "req-yes" if p.get("required") else "req-no"
-            desc = esc(p.get("description") or "").replace("\n", "<br>")
+            desc = esc(translate_common(p.get("description") or "")).replace(
+                "\n", "<br>"
+            )
             parts.append(
                 f'<tr><td class="param-name">{esc(name)}</td>'
                 f'<td class="type">{type_s}</td>'
@@ -289,7 +597,7 @@ def render_responses(responses: dict) -> str:
     parts.append("</tr></thead><tbody>")
     for status in sorted(responses.keys(), key=lambda s: (len(s) > 3, s)):
         resp = responses[status] or {}
-        desc = esc(resp.get("description") or "")
+        desc = esc(translate_common(resp.get("description") or ""))
         code_cls = "status-2xx"
         try:
             code = int(status)
@@ -309,8 +617,12 @@ def render_responses(responses: dict) -> str:
 def render_operation(path: str, method: str, op: dict) -> str:
     method_up = method.upper()
     color = METHOD_COLORS.get(method_up, "#6B7280")
-    summary = esc(op.get("summary") or f"{method_up} {path}")
-    description = esc(op.get("description") or "")
+    key = f"{method_up} {path}"
+    summary = esc(
+        SUMMARY_VI.get(key) or op.get("summary") or f"{method_up} {path}"
+    )
+    raw_desc = DESC_VI.get(key) or op.get("description") or ""
+    description = esc(raw_desc)
     deprecated = op.get("deprecated", False)
     op_id = op.get("operationId") or slugify(f"{method}-{path}")
     anchor = f"op-{slugify(op_id)}"
@@ -425,30 +737,48 @@ code {{
 }}
 h1, h2, h3 {{ color: {BRAND_BG}; letter-spacing: -0.01em; }}
 
-/* ─ cover ─ (fits inside the default @page margins — we accept a small frame) */
+/* ─ cover ─ (fits inside the default @page margins; main block centered,
+   copyright notice pinned to the bottom of the page) */
 .cover {{
     page-break-after: always;
-    min-height: 250mm;
+    min-height: 255mm;
     background: {BRAND_BG};
     color: #F8FAFC;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 20mm 16mm 16mm;
+    border-radius: 4pt;
+}}
+.cover .cover-main {{
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     text-align: center;
-    padding: 30mm 18mm;
-    border-radius: 4pt;
 }}
 .cover img {{ width: 160px; height: auto; margin-bottom: 28pt; }}
 .cover h1 {{
     color: white;
-    font-size: 36pt;
+    font-size: 34pt;
     margin: 0 0 12pt;
     font-weight: 700;
     letter-spacing: -0.02em;
 }}
 .cover .accent {{ color: {BRAND_PRIMARY}; font-weight: 600; font-size: 13pt; margin: 4pt 0 20pt; }}
-.cover p {{ margin: 4pt 0; font-size: 11pt; opacity: 0.85; }}
+.cover .cover-main p {{ margin: 4pt 0; font-size: 11pt; opacity: 0.85; }}
+.cover .cover-main p.org {{ margin-top: 14pt; }}
+.cover .cover-copyright {{
+    margin-top: 14pt;
+    padding-top: 10pt;
+    border-top: 1px solid rgba(148, 163, 184, 0.35);
+    font-size: 7.5pt;
+    line-height: 1.5;
+    color: #94A3B8;
+    text-align: justify;
+}}
+.cover .cover-copyright p {{ margin: 0; }}
 /* suppress footer on the cover page */
 @page :first {{
     @bottom-left {{ content: ""; }}
@@ -695,27 +1025,23 @@ def render_html(spec: dict) -> str:
 
     groups = group_operations(spec)
 
-    # ─ cover ─
+    # ─ cover (includes copyright notice at the bottom) ─
     cover = f"""
 <section class="cover">
-  <img src="{logo_data_uri()}" alt="Duall Master"/>
-  <h1>{title}</h1>
-  <div class="accent">{L["cover_subtitle"]} · v{version}</div>
-  <p>{L["cover_tag"]}</p>
-  <p>&copy; Duali Vietnam</p>
+  <div class="cover-main">
+    <img src="{logo_data_uri()}" alt="Duall Master"/>
+    <h1>{title}</h1>
+    <div class="accent">{L["cover_subtitle"]} · v{version}</div>
+    <p>{L["cover_tag"]}</p>
+    <p class="org">&copy; Duali Vietnam</p>
+  </div>
+  <div class="cover-copyright">
+    <p>{esc(FRONT_COPYRIGHT)}</p>
+  </div>
 </section>
 """
 
-    # ─ front matter: standard Duali copyright + disclaimer ─
-    logo_uri = logo_data_uri()
-    copyright_page = f"""
-<section class="front-page">
-  <div class="copyright-block">
-    <p>{esc(FRONT_COPYRIGHT)}</p>
-  </div>
-  <div class="logo-mark"><img src="{logo_uri}" alt="DUALi"/></div>
-</section>
-"""
+    # ─ disclaimer page (copyright is now on the cover) ─
     disclaimer_paras = "".join(
         f"<p>{esc(p)}</p>" for p in FRONT_DISCLAIMER_PARAGRAPHS
     )
@@ -731,12 +1057,12 @@ def render_html(spec: dict) -> str:
 </section>
 """
 
-    # ─ overview ─
+    # ─ overview ─ (use Vietnamese overlay, not the spec's English description)
     server = f"{schemes}://{host}{base_path}" if host else base_path or "/api/v1"
     overview = f"""
 <section class="overview">
   <h1>{L["overview"]}</h1>
-  <p>{esc(description)}</p>
+  <p>{OVERVIEW_VI}</p>
   <div class="meta-grid">
     <div><div class="label">Base URL</div><div class="value"><code>{esc(server)}</code></div></div>
     <div><div class="label">Phiên bản</div><div class="value">v{version}</div></div>
@@ -778,7 +1104,10 @@ def render_html(spec: dict) -> str:
         for path, method, op in ops:
             method_up = method.upper()
             color = METHOD_COLORS.get(method_up, "#6B7280")
-            summary = esc(op.get("summary") or f"{method_up} {path}")
+            key = f"{method_up} {path}"
+            summary = esc(
+                SUMMARY_VI.get(key) or op.get("summary") or f"{method_up} {path}"
+            )
             op_id = op.get("operationId") or slugify(f"{method}-{path}")
             op_anchor = f"op-{slugify(op_id)}"
             toc_parts.append(
@@ -816,7 +1145,6 @@ def render_html(spec: dict) -> str:
 </head>
 <body>
 {cover}
-{copyright_page}
 {disclaimer_page}
 <section id="overview-marker"></section>
 {overview}
