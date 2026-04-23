@@ -34,11 +34,16 @@ func pathRecordDefaults(ctx context.Context, database *db.DB, tenantID string) P
 		return PathConfig{}
 	}
 
+	// recordPath template uses MediaMTX's built-in strftime-style placeholders.
+	// %path = camera UUID (we set path name = device UUID in UpsertPath); %f =
+	// microseconds. The filename encodes segment start time so the extractor
+	// can window-filter without opening each file.
 	return PathConfig{
 		Record:                true,
 		RecordFormat:          "fmp4",
-		RecordSegmentDuration: "5s",
-		RecordDeleteAfter:     fmt.Sprintf("%ds", rollingSec*2),
+		RecordPath:            "/recordings/%path/%Y-%m-%d_%H-%M-%S-%f",
+		RecordSegmentDuration: "10s",
+		RecordDeleteAfter:     fmt.Sprintf("%ds", rollingSec+60),
 	}
 }
 

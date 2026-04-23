@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { PageHeader, DataTable, type Column, Button, AppModal } from '@dm3/ui';
+import { PageHeader, DataTable, TablePaginationFooter, type Column, Button, AppModal } from '@dm3/ui';
 import { useTranslation } from 'react-i18next';
 import { Trash2, Play, Download, Film, Image as ImageIcon, Loader2, AlertTriangle } from 'lucide-react';
 import {
@@ -8,6 +8,7 @@ import {
   listClips,
   getClipPlayback,
   deleteClip,
+  bulkDeleteClips,
   type ClipDTO,
 } from '@dm3/api-client';
 
@@ -16,9 +17,19 @@ export function CCTVClipsPage() {
   const qc = useQueryClient();
 
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [cameraFilter, setCameraFilter] = useState('');
   const [fromFilter, setFromFilter] = useState('');
   const [toFilter, setToFilter] = useState('');
+  const [sortBy, setSortBy] = useState<'started_at' | 'duration_ms' | 'camera_name' | 'media_type' | 'status'>('started_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSortChange = (col: string, dir: 'asc' | 'desc') => {
+    setSortBy(col as typeof sortBy);
+    setSortDir(dir);
+    setPage(1);
+  };
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
 
   const { data: camerasData } = useQuery({
     queryKey: ['cctv-cameras-all'],
@@ -29,20 +40,35 @@ export function CCTVClipsPage() {
   const [playUrl, setPlayUrl] = useState<string>('');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['cctv-clips', page, cameraFilter, fromFilter, toFilter],
+    queryKey: ['cctv-clips', page, pageSize, cameraFilter, fromFilter, toFilter, sortBy, sortDir],
     queryFn: () =>
       listClips({
         page,
-        limit: 20,
+        limit: pageSize,
         camera_id: cameraFilter || undefined,
         from: fromFilter || undefined,
         to: toFilter || undefined,
+        sort_by: sortBy,
+        sort_order: sortDir,
       }),
+    // Surface stale pages while the next page loads so the table doesn't
+    // flash "empty" between clicks — matches the behaviour of other listing
+    // pages (access-times, access-points).
+    placeholderData: (prev) => prev,
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteClip(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cctv-clips'] }),
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) => bulkDeleteClips(ids),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cctv-clips'] });
+      setSelected(new Set());
+      setShowBulkDelete(false);
+    },
   });
 
   const playMutation = useMutation({
@@ -83,6 +109,7 @@ export function CCTVClipsPage() {
       key: 'camera_name',
       header: t('cctv.clips.cols.camera'),
       width: '160px',
+      sortable: true,
       render: (r) => (
         <span className="text-[13px] font-medium">{r.camera_name ?? t('cctv.common.unknownCamera')}</span>
       ),
@@ -95,14 +122,14 @@ export function CCTVClipsPage() {
         if (r.status === 'pending' || r.status === 'recording') {
           return (
             <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Loader2 size={12} className="animate-spin" /> Processing
+              <Loader2 size={12} className="animate-spin" /> {t('cctv.clips.status.processing')}
             </span>
           );
         }
         if (r.status === 'failed') {
           return (
             <span className="inline-flex items-center gap-1 text-[11px] text-destructive">
-              <AlertTriangle size={12} /> Failed
+              <AlertTriangle size={12} /> {t('cctv.clips.status.failed')}
             </span>
           );
         }
@@ -110,19 +137,25 @@ export function CCTVClipsPage() {
       },
     },
     {
+      // A single clip can cover multiple events (coalesced bursts), so showing
+      // a single "event time" on this row is misleading. The correlation flow
+      // is event → clip (Access History surfaces per-event media via
+      // cctv_media[]), not clip → event.
       key: 'started_at',
-      header: t('cctv.clips.cols.startedAt'),
-      width: '160px',
+      header: t('cctv.clips.cols.recordedAt'),
+      width: '170px',
+      sortable: true,
       render: (r) => (
-        <span className="font-mono text-[12px] text-muted-foreground">
+        <span className="font-mono text-[12px] text-foreground">
           {new Date(r.started_at).toLocaleString()}
         </span>
       ),
     },
     {
-      key: 'duration_sec',
+      key: 'duration_ms',
       header: t('cctv.clips.cols.duration'),
       width: '90px',
+      sortable: true,
       render: (r) => (
         <span className="text-[12px] text-muted-foreground">
           {r.duration_sec != null ? `${r.duration_sec}s` : '—'}
@@ -151,7 +184,7 @@ export function CCTVClipsPage() {
             onClick={() => playMutation.mutate(r)}
             disabled={playMutation.isPending || r.status === 'pending' || r.status === 'recording' || r.status === 'failed'}
             data-testid={`cctv-button-play-clip-${r.id}`}
-            aria-label={r.media_type === 'snapshot' ? 'Open image' : t('cctv.clips.play')}
+            aria-label={r.media_type === 'snapshot' ? t('cctv.clips.actions.openImage') : t('cctv.clips.play')}
           >
             {r.media_type === 'snapshot' ? <ImageIcon size={14} /> : <Play size={14} />}
           </Button>
@@ -170,8 +203,10 @@ export function CCTVClipsPage() {
     },
   ];
 
+  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / (data?.limit ?? pageSize)));
+
   return (
-    <div>
+    <div className="flex h-full min-h-0 flex-col">
       <PageHeader title={t('cctv.clips.title')} description={t('cctv.clips.description')}>
         <div className="flex items-center gap-2">
           <select
@@ -205,27 +240,95 @@ export function CCTVClipsPage() {
         </div>
       </PageHeader>
 
-      {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">{t('cctv.common.loading')}</div>
-      ) : (
-        <DataTable
-          columns={columns}
-          data={clips}
-          rowKey={(r) => r.id}
-          pageSize={20}
-          emptyIcon={<Film size={32} strokeWidth={1.2} />}
-          emptyTitle={(cameraFilter || fromFilter || toFilter) ? 'No clips match these filters' : 'No clips recorded yet'}
-          emptyDescription={(cameraFilter || fromFilter || toFilter)
-            ? 'Try a different camera or broaden the date range.'
-            : 'Clips are captured automatically when a camera triggers a recording event (motion, access, or manual). Check camera recording mode and MediaMTX connectivity.'}
-          emptyAction={(cameraFilter || fromFilter || toFilter) ? {
-            label: 'Clear filters',
-            variant: 'outline',
-            onClick: () => { setCameraFilter(''); setFromFilter(''); setToFilter(''); setPage(1); },
-            'data-testid': 'cctv-button-clear-filters-empty',
-          } : undefined}
+      {/* Wrapping flex column: inner scroll holds the table, footer sits
+          permanently at the bottom of the viewport (same pattern as
+          /manage/users). `min-h-0` lets flex children actually shrink. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+        <div className="min-h-0 flex-1 overflow-auto">
+          <DataTable
+            embedded
+            stickyHeader
+            paginate={false}
+            loading={isLoading}
+            columns={columns}
+            data={clips}
+            rowKey={(r) => r.id}
+            sortState={{ col: sortBy, dir: sortDir }}
+            onSortChange={(col, dir) => handleSortChange(String(col), dir)}
+            selection={{
+              selectedIds: Array.from(selected),
+              onSelectedIdsChange: (ids) => setSelected(new Set(ids)),
+              selectAllScope: 'page',
+              bulkActions: [
+                {
+                  icon: <Trash2 size={13} className="text-destructive" />,
+                  label: t('cctv.clips.bulkDelete'),
+                  variant: 'ghost',
+                  className: 'text-destructive hover:text-destructive hover:bg-destructive/10',
+                  onClick: () => setShowBulkDelete(true),
+                },
+              ],
+            }}
+            emptyIcon={<Film size={32} strokeWidth={1.2} />}
+            emptyTitle={(cameraFilter || fromFilter || toFilter) ? 'No clips match these filters' : 'No clips recorded yet'}
+            emptyDescription={(cameraFilter || fromFilter || toFilter)
+              ? 'Try a different camera or broaden the date range.'
+              : 'Clips are captured automatically when a camera triggers a recording event (motion, access, or manual). Check camera recording mode and MediaMTX connectivity.'}
+            emptyAction={(cameraFilter || fromFilter || toFilter) ? {
+              label: 'Clear filters',
+              variant: 'outline',
+              onClick: () => { setCameraFilter(''); setFromFilter(''); setToFilter(''); setPage(1); },
+              'data-testid': 'cctv-button-clear-filters-empty',
+            } : undefined}
+          />
+        </div>
+        <TablePaginationFooter
+          page={data?.page ?? page}
+          pageSize={data?.limit ?? pageSize}
+          total={data?.total ?? 0}
+          totalPages={totalPages}
+          pageSizeOptions={[10, 20, 50, 100]}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+          loading={isLoading}
+          sortColumns={[
+            { value: 'started_at', label: t('cctv.clips.cols.recordedAt') },
+            { value: 'camera_name', label: t('cctv.clips.cols.camera') },
+            { value: 'duration_ms', label: t('cctv.clips.cols.duration') },
+          ]}
+          sortBy={sortBy}
+          sortDir={sortDir}
+          onSortChange={(col, dir) => handleSortChange(String(col), dir)}
         />
-      )}
+      </div>
+
+      {/* Bulk delete confirmation */}
+      <AppModal
+        open={showBulkDelete}
+        onOpenChange={(open) => { if (!open) setShowBulkDelete(false); }}
+        title={
+          <span className="flex items-center gap-2 text-destructive">
+            <Trash2 size={16} />
+            {t('cctv.clips.bulkDeleteTitle')}
+          </span>
+        }
+        size="xs"
+        showCancelButton
+        cancelLabel={t('cctv.common.cancel')}
+        cancelDisabled={bulkDeleteMutation.isPending}
+        primaryAction={{
+          label: bulkDeleteMutation.isPending ? t('cctv.common.saving') : t('cctv.clips.bulkDeleteConfirm'),
+          variant: 'outline',
+          className: 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20',
+          onClick: () => bulkDeleteMutation.mutate(Array.from(selected)),
+          loading: bulkDeleteMutation.isPending,
+          disabled: bulkDeleteMutation.isPending || selected.size === 0,
+        }}
+      >
+        <p className="text-[13px] text-muted-foreground">
+          {t('cctv.clips.bulkDeletePrompt', { count: selected.size })}
+        </p>
+      </AppModal>
 
       {/* Video player modal */}
       <AppModal

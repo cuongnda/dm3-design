@@ -34,6 +34,12 @@ export interface ClipDTO {
   camera_id: string;
   camera_name?: string;
   access_event_id?: string;
+  /** Wall-clock time of the earliest access event attached to this clip.
+   *  Present when the clip originated from an access event (trigger='access_event').
+   *  Use this instead of `started_at` for side-by-side correlation with the
+   *  Access History page — `started_at` is the capture window start, which
+   *  is skewed by pre_roll. */
+  event_time?: string;
   started_at: string;
   ended_at?: string;
   duration_sec?: number;
@@ -211,6 +217,8 @@ export interface ListClipsParams {
   to?: string;
   page?: number;
   limit?: number;
+  sort_by?: 'event_time' | 'started_at' | 'duration_ms' | 'camera_name' | 'media_type' | 'status';
+  sort_order?: 'asc' | 'desc';
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -283,6 +291,15 @@ export function getClipPlayback(id: string): Promise<ClipPlaybackDTO> {
 
 export function deleteClip(id: string): Promise<void> {
   return apiFetch(`${BASE}/clips/${id}`, { method: 'DELETE' });
+}
+
+/** Bulk delete clips by id. Server caps at 500 ids per request. Tenant is
+ *  inferred from the caller's JWT — only clips in that tenant are touched. */
+export function bulkDeleteClips(ids: string[]): Promise<{ deleted: number }> {
+  return apiFetch(`${BASE}/clips/bulk-delete`, {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
 }
 
 // ─── Settings ────────────────────────────────────────────────────────────────

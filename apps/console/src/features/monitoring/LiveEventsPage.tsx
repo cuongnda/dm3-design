@@ -114,10 +114,12 @@ function accessToRow(e: RealtimeAccessEvent): TimelineRow {
     cardIds: e.cardIds,
     credentials: e.credentials,
     credentialType: e.credentialType,
-    // Realtime store only carries the raw object key — no presigned URL on
-    // the WebSocket hop. The next fetchBackendEvents() refresh fills in
-    // photoUrl; until then, the cell hides if photoRef isn't a legacy
-    // /photos/ path (assetUrl only handles those).
+    // Prefer the presigned URL carried on the WebSocket payload (TungSon
+    // face paths and anyone else calling publishWSEventWithPhoto). Fall back
+    // to the raw object key when the publisher couldn't presign — the cell
+    // hides gracefully if photoRef is neither a legacy `/photos/` path nor a
+    // recognizable MinIO key.
+    photoUrl: e.photoUrl,
     photoRef: e.photoRef,
   };
 }

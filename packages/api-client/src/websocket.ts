@@ -35,10 +35,12 @@ export interface AccessEventData {
   device_name?: string;
   // Event snapshot captured by the device. `photo` is the raw MinIO object key
   // (events/<tenant>/<device>/snapshot/<uuid>.<ext>) the firmware publishes on
-  // access.log. The server does NOT presign it for the WebSocket broadcast —
-  // subscribers should fall back to the REST ListEvents endpoint for a
-  // short-lived GET URL, or treat this as a key to request on demand.
+  // access.log. For paths where the backend can presign cheaply (TungSon face
+  // recognition + unknown-face) the server also sends a ready-to-render
+  // `photo_url` so the realtime monitoring page can show the image without
+  // waiting for a REST refresh.
   photo?: string;
+  photo_url?: string;
 }
 
 export interface DoorStateData {
@@ -341,8 +343,11 @@ export class WebSocketClient {
   }
 
   private routeEvent(event: WSEvent): void {
-    // Route to specific handlers based on event type
-    if (event.type.startsWith('access.')) {
+    // Route to specific handlers based on event type. face.match / face.unknown
+    // share the access-log payload shape so they feed onAccessEvent too —
+    // otherwise face recognition events silently dropped off the realtime
+    // monitoring page when we stopped wrapping them in `access.log`.
+    if (event.type.startsWith('access.') || event.type.startsWith('face.')) {
       this.options.onAccessEvent?.(event.data as AccessEventData, event);
     } else if (event.type === 'door.state') {
       this.options.onDoorState?.(event.data as DoorStateData, event);

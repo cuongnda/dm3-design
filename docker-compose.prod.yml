@@ -403,6 +403,12 @@ services:
     ports:
       - "8889:8889"
       - "8189:8189/udp"
+    volumes:
+      # Rolling-buffer directory: MediaMTX writes fMP4 segments here when a
+      # path has `record: true` (set by cctv-svc based on cctv_settings
+      # rolling_buffer_sec). Shared read-only with cctv-svc so the finalizer
+      # can splice segments into event clips for real pre-roll.
+      - mediamtx_recordings:/recordings
     networks:
       - dm3-internal
     # mediamtx image is distroless (no wget/curl). We rely on the service
@@ -427,6 +433,14 @@ services:
       MEDIAMTX_WHEP_BASE: ${MEDIAMTX_WHEP_BASE:-/cctv/whep}
       MEDIAMTX_HLS_BASE: ${MEDIAMTX_HLS_BASE:-/cctv/hls}
       CCTV_ALLOW_PRIVATE_RTSP: "true"
+      # Rolling-buffer root. When set, the clip extractor splices MediaMTX
+      # fMP4 segments covering [started_at, end_at] instead of pulling live
+      # RTSP from "now" — preserves real pre-roll on event clips. Must be
+      # the same path both this service and `mediamtx` see via the shared
+      # named volume below. (object-store-env anchor handles MinIO config.)
+      MEDIAMTX_RECORD_DIR: /recordings
+    volumes:
+      - mediamtx_recordings:/recordings:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -588,6 +602,12 @@ volumes:
   minio_data:
   certbot_webroot:
   automation_data:
+  # Rolling-buffer fMP4 segments for CCTV pre-roll. Disk usage is
+  # bounded by cctv_settings.rolling_buffer_sec per tenant (MediaMTX
+  # prunes segments older than buffer + 60s). Rough budget:
+  #   bitrate × (buffer + 60s) × active cameras.
+  # e.g. 50 cams × 2Mbps × (300+60)s ≈ 4.5 GB steady state.
+  mediamtx_recordings:
 
 networks:
   dm3-internal:

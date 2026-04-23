@@ -39,8 +39,8 @@ export function CCTVSettingsPage() {
     if (settings) {
       setForm({
         retention_days: settings.retention_days,
-        pre_roll_sec_default: settings.pre_roll_sec_default,
-        post_roll_sec_default: settings.post_roll_sec_default,
+        // pre/post_roll_sec_default intentionally omitted — edited per rule
+        // on the Event Rules page.
         storage_quota_gb: settings.storage_quota_gb,
         hanet_client_id: settings.hanet_client_id,
         hanet_server_url: settings.hanet_server_url || HANET_DEFAULT_SERVER,
@@ -139,35 +139,14 @@ export function CCTVSettingsPage() {
           </div>
         </section>
 
-        <section className="rounded-lg border border-border p-4">
-          <h3 className="text-[13px] font-semibold mb-3">{t('cctv.settings.rollSection')}</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-[12px]">{t('cctv.settings.preRollDefault')} (s)</Label>
-              <Input
-                type="number"
-                className="mt-1 h-8 text-[13px]"
-                min={0}
-                max={60}
-                value={form.pre_roll_sec_default ?? 10}
-                onChange={(e) => update('pre_roll_sec_default', Number(e.target.value))}
-                data-testid="cctv-input-pre-roll-default"
-              />
-            </div>
-            <div>
-              <Label className="text-[12px]">{t('cctv.settings.postRollDefault')} (s)</Label>
-              <Input
-                type="number"
-                className="mt-1 h-8 text-[13px]"
-                min={0}
-                max={60}
-                value={form.post_roll_sec_default ?? 10}
-                onChange={(e) => update('post_roll_sec_default', Number(e.target.value))}
-                data-testid="cctv-input-post-roll-default"
-              />
-            </div>
-          </div>
-        </section>
+        {/*
+          Pre/post-roll are now edited per rule on the Event Rules page; the
+          tenant-wide default fields in cctv_settings remain only as a
+          deep-fallback used by the resolver when no rule matches. Not
+          exposed here any more to avoid operators chasing two sources of
+          truth — if they want a tenant-wide default, they create a
+          tenant-scoped rule with priority 1000.
+        */}
 
         <section className="rounded-lg border border-border p-4">
           <h3 className="text-[13px] font-semibold mb-3">{t('cctv.settings.storageSection')}</h3>
@@ -191,10 +170,10 @@ export function CCTVSettingsPage() {
           separate Event Rules page; these are the fallbacks.
         */}
         <section className="rounded-lg border border-border p-4">
-          <h3 className="text-[13px] font-semibold mb-3">Event capture</h3>
+          <h3 className="text-[13px] font-semibold mb-3">{t('cctv.settings.eventCapture.title')}</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-[12px]">Rolling buffer (s) — 0 disables</Label>
+              <Label className="text-[12px]">{t('cctv.settings.eventCapture.rollingBuffer')}</Label>
               <Input
                 type="number"
                 className="mt-1 h-8 text-[13px]"
@@ -205,11 +184,11 @@ export function CCTVSettingsPage() {
                 data-testid="cctv-input-rolling-buffer"
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Disk dung lượng thường trực ≈ bitrate × giá trị này × số cam.
+                {t('cctv.settings.eventCapture.rollingBufferHelp')}
               </p>
             </div>
             <div>
-              <Label className="text-[12px]">Max clip duration (s)</Label>
+              <Label className="text-[12px]">{t('cctv.settings.eventCapture.maxClipDuration')}</Label>
               <Input
                 type="number"
                 className="mt-1 h-8 text-[13px]"
@@ -220,11 +199,11 @@ export function CCTVSettingsPage() {
                 data-testid="cctv-input-max-clip-duration"
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Coalesced clip đạt ngưỡng này sẽ finalize và clip mới được mở.
+                {t('cctv.settings.eventCapture.maxClipDurationHelp')}
               </p>
             </div>
             <div>
-              <Label className="text-[12px]">Max concurrent extractions</Label>
+              <Label className="text-[12px]">{t('cctv.settings.eventCapture.maxConcurrent')}</Label>
               <Input
                 type="number"
                 className="mt-1 h-8 text-[13px]"
@@ -235,7 +214,7 @@ export function CCTVSettingsPage() {
                 data-testid="cctv-input-max-concurrent-extractions"
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Cap số ffmpeg job cùng lúc khi có event burst.
+                {t('cctv.settings.eventCapture.maxConcurrentHelp')}
               </p>
             </div>
             <div className="flex flex-col gap-2 pt-5">
@@ -245,7 +224,7 @@ export function CCTVSettingsPage() {
                   checked={form.default_record_enabled ?? true}
                   onChange={(e) => update('default_record_enabled', e.target.checked)}
                   data-testid="cctv-check-default-record"
-                /> Default: record video on access events
+                /> {t('cctv.settings.eventCapture.defaultRecord')}
               </label>
               <label className="flex items-center gap-2 text-[13px]">
                 <input
@@ -253,8 +232,11 @@ export function CCTVSettingsPage() {
                   checked={form.default_snapshot_enabled ?? false}
                   onChange={(e) => update('default_snapshot_enabled', e.target.checked)}
                   data-testid="cctv-check-default-snapshot"
-                /> Default: snapshot on access events
+                /> {t('cctv.settings.eventCapture.defaultSnapshot')}
               </label>
+              <p className="text-[11px] text-muted-foreground">
+                {t('cctv.settings.eventCapture.defaultsHint')}
+              </p>
             </div>
           </div>
         </section>

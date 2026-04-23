@@ -44,6 +44,7 @@ type clipResponseDTO struct {
 	CameraID      string     `json:"camera_id"`
 	CameraName    *string    `json:"camera_name,omitempty"`
 	AccessEventID *string    `json:"access_event_id,omitempty"`
+	EventTime     *time.Time `json:"event_time,omitempty"` // access_events.time of the earliest linked event
 	StartedAt     time.Time  `json:"started_at"`
 	EndedAt       *time.Time `json:"ended_at,omitempty"`
 	DurationSec   *int       `json:"duration_sec,omitempty"`
@@ -111,6 +112,33 @@ func (h *CCTVHandlers) ListClips(w http.ResponseWriter, r *http.Request) {
 	from := q.Get("from")
 	to := q.Get("to")
 
+	// Whitelist sortable columns. Unknown values fall back to started_at DESC
+	// so the handler can't be tricked into ORDER BY'ing on an unindexed column.
+	sortBy := q.Get("sort_by")
+	sortOrder := strings.ToLower(q.Get("sort_order"))
+	orderClause := "ec.started_at DESC"
+	switch sortBy {
+	case "event_time":
+		orderClause = "evt.time"
+	case "started_at":
+		orderClause = "ec.started_at"
+	case "duration_ms":
+		orderClause = "ec.duration_ms"
+	case "camera_name":
+		orderClause = "d.name"
+	case "media_type":
+		orderClause = "ec.media_type"
+	case "status":
+		orderClause = "ec.status"
+	}
+	if sortBy != "" {
+		if sortOrder == "asc" {
+			orderClause += " ASC NULLS LAST"
+		} else {
+			orderClause += " DESC NULLS LAST"
+		}
+	}
+
 	args := []any{cid}
 	conditions := []string{"ec.tenant_id = $1::uuid"}
 	argIdx := 2
@@ -147,15 +175,30 @@ func (h *CCTVHandlers) ListClips(w http.ResponseWriter, r *http.Request) {
 	}
 
 	listArgs := append(args, limit, offset)
+	// LATERAL subquery pulls the earliest linked access_events.time for each
+	// clip — the coalescer may attach several events to one clip, so we
+	// surface the first one (the event that opened the clip). Cross-schema
+	// text cast on the junction column because access_events.event_id is
+	// the public UUID shape both services agree on.
 	rows, err := h.db.Pool.Query(r.Context(), `
 		SELECT ec.id, ec.tenant_id, ec.device_id, ec.access_event_id, ec.started_at, ec.ended_at,
 		       ec.duration_ms, ec.object_key, ec.thumbnail_ref, ec.trigger, ec.media_type, ec.status, ec.created_at,
-		       d.name
+		       d.name,
+		       evt.time AS event_time
 		FROM dm3_cctv.event_clips ec
 		LEFT JOIN dm3_devices.devices d
 		       ON d.id = ec.device_id AND d.tenant_id = ec.tenant_id
+		LEFT JOIN LATERAL (
+		    SELECT ae.time
+		      FROM dm3_cctv.event_clip_events j
+		      JOIN dm3_access.access_events ae
+		        ON ae.event_id = j.access_event_id::text
+		     WHERE j.clip_id = ec.id
+		     ORDER BY ae.time ASC
+		     LIMIT 1
+		) evt ON TRUE
 		`+where+`
-		ORDER BY ec.started_at DESC
+		ORDER BY `+orderClause+`
 		LIMIT $`+itoa(argIdx)+` OFFSET $`+itoa(argIdx+1), listArgs...)
 	if err != nil {
 		logInternalError(w, "list clips query error", err)
@@ -167,16 +210,18 @@ func (h *CCTVHandlers) ListClips(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var clip EventClip
 		var cameraName *string
+		var eventTime *time.Time
 		if err := rows.Scan(
 			&clip.ID, &clip.TenantID, &clip.DeviceID, &clip.AccessEventID,
 			&clip.StartedAt, &clip.EndedAt, &clip.DurationMs, &clip.ObjectKey, &clip.ThumbnailRef,
 			&clip.Trigger, &clip.MediaType, &clip.Status, &clip.CreatedAt,
-			&cameraName,
+			&cameraName, &eventTime,
 		); err != nil {
 			logInternalError(w, "list clips scan error", err)
 			return
 		}
 		dto := toClipResponse(clip, cameraName)
+		dto.EventTime = eventTime
 		// Presign thumbnail/snapshot so the UI can render it directly. Presigning
 		// is essentially free (local HMAC); N presigns per page of 20 is fine.
 		// TODO(refactor): if the page size ever grows well past 50, switch to a
@@ -351,6 +396,87 @@ func (h *CCTVHandlers) DeleteClip(w http.ResponseWriter, r *http.Request) {
 
 	h.audit.LogFromRequest(r, "cctv.clip.delete", "event_clip", id, objectKey, "success", nil, nil)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// BulkDeleteClips handles POST /clips/bulk-delete
+// Body: {ids: ["uuid1", "uuid2", ...]}
+// Tenant-scoped: only rows belonging to the caller's tenant are affected. Uses
+// a single DELETE ... WHERE id = ANY($1::uuid[]) ... RETURNING so the number
+// of rows deleted (not just requested) is visible to the caller and the
+// audit log. Object-storage cleanup (clip + thumbnail keys) is best-effort
+// after the DB write — retention worker sweeps any leftovers.
+func (h *CCTVHandlers) BulkDeleteClips(w http.ResponseWriter, r *http.Request) {
+	cid := h.getTenantID(r)
+	if !requireTenant(w, cid) {
+		return
+	}
+
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(req.IDs) == 0 {
+		httputil.Error(w, http.StatusBadRequest, "ids must be a non-empty array")
+		return
+	}
+	// Hard cap so a runaway client can't delete tens of thousands of rows
+	// in one request. Operators asking for more can paginate.
+	if len(req.IDs) > 500 {
+		httputil.Error(w, http.StatusBadRequest, "too many ids; max 500 per request")
+		return
+	}
+
+	rows, err := h.db.Pool.Query(r.Context(),
+		`DELETE FROM dm3_cctv.event_clips
+		 WHERE id = ANY($1::uuid[]) AND tenant_id = $2::uuid
+		 RETURNING id::text, COALESCE(object_key,''), COALESCE(thumbnail_ref,'')`,
+		req.IDs, cid,
+	)
+	if err != nil {
+		logInternalError(w, "bulk delete clips error", err)
+		return
+	}
+	defer rows.Close()
+
+	type deletedRow struct {
+		ID, ObjectKey, ThumbRef string
+	}
+	var deleted []deletedRow
+	for rows.Next() {
+		var dr deletedRow
+		if err := rows.Scan(&dr.ID, &dr.ObjectKey, &dr.ThumbRef); err == nil {
+			deleted = append(deleted, dr)
+		}
+	}
+
+	// Object-storage cleanup — don't fail the response if MinIO misbehaves.
+	// Each call is short but we cap context so one slow delete can't block the
+	// HTTP reply.
+	if h.objectStore != nil && len(deleted) > 0 {
+		cleanupCtx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		for _, d := range deleted {
+			if d.ObjectKey != "" && !strings.HasPrefix(d.ObjectKey, "pending/") {
+				if err := h.objectStore.DeleteObject(cleanupCtx, d.ObjectKey); err != nil {
+					slog.Warn("cctv: bulk delete object failed", "clip_id", d.ID, "object_key", d.ObjectKey, "error", err)
+				}
+			}
+			if d.ThumbRef != "" {
+				if err := h.objectStore.DeleteObject(cleanupCtx, d.ThumbRef); err != nil {
+					slog.Warn("cctv: bulk delete thumbnail failed", "clip_id", d.ID, "thumbnail_ref", d.ThumbRef, "error", err)
+				}
+			}
+		}
+	}
+
+	h.audit.LogFromRequest(r, "cctv.clip.bulk_delete", "event_clip", "", "", "success",
+		map[string]any{"requested": len(req.IDs)},
+		map[string]any{"deleted": len(deleted)},
+	)
+	httputil.JSON(w, http.StatusOK, map[string]int{"deleted": len(deleted)})
 }
 
 // GetClipPlayback handles GET /clips/{id}/playback

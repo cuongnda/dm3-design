@@ -450,16 +450,37 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Resolve PersonID (DC_{user_code}) back to user UUID
+	// Resolve PersonID (DC_{user_code}) back to user UUID + display fields
+	// so downstream consumers (monitoring page, access log) don't have to
+	// second-guess camera payloads. Leave userUUID as the raw PersonID only
+	// as a last-ditch fallback — that way the event still carries *some*
+	// identity even when the operator hasn't fully finished the enrolment.
 	userCode := strings.TrimPrefix(result.PersonID, "DC_")
-	var userUUID string
+	var (
+		userUUID   string
+		userName   string
+		deptName   string
+	)
 	_ = h.db.Pool.QueryRow(ctx,
-		`SELECT id::text FROM dm3_identity.users WHERE user_code = $1 AND tenant_id = $2::uuid`,
+		`SELECT u.id::text,
+		        TRIM(CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,''))),
+		        COALESCE(d.name,'')
+		   FROM dm3_identity.users u
+		   LEFT JOIN dm3_identity.departments d ON d.id = u.department_id
+		  WHERE u.user_code = $1 AND u.tenant_id = $2::uuid`,
 		userCode, tenantID,
-	).Scan(&userUUID)
+	).Scan(&userUUID, &userName, &deptName)
 	if userUUID == "" {
-		userUUID = result.PersonID // fallback to raw PersonID
+		userUUID = result.PersonID
 	}
+
+	// Camera display name keeps realtime events human-readable on the
+	// monitoring page; pulled once per event, cheap.
+	var cameraName string
+	_ = h.db.Pool.QueryRow(ctx,
+		`SELECT name FROM dm3_devices.devices WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+		deviceUUID, tenantID,
+	).Scan(&cameraName)
 
 	// Upload snapshot to MinIO — use the largest available image.
 	// Camera may send 1 image (face crop) or 2 (face crop + full frame).
@@ -498,15 +519,28 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 		"id":   eventID,
 		"ts":   now.UnixMilli(),
 		"src":  deviceUUID,
-		"type": "access.log",
+		// Specific type — both access-svc and cctv-svc consumers accept
+		// face.match / face.unknown alongside the classic access.log.
+		"type": "face.match",
 		"data": map[string]any{
 			"method":          "face",
 			"direction":       "entry",
 			"decision":        "granted",
 			"decided_locally": true,
 			"user_id":         userUUID,
+			"user_name":       userName,
+			"user_code":       userCode,
+			"department":      deptName,
+			"device_name":     cameraName,
 			"confidence":      similarity,
-			"credentials":     []map[string]string{{"type": "face", "value": userUUID}},
+			// card_id carries the ORIGINAL identifier the camera sent us
+			// (DC_<user_code>). Keeping it lets the monitoring UI show the
+			// physical "badge" the camera matched against, while user_id /
+			// user_name carry the resolved identity. credentials mirrors it
+			// with the face type so downstream "credential shown" UIs work.
+			"card_id":         result.PersonID,
+			"credentials":     []map[string]string{{"type": "face", "value": result.PersonID}},
+			"reason":          fmt.Sprintf("Face match · similarity %.0f%%", similarity*100),
 			"photo":           photoRef,
 		},
 	})
@@ -552,6 +586,14 @@ func (h *TungSonHandlers) HandleUnknownFace(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Camera display name for the realtime row — same pattern as
+	// HandleFaceRecognition.
+	var cameraName string
+	_ = h.db.Pool.QueryRow(ctx,
+		`SELECT name FROM dm3_devices.devices WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+		deviceUUID, tenantID,
+	).Scan(&cameraName)
+
 	// Upload snapshot — use largest available image
 	var photoRef string
 	if h.objectStore != nil && face.SubImageList != nil && len(face.SubImageList.SubImageInfoObject) > 0 {
@@ -581,13 +623,21 @@ func (h *TungSonHandlers) HandleUnknownFace(w http.ResponseWriter, r *http.Reque
 		"id":   eventID,
 		"ts":   now.UnixMilli(),
 		"src":  deviceUUID,
-		"type": "access.log",
+		// Specific type so rules targeting `face.unknown` match cleanly. Both
+		// access-svc and cctv-svc consumers accept this as an access-log
+		// sibling.
+		"type": "face.unknown",
 		"data": map[string]any{
 			"method":          "face",
 			"direction":       "entry",
 			"decision":        "denied",
 			"decided_locally": true,
-			"reason":          "unknown_face",
+			"device_name":     cameraName,
+			// Human-readable reason for the Detail column on the monitoring
+			// page — "unknown_face" as a token also kept for anyone pattern-
+			// matching on it.
+			"reason":          "Unknown face",
+			"reason_code":     "unknown_face",
 			"confidence":      0,
 			"photo":           photoRef,
 		},
@@ -625,9 +675,16 @@ func (h *TungSonHandlers) presignPhoto(ctx context.Context, photoRef string) str
 	return u.String()
 }
 
-// publishWSEventWithPhoto publishes event to WebSocket with photo_url included.
+// publishWSEventWithPhoto re-emits the already-published NATS event onto the
+// CCTV WebSocket subject (dm3.cctv.ws.{tenant}.{device}) so device-gateway's
+// CCTVWebSocketConsumer can forward it to the realtime monitoring page.
+// Forwards the event's real `type` (face.match / face.unknown / access.log)
+// so frontend filtering stays consistent with the rule/pipeline values.
+// Always parses data even when photo is missing — otherwise the WS row had
+// `data: null` and the monitoring page fell back to showing IDs.
 func (h *TungSonHandlers) publishWSEventWithPhoto(ctx context.Context, tenantID, deviceUUID string, originalPayload []byte, photoURL string) {
 	var envelope struct {
+		Type string          `json:"type"`
 		Data json.RawMessage `json:"data"`
 		TS   int64           `json:"ts"`
 	}
@@ -636,14 +693,17 @@ func (h *TungSonHandlers) publishWSEventWithPhoto(ctx context.Context, tenantID,
 		return
 	}
 
-	// Inject photo_url into data
 	var dataMap map[string]any
-	if err := json.Unmarshal(envelope.Data, &dataMap); err == nil && photoURL != "" {
+	_ = json.Unmarshal(envelope.Data, &dataMap)
+	if dataMap == nil {
+		dataMap = map[string]any{}
+	}
+	if photoURL != "" {
 		dataMap["photo_url"] = photoURL
 	}
 
 	wsPayload, _ := json.Marshal(map[string]any{
-		"type":      "access.log",
+		"type":      envelope.Type,
 		"device_id": deviceUUID,
 		"tenant_id": tenantID,
 		"data":      dataMap,
@@ -698,14 +758,30 @@ func (h *TungSonHandlers) HandleExtendConfirm(w http.ResponseWriter, r *http.Req
 				deviceUUID, userID,
 			)
 
-			// Create face credential DC_{user_code} for this user
-			// Uses the partial unique index idx_credentials_face_dc_card
-			// (tenant_id, user_id) WHERE type='face' AND value LIKE 'DC_%'
+			// Create face credential DC_{user_code} for this user. Inherit
+			// the user's effective/expired dates so the credential's validity
+			// window mirrors the user's — expires the moment the user does,
+			// and opens the same day the user does. `::timestamptz` casts the
+			// DATE columns to the credential column's type; a NULL user date
+			// flows through as NULL (no bound). ON CONFLICT refreshes dates
+			// on re-sync so operator edits to the user propagate.
+			// Partial unique index idx_credentials_face_dc_card makes this
+			// an idempotent upsert keyed on (tenant_id, user_id) WHERE
+			// type='face' AND value LIKE 'DC_%'.
 			_, _ = h.db.Pool.Exec(ctx,
-				`INSERT INTO dm3_identity.credentials (tenant_id, user_id, type, value, status)
-				 VALUES ($1::uuid, $2::uuid, 'face', $3, 'active')
+				`INSERT INTO dm3_identity.credentials
+				   (tenant_id, user_id, type, value, status, valid_from, valid_until)
+				 SELECT $1::uuid, u.id, 'face', $3, 'active',
+				        u.effective_date::timestamptz,
+				        u.expired_date::timestamptz
+				   FROM dm3_identity.users u
+				  WHERE u.id = $2::uuid AND u.tenant_id = $1::uuid
 				 ON CONFLICT (tenant_id, user_id) WHERE type = 'face' AND value LIKE 'DC\_%' ESCAPE '\'
-				 DO UPDATE SET status = 'active', updated_at = now()`,
+				 DO UPDATE SET
+				   status       = 'active',
+				   valid_from   = EXCLUDED.valid_from,
+				   valid_until  = EXCLUDED.valid_until,
+				   updated_at   = now()`,
 				tenantID, userID, cardID,
 			)
 			slog.Info("tungson: face credential created", "user_id", userID, "card_id", cardID)

@@ -13,12 +13,16 @@ import (
 // RuleMatchInput carries everything the resolver needs to pick a rule for a
 // single (camera, event) pair. All fields are plain values so the caller
 // does not have to construct intermediate structs.
+//
+// EventTypes is a slice rather than a single string so we can match both the
+// top-level NATS type (`access.log`) AND a producer-supplied finer subkind
+// (e.g. `face.match`) without forcing operators to understand both.
 type RuleMatchInput struct {
 	TenantID       string
 	CameraDeviceID string
-	AccessPointID  string // may be empty when event originates directly from a camera
-	Decision       string // e.g. "granted" / "denied" / "unknown"
-	EventType      string // e.g. "access.log" / "face.match"
+	AccessPointID  string   // may be empty when event originates directly from a camera
+	Decision       string   // e.g. "granted" / "denied" / "unknown"
+	EventTypes     []string // any-of; rule matches when its filter overlaps this set
 }
 
 // ResolveRule returns the EffectiveRule to apply for (camera, event). It runs
@@ -39,9 +43,16 @@ func ResolveRule(ctx context.Context, database *db.DB, in RuleMatchInput) (Effec
 	//   priority ASC    — lower wins within same scope
 	// LIMIT 1 → first row is the winner.
 	//
-	// Array match: empty decisions/event_types are treated as wildcards via
-	// `cardinality(...) = 0 OR ... @> ARRAY[...]` so a rule only needs to list
-	// filters when it wants to restrict.
+	// Array match: empty decisions/event_types are treated as wildcards. For
+	// event_types we use `&&` (overlap) rather than `@>` (contains) so the
+	// rule matches when ANY of the producer-supplied type tokens is in the
+	// rule's filter list — lets a single event carry both the transport-level
+	// type (`access.log`) and a subkind (`face.match`) without needing the
+	// rule to list all aliases.
+	eventTypes := in.EventTypes
+	if eventTypes == nil {
+		eventTypes = []string{}
+	}
 	row := database.Pool.QueryRow(queryCtx, `
 		SELECT r.id::text, r.snapshot_enabled, r.record_enabled,
 		       r.pre_roll_sec, r.post_roll_sec
@@ -54,13 +65,13 @@ func ResolveRule(ctx context.Context, database *db.DB, in RuleMatchInput) (Effec
 		     OR (r.scope_kind = 'tenant')
 		   )
 		   AND (cardinality(r.decisions)   = 0 OR r.decisions   @> ARRAY[$4]::text[])
-		   AND (cardinality(r.event_types) = 0 OR r.event_types @> ARRAY[$5]::text[])
+		   AND (cardinality(r.event_types) = 0 OR r.event_types && $5::text[])
 		 ORDER BY
 		   CASE r.scope_kind WHEN 'camera' THEN 1 WHEN 'access_point' THEN 2 ELSE 3 END,
 		   r.priority ASC,
 		   r.created_at ASC
 		 LIMIT 1`,
-		in.TenantID, in.CameraDeviceID, in.AccessPointID, in.Decision, in.EventType,
+		in.TenantID, in.CameraDeviceID, in.AccessPointID, in.Decision, eventTypes,
 	)
 
 	var (

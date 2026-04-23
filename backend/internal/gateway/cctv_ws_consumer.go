@@ -71,9 +71,11 @@ func (c *CCTVWebSocketConsumer) handle(subject string, data []byte) error {
 		return nil // ack bad messages
 	}
 
-	// Enrich with identity data if this is an access event.
+	// Enrich with identity data if this is an access-family event (includes
+	// face.match / face.unknown which share the access-log shape and want
+	// the same user-name / device-name enrichment before hitting the UI).
 	broadcastData := evt.Data
-	if strings.HasPrefix(evt.Type, "access.") && c.db != nil {
+	if (strings.HasPrefix(evt.Type, "access.") || strings.HasPrefix(evt.Type, "face.")) && c.db != nil {
 		enrichCtx, enrichCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer enrichCancel()
 		broadcastData = c.enrichAccessData(enrichCtx, evt.Data, tenantID, deviceID)
@@ -134,24 +136,39 @@ func (c *CCTVWebSocketConsumer) enrichAccessData(ctx context.Context, data json.
 			if existing, _ := m["person_name"].(string); existing == "" && fullName != "" {
 				m["person_name"] = fullName
 			}
-			m["user_code"] = userCode
-			m["avatar"] = avatar
-			m["department"] = department
-			if cardID != "" {
+			if existing, _ := m["user_code"].(string); existing == "" && userCode != "" {
+				m["user_code"] = userCode
+			}
+			if existing, _ := m["avatar"].(string); existing == "" && avatar != "" {
+				m["avatar"] = avatar
+			}
+			if existing, _ := m["department"].(string); existing == "" && department != "" {
+				m["department"] = department
+			}
+			// Don't stomp on a producer-supplied card_id (TungSon sends
+			// DC_<user_code>). Only seed the physical card value when the
+			// event didn't already carry an identifier.
+			if existing, _ := m["card_id"].(string); existing == "" && cardID != "" {
 				m["card_id"] = cardID
 			}
 		}
 	}
 
-	// Resolve device name
-	if deviceID != "" {
+	// Resolve device name. Accept either the short code or the native UUID —
+	// TungSon face events publish `src = <camera UUID>` whereas classic
+	// terminal firmware uses the short code. Existing m["device_name"] wins
+	// so producers can override the DB display name per event if they have
+	// richer context.
+	if existing, _ := m["device_name"].(string); existing == "" && deviceID != "" {
 		var deviceName string
 		_ = c.db.Pool.QueryRow(ctx,
 			`SELECT COALESCE(name,'') FROM dm3_devices.devices
-			 WHERE device_id = $1 AND tenant_id = $2::uuid`,
+			 WHERE (device_id = $1 OR id::text = $1) AND tenant_id = $2::uuid`,
 			deviceID, tenantID,
 		).Scan(&deviceName)
-		m["device_name"] = deviceName
+		if deviceName != "" {
+			m["device_name"] = deviceName
+		}
 	}
 
 	out, jerr := json.Marshal(m)

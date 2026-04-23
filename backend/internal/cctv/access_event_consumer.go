@@ -82,9 +82,11 @@ type deviceEvent struct {
 	Data    json.RawMessage `json:"data"`
 }
 
-// accessLogData is the subset of the access.log payload we care about for
-// capture decisions. Decision drives rule matching; DoorID is used as the
-// fallback access point resolver when src is empty.
+// accessLogData is the subset of the access-log family payload we care about
+// for capture decisions. Decision drives rule matching; DoorID is used as the
+// fallback access point resolver when src is empty. The same struct works for
+// `access.log`, `face.match`, and `face.unknown` events — they all share the
+// decision/photo/door_id shape.
 type accessLogData struct {
 	EventID  string `json:"event_id"`
 	DoorID   string `json:"door_id"`
@@ -112,11 +114,10 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 		return nil // ack bad messages
 	}
 
-	if evt.Type != "access.log" {
-		// TODO(refactor): open the filter to face.match / face.unknown /
-		// door.forced when rules start referencing them. Right now the rule
-		// event_types filter still accepts those values — this switch is the
-		// only reason they wouldn't reach the resolver.
+	switch evt.Type {
+	case "access.log", "face.match", "face.unknown", "door.forced":
+		// accepted — continue
+	default:
 		return nil
 	}
 
@@ -165,6 +166,13 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 	)
 	if c.isCamera(ctx, tenantID, srcDeviceID) {
 		cameras = []string{srcDeviceID}
+		// Even though the event originated directly on the camera (TungSon
+		// face path), resolve its access point so access-point-scoped rules
+		// still match. Without this, a rule targeting an AP would silently
+		// be ignored whenever the camera published the event itself.
+		if apID, err := c.resolveAccessPointID(ctx, tenantID, srcDeviceID, payload.DoorID); err == nil {
+			accessPointID = apID
+		}
 	} else {
 		apID, err := c.resolveAccessPointID(ctx, tenantID, srcDeviceID, payload.DoorID)
 		if err != nil {
@@ -207,12 +215,17 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 	// TODO(refactor): if we ever see tenants with >100 cameras on an AP,
 	// convert this to a small semaphore (say 16) to avoid DB connection
 	// saturation under burst traffic.
+	// Resolver takes a slice to stay forward-compatible with producers that
+	// might carry aliases (e.g. access.log + face.match on the same wire
+	// event). Today we just pass the single canonical type.
+	ruleEventTypes := []string{evt.Type}
+
 	var wg sync.WaitGroup
 	for _, camDeviceID := range cameras {
 		wg.Add(1)
 		go func(camDeviceID string) {
 			defer wg.Done()
-			c.captureForCamera(ctx, tenantID, accessPointID, camDeviceID, payload, evt, eventUUID, eventTS, maxClipDuration)
+			c.captureForCamera(ctx, tenantID, accessPointID, camDeviceID, payload, evt, ruleEventTypes, eventUUID, eventTS, maxClipDuration)
 		}(camDeviceID)
 	}
 	wg.Wait()
@@ -224,6 +237,7 @@ func (c *AccessEventConsumer) captureForCamera(
 	tenantID, accessPointID, camDeviceID string,
 	payload accessLogData,
 	evt deviceEvent,
+	eventTypes []string,
 	eventUUID *string,
 	eventTS time.Time,
 	maxClipDuration time.Duration,
@@ -233,7 +247,7 @@ func (c *AccessEventConsumer) captureForCamera(
 		CameraDeviceID: camDeviceID,
 		AccessPointID:  accessPointID,
 		Decision:       payload.Decision,
-		EventType:      evt.Type,
+		EventTypes:     eventTypes,
 	})
 	if err != nil {
 		slog.Warn("cctv: rule resolve failed, skipping camera", "error", err,
