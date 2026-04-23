@@ -67,6 +67,11 @@ Create the following A records pointing to `demo.demasterpro.com`'s IP:
 | `dm3-api.demasterpro.com`     | A    | `<server IP>`    |
 | `dm3-mqtt.demasterpro.com`    | A    | `<server IP>`    |
 | `dm3-minio.demasterpro.com`   | A    | `<server IP>`    |
+| `dm3-s3.demasterpro.com`      | A    | `<server IP>`    |
+
+`dm3-s3` is the **S3 API** (port 9000), routed by nginx to `minio:9000`. It's
+the host baked into presigned PUT/GET URLs that devices and browsers fetch —
+distinct from `dm3-minio` which serves the admin console on port 9001.
 
 ---
 
@@ -90,6 +95,7 @@ sudo certbot certonly --webroot \
   -d dm3-api.demasterpro.com \
   -d dm3-mqtt.demasterpro.com \
   -d dm3-minio.demasterpro.com \
+  -d dm3-s3.demasterpro.com \
   --email admin@duali.com --agree-tos --non-interactive
 ```
 
