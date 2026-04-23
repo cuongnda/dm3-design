@@ -198,8 +198,14 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 		return nil // ack bad messages to avoid redelivery
 	}
 
-	// Only process access.log events
-	if evt.Type != "access.log" {
+	// Access log and its siblings. `face.match` / `face.unknown` are emitted
+	// by the TungSon face camera path so operators can author CCTV event
+	// rules that target them; structurally they're access-log events
+	// (decision, photo, user_id) and belong in the access history.
+	switch evt.Type {
+	case "access.log", "face.match", "face.unknown":
+		// accepted — continue
+	default:
 		return nil
 	}
 

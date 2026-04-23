@@ -82,17 +82,15 @@ type deviceEvent struct {
 	Data    json.RawMessage `json:"data"`
 }
 
-// accessLogData is the subset of the access.log payload we care about for
-// capture decisions. Decision drives rule matching; DoorID is used as the
-// fallback access point resolver when src is empty. Subkind is a
-// tungson-supplied finer-grained type (face.match / face.unknown) so an
-// event_rule can target just face events even though the top-level NATS
-// event.type stays `access.log` for access-svc compatibility.
+// accessLogData is the subset of the access-log family payload we care about
+// for capture decisions. Decision drives rule matching; DoorID is used as the
+// fallback access point resolver when src is empty. The same struct works for
+// `access.log`, `face.match`, and `face.unknown` events — they all share the
+// decision/photo/door_id shape.
 type accessLogData struct {
 	EventID  string `json:"event_id"`
 	DoorID   string `json:"door_id"`
 	Decision string `json:"decision"`
-	Subkind  string `json:"subkind"`
 }
 
 // Start subscribes to dm3.devices.*.*.evt on the DEVICES stream with queue
@@ -116,11 +114,10 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 		return nil // ack bad messages
 	}
 
-	if evt.Type != "access.log" {
-		// TODO(refactor): open the filter to face.match / face.unknown /
-		// door.forced when rules start referencing them. Right now the rule
-		// event_types filter still accepts those values — this switch is the
-		// only reason they wouldn't reach the resolver.
+	switch evt.Type {
+	case "access.log", "face.match", "face.unknown", "door.forced":
+		// accepted — continue
+	default:
 		return nil
 	}
 
@@ -218,15 +215,10 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 	// TODO(refactor): if we ever see tenants with >100 cameras on an AP,
 	// convert this to a small semaphore (say 16) to avoid DB connection
 	// saturation under burst traffic.
-	// For rule matching purposes we expand the canonical type list with any
-	// payload subkind the producer gave us. That way an event published as
-	// access.log with data.subkind="face.match" matches rules filtering on
-	// either `access.log`, `face.match`, or both — operators don't have to
-	// know the wire-protocol quirk.
+	// Resolver takes a slice to stay forward-compatible with producers that
+	// might carry aliases (e.g. access.log + face.match on the same wire
+	// event). Today we just pass the single canonical type.
 	ruleEventTypes := []string{evt.Type}
-	if payload.Subkind != "" && payload.Subkind != evt.Type {
-		ruleEventTypes = append(ruleEventTypes, payload.Subkind)
-	}
 
 	var wg sync.WaitGroup
 	for _, camDeviceID := range cameras {

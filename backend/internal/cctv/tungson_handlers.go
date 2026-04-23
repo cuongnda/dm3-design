@@ -498,7 +498,9 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 		"id":   eventID,
 		"ts":   now.UnixMilli(),
 		"src":  deviceUUID,
-		"type": "access.log",
+		// Specific type — both access-svc and cctv-svc consumers accept
+		// face.match / face.unknown alongside the classic access.log.
+		"type": "face.match",
 		"data": map[string]any{
 			"method":          "face",
 			"direction":       "entry",
@@ -508,10 +510,6 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 			"confidence":      similarity,
 			"credentials":     []map[string]string{{"type": "face", "value": userUUID}},
 			"photo":           photoRef,
-			// Subkind lets event_rules filter on face-specific tokens like
-			// `face.match` / `face.unknown` even though the top-level NATS
-			// event.type is still `access.log` (access-svc expects that).
-			"subkind": "face.match",
 		},
 	})
 
@@ -585,7 +583,10 @@ func (h *TungSonHandlers) HandleUnknownFace(w http.ResponseWriter, r *http.Reque
 		"id":   eventID,
 		"ts":   now.UnixMilli(),
 		"src":  deviceUUID,
-		"type": "access.log",
+		// Specific type so rules targeting `face.unknown` match cleanly. Both
+		// access-svc and cctv-svc consumers accept this as an access-log
+		// sibling.
+		"type": "face.unknown",
 		"data": map[string]any{
 			"method":          "face",
 			"direction":       "entry",
@@ -594,8 +595,6 @@ func (h *TungSonHandlers) HandleUnknownFace(w http.ResponseWriter, r *http.Reque
 			"reason":          "unknown_face",
 			"confidence":      0,
 			"photo":           photoRef,
-			// See HandleFaceRecognition — subkind is what event_rules match on.
-			"subkind": "face.unknown",
 		},
 	})
 
