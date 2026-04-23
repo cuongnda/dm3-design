@@ -296,7 +296,10 @@ services:
       - ./deploy/mediamtx/mediamtx.yml:/mediamtx.yml:ro
       # Shared rolling-buffer directory: MediaMTX writes fMP4 segments here,
       # cctv-svc reads them to build real-pre-roll clips when an event lands.
-      - dm3_local_mediamtx_recordings:/recordings
+      # Bind mount (not a named volume) so cctv-svc can also run on the host
+      # during local dev and read the same files. Path is relative to the
+      # compose file; it gets auto-created on first start.
+      - ./data/mediamtx-recordings:/recordings
     ports:
       # expose LL-HLS + WHEP for local browser testing
       - "8888:8888"
@@ -304,6 +307,10 @@ services:
       # WebRTC RTP over UDP — without this the ICE candidate at 127.0.0.1
       # is unreachable and video stays at readyState 0.
       - "8189:8189/udp"
+      # MediaMTX config API — only needed when cctv-svc runs on the host
+      # during local dev. Compose-deployed cctv-svc reaches it via the
+      # internal `mediamtx:9997` DNS name, no host mapping required.
+      - "127.0.0.1:9997:9997"
     networks:
       - dm3-local
     # mediamtx image is distroless (no wget/curl). We rely on the service
@@ -331,12 +338,12 @@ services:
       MEDIAMTX_STREAM_PASS: ${MEDIAMTX_STREAM_PASS:?MEDIAMTX_STREAM_PASS must be set}
       MEDIAMTX_API_USER: ${MEDIAMTX_API_USER:-dm3admin}
       MEDIAMTX_API_PASS: ${MEDIAMTX_API_PASS:?MEDIAMTX_API_PASS must be set}
-      # Directory where MediaMTX writes the rolling fMP4 segments. Same volume
-      # mounted above on the mediamtx service. Finalizer scans this path to
-      # build pre-roll-accurate clips via a fast ffmpeg concat (no re-encode).
+      # Directory where MediaMTX writes the rolling fMP4 segments. Same
+      # bind-mounted host path as the mediamtx service above, read-only here
+      # so cctv-svc can only consume segments, never modify them.
       MEDIAMTX_RECORD_DIR: /recordings
     volumes:
-      - dm3_local_mediamtx_recordings:/recordings:ro
+      - ./data/mediamtx-recordings:/recordings:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -578,7 +585,6 @@ volumes:
   dm3_local_valkey:
   dm3_local_minio:
   dm3_local_automation:
-  dm3_local_mediamtx_recordings:
 
 networks:
   dm3-local:
