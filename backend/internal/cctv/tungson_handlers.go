@@ -88,8 +88,8 @@ func (h *TungSonHandlers) ensureCameraRow(ctx context.Context, deviceUUID, tenan
 	rtspURL, protocol := buildCameraDefaults(model, clientIP, cameraID)
 
 	_, err := h.db.Pool.Exec(ctx,
-		`INSERT INTO dm3_cctv.cameras (device_id, tenant_id, rtsp_url, rtsp_username, recording_mode, pre_roll_sec, post_roll_sec, camera_protocol, camera_ip, last_heartbeat_at)
-		 VALUES ($1::uuid, $2::uuid, $3, 'admin', 'event_only', 10, 20, $5, $4::inet, now())`,
+		`INSERT INTO dm3_cctv.cameras (device_id, tenant_id, rtsp_url, recording_mode, pre_roll_sec, post_roll_sec, camera_protocol, camera_ip, last_heartbeat_at)
+		 VALUES ($1::uuid, $2::uuid, $3, 'event_only', 10, 20, $5, $4::inet, now())`,
 		deviceUUID, tenantID, rtspURL, clientIP, protocol,
 	)
 	if err != nil {

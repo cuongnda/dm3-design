@@ -71,12 +71,11 @@ func NewClipExtractor(database *db.DB, objStore objectstore.Store, cipher *Crede
 }
 
 // cameraRTSPInfo holds the RTSP connection details fetched from dm3_cctv.cameras.
+// Credentials, if required, are embedded directly in RTSPUrl.
 type cameraRTSPInfo struct {
-	RTSPUrl        string
-	RTSPUsername   *string
-	RTSPPasswordEnc []byte // AES-encrypted; nil when no auth
-	PreRollSec     int
-	PostRollSec    int
+	RTSPUrl     string
+	PreRollSec  int
+	PostRollSec int
 }
 
 // ExtractClip records video for the coalesced window (started_at..end_at) of
@@ -274,25 +273,8 @@ func (e *ClipExtractor) runLivePullPath(
 		return 0, fmt.Errorf("no rtsp url")
 	}
 
-	var password string
-	if len(info.RTSPPasswordEnc) > 0 {
-		if e.cipher == nil {
-			e.markClipFailed(ctx, clipID, "credential cipher not configured")
-			return 0, fmt.Errorf("cipher missing")
-		}
-		var err error
-		password, err = e.cipher.Decrypt(info.RTSPPasswordEnc)
-		if err != nil {
-			log.Error("cctv: clip extractor failed to decrypt RTSP password", "error", err)
-			e.markClipFailed(ctx, clipID, fmt.Sprintf("decrypt password: %v", err))
-			return 0, err
-		}
-	}
-	username := ""
-	if info.RTSPUsername != nil {
-		username = *info.RTSPUsername
-	}
-	authedURL := composeRTSPURLWithAuth(info.RTSPUrl, username, password)
+	// RTSP credentials, if required, are part of info.RTSPUrl already.
+	authedURL := info.RTSPUrl
 
 	// Honour the full (pre + post) duration the rule configured. Without a
 	// rolling buffer we can't actually reach into the past, but ffmpeg still
@@ -420,11 +402,11 @@ func (e *ClipExtractor) fetchCameraRTSPInfo(ctx context.Context, tenantID, camer
 
 	var info cameraRTSPInfo
 	err := e.db.Pool.QueryRow(queryCtx,
-		`SELECT c.rtsp_url, c.rtsp_username, c.rtsp_password_enc, c.pre_roll_sec, c.post_roll_sec
+		`SELECT c.rtsp_url, c.pre_roll_sec, c.post_roll_sec
 		 FROM dm3_cctv.cameras c
 		 WHERE c.device_id = $1::uuid AND c.tenant_id = $2::uuid`,
 		cameraDeviceID, tenantID,
-	).Scan(&info.RTSPUrl, &info.RTSPUsername, &info.RTSPPasswordEnc, &info.PreRollSec, &info.PostRollSec)
+	).Scan(&info.RTSPUrl, &info.PreRollSec, &info.PostRollSec)
 	if err != nil {
 		return cameraRTSPInfo{}, fmt.Errorf("query camera RTSP info: %w", err)
 	}

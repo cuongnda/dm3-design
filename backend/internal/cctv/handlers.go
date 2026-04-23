@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/duali/dm3-backend/internal/authsvc"
 	"github.com/duali/dm3-backend/pkg/audit"
@@ -161,56 +160,6 @@ func (h *CCTVHandlers) getHanetAccessToken(ctx context.Context, tenantID string)
 		return "", nil
 	}
 	return h.cipher.Decrypt(enc)
-}
-
-// composeRTSPURLWithAuth builds the full RTSP URL including credentials for
-// MediaMTX source. If the URL already embeds credentials (rtsp://u:p@host/...)
-// those are stripped first so we don't end up with the double-userinfo shape
-// `rtsp://newu:newp@oldu:oldp@host/...`, which many camera RTSP servers reject
-// as 401 Unauthorized.
-func composeRTSPURLWithAuth(rtspURL string, username, password string) string {
-	// Strip any existing userinfo so we can reinject cleanly.
-	stripped := rtspURL
-	for _, scheme := range []string{"rtsps://", "rtsp://"} {
-		if strings.HasPrefix(rtspURL, scheme) {
-			rest := rtspURL[len(scheme):]
-			if at := strings.Index(rest, "@"); at >= 0 {
-				// If '@' appears before the path/query, it's userinfo. Path
-				// components are safe because '@' isn't valid in a bare host.
-				slash := strings.IndexAny(rest, "/?")
-				if slash < 0 || at < slash {
-					// Preserve the creds we're about to replace in case the
-					// caller passed empty user/pass — re-use the embedded
-					// ones so URL-only configs still work.
-					if username == "" && password == "" {
-						embedded := rest[:at]
-						if col := strings.Index(embedded, ":"); col >= 0 {
-							username, password = embedded[:col], embedded[col+1:]
-						} else {
-							username = embedded
-						}
-					}
-					stripped = scheme + rest[at+1:]
-				}
-			}
-			break
-		}
-	}
-
-	if username == "" && password == "" {
-		return stripped
-	}
-
-	for _, scheme := range []string{"rtsps://", "rtsp://"} {
-		if strings.HasPrefix(stripped, scheme) {
-			rest := stripped[len(scheme):]
-			if password != "" {
-				return fmt.Sprintf("%s%s:%s@%s", scheme, username, password, rest)
-			}
-			return fmt.Sprintf("%s%s@%s", scheme, username, rest)
-		}
-	}
-	return stripped
 }
 
 // requireTenant validates tenant context and writes 403 if missing.

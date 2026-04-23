@@ -36,8 +36,6 @@ function defaultConfig(): DeviceConfig {
 
 interface CameraState {
     rtsp_url: string;
-    rtsp_username: string;
-    rtsp_password: string;
     brand: string;
     recording_mode: 'event_only' | 'disabled';
     pre_roll_sec: number;
@@ -45,7 +43,7 @@ interface CameraState {
 }
 
 function defaultCamera(): CameraState {
-    return { rtsp_url: '', rtsp_username: '', rtsp_password: '', brand: '', recording_mode: 'event_only', pre_roll_sec: 10, post_roll_sec: 20 };
+    return { rtsp_url: '', brand: '', recording_mode: 'event_only', pre_roll_sec: 10, post_roll_sec: 20 };
 }
 
 function Section({ icon: Icon, title, desc, children }: { icon: React.ElementType; title: string; desc: string; children: React.ReactNode }) {
@@ -182,8 +180,6 @@ export function CreateDeviceModal({ open, onOpenChange, onCreated }: CreateDevic
             if (isCamera) {
                 body.camera = {
                     rtsp_url: camera.rtsp_url.trim(),
-                    rtsp_username: camera.rtsp_username.trim() || undefined,
-                    rtsp_password: camera.rtsp_password || undefined,
                     brand: camera.brand.trim() || undefined,
                     recording_mode: camera.recording_mode,
                     pre_roll_sec: camera.pre_roll_sec,
@@ -299,34 +295,9 @@ export function CreateDeviceModal({ open, onOpenChange, onCreated }: CreateDevic
                                     className="mt-1 font-mono text-[12px]"
                                 />
                                 <p className="text-[11px] text-muted-foreground mt-1">
-                                    Must be an rtsp:// or rtsps:// URL reachable from the cctv-svc container.
+                                    Must be an rtsp:// or rtsps:// URL. If the camera requires auth,
+                                    embed credentials directly: <code>rtsp://user:pass@host/path</code>.
                                 </p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <Label className="text-[12px]">RTSP Username</Label>
-                                    <Input
-                                        data-testid="sysdevice-input-rtsp-username"
-                                        value={camera.rtsp_username}
-                                        onChange={(e) => setCamera(c => ({ ...c, rtsp_username: e.target.value }))}
-                                        placeholder="admin"
-                                        disabled={loading}
-                                        className="mt-1"
-                                    />
-                                </div>
-                                <div>
-                                    <Label className="text-[12px]">RTSP Password</Label>
-                                    <Input
-                                        data-testid="sysdevice-input-rtsp-password"
-                                        type="password"
-                                        value={camera.rtsp_password}
-                                        onChange={(e) => setCamera(c => ({ ...c, rtsp_password: e.target.value }))}
-                                        placeholder="••••••••"
-                                        disabled={loading}
-                                        className="mt-1"
-                                        autoComplete="new-password"
-                                    />
-                                </div>
                             </div>
                             <div className="grid grid-cols-3 gap-4">
                                 <div>

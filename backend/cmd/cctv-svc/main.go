@@ -157,7 +157,7 @@ func main() {
 
 	// Bootstrap: register all existing camera paths in MediaMTX (paths are in-memory,
 	// lost on MediaMTX restart). Runs async so it doesn't block startup.
-	go cctv.BootstrapMediaMTXPaths(ctx, database, mediamtxClient, cipher)
+	go cctv.BootstrapMediaMTXPaths(ctx, database, mediamtxClient)
 
 	// Camera liveness: poll MediaMTX for RTSP stream readiness and sweep stale
 	// tungson heartbeats. Keeps dm3_devices.devices.status in sync with reality.

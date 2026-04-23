@@ -11,12 +11,14 @@ import (
 
 // BootstrapMediaMTXPaths registers all existing cameras in MediaMTX on startup.
 // This ensures paths survive MediaMTX restarts (paths are in-memory only).
-func BootstrapMediaMTXPaths(ctx context.Context, database *db.DB, mediamtx MediaMTXClient, cipher *CredentialCipher) {
+// Credentials, if required, are expected to be embedded directly in rtsp_url
+// by the operator — we pass the URL through to MediaMTX as-is.
+func BootstrapMediaMTXPaths(ctx context.Context, database *db.DB, mediamtx MediaMTXClient) {
 	bootCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	rows, err := database.Pool.Query(bootCtx, `
-		SELECT d.id::text, c.tenant_id::text, c.rtsp_url, COALESCE(c.rtsp_username,''), c.rtsp_password_enc
+		SELECT d.id::text, c.tenant_id::text, c.rtsp_url
 		FROM dm3_cctv.cameras c
 		JOIN dm3_devices.devices d ON d.id = c.device_id
 		WHERE c.rtsp_url != '' AND c.rtsp_url IS NOT NULL`)
@@ -32,24 +34,12 @@ func BootstrapMediaMTXPaths(ctx context.Context, database *db.DB, mediamtx Media
 
 	var registered, failed int
 	for rows.Next() {
-		var deviceUUID, tenantID, rtspURL, rtspUsername string
-		var encPass []byte
-		if err := rows.Scan(&deviceUUID, &tenantID, &rtspURL, &rtspUsername, &encPass); err != nil {
+		var deviceUUID, tenantID, rtspURL string
+		if err := rows.Scan(&deviceUUID, &tenantID, &rtspURL); err != nil {
 			slog.Warn("cctv: bootstrap scan failed", "error", err)
 			failed++
 			continue
 		}
-
-		// Decrypt password if available
-		password := ""
-		if len(encPass) > 0 && cipher != nil {
-			decrypted, decErr := cipher.Decrypt(encPass)
-			if decErr == nil {
-				password = decrypted
-			}
-		}
-
-		sourceURL := composeRTSPURLWithAuth(rtspURL, rtspUsername, password)
 
 		rec, ok := recordCache[tenantID]
 		if !ok {
@@ -57,7 +47,7 @@ func BootstrapMediaMTXPaths(ctx context.Context, database *db.DB, mediamtx Media
 			recordCache[tenantID] = rec
 		}
 
-		cfg := applyRecordDefaults(PathConfig{Source: sourceURL, SourceOnDemand: false}, rec)
+		cfg := applyRecordDefaults(PathConfig{Source: rtspURL, SourceOnDemand: false}, rec)
 		if err := mediamtx.UpsertPath(bootCtx, deviceUUID, cfg); err != nil {
 			slog.Warn("cctv: bootstrap path failed", "device_id", deviceUUID, "error", err)
 			failed++

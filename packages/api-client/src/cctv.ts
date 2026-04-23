@@ -16,7 +16,6 @@ export interface CameraDTO {
   brand?: string;
   model?: string;
   rtsp_url: string;
-  rtsp_username?: string;
   recording_mode: 'event_only' | 'disabled';
   pre_roll_sec: number;
   post_roll_sec: number;
@@ -117,9 +116,10 @@ export interface TestConnectionDTO {
 export interface CreateCameraRequest {
   name: string;
   access_point_id?: string;
+  /** RTSP URL. Credentials, if required, must be embedded directly
+   *  (e.g. `rtsp://user:pass@host/path`). The backend no longer handles
+   *  separate username/password fields — URL shapes vary per brand. */
   rtsp_url?: string;
-  rtsp_username?: string;
-  rtsp_password?: string;
   brand?: string;
   recording_mode?: 'event_only' | 'disabled';
   pre_roll_sec?: number;
@@ -130,8 +130,6 @@ export interface UpdateCameraRequest {
   name?: string;
   access_point_id?: string;
   rtsp_url?: string;
-  rtsp_username?: string;
-  rtsp_password?: string;
   brand?: string;
   recording_mode?: 'event_only' | 'disabled';
   pre_roll_sec?: number;

@@ -135,7 +135,7 @@ func (h *CCTVHandlers) ListCameras(w http.ResponseWriter, r *http.Request) {
 	listQuery := fmt.Sprintf(`
 		SELECT d.id, d.device_id, d.tenant_id, d.name, d.status, d.last_seen,
 		       apd.access_point_id::text,
-		       c.brand, d.model, c.rtsp_url, c.rtsp_username,
+		       c.brand, d.model, c.rtsp_url,
 		       c.recording_mode, c.pre_roll_sec, c.post_roll_sec,
 		       c.stream_profile, c.last_checked_at, d.created_at, d.updated_at
 		FROM dm3_devices.devices d
@@ -244,17 +244,6 @@ func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 
 	trimmedURL := strings.TrimSpace(req.RTSPUrl)
 
-	// Encrypt password if provided
-	var encryptedPass []byte
-	if req.RTSPPassword != nil && *req.RTSPPassword != "" {
-		var err error
-		encryptedPass, err = h.cipher.Encrypt(*req.RTSPPassword)
-		if err != nil {
-			logInternalError(w, "encrypt rtsp password error", err)
-			return
-		}
-	}
-
 	// Generate device_id short code: "CAM" + first 6 chars of a random UUID segment
 	// We'll use the DB gen_random_uuid() and slice it in Go after insert
 	tx, err := h.db.Pool.Begin(r.Context())
@@ -290,9 +279,9 @@ func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 
 	_, err = tx.Exec(r.Context(), `
 		INSERT INTO dm3_cctv.cameras
-		(device_id, tenant_id, brand, rtsp_url, rtsp_username, rtsp_password_enc, recording_mode, pre_roll_sec, post_roll_sec, stream_profile)
-		VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)`,
-		deviceUUID, cid, req.Brand, trimmedURL, req.RTSPUsername, encryptedPass,
+		(device_id, tenant_id, brand, rtsp_url, recording_mode, pre_roll_sec, post_roll_sec, stream_profile)
+		VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8::jsonb)`,
+		deviceUUID, cid, req.Brand, trimmedURL,
 		recordingMode, preRoll, postRoll, streamProfileJSON,
 	)
 	if err != nil {
@@ -314,20 +303,8 @@ func (h *CCTVHandlers) CreateCamera(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Register path in MediaMTX (best-effort — don't fail camera creation on MediaMTX error).
-	// The camera row is the source of truth; MediaMTX drift should be healed by
-	// a periodic reconciliation worker.
-	// TODO(cctv): add a reconciler that compares dm3_cctv.cameras against
-	// MediaMTX-configured paths and repairs drift on a timer.
-	var decryptedPass string
-	if encryptedPass != nil {
-		decryptedPass, _ = h.cipher.Decrypt(encryptedPass)
-	}
-	rtspUsername := ""
-	if req.RTSPUsername != nil {
-		rtspUsername = *req.RTSPUsername
-	}
-	sourceURL := composeRTSPURLWithAuth(trimmedURL, rtspUsername, decryptedPass)
-	cfg := applyRecordDefaults(PathConfig{Source: sourceURL, SourceOnDemand: false}, pathRecordDefaults(r.Context(), h.db, cid))
+	// Credentials (if any) are already embedded in rtsp_url by the operator.
+	cfg := applyRecordDefaults(PathConfig{Source: trimmedURL, SourceOnDemand: false}, pathRecordDefaults(r.Context(), h.db, cid))
 	if err := h.mediamtx.UpsertPath(r.Context(), deviceUUID, cfg); err != nil {
 		slog.Warn("cctv: mediamtx upsert path failed (non-fatal)", "device_id", deviceUUID, "error", err)
 	}
@@ -401,28 +378,6 @@ func unbindCameraFromAccessPoint(ctx context.Context, tx pgx.Tx, tenantID, devic
 	return nil
 }
 
-// decryptExistingPassword reads the encrypted rtsp_password_enc column for a
-// camera and returns the decrypted plaintext. Returns empty string (nil error)
-// when the column is NULL.
-func (h *CCTVHandlers) decryptExistingPassword(ctx context.Context, tx pgx.Tx, tenantID, cameraID string) (string, error) {
-	var encPass []byte
-	err := tx.QueryRow(ctx, `
-		SELECT rtsp_password_enc FROM dm3_cctv.cameras
-		WHERE device_id = $1::uuid AND tenant_id = $2::uuid`,
-		cameraID, tenantID,
-	).Scan(&encPass)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return "", nil
-		}
-		return "", err
-	}
-	if len(encPass) == 0 {
-		return "", nil
-	}
-	return h.cipher.Decrypt(encPass)
-}
-
 // UpdateCamera handles PUT /cameras/{id}
 func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 	cid := h.getTenantID(r)
@@ -483,23 +438,6 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	rtspUsername := existing.RTSPUsername
-	if req.RTSPUsername != nil {
-		rtspUsername = req.RTSPUsername
-	}
-
-	// Re-encrypt password if a new one is provided
-	var encryptedPass []byte
-	var decryptedPass string
-	passwordSupplied := req.RTSPPassword != nil && *req.RTSPPassword != ""
-	if passwordSupplied {
-		encryptedPass, err = h.cipher.Encrypt(*req.RTSPPassword)
-		if err != nil {
-			logInternalError(w, "encrypt rtsp password error", err)
-			return
-		}
-		decryptedPass = *req.RTSPPassword
-	}
 
 	// Wrap device + camera updates in a single transaction for atomicity.
 	tx, err := h.db.Pool.Begin(r.Context())
@@ -508,27 +446,6 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
-
-	// If no new password supplied, read and decrypt the existing one so that
-	// the MediaMTX source URL (composed below) preserves the stored credential.
-	// If decryption fails (typically because CCTV_CREDENTIAL_KEY has been
-	// rotated since the camera was saved), surface a 400 asking the user to
-	// re-enter the password instead of a generic 500.
-	if !passwordSupplied {
-		existingPass, err := h.decryptExistingPassword(r.Context(), tx, cid, id)
-		if err != nil {
-			if strings.Contains(err.Error(), "message authentication failed") {
-				slog.Warn("cctv: existing password undecryptable; credential key likely rotated",
-					"camera_id", id, "tenant_id", cid)
-				httputil.Error(w, http.StatusBadRequest,
-					"stored RTSP password cannot be decrypted (credential key rotated); please re-enter the password")
-				return
-			}
-			logInternalError(w, "decrypt existing rtsp password error", err)
-			return
-		}
-		decryptedPass = existingPass
-	}
 
 	// Update devices.name
 	_, err = tx.Exec(r.Context(), `
@@ -542,23 +459,13 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update cctv.cameras
-	if encryptedPass != nil {
-		_, err = tx.Exec(r.Context(), `
-			UPDATE dm3_cctv.cameras
-			SET brand = $3, rtsp_url = $4, rtsp_username = $5, rtsp_password_enc = $6,
-			    recording_mode = $7, pre_roll_sec = $8, post_roll_sec = $9, updated_at = now()
-			WHERE device_id = $1::uuid AND tenant_id = $2::uuid`,
-			id, cid, brand, rtspURL, rtspUsername, encryptedPass, recordingMode, preRoll, postRoll,
-		)
-	} else {
-		_, err = tx.Exec(r.Context(), `
-			UPDATE dm3_cctv.cameras
-			SET brand = $3, rtsp_url = $4, rtsp_username = $5,
-			    recording_mode = $6, pre_roll_sec = $7, post_roll_sec = $8, updated_at = now()
-			WHERE device_id = $1::uuid AND tenant_id = $2::uuid`,
-			id, cid, brand, rtspURL, rtspUsername, recordingMode, preRoll, postRoll,
-		)
-	}
+	_, err = tx.Exec(r.Context(), `
+		UPDATE dm3_cctv.cameras
+		SET brand = $3, rtsp_url = $4,
+		    recording_mode = $5, pre_roll_sec = $6, post_roll_sec = $7, updated_at = now()
+		WHERE device_id = $1::uuid AND tenant_id = $2::uuid`,
+		id, cid, brand, rtspURL, recordingMode, preRoll, postRoll,
+	)
 	if err != nil {
 		logInternalError(w, "update camera error", err)
 		return
@@ -588,13 +495,9 @@ func (h *CCTVHandlers) UpdateCamera(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update MediaMTX path if RTSP details changed (best-effort — post-commit)
-	rtspUsernameStr := ""
-	if rtspUsername != nil {
-		rtspUsernameStr = *rtspUsername
-	}
-	sourceURL := composeRTSPURLWithAuth(rtspURL, rtspUsernameStr, decryptedPass)
-	cfg := applyRecordDefaults(PathConfig{Source: sourceURL, SourceOnDemand: false}, pathRecordDefaults(r.Context(), h.db, cid))
+	// Update MediaMTX path if RTSP details changed (best-effort — post-commit).
+	// Credentials, if any, are already embedded in rtspURL.
+	cfg := applyRecordDefaults(PathConfig{Source: rtspURL, SourceOnDemand: false}, pathRecordDefaults(r.Context(), h.db, cid))
 	if err := h.mediamtx.UpsertPath(r.Context(), id, cfg); err != nil {
 		slog.Warn("cctv: mediamtx upsert path failed (non-fatal)", "device_id", id, "error", err)
 	}
@@ -731,22 +634,10 @@ func (h *CCTVHandlers) TestCameraConnection(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Decrypt RTSP password if set.
-	var rtspPassword string
-	var encPass []byte
-	if scanErr := h.db.Pool.QueryRow(r.Context(), `
-		SELECT rtsp_password_enc FROM dm3_cctv.cameras
-		WHERE device_id = $1::uuid AND tenant_id = $2::uuid`,
-		id, cid).Scan(&encPass); scanErr == nil && len(encPass) > 0 {
-		rtspPassword, _ = h.cipher.Decrypt(encPass)
-	}
-
-	rtspUsername := ""
-	if cam.RTSPUsername != nil {
-		rtspUsername = *cam.RTSPUsername
-	}
-
-	result := probeRTSP(r, cam.RTSPUrl, rtspUsername, rtspPassword)
+	// Credentials (if required by the RTSP server) are already embedded in
+	// cam.RTSPUrl. probeRTSP accepts an empty username/password — ffmpeg
+	// picks up the userinfo from the URL on its own.
+	result := probeRTSP(r, cam.RTSPUrl, "", "")
 
 	// Persist last_checked_at and stream_profile regardless of probe outcome.
 	profileJSON := fmt.Sprintf(`{"codec":%q,"resolution":%q,"probed_at":%q}`,
@@ -778,7 +669,7 @@ func (h *CCTVHandlers) fetchCamera(r *http.Request, tenantID, deviceID string) (
 	row := h.db.Pool.QueryRow(r.Context(), `
 		SELECT d.id, d.device_id, d.tenant_id, d.name, d.status, d.last_seen,
 		       apd.access_point_id::text,
-		       c.brand, d.model, c.rtsp_url, c.rtsp_username,
+		       c.brand, d.model, c.rtsp_url,
 		       c.recording_mode, c.pre_roll_sec, c.post_roll_sec,
 		       c.stream_profile, c.last_checked_at, d.created_at, d.updated_at
 		FROM dm3_devices.devices d
@@ -803,7 +694,7 @@ func scanCamera(row scannable) (Camera, error) {
 	err := row.Scan(
 		&cam.ID, &cam.DeviceID, &cam.TenantID, &cam.Name, &cam.Status, &cam.LastSeen,
 		&cam.AccessPointID,
-		&cam.Brand, &cam.Model, &cam.RTSPUrl, &cam.RTSPUsername,
+		&cam.Brand, &cam.Model, &cam.RTSPUrl,
 		&cam.RecordingMode, &cam.PreRollSec, &cam.PostRollSec,
 		&streamProfileRaw, &cam.LastCheckedAt, &cam.CreatedAt, &cam.UpdatedAt,
 	)
