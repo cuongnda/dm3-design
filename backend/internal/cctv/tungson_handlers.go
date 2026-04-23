@@ -440,13 +440,20 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	ctx := r.Context()
 	result := personList[0]
 	cameraID := result.DeviceID
 
+	// Reply first so the camera isn't blocked on MinIO / NATS latency.
+	// Event must still fan out in realtime — the rest runs on a detached
+	// context.
+	httputil.JSON(w, http.StatusOK, "ok")
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	ctx := context.Background()
+
 	tenantID, deviceUUID, err := h.lookupCamera(ctx, cameraID)
 	if err != nil {
-		httputil.JSON(w, http.StatusOK, "ok")
 		return
 	}
 
@@ -482,29 +489,35 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 		deviceUUID, tenantID,
 	).Scan(&cameraName)
 
-	// Upload snapshot to MinIO — use the largest available image.
-	// Camera may send 1 image (face crop) or 2 (face crop + full frame).
-	var photoRef string
+	// Decide the MinIO key upfront; actual upload runs in parallel so the
+	// NATS publish below doesn't stall waiting on object storage.
+	var (
+		photoRef string
+		imgData  []byte
+	)
 	if h.objectStore != nil && result.SubImageList != nil && len(result.SubImageList.SubImageInfoObject) > 0 {
-		// Prefer last image (full frame) if multiple, else use first
 		idx := len(result.SubImageList.SubImageInfoObject) - 1
 		imgData64 := result.SubImageList.SubImageInfoObject[idx].Data
 		if imgData64 != "" {
-			imgData, decErr := base64.StdEncoding.DecodeString(imgData64)
-			if decErr == nil && len(imgData) > 0 {
-				key := fmt.Sprintf("cctv-faces/%s/%s/recognition/%s/%d_%s.jpg",
+			if b, decErr := base64.StdEncoding.DecodeString(imgData64); decErr == nil && len(b) > 0 {
+				imgData = b
+				photoRef = fmt.Sprintf("cctv-faces/%s/%s/recognition/%s/%d_%s.jpg",
 					tenantID, deviceUUID,
 					time.Now().Format("2006-01-02"),
 					time.Now().UnixMilli(),
 					userUUID,
 				)
-				if putErr := h.objectStore.PutObject(ctx, key, bytes.NewReader(imgData), int64(len(imgData)), "image/jpeg"); putErr == nil {
-					photoRef = key
-				} else {
-					slog.Warn("tungson: upload recognition photo failed", "error", putErr)
-				}
 			}
 		}
+	}
+	if photoRef != "" && len(imgData) > 0 {
+		go func(key string, data []byte) {
+			upCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := h.objectStore.PutObject(upCtx, key, bytes.NewReader(data), int64(len(data)), "image/jpeg"); err != nil {
+				slog.Warn("tungson: upload recognition photo failed", "error", err, "key", key)
+			}
+		}(photoRef, imgData)
 	}
 
 	// Parse similarity string to float
@@ -557,12 +570,17 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 	slog.Info("tungson: face recognized",
 		"camera_id", cameraID, "user_id", userUUID,
 		"similarity", similarity, "tenant_id", tenantID)
-
-	httputil.JSON(w, http.StatusOK, "ok")
 }
 
 // HandleUnknownFace handles POST /VIID/Faces
 // Camera reports unknown face -> upload to MinIO + publish event.
+//
+// Respond to the camera IMMEDIATELY (200 OK) once we've accepted the body,
+// then do the slow work (MinIO upload, NATS publish, WS broadcast) in a
+// background goroutine. Synchronous uploads were blocking the VIID callback
+// for 30-40 s and starving new face events — camera waits for our response
+// before sending the next detection, and realtime monitoring lagged for the
+// same reason.
 func (h *TungSonHandlers) HandleUnknownFace(w http.ResponseWriter, r *http.Request) {
 	var req VIIDUnknownFaceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -576,13 +594,24 @@ func (h *TungSonHandlers) HandleUnknownFace(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	ctx := r.Context()
 	face := faceObjects[0]
 	cameraID := face.DeviceID
 
+	// Reply first; camera stops waiting on the callback and can send the
+	// next detection immediately.
+	httputil.JSON(w, http.StatusOK, "ok")
+
+	// Flush the response back to the socket before we detach to background.
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+
+	// Detach to a context that outlives the request — the caller's context
+	// will cancel as soon as the handler returns.
+	ctx := context.Background()
+
 	tenantID, deviceUUID, err := h.lookupCamera(ctx, cameraID)
 	if err != nil {
-		httputil.JSON(w, http.StatusOK, "ok")
 		return
 	}
 
@@ -594,27 +623,42 @@ func (h *TungSonHandlers) HandleUnknownFace(w http.ResponseWriter, r *http.Reque
 		deviceUUID, tenantID,
 	).Scan(&cameraName)
 
-	// Upload snapshot — use largest available image
-	var photoRef string
+	// Decide the future MinIO key upfront so the NATS event can carry the
+	// same reference the upload will land at. Actual upload runs in parallel
+	// with NATS publish — event appears on monitoring in <1s; the photo
+	// thumbnail loads a second or two later when the object is available.
+	var (
+		photoRef string
+		imgData  []byte
+	)
 	if h.objectStore != nil && face.SubImageList != nil && len(face.SubImageList.SubImageInfoObject) > 0 {
 		idx := len(face.SubImageList.SubImageInfoObject) - 1
 		imgData64 := face.SubImageList.SubImageInfoObject[idx].Data
 		if imgData64 != "" {
-			imgData, decErr := base64.StdEncoding.DecodeString(imgData64)
-			if decErr == nil && len(imgData) > 0 {
-				key := fmt.Sprintf("cctv-faces/%s/%s/unknown/%s/%d.jpg",
+			if b, decErr := base64.StdEncoding.DecodeString(imgData64); decErr == nil && len(b) > 0 {
+				imgData = b
+				photoRef = fmt.Sprintf("cctv-faces/%s/%s/unknown/%s/%d.jpg",
 					tenantID, deviceUUID,
 					time.Now().Format("2006-01-02"),
 					time.Now().UnixMilli(),
 				)
-				if putErr := h.objectStore.PutObject(ctx, key, bytes.NewReader(imgData), int64(len(imgData)), "image/jpeg"); putErr == nil {
-					photoRef = key
-				}
 			}
 		}
 	}
 
-	// Publish unknown face event
+	// Upload in parallel so the NATS publish below doesn't wait on MinIO.
+	if photoRef != "" && len(imgData) > 0 {
+		go func(key string, data []byte) {
+			upCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := h.objectStore.PutObject(upCtx, key, bytes.NewReader(data), int64(len(data)), "image/jpeg"); err != nil {
+				slog.Warn("tungson: unknown face snapshot upload failed", "error", err, "key", key)
+			}
+		}(photoRef, imgData)
+	}
+
+	// Publish event immediately — monitoring UI receives it over WS within
+	// hundreds of milliseconds instead of waiting for MinIO.
 	eventID := uuid.New().String()
 	now := time.Now()
 
@@ -648,12 +692,14 @@ func (h *TungSonHandlers) HandleUnknownFace(w http.ResponseWriter, r *http.Reque
 		slog.Error("tungson: publish unknown face event failed", "error", err)
 	}
 
-	// Publish to WebSocket with presigned photo URL for realtime display
+	// Publish to WebSocket with presigned photo URL for realtime display.
+	// The presigned URL resolves once the background upload finishes; until
+	// then monitoring UI shows a broken image for 1-2 s, then the real
+	// thumbnail.
 	unknownPhotoURL := h.presignPhoto(ctx, photoRef)
 	h.publishWSEventWithPhoto(ctx, tenantID, deviceUUID, eventPayload, unknownPhotoURL)
 
 	slog.Info("tungson: unknown face detected", "camera_id", cameraID, "tenant_id", tenantID)
-	httputil.JSON(w, http.StatusOK, "ok")
 }
 
 // presignPhoto generates a presigned GET URL for a MinIO photo key.
