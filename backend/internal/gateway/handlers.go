@@ -384,6 +384,12 @@ func fetchDeviceAccessPointID(ctx context.Context, database *db.DB, deviceID, te
 // device with a single binding to newAPID. When newAPID is empty the device
 // is simply detached from every access point. Scoped to tenantID so a
 // system-admin edit still can't leak bindings across tenants.
+//
+// Role is derived from the device's type (camera → 'camera', anything else →
+// 'reader_in'). Hardcoding 'reader_in' here previously demoted cameras on
+// every save from this page and would silently break any future query that
+// filters by role — cctv-svc's access_event_consumer, for example, already
+// expects camera-role junction rows after migration 000051.
 func applyDeviceAccessPointBinding(ctx context.Context, database *db.DB, deviceID, tenantID, newAPID string) error {
 	tx, err := database.Pool.Begin(ctx)
 	if err != nil {
@@ -399,12 +405,23 @@ func applyDeviceAccessPointBinding(ctx context.Context, database *db.DB, deviceI
 		return fmt.Errorf("clear bindings: %w", err)
 	}
 	if newAPID != "" {
+		var deviceType string
+		if err := tx.QueryRow(ctx,
+			`SELECT type FROM dm3_devices.devices WHERE id = $1::uuid`,
+			deviceID,
+		).Scan(&deviceType); err != nil {
+			return fmt.Errorf("lookup device type: %w", err)
+		}
+		role := "reader_in"
+		if deviceType == "camera" {
+			role = "camera"
+		}
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO dm3_access.access_point_devices
 			   (tenant_id, access_point_id, access_device_id, role)
-			 VALUES ($2::uuid, $3::uuid, $1, 'reader_in')
+			 VALUES ($2::uuid, $3::uuid, $1, $4)
 			 ON CONFLICT (access_point_id, access_device_id) DO NOTHING`,
-			deviceID, tenantID, newAPID,
+			deviceID, tenantID, newAPID, role,
 		); err != nil {
 			return fmt.Errorf("insert binding: %w", err)
 		}

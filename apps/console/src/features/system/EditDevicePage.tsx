@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Check, Terminal, Cpu, Camera, Gauge, Monitor, Settings2, Search, ShieldCheck, Save, X, DoorOpen } from 'lucide-react';
 import { fetchSystemDevice, updateSystemDevice, fetchDevice, updateDevice, fetchCompanies, fetchAccessPoints, type CompanyDTO, type AccessPointDTO } from '@/lib/api';
 import { DEVICE_TYPE_MODELS, VERIFY_METHODS, getModelCapabilities, type VerifyMethodValue } from '@/lib/device-models';
@@ -103,6 +104,7 @@ interface EditDevicePageProps {
 
 function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { id } = useParams<{ id: string }>();
   const { t } = useTranslation('system');
   const loadDevice = isSystemAdmin ? fetchSystemDevice : fetchDevice;
@@ -208,6 +210,17 @@ function EditDevicePageContent({ isSystemAdmin = true }: EditDevicePageProps) {
         payload.access_point_id = accessPointID;
       }
       await (saveDevice as (id: string, data: Record<string, unknown>) => Promise<unknown>)(id, payload);
+      // Access-point binding lives in a junction table shared by the Devices
+      // page, CCTV cameras page, and Access Points page. Invalidate all three
+      // so a rebinding here is immediately visible wherever that device is
+      // listed — otherwise the 30s default staleTime hides the change.
+      if (accessPointID !== initialAccessPointID) {
+        qc.invalidateQueries({ queryKey: ['cctv-cameras'] });
+        qc.invalidateQueries({ queryKey: ['cctv-cameras-all'] });
+        qc.invalidateQueries({ queryKey: ['access-points'] });
+      }
+      qc.invalidateQueries({ queryKey: ['devices'] });
+      qc.invalidateQueries({ queryKey: ['system-devices'] });
       toast(t('editDevice.success.message'), 'success');
       navigate(listPath);
     } catch (err) {

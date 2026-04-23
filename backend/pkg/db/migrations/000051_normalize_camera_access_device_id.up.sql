@@ -12,15 +12,32 @@
 -- breaks clip/snapshot capture and camera listings.
 --
 -- This migration:
---   1. Rewrites camera junction rows to point at the underlying devices.id.
---   2. Removes the orphan access_devices rows of type='camera' that nothing
---      references anymore.
+--   0. Drops wrapper-based junction rows that would collide with an
+--      existing devices.id-based row for the same (access_point, camera)
+--      pair. Prod has both conventions coexisting on some cameras, so
+--      rewriting the wrapper row would violate uq_ap_access_device.
+--   1. Rewrites remaining camera junction rows to point at devices.id.
+--   2. Removes the orphan access_devices rows of type='camera' that
+--      nothing references anymore.
 -- ================================================================
 
 BEGIN;
 
--- Step 1: rewrite camera-role junction rows whose access_device_id still
--- resolves to an access_devices.id row with a known underlying device.
+-- Step 0: eliminate the duplicate before the rewrite. When a camera
+-- already has a devices.id-based junction row, the wrapper-based
+-- junction row is redundant — keep the canonical one.
+DELETE FROM dm3_access.access_point_devices apd
+ USING dm3_access.access_devices ad
+ WHERE apd.role = 'camera'
+   AND apd.access_device_id = ad.id::text
+   AND ad.device_id IS NOT NULL
+   AND EXISTS (
+       SELECT 1 FROM dm3_access.access_point_devices apd2
+        WHERE apd2.access_point_id = apd.access_point_id
+          AND apd2.access_device_id = ad.device_id::text
+   );
+
+-- Step 1: rewrite surviving wrapper-based rows to point at devices.id.
 UPDATE dm3_access.access_point_devices apd
    SET access_device_id = ad.device_id::text
   FROM dm3_access.access_devices ad
