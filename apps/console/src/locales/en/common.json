@@ -157,6 +157,8 @@
   "cctv.clips.toDate": "To date",
   "cctv.clips.cols.camera": "Camera",
   "cctv.clips.cols.startedAt": "Recorded At",
+  "cctv.clips.cols.recordedAt": "Recorded at",
+  "cctv.clips.cols.eventTime": "Event time",
   "cctv.clips.cols.duration": "Duration",
   "cctv.clips.cols.size": "Size",
   "cctv.settings.title": "CCTV Settings",

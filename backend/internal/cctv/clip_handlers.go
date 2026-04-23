@@ -44,6 +44,7 @@ type clipResponseDTO struct {
 	CameraID      string     `json:"camera_id"`
 	CameraName    *string    `json:"camera_name,omitempty"`
 	AccessEventID *string    `json:"access_event_id,omitempty"`
+	EventTime     *time.Time `json:"event_time,omitempty"` // access_events.time of the earliest linked event
 	StartedAt     time.Time  `json:"started_at"`
 	EndedAt       *time.Time `json:"ended_at,omitempty"`
 	DurationSec   *int       `json:"duration_sec,omitempty"`
@@ -147,13 +148,28 @@ func (h *CCTVHandlers) ListClips(w http.ResponseWriter, r *http.Request) {
 	}
 
 	listArgs := append(args, limit, offset)
+	// LATERAL subquery pulls the earliest linked access_events.time for each
+	// clip — the coalescer may attach several events to one clip, so we
+	// surface the first one (the event that opened the clip). Cross-schema
+	// text cast on the junction column because access_events.event_id is
+	// the public UUID shape both services agree on.
 	rows, err := h.db.Pool.Query(r.Context(), `
 		SELECT ec.id, ec.tenant_id, ec.device_id, ec.access_event_id, ec.started_at, ec.ended_at,
 		       ec.duration_ms, ec.object_key, ec.thumbnail_ref, ec.trigger, ec.media_type, ec.status, ec.created_at,
-		       d.name
+		       d.name,
+		       evt.time AS event_time
 		FROM dm3_cctv.event_clips ec
 		LEFT JOIN dm3_devices.devices d
 		       ON d.id = ec.device_id AND d.tenant_id = ec.tenant_id
+		LEFT JOIN LATERAL (
+		    SELECT ae.time
+		      FROM dm3_cctv.event_clip_events j
+		      JOIN dm3_access.access_events ae
+		        ON ae.event_id = j.access_event_id::text
+		     WHERE j.clip_id = ec.id
+		     ORDER BY ae.time ASC
+		     LIMIT 1
+		) evt ON TRUE
 		`+where+`
 		ORDER BY ec.started_at DESC
 		LIMIT $`+itoa(argIdx)+` OFFSET $`+itoa(argIdx+1), listArgs...)
@@ -167,16 +183,18 @@ func (h *CCTVHandlers) ListClips(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var clip EventClip
 		var cameraName *string
+		var eventTime *time.Time
 		if err := rows.Scan(
 			&clip.ID, &clip.TenantID, &clip.DeviceID, &clip.AccessEventID,
 			&clip.StartedAt, &clip.EndedAt, &clip.DurationMs, &clip.ObjectKey, &clip.ThumbnailRef,
 			&clip.Trigger, &clip.MediaType, &clip.Status, &clip.CreatedAt,
-			&cameraName,
+			&cameraName, &eventTime,
 		); err != nil {
 			logInternalError(w, "list clips scan error", err)
 			return
 		}
 		dto := toClipResponse(clip, cameraName)
+		dto.EventTime = eventTime
 		// Presign thumbnail/snapshot so the UI can render it directly. Presigning
 		// is essentially free (local HMAC); N presigns per page of 20 is fine.
 		// TODO(refactor): if the page size ever grows well past 50, switch to a

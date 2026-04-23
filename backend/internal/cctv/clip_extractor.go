@@ -96,7 +96,7 @@ func (e *ClipExtractor) ExtractClip(ctx context.Context, clipID, tenantID, camer
 
 	usedBuffer, duration := e.runBufferPath(ctx, log, cameraDeviceID, startedAt, endAt, tmpFile)
 	if !usedBuffer {
-		duration, err = e.runLivePullPath(ctx, log, clipID, info, endAt, tmpFile)
+		duration, err = e.runLivePullPath(ctx, log, clipID, info, startedAt, endAt, tmpFile)
 		if err != nil {
 			return // runLivePullPath already persisted the failure
 		}
@@ -204,14 +204,19 @@ func (e *ClipExtractor) runBufferPath(
 	return true, duration
 }
 
-// runLivePullPath is the original live-RTSP extractor. Keeps the service
-// operational when the rolling buffer isn't usable.
+// runLivePullPath is the fallback extractor used when MediaMTX isn't writing
+// a rolling buffer. Real pre-roll isn't possible here (RTSP can't rewind),
+// but we still honour the rule's configured total duration (pre + post) so
+// the clip length matches what the operator picked on the Event Rules page.
+// The captured window shifts later by ~`pre_roll` relative to the event;
+// event content still lands in the clip because ffmpeg starts right after
+// the event fires.
 func (e *ClipExtractor) runLivePullPath(
 	ctx context.Context,
 	log *slog.Logger,
 	clipID string,
 	info cameraRTSPInfo,
-	endAt time.Time,
+	startedAt, endAt time.Time,
 	tmpFile string,
 ) (int, error) {
 	if info.RTSPUrl == "" {
@@ -240,7 +245,11 @@ func (e *ClipExtractor) runLivePullPath(
 	}
 	authedURL := composeRTSPURLWithAuth(info.RTSPUrl, username, password)
 
-	duration := int(time.Until(endAt).Seconds())
+	// Honour the full (pre + post) duration the rule configured. Without a
+	// rolling buffer we can't actually reach into the past, but ffmpeg still
+	// captures that many seconds forward from "now" — giving the operator a
+	// clip of the expected length instead of a 5-second stub.
+	duration := int(endAt.Sub(startedAt).Seconds())
 	if duration < 5 {
 		duration = 5
 	}

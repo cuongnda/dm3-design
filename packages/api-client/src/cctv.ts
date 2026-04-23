@@ -34,6 +34,12 @@ export interface ClipDTO {
   camera_id: string;
   camera_name?: string;
   access_event_id?: string;
+  /** Wall-clock time of the earliest access event attached to this clip.
+   *  Present when the clip originated from an access event (trigger='access_event').
+   *  Use this instead of `started_at` for side-by-side correlation with the
+   *  Access History page — `started_at` is the capture window start, which
+   *  is skewed by pre_roll. */
+  event_time?: string;
   started_at: string;
   ended_at?: string;
   duration_sec?: number;

@@ -157,6 +157,8 @@
   "cctv.clips.toDate": "Đến ngày",
   "cctv.clips.cols.camera": "Camera",
   "cctv.clips.cols.startedAt": "Thời gian ghi",
+  "cctv.clips.cols.recordedAt": "Thời gian ghi hình",
+  "cctv.clips.cols.eventTime": "Thời điểm sự kiện",
   "cctv.clips.cols.duration": "Thời lượng",
   "cctv.clips.cols.size": "Kích thước",
   "cctv.settings.title": "Cài đặt CCTV",

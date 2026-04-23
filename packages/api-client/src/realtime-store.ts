@@ -26,10 +26,15 @@ export interface RealtimeAccessEvent {
   /** Typed credentials list for N-step verify; each entry has its own type. */
   credentials?: Array<{ type: string; value: string }>;
   /** Raw MinIO object key from `data.photo` on the access.log payload.
-   *  Empty for events without an attached snapshot. The WebSocket broadcast
-   *  never carries a presigned URL — consumers render via assetUrl() or by
-   *  refetching the event from the REST ListEvents endpoint. */
+   *  Empty for events without an attached snapshot. Used as a fallback when
+   *  `photoUrl` is absent (legacy event shapes) — assetUrl() handles the
+   *  `/photos/...` prefix. */
   photoRef?: string;
+  /** Presigned GET URL (5 min) populated when the publishing service had the
+   *  object store wired up — most TungSon face paths do. Prefer this over
+   *  photoRef: it lets the realtime monitoring page render the image
+   *  immediately, without a REST refresh. */
+  photoUrl?: string;
 }
 
 // Named RealtimeDeviceStatus to avoid collision with DeviceStatus const in types/enums
@@ -233,6 +238,7 @@ export function transformAccessEvent(data: AccessEventData, event: WSEvent): Rea
     cardIds: Array.isArray(data.card_ids) && data.card_ids.length > 0 ? data.card_ids : undefined,
     credentials: Array.isArray(data.credentials) && data.credentials.length > 0 ? data.credentials : undefined,
     photoRef: data.photo || undefined,
+    photoUrl: data.photo_url || undefined,
   };
 }
 

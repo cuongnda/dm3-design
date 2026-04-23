@@ -110,9 +110,19 @@ export function CCTVClipsPage() {
       },
     },
     {
+      key: 'event_time',
+      header: t('cctv.clips.cols.eventTime'),
+      width: '170px',
+      render: (r) => (
+        <span className="font-mono text-[12px] text-foreground">
+          {r.event_time ? new Date(r.event_time).toLocaleString() : '—'}
+        </span>
+      ),
+    },
+    {
       key: 'started_at',
-      header: t('cctv.clips.cols.startedAt'),
-      width: '160px',
+      header: t('cctv.clips.cols.recordedAt'),
+      width: '170px',
       render: (r) => (
         <span className="font-mono text-[12px] text-muted-foreground">
           {new Date(r.started_at).toLocaleString()}
