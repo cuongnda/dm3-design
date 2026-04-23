@@ -119,40 +119,32 @@ func (c *HTTPMediaMTXClient) UpsertPath(ctx context.Context, name string, cfg Pa
 		return nil // Created successfully
 	}
 
-	slog.Debug("mediamtx: POST add failed, deleting and re-adding", "path", name, "status", resp.StatusCode)
+	// Path already exists — PATCH it. Previously we did DELETE + re-ADD here,
+	// which closed the RTSP source and tore down the rolling-buffer recorder;
+	// every cctv-svc restart produced multi-second gaps in the segment
+	// timeline, which later showed up as time jumps in stitched clips.
+	// PATCH with the same Source field is a no-op on the live stream and
+	// only updates the recording options.
+	slog.Debug("mediamtx: path exists, patching", "path", name, "status", resp.StatusCode)
 
-	// Path exists — delete first, then re-add
-	delURL := fmt.Sprintf("%s/v3/config/paths/delete/%s", c.baseURL, name)
-	delReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, delURL, nil)
+	patchURL := fmt.Sprintf("%s/v3/config/paths/patch/%s", c.baseURL, name)
+	patchReq, err := http.NewRequestWithContext(ctx, http.MethodPatch, patchURL, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("mediamtx: create delete request: %w", err)
+		return fmt.Errorf("mediamtx: create patch request: %w", err)
 	}
+	patchReq.Header.Set("Content-Type", "application/json")
 	if c.user != "" {
-		delReq.SetBasicAuth(c.user, c.pass)
-	}
-	delResp, err := c.client.Do(delReq)
-	if err == nil {
-		delResp.Body.Close()
+		patchReq.SetBasicAuth(c.user, c.pass)
 	}
 
-	// Re-add
-	addReq2, err := http.NewRequestWithContext(ctx, http.MethodPost, addURL, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("mediamtx: create re-add request: %w", err)
-	}
-	addReq2.Header.Set("Content-Type", "application/json")
-	if c.user != "" {
-		addReq2.SetBasicAuth(c.user, c.pass)
-	}
-
-	resp2, err := c.client.Do(addReq2)
+	patchResp, err := c.client.Do(patchReq)
 	if err != nil {
 		return fmt.Errorf("mediamtx: patch path %q: %w", name, err)
 	}
-	defer resp2.Body.Close()
+	defer patchResp.Body.Close()
 
-	if resp2.StatusCode >= 400 {
-		return fmt.Errorf("mediamtx: patch path %q returned status %d", name, resp2.StatusCode)
+	if patchResp.StatusCode >= 400 {
+		return fmt.Errorf("mediamtx: patch path %q returned status %d", name, patchResp.StatusCode)
 	}
 	return nil
 }
