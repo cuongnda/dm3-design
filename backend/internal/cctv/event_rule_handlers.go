@@ -268,6 +268,21 @@ func (h *CCTVHandlers) UpdateEventRule(w http.ResponseWriter, r *http.Request) {
 		existing.Notes = in.Notes
 	}
 
+	// Normalize the FK fields based on the final scope. JSON `null` and field
+	// absence both unmarshal to nil pointer, so a client that switches scope
+	// (sending e.g. `{"scope_kind":"access_point","camera_device_id":null}`)
+	// relies on us clearing the unrelated FK — otherwise we'd keep the old
+	// camera_device_id and fail validation.
+	switch existing.ScopeKind {
+	case "tenant":
+		existing.AccessPointID = nil
+		existing.CameraDeviceID = nil
+	case "access_point":
+		existing.CameraDeviceID = nil
+	case "camera":
+		existing.AccessPointID = nil
+	}
+
 	// Re-validate the merged state so we can't sneak inconsistent scope through an update.
 	if err := validateRuleScope(eventRuleInput{
 		ScopeKind:      existing.ScopeKind,
