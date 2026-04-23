@@ -243,5 +243,14 @@
   "cctv.eventRules.fields.priorityHint": "Lower number wins when multiple rules at the same scope match.",
   "cctv.eventRules.fields.enabled": "Enabled",
   "cctv.eventRules.fields.notes": "Notes",
-  "cctv.eventRules.confirmDelete": "Delete this rule?"
+  "cctv.eventRules.confirmDelete": "Delete this rule?",
+  "cctv.eventRules.anyMatch": "Any",
+  "cctv.eventRules.decisions.granted": "Granted",
+  "cctv.eventRules.decisions.denied": "Denied",
+  "cctv.eventRules.decisions.unknown": "Unknown person",
+  "cctv.eventRules.decisions.duress": "Duress",
+  "cctv.eventRules.eventTypes.access_log": "Access event",
+  "cctv.eventRules.eventTypes.face_match": "Recognized face",
+  "cctv.eventRules.eventTypes.face_unknown": "Unrecognized face",
+  "cctv.eventRules.eventTypes.door_forced": "Door forced open"
 }

@@ -90,6 +90,18 @@ export function CCTVEventRulesPage() {
     return `${t('cctv.eventRules.scope.camPrefix')} ${cam?.name ?? r.camera_device_id}`;
   };
 
+  // Raw token → display label. Keep API values untouched (granted/denied/…),
+  // show them translated in the UI. Replace dots in event-type tokens
+  // (access.log) with underscores because i18next's default key separator is
+  // dot; using access_log in the key avoids the nested-lookup ambiguity.
+  const decisionLabel = (d: string) => t(`cctv.eventRules.decisions.${d}`, { defaultValue: d });
+  const eventTypeLabel = (et: string) => t(`cctv.eventRules.eventTypes.${et.replace(/\./g, '_')}`, { defaultValue: et });
+  const joinLabels = (values: string[], kind: 'decision' | 'eventType') => {
+    if (values.length === 0) return t('cctv.eventRules.anyMatch');
+    const fn = kind === 'decision' ? decisionLabel : eventTypeLabel;
+    return values.map(fn).join(', ');
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
@@ -127,8 +139,8 @@ export function CCTVEventRulesPage() {
               {rules.map((r) => (
                 <tr key={r.id} className="border-t border-border">
                   <td className="py-2 pr-3">{scopeLabel(r)}</td>
-                  <td className="py-2 pr-3">{r.decisions.length ? r.decisions.join(', ') : '*'}</td>
-                  <td className="py-2 pr-3">{r.event_types.length ? r.event_types.join(', ') : '*'}</td>
+                  <td className="py-2 pr-3">{joinLabels(r.decisions, 'decision')}</td>
+                  <td className="py-2 pr-3">{joinLabels(r.event_types, 'eventType')}</td>
                   <td className="py-2 pr-3">{r.snapshot_enabled ? '✓' : '—'}</td>
                   <td className="py-2 pr-3">{r.record_enabled ? '✓' : '—'}</td>
                   <td className="py-2 pr-3">{r.pre_roll_sec}s / {r.post_roll_sec}s</td>
@@ -210,6 +222,11 @@ interface RuleFormProps {
 function RuleFormModal({ open, initial, accessPoints, cameras, submitting, isEditing, onCancel, onSubmit }: RuleFormProps) {
   const { t } = useTranslation('common');
   const [form, setForm] = useState<EventRuleInput>(initial);
+
+  // Same translation helpers as the list — pill buttons show the friendly
+  // label but the underlying toggle still emits the raw API token.
+  const decisionLabel = (d: string) => t(`cctv.eventRules.decisions.${d}`, { defaultValue: d });
+  const eventTypeLabel = (et: string) => t(`cctv.eventRules.eventTypes.${et.replace(/\./g, '_')}`, { defaultValue: et });
 
   // Reset form whenever the modal opens with a new initial (create vs edit).
   // Using a key on AppModal would work too but this is fewer re-renders.
@@ -293,7 +310,7 @@ function RuleFormModal({ open, initial, accessPoints, cameras, submitting, isEdi
                   type="button"
                   onClick={() => set('decisions', toggleMulti(form.decisions, d))}
                   className={`px-2 py-1 rounded border text-[12px] ${active ? 'bg-primary text-primary-foreground border-primary' : 'border-border'}`}
-                >{d}</button>
+                >{decisionLabel(d)}</button>
               );
             })}
           </div>
@@ -311,7 +328,7 @@ function RuleFormModal({ open, initial, accessPoints, cameras, submitting, isEdi
                   type="button"
                   onClick={() => set('event_types', toggleMulti(form.event_types, ev))}
                   className={`px-2 py-1 rounded border text-[12px] ${active ? 'bg-primary text-primary-foreground border-primary' : 'border-border'}`}
-                >{ev}</button>
+                >{eventTypeLabel(ev)}</button>
               );
             })}
           </div>

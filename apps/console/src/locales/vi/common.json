@@ -243,5 +243,14 @@
   "cctv.eventRules.fields.priorityHint": "Số nhỏ hơn được ưu tiên khi có nhiều quy tắc cùng phạm vi khớp.",
   "cctv.eventRules.fields.enabled": "Đang bật",
   "cctv.eventRules.fields.notes": "Ghi chú",
-  "cctv.eventRules.confirmDelete": "Xóa quy tắc này?"
+  "cctv.eventRules.confirmDelete": "Xóa quy tắc này?",
+  "cctv.eventRules.anyMatch": "Tất cả",
+  "cctv.eventRules.decisions.granted": "Cho phép",
+  "cctv.eventRules.decisions.denied": "Từ chối",
+  "cctv.eventRules.decisions.unknown": "Không nhận diện",
+  "cctv.eventRules.decisions.duress": "Cảnh báo ép buộc",
+  "cctv.eventRules.eventTypes.access_log": "Sự kiện ra vào",
+  "cctv.eventRules.eventTypes.face_match": "Nhận diện khuôn mặt",
+  "cctv.eventRules.eventTypes.face_unknown": "Khuôn mặt lạ",
+  "cctv.eventRules.eventTypes.door_forced": "Cửa bị mở cưỡng bức"
 }
