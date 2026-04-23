@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppModal, Button, Input, Label, PageHeader } from '@dm3/ui';
@@ -228,15 +228,20 @@ function RuleFormModal({ open, initial, accessPoints, cameras, submitting, isEdi
   const decisionLabel = (d: string) => t(`cctv.eventRules.decisions.${d}`, { defaultValue: d });
   const eventTypeLabel = (et: string) => t(`cctv.eventRules.eventTypes.${et.replace(/\./g, '_')}`, { defaultValue: et });
 
-  // Reset form whenever the modal opens with a new initial (create vs edit).
-  // Using a key on AppModal would work too but this is fewer re-renders.
-  // Note: intentional dep on `open` + `initial` identity change.
-  if (open && form !== initial && !(form as any).__touched) {
-    setForm({ ...initial, ...(form as any) });
-  }
+  // Prime the form whenever the modal opens. The parent rebuilds `initial`
+  // on every render (`inputFromRule(editing)` returns a fresh object), so
+  // an effect keyed on `open` is the safe way to pick up edits — setting
+  // state inside the render body as we did before caused a React loop when
+  // `initial !== prev initial` on every call.
+  useEffect(() => {
+    if (open) {
+      setForm(initial);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const set = <K extends keyof EventRuleInput>(k: K, v: EventRuleInput[K]) => {
-    setForm((prev) => ({ ...prev, [k]: v, __touched: true } as EventRuleInput));
+    setForm((prev) => ({ ...prev, [k]: v } as EventRuleInput));
   };
 
   const toggleMulti = (list: string[] | undefined, value: string): string[] => {
@@ -261,8 +266,7 @@ function RuleFormModal({ open, initial, accessPoints, cameras, submitting, isEdi
                 scope_kind: s,
                 access_point_id: s === 'access_point' ? prev.access_point_id ?? null : null,
                 camera_device_id: s === 'camera' ? prev.camera_device_id ?? null : null,
-                __touched: true,
-              } as EventRuleInput));
+              }));
             }}
           >
             <option value="tenant">{t('cctv.eventRules.scope.tenant')}</option>
@@ -411,12 +415,7 @@ function RuleFormModal({ open, initial, accessPoints, cameras, submitting, isEdi
           <Button
             size="sm"
             disabled={submitting}
-            onClick={() => {
-              // Strip the UI-only __touched flag before sending.
-              const clean: EventRuleInput = { ...form };
-              delete (clean as any).__touched;
-              onSubmit(clean);
-            }}
+            onClick={() => onSubmit(form)}
             className="bg-[#3B82F6] hover:bg-[#2563EB]"
           >
             {submitting ? t('cctv.common.saving') : t('cctv.common.saveChanges')}
