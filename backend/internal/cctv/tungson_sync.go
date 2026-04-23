@@ -46,10 +46,8 @@ func (s *FaceSyncService) EnqueueUserToCamera(ctx context.Context, tenantID, use
 		JOIN dm3_access.access_point_devices apd
 		  ON apd.access_point_id = agap.access_point_id
 		  AND apd.tenant_id = agap.tenant_id
-		JOIN dm3_access.access_devices ad
-		  ON ad.id::text = apd.access_device_id
 		JOIN dm3_devices.devices d
-		  ON d.id = ad.device_id AND d.tenant_id = ad.tenant_id
+		  ON d.id::text = apd.access_device_id AND d.tenant_id = apd.tenant_id
 		JOIN dm3_cctv.cameras c
 		  ON c.device_id = d.id AND c.tenant_id = d.tenant_id
 		WHERE agu.user_id = $1::uuid
@@ -132,8 +130,6 @@ func (s *FaceSyncService) EnqueueFullSync(ctx context.Context, tenantID, cameraD
 	rows, err := tx.Query(dbCtx, `
 		SELECT DISTINCT agu.user_id::text
 		FROM dm3_access.access_point_devices apd
-		JOIN dm3_access.access_devices ad
-		  ON ad.id::text = apd.access_device_id
 		JOIN dm3_access.access_group_access_points agap
 		  ON agap.access_point_id = apd.access_point_id
 		  AND agap.tenant_id = apd.tenant_id
@@ -142,8 +138,8 @@ func (s *FaceSyncService) EnqueueFullSync(ctx context.Context, tenantID, cameraD
 		  AND agu.tenant_id = agap.tenant_id
 		JOIN dm3_identity.users u
 		  ON u.id = agu.user_id AND u.tenant_id = agu.tenant_id
-		WHERE ad.device_id = $1::uuid
-		  AND ad.tenant_id = $2::uuid
+		WHERE apd.access_device_id = $1::text
+		  AND apd.tenant_id = $2::uuid
 		  AND u.status = 'active'
 		  AND (agu.effective_from IS NULL OR agu.effective_from <= now())
 		  AND (agu.effective_to IS NULL OR agu.effective_to >= now())

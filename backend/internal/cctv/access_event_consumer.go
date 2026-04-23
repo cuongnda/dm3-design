@@ -498,8 +498,7 @@ func (c *AccessEventConsumer) resolveAccessPointID(ctx context.Context, tenantID
 			`SELECT ap.id::text
 			   FROM dm3_access.access_points ap
 			   JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
-			   JOIN dm3_access.access_devices ad ON ad.id::text = apd.access_device_id
-			  WHERE ad.device_id = $1::uuid AND ap.tenant_id = $2::uuid
+			  WHERE apd.access_device_id = $1 AND ap.tenant_id = $2::uuid
 			  LIMIT 1`,
 			srcDeviceID, tenantID,
 		).Scan(&apID)
@@ -537,8 +536,7 @@ func (c *AccessEventConsumer) findCamerasForAccessPoint(ctx context.Context, ten
 	rows, err := c.db.Pool.Query(lookupCtx,
 		`SELECT d.id::text
 		   FROM dm3_access.access_point_devices apd
-		   JOIN dm3_access.access_devices ad ON ad.id::text = apd.access_device_id AND ad.tenant_id = apd.tenant_id
-		   JOIN dm3_devices.devices d ON d.id = ad.device_id AND d.tenant_id = ad.tenant_id
+		   JOIN dm3_devices.devices d ON d.id::text = apd.access_device_id AND d.tenant_id = apd.tenant_id
 		  WHERE apd.access_point_id = $1::uuid AND apd.tenant_id = $2::uuid AND d.type = 'camera'`,
 		accessPointID, tenantID,
 	)
