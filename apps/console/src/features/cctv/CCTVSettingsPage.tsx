@@ -42,6 +42,15 @@ export function CCTVSettingsPage() {
         // pre/post_roll_sec_default intentionally omitted — edited per rule
         // on the Event Rules page.
         storage_quota_gb: settings.storage_quota_gb,
+        // Event capture section. Seed the form from the server value so the
+        // save mutation actually carries them back; without this the fields
+        // only ever held their `?? fallback` render value and the PUT body
+        // skipped them → COALESCE no-op on the backend.
+        rolling_buffer_sec: settings.rolling_buffer_sec,
+        max_clip_duration_sec: settings.max_clip_duration_sec,
+        max_concurrent_extractions: settings.max_concurrent_extractions,
+        default_record_enabled: settings.default_record_enabled,
+        default_snapshot_enabled: settings.default_snapshot_enabled,
         hanet_client_id: settings.hanet_client_id,
         hanet_server_url: settings.hanet_server_url || HANET_DEFAULT_SERVER,
         hanet_place_id: settings.hanet_place_id,
