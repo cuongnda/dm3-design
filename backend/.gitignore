@@ -9,3 +9,4 @@ bin/
 /access-svc
 /identity-svc
 /audit-svc
+.prod-backups/
