@@ -37,6 +37,13 @@ func (h *IdentityHandlers) UploadUserAvatar(w http.ResponseWriter, r *http.Reque
 	h.publishEvent("dm3.identity.user.updated", map[string]string{"id": userID, "avatar": assetURL})
 	h.audit.LogFromRequest(r, "identity.user.photo_upload", "user", userID, userID, "success", nil, map[string]any{"avatar": assetURL})
 
+	// Also fire the subject cctv-svc listens to — without this the TungSon
+	// face sync queue never gets a "new avatar, please push it" signal and
+	// the user silently fails to register on connected cameras. Reason
+	// "avatar.updated" so downstream consumers can branch if they care (sync
+	// service currently maps anything non-delete to action='add').
+	h.publishPersonChanged(companyID, userID, "avatar.updated")
+
 	// Avatar changed → retract any prior enrolment (reset status to invalid
 	// so the old template stops syncing) then make sure the M_<user_code>
 	// row exists so the next face_result ack from a qualifying device can

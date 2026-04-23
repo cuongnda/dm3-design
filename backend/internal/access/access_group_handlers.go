@@ -468,6 +468,8 @@ func (h *AccessHandlers) AddAccessGroupAccessPoint(w http.ResponseWriter, r *htt
 	}
 	h.audit.LogFromRequest(r, "access.group.add_access_point", "access_group", groupID, "", "success", nil, map[string]any{"access_point_id": req.AccessPointID})
 	h.publishAGEvent(r.Context(), cid, groupID, "ap_added")
+	// AP added to group → every member gets a wider reach; re-enqueue sync.
+	h.publishPersonChangedForGroup(r.Context(), cid, groupID, "access_group.ap_added")
 	httputil.JSON(w, http.StatusCreated, map[string]string{"id": id})
 }
 
@@ -612,6 +614,9 @@ func (h *AccessHandlers) AssignUsersToGroup(w http.ResponseWriter, r *http.Reque
 	}
 	h.audit.LogFromRequest(r, "access.group.assign_users", "access_group", groupID, "", "success", nil, map[string]any{"user_ids": userIDs})
 	h.publishAGEvent(r.Context(), cid, groupID, "user_added")
+	for _, uid := range userIDs {
+		h.publishPersonChanged(r.Context(), cid, uid, "access_group.user_added")
+	}
 	httputil.JSON(w, http.StatusOK, map[string]any{"assigned": assigned})
 }
 
@@ -654,6 +659,7 @@ func (h *AccessHandlers) UpdateUserMembership(w http.ResponseWriter, r *http.Req
 	}
 	h.audit.LogFromRequest(r, "access.group.update_user_membership", "access_group", groupID, "", "success", nil, map[string]any{"user_id": userID})
 	h.publishAGEvent(r.Context(), cid, groupID, "user_added")
+	h.publishPersonChanged(r.Context(), cid, userID, "access_group.user_updated")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -682,6 +688,7 @@ func (h *AccessHandlers) RemoveUserFromGroup(w http.ResponseWriter, r *http.Requ
 	}
 	h.audit.LogFromRequest(r, "access.group.remove_user", "access_group", groupID, "", "success", nil, map[string]any{"user_id": userID})
 	h.publishAGEvent(r.Context(), cid, groupID, "user_removed")
+	h.publishPersonChanged(r.Context(), cid, userID, "access_group.user_removed")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -710,6 +717,9 @@ func (h *AccessHandlers) RemoveAccessGroupAccessPoint(w http.ResponseWriter, r *
 	}
 	h.audit.LogFromRequest(r, "access.group.remove_access_point", "access_group", groupID, "", "success", nil, map[string]any{"access_point_id": apID})
 	h.publishAGEvent(r.Context(), cid, groupID, "ap_removed")
+	// AP removed → members may lose their only camera in that group; re-sync
+	// so cctv-svc re-evaluates and potentially queues a delete.
+	h.publishPersonChangedForGroup(r.Context(), cid, groupID, "access_group.ap_removed")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -875,5 +885,57 @@ func (h *AccessHandlers) publishAGEvent(ctx context.Context, tenantID, accessGro
 	}
 	if err := h.nats.Publish(ctx, subject, payload); err != nil {
 		slog.Warn("publishAGEvent: failed to publish", "subject", subject, "error", err)
+	}
+}
+
+// publishPersonChanged fires the identity-level sync signal for each user
+// whose "reach" changed because of an access-group mutation. cctv-svc's
+// IdentityChangeSyncConsumer listens on dm3.identity.person.changed and
+// re-enqueues TungSon face sync for the user.
+//
+// We use the identity subject rather than inventing a new one so every
+// consumer that already reacts to user changes (cctv-svc, device-gateway
+// PushPersonSync path, etc.) automatically picks up membership changes too.
+func (h *AccessHandlers) publishPersonChanged(ctx context.Context, tenantID, userID, reason string) {
+	if h.nats == nil || tenantID == "" || userID == "" {
+		return
+	}
+	payload, err := json.Marshal(map[string]string{
+		"tenant_id": tenantID,
+		"user_id":   userID,
+		"reason":    reason,
+	})
+	if err != nil {
+		return
+	}
+	if err := h.nats.Publish(ctx, "dm3.identity.person.changed", payload); err != nil {
+		slog.Warn("publishPersonChanged: failed to publish", "error", err)
+	}
+}
+
+// publishPersonChangedForGroup fan-outs person.changed for every active
+// member of the given access group. Used by AP-level mutations (adding or
+// removing an access point from a group) where the membership list itself
+// didn't change but every user's reachable-camera set did.
+func (h *AccessHandlers) publishPersonChangedForGroup(ctx context.Context, tenantID, accessGroupID, reason string) {
+	if h.nats == nil || tenantID == "" || accessGroupID == "" {
+		return
+	}
+	rows, err := h.db.Pool.Query(ctx,
+		`SELECT user_id::text FROM dm3_access.access_group_users
+		 WHERE access_group_id = $1::uuid AND tenant_id = $2::uuid`,
+		accessGroupID, tenantID,
+	)
+	if err != nil {
+		slog.Warn("publishPersonChangedForGroup: query failed", "error", err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var uid string
+		if err := rows.Scan(&uid); err != nil {
+			continue
+		}
+		h.publishPersonChanged(ctx, tenantID, uid, reason)
 	}
 }
