@@ -340,7 +340,7 @@ func (h *AccessHandlers) ListAccessPointDevices(w http.ResponseWriter, r *http.R
 	// Resolve both via LEFT JOINs so the UI always gets a device name, not a UUID.
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT apd.id, apd.tenant_id, apd.access_point_id, apd.access_device_id, apd.role, apd.created_at,
-		        COALESCE(ad.id::text, d.id::text)            AS dev_id,
+		        COALESCE(ad.id::text, d.id::text, '')        AS dev_id,
 		        COALESCE(ad.name, d.name, d.device_id, '')    AS dev_name,
 		        COALESCE(ad.type, d.type, '')                 AS dev_type,
 		        COALESCE(d.status, ad.status, '')             AS dev_status
