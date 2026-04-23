@@ -71,9 +71,11 @@ func (c *CCTVWebSocketConsumer) handle(subject string, data []byte) error {
 		return nil // ack bad messages
 	}
 
-	// Enrich with identity data if this is an access event.
+	// Enrich with identity data if this is an access-family event (includes
+	// face.match / face.unknown which share the access-log shape and want
+	// the same user-name / device-name enrichment before hitting the UI).
 	broadcastData := evt.Data
-	if strings.HasPrefix(evt.Type, "access.") && c.db != nil {
+	if (strings.HasPrefix(evt.Type, "access.") || strings.HasPrefix(evt.Type, "face.")) && c.db != nil {
 		enrichCtx, enrichCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer enrichCancel()
 		broadcastData = c.enrichAccessData(enrichCtx, evt.Data, tenantID, deviceID)

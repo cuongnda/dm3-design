@@ -343,8 +343,11 @@ export class WebSocketClient {
   }
 
   private routeEvent(event: WSEvent): void {
-    // Route to specific handlers based on event type
-    if (event.type.startsWith('access.')) {
+    // Route to specific handlers based on event type. face.match / face.unknown
+    // share the access-log payload shape so they feed onAccessEvent too —
+    // otherwise face recognition events silently dropped off the realtime
+    // monitoring page when we stopped wrapping them in `access.log`.
+    if (event.type.startsWith('access.') || event.type.startsWith('face.')) {
       this.options.onAccessEvent?.(event.data as AccessEventData, event);
     } else if (event.type === 'door.state') {
       this.options.onDoorState?.(event.data as DoorStateData, event);

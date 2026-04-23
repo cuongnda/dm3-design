@@ -675,9 +675,16 @@ func (h *TungSonHandlers) presignPhoto(ctx context.Context, photoRef string) str
 	return u.String()
 }
 
-// publishWSEventWithPhoto publishes event to WebSocket with photo_url included.
+// publishWSEventWithPhoto re-emits the already-published NATS event onto the
+// CCTV WebSocket subject (dm3.cctv.ws.{tenant}.{device}) so device-gateway's
+// CCTVWebSocketConsumer can forward it to the realtime monitoring page.
+// Forwards the event's real `type` (face.match / face.unknown / access.log)
+// so frontend filtering stays consistent with the rule/pipeline values.
+// Always parses data even when photo is missing — otherwise the WS row had
+// `data: null` and the monitoring page fell back to showing IDs.
 func (h *TungSonHandlers) publishWSEventWithPhoto(ctx context.Context, tenantID, deviceUUID string, originalPayload []byte, photoURL string) {
 	var envelope struct {
+		Type string          `json:"type"`
 		Data json.RawMessage `json:"data"`
 		TS   int64           `json:"ts"`
 	}
@@ -686,14 +693,17 @@ func (h *TungSonHandlers) publishWSEventWithPhoto(ctx context.Context, tenantID,
 		return
 	}
 
-	// Inject photo_url into data
 	var dataMap map[string]any
-	if err := json.Unmarshal(envelope.Data, &dataMap); err == nil && photoURL != "" {
+	_ = json.Unmarshal(envelope.Data, &dataMap)
+	if dataMap == nil {
+		dataMap = map[string]any{}
+	}
+	if photoURL != "" {
 		dataMap["photo_url"] = photoURL
 	}
 
 	wsPayload, _ := json.Marshal(map[string]any{
-		"type":      "access.log",
+		"type":      envelope.Type,
 		"device_id": deviceUUID,
 		"tenant_id": tenantID,
 		"data":      dataMap,
