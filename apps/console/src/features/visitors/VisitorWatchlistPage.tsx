@@ -30,7 +30,7 @@ export function VisitorWatchlistPage() {
   const deleteMutation = useDeleteWatchlistEntry();
 
   const [formData, setFormData] = useState<CreateWatchlistRequest>({
-    entry_type: 'blocklist',
+    entry_type: 'blacklisted',
     match_field: 'email',
     match_value: '',
     reason: '',
@@ -44,9 +44,9 @@ export function VisitorWatchlistPage() {
       key: 'entry_type', header: t('visitors.watchlist.type', 'Type'), width: '100px',
       render: (r) => (
         <span className={cn('text-[12px] font-medium px-2 py-0.5 rounded',
-          r.entry_type === 'blocklist' ? 'bg-destructive/20 text-destructive' : 'bg-amber-500/20 text-amber-400'
+          r.entry_type === 'blacklisted' ? 'bg-destructive/20 text-destructive' : 'bg-amber-500/20 text-amber-400'
         )}>
-          {r.entry_type}
+          {r.entry_type === 'blacklisted' ? t('visitors.watchlist.blocklist', 'Blocklist') : t('visitors.watchlist.flagged', 'Flagged')}
         </span>
       ),
     },
@@ -72,7 +72,7 @@ export function VisitorWatchlistPage() {
     createMutation.mutate(formData, {
       onSuccess: () => {
         setShowForm(false);
-        setFormData({ entry_type: 'blocklist', match_field: 'email', match_value: '', reason: '' });
+        setFormData({ entry_type: 'blacklisted', match_field: 'email', match_value: '', reason: '' });
       },
     });
   };
@@ -115,8 +115,8 @@ export function VisitorWatchlistPage() {
           <div>
             <Label className="text-[12px]">{t('visitors.watchlist.type', 'Type')}</Label>
             <Select className="mt-1 h-8 text-[12px]" value={formData.entry_type} onChange={(e) => setFormData(prev => ({ ...prev, entry_type: e.target.value }))}>
-              <SelectOption value="blocklist">Blocklist</SelectOption>
-              <SelectOption value="flagged">Flagged</SelectOption>
+              <SelectOption value="blacklisted">{t('visitors.watchlist.blocklist', 'Blocklist')}</SelectOption>
+              <SelectOption value="vip">{t('visitors.watchlist.flagged', 'Flagged')}</SelectOption>
             </Select>
           </div>
           <div>
