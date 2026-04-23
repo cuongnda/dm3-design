@@ -21,7 +21,7 @@ export function CCTVClipsPage() {
   const [cameraFilter, setCameraFilter] = useState('');
   const [fromFilter, setFromFilter] = useState('');
   const [toFilter, setToFilter] = useState('');
-  const [sortBy, setSortBy] = useState<'event_time' | 'started_at' | 'duration_ms' | 'camera_name' | 'media_type' | 'status'>('started_at');
+  const [sortBy, setSortBy] = useState<'started_at' | 'duration_ms' | 'camera_name' | 'media_type' | 'status'>('started_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const handleSortChange = (col: string, dir: 'asc' | 'desc') => {
     setSortBy(col as typeof sortBy);
@@ -137,23 +137,16 @@ export function CCTVClipsPage() {
       },
     },
     {
-      key: 'event_time',
-      header: t('cctv.clips.cols.eventTime'),
-      width: '170px',
-      sortable: true,
-      render: (r) => (
-        <span className="font-mono text-[12px] text-foreground">
-          {r.event_time ? new Date(r.event_time).toLocaleString() : '—'}
-        </span>
-      ),
-    },
-    {
+      // A single clip can cover multiple events (coalesced bursts), so showing
+      // a single "event time" on this row is misleading. The correlation flow
+      // is event → clip (Access History surfaces per-event media via
+      // cctv_media[]), not clip → event.
       key: 'started_at',
       header: t('cctv.clips.cols.recordedAt'),
       width: '170px',
       sortable: true,
       render: (r) => (
-        <span className="font-mono text-[12px] text-muted-foreground">
+        <span className="font-mono text-[12px] text-foreground">
           {new Date(r.started_at).toLocaleString()}
         </span>
       ),
@@ -299,7 +292,6 @@ export function CCTVClipsPage() {
           onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
           loading={isLoading}
           sortColumns={[
-            { value: 'event_time', label: t('cctv.clips.cols.eventTime') },
             { value: 'started_at', label: t('cctv.clips.cols.recordedAt') },
             { value: 'camera_name', label: t('cctv.clips.cols.camera') },
             { value: 'duration_ms', label: t('cctv.clips.cols.duration') },
