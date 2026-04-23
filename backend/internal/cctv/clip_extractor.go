@@ -179,22 +179,19 @@ func (e *ClipExtractor) runBufferPath(
 		return false, 0
 	}
 
-	// No `-ss` seeking. On fmp4 with `-c copy`, input-side -ss snaps to the
-	// nearest keyframe, which on MediaMTX's 1-second record parts can land
-	// one keyframe AFTER the requested offset — dropping the first second
-	// of the window, which is often the event frame itself. Instead we
-	// accept the leading slack of the first segment: clip starts at segment
-	// boundary and the event lands `leadingSlack` seconds in. Duration is
-	// extended so the tail still reaches end_at.
-	//
-	// Worst case leading slack ≈ segment part duration (~10s max) — harmless
-	// extra context for the operator and guaranteed to keep the event frame
-	// visible. Use the wider window from the first segment's start.
+	// Offset from the first picked segment's boundary to the window's
+	// started_at — we'll feed this to ffmpeg's output-side `-ss` so the
+	// final mp4 begins exactly at started_at rather than at segment start.
+	// Output-side seek (i.e. `-ss` placed AFTER `-i`) is frame-accurate
+	// because we re-encode; with `-c copy` it snaps to keyframes and
+	// historically dropped the event frame, which is why the previous
+	// attempt was removed.
 	leadingSlack := startedAt.Sub(pick[0].Start).Seconds()
 	if leadingSlack < 0 {
 		leadingSlack = 0
 	}
-	duration := int(endAt.Sub(pick[0].Start).Seconds())
+	// Requested clip length is exactly the rule's window.
+	duration := int(endAt.Sub(startedAt).Seconds())
 	if duration < 1 {
 		duration = 1
 	}
@@ -202,23 +199,27 @@ func (e *ClipExtractor) runBufferPath(
 	ffmpegCtx, cancel := context.WithTimeout(ctx, time.Duration(duration*2+30)*time.Second)
 	defer cancel()
 
-	// Re-encode instead of `-c copy`. MediaMTX fmp4 segments stored via the
-	// record feature carry per-file timebases and may have inter-segment PTS
-	// gaps (each segment restarts near 0). The concat demuxer + `-c copy`
-	// combination preserves those quirks into the output — the player then
-	// sees huge time jumps or stops decoding mid-stream. Decoding through
-	// ffmpeg and re-encoding with ultrafast x264 produces a monotonically
-	// increasing PTS at the cost of ~1-2 s extra CPU per 30 s clip, which
-	// is acceptable for post-event clips (not a hot path).
+	// Re-encode via libx264 ultrafast. MediaMTX writes each segment as a
+	// self-contained MPEG-TS (PAT/PMT/SPS/PPS included), so the concat
+	// demuxer decodes cleanly across segment boundaries. Re-encoding
+	// regenerates a single monotonic PTS stream and costs ~1-2 s CPU per
+	// 30 s clip — off the hot path.
 	//
 	// -fflags +genpts + -avoid_negative_ts handle the occasional segment
-	// whose header PTS rolls back; -vsync cfr enforces a constant frame
-	// cadence so the output plays smoothly even if an input had dropped
-	// frames.
+	// whose header PTS starts slightly negative; -vsync cfr enforces a
+	// constant frame cadence so playback stays smooth even across dropped
+	// frames within a segment.
 	args := []string{
 		"-fflags", "+genpts",
 		"-f", "concat", "-safe", "0",
 		"-i", listFile,
+	}
+	// Apply output-side seek only when there is real slack to skip — lets
+	// short clips (event lands at segment boundary) emit the full segment.
+	if leadingSlack > 0.1 {
+		args = append(args, "-ss", fmt.Sprintf("%.3f", leadingSlack))
+	}
+	args = append(args,
 		"-t", fmt.Sprintf("%d", duration),
 		"-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
 		"-vsync", "cfr",
@@ -226,7 +227,7 @@ func (e *ClipExtractor) runBufferPath(
 		"-an",
 		"-movflags", "+faststart",
 		"-y", tmpFile,
-	}
+	)
 	var stderr bytes.Buffer
 	cmd := exec.CommandContext(ffmpegCtx, "ffmpeg", args...)
 	cmd.Stderr = &stderr
