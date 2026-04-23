@@ -202,11 +202,27 @@ func (e *ClipExtractor) runBufferPath(
 	ffmpegCtx, cancel := context.WithTimeout(ctx, time.Duration(duration*2+30)*time.Second)
 	defer cancel()
 
+	// Re-encode instead of `-c copy`. MediaMTX fmp4 segments stored via the
+	// record feature carry per-file timebases and may have inter-segment PTS
+	// gaps (each segment restarts near 0). The concat demuxer + `-c copy`
+	// combination preserves those quirks into the output — the player then
+	// sees huge time jumps or stops decoding mid-stream. Decoding through
+	// ffmpeg and re-encoding with ultrafast x264 produces a monotonically
+	// increasing PTS at the cost of ~1-2 s extra CPU per 30 s clip, which
+	// is acceptable for post-event clips (not a hot path).
+	//
+	// -fflags +genpts + -avoid_negative_ts handle the occasional segment
+	// whose header PTS rolls back; -vsync cfr enforces a constant frame
+	// cadence so the output plays smoothly even if an input had dropped
+	// frames.
 	args := []string{
+		"-fflags", "+genpts",
 		"-f", "concat", "-safe", "0",
 		"-i", listFile,
 		"-t", fmt.Sprintf("%d", duration),
-		"-c", "copy",
+		"-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+		"-vsync", "cfr",
+		"-avoid_negative_ts", "make_zero",
 		"-an",
 		"-movflags", "+faststart",
 		"-y", tmpFile,
