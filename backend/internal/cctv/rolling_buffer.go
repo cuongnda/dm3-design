@@ -27,9 +27,12 @@ import (
 // DST and host-TZ shifts can't skew segment selection.
 
 // segmentFilenamePattern parses the MediaMTX default filename template.
-// Leading "2026-04-23_10-15-30-123456" plus either ".ts" (mpegts, current) or
-// ".mp4" (legacy fmp4) extension.
-var segmentFilenamePattern = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})-(\d{1,6})\.(ts|mp4)$`)
+// Leading "2026-04-23_10-15-30-123456" plus ".ts" — we only accept mpegts
+// segments. Legacy fmp4 ".mp4" fragment files (written before the format
+// switch) are ignored because their codec params live in a separate init
+// file and ffmpeg can't decode them standalone; mixing them with .ts
+// segments breaks the concat stream.
+var segmentFilenamePattern = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})-(\d{1,6})\.ts$`)
 
 // segment is a single rolling-buffer file with its start time parsed out.
 type segment struct {
@@ -57,10 +60,7 @@ func listRollingSegments(rootDir, cameraUUID string) ([]segment, error) {
 
 	out := make([]segment, 0, len(entries))
 	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		if !strings.HasSuffix(e.Name(), ".ts") && !strings.HasSuffix(e.Name(), ".mp4") {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".ts") {
 			continue
 		}
 		t, ok := parseSegmentStart(e.Name())
@@ -85,12 +85,9 @@ func parseSegmentStart(name string) (time.Time, bool) {
 	if m == nil {
 		return time.Time{}, false
 	}
-	// The regex already matched the suffix; reuse captured groups so we don't
-	// have to branch on extension here.
 	var y, mo, d, h, mi, s, us int
-	var ext string
-	_, err := fmt.Sscanf(name, "%04d-%02d-%02d_%02d-%02d-%02d-%d.%s",
-		&y, &mo, &d, &h, &mi, &s, &us, &ext)
+	_, err := fmt.Sscanf(name, "%04d-%02d-%02d_%02d-%02d-%02d-%d.ts",
+		&y, &mo, &d, &h, &mi, &s, &us)
 	if err != nil {
 		return time.Time{}, false
 	}
