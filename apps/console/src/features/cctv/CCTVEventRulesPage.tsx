@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppModal, Button, Input, Label, PageHeader } from '@dm3/ui';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
@@ -39,6 +40,7 @@ const emptyInput: EventRuleInput = {
 };
 
 export function CCTVEventRulesPage() {
+  const { t } = useTranslation('common');
   const qc = useQueryClient();
   const { data: rules = [], isLoading } = useQuery({
     queryKey: ['cctv-event-rules'],
@@ -79,45 +81,45 @@ export function CCTVEventRulesPage() {
   });
 
   const scopeLabel = (r: EventRuleDTO) => {
-    if (r.scope_kind === 'tenant') return 'All cameras';
+    if (r.scope_kind === 'tenant') return t('cctv.eventRules.scope.tenant');
     if (r.scope_kind === 'access_point') {
       const ap = accessPoints.find((a) => a.id === r.access_point_id);
-      return `AP: ${ap?.name ?? r.access_point_id}`;
+      return `${t('cctv.eventRules.scope.apPrefix')} ${ap?.name ?? r.access_point_id}`;
     }
     const cam = cameras.find((c) => c.id === r.camera_device_id);
-    return `Cam: ${cam?.name ?? r.camera_device_id}`;
+    return `${t('cctv.eventRules.scope.camPrefix')} ${cam?.name ?? r.camera_device_id}`;
   };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
-        title="Event Rules"
-        description="Quyết định từng event access sẽ tạo snapshot và/hoặc record video. Scope ưu tiên: camera > access point > tenant."
+        title={t('cctv.eventRules.title')}
+        description={t('cctv.eventRules.description')}
       >
         <Button size="sm" onClick={() => setCreating(true)} data-testid="cctv-button-new-rule">
-          <Plus size={16} className="mr-1" /> New Rule
+          <Plus size={16} className="mr-1" /> {t('cctv.eventRules.newRule')}
         </Button>
       </PageHeader>
 
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         {isLoading ? (
-          <div className="py-12 text-center text-muted-foreground">Loading…</div>
+          <div className="py-12 text-center text-muted-foreground">{t('cctv.common.loading')}</div>
         ) : rules.length === 0 ? (
           <div className="py-12 text-center text-muted-foreground text-[13px]">
-            Chưa có rule nào. Nếu không có rule, tenant default trong Settings sẽ áp dụng cho mọi event.
+            {t('cctv.eventRules.noRules')}
           </div>
         ) : (
           <table className="w-full text-[13px]">
             <thead className="text-left text-muted-foreground text-[12px]">
               <tr>
-                <th className="py-2 pr-3">Scope</th>
-                <th className="py-2 pr-3">Decisions</th>
-                <th className="py-2 pr-3">Event Types</th>
-                <th className="py-2 pr-3">Snapshot</th>
-                <th className="py-2 pr-3">Record</th>
-                <th className="py-2 pr-3">Pre/Post</th>
-                <th className="py-2 pr-3">Priority</th>
-                <th className="py-2 pr-3">Enabled</th>
+                <th className="py-2 pr-3">{t('cctv.eventRules.columns.scope')}</th>
+                <th className="py-2 pr-3">{t('cctv.eventRules.columns.decisions')}</th>
+                <th className="py-2 pr-3">{t('cctv.eventRules.columns.eventTypes')}</th>
+                <th className="py-2 pr-3">{t('cctv.eventRules.columns.snapshot')}</th>
+                <th className="py-2 pr-3">{t('cctv.eventRules.columns.record')}</th>
+                <th className="py-2 pr-3">{t('cctv.eventRules.columns.rolls')}</th>
+                <th className="py-2 pr-3">{t('cctv.eventRules.columns.priority')}</th>
+                <th className="py-2 pr-3">{t('cctv.eventRules.columns.enabled')}</th>
                 <th className="py-2 pr-3"></th>
               </tr>
             </thead>
@@ -141,7 +143,7 @@ export function CCTVEventRulesPage() {
                       variant="ghost"
                       className="text-destructive"
                       onClick={() => {
-                        if (window.confirm('Delete this rule?')) {
+                        if (window.confirm(t('cctv.eventRules.confirmDelete'))) {
                           deleteMutation.mutate(r.id);
                         }
                       }}
@@ -163,6 +165,7 @@ export function CCTVEventRulesPage() {
         accessPoints={accessPoints.map((a) => ({ id: a.id, name: a.name }))}
         cameras={cameras.map((c) => ({ id: c.id, name: c.name }))}
         submitting={createMutation.isPending || updateMutation.isPending}
+        isEditing={!!editing}
         onCancel={() => {
           setCreating(false);
           setEditing(null);
@@ -199,11 +202,13 @@ interface RuleFormProps {
   accessPoints: { id: string; name: string }[];
   cameras: { id: string; name: string }[];
   submitting: boolean;
+  isEditing: boolean;
   onCancel: () => void;
   onSubmit: (data: EventRuleInput) => void;
 }
 
-function RuleFormModal({ open, initial, accessPoints, cameras, submitting, onCancel, onSubmit }: RuleFormProps) {
+function RuleFormModal({ open, initial, accessPoints, cameras, submitting, isEditing, onCancel, onSubmit }: RuleFormProps) {
+  const { t } = useTranslation('common');
   const [form, setForm] = useState<EventRuleInput>(initial);
 
   // Reset form whenever the modal opens with a new initial (create vs edit).
@@ -225,10 +230,10 @@ function RuleFormModal({ open, initial, accessPoints, cameras, submitting, onCan
   };
 
   return (
-    <AppModal open={open} onOpenChange={(v) => { if (!v) onCancel(); }} title="Event Rule">
+    <AppModal open={open} onOpenChange={(v) => { if (!v) onCancel(); }} title={isEditing ? t('cctv.eventRules.editRule') : t('cctv.eventRules.newRule')}>
       <div className="space-y-3">
         <div>
-          <Label className="text-[12px]">Scope</Label>
+          <Label className="text-[12px]">{t('cctv.eventRules.columns.scope')}</Label>
           <select
             className="mt-1 w-full h-8 rounded-md border border-border bg-background px-2 text-[13px]"
             value={form.scope_kind}
@@ -243,21 +248,21 @@ function RuleFormModal({ open, initial, accessPoints, cameras, submitting, onCan
               } as EventRuleInput));
             }}
           >
-            <option value="tenant">Tenant (mọi camera)</option>
-            <option value="access_point">Access point (mọi camera trong 1 điểm)</option>
-            <option value="camera">Camera cụ thể</option>
+            <option value="tenant">{t('cctv.eventRules.scope.tenant')}</option>
+            <option value="access_point">{t('cctv.eventRules.scope.accessPoint')}</option>
+            <option value="camera">{t('cctv.eventRules.scope.camera')}</option>
           </select>
         </div>
 
         {form.scope_kind === 'access_point' && (
           <div>
-            <Label className="text-[12px]">Access Point</Label>
+            <Label className="text-[12px]">{t('cctv.eventRules.scope.accessPoint')}</Label>
             <select
               className="mt-1 w-full h-8 rounded-md border border-border bg-background px-2 text-[13px]"
               value={form.access_point_id ?? ''}
               onChange={(e) => set('access_point_id', e.target.value || null)}
             >
-              <option value="">-- chọn --</option>
+              <option value="">{t('cctv.eventRules.scope.selectAP')}</option>
               {accessPoints.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
@@ -265,20 +270,20 @@ function RuleFormModal({ open, initial, accessPoints, cameras, submitting, onCan
 
         {form.scope_kind === 'camera' && (
           <div>
-            <Label className="text-[12px]">Camera</Label>
+            <Label className="text-[12px]">{t('cctv.eventRules.scope.camera')}</Label>
             <select
               className="mt-1 w-full h-8 rounded-md border border-border bg-background px-2 text-[13px]"
               value={form.camera_device_id ?? ''}
               onChange={(e) => set('camera_device_id', e.target.value || null)}
             >
-              <option value="">-- chọn --</option>
+              <option value="">{t('cctv.eventRules.scope.selectCamera')}</option>
               {cameras.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
         )}
 
         <div>
-          <Label className="text-[12px]">Decisions (trống = match mọi decision)</Label>
+          <Label className="text-[12px]">{t('cctv.eventRules.fields.decisions')}</Label>
           <div className="flex flex-wrap gap-2 mt-1">
             {DECISIONS.map((d) => {
               const active = (form.decisions ?? []).includes(d);
@@ -292,23 +297,25 @@ function RuleFormModal({ open, initial, accessPoints, cameras, submitting, onCan
               );
             })}
           </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">{t('cctv.eventRules.fields.decisionsHint')}</p>
         </div>
 
         <div>
-          <Label className="text-[12px]">Event Types (trống = match mọi type)</Label>
+          <Label className="text-[12px]">{t('cctv.eventRules.fields.eventTypes')}</Label>
           <div className="flex flex-wrap gap-2 mt-1">
-            {EVENT_TYPES.map((t) => {
-              const active = (form.event_types ?? []).includes(t);
+            {EVENT_TYPES.map((ev) => {
+              const active = (form.event_types ?? []).includes(ev);
               return (
                 <button
-                  key={t}
+                  key={ev}
                   type="button"
-                  onClick={() => set('event_types', toggleMulti(form.event_types, t))}
+                  onClick={() => set('event_types', toggleMulti(form.event_types, ev))}
                   className={`px-2 py-1 rounded border text-[12px] ${active ? 'bg-primary text-primary-foreground border-primary' : 'border-border'}`}
-                >{t}</button>
+                >{ev}</button>
               );
             })}
           </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">{t('cctv.eventRules.fields.eventTypesHint')}</p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -317,20 +324,20 @@ function RuleFormModal({ open, initial, accessPoints, cameras, submitting, onCan
               type="checkbox"
               checked={!!form.snapshot_enabled}
               onChange={(e) => set('snapshot_enabled', e.target.checked)}
-            /> Snapshot
+            /> {t('cctv.eventRules.fields.snapshot')}
           </label>
           <label className="flex items-center gap-2 text-[13px]">
             <input
               type="checkbox"
               checked={!!form.record_enabled}
               onChange={(e) => set('record_enabled', e.target.checked)}
-            /> Record video
+            /> {t('cctv.eventRules.fields.record')}
           </label>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label className="text-[12px]">Pre-roll (s)</Label>
+            <Label className="text-[12px]">{t('cctv.eventRules.fields.preRoll')}</Label>
             <Input
               type="number"
               min={0}
@@ -341,7 +348,7 @@ function RuleFormModal({ open, initial, accessPoints, cameras, submitting, onCan
             />
           </div>
           <div>
-            <Label className="text-[12px]">Post-roll (s)</Label>
+            <Label className="text-[12px]">{t('cctv.eventRules.fields.postRoll')}</Label>
             <Input
               type="number"
               min={0}
@@ -355,25 +362,26 @@ function RuleFormModal({ open, initial, accessPoints, cameras, submitting, onCan
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label className="text-[12px]">Priority (nhỏ = ưu tiên cao)</Label>
+            <Label className="text-[12px]">{t('cctv.eventRules.fields.priority')}</Label>
             <Input
               type="number"
               className="mt-1 h-8 text-[13px]"
               value={form.priority ?? 1000}
               onChange={(e) => set('priority', Number(e.target.value))}
             />
+            <p className="mt-1 text-[11px] text-muted-foreground">{t('cctv.eventRules.fields.priorityHint')}</p>
           </div>
           <label className="flex items-center gap-2 mt-6 text-[13px]">
             <input
               type="checkbox"
               checked={form.enabled !== false}
               onChange={(e) => set('enabled', e.target.checked)}
-            /> Enabled
+            /> {t('cctv.eventRules.fields.enabled')}
           </label>
         </div>
 
         <div>
-          <Label className="text-[12px]">Notes</Label>
+          <Label className="text-[12px]">{t('cctv.eventRules.fields.notes')}</Label>
           <Input
             className="mt-1 h-8 text-[13px]"
             value={form.notes ?? ''}
@@ -382,7 +390,7 @@ function RuleFormModal({ open, initial, accessPoints, cameras, submitting, onCan
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
+          <Button variant="outline" size="sm" onClick={onCancel}>{t('cctv.common.cancel')}</Button>
           <Button
             size="sm"
             disabled={submitting}
@@ -394,7 +402,7 @@ function RuleFormModal({ open, initial, accessPoints, cameras, submitting, onCan
             }}
             className="bg-[#3B82F6] hover:bg-[#2563EB]"
           >
-            {submitting ? 'Saving…' : 'Save'}
+            {submitting ? t('cctv.common.saving') : t('cctv.common.saveChanges')}
           </Button>
         </div>
       </div>

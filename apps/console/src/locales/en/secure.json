@@ -256,5 +256,9 @@
   "accessHistory.error.title": "Failed to load access events",
   "accessHistory.error.retry": "Retry",
   "accessHistory.photo.view": "View photo",
-  "accessHistory.photo.modal": "Access Photo"
+  "accessHistory.photo.modal": "Access Photo",
+  "accessHistory.photo.device": "Device photo",
+  "accessHistory.photo.processing": "Processing…",
+  "accessHistory.photo.failed": "Capture failed",
+  "accessHistory.photo.noMedia": "No media"
 }

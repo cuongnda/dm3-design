@@ -256,5 +256,9 @@
   "accessHistory.error.title": "Không thể tải sự kiện ra vào",
   "accessHistory.error.retry": "Thử lại",
   "accessHistory.photo.view": "Xem ảnh",
-  "accessHistory.photo.modal": "Ảnh ra vào"
+  "accessHistory.photo.modal": "Ảnh ra vào",
+  "accessHistory.photo.device": "Ảnh từ thiết bị",
+  "accessHistory.photo.processing": "Đang xử lý…",
+  "accessHistory.photo.failed": "Chụp thất bại",
+  "accessHistory.photo.noMedia": "Chưa có ảnh"
 }

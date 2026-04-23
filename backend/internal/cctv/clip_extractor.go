@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/duali/dm3-backend/pkg/db"
@@ -18,20 +19,29 @@ import (
 // After the AccessEventConsumer creates a placeholder event_clips row, it calls
 // ExtractClip to asynchronously record the actual video, upload it to MinIO, and
 // update the row with real metadata.
+//
+// RecordDir is the MediaMTX rolling-buffer root (env MEDIAMTX_RECORD_DIR).
+// When set and the camera's segments cover the requested window, extraction
+// uses a fast ffmpeg concat copy that preserves real pre-roll. When unset or
+// the buffer doesn't cover the event (camera just came online, MediaMTX
+// restart…), the extractor falls back to a live RTSP pull from "now".
 type ClipExtractor struct {
 	db          *db.DB
 	objectStore objectstore.Store
 	cipher      *CredentialCipher
+	recordDir   string
 }
 
 // NewClipExtractor constructs a ClipExtractor.
 // cipher may be nil — ExtractClip will skip extraction (log a warning) if it
 // needs to decrypt a password but no cipher is available.
-func NewClipExtractor(database *db.DB, objStore objectstore.Store, cipher *CredentialCipher) *ClipExtractor {
+// recordDir empty → rolling-buffer path disabled (live pull only).
+func NewClipExtractor(database *db.DB, objStore objectstore.Store, cipher *CredentialCipher, recordDir string) *ClipExtractor {
 	return &ClipExtractor{
 		db:          database,
 		objectStore: objStore,
 		cipher:      cipher,
+		recordDir:   recordDir,
 	}
 }
 
@@ -48,16 +58,16 @@ type cameraRTSPInfo struct {
 // the clip row, uploads the resulting MP4 to MinIO, and transitions the row
 // to 'finalized' (or 'failed' / 'degraded').
 //
+// Two paths, picked at runtime:
+//   1. Rolling buffer — when MEDIAMTX_RECORD_DIR is configured and segments
+//      overlapping [started_at, end_at] exist on disk. Runs ffmpeg concat
+//      copy, preserves real pre-roll, never touches the live stream.
+//   2. Live pull fallback — the original path. Used when no buffer is
+//      available or it doesn't cover the window (camera just came online,
+//      MediaMTX restart, buffer GC'd the segment).
+//
 // Runs asynchronously via the ExtractionWorkerPool. Never returns an error to
 // the caller; failures are logged and persisted in the DB row.
-//
-// TODO(pre-roll): this path pulls from live RTSP starting at "now" which means
-// the recorded clip only covers `(now, end_at)`, not `(started_at, end_at)` as
-// the row suggests. True pre-roll requires splicing from a rolling-buffer
-// source — MediaMTX with `record: true` + small `recordDeleteAfter`. When a
-// record directory is available, substitute this ffmpeg call with a concat
-// demux over the fMP4 segments inside [started_at, end_at] plus a tail live
-// pull until `end_at`. See migration 000048 comment block.
 func (e *ClipExtractor) ExtractClip(ctx context.Context, clipID, tenantID, cameraDeviceID string) {
 	log := slog.With("clip_id", clipID, "tenant_id", tenantID, "camera_device_id", cameraDeviceID)
 
@@ -67,7 +77,6 @@ func (e *ClipExtractor) ExtractClip(ctx context.Context, clipID, tenantID, camer
 		return
 	}
 
-	// Load the actual capture window the consumer wrote on the row.
 	startedAt, endAt, ok := e.fetchClipWindow(ctx, clipID)
 	if !ok {
 		log.Warn("cctv: clip extractor could not load clip window")
@@ -82,135 +91,240 @@ func (e *ClipExtractor) ExtractClip(ctx context.Context, clipID, tenantID, camer
 		return
 	}
 
+	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("cctv-clip-%s.mp4", clipID))
+	defer os.Remove(tmpFile)
+
+	usedBuffer, duration := e.runBufferPath(ctx, log, cameraDeviceID, startedAt, endAt, tmpFile)
+	if !usedBuffer {
+		duration, err = e.runLivePullPath(ctx, log, clipID, info, endAt, tmpFile)
+		if err != nil {
+			return // runLivePullPath already persisted the failure
+		}
+	}
+
+	if err := e.uploadAndFinalize(ctx, log, clipID, tenantID, tmpFile, duration, usedBuffer); err != nil {
+		return
+	}
+}
+
+// runBufferPath attempts the rolling-buffer concat. Returns (used, duration)
+// where used=true means ffmpeg wrote tmpFile successfully. All failure modes
+// return false with duration=0 so the caller falls back to live pull.
+func (e *ClipExtractor) runBufferPath(
+	ctx context.Context,
+	log *slog.Logger,
+	cameraDeviceID string,
+	startedAt, endAt time.Time,
+	tmpFile string,
+) (bool, int) {
+	if e.recordDir == "" {
+		return false, 0
+	}
+
+	// Wait for the post-roll tail segment to actually hit disk. MediaMTX
+	// writes a segment when the next one starts, so our end_at may land mid-
+	// segment; give it one segment-duration's worth of slack.
+	ctxAwareWait(ctx, endAt.Add(12*time.Second))
+
+	segs, err := listRollingSegments(e.recordDir, cameraDeviceID)
+	if err != nil {
+		log.Warn("cctv: rolling buffer scan failed — falling back to live pull", "error", err)
+		return false, 0
+	}
+	// segmentMaxGap = segment duration + safety → covers a pre-roll start
+	// that falls inside a segment that began shortly before started_at.
+	const segmentMaxGap = 15 * time.Second
+	pick := segmentsForWindow(segs, startedAt, endAt, segmentMaxGap)
+	if len(pick) == 0 {
+		log.Info("cctv: rolling buffer has no segment covering window — falling back to live pull",
+			"window_start", startedAt, "window_end", endAt, "total_segments", len(segs))
+		return false, 0
+	}
+
+	// Write ffmpeg concat demuxer manifest.
+	listFile := tmpFile + ".list"
+	defer os.Remove(listFile)
+	var mf bytes.Buffer
+	for _, s := range pick {
+		// ffmpeg concat demuxer spec: line per file prefixed with "file ",
+		// quote to tolerate spaces; our paths never have ' but escape just in
+		// case.
+		safe := strings.ReplaceAll(s.Path, "'", `'\''`)
+		fmt.Fprintf(&mf, "file '%s'\n", safe)
+	}
+	if err := os.WriteFile(listFile, mf.Bytes(), 0o600); err != nil {
+		log.Warn("cctv: rolling buffer list write failed — falling back", "error", err)
+		return false, 0
+	}
+
+	offset := segmentRelativeOffset(pick[0], startedAt)
+	duration := int(endAt.Sub(startedAt).Seconds())
+	if duration < 1 {
+		duration = 1
+	}
+
+	ffmpegCtx, cancel := context.WithTimeout(ctx, time.Duration(duration*2+30)*time.Second)
+	defer cancel()
+
+	// -ss before -i on the concat demuxer still fast-seeks on the first input
+	// (ffmpeg treats the list as a single virtual file). -c copy keeps this
+	// nearly-instant — no re-encode.
+	args := []string{
+		"-f", "concat", "-safe", "0",
+	}
+	if offset > 0.1 {
+		args = append(args, "-ss", fmt.Sprintf("%.3f", offset))
+	}
+	args = append(args,
+		"-i", listFile,
+		"-t", fmt.Sprintf("%d", duration),
+		"-c", "copy",
+		"-an",
+		"-movflags", "+faststart",
+		"-y", tmpFile,
+	)
+	var stderr bytes.Buffer
+	cmd := exec.CommandContext(ffmpegCtx, "ffmpeg", args...)
+	cmd.Stderr = &stderr
+
+	log.Info("cctv: rolling buffer concat starting",
+		"segments", len(pick), "offset_sec", offset, "duration_sec", duration)
+
+	if err := cmd.Run(); err != nil {
+		log.Warn("cctv: rolling buffer concat failed — falling back to live pull",
+			"error", err, "stderr", truncate(stderr.String(), 300))
+		return false, 0
+	}
+
+	if fi, err := os.Stat(tmpFile); err != nil || fi.Size() == 0 {
+		log.Warn("cctv: rolling buffer concat produced empty file — falling back")
+		return false, 0
+	}
+
+	return true, duration
+}
+
+// runLivePullPath is the original live-RTSP extractor. Keeps the service
+// operational when the rolling buffer isn't usable.
+func (e *ClipExtractor) runLivePullPath(
+	ctx context.Context,
+	log *slog.Logger,
+	clipID string,
+	info cameraRTSPInfo,
+	endAt time.Time,
+	tmpFile string,
+) (int, error) {
 	if info.RTSPUrl == "" {
 		log.Warn("cctv: clip extractor skipped — camera has no RTSP URL")
 		e.markClipFailed(ctx, clipID, "camera has no rtsp_url")
-		return
+		return 0, fmt.Errorf("no rtsp url")
 	}
 
 	var password string
 	if len(info.RTSPPasswordEnc) > 0 {
 		if e.cipher == nil {
-			log.Warn("cctv: clip extractor skipped — credential cipher not configured but camera has encrypted password")
 			e.markClipFailed(ctx, clipID, "credential cipher not configured")
-			return
+			return 0, fmt.Errorf("cipher missing")
 		}
+		var err error
 		password, err = e.cipher.Decrypt(info.RTSPPasswordEnc)
 		if err != nil {
 			log.Error("cctv: clip extractor failed to decrypt RTSP password", "error", err)
 			e.markClipFailed(ctx, clipID, fmt.Sprintf("decrypt password: %v", err))
-			return
+			return 0, err
 		}
 	}
-
-	var username string
+	username := ""
 	if info.RTSPUsername != nil {
 		username = *info.RTSPUsername
 	}
 	authedURL := composeRTSPURLWithAuth(info.RTSPUrl, username, password)
 
-	// Duration to pull. If the coalesced window has already elapsed entirely
-	// (e.g. finalizer was delayed), clamp to a minimum 5s so we at least
-	// capture the post-burst tail instead of producing an empty file.
 	duration := int(time.Until(endAt).Seconds())
 	if duration < 5 {
-		_ = startedAt // silence unused until rolling-buffer path lands
 		duration = 5
 	}
 
-	// 5. Run ffmpeg to record the clip.
-	tmpDir := os.TempDir()
-	tmpFile := filepath.Join(tmpDir, fmt.Sprintf("cctv-clip-%s.mp4", clipID))
-	defer os.Remove(tmpFile) // cleanup regardless of outcome
+	ffmpegCtx, cancel := context.WithTimeout(ctx, time.Duration(duration*2+30)*time.Second)
+	defer cancel()
 
-	// Give ffmpeg the recording duration plus a generous timeout for connection
-	// setup and muxer finalization (2x duration + 30s).
-	ffmpegTimeout := time.Duration(duration*2+30) * time.Second
-	ffmpegCtx, ffmpegCancel := context.WithTimeout(ctx, ffmpegTimeout)
-	defer ffmpegCancel()
-
-	//nolint:gosec // authedURL contains user-supplied RTSP URL; validated at camera creation time
+	//nolint:gosec // authedURL derives from tenant-controlled DB values
 	cmd := exec.CommandContext(ffmpegCtx, "ffmpeg",
 		"-rtsp_transport", "tcp",
 		"-i", authedURL,
 		"-t", fmt.Sprintf("%d", duration),
 		"-c:v", "copy",
-		"-an", // skip audio — pcm_alaw not supported in MP4 container
+		"-an",
 		"-movflags", "+faststart",
-		"-y", // overwrite output file
-		tmpFile,
+		"-y", tmpFile,
 	)
-	var ffmpegStderr bytes.Buffer
-	cmd.Stderr = &ffmpegStderr
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 
-	log.Info("cctv: clip extractor starting ffmpeg",
-		"duration_sec", duration,
-		"rtsp_url", redactRTSPCredentials(authedURL),
-	)
+	log.Info("cctv: live pull ffmpeg starting",
+		"duration_sec", duration, "rtsp_url", redactRTSPCredentials(authedURL))
 
 	if err := cmd.Run(); err != nil {
-		errMsg := ffmpegStderr.String()
-		if len(errMsg) > 500 {
-			errMsg = errMsg[:500]
-		}
-		log.Error("cctv: ffmpeg clip extraction failed",
-			"error", err,
-			"stderr", errMsg,
-		)
-		e.markClipFailed(ctx, clipID, fmt.Sprintf("ffmpeg: %v — %s", err, errMsg))
-		return
+		msg := truncate(stderr.String(), 500)
+		log.Error("cctv: ffmpeg clip extraction failed", "error", err, "stderr", msg)
+		e.markClipFailed(ctx, clipID, fmt.Sprintf("ffmpeg: %v — %s", err, msg))
+		return 0, err
 	}
+	return duration, nil
+}
 
-	// 6. Read the temp file and upload to MinIO.
-	fileInfo, err := os.Stat(tmpFile)
+// uploadAndFinalize uploads the tmp MP4 to MinIO and flips the row to
+// finalized. Shared between rolling-buffer and live-pull paths.
+func (e *ClipExtractor) uploadAndFinalize(
+	ctx context.Context,
+	log *slog.Logger,
+	clipID, tenantID, tmpFile string,
+	duration int,
+	fromBuffer bool,
+) error {
+	fi, err := os.Stat(tmpFile)
 	if err != nil {
 		log.Error("cctv: clip extractor failed to stat temp file", "error", err)
 		e.markClipFailed(ctx, clipID, fmt.Sprintf("stat temp file: %v", err))
-		return
+		return err
 	}
 
 	objectKey := fmt.Sprintf("cctv-clips/%s/%s.mp4", tenantID, clipID)
-
 	f, err := os.Open(tmpFile)
 	if err != nil {
 		log.Error("cctv: clip extractor failed to open temp file", "error", err)
 		e.markClipFailed(ctx, clipID, fmt.Sprintf("open temp file: %v", err))
-		return
+		return err
 	}
 	defer f.Close()
 
-	uploadCtx, uploadCancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer uploadCancel()
-
-	if err := e.objectStore.PutObject(uploadCtx, objectKey, f, fileInfo.Size(), "video/mp4"); err != nil {
+	uploadCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	if err := e.objectStore.PutObject(uploadCtx, objectKey, f, fi.Size(), "video/mp4"); err != nil {
 		log.Error("cctv: clip extractor failed to upload to object store", "error", err)
 		e.markClipFailed(ctx, clipID, fmt.Sprintf("upload: %v", err))
-		return
+		return err
 	}
 
-	// 7. Update the event_clips row — final state.
 	durationMs := duration * 1000
 	endedAt := time.Now()
-
 	updateCtx, updateCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer updateCancel()
 
-	_, err = e.db.Pool.Exec(updateCtx,
+	if _, err := e.db.Pool.Exec(updateCtx,
 		`UPDATE dm3_cctv.event_clips
 		 SET object_key = $1, duration_ms = $2, ended_at = $3, status = 'finalized', updated_at = now()
 		 WHERE id = $4::uuid`,
 		objectKey, durationMs, endedAt, clipID,
-	)
-	if err != nil {
+	); err != nil {
 		log.Error("cctv: clip extractor failed to update event_clips row", "error", err)
-		return
+		return err
 	}
 
 	log.Info("cctv: clip extraction complete",
-		"object_key", objectKey,
-		"duration_sec", duration,
-		"file_size", fileInfo.Size(),
-	)
+		"object_key", objectKey, "duration_sec", duration,
+		"file_size", fi.Size(), "from_rolling_buffer", fromBuffer)
+	return nil
 }
 
 // fetchCameraRTSPInfo loads the RTSP connection details from dm3_cctv.cameras.

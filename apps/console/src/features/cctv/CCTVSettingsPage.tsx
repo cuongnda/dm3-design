@@ -191,10 +191,10 @@ export function CCTVSettingsPage() {
           separate Event Rules page; these are the fallbacks.
         */}
         <section className="rounded-lg border border-border p-4">
-          <h3 className="text-[13px] font-semibold mb-3">Event capture</h3>
+          <h3 className="text-[13px] font-semibold mb-3">{t('cctv.settings.eventCapture.title')}</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-[12px]">Rolling buffer (s) — 0 disables</Label>
+              <Label className="text-[12px]">{t('cctv.settings.eventCapture.rollingBuffer')}</Label>
               <Input
                 type="number"
                 className="mt-1 h-8 text-[13px]"
@@ -205,11 +205,11 @@ export function CCTVSettingsPage() {
                 data-testid="cctv-input-rolling-buffer"
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Disk dung lượng thường trực ≈ bitrate × giá trị này × số cam.
+                {t('cctv.settings.eventCapture.rollingBufferHelp')}
               </p>
             </div>
             <div>
-              <Label className="text-[12px]">Max clip duration (s)</Label>
+              <Label className="text-[12px]">{t('cctv.settings.eventCapture.maxClipDuration')}</Label>
               <Input
                 type="number"
                 className="mt-1 h-8 text-[13px]"
@@ -220,11 +220,11 @@ export function CCTVSettingsPage() {
                 data-testid="cctv-input-max-clip-duration"
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Coalesced clip đạt ngưỡng này sẽ finalize và clip mới được mở.
+                {t('cctv.settings.eventCapture.maxClipDurationHelp')}
               </p>
             </div>
             <div>
-              <Label className="text-[12px]">Max concurrent extractions</Label>
+              <Label className="text-[12px]">{t('cctv.settings.eventCapture.maxConcurrent')}</Label>
               <Input
                 type="number"
                 className="mt-1 h-8 text-[13px]"
@@ -235,7 +235,7 @@ export function CCTVSettingsPage() {
                 data-testid="cctv-input-max-concurrent-extractions"
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Cap số ffmpeg job cùng lúc khi có event burst.
+                {t('cctv.settings.eventCapture.maxConcurrentHelp')}
               </p>
             </div>
             <div className="flex flex-col gap-2 pt-5">
@@ -245,7 +245,7 @@ export function CCTVSettingsPage() {
                   checked={form.default_record_enabled ?? true}
                   onChange={(e) => update('default_record_enabled', e.target.checked)}
                   data-testid="cctv-check-default-record"
-                /> Default: record video on access events
+                /> {t('cctv.settings.eventCapture.defaultRecord')}
               </label>
               <label className="flex items-center gap-2 text-[13px]">
                 <input
@@ -253,8 +253,11 @@ export function CCTVSettingsPage() {
                   checked={form.default_snapshot_enabled ?? false}
                   onChange={(e) => update('default_snapshot_enabled', e.target.checked)}
                   data-testid="cctv-check-default-snapshot"
-                /> Default: snapshot on access events
+                /> {t('cctv.settings.eventCapture.defaultSnapshot')}
               </label>
+              <p className="text-[11px] text-muted-foreground">
+                {t('cctv.settings.eventCapture.defaultsHint')}
+              </p>
             </div>
           </div>
         </section>

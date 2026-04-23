@@ -220,10 +220,15 @@ func main() {
 	var snapshotExtractor *cctv.SnapshotExtractor
 	var workerPool *cctv.ExtractionWorkerPool
 	if objectStore != nil {
-		clipExtractor = cctv.NewClipExtractor(database, objectStore, cipher)
+		// When MEDIAMTX_RECORD_DIR is set the extractor prefers splicing from
+		// the rolling buffer (real pre-roll); empty value means live-pull
+		// fallback only. docker-compose.local.yml wires this to the shared
+		// volume mounted on both the MediaMTX and cctv-svc containers.
+		recordDir := os.Getenv("MEDIAMTX_RECORD_DIR")
+		clipExtractor = cctv.NewClipExtractor(database, objectStore, cipher, recordDir)
 		snapshotExtractor = cctv.NewSnapshotExtractor(database, objectStore, cipher)
 		workerPool = cctv.NewExtractionWorkerPool(8)
-		slog.Info("cctv extractors + worker pool enabled", "max_concurrent", 8)
+		slog.Info("cctv extractors + worker pool enabled", "max_concurrent", 8, "rolling_buffer_dir", recordDir)
 	} else {
 		slog.Warn("object store not configured — clip & snapshot extraction disabled (placeholders only)")
 	}

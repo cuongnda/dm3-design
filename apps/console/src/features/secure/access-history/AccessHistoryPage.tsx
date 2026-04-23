@@ -247,10 +247,10 @@ function MediaCell({
               ) : (
                 <div className="w-full h-40 rounded border border-border bg-muted flex items-center justify-center text-[12px] text-muted-foreground">
                   {m.status === 'pending' || m.status === 'recording'
-                    ? 'Processing…'
+                    ? t('accessHistory.photo.processing')
                     : m.status === 'failed'
-                      ? 'Capture failed'
-                      : 'No media'}
+                      ? t('accessHistory.photo.failed')
+                      : t('accessHistory.photo.noMedia')}
                 </div>
               )}
               <figcaption className="text-[11px] text-muted-foreground">

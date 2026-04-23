@@ -95,14 +95,14 @@ export function CCTVClipsPage() {
         if (r.status === 'pending' || r.status === 'recording') {
           return (
             <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Loader2 size={12} className="animate-spin" /> Processing
+              <Loader2 size={12} className="animate-spin" /> {t('cctv.clips.status.processing')}
             </span>
           );
         }
         if (r.status === 'failed') {
           return (
             <span className="inline-flex items-center gap-1 text-[11px] text-destructive">
-              <AlertTriangle size={12} /> Failed
+              <AlertTriangle size={12} /> {t('cctv.clips.status.failed')}
             </span>
           );
         }
@@ -151,7 +151,7 @@ export function CCTVClipsPage() {
             onClick={() => playMutation.mutate(r)}
             disabled={playMutation.isPending || r.status === 'pending' || r.status === 'recording' || r.status === 'failed'}
             data-testid={`cctv-button-play-clip-${r.id}`}
-            aria-label={r.media_type === 'snapshot' ? 'Open image' : t('cctv.clips.play')}
+            aria-label={r.media_type === 'snapshot' ? t('cctv.clips.actions.openImage') : t('cctv.clips.play')}
           >
             {r.media_type === 'snapshot' ? <ImageIcon size={14} /> : <Play size={14} />}
           </Button>
