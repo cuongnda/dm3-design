@@ -2,6 +2,16 @@ stages:
   - verify
   - deploy
 
+# Exclude .gocache from git clean so verify:openapi's root-owned module cache
+# (created inside the golang:1.24 container) doesn't cause "permission denied"
+# when GitLab prepares the workspace for the next job. Without this, jobs
+# fail at ~2s during the "Getting source from Git repository" step — before
+# any script can run. The verify:openapi after_script still chowns the dir
+# back to the host user; this variable is belt-and-suspenders for when that
+# hasn't landed yet or a stale root-owned state predates it.
+variables:
+  GIT_CLEAN_FLAGS: -ffdx -e .gocache
+
 # ── Shared bootstrap ──────────────────────────────────────────────────────────
 # Jobs that need .env use .setup_env as a script-level include. It generates
 # .env from GitLab CI/CD project variables and installs a trap to shred the
