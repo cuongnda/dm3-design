@@ -25,7 +25,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o bin/device-gateway ./c
 # Stage 2: Minimal runtime image
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates postgresql-client tzdata
+RUN apk add --no-cache ca-certificates postgresql-client tzdata ffmpeg
 
 WORKDIR /app
 
