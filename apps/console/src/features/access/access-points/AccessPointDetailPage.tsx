@@ -405,8 +405,13 @@ export function AccessPointDetailPage() {
                 apiFetch<{ id: string; name: string; type: string; status: string; device_id?: string }[]>('/api/v1/gateway/devices?limit=500'),
             ]);
             const linked = linkedRes.data ?? [];
+            // access_device_id can reference either access_devices.id or devices.id
+            // (dual-convention TEXT column). The backend now resolves and returns
+            // `device` directly; we only fall back to the gateway map when the
+            // backend can't find a match (older data, etc).
             const gatewayMap = new Map((Array.isArray(gatewayRes) ? gatewayRes : []).map((d) => [d.id, d]));
             setDevices(linked.map((item) => {
+                if (item.device) return item;
                 const gw = gatewayMap.get(item.access_device_id);
                 return {
                     ...item,
@@ -596,7 +601,14 @@ export function AccessPointDetailPage() {
             {
                 key: 'device_name',
                 header: t('deviceName', 'Device Name'),
-                render: (d) => <span className="text-[13px] font-medium">{d.device?.name ?? d.access_device_id}</span>,
+                render: (d) =>
+                    d.device?.name ? (
+                        <span className="text-[13px] font-medium">{d.device.name}</span>
+                    ) : (
+                        <span className="text-[13px] italic text-muted-foreground">
+                            {t('deletedDevice', '(deleted device)')}
+                        </span>
+                    ),
             },
             {
                 key: 'device_type',
