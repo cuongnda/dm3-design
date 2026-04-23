@@ -217,6 +217,8 @@ export interface ListClipsParams {
   to?: string;
   page?: number;
   limit?: number;
+  sort_by?: 'event_time' | 'started_at' | 'duration_ms' | 'camera_name' | 'media_type' | 'status';
+  sort_order?: 'asc' | 'desc';
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

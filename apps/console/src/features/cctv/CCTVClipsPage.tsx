@@ -20,6 +20,13 @@ export function CCTVClipsPage() {
   const [cameraFilter, setCameraFilter] = useState('');
   const [fromFilter, setFromFilter] = useState('');
   const [toFilter, setToFilter] = useState('');
+  const [sortBy, setSortBy] = useState<'event_time' | 'started_at' | 'duration_ms' | 'camera_name' | 'media_type' | 'status'>('started_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSortChange = (col: string, dir: 'asc' | 'desc') => {
+    setSortBy(col as typeof sortBy);
+    setSortDir(dir);
+    setPage(1);
+  };
 
   const { data: camerasData } = useQuery({
     queryKey: ['cctv-cameras-all'],
@@ -30,7 +37,7 @@ export function CCTVClipsPage() {
   const [playUrl, setPlayUrl] = useState<string>('');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['cctv-clips', page, pageSize, cameraFilter, fromFilter, toFilter],
+    queryKey: ['cctv-clips', page, pageSize, cameraFilter, fromFilter, toFilter, sortBy, sortDir],
     queryFn: () =>
       listClips({
         page,
@@ -38,6 +45,8 @@ export function CCTVClipsPage() {
         camera_id: cameraFilter || undefined,
         from: fromFilter || undefined,
         to: toFilter || undefined,
+        sort_by: sortBy,
+        sort_order: sortDir,
       }),
     // Surface stale pages while the next page loads so the table doesn't
     // flash "empty" between clicks — matches the behaviour of other listing
@@ -88,6 +97,7 @@ export function CCTVClipsPage() {
       key: 'camera_name',
       header: t('cctv.clips.cols.camera'),
       width: '160px',
+      sortable: true,
       render: (r) => (
         <span className="text-[13px] font-medium">{r.camera_name ?? t('cctv.common.unknownCamera')}</span>
       ),
@@ -118,6 +128,7 @@ export function CCTVClipsPage() {
       key: 'event_time',
       header: t('cctv.clips.cols.eventTime'),
       width: '170px',
+      sortable: true,
       render: (r) => (
         <span className="font-mono text-[12px] text-foreground">
           {r.event_time ? new Date(r.event_time).toLocaleString() : '—'}
@@ -128,6 +139,7 @@ export function CCTVClipsPage() {
       key: 'started_at',
       header: t('cctv.clips.cols.recordedAt'),
       width: '170px',
+      sortable: true,
       render: (r) => (
         <span className="font-mono text-[12px] text-muted-foreground">
           {new Date(r.started_at).toLocaleString()}
@@ -135,9 +147,10 @@ export function CCTVClipsPage() {
       ),
     },
     {
-      key: 'duration_sec',
+      key: 'duration_ms',
       header: t('cctv.clips.cols.duration'),
       width: '90px',
+      sortable: true,
       render: (r) => (
         <span className="text-[12px] text-muted-foreground">
           {r.duration_sec != null ? `${r.duration_sec}s` : '—'}
@@ -185,8 +198,10 @@ export function CCTVClipsPage() {
     },
   ];
 
+  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / (data?.limit ?? pageSize)));
+
   return (
-    <div>
+    <div className="flex h-full min-h-0 flex-col">
       <PageHeader title={t('cctv.clips.title')} description={t('cctv.clips.description')}>
         <div className="flex items-center gap-2">
           <select
@@ -220,18 +235,21 @@ export function CCTVClipsPage() {
         </div>
       </PageHeader>
 
-      {isLoading && !data ? (
-        <div className="text-center py-12 text-muted-foreground">{t('cctv.common.loading')}</div>
-      ) : (
-        <>
+      {/* Wrapping flex column: inner scroll holds the table, footer sits
+          permanently at the bottom of the viewport (same pattern as
+          /manage/users). `min-h-0` lets flex children actually shrink. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+        <div className="min-h-0 flex-1 overflow-auto">
           <DataTable
+            embedded
+            stickyHeader
+            paginate={false}
+            loading={isLoading}
             columns={columns}
             data={clips}
             rowKey={(r) => r.id}
-            // Disable the DataTable's own paginator — the server paginates via
-            // listClips(page, limit), so the grid just renders the current page
-            // and the real controls live in TablePaginationFooter below.
-            pageSize={clips.length || 1}
+            sortState={{ col: sortBy, dir: sortDir }}
+            onSortChange={(col, dir) => handleSortChange(String(col), dir)}
             emptyIcon={<Film size={32} strokeWidth={1.2} />}
             emptyTitle={(cameraFilter || fromFilter || toFilter) ? 'No clips match these filters' : 'No clips recorded yet'}
             emptyDescription={(cameraFilter || fromFilter || toFilter)
@@ -244,18 +262,27 @@ export function CCTVClipsPage() {
               'data-testid': 'cctv-button-clear-filters-empty',
             } : undefined}
           />
-          <TablePaginationFooter
-            page={data?.page ?? page}
-            pageSize={data?.limit ?? pageSize}
-            total={data?.total ?? 0}
-            totalPages={Math.max(1, Math.ceil((data?.total ?? 0) / (data?.limit ?? pageSize)))}
-            pageSizeOptions={[10, 20, 50, 100]}
-            onPageChange={(p) => setPage(p)}
-            onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
-            loading={isLoading}
-          />
-        </>
-      )}
+        </div>
+        <TablePaginationFooter
+          page={data?.page ?? page}
+          pageSize={data?.limit ?? pageSize}
+          total={data?.total ?? 0}
+          totalPages={totalPages}
+          pageSizeOptions={[10, 20, 50, 100]}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+          loading={isLoading}
+          sortColumns={[
+            { value: 'event_time', label: t('cctv.clips.cols.eventTime') },
+            { value: 'started_at', label: t('cctv.clips.cols.recordedAt') },
+            { value: 'camera_name', label: t('cctv.clips.cols.camera') },
+            { value: 'duration_ms', label: t('cctv.clips.cols.duration') },
+          ]}
+          sortBy={sortBy}
+          sortDir={sortDir}
+          onSortChange={(col, dir) => handleSortChange(String(col), dir)}
+        />
+      </div>
 
       {/* Video player modal */}
       <AppModal

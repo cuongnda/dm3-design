@@ -112,6 +112,33 @@ func (h *CCTVHandlers) ListClips(w http.ResponseWriter, r *http.Request) {
 	from := q.Get("from")
 	to := q.Get("to")
 
+	// Whitelist sortable columns. Unknown values fall back to started_at DESC
+	// so the handler can't be tricked into ORDER BY'ing on an unindexed column.
+	sortBy := q.Get("sort_by")
+	sortOrder := strings.ToLower(q.Get("sort_order"))
+	orderClause := "ec.started_at DESC"
+	switch sortBy {
+	case "event_time":
+		orderClause = "evt.time"
+	case "started_at":
+		orderClause = "ec.started_at"
+	case "duration_ms":
+		orderClause = "ec.duration_ms"
+	case "camera_name":
+		orderClause = "d.name"
+	case "media_type":
+		orderClause = "ec.media_type"
+	case "status":
+		orderClause = "ec.status"
+	}
+	if sortBy != "" {
+		if sortOrder == "asc" {
+			orderClause += " ASC NULLS LAST"
+		} else {
+			orderClause += " DESC NULLS LAST"
+		}
+	}
+
 	args := []any{cid}
 	conditions := []string{"ec.tenant_id = $1::uuid"}
 	argIdx := 2
@@ -171,7 +198,7 @@ func (h *CCTVHandlers) ListClips(w http.ResponseWriter, r *http.Request) {
 		     LIMIT 1
 		) evt ON TRUE
 		`+where+`
-		ORDER BY ec.started_at DESC
+		ORDER BY `+orderClause+`
 		LIMIT $`+itoa(argIdx)+` OFFSET $`+itoa(argIdx+1), listArgs...)
 	if err != nil {
 		logInternalError(w, "list clips query error", err)
