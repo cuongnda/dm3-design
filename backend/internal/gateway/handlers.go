@@ -119,11 +119,10 @@ func (h *GatewayHandlers) ListDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// A device can be bound to multiple access points through the
-	// dm3_access overlay: access_devices wraps the physical device, and
-	// access_point_devices references access_devices.id. We aggregate all
-	// linked access-point names into a single comma-separated string so the
-	// list endpoint stays a flat row.
+	// A device can be bound to multiple access points through
+	// dm3_access.access_point_devices (access_device_id is TEXT holding
+	// devices.id). We aggregate all linked access point names into a single
+	// comma-separated string so the list endpoint stays a flat row.
 	query := `SELECT d.id, d.tenant_id, d.device_id, COALESCE(d.name,''), d.type, d.status,
 		COALESCE(d.model,''), COALESCE(d.firmware_version,''), COALESCE(d.location,''),
 		d.ip_address, d.mac_address,
@@ -132,9 +131,8 @@ func (h *GatewayHandlers) ListDevices(w http.ResponseWriter, r *http.Request) {
 		d.door_state, d.last_seen, d.created_at, d.updated_at,
 		(SELECT STRING_AGG(ap.name, ', ' ORDER BY ap.name)
 		 FROM dm3_access.access_point_devices apd
-		 JOIN dm3_access.access_devices ad ON ad.id::text = apd.access_device_id
 		 JOIN dm3_access.access_points ap ON ap.id = apd.access_point_id
-		 WHERE ad.device_id = d.id AND apd.tenant_id = d.tenant_id) AS access_points
+		 WHERE apd.access_device_id = d.id::text AND apd.tenant_id = d.tenant_id) AS access_points
 		FROM dm3_devices.devices d WHERE d.tenant_id = $1::uuid`
 	args := []any{cid}
 	argIdx := 2
@@ -369,12 +367,11 @@ func (h *GatewayHandlers) GetDevice(w http.ResponseWriter, r *http.Request) {
 func fetchDeviceAccessPointID(ctx context.Context, database *db.DB, deviceID, tenantID string) (string, error) {
 	var apID string
 	err := database.Pool.QueryRow(ctx,
-		`SELECT apd.access_point_id::text
-		   FROM dm3_access.access_point_devices apd
-		   JOIN dm3_access.access_devices ad ON ad.id::text = apd.access_device_id
-		  WHERE ad.device_id = $1::uuid AND apd.tenant_id = $2::uuid
-		  ORDER BY apd.created_at ASC
-		  LIMIT 1`,
+		`SELECT access_point_id::text
+		 FROM dm3_access.access_point_devices
+		 WHERE access_device_id = $1 AND tenant_id = $2::uuid
+		 ORDER BY created_at ASC
+		 LIMIT 1`,
 		deviceID, tenantID,
 	).Scan(&apID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -394,43 +391,10 @@ func applyDeviceAccessPointBinding(ctx context.Context, database *db.DB, deviceI
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// access_point_devices.access_device_id references access_devices.id
-	// (NOT dm3_devices.devices.id). We take the physical device UUID in
-	// and resolve it up to an access_devices row — creating a lightweight
-	// one if the operator never clicked through the access-device form.
-	// Without this, every edit from the device page wrote a binding row
-	// whose FK pointed at the wrong table, so the LATERAL join in
-	// access-svc never surfaced the access point.
-	var accessDeviceID string
-	if err := tx.QueryRow(ctx,
-		`SELECT id::text FROM dm3_access.access_devices
-		  WHERE device_id = $1::uuid AND tenant_id = $2::uuid
-		  LIMIT 1`,
-		deviceID, tenantID,
-	).Scan(&accessDeviceID); err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("lookup access_device: %w", err)
-		}
-		// Seed an access_device row from the devices row so the binding
-		// has a valid target. Name/type are copied so the UI still
-		// renders the physical device's label when browsing the AP.
-		if err := tx.QueryRow(ctx,
-			`INSERT INTO dm3_access.access_devices
-			   (tenant_id, device_id, name, type)
-			 SELECT tenant_id, id, name, type
-			   FROM dm3_devices.devices
-			  WHERE id = $1::uuid AND tenant_id = $2::uuid
-			 RETURNING id::text`,
-			deviceID, tenantID,
-		).Scan(&accessDeviceID); err != nil {
-			return fmt.Errorf("seed access_device: %w", err)
-		}
-	}
-
 	if _, err := tx.Exec(ctx,
 		`DELETE FROM dm3_access.access_point_devices
 		 WHERE access_device_id = $1 AND tenant_id = $2::uuid`,
-		accessDeviceID, tenantID,
+		deviceID, tenantID,
 	); err != nil {
 		return fmt.Errorf("clear bindings: %w", err)
 	}
@@ -440,7 +404,7 @@ func applyDeviceAccessPointBinding(ctx context.Context, database *db.DB, deviceI
 			   (tenant_id, access_point_id, access_device_id, role)
 			 VALUES ($2::uuid, $3::uuid, $1, 'reader_in')
 			 ON CONFLICT (access_point_id, access_device_id) DO NOTHING`,
-			accessDeviceID, tenantID, newAPID,
+			deviceID, tenantID, newAPID,
 		); err != nil {
 			return fmt.Errorf("insert binding: %w", err)
 		}
