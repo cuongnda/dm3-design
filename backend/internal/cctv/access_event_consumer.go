@@ -84,11 +84,15 @@ type deviceEvent struct {
 
 // accessLogData is the subset of the access.log payload we care about for
 // capture decisions. Decision drives rule matching; DoorID is used as the
-// fallback access point resolver when src is empty.
+// fallback access point resolver when src is empty. Subkind is a
+// tungson-supplied finer-grained type (face.match / face.unknown) so an
+// event_rule can target just face events even though the top-level NATS
+// event.type stays `access.log` for access-svc compatibility.
 type accessLogData struct {
 	EventID  string `json:"event_id"`
 	DoorID   string `json:"door_id"`
 	Decision string `json:"decision"`
+	Subkind  string `json:"subkind"`
 }
 
 // Start subscribes to dm3.devices.*.*.evt on the DEVICES stream with queue
@@ -165,6 +169,13 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 	)
 	if c.isCamera(ctx, tenantID, srcDeviceID) {
 		cameras = []string{srcDeviceID}
+		// Even though the event originated directly on the camera (TungSon
+		// face path), resolve its access point so access-point-scoped rules
+		// still match. Without this, a rule targeting an AP would silently
+		// be ignored whenever the camera published the event itself.
+		if apID, err := c.resolveAccessPointID(ctx, tenantID, srcDeviceID, payload.DoorID); err == nil {
+			accessPointID = apID
+		}
 	} else {
 		apID, err := c.resolveAccessPointID(ctx, tenantID, srcDeviceID, payload.DoorID)
 		if err != nil {
@@ -207,12 +218,22 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 	// TODO(refactor): if we ever see tenants with >100 cameras on an AP,
 	// convert this to a small semaphore (say 16) to avoid DB connection
 	// saturation under burst traffic.
+	// For rule matching purposes we expand the canonical type list with any
+	// payload subkind the producer gave us. That way an event published as
+	// access.log with data.subkind="face.match" matches rules filtering on
+	// either `access.log`, `face.match`, or both — operators don't have to
+	// know the wire-protocol quirk.
+	ruleEventTypes := []string{evt.Type}
+	if payload.Subkind != "" && payload.Subkind != evt.Type {
+		ruleEventTypes = append(ruleEventTypes, payload.Subkind)
+	}
+
 	var wg sync.WaitGroup
 	for _, camDeviceID := range cameras {
 		wg.Add(1)
 		go func(camDeviceID string) {
 			defer wg.Done()
-			c.captureForCamera(ctx, tenantID, accessPointID, camDeviceID, payload, evt, eventUUID, eventTS, maxClipDuration)
+			c.captureForCamera(ctx, tenantID, accessPointID, camDeviceID, payload, evt, ruleEventTypes, eventUUID, eventTS, maxClipDuration)
 		}(camDeviceID)
 	}
 	wg.Wait()
@@ -224,6 +245,7 @@ func (c *AccessEventConsumer) captureForCamera(
 	tenantID, accessPointID, camDeviceID string,
 	payload accessLogData,
 	evt deviceEvent,
+	eventTypes []string,
 	eventUUID *string,
 	eventTS time.Time,
 	maxClipDuration time.Duration,
@@ -233,7 +255,7 @@ func (c *AccessEventConsumer) captureForCamera(
 		CameraDeviceID: camDeviceID,
 		AccessPointID:  accessPointID,
 		Decision:       payload.Decision,
-		EventType:      evt.Type,
+		EventTypes:     eventTypes,
 	})
 	if err != nil {
 		slog.Warn("cctv: rule resolve failed, skipping camera", "error", err,
