@@ -52,12 +52,20 @@ verify:backend:
 # `make swag`, this job regenerates the spec and fails the build on diff.
 verify:openapi:
   stage: verify
-  image: golang:1.24
+  # Runner is a shell executor, so the `image:` directive is ignored. Run Go
+  # inside a throwaway container instead. GOPATH/GOCACHE are redirected into
+  # the workspace so the container user can write them without needing host
+  # UID mapping.
   script:
     - echo "=== Verifying OpenAPI spec is in sync with annotations ==="
-    - cd backend
-    - go install github.com/swaggo/swag/cmd/swag@latest
-    - make swag-check
+    - mkdir -p .gocache/go .gocache/build
+    - docker run --rm
+      -v "$PWD":/src -w /src/backend
+      -e GOPATH=/src/.gocache/go
+      -e GOCACHE=/src/.gocache/build
+      -e GOFLAGS=-buildvcs=false
+      golang:1.24
+      bash -c "go install github.com/swaggo/swag/cmd/swag@latest && PATH=/src/.gocache/go/bin:\$PATH make swag-check"
   only:
     - develop
     - merge_requests
