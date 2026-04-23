@@ -698,14 +698,30 @@ func (h *TungSonHandlers) HandleExtendConfirm(w http.ResponseWriter, r *http.Req
 				deviceUUID, userID,
 			)
 
-			// Create face credential DC_{user_code} for this user
-			// Uses the partial unique index idx_credentials_face_dc_card
-			// (tenant_id, user_id) WHERE type='face' AND value LIKE 'DC_%'
+			// Create face credential DC_{user_code} for this user. Inherit
+			// the user's effective/expired dates so the credential's validity
+			// window mirrors the user's — expires the moment the user does,
+			// and opens the same day the user does. `::timestamptz` casts the
+			// DATE columns to the credential column's type; a NULL user date
+			// flows through as NULL (no bound). ON CONFLICT refreshes dates
+			// on re-sync so operator edits to the user propagate.
+			// Partial unique index idx_credentials_face_dc_card makes this
+			// an idempotent upsert keyed on (tenant_id, user_id) WHERE
+			// type='face' AND value LIKE 'DC_%'.
 			_, _ = h.db.Pool.Exec(ctx,
-				`INSERT INTO dm3_identity.credentials (tenant_id, user_id, type, value, status)
-				 VALUES ($1::uuid, $2::uuid, 'face', $3, 'active')
+				`INSERT INTO dm3_identity.credentials
+				   (tenant_id, user_id, type, value, status, valid_from, valid_until)
+				 SELECT $1::uuid, u.id, 'face', $3, 'active',
+				        u.effective_date::timestamptz,
+				        u.expired_date::timestamptz
+				   FROM dm3_identity.users u
+				  WHERE u.id = $2::uuid AND u.tenant_id = $1::uuid
 				 ON CONFLICT (tenant_id, user_id) WHERE type = 'face' AND value LIKE 'DC\_%' ESCAPE '\'
-				 DO UPDATE SET status = 'active', updated_at = now()`,
+				 DO UPDATE SET
+				   status       = 'active',
+				   valid_from   = EXCLUDED.valid_from,
+				   valid_until  = EXCLUDED.valid_until,
+				   updated_at   = now()`,
 				tenantID, userID, cardID,
 			)
 			slog.Info("tungson: face credential created", "user_id", userID, "card_id", cardID)
