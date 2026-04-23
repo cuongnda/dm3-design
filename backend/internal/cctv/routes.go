@@ -67,6 +67,7 @@ func RegisterRoutes(r chi.Router, h *CCTVHandlers, jwtSecret string) {
 			pr.Use(authsvc.RequireWritePermission("cctv.clip.export"))
 			pr.Post("/clips", h.CreateClip)
 			pr.Delete("/clips/{id}", h.DeleteClip)
+			pr.Post("/clips/bulk-delete", h.BulkDeleteClips)
 		})
 	})
 }

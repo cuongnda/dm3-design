@@ -398,6 +398,87 @@ func (h *CCTVHandlers) DeleteClip(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// BulkDeleteClips handles POST /clips/bulk-delete
+// Body: {ids: ["uuid1", "uuid2", ...]}
+// Tenant-scoped: only rows belonging to the caller's tenant are affected. Uses
+// a single DELETE ... WHERE id = ANY($1::uuid[]) ... RETURNING so the number
+// of rows deleted (not just requested) is visible to the caller and the
+// audit log. Object-storage cleanup (clip + thumbnail keys) is best-effort
+// after the DB write — retention worker sweeps any leftovers.
+func (h *CCTVHandlers) BulkDeleteClips(w http.ResponseWriter, r *http.Request) {
+	cid := h.getTenantID(r)
+	if !requireTenant(w, cid) {
+		return
+	}
+
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(req.IDs) == 0 {
+		httputil.Error(w, http.StatusBadRequest, "ids must be a non-empty array")
+		return
+	}
+	// Hard cap so a runaway client can't delete tens of thousands of rows
+	// in one request. Operators asking for more can paginate.
+	if len(req.IDs) > 500 {
+		httputil.Error(w, http.StatusBadRequest, "too many ids; max 500 per request")
+		return
+	}
+
+	rows, err := h.db.Pool.Query(r.Context(),
+		`DELETE FROM dm3_cctv.event_clips
+		 WHERE id = ANY($1::uuid[]) AND tenant_id = $2::uuid
+		 RETURNING id::text, COALESCE(object_key,''), COALESCE(thumbnail_ref,'')`,
+		req.IDs, cid,
+	)
+	if err != nil {
+		logInternalError(w, "bulk delete clips error", err)
+		return
+	}
+	defer rows.Close()
+
+	type deletedRow struct {
+		ID, ObjectKey, ThumbRef string
+	}
+	var deleted []deletedRow
+	for rows.Next() {
+		var dr deletedRow
+		if err := rows.Scan(&dr.ID, &dr.ObjectKey, &dr.ThumbRef); err == nil {
+			deleted = append(deleted, dr)
+		}
+	}
+
+	// Object-storage cleanup — don't fail the response if MinIO misbehaves.
+	// Each call is short but we cap context so one slow delete can't block the
+	// HTTP reply.
+	if h.objectStore != nil && len(deleted) > 0 {
+		cleanupCtx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		for _, d := range deleted {
+			if d.ObjectKey != "" && !strings.HasPrefix(d.ObjectKey, "pending/") {
+				if err := h.objectStore.DeleteObject(cleanupCtx, d.ObjectKey); err != nil {
+					slog.Warn("cctv: bulk delete object failed", "clip_id", d.ID, "object_key", d.ObjectKey, "error", err)
+				}
+			}
+			if d.ThumbRef != "" {
+				if err := h.objectStore.DeleteObject(cleanupCtx, d.ThumbRef); err != nil {
+					slog.Warn("cctv: bulk delete thumbnail failed", "clip_id", d.ID, "thumbnail_ref", d.ThumbRef, "error", err)
+				}
+			}
+		}
+	}
+
+	h.audit.LogFromRequest(r, "cctv.clip.bulk_delete", "event_clip", "", "", "success",
+		map[string]any{"requested": len(req.IDs)},
+		map[string]any{"deleted": len(deleted)},
+	)
+	httputil.JSON(w, http.StatusOK, map[string]int{"deleted": len(deleted)})
+}
+
 // GetClipPlayback handles GET /clips/{id}/playback
 // Returns a presigned GET URL for the clip's object key, valid for 5 minutes.
 // Falls back to returning the object_key unchanged when no signer is configured.

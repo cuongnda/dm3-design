@@ -8,6 +8,7 @@ import {
   listClips,
   getClipPlayback,
   deleteClip,
+  bulkDeleteClips,
   type ClipDTO,
 } from '@dm3/api-client';
 
@@ -27,6 +28,8 @@ export function CCTVClipsPage() {
     setSortDir(dir);
     setPage(1);
   };
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
 
   const { data: camerasData } = useQuery({
     queryKey: ['cctv-cameras-all'],
@@ -57,6 +60,15 @@ export function CCTVClipsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteClip(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cctv-clips'] }),
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) => bulkDeleteClips(ids),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cctv-clips'] });
+      setSelected(new Set());
+      setShowBulkDelete(false);
+    },
   });
 
   const playMutation = useMutation({
@@ -250,6 +262,20 @@ export function CCTVClipsPage() {
             rowKey={(r) => r.id}
             sortState={{ col: sortBy, dir: sortDir }}
             onSortChange={(col, dir) => handleSortChange(String(col), dir)}
+            selection={{
+              selectedIds: Array.from(selected),
+              onSelectedIdsChange: (ids) => setSelected(new Set(ids)),
+              selectAllScope: 'page',
+              bulkActions: [
+                {
+                  icon: <Trash2 size={13} className="text-destructive" />,
+                  label: t('cctv.clips.bulkDelete'),
+                  variant: 'ghost',
+                  className: 'text-destructive hover:text-destructive hover:bg-destructive/10',
+                  onClick: () => setShowBulkDelete(true),
+                },
+              ],
+            }}
             emptyIcon={<Film size={32} strokeWidth={1.2} />}
             emptyTitle={(cameraFilter || fromFilter || toFilter) ? 'No clips match these filters' : 'No clips recorded yet'}
             emptyDescription={(cameraFilter || fromFilter || toFilter)
@@ -283,6 +309,34 @@ export function CCTVClipsPage() {
           onSortChange={(col, dir) => handleSortChange(String(col), dir)}
         />
       </div>
+
+      {/* Bulk delete confirmation */}
+      <AppModal
+        open={showBulkDelete}
+        onOpenChange={(open) => { if (!open) setShowBulkDelete(false); }}
+        title={
+          <span className="flex items-center gap-2 text-destructive">
+            <Trash2 size={16} />
+            {t('cctv.clips.bulkDeleteTitle')}
+          </span>
+        }
+        size="xs"
+        showCancelButton
+        cancelLabel={t('cctv.common.cancel')}
+        cancelDisabled={bulkDeleteMutation.isPending}
+        primaryAction={{
+          label: bulkDeleteMutation.isPending ? t('cctv.common.saving') : t('cctv.clips.bulkDeleteConfirm'),
+          variant: 'outline',
+          className: 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20',
+          onClick: () => bulkDeleteMutation.mutate(Array.from(selected)),
+          loading: bulkDeleteMutation.isPending,
+          disabled: bulkDeleteMutation.isPending || selected.size === 0,
+        }}
+      >
+        <p className="text-[13px] text-muted-foreground">
+          {t('cctv.clips.bulkDeletePrompt', { count: selected.size })}
+        </p>
+      </AppModal>
 
       {/* Video player modal */}
       <AppModal

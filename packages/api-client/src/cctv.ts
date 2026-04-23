@@ -293,6 +293,15 @@ export function deleteClip(id: string): Promise<void> {
   return apiFetch(`${BASE}/clips/${id}`, { method: 'DELETE' });
 }
 
+/** Bulk delete clips by id. Server caps at 500 ids per request. Tenant is
+ *  inferred from the caller's JWT — only clips in that tenant are touched. */
+export function bulkDeleteClips(ids: string[]): Promise<{ deleted: number }> {
+  return apiFetch(`${BASE}/clips/bulk-delete`, {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+}
+
 // ─── Settings ────────────────────────────────────────────────────────────────
 
 export function getCCTVSettings(): Promise<CCTVSettingsDTO> {
