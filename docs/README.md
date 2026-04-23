@@ -33,6 +33,11 @@ docs/
 │   ├── materials-plan.md              # Original materials planning
 │   └── webapp-tasks-archive.md        # Task breakdown (now in kanban)
 │
+├── implementation/                    # Customer rollout, delivery, and licensing docs
+│   ├── README.md                      # Index for deployment and licensing docs
+│   ├── customer-deployment/           # Installation package templates and runbooks
+│   └── licensing/                     # Commercial and technical license design
+│
 └── changelog/                         # Decision history & major changes
     └── 2026-02-19-offline-first.md    # Architecture shift to offline-first
 ```
@@ -48,6 +53,14 @@ docs/
 **Three Domains:** SECURE (blue) / MANAGE (purple) / OPERATE (amber)
 **Cross-cutting:** SMART (cyan) / PLATFORM (gray)
 **Core principle:** Offline-first — devices decide locally, server syncs & aggregates
+
+## 🚀 Implementation docs
+
+For customer deployment packaging and licensing, start here:
+- `docs/implementation/README.md`
+- `docs/implementation/customer-deployment/README.md`
+- `docs/implementation/licensing/license-framework.md`
+- `docs/implementation/licensing/license-technical-design.md`
 
 ## 📝 How to Update
 

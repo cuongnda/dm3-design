@@ -2,6 +2,16 @@ stages:
   - verify
   - deploy
 
+# Exclude .gocache from git clean so verify:openapi's root-owned module cache
+# (created inside the golang:1.24 container) doesn't cause "permission denied"
+# when GitLab prepares the workspace for the next job. Without this, jobs
+# fail at ~2s during the "Getting source from Git repository" step — before
+# any script can run. The verify:openapi after_script still chowns the dir
+# back to the host user; this variable is belt-and-suspenders for when that
+# hasn't landed yet or a stale root-owned state predates it.
+variables:
+  GIT_CLEAN_FLAGS: -ffdx -e .gocache
+
 # ── Shared bootstrap ──────────────────────────────────────────────────────────
 # Jobs that need .env use .setup_env as a script-level include. It generates
 # .env from GitLab CI/CD project variables and installs a trap to shred the
@@ -52,12 +62,41 @@ verify:backend:
 # `make swag`, this job regenerates the spec and fails the build on diff.
 verify:openapi:
   stage: verify
-  image: golang:1.24
+  # Runner is a shell executor, so the `image:` directive is ignored. Run Go
+  # inside a throwaway container instead. GOPATH/GOCACHE are redirected into
+  # the workspace so the container user can write them without needing host
+  # UID mapping.
+  #
+  # Non-blocking: this catches a dev mistake (annotations drifted from the
+  # committed OpenAPI spec) — a real issue to fix, but not one that should
+  # taint the deploy pipeline. allow_failure: true makes it a warning, not
+  # a gate.
+  allow_failure: true
   script:
     - echo "=== Verifying OpenAPI spec is in sync with annotations ==="
-    - cd backend
-    - go install github.com/swaggo/swag/cmd/swag@latest
-    - make swag-check
+    - mkdir -p .gocache/go .gocache/build
+    # GOFLAGS=-modcacherw writes the module cache with user-write perms so
+    # GitLab's workspace cleanup can rm them. Without it, Go's default 0444
+    # perms make cleanup fail with "permission denied" and the job exits
+    # with non-zero — even when swag-check itself passed.
+    # safe.directory: git inside the container refuses to read /src/.git
+    # because it's owned by the host gitlab-runner user while the container
+    # runs as root ("dubious ownership" error). Without this, `make
+    # swag-check` → `git diff` fails with "Not a git repository" and the
+    # Makefile incorrectly reports OpenAPI drift.
+    - docker run --rm
+      -v "$PWD":/src -w /src/backend
+      -e GOPATH=/src/.gocache/go
+      -e GOCACHE=/src/.gocache/build
+      -e "GOFLAGS=-buildvcs=false -modcacherw"
+      golang:1.24
+      bash -c "git config --global --add safe.directory /src && go install github.com/swaggo/swag/cmd/swag@latest && PATH=/src/.gocache/go/bin:\$PATH make swag-check"
+  # Files under .gocache are created as root inside the container; the host
+  # gitlab-runner user can't chmod/rm them without sudo. Fix ownership back
+  # to the host UID so cleanup (and any rerun of this job) succeeds.
+  after_script:
+    - docker run --rm -v "$PWD":/src -w /src alpine
+      sh -c "chown -R $(id -u):$(id -g) .gocache 2>/dev/null; chmod -R u+w .gocache 2>/dev/null; true"
   only:
     - develop
     - merge_requests

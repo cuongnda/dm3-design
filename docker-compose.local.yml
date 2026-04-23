@@ -159,11 +159,6 @@ services:
       SERVICE_NAME: identity-svc
       HTTP_PORT: "8004"
       DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:-dm3secret}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
-      OBJECT_STORE_ENDPOINT: minio:9000
-      OBJECT_STORE_ACCESS_KEY: ${MINIO_ROOT_USER:-dm3admin}
-      OBJECT_STORE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-dm3secret123}
-      OBJECT_STORE_BUCKET: ${OBJECT_STORE_BUCKET:-dm3}
-      OBJECT_STORE_USE_SSL: "false"
       OBJECT_STORE_AUTO_CREATE_BUCKET: "true"
     depends_on:
       migrate:
@@ -238,16 +233,18 @@ services:
       dockerfile: Dockerfile
     container_name: dm3-local-visitor-svc
     restart: unless-stopped
+    env_file: ./deploy/env/local.env
     environment:
       SERVICE_NAME: visitor-svc
       HTTP_PORT: "8006"
       DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
-      JWT_SECRET: dm3-local-jwt-secret-change-me
-      NATS_URL: nats://nats:4222
+      OBJECT_STORE_AUTO_CREATE_BUCKET: "true"
     depends_on:
       migrate:
         condition: service_completed_successfully
       nats:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - dm3-local
@@ -323,12 +320,12 @@ services:
       dockerfile: Dockerfile
     container_name: dm3-local-cctv-svc
     restart: unless-stopped
+    env_file: ./deploy/env/local.env
     environment:
       SERVICE_NAME: cctv-svc
       HTTP_PORT: "8008"
       DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
-      JWT_SECRET: dm3-local-jwt-secret-change-me
-      NATS_URL: nats://nats:4222
+      OBJECT_STORE_AUTO_CREATE_BUCKET: "true"
       # Must be 32 random bytes base64-encoded. Never commit. Generate with: openssl rand -base64 32
       CCTV_CREDENTIAL_KEY: ${CCTV_CREDENTIAL_KEY:?CCTV_CREDENTIAL_KEY must be set in .env}
       MEDIAMTX_API_URL: "http://mediamtx:9997"
@@ -351,6 +348,8 @@ services:
         condition: service_healthy
       mediamtx:
         condition: service_started
+      minio:
+        condition: service_healthy
     networks:
       - dm3-local
     healthcheck:
@@ -365,16 +364,18 @@ services:
       dockerfile: Dockerfile
     container_name: dm3-local-attend-svc
     restart: unless-stopped
+    env_file: ./deploy/env/local.env
     environment:
       SERVICE_NAME: attend-svc
       HTTP_PORT: "8010"
       DATABASE_URL: postgres://dm3:dm3secret@timescaledb:5432/dm3?sslmode=disable
-      JWT_SECRET: dm3-local-jwt-secret-change-me
-      NATS_URL: nats://nats:4222
+      OBJECT_STORE_AUTO_CREATE_BUCKET: "true"
     depends_on:
       migrate:
         condition: service_completed_successfully
       nats:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - dm3-local
