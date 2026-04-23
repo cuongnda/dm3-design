@@ -220,7 +220,13 @@ func (e *ClipExtractor) runBufferPath(
 	// is in `pick`.
 	runConcat := func(withSeek bool) (bool, int64) {
 		args := []string{
-			"-fflags", "+genpts",
+			// +genpts regenerates PTS from DTS; +discardcorrupt drops
+			// broken packets rather than letting them poison the decoder
+			// — essential for cameras whose RTSP stream drops mid-segment
+			// (cam TS's profile: 700 ms ping, frequent TCP resets). Without
+			// discardcorrupt the decoder hangs or emits backward-PTS
+			// frames that the player renders as time jumps.
+			"-fflags", "+genpts+discardcorrupt",
 			"-f", "concat", "-safe", "0",
 			"-i", listFile,
 		}
@@ -240,6 +246,13 @@ func (e *ClipExtractor) runBufferPath(
 		args = append(args,
 			"-t", fmt.Sprintf("%d", effDuration),
 			"-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+			// setpts=N/FRAME_RATE/TB assigns output PTS purely from the
+			// frame index, so any quirks in the source timestamps (stream
+			// reconnect, dropped keyframe region) can't leak into the
+			// output. Combined with -vsync cfr this guarantees a smoothly
+			// playable MP4 even when the source segment had internal
+			// discontinuities.
+			"-vf", "setpts=N/FRAME_RATE/TB",
 			"-vsync", "cfr",
 			"-avoid_negative_ts", "make_zero",
 			"-an",
