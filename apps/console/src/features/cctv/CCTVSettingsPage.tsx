@@ -39,8 +39,8 @@ export function CCTVSettingsPage() {
     if (settings) {
       setForm({
         retention_days: settings.retention_days,
-        pre_roll_sec_default: settings.pre_roll_sec_default,
-        post_roll_sec_default: settings.post_roll_sec_default,
+        // pre/post_roll_sec_default intentionally omitted — edited per rule
+        // on the Event Rules page.
         storage_quota_gb: settings.storage_quota_gb,
         hanet_client_id: settings.hanet_client_id,
         hanet_server_url: settings.hanet_server_url || HANET_DEFAULT_SERVER,
@@ -139,35 +139,14 @@ export function CCTVSettingsPage() {
           </div>
         </section>
 
-        <section className="rounded-lg border border-border p-4">
-          <h3 className="text-[13px] font-semibold mb-3">{t('cctv.settings.rollSection')}</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-[12px]">{t('cctv.settings.preRollDefault')} (s)</Label>
-              <Input
-                type="number"
-                className="mt-1 h-8 text-[13px]"
-                min={0}
-                max={60}
-                value={form.pre_roll_sec_default ?? 10}
-                onChange={(e) => update('pre_roll_sec_default', Number(e.target.value))}
-                data-testid="cctv-input-pre-roll-default"
-              />
-            </div>
-            <div>
-              <Label className="text-[12px]">{t('cctv.settings.postRollDefault')} (s)</Label>
-              <Input
-                type="number"
-                className="mt-1 h-8 text-[13px]"
-                min={0}
-                max={60}
-                value={form.post_roll_sec_default ?? 10}
-                onChange={(e) => update('post_roll_sec_default', Number(e.target.value))}
-                data-testid="cctv-input-post-roll-default"
-              />
-            </div>
-          </div>
-        </section>
+        {/*
+          Pre/post-roll are now edited per rule on the Event Rules page; the
+          tenant-wide default fields in cctv_settings remain only as a
+          deep-fallback used by the resolver when no rule matches. Not
+          exposed here any more to avoid operators chasing two sources of
+          truth — if they want a tenant-wide default, they create a
+          tenant-scoped rule with priority 1000.
+        */}
 
         <section className="rounded-lg border border-border p-4">
           <h3 className="text-[13px] font-semibold mb-3">{t('cctv.settings.storageSection')}</h3>
