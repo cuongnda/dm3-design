@@ -157,59 +157,78 @@ func (e *ClipExtractor) runBufferPath(
 		return false, 0
 	}
 
-	// Duration from started_at to end_at is the rule's (pre + post) window.
-	// We intentionally DON'T pass -ss to trim the segment-boundary slack at
-	// the head: -ss + concat demuxer + -c copy is flaky (with copy codec
-	// ffmpeg can't seek past non-keyframes and often emits a near-empty
-	// container). Accept up to one extra segment-duration's worth of footage
-	// at the start — still well inside the spirit of "pre-roll" — and keep
-	// the concat boringly reliable.
+	// Duration is the rule's (pre + post) window.
 	duration := int(endAt.Sub(startedAt).Seconds())
 	if duration < 1 {
 		duration = 1
 	}
 
-	ffmpegCtx, cancel := context.WithTimeout(ctx, time.Duration(duration*2+30)*time.Second)
-	defer cancel()
+	// Two-pass concat. MediaMTX segments aren't aligned to event boundaries,
+	// so the first picked segment typically started 0-10s before started_at.
+	// Without -ss we'd pad the clip with that leading slack and push the
+	// event closer to the end — often out of frame for short (5+5) rules.
+	// So we first try with -ss (sub-second accuracy) and fall back to
+	// no-ss only when ffmpeg's concat-demuxer + copy codec combination
+	// misbehaves (a known flake → near-empty container < 50KB).
+	offset := segmentRelativeOffset(pick[0], startedAt)
 
-	args := []string{
-		"-f", "concat", "-safe", "0",
-		"-i", listFile,
-		"-t", fmt.Sprintf("%d", duration),
-		"-c", "copy",
-		"-an",
-		"-movflags", "+faststart",
-		"-y", tmpFile,
+	tryConcat := func(withSeek bool) (ok bool, size int64) {
+		ffmpegCtx, cancel := context.WithTimeout(ctx, time.Duration(duration*2+30)*time.Second)
+		defer cancel()
+
+		args := []string{"-f", "concat", "-safe", "0"}
+		if withSeek && offset > 0.1 {
+			// Fast seek — before -i — so ffmpeg never demuxes the leading
+			// slack. On fmp4 with 1s record parts the keyframe grid is fine
+			// enough that -c copy lands within ±1s of the target.
+			args = append(args, "-ss", fmt.Sprintf("%.3f", offset))
+		}
+		args = append(args,
+			"-i", listFile,
+			"-t", fmt.Sprintf("%d", duration),
+			"-c", "copy",
+			"-an",
+			"-movflags", "+faststart",
+			"-y", tmpFile,
+		)
+		var stderr bytes.Buffer
+		cmd := exec.CommandContext(ffmpegCtx, "ffmpeg", args...)
+		cmd.Stderr = &stderr
+
+		if err := cmd.Run(); err != nil {
+			log.Warn("cctv: rolling buffer concat ffmpeg failed",
+				"with_seek", withSeek, "error", err, "stderr", truncate(stderr.String(), 300))
+			return false, 0
+		}
+		fi, err := os.Stat(tmpFile)
+		if err != nil {
+			return false, 0
+		}
+		// 50KB sanity floor — see earlier commit. A moov-only container is
+		// ~200-500 bytes and happens when -ss lands past the last keyframe.
+		if fi.Size() < 50*1024 {
+			return false, fi.Size()
+		}
+		return true, fi.Size()
 	}
-	var stderr bytes.Buffer
-	cmd := exec.CommandContext(ffmpegCtx, "ffmpeg", args...)
-	cmd.Stderr = &stderr
 
 	log.Info("cctv: rolling buffer concat starting",
-		"segments", len(pick), "duration_sec", duration)
+		"segments", len(pick), "offset_sec", offset, "duration_sec", duration)
 
-	if err := cmd.Run(); err != nil {
-		log.Warn("cctv: rolling buffer concat failed — falling back to live pull",
-			"error", err, "stderr", truncate(stderr.String(), 300))
-		return false, 0
+	if ok, _ := tryConcat(true); ok {
+		return true, duration
 	}
 
-	// 50KB sanity floor: an fMP4 container with no usable payload is ~200–500
-	// bytes (moov box only). Anything smaller than the equivalent of ~0.1s of
-	// video probably means ffmpeg succeeded structurally but produced an
-	// empty file — fall back to live pull so the operator gets *something*.
-	fi, err := os.Stat(tmpFile)
-	if err != nil || fi.Size() < 50*1024 {
-		size := int64(-1)
-		if fi != nil {
-			size = fi.Size()
-		}
-		log.Warn("cctv: rolling buffer concat produced suspiciously small file — falling back",
+	// With-seek produced nothing usable. Retry without -ss so the clip is at
+	// least non-empty, even if it's time-shifted vs the event.
+	log.Warn("cctv: rolling buffer concat with -ss produced too small a file, retrying without seek")
+	if ok, size := tryConcat(false); ok {
+		return true, duration
+	} else {
+		log.Warn("cctv: rolling buffer concat fallback also failed — falling back to live pull",
 			"size_bytes", size)
-		return false, 0
 	}
-
-	return true, duration
+	return false, 0
 }
 
 // runLivePullPath is the fallback extractor used when MediaMTX isn't writing
