@@ -8,6 +8,29 @@ x-backend-build: &backend-build
     dockerfile: Dockerfile
   image: dm3-backend:local
 
+# ── Shared object-store env ─────────────────────────────────────────────────
+# Every service that signs MinIO URLs (access-svc, device-gateway, identity-svc,
+# cctv-svc, visitor-svc, attend-svc) must see the same config, otherwise the
+# service falls back to the dev default (localhost:9002) and presigns fail at
+# runtime. PUBLIC_ENDPOINT is the host baked into presigned URLs — it must be
+# something devices and browsers outside the Docker network can reach.
+# nginx's dm3-s3.* server block proxies to minio:9000 (S3 API, not :9001 which
+# is the console UI).
+x-object-store-env: &object-store-env
+  OBJECT_STORE_ENDPOINT: minio:9000
+  OBJECT_STORE_ACCESS_KEY: ${MINIO_ROOT_USER:-dm3admin}
+  OBJECT_STORE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
+  OBJECT_STORE_BUCKET: ${OBJECT_STORE_BUCKET:-dm3}
+  OBJECT_STORE_USE_SSL: "false"
+  OBJECT_STORE_AUTO_CREATE_BUCKET: "true"
+  # Public host routes through Cloudflare → origin nginx → minio:9000.
+  # USE_SSL=false because Cloudflare terminates TLS at the edge and talks
+  # HTTP to origin; presigned URLs ride the same http→https 301 the rest
+  # of the prod stack uses. Override via GitLab CI/CD variables if either
+  # value ever needs to differ per environment.
+  OBJECT_STORE_PUBLIC_ENDPOINT: ${OBJECT_STORE_PUBLIC_ENDPOINT:-dm3-s3.demasterpro.com}
+  OBJECT_STORE_PUBLIC_USE_SSL: ${OBJECT_STORE_PUBLIC_USE_SSL:-false}
+
 services:
   # ── Infrastructure ─────────────────────────────────────────────────────────
 
@@ -157,20 +180,13 @@ services:
     container_name: dm3-identity-svc
     restart: unless-stopped
     environment:
+      <<: *object-store-env
       SERVICE_NAME: identity-svc
       HTTP_PORT: "8004"
       DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       NATS_URL: nats://nats:4222
       MQTT_BROKER: tcp://emqx:1883
-      # Photos go to MinIO (S3-compatible). PHOTO_STORAGE defaults to "minio"
-      # in backend/internal/config/config.go, so no override is needed here.
-      OBJECT_STORE_ENDPOINT: minio:9000
-      OBJECT_STORE_ACCESS_KEY: ${MINIO_ROOT_USER:-dm3admin}
-      OBJECT_STORE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
-      OBJECT_STORE_BUCKET: ${OBJECT_STORE_BUCKET:-dm3}
-      OBJECT_STORE_USE_SSL: "false"
-      OBJECT_STORE_AUTO_CREATE_BUCKET: "true"
       SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME}
@@ -197,6 +213,7 @@ services:
     container_name: dm3-access-svc
     restart: unless-stopped
     environment:
+      <<: *object-store-env
       SERVICE_NAME: access-svc
       HTTP_PORT: "8003"
       DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
@@ -207,6 +224,8 @@ services:
       migrate:
         condition: service_completed_successfully
       nats:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - dm3-internal
@@ -244,6 +263,7 @@ services:
     container_name: dm3-device-gateway
     restart: unless-stopped
     environment:
+      <<: *object-store-env
       SERVICE_NAME: device-gateway
       HTTP_PORT: "8002"
       DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
@@ -266,6 +286,8 @@ services:
         condition: service_healthy
       valkey:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     networks:
       - dm3-internal
     healthcheck:
@@ -279,6 +301,7 @@ services:
     container_name: dm3-visitor-svc
     restart: unless-stopped
     environment:
+      <<: *object-store-env
       SERVICE_NAME: visitor-svc
       HTTP_PORT: "8006"
       DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
@@ -289,6 +312,8 @@ services:
       migrate:
         condition: service_completed_successfully
       nats:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - dm3-internal
@@ -327,6 +352,7 @@ services:
     container_name: dm3-attend-svc
     restart: unless-stopped
     environment:
+      <<: *object-store-env
       SERVICE_NAME: attend-svc
       HTTP_PORT: "8010"
       DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
@@ -336,6 +362,8 @@ services:
       migrate:
         condition: service_completed_successfully
       nats:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - dm3-internal
@@ -386,6 +414,7 @@ services:
     container_name: dm3-cctv-svc
     restart: unless-stopped
     environment:
+      <<: *object-store-env
       SERVICE_NAME: cctv-svc
       HTTP_PORT: "8008"
       DATABASE_URL: postgres://${DB_USER:-dm3}:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@timescaledb:5432/${DB_NAME:-dm3}?sslmode=disable
@@ -398,13 +427,6 @@ services:
       MEDIAMTX_WHEP_BASE: ${MEDIAMTX_WHEP_BASE:-/cctv/whep}
       MEDIAMTX_HLS_BASE: ${MEDIAMTX_HLS_BASE:-/cctv/hls}
       CCTV_ALLOW_PRIVATE_RTSP: "true"
-      # Object store for CCTV clips (S3-compatible MinIO).
-      OBJECT_STORE_ENDPOINT: minio:9000
-      OBJECT_STORE_ACCESS_KEY: ${MINIO_ROOT_USER:-dm3admin}
-      OBJECT_STORE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
-      OBJECT_STORE_BUCKET: ${OBJECT_STORE_BUCKET:-dm3}
-      OBJECT_STORE_USE_SSL: "false"
-      OBJECT_STORE_AUTO_CREATE_BUCKET: "true"
     depends_on:
       migrate:
         condition: service_completed_successfully
