@@ -27,8 +27,12 @@ import (
 // DST and host-TZ shifts can't skew segment selection.
 
 // segmentFilenamePattern parses the MediaMTX default filename template.
-// Leading "2026-04-23_10-15-30-123456" plus ".mp4" (or fMP4 .mp4 extension).
-var segmentFilenamePattern = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})-(\d{1,6})\.mp4$`)
+// Leading "2026-04-23_10-15-30-123456" plus ".ts" — we only accept mpegts
+// segments. Legacy fmp4 ".mp4" fragment files (written before the format
+// switch) are ignored because their codec params live in a separate init
+// file and ffmpeg can't decode them standalone; mixing them with .ts
+// segments breaks the concat stream.
+var segmentFilenamePattern = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})-(\d{1,6})\.ts$`)
 
 // segment is a single rolling-buffer file with its start time parsed out.
 type segment struct {
@@ -56,7 +60,7 @@ func listRollingSegments(rootDir, cameraUUID string) ([]segment, error) {
 
 	out := make([]segment, 0, len(entries))
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".mp4") {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".ts") {
 			continue
 		}
 		t, ok := parseSegmentStart(e.Name())
@@ -81,10 +85,8 @@ func parseSegmentStart(name string) (time.Time, bool) {
 	if m == nil {
 		return time.Time{}, false
 	}
-	// Build a layout string ourselves so we don't need to string-munge %f into
-	// something time.Parse understands. Easier to use Sscanf.
 	var y, mo, d, h, mi, s, us int
-	_, err := fmt.Sscanf(name, "%04d-%02d-%02d_%02d-%02d-%02d-%d.mp4",
+	_, err := fmt.Sscanf(name, "%04d-%02d-%02d_%02d-%02d-%02d-%d.ts",
 		&y, &mo, &d, &h, &mi, &s, &us)
 	if err != nil {
 		return time.Time{}, false
@@ -95,28 +97,54 @@ func parseSegmentStart(name string) (time.Time, bool) {
 }
 
 // segmentsForWindow picks the subset of `all` that overlaps [from, to].
-// A segment with start time S overlaps when S < to AND (S + maxSegmentGap) > from.
-// We don't know each segment's real duration without probing the file, so
-// maxSegmentGap is a safety margin (= typical segment duration + 1s) used only
-// for the lower-bound check; the upper bound is exact because later segments
-// are pruned.
-func segmentsForWindow(all []segment, from, to time.Time, maxSegmentGap time.Duration) []segment {
+// `all` must be sorted ascending by Start.
+//
+// Algorithm: the segment whose Start is the latest value ≤ from is guaranteed
+// to be the one that *contains* (or leads into) the window's first frame —
+// its content runs until the next segment's Start regardless of its own
+// duration. From that segment, include every subsequent one whose Start is
+// strictly before `to`.
+//
+// The previous implementation used a fixed `maxSegmentGap = 15s` lower-bound
+// heuristic that silently dropped the immediate-before segment whenever
+// MediaMTX wrote a longer-than-15s segment — exactly the case where the
+// event time ended up in a segment that started >15s earlier, producing
+// clips that skipped the event frames.
+func segmentsForWindow(all []segment, from, to time.Time) []segment {
 	if len(all) == 0 || !to.After(from) {
 		return nil
 	}
-	// lower bound = from - maxSegmentGap so the segment that started shortly
-	// before `from` still gets included (it covers the first pre-roll frames).
-	lower := from.Add(-maxSegmentGap)
+
+	// Walk forward to find the latest segment whose Start ≤ from. If every
+	// segment starts after `from` (e.g. fresh MediaMTX, no history), fall
+	// back to the first segment that overlaps the window.
+	firstIdx := -1
+	for i, s := range all {
+		if s.Start.After(from) {
+			break
+		}
+		firstIdx = i
+	}
+	if firstIdx < 0 {
+		// No segment started at/before `from`. Start from the first segment
+		// whose Start is before `to` (i.e. overlaps the window's tail).
+		for i, s := range all {
+			if s.Start.Before(to) {
+				firstIdx = i
+				break
+			}
+		}
+	}
+	if firstIdx < 0 {
+		return nil
+	}
 
 	out := make([]segment, 0, 8)
-	for _, s := range all {
-		if s.Start.After(to) {
-			break // sorted ascending — no later segment matters
+	for i := firstIdx; i < len(all); i++ {
+		if !all[i].Start.Before(to) {
+			break
 		}
-		if s.Start.Before(lower) {
-			continue
-		}
-		out = append(out, s)
+		out = append(out, all[i])
 	}
 	return out
 }

@@ -160,35 +160,41 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 		return nil
 	}
 
-	var (
-		cameras       []string
-		accessPointID string
-	)
-	if c.isCamera(ctx, tenantID, srcDeviceID) {
-		cameras = []string{srcDeviceID}
-		// Even though the event originated directly on the camera (TungSon
-		// face path), resolve its access point so access-point-scoped rules
-		// still match. Without this, a rule targeting an AP would silently
-		// be ignored whenever the camera published the event itself.
-		if apID, err := c.resolveAccessPointID(ctx, tenantID, srcDeviceID, payload.DoorID); err == nil {
-			accessPointID = apID
-		}
-	} else {
-		apID, err := c.resolveAccessPointID(ctx, tenantID, srcDeviceID, payload.DoorID)
-		if err != nil {
-			slog.Error("cctv: failed to resolve access_point_id", "error", err, "src", srcDeviceID)
-			return err
-		}
-		if apID == "" {
-			return nil
-		}
-		accessPointID = apID
+	// Resolve the access point for this event regardless of whether the source
+	// device is a controller or a camera (TungSon face path publishes from the
+	// camera itself). We always fan out to EVERY camera bound to that AP —
+	// an event at a door should trigger a clip on every CCTV covering the
+	// door, including camera angles that didn't originate the event.
+	accessPointID, err := c.resolveAccessPointID(ctx, tenantID, srcDeviceID, payload.DoorID)
+	if err != nil {
+		slog.Error("cctv: failed to resolve access_point_id", "error", err, "src", srcDeviceID)
+		return err
+	}
+
+	var cameras []string
+	if accessPointID != "" {
 		cameras, err = c.findCamerasForAccessPoint(ctx, tenantID, accessPointID)
 		if err != nil {
 			slog.Error("cctv: failed to find cameras for access point", "error", err, "access_point_id", accessPointID)
 			return err
 		}
 	}
+
+	// If the event source is itself a camera but didn't come through the AP
+	// binding (freshly-added, not yet linked), make sure we still capture it.
+	if c.isCamera(ctx, tenantID, srcDeviceID) {
+		found := false
+		for _, id := range cameras {
+			if id == srcDeviceID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			cameras = append(cameras, srcDeviceID)
+		}
+	}
+
 	if len(cameras) == 0 {
 		return nil
 	}
@@ -498,8 +504,7 @@ func (c *AccessEventConsumer) resolveAccessPointID(ctx context.Context, tenantID
 			`SELECT ap.id::text
 			   FROM dm3_access.access_points ap
 			   JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
-			   JOIN dm3_access.access_devices ad ON ad.id::text = apd.access_device_id
-			  WHERE ad.device_id = $1::uuid AND ap.tenant_id = $2::uuid
+			  WHERE apd.access_device_id = $1 AND ap.tenant_id = $2::uuid
 			  LIMIT 1`,
 			srcDeviceID, tenantID,
 		).Scan(&apID)
@@ -537,8 +542,7 @@ func (c *AccessEventConsumer) findCamerasForAccessPoint(ctx context.Context, ten
 	rows, err := c.db.Pool.Query(lookupCtx,
 		`SELECT d.id::text
 		   FROM dm3_access.access_point_devices apd
-		   JOIN dm3_access.access_devices ad ON ad.id::text = apd.access_device_id AND ad.tenant_id = apd.tenant_id
-		   JOIN dm3_devices.devices d ON d.id = ad.device_id AND d.tenant_id = ad.tenant_id
+		   JOIN dm3_devices.devices d ON d.id::text = apd.access_device_id AND d.tenant_id = apd.tenant_id
 		  WHERE apd.access_point_id = $1::uuid AND apd.tenant_id = $2::uuid AND d.type = 'camera'`,
 		accessPointID, tenantID,
 	)

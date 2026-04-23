@@ -162,28 +162,6 @@ func (h *CCTVHandlers) getHanetAccessToken(ctx context.Context, tenantID string)
 	return h.cipher.Decrypt(enc)
 }
 
-// composeRTSPURLWithAuth builds the full RTSP URL including credentials for MediaMTX source.
-// Format: rtsp://username:password@host/path or rtsp://host/path if no credentials.
-func composeRTSPURLWithAuth(rtspURL string, username, password string) string {
-	if username == "" && password == "" {
-		return rtspURL
-	}
-
-	// Parse scheme + rest manually to insert credentials
-	// Expected: rtsp://host:port/path  or  rtsps://host:port/path
-	for _, scheme := range []string{"rtsps://", "rtsp://"} {
-		if len(rtspURL) > len(scheme) && rtspURL[:len(scheme)] == scheme {
-			rest := rtspURL[len(scheme):]
-			if password != "" {
-				return fmt.Sprintf("%s%s:%s@%s", scheme, username, password, rest)
-			}
-			return fmt.Sprintf("%s%s@%s", scheme, username, rest)
-		}
-	}
-	// Fallback: return as-is
-	return rtspURL
-}
-
 // requireTenant validates tenant context and writes 403 if missing.
 // Returns false if the caller should abort.
 func requireTenant(w http.ResponseWriter, tenantID string) bool {

@@ -78,8 +78,6 @@ type deviceConfig struct {
 // recording_mode="event_only", pre_roll_sec=10, post_roll_sec=20.
 type cameraParams struct {
 	RTSPURL       string  `json:"rtsp_url"`
-	RTSPUsername  *string `json:"rtsp_username,omitempty"`
-	RTSPPassword  *string `json:"rtsp_password,omitempty"`
 	Brand         *string `json:"brand,omitempty"`
 	RecordingMode *string `json:"recording_mode,omitempty"`
 	PreRollSec    *int    `json:"pre_roll_sec,omitempty"`
@@ -153,20 +151,17 @@ func (h *ProvisioningHandlers) ProvisionDevice(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	// Validate+encrypt camera params up-front so we fail fast before touching
-	// the DB. For non-camera types this block is a no-op.
+	// Validate camera params up-front so we fail fast before touching the DB.
+	// For non-camera types this block is a no-op. Credentials, if required,
+	// are embedded in rtsp_url by the operator — we no longer handle them
+	// as separate fields.
 	var (
-		encryptedPass []byte
 		trimmedRTSP   string
 		recordingMode = "event_only"
 		preRoll       = 10
 		postRoll      = 20
 	)
 	if req.Type == "camera" {
-		if h.cameraCipher == nil {
-			httputil.Error(w, http.StatusServiceUnavailable, "camera provisioning is not configured on this server (CCTV_CREDENTIAL_KEY missing)")
-			return
-		}
 		if req.Camera == nil {
 			httputil.Error(w, http.StatusBadRequest, "camera block is required when type=camera")
 			return
@@ -192,15 +187,6 @@ func (h *ProvisioningHandlers) ProvisionDevice(w http.ResponseWriter, r *http.Re
 		if postRoll < 0 || postRoll > 120 {
 			httputil.Error(w, http.StatusBadRequest, "post_roll_sec must be between 0 and 120")
 			return
-		}
-		if req.Camera.RTSPPassword != nil && *req.Camera.RTSPPassword != "" {
-			var err error
-			encryptedPass, err = h.cameraCipher.Encrypt(*req.Camera.RTSPPassword)
-			if err != nil {
-				slog.Error("ProvisionDevice: encrypt rtsp password failed", "error", err)
-				httputil.Error(w, http.StatusInternalServerError, "internal server error")
-				return
-			}
 		}
 	}
 
@@ -241,9 +227,9 @@ func (h *ProvisioningHandlers) ProvisionDevice(w http.ResponseWriter, r *http.Re
 	if req.Type == "camera" {
 		_, err = tx.Exec(r.Context(), `
 			INSERT INTO dm3_cctv.cameras
-			(device_id, tenant_id, brand, rtsp_url, rtsp_username, rtsp_password_enc, recording_mode, pre_roll_sec, post_roll_sec)
-			VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9)`,
-			deviceDBID, companyID, req.Camera.Brand, trimmedRTSP, req.Camera.RTSPUsername, encryptedPass,
+			(device_id, tenant_id, brand, rtsp_url, recording_mode, pre_roll_sec, post_roll_sec)
+			VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7)`,
+			deviceDBID, companyID, req.Camera.Brand, trimmedRTSP,
 			recordingMode, preRoll, postRoll,
 		)
 		if err != nil {

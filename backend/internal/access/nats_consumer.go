@@ -296,9 +296,8 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 			slog.Error("nats: failed to resolve access_point_id", "error", err, "device_id", deviceID, "tenant_id", tenantID)
 		}
 		// Fallback: device may exist in dm3_devices but not yet be linked to
-		// an access_point (freshly-provisioned), OR the face camera is bound
-		// via access_devices + access_point_devices but the JOIN above only
-		// matches the specific binding we happen to have.
+		// an access_point (freshly-provisioned). We still want the UUID so
+		// media-key validation passes.
 		if deviceUUID == "" {
 			fbCtx, fbCancel := context.WithTimeout(ctx, 2*time.Second)
 			err := c.db.Pool.QueryRow(fbCtx,

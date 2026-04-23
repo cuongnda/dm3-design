@@ -8,12 +8,37 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/objectstore"
 )
+
+// probeMP4DurationSeconds returns the playable duration of an mp4 as seen by
+// ffprobe, in seconds. A short timeout is hard-coded because ffprobe is a
+// lightweight header read; we never want a hung probe to block a clip upload.
+func probeMP4DurationSeconds(ctx context.Context, path string) (float64, error) {
+	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(probeCtx, "ffprobe",
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		path,
+	)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		return 0, fmt.Errorf("ffprobe: %w", err)
+	}
+	s := strings.TrimSpace(out.String())
+	if s == "" || s == "N/A" {
+		return 0, fmt.Errorf("ffprobe returned empty duration")
+	}
+	return strconv.ParseFloat(s, 64)
+}
 
 // ClipExtractor records video clips from camera RTSP streams when access events fire.
 // After the AccessEventConsumer creates a placeholder event_clips row, it calls
@@ -46,12 +71,11 @@ func NewClipExtractor(database *db.DB, objStore objectstore.Store, cipher *Crede
 }
 
 // cameraRTSPInfo holds the RTSP connection details fetched from dm3_cctv.cameras.
+// Credentials, if required, are embedded directly in RTSPUrl.
 type cameraRTSPInfo struct {
-	RTSPUrl        string
-	RTSPUsername   *string
-	RTSPPasswordEnc []byte // AES-encrypted; nil when no auth
-	PreRollSec     int
-	PostRollSec    int
+	RTSPUrl     string
+	PreRollSec  int
+	PostRollSec int
 }
 
 // ExtractClip records video for the coalesced window (started_at..end_at) of
@@ -131,10 +155,7 @@ func (e *ClipExtractor) runBufferPath(
 		log.Warn("cctv: rolling buffer scan failed — falling back to live pull", "error", err)
 		return false, 0
 	}
-	// segmentMaxGap = segment duration + safety → covers a pre-roll start
-	// that falls inside a segment that began shortly before started_at.
-	const segmentMaxGap = 15 * time.Second
-	pick := segmentsForWindow(segs, startedAt, endAt, segmentMaxGap)
+	pick := segmentsForWindow(segs, startedAt, endAt)
 	if len(pick) == 0 {
 		log.Info("cctv: rolling buffer has no segment covering window — falling back to live pull",
 			"window_start", startedAt, "window_end", endAt, "total_segments", len(segs))
@@ -157,78 +178,78 @@ func (e *ClipExtractor) runBufferPath(
 		return false, 0
 	}
 
-	// Duration is the rule's (pre + post) window.
+	// Offset from the first picked segment's boundary to the window's
+	// started_at — we'll feed this to ffmpeg's output-side `-ss` so the
+	// final mp4 begins exactly at started_at rather than at segment start.
+	// Output-side seek (i.e. `-ss` placed AFTER `-i`) is frame-accurate
+	// because we re-encode; with `-c copy` it snaps to keyframes and
+	// historically dropped the event frame, which is why the previous
+	// attempt was removed.
+	leadingSlack := startedAt.Sub(pick[0].Start).Seconds()
+	if leadingSlack < 0 {
+		leadingSlack = 0
+	}
+	// Requested clip length is exactly the rule's window.
 	duration := int(endAt.Sub(startedAt).Seconds())
 	if duration < 1 {
 		duration = 1
 	}
 
-	// Two-pass concat. MediaMTX segments aren't aligned to event boundaries,
-	// so the first picked segment typically started 0-10s before started_at.
-	// Without -ss we'd pad the clip with that leading slack and push the
-	// event closer to the end — often out of frame for short (5+5) rules.
-	// So we first try with -ss (sub-second accuracy) and fall back to
-	// no-ss only when ffmpeg's concat-demuxer + copy codec combination
-	// misbehaves (a known flake → near-empty container < 50KB).
-	offset := segmentRelativeOffset(pick[0], startedAt)
+	ffmpegCtx, cancel := context.WithTimeout(ctx, time.Duration(duration*2+30)*time.Second)
+	defer cancel()
 
-	tryConcat := func(withSeek bool) (ok bool, size int64) {
-		ffmpegCtx, cancel := context.WithTimeout(ctx, time.Duration(duration*2+30)*time.Second)
-		defer cancel()
-
-		args := []string{"-f", "concat", "-safe", "0"}
-		if withSeek && offset > 0.1 {
-			// Fast seek — before -i — so ffmpeg never demuxes the leading
-			// slack. On fmp4 with 1s record parts the keyframe grid is fine
-			// enough that -c copy lands within ±1s of the target.
-			args = append(args, "-ss", fmt.Sprintf("%.3f", offset))
-		}
-		args = append(args,
-			"-i", listFile,
-			"-t", fmt.Sprintf("%d", duration),
-			"-c", "copy",
-			"-an",
-			"-movflags", "+faststart",
-			"-y", tmpFile,
-		)
-		var stderr bytes.Buffer
-		cmd := exec.CommandContext(ffmpegCtx, "ffmpeg", args...)
-		cmd.Stderr = &stderr
-
-		if err := cmd.Run(); err != nil {
-			log.Warn("cctv: rolling buffer concat ffmpeg failed",
-				"with_seek", withSeek, "error", err, "stderr", truncate(stderr.String(), 300))
-			return false, 0
-		}
-		fi, err := os.Stat(tmpFile)
-		if err != nil {
-			return false, 0
-		}
-		// 50KB sanity floor — see earlier commit. A moov-only container is
-		// ~200-500 bytes and happens when -ss lands past the last keyframe.
-		if fi.Size() < 50*1024 {
-			return false, fi.Size()
-		}
-		return true, fi.Size()
+	// Re-encode via libx264 ultrafast. MediaMTX writes each segment as a
+	// self-contained MPEG-TS (PAT/PMT/SPS/PPS included), so the concat
+	// demuxer decodes cleanly across segment boundaries. Re-encoding
+	// regenerates a single monotonic PTS stream and costs ~1-2 s CPU per
+	// 30 s clip — off the hot path.
+	//
+	// -fflags +genpts + -avoid_negative_ts handle the occasional segment
+	// whose header PTS starts slightly negative; -vsync cfr enforces a
+	// constant frame cadence so playback stays smooth even across dropped
+	// frames within a segment.
+	args := []string{
+		"-fflags", "+genpts",
+		"-f", "concat", "-safe", "0",
+		"-i", listFile,
 	}
+	// Apply output-side seek only when there is real slack to skip — lets
+	// short clips (event lands at segment boundary) emit the full segment.
+	if leadingSlack > 0.1 {
+		args = append(args, "-ss", fmt.Sprintf("%.3f", leadingSlack))
+	}
+	args = append(args,
+		"-t", fmt.Sprintf("%d", duration),
+		"-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+		"-vsync", "cfr",
+		"-avoid_negative_ts", "make_zero",
+		"-an",
+		"-movflags", "+faststart",
+		"-y", tmpFile,
+	)
+	var stderr bytes.Buffer
+	cmd := exec.CommandContext(ffmpegCtx, "ffmpeg", args...)
+	cmd.Stderr = &stderr
 
 	log.Info("cctv: rolling buffer concat starting",
-		"segments", len(pick), "offset_sec", offset, "duration_sec", duration)
+		"segments", len(pick), "leading_slack_sec", leadingSlack, "duration_sec", duration)
 
-	if ok, _ := tryConcat(true); ok {
-		return true, duration
+	if err := cmd.Run(); err != nil {
+		log.Warn("cctv: rolling buffer concat ffmpeg failed — falling back to live pull",
+			"error", err, "stderr", truncate(stderr.String(), 300))
+		return false, 0
 	}
-
-	// With-seek produced nothing usable. Retry without -ss so the clip is at
-	// least non-empty, even if it's time-shifted vs the event.
-	log.Warn("cctv: rolling buffer concat with -ss produced too small a file, retrying without seek")
-	if ok, size := tryConcat(false); ok {
-		return true, duration
-	} else {
-		log.Warn("cctv: rolling buffer concat fallback also failed — falling back to live pull",
+	fi, err := os.Stat(tmpFile)
+	if err != nil || fi.Size() < 50*1024 {
+		var size int64
+		if fi != nil {
+			size = fi.Size()
+		}
+		log.Warn("cctv: rolling buffer concat produced too small a file — falling back to live pull",
 			"size_bytes", size)
+		return false, 0
 	}
-	return false, 0
+	return true, duration
 }
 
 // runLivePullPath is the fallback extractor used when MediaMTX isn't writing
@@ -252,25 +273,8 @@ func (e *ClipExtractor) runLivePullPath(
 		return 0, fmt.Errorf("no rtsp url")
 	}
 
-	var password string
-	if len(info.RTSPPasswordEnc) > 0 {
-		if e.cipher == nil {
-			e.markClipFailed(ctx, clipID, "credential cipher not configured")
-			return 0, fmt.Errorf("cipher missing")
-		}
-		var err error
-		password, err = e.cipher.Decrypt(info.RTSPPasswordEnc)
-		if err != nil {
-			log.Error("cctv: clip extractor failed to decrypt RTSP password", "error", err)
-			e.markClipFailed(ctx, clipID, fmt.Sprintf("decrypt password: %v", err))
-			return 0, err
-		}
-	}
-	username := ""
-	if info.RTSPUsername != nil {
-		username = *info.RTSPUsername
-	}
-	authedURL := composeRTSPURLWithAuth(info.RTSPUrl, username, password)
+	// RTSP credentials, if required, are part of info.RTSPUrl already.
+	authedURL := info.RTSPUrl
 
 	// Honour the full (pre + post) duration the rule configured. Without a
 	// rolling buffer we can't actually reach into the past, but ffmpeg still
@@ -334,6 +338,22 @@ func (e *ClipExtractor) uploadAndFinalize(
 	}
 	defer f.Close()
 
+	// Probe the actual playable duration from the container header. Requested
+	// duration is what we asked ffmpeg for, not what landed — rolling-buffer
+	// gaps, truncated segments, or ffmpeg exiting early can all produce a file
+	// much shorter than the window. Trusting the requested value is how we
+	// ended up with rows that said 30 s but the player could only decode 4 s.
+	actualSec, probeErr := probeMP4DurationSeconds(ctx, tmpFile)
+	if probeErr != nil {
+		log.Warn("cctv: ffprobe failed — falling back to requested duration", "error", probeErr)
+		actualSec = float64(duration)
+	}
+	if actualSec < 1 {
+		log.Warn("cctv: extracted clip is shorter than 1 second, marking as degraded",
+			"requested_sec", duration, "actual_sec", actualSec, "file_size", fi.Size())
+		// Still upload so the operator can see what we got, but flag status.
+	}
+
 	uploadCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	if err := e.objectStore.PutObject(uploadCtx, objectKey, f, fi.Size(), "video/mp4"); err != nil {
@@ -342,24 +362,36 @@ func (e *ClipExtractor) uploadAndFinalize(
 		return err
 	}
 
-	durationMs := duration * 1000
+	// Prefer the probed value; fall back to requested only when probe fails.
+	durationMs := int(actualSec * 1000)
+	if durationMs <= 0 {
+		durationMs = duration * 1000
+	}
+	// Mark as 'degraded' if the playable length is noticeably shorter than
+	// what the rule asked for — the file will still open but the operator
+	// should know the clip is partial (rolling-buffer gap or early ffmpeg
+	// exit). Threshold: ≥ 1 s and ≥ 50 % of requested.
+	status := "finalized"
+	if actualSec < 1 || (duration > 0 && actualSec < float64(duration)*0.5) {
+		status = "degraded"
+	}
 	endedAt := time.Now()
 	updateCtx, updateCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer updateCancel()
 
 	if _, err := e.db.Pool.Exec(updateCtx,
 		`UPDATE dm3_cctv.event_clips
-		 SET object_key = $1, duration_ms = $2, ended_at = $3, status = 'finalized', updated_at = now()
-		 WHERE id = $4::uuid`,
-		objectKey, durationMs, endedAt, clipID,
+		 SET object_key = $1, duration_ms = $2, ended_at = $3, status = $4, updated_at = now()
+		 WHERE id = $5::uuid`,
+		objectKey, durationMs, endedAt, status, clipID,
 	); err != nil {
 		log.Error("cctv: clip extractor failed to update event_clips row", "error", err)
 		return err
 	}
 
 	log.Info("cctv: clip extraction complete",
-		"object_key", objectKey, "duration_sec", duration,
-		"file_size", fi.Size(), "from_rolling_buffer", fromBuffer)
+		"object_key", objectKey, "requested_sec", duration, "actual_sec", actualSec,
+		"status", status, "file_size", fi.Size(), "from_rolling_buffer", fromBuffer)
 	return nil
 }
 
@@ -370,11 +402,11 @@ func (e *ClipExtractor) fetchCameraRTSPInfo(ctx context.Context, tenantID, camer
 
 	var info cameraRTSPInfo
 	err := e.db.Pool.QueryRow(queryCtx,
-		`SELECT c.rtsp_url, c.rtsp_username, c.rtsp_password_enc, c.pre_roll_sec, c.post_roll_sec
+		`SELECT c.rtsp_url, c.pre_roll_sec, c.post_roll_sec
 		 FROM dm3_cctv.cameras c
 		 WHERE c.device_id = $1::uuid AND c.tenant_id = $2::uuid`,
 		cameraDeviceID, tenantID,
-	).Scan(&info.RTSPUrl, &info.RTSPUsername, &info.RTSPPasswordEnc, &info.PreRollSec, &info.PostRollSec)
+	).Scan(&info.RTSPUrl, &info.PreRollSec, &info.PostRollSec)
 	if err != nil {
 		return cameraRTSPInfo{}, fmt.Errorf("query camera RTSP info: %w", err)
 	}

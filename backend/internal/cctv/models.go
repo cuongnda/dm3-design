@@ -25,7 +25,6 @@ type Camera struct {
 	Model         *string          `json:"model,omitempty"`
 	Location      *string          `json:"location,omitempty"`
 	RTSPUrl       string           `json:"rtsp_url"`
-	RTSPUsername  *string          `json:"rtsp_username,omitempty"`
 	RecordingMode string           `json:"recording_mode"`
 	PreRollSec    int              `json:"pre_roll_sec"`
 	PostRollSec   int              `json:"post_roll_sec"`
@@ -36,6 +35,9 @@ type Camera struct {
 }
 
 // CameraInput is the DTO for create/update operations.
+// Credentials (if the RTSP server requires them) are embedded directly in
+// rtsp_url ("rtsp://user:pass@host/path") by the operator — we don't
+// accept them as separate fields since URL shapes vary per camera brand.
 type CameraInput struct {
 	Name          string           `json:"name"`
 	AccessPointID *string          `json:"access_point_id"`
@@ -43,8 +45,6 @@ type CameraInput struct {
 	Model         *string          `json:"model"`
 	Location      *string          `json:"location"`
 	RTSPUrl       string           `json:"rtsp_url"`
-	RTSPUsername  *string          `json:"rtsp_username"`
-	RTSPPassword  *string          `json:"rtsp_password"`
 	PreRollSec    *int             `json:"pre_roll_sec"`
 	PostRollSec   *int             `json:"post_roll_sec"`
 	RecordingMode *string          `json:"recording_mode"`

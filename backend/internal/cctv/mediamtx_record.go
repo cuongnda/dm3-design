@@ -38,9 +38,16 @@ func pathRecordDefaults(ctx context.Context, database *db.DB, tenantID string) P
 	// %path = camera UUID (we set path name = device UUID in UpsertPath); %f =
 	// microseconds. The filename encodes segment start time so the extractor
 	// can window-filter without opening each file.
+	//
+	// RecordFormat=mpegts: each segment is a self-contained MPEG-TS file with
+	// its own PAT/PMT/SPS/PPS. Previously we used fmp4 "fragment" mode, which
+	// writes mdat-only chunks that depend on an init.mp4 for codec params —
+	// ffmpeg would see `pix_fmt=unknown` and refuse to re-encode for concat.
+	// TS has no such coupling, concatenates cleanly, and players decode every
+	// segment standalone.
 	return PathConfig{
 		Record:                true,
-		RecordFormat:          "fmp4",
+		RecordFormat:          "mpegts",
 		RecordPath:            "/recordings/%path/%Y-%m-%d_%H-%M-%S-%f",
 		RecordSegmentDuration: "10s",
 		RecordDeleteAfter:     fmt.Sprintf("%ds", rollingSec+60),
