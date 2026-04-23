@@ -263,9 +263,10 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 	//     controllers publish like this.
 	//   - native UUID: cctv-svc's tungson face handler publishes evt.Src as the
 	//     camera's UUID.
-	// access_point_devices.access_device_id references access_devices.id (NOT
-	// devices.id), so we join through access_devices → devices. The WHERE
-	// clause accepts either the short code or the physical device UUID.
+	// access_point_devices.access_device_id stores dm3_devices.devices.id
+	// (uuid as text) per the repo-wide convention — the UI and sync paths
+	// all write/read it that way. Join devices directly and accept either
+	// the short code or the physical device UUID in the WHERE.
 	var accessPointID *string
 	var deviceUUID string
 	if deviceID != "" {
@@ -274,8 +275,7 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 			`SELECT ap.id::text, d.id::text
 			   FROM dm3_access.access_points ap
 			   JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
-			   JOIN dm3_access.access_devices ad ON ad.id::text = apd.access_device_id
-			   JOIN dm3_devices.devices d ON d.id = ad.device_id
+			   JOIN dm3_devices.devices d ON d.id::text = apd.access_device_id
 			  WHERE (d.device_id = $1 OR d.id::text = $1) AND ap.tenant_id = $2::uuid
 			  LIMIT 1`,
 			deviceID, tenantID,
@@ -285,9 +285,8 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 			slog.Error("nats: failed to resolve access_point_id", "error", err, "device_id", deviceID, "tenant_id", tenantID)
 		}
 		// Fallback: device may exist in dm3_devices but not yet be linked to
-		// an access_point (freshly-provisioned), OR the face camera is bound
-		// via access_devices + access_point_devices but the JOIN above only
-		// matches the specific binding we happen to have.
+		// an access_point (freshly-provisioned). We still want the UUID so
+		// media-key validation passes.
 		if deviceUUID == "" {
 			fbCtx, fbCancel := context.WithTimeout(ctx, 2*time.Second)
 			err := c.db.Pool.QueryRow(fbCtx,
