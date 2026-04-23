@@ -967,10 +967,24 @@ func (h *AccessHandlers) GetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Door counts reflect real-time status from dm3_devices.devices (the gateway
+	// updates that table, not dm3_access.access_devices). Join by access_devices.device_id.
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesTotal)
-	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='online' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesOnline)
-	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='offline' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesOffline)
-	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_devices WHERE status='warning' AND tenant_id = $1::uuid`, cid).Scan(&stats.AccessDevicesWarning)
+	_ = h.db.Pool.QueryRow(r.Context(), `
+		SELECT COUNT(*)
+		  FROM dm3_access.access_devices ad
+		  JOIN dm3_devices.devices d ON d.id = ad.device_id AND d.tenant_id = ad.tenant_id
+		 WHERE ad.tenant_id = $1::uuid AND d.status = 'online'`, cid).Scan(&stats.AccessDevicesOnline)
+	_ = h.db.Pool.QueryRow(r.Context(), `
+		SELECT COUNT(*)
+		  FROM dm3_access.access_devices ad
+		  LEFT JOIN dm3_devices.devices d ON d.id = ad.device_id AND d.tenant_id = ad.tenant_id
+		 WHERE ad.tenant_id = $1::uuid AND (d.status = 'offline' OR d.status IS NULL)`, cid).Scan(&stats.AccessDevicesOffline)
+	_ = h.db.Pool.QueryRow(r.Context(), `
+		SELECT COUNT(*)
+		  FROM dm3_access.access_devices ad
+		  JOIN dm3_devices.devices d ON d.id = ad.device_id AND d.tenant_id = ad.tenant_id
+		 WHERE ad.tenant_id = $1::uuid AND d.status = 'warning'`, cid).Scan(&stats.AccessDevicesWarning)
 
 	now := time.Now()
 	today := now.Truncate(24 * time.Hour)
@@ -980,10 +994,11 @@ func (h *AccessHandlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_access.access_events WHERE time >= $1 AND decision='denied' AND tenant_id = $2::uuid`, today, cid).Scan(&stats.DeniedToday)
 
 	// On-site count: today's ingress minus egress, granted only.
+	// Accept both 'in'/'out' and 'entry'/'exit' — devices and simulators emit different vocabularies.
 	_ = h.db.Pool.QueryRow(r.Context(), `
 		SELECT
-			COUNT(*) FILTER (WHERE direction = 'in')
-			- COUNT(*) FILTER (WHERE direction = 'out')
+			COUNT(*) FILTER (WHERE direction IN ('in', 'entry'))
+			- COUNT(*) FILTER (WHERE direction IN ('out', 'exit'))
 		FROM dm3_access.access_events
 		WHERE time >= $1 AND decision = 'granted' AND tenant_id = $2::uuid`,
 		today, cid).Scan(&stats.OnSiteCount)

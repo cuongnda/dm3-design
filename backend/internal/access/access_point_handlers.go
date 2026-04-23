@@ -335,11 +335,23 @@ func (h *AccessHandlers) ListAccessPointDevices(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// access_device_id is a TEXT column with two coexisting writer conventions:
+	// it may store either dm3_access.access_devices.id OR dm3_devices.devices.id.
+	// Resolve both via LEFT JOINs so the UI always gets a device name, not a UUID.
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT apd.id, apd.tenant_id, apd.access_point_id, apd.access_device_id, apd.role, apd.created_at
-		 FROM dm3_access.access_point_devices apd
-		 WHERE apd.access_point_id = $1::uuid
-		 ORDER BY apd.created_at DESC`,
+		`SELECT apd.id, apd.tenant_id, apd.access_point_id, apd.access_device_id, apd.role, apd.created_at,
+		        COALESCE(ad.id::text, d.id::text, '')        AS dev_id,
+		        COALESCE(ad.name, d.name, d.device_id, '')    AS dev_name,
+		        COALESCE(ad.type, d.type, '')                 AS dev_type,
+		        COALESCE(d.status, ad.status, '')             AS dev_status
+		   FROM dm3_access.access_point_devices apd
+		   LEFT JOIN dm3_access.access_devices ad
+		        ON ad.id::text = apd.access_device_id AND ad.tenant_id = apd.tenant_id
+		   LEFT JOIN dm3_devices.devices d
+		        ON (d.id::text = apd.access_device_id OR d.id = ad.device_id)
+		       AND d.tenant_id = apd.tenant_id
+		  WHERE apd.access_point_id = $1::uuid
+		  ORDER BY apd.created_at DESC`,
 		apID,
 	)
 	if err != nil {
@@ -351,13 +363,25 @@ func (h *AccessHandlers) ListAccessPointDevices(w http.ResponseWriter, r *http.R
 
 	result := []models.AccessPointDevice{}
 	for rows.Next() {
-		var item models.AccessPointDevice
+		var (
+			item                                   models.AccessPointDevice
+			devID, devName, devType, devStatus string
+		)
 		if err := rows.Scan(
 			&item.ID, &item.TenantID, &item.AccessPointID, &item.AccessDeviceID, &item.Role, &item.CreatedAt,
+			&devID, &devName, &devType, &devStatus,
 		); err != nil {
 			slog.Error("list access point devices scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
+		}
+		if devID != "" {
+			item.Device = &models.AccessDevice{
+				ID:     devID,
+				Name:   devName,
+				Type:   devType,
+				Status: devStatus,
+			}
 		}
 		result = append(result, item)
 	}
