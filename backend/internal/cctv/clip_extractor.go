@@ -8,12 +8,37 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/objectstore"
 )
+
+// probeMP4DurationSeconds returns the playable duration of an mp4 as seen by
+// ffprobe, in seconds. A short timeout is hard-coded because ffprobe is a
+// lightweight header read; we never want a hung probe to block a clip upload.
+func probeMP4DurationSeconds(ctx context.Context, path string) (float64, error) {
+	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(probeCtx, "ffprobe",
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		path,
+	)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		return 0, fmt.Errorf("ffprobe: %w", err)
+	}
+	s := strings.TrimSpace(out.String())
+	if s == "" || s == "N/A" {
+		return 0, fmt.Errorf("ffprobe returned empty duration")
+	}
+	return strconv.ParseFloat(s, 64)
+}
 
 // ClipExtractor records video clips from camera RTSP streams when access events fire.
 // After the AccessEventConsumer creates a placeholder event_clips row, it calls
@@ -317,6 +342,22 @@ func (e *ClipExtractor) uploadAndFinalize(
 	}
 	defer f.Close()
 
+	// Probe the actual playable duration from the container header. Requested
+	// duration is what we asked ffmpeg for, not what landed — rolling-buffer
+	// gaps, truncated segments, or ffmpeg exiting early can all produce a file
+	// much shorter than the window. Trusting the requested value is how we
+	// ended up with rows that said 30 s but the player could only decode 4 s.
+	actualSec, probeErr := probeMP4DurationSeconds(ctx, tmpFile)
+	if probeErr != nil {
+		log.Warn("cctv: ffprobe failed — falling back to requested duration", "error", probeErr)
+		actualSec = float64(duration)
+	}
+	if actualSec < 1 {
+		log.Warn("cctv: extracted clip is shorter than 1 second, marking as degraded",
+			"requested_sec", duration, "actual_sec", actualSec, "file_size", fi.Size())
+		// Still upload so the operator can see what we got, but flag status.
+	}
+
 	uploadCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	if err := e.objectStore.PutObject(uploadCtx, objectKey, f, fi.Size(), "video/mp4"); err != nil {
@@ -325,24 +366,36 @@ func (e *ClipExtractor) uploadAndFinalize(
 		return err
 	}
 
-	durationMs := duration * 1000
+	// Prefer the probed value; fall back to requested only when probe fails.
+	durationMs := int(actualSec * 1000)
+	if durationMs <= 0 {
+		durationMs = duration * 1000
+	}
+	// Mark as 'degraded' if the playable length is noticeably shorter than
+	// what the rule asked for — the file will still open but the operator
+	// should know the clip is partial (rolling-buffer gap or early ffmpeg
+	// exit). Threshold: ≥ 1 s and ≥ 50 % of requested.
+	status := "finalized"
+	if actualSec < 1 || (duration > 0 && actualSec < float64(duration)*0.5) {
+		status = "degraded"
+	}
 	endedAt := time.Now()
 	updateCtx, updateCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer updateCancel()
 
 	if _, err := e.db.Pool.Exec(updateCtx,
 		`UPDATE dm3_cctv.event_clips
-		 SET object_key = $1, duration_ms = $2, ended_at = $3, status = 'finalized', updated_at = now()
-		 WHERE id = $4::uuid`,
-		objectKey, durationMs, endedAt, clipID,
+		 SET object_key = $1, duration_ms = $2, ended_at = $3, status = $4, updated_at = now()
+		 WHERE id = $5::uuid`,
+		objectKey, durationMs, endedAt, status, clipID,
 	); err != nil {
 		log.Error("cctv: clip extractor failed to update event_clips row", "error", err)
 		return err
 	}
 
 	log.Info("cctv: clip extraction complete",
-		"object_key", objectKey, "duration_sec", duration,
-		"file_size", fi.Size(), "from_rolling_buffer", fromBuffer)
+		"object_key", objectKey, "requested_sec", duration, "actual_sec", actualSec,
+		"status", status, "file_size", fi.Size(), "from_rolling_buffer", fromBuffer)
 	return nil
 }
 
