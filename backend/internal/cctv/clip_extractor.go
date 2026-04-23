@@ -208,44 +208,71 @@ func (e *ClipExtractor) runBufferPath(
 	// whose header PTS starts slightly negative; -vsync cfr enforces a
 	// constant frame cadence so playback stays smooth even across dropped
 	// frames within a segment.
-	args := []string{
-		"-fflags", "+genpts",
-		"-f", "concat", "-safe", "0",
-		"-i", listFile,
+	// Two-pass concat. With `-ss leadingSlack` we snip the pre-event slack
+	// from the first segment so the clip starts at exactly started_at; but
+	// when the first segment is shorter than leadingSlack (common on cams
+	// whose RTSP drops / reconnects and leaves stubby segments), the -ss
+	// seek lands past the segment's content and the output is near-empty.
+	// Before giving up and going to live pull — which is slow on those same
+	// unreliable cams — retry the concat WITHOUT -ss. Operator gets the
+	// full picked range as the clip; event still lands inside it because
+	// segmentsForWindow already guaranteed the segment containing started_at
+	// is in `pick`.
+	runConcat := func(withSeek bool) (bool, int64) {
+		args := []string{
+			"-fflags", "+genpts",
+			"-f", "concat", "-safe", "0",
+			"-i", listFile,
+		}
+		if withSeek && leadingSlack > 0.1 {
+			args = append(args, "-ss", fmt.Sprintf("%.3f", leadingSlack))
+		}
+		// When dropping -ss the clip keeps the segment's own leading content,
+		// so extend -t to cover the full range from the first segment's start
+		// through end_at (otherwise the output would be truncated before the
+		// event itself).
+		effDuration := duration
+		if !withSeek {
+			if d := int(endAt.Sub(pick[0].Start).Seconds()); d > effDuration {
+				effDuration = d
+			}
+		}
+		args = append(args,
+			"-t", fmt.Sprintf("%d", effDuration),
+			"-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+			"-vsync", "cfr",
+			"-avoid_negative_ts", "make_zero",
+			"-an",
+			"-movflags", "+faststart",
+			"-y", tmpFile,
+		)
+		var stderr bytes.Buffer
+		cmd := exec.CommandContext(ffmpegCtx, "ffmpeg", args...)
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			log.Warn("cctv: rolling buffer concat ffmpeg failed",
+				"with_seek", withSeek, "error", err, "stderr", truncate(stderr.String(), 300))
+			return false, 0
+		}
+		fi, err := os.Stat(tmpFile)
+		if err != nil {
+			return false, 0
+		}
+		return true, fi.Size()
 	}
-	// Apply output-side seek only when there is real slack to skip — lets
-	// short clips (event lands at segment boundary) emit the full segment.
-	if leadingSlack > 0.1 {
-		args = append(args, "-ss", fmt.Sprintf("%.3f", leadingSlack))
-	}
-	args = append(args,
-		"-t", fmt.Sprintf("%d", duration),
-		"-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-		"-vsync", "cfr",
-		"-avoid_negative_ts", "make_zero",
-		"-an",
-		"-movflags", "+faststart",
-		"-y", tmpFile,
-	)
-	var stderr bytes.Buffer
-	cmd := exec.CommandContext(ffmpegCtx, "ffmpeg", args...)
-	cmd.Stderr = &stderr
 
 	log.Info("cctv: rolling buffer concat starting",
 		"segments", len(pick), "leading_slack_sec", leadingSlack, "duration_sec", duration)
 
-	if err := cmd.Run(); err != nil {
-		log.Warn("cctv: rolling buffer concat ffmpeg failed — falling back to live pull",
-			"error", err, "stderr", truncate(stderr.String(), 300))
-		return false, 0
+	// First pass: with -ss for a clip that starts at started_at.
+	ok, size := runConcat(true)
+	if !ok || size < 50*1024 {
+		log.Warn("cctv: rolling buffer -ss pass too small, retrying without seek",
+			"size_bytes", size)
+		ok, size = runConcat(false)
 	}
-	fi, err := os.Stat(tmpFile)
-	if err != nil || fi.Size() < 50*1024 {
-		var size int64
-		if fi != nil {
-			size = fi.Size()
-		}
-		log.Warn("cctv: rolling buffer concat produced too small a file — falling back to live pull",
+	if !ok || size < 50*1024 {
+		log.Warn("cctv: rolling buffer concat still too small — falling back to live pull",
 			"size_bytes", size)
 		return false, 0
 	}
