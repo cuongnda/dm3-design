@@ -157,7 +157,13 @@ func (e *ClipExtractor) runBufferPath(
 		return false, 0
 	}
 
-	offset := segmentRelativeOffset(pick[0], startedAt)
+	// Duration from started_at to end_at is the rule's (pre + post) window.
+	// We intentionally DON'T pass -ss to trim the segment-boundary slack at
+	// the head: -ss + concat demuxer + -c copy is flaky (with copy codec
+	// ffmpeg can't seek past non-keyframes and often emits a near-empty
+	// container). Accept up to one extra segment-duration's worth of footage
+	// at the start — still well inside the spirit of "pre-roll" — and keep
+	// the concat boringly reliable.
 	duration := int(endAt.Sub(startedAt).Seconds())
 	if duration < 1 {
 		duration = 1
@@ -166,29 +172,21 @@ func (e *ClipExtractor) runBufferPath(
 	ffmpegCtx, cancel := context.WithTimeout(ctx, time.Duration(duration*2+30)*time.Second)
 	defer cancel()
 
-	// -ss before -i on the concat demuxer still fast-seeks on the first input
-	// (ffmpeg treats the list as a single virtual file). -c copy keeps this
-	// nearly-instant — no re-encode.
 	args := []string{
 		"-f", "concat", "-safe", "0",
-	}
-	if offset > 0.1 {
-		args = append(args, "-ss", fmt.Sprintf("%.3f", offset))
-	}
-	args = append(args,
 		"-i", listFile,
 		"-t", fmt.Sprintf("%d", duration),
 		"-c", "copy",
 		"-an",
 		"-movflags", "+faststart",
 		"-y", tmpFile,
-	)
+	}
 	var stderr bytes.Buffer
 	cmd := exec.CommandContext(ffmpegCtx, "ffmpeg", args...)
 	cmd.Stderr = &stderr
 
 	log.Info("cctv: rolling buffer concat starting",
-		"segments", len(pick), "offset_sec", offset, "duration_sec", duration)
+		"segments", len(pick), "duration_sec", duration)
 
 	if err := cmd.Run(); err != nil {
 		log.Warn("cctv: rolling buffer concat failed — falling back to live pull",
@@ -196,8 +194,18 @@ func (e *ClipExtractor) runBufferPath(
 		return false, 0
 	}
 
-	if fi, err := os.Stat(tmpFile); err != nil || fi.Size() == 0 {
-		log.Warn("cctv: rolling buffer concat produced empty file — falling back")
+	// 50KB sanity floor: an fMP4 container with no usable payload is ~200–500
+	// bytes (moov box only). Anything smaller than the equivalent of ~0.1s of
+	// video probably means ffmpeg succeeded structurally but produced an
+	// empty file — fall back to live pull so the operator gets *something*.
+	fi, err := os.Stat(tmpFile)
+	if err != nil || fi.Size() < 50*1024 {
+		size := int64(-1)
+		if fi != nil {
+			size = fi.Size()
+		}
+		log.Warn("cctv: rolling buffer concat produced suspiciously small file — falling back",
+			"size_bytes", size)
 		return false, 0
 	}
 
