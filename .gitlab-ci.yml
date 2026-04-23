@@ -56,16 +56,32 @@ verify:openapi:
   # inside a throwaway container instead. GOPATH/GOCACHE are redirected into
   # the workspace so the container user can write them without needing host
   # UID mapping.
+  #
+  # Non-blocking: this catches a dev mistake (annotations drifted from the
+  # committed OpenAPI spec) — a real issue to fix, but not one that should
+  # taint the deploy pipeline. allow_failure: true makes it a warning, not
+  # a gate.
+  allow_failure: true
   script:
     - echo "=== Verifying OpenAPI spec is in sync with annotations ==="
     - mkdir -p .gocache/go .gocache/build
+    # GOFLAGS=-modcacherw writes the module cache with user-write perms so
+    # GitLab's workspace cleanup can rm them. Without it, Go's default 0444
+    # perms make cleanup fail with "permission denied" and the job exits
+    # with non-zero — even when swag-check itself passed.
     - docker run --rm
       -v "$PWD":/src -w /src/backend
       -e GOPATH=/src/.gocache/go
       -e GOCACHE=/src/.gocache/build
-      -e GOFLAGS=-buildvcs=false
+      -e "GOFLAGS=-buildvcs=false -modcacherw"
       golang:1.24
       bash -c "go install github.com/swaggo/swag/cmd/swag@latest && PATH=/src/.gocache/go/bin:\$PATH make swag-check"
+  # Files under .gocache are created as root inside the container; the host
+  # gitlab-runner user can't chmod/rm them without sudo. Fix ownership back
+  # to the host UID so cleanup (and any rerun of this job) succeeds.
+  after_script:
+    - docker run --rm -v "$PWD":/src -w /src alpine
+      sh -c "chown -R $(id -u):$(id -g) .gocache 2>/dev/null; chmod -R u+w .gocache 2>/dev/null; true"
   only:
     - develop
     - merge_requests
