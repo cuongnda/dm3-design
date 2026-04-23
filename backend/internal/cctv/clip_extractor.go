@@ -156,10 +156,7 @@ func (e *ClipExtractor) runBufferPath(
 		log.Warn("cctv: rolling buffer scan failed — falling back to live pull", "error", err)
 		return false, 0
 	}
-	// segmentMaxGap = segment duration + safety → covers a pre-roll start
-	// that falls inside a segment that began shortly before started_at.
-	const segmentMaxGap = 15 * time.Second
-	pick := segmentsForWindow(segs, startedAt, endAt, segmentMaxGap)
+	pick := segmentsForWindow(segs, startedAt, endAt)
 	if len(pick) == 0 {
 		log.Info("cctv: rolling buffer has no segment covering window — falling back to live pull",
 			"window_start", startedAt, "window_end", endAt, "total_segments", len(segs))

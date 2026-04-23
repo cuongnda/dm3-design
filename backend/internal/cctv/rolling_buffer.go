@@ -95,28 +95,54 @@ func parseSegmentStart(name string) (time.Time, bool) {
 }
 
 // segmentsForWindow picks the subset of `all` that overlaps [from, to].
-// A segment with start time S overlaps when S < to AND (S + maxSegmentGap) > from.
-// We don't know each segment's real duration without probing the file, so
-// maxSegmentGap is a safety margin (= typical segment duration + 1s) used only
-// for the lower-bound check; the upper bound is exact because later segments
-// are pruned.
-func segmentsForWindow(all []segment, from, to time.Time, maxSegmentGap time.Duration) []segment {
+// `all` must be sorted ascending by Start.
+//
+// Algorithm: the segment whose Start is the latest value ≤ from is guaranteed
+// to be the one that *contains* (or leads into) the window's first frame —
+// its content runs until the next segment's Start regardless of its own
+// duration. From that segment, include every subsequent one whose Start is
+// strictly before `to`.
+//
+// The previous implementation used a fixed `maxSegmentGap = 15s` lower-bound
+// heuristic that silently dropped the immediate-before segment whenever
+// MediaMTX wrote a longer-than-15s segment — exactly the case where the
+// event time ended up in a segment that started >15s earlier, producing
+// clips that skipped the event frames.
+func segmentsForWindow(all []segment, from, to time.Time) []segment {
 	if len(all) == 0 || !to.After(from) {
 		return nil
 	}
-	// lower bound = from - maxSegmentGap so the segment that started shortly
-	// before `from` still gets included (it covers the first pre-roll frames).
-	lower := from.Add(-maxSegmentGap)
+
+	// Walk forward to find the latest segment whose Start ≤ from. If every
+	// segment starts after `from` (e.g. fresh MediaMTX, no history), fall
+	// back to the first segment that overlaps the window.
+	firstIdx := -1
+	for i, s := range all {
+		if s.Start.After(from) {
+			break
+		}
+		firstIdx = i
+	}
+	if firstIdx < 0 {
+		// No segment started at/before `from`. Start from the first segment
+		// whose Start is before `to` (i.e. overlaps the window's tail).
+		for i, s := range all {
+			if s.Start.Before(to) {
+				firstIdx = i
+				break
+			}
+		}
+	}
+	if firstIdx < 0 {
+		return nil
+	}
 
 	out := make([]segment, 0, 8)
-	for _, s := range all {
-		if s.Start.After(to) {
-			break // sorted ascending — no later segment matters
+	for i := firstIdx; i < len(all); i++ {
+		if !all[i].Start.Before(to) {
+			break
 		}
-		if s.Start.Before(lower) {
-			continue
-		}
-		out = append(out, s)
+		out = append(out, all[i])
 	}
 	return out
 }
