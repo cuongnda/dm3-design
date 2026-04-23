@@ -23,13 +23,12 @@ x-object-store-env: &object-store-env
   OBJECT_STORE_BUCKET: ${OBJECT_STORE_BUCKET:-dm3}
   OBJECT_STORE_USE_SSL: "false"
   OBJECT_STORE_AUTO_CREATE_BUCKET: "true"
-  # Default is empty so the first deploy after this change is a no-op —
-  # services fall back to signing against the internal minio:9000, same as
-  # before. Flip the public endpoint on in /home/gitlab-runner/.env.dm3
-  # once DNS for dm3-s3.* is live and the TLS cert has been issued:
-  #   OBJECT_STORE_PUBLIC_ENDPOINT=dm3-s3.demasterpro.com
-  #   OBJECT_STORE_PUBLIC_USE_SSL=true
-  OBJECT_STORE_PUBLIC_ENDPOINT: ${OBJECT_STORE_PUBLIC_ENDPOINT:-}
+  # Public host routes through Cloudflare → origin nginx → minio:9000.
+  # USE_SSL=false because Cloudflare terminates TLS at the edge and talks
+  # HTTP to origin; presigned URLs ride the same http→https 301 the rest
+  # of the prod stack uses. Override via GitLab CI/CD variables if either
+  # value ever needs to differ per environment.
+  OBJECT_STORE_PUBLIC_ENDPOINT: ${OBJECT_STORE_PUBLIC_ENDPOINT:-dm3-s3.demasterpro.com}
   OBJECT_STORE_PUBLIC_USE_SSL: ${OBJECT_STORE_PUBLIC_USE_SSL:-false}
 
 services:
