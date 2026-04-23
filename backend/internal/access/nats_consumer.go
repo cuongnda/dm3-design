@@ -257,23 +257,27 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 		deviceID = parts[3]
 	}
 
-	// Resolve access_point_id AND the device UUID from the literal device_id.
-	// apd.access_device_id is a text column storing dm3_devices.devices.id
-	// (uuid as text), so we must translate the literal device_id ("840107")
-	// to its uuid via devices. The UUID is also needed for the media-key
-	// prefix check below: the media-url endpoint issues keys scoped by the
-	// JWT `did` (UUID), but evt.Src carries the short device_id, so the two
-	// never match without this lookup.
+	// Resolve access_point_id AND the device UUID. Two shapes arrive here:
+	//   - firmware-style: deviceID is the short code in dm3_devices.devices.device_id
+	//     (e.g. "840107", "45010001491"). Classic access terminals / door
+	//     controllers publish like this.
+	//   - native UUID: cctv-svc's tungson face handler publishes evt.Src as the
+	//     camera's UUID.
+	// access_point_devices.access_device_id references access_devices.id (NOT
+	// devices.id), so we join through access_devices → devices. The WHERE
+	// clause accepts either the short code or the physical device UUID.
 	var accessPointID *string
 	var deviceUUID string
 	if deviceID != "" {
 		lookupCtx, lookupCancel := context.WithTimeout(ctx, 2*time.Second)
 		err := c.db.Pool.QueryRow(lookupCtx,
-			`SELECT ap.id::text, d.id::text FROM dm3_access.access_points ap
-			 JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
-			 JOIN dm3_devices.devices d ON d.id::text = apd.access_device_id
-			 WHERE d.device_id = $1 AND ap.tenant_id = $2::uuid
-			 LIMIT 1`,
+			`SELECT ap.id::text, d.id::text
+			   FROM dm3_access.access_points ap
+			   JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
+			   JOIN dm3_access.access_devices ad ON ad.id::text = apd.access_device_id
+			   JOIN dm3_devices.devices d ON d.id = ad.device_id
+			  WHERE (d.device_id = $1 OR d.id::text = $1) AND ap.tenant_id = $2::uuid
+			  LIMIT 1`,
 			deviceID, tenantID,
 		).Scan(&accessPointID, &deviceUUID)
 		lookupCancel()
@@ -281,14 +285,14 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 			slog.Error("nats: failed to resolve access_point_id", "error", err, "device_id", deviceID, "tenant_id", tenantID)
 		}
 		// Fallback: device may exist in dm3_devices but not yet be linked to
-		// an access_point. We still want the UUID so media-key validation
-		// passes on a freshly-provisioned device whose access-point wiring
-		// is pending.
+		// an access_point (freshly-provisioned), OR the face camera is bound
+		// via access_devices + access_point_devices but the JOIN above only
+		// matches the specific binding we happen to have.
 		if deviceUUID == "" {
 			fbCtx, fbCancel := context.WithTimeout(ctx, 2*time.Second)
 			err := c.db.Pool.QueryRow(fbCtx,
 				`SELECT id::text FROM dm3_devices.devices
-				 WHERE device_id = $1 AND tenant_id = $2::uuid
+				 WHERE (device_id = $1 OR id::text = $1) AND tenant_id = $2::uuid
 				 LIMIT 1`,
 				deviceID, tenantID,
 			).Scan(&deviceUUID)

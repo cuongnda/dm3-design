@@ -450,16 +450,37 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Resolve PersonID (DC_{user_code}) back to user UUID
+	// Resolve PersonID (DC_{user_code}) back to user UUID + display fields
+	// so downstream consumers (monitoring page, access log) don't have to
+	// second-guess camera payloads. Leave userUUID as the raw PersonID only
+	// as a last-ditch fallback — that way the event still carries *some*
+	// identity even when the operator hasn't fully finished the enrolment.
 	userCode := strings.TrimPrefix(result.PersonID, "DC_")
-	var userUUID string
+	var (
+		userUUID   string
+		userName   string
+		deptName   string
+	)
 	_ = h.db.Pool.QueryRow(ctx,
-		`SELECT id::text FROM dm3_identity.users WHERE user_code = $1 AND tenant_id = $2::uuid`,
+		`SELECT u.id::text,
+		        TRIM(CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,''))),
+		        COALESCE(d.name,'')
+		   FROM dm3_identity.users u
+		   LEFT JOIN dm3_identity.departments d ON d.id = u.department_id
+		  WHERE u.user_code = $1 AND u.tenant_id = $2::uuid`,
 		userCode, tenantID,
-	).Scan(&userUUID)
+	).Scan(&userUUID, &userName, &deptName)
 	if userUUID == "" {
-		userUUID = result.PersonID // fallback to raw PersonID
+		userUUID = result.PersonID
 	}
+
+	// Camera display name keeps realtime events human-readable on the
+	// monitoring page; pulled once per event, cheap.
+	var cameraName string
+	_ = h.db.Pool.QueryRow(ctx,
+		`SELECT name FROM dm3_devices.devices WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+		deviceUUID, tenantID,
+	).Scan(&cameraName)
 
 	// Upload snapshot to MinIO — use the largest available image.
 	// Camera may send 1 image (face crop) or 2 (face crop + full frame).
@@ -507,8 +528,19 @@ func (h *TungSonHandlers) HandleFaceRecognition(w http.ResponseWriter, r *http.R
 			"decision":        "granted",
 			"decided_locally": true,
 			"user_id":         userUUID,
+			"user_name":       userName,
+			"user_code":       userCode,
+			"department":      deptName,
+			"device_name":     cameraName,
 			"confidence":      similarity,
-			"credentials":     []map[string]string{{"type": "face", "value": userUUID}},
+			// card_id carries the ORIGINAL identifier the camera sent us
+			// (DC_<user_code>). Keeping it lets the monitoring UI show the
+			// physical "badge" the camera matched against, while user_id /
+			// user_name carry the resolved identity. credentials mirrors it
+			// with the face type so downstream "credential shown" UIs work.
+			"card_id":         result.PersonID,
+			"credentials":     []map[string]string{{"type": "face", "value": result.PersonID}},
+			"reason":          fmt.Sprintf("Face match · similarity %.0f%%", similarity*100),
 			"photo":           photoRef,
 		},
 	})
@@ -554,6 +586,14 @@ func (h *TungSonHandlers) HandleUnknownFace(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Camera display name for the realtime row — same pattern as
+	// HandleFaceRecognition.
+	var cameraName string
+	_ = h.db.Pool.QueryRow(ctx,
+		`SELECT name FROM dm3_devices.devices WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+		deviceUUID, tenantID,
+	).Scan(&cameraName)
+
 	// Upload snapshot — use largest available image
 	var photoRef string
 	if h.objectStore != nil && face.SubImageList != nil && len(face.SubImageList.SubImageInfoObject) > 0 {
@@ -592,7 +632,12 @@ func (h *TungSonHandlers) HandleUnknownFace(w http.ResponseWriter, r *http.Reque
 			"direction":       "entry",
 			"decision":        "denied",
 			"decided_locally": true,
-			"reason":          "unknown_face",
+			"device_name":     cameraName,
+			// Human-readable reason for the Detail column on the monitoring
+			// page — "unknown_face" as a token also kept for anyone pattern-
+			// matching on it.
+			"reason":          "Unknown face",
+			"reason_code":     "unknown_face",
 			"confidence":      0,
 			"photo":           photoRef,
 		},
