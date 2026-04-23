@@ -263,9 +263,17 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 	//     controllers publish like this.
 	//   - native UUID: cctv-svc's tungson face handler publishes evt.Src as the
 	//     camera's UUID.
-	// access_point_devices.access_device_id references access_devices.id (NOT
-	// devices.id), so we join through access_devices → devices. The WHERE
-	// clause accepts either the short code or the physical device UUID.
+	//
+	// apd.access_device_id is a TEXT column with no FK and two historical
+	// writers:
+	//   (A) gateway/handlers.go:applyDeviceAccessPointBinding (terminals via
+	//       EditDevicePage) and seed data store dm3_devices.devices.id directly.
+	//   (B) cctv/camera_handlers.go and access/parking_barrier_consumer.go
+	//       store dm3_access.access_devices.id (which in turn references
+	//       devices.id via ad.device_id).
+	// We support both: LEFT JOIN on access_devices (optional indirect path),
+	// then JOIN dm3_devices.devices with an OR that matches either convention.
+	// The WHERE accepts either the short device_id or the UUID.
 	var accessPointID *string
 	var deviceUUID string
 	if deviceID != "" {
@@ -274,8 +282,11 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 			`SELECT ap.id::text, d.id::text
 			   FROM dm3_access.access_points ap
 			   JOIN dm3_access.access_point_devices apd ON apd.access_point_id = ap.id
-			   JOIN dm3_access.access_devices ad ON ad.id::text = apd.access_device_id
-			   JOIN dm3_devices.devices d ON d.id = ad.device_id
+			   LEFT JOIN dm3_access.access_devices ad
+			        ON ad.id::text = apd.access_device_id AND ad.tenant_id = apd.tenant_id
+			   JOIN dm3_devices.devices d
+			        ON (d.id::text = apd.access_device_id OR d.id = ad.device_id)
+			       AND d.tenant_id = apd.tenant_id
 			  WHERE (d.device_id = $1 OR d.id::text = $1) AND ap.tenant_id = $2::uuid
 			  LIMIT 1`,
 			deviceID, tenantID,
@@ -401,13 +412,15 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 		return err
 	}
 
-	// Update access device's last_event_at using the actual device ID (from subject/src),
-	// not ald.DoorID which is the door/access-point identifier.
-	if deviceUUID := toUUIDPtr(deviceID); deviceUUID != nil {
+	// Update access device's last_event_at. Use the resolved devices.id UUID
+	// (from the access-point lookup above), not ald.DoorID (which is the
+	// door/access-point identifier). Note access_devices.device_id references
+	// dm3_devices.devices.id, so we match by that — not by access_devices.id.
+	if deviceUUID != "" {
 		updateCtx, updateCancel := context.WithTimeout(ctx, 5*time.Second)
 		if _, err := c.db.Pool.Exec(updateCtx,
-			`UPDATE dm3_access.access_devices SET last_event_at = $1 WHERE id = $2::uuid`, evtTime, *deviceUUID); err != nil {
-			slog.Warn("nats: failed to update access device last_event_at", "error", err, "device", *deviceUUID)
+			`UPDATE dm3_access.access_devices SET last_event_at = $1 WHERE device_id = $2::uuid AND tenant_id = $3::uuid`, evtTime, deviceUUID, tenantID); err != nil {
+			slog.Warn("nats: failed to update access device last_event_at", "error", err, "device", deviceUUID)
 		}
 		updateCancel()
 	}
