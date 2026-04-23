@@ -69,13 +69,18 @@ verify:openapi:
     # GitLab's workspace cleanup can rm them. Without it, Go's default 0444
     # perms make cleanup fail with "permission denied" and the job exits
     # with non-zero — even when swag-check itself passed.
+    # safe.directory: git inside the container refuses to read /src/.git
+    # because it's owned by the host gitlab-runner user while the container
+    # runs as root ("dubious ownership" error). Without this, `make
+    # swag-check` → `git diff` fails with "Not a git repository" and the
+    # Makefile incorrectly reports OpenAPI drift.
     - docker run --rm
       -v "$PWD":/src -w /src/backend
       -e GOPATH=/src/.gocache/go
       -e GOCACHE=/src/.gocache/build
       -e "GOFLAGS=-buildvcs=false -modcacherw"
       golang:1.24
-      bash -c "go install github.com/swaggo/swag/cmd/swag@latest && PATH=/src/.gocache/go/bin:\$PATH make swag-check"
+      bash -c "git config --global --add safe.directory /src && go install github.com/swaggo/swag/cmd/swag@latest && PATH=/src/.gocache/go/bin:\$PATH make swag-check"
   # Files under .gocache are created as root inside the container; the host
   # gitlab-runner user can't chmod/rm them without sudo. Fix ownership back
   # to the host UID so cleanup (and any rerun of this job) succeeds.
