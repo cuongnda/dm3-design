@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { PageHeader, DataTable, type Column, Button, AppModal } from '@dm3/ui';
+import { PageHeader, DataTable, TablePaginationFooter, type Column, Button, AppModal } from '@dm3/ui';
 import { useTranslation } from 'react-i18next';
 import { Trash2, Play, Download, Film, Image as ImageIcon, Loader2, AlertTriangle } from 'lucide-react';
 import {
@@ -16,6 +16,7 @@ export function CCTVClipsPage() {
   const qc = useQueryClient();
 
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [cameraFilter, setCameraFilter] = useState('');
   const [fromFilter, setFromFilter] = useState('');
   const [toFilter, setToFilter] = useState('');
@@ -29,15 +30,19 @@ export function CCTVClipsPage() {
   const [playUrl, setPlayUrl] = useState<string>('');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['cctv-clips', page, cameraFilter, fromFilter, toFilter],
+    queryKey: ['cctv-clips', page, pageSize, cameraFilter, fromFilter, toFilter],
     queryFn: () =>
       listClips({
         page,
-        limit: 20,
+        limit: pageSize,
         camera_id: cameraFilter || undefined,
         from: fromFilter || undefined,
         to: toFilter || undefined,
       }),
+    // Surface stale pages while the next page loads so the table doesn't
+    // flash "empty" between clicks — matches the behaviour of other listing
+    // pages (access-times, access-points).
+    placeholderData: (prev) => prev,
   });
 
   const deleteMutation = useMutation({
@@ -215,26 +220,41 @@ export function CCTVClipsPage() {
         </div>
       </PageHeader>
 
-      {isLoading ? (
+      {isLoading && !data ? (
         <div className="text-center py-12 text-muted-foreground">{t('cctv.common.loading')}</div>
       ) : (
-        <DataTable
-          columns={columns}
-          data={clips}
-          rowKey={(r) => r.id}
-          pageSize={20}
-          emptyIcon={<Film size={32} strokeWidth={1.2} />}
-          emptyTitle={(cameraFilter || fromFilter || toFilter) ? 'No clips match these filters' : 'No clips recorded yet'}
-          emptyDescription={(cameraFilter || fromFilter || toFilter)
-            ? 'Try a different camera or broaden the date range.'
-            : 'Clips are captured automatically when a camera triggers a recording event (motion, access, or manual). Check camera recording mode and MediaMTX connectivity.'}
-          emptyAction={(cameraFilter || fromFilter || toFilter) ? {
-            label: 'Clear filters',
-            variant: 'outline',
-            onClick: () => { setCameraFilter(''); setFromFilter(''); setToFilter(''); setPage(1); },
-            'data-testid': 'cctv-button-clear-filters-empty',
-          } : undefined}
-        />
+        <>
+          <DataTable
+            columns={columns}
+            data={clips}
+            rowKey={(r) => r.id}
+            // Disable the DataTable's own paginator — the server paginates via
+            // listClips(page, limit), so the grid just renders the current page
+            // and the real controls live in TablePaginationFooter below.
+            pageSize={clips.length || 1}
+            emptyIcon={<Film size={32} strokeWidth={1.2} />}
+            emptyTitle={(cameraFilter || fromFilter || toFilter) ? 'No clips match these filters' : 'No clips recorded yet'}
+            emptyDescription={(cameraFilter || fromFilter || toFilter)
+              ? 'Try a different camera or broaden the date range.'
+              : 'Clips are captured automatically when a camera triggers a recording event (motion, access, or manual). Check camera recording mode and MediaMTX connectivity.'}
+            emptyAction={(cameraFilter || fromFilter || toFilter) ? {
+              label: 'Clear filters',
+              variant: 'outline',
+              onClick: () => { setCameraFilter(''); setFromFilter(''); setToFilter(''); setPage(1); },
+              'data-testid': 'cctv-button-clear-filters-empty',
+            } : undefined}
+          />
+          <TablePaginationFooter
+            page={data?.page ?? page}
+            pageSize={data?.limit ?? pageSize}
+            total={data?.total ?? 0}
+            totalPages={Math.max(1, Math.ceil((data?.total ?? 0) / (data?.limit ?? pageSize)))}
+            pageSizeOptions={[10, 20, 50, 100]}
+            onPageChange={(p) => setPage(p)}
+            onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+            loading={isLoading}
+          />
+        </>
       )}
 
       {/* Video player modal */}
