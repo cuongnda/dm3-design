@@ -100,11 +100,24 @@ func (s *FaceSyncService) EnqueueUserToCamera(ctx context.Context, tenantID, use
 // ─── Case 2: Full sync for a camera ─────────────────────────────────────────
 
 // EnqueueFullSync performs a full resync for a specific TungSon camera:
-//  1. Mark all existing 'pending'/'sent' entries as 'delete' (camera should remove them)
-//  2. Query all users with access to this camera's access point
-//  3. Insert 'add' entries for each user
+//  1. Discard any in-flight 'pending'/'sent' entries (stale, would race
+//     with the new batch).
+//  2. For every user the camera previously confirmed: enqueue a 'delete'
+//     so the camera wipes its in-memory face DB. Without this the camera
+//     rejects the subsequent 'add' with "already exists" — that was the
+//     production-observed `error_message='camera rejected'` bug behind
+//     manual full-sync calls.
+//  3. Drop the now-obsolete 'confirmed' rows in the same transaction —
+//     they no longer represent "camera holds this user" once we've queued
+//     the wipe. New confirmed rows will appear when the cam acks the
+//     subsequent adds, and that's what the next full sync reads from.
+//  4. Enqueue 'add' for every user that should be on the camera now.
+//     Add timestamps are bumped 1 second forward so HandleExtendFaceList
+//     (ORDER BY created_at ASC) drains all deletes before any adds.
 //
-// This is triggered manually (admin action) or when a camera sends delete-all command.
+// Run inside a single transaction so we never end up with adds enqueued
+// but the corresponding deletes missing — that combination would deadlock
+// the camera into a reject loop.
 func (s *FaceSyncService) EnqueueFullSync(ctx context.Context, tenantID, cameraDeviceID string) error {
 	dbCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -126,7 +139,33 @@ func (s *FaceSyncService) EnqueueFullSync(ctx context.Context, tenantID, cameraD
 		return fmt.Errorf("clear pending entries: %w", err)
 	}
 
-	// Step 2: Find all active users with face data who have access to this camera
+	// Step 2: Snapshot every distinct user the camera has confirmed
+	// previously so we can wipe them. DISTINCT because earlier full-syncs
+	// could have layered multiple confirmed rows per user — sending more
+	// than one delete for the same user is harmless on cam but wastes a
+	// poll slot.
+	confirmedRows, err := tx.Query(dbCtx, `
+		SELECT DISTINCT user_id::text
+		  FROM dm3_cctv.camera_face_sync_queue
+		 WHERE camera_device_id = $1::uuid AND tenant_id = $2::uuid
+		   AND status = 'confirmed'`,
+		cameraDeviceID, tenantID,
+	)
+	if err != nil {
+		return fmt.Errorf("snapshot confirmed users: %w", err)
+	}
+	var confirmedUserIDs []string
+	for confirmedRows.Next() {
+		var uid string
+		if err := confirmedRows.Scan(&uid); err != nil {
+			confirmedRows.Close()
+			return fmt.Errorf("scan confirmed user: %w", err)
+		}
+		confirmedUserIDs = append(confirmedUserIDs, uid)
+	}
+	confirmedRows.Close()
+
+	// Step 3: Find all active users with face data who have access to this camera
 	rows, err := tx.Query(dbCtx, `
 		SELECT DISTINCT agu.user_id::text
 		FROM dm3_access.access_point_devices apd
@@ -168,15 +207,53 @@ func (s *FaceSyncService) EnqueueFullSync(ctx context.Context, tenantID, cameraD
 		return fmt.Errorf("iterate users: %w", err)
 	}
 
-	// Step 3: Batch insert 'add' entries for all users
+	// Step 4: Wipe the camera. Enqueue 'delete' for every previously-
+	// confirmed user, then retire those confirmed rows so they don't pile
+	// up on subsequent full syncs.
+	if len(confirmedUserIDs) > 0 {
+		valueStrings := make([]string, 0, len(confirmedUserIDs))
+		args := []any{tenantID, cameraDeviceID}
+		argIdx := 3
+		for _, uid := range confirmedUserIDs {
+			valueStrings = append(valueStrings,
+				fmt.Sprintf("($1::uuid, $2::uuid, $%d::uuid, 'delete', 'pending', now())", argIdx))
+			args = append(args, uid)
+			argIdx++
+		}
+		query := fmt.Sprintf(
+			`INSERT INTO dm3_cctv.camera_face_sync_queue
+			 (tenant_id, camera_device_id, user_id, action, status, created_at)
+			 VALUES %s`,
+			strings.Join(valueStrings, ", "),
+		)
+		if _, err := tx.Exec(dbCtx, query, args...); err != nil {
+			return fmt.Errorf("enqueue wipe deletes: %w", err)
+		}
+
+		// Drop the obsolete confirmed rows in the same tx — they describe
+		// a state the camera is about to leave behind. Keeping them would
+		// double-count on the next full sync's snapshot query.
+		if _, err := tx.Exec(dbCtx,
+			`DELETE FROM dm3_cctv.camera_face_sync_queue
+			  WHERE camera_device_id = $1::uuid AND tenant_id = $2::uuid
+			    AND status = 'confirmed'`,
+			cameraDeviceID, tenantID,
+		); err != nil {
+			return fmt.Errorf("delete obsolete confirmed entries: %w", err)
+		}
+	}
+
+	// Step 5: Enqueue 'add' for the current user list. Bump created_at by
+	// 1 second so the camera's poll, which sorts ASC, finishes every wipe
+	// before pulling any add. Otherwise a single 5-row poll could mix delete
+	// and add for the same user and we're back to "already exists" rejects.
 	if len(userIDs) > 0 {
-		// Build batch INSERT for efficiency
 		valueStrings := make([]string, 0, len(userIDs))
 		args := []any{tenantID, cameraDeviceID}
 		argIdx := 3
 		for _, uid := range userIDs {
 			valueStrings = append(valueStrings,
-				fmt.Sprintf("($1::uuid, $2::uuid, $%d::uuid, 'add', 'pending', now())", argIdx))
+				fmt.Sprintf("($1::uuid, $2::uuid, $%d::uuid, 'add', 'pending', now() + interval '1 second')", argIdx))
 			args = append(args, uid)
 			argIdx++
 		}
@@ -198,7 +275,10 @@ func (s *FaceSyncService) EnqueueFullSync(ctx context.Context, tenantID, cameraD
 	}
 
 	slog.Info("tungson sync: full sync enqueued",
-		"camera_device_id", cameraDeviceID, "users", len(userIDs), "tenant_id", tenantID)
+		"camera_device_id", cameraDeviceID,
+		"wiped_users", len(confirmedUserIDs),
+		"added_users", len(userIDs),
+		"tenant_id", tenantID)
 	return nil
 }
 

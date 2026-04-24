@@ -187,8 +187,10 @@ func (h *TungSonHandlers) HandleRegister(w http.ResponseWriter, r *http.Request)
 // HandleKeepalive handles POST /VIID/System/Keepalive
 // Updates heartbeat and returns ExtendCmd if sync is pending.
 func (h *TungSonHandlers) HandleKeepalive(w http.ResponseWriter, r *http.Request) {
+	bodyBytes, _ := io.ReadAll(r.Body)
+	slog.Debug("tungson: keepalive raw body", "size", len(bodyBytes), "body", string(bodyBytes))
 	var req VIIDKeepaliveRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -252,12 +254,20 @@ func (h *TungSonHandlers) HandleExtendFaceList(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	size := 5
-	if s := r.URL.Query().Get("Size"); s != "" {
-		if v, err := strconv.Atoi(s); err == nil && v > 0 {
+	// Honour the camera's `Size` query param — that's the cam's
+	// self-reported batch capacity for this poll. Forcing it to 1 makes
+	// cam wait for the next Keepalive cycle (~10 s) between every face,
+	// which turns a 6-user sync into a multi-minute drag. Default 1 only
+	// when the firmware omits the param (defensive against an unknown
+	// firmware that floods on size=0 → "default").
+	rawSize := r.URL.Query().Get("Size")
+	size := 1
+	if rawSize != "" {
+		if v, err := strconv.Atoi(rawSize); err == nil && v > 0 {
 			size = v
 		}
 	}
+	slog.Debug("tungson: ExtendFaceList poll", "camera_id", cameraID, "cam_requested_size", rawSize, "effective_size", size)
 
 	ctx := r.Context()
 	tenantID, deviceUUID, err := h.lookupCamera(ctx, cameraID)
@@ -307,9 +317,18 @@ func (h *TungSonHandlers) HandleExtendFaceList(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Build person list
+	// Build person list. Cap response payload by bytes so the cam never
+	// chokes on a heavy poll. TungSon firmware advertises Size=4 in the
+	// query but locks up (no Keepalive, no recognition for several
+	// minutes) once the response body crosses ~2 MB. Avatar JPEGs in
+	// production range 150 KB → 900 KB which becomes ~200 KB → 1.2 MB
+	// after base64; an 800 KB face cap means at most one big face or a
+	// handful of small ones per poll, with the rest deferred to the
+	// camera's next poll cycle.
+	const maxResponseBytes = 800_000
 	persons := make([]VIIDPerson, 0, len(entries))
 	var sentIDs []string
+	totalBytes := 0
 
 	for _, entry := range entries {
 		if entry.Action == "delete" {
@@ -355,7 +374,12 @@ func (h *TungSonHandlers) HandleExtendFaceList(w http.ResponseWriter, r *http.Re
 		faceBase64 := ""
 		fileFormat := "jpg"
 
-		// Try face credential first
+		// Try face credential first. Skip the `DC_<user_code>` synthetic
+		// marker we plant in HandleExtendConfirm — it's a tag we use to
+		// remember which users the camera has accepted, NOT real image
+		// data. Sending it as base64 produces garbage at the camera and
+		// the add gets rejected. Fall through to the avatar path so a
+		// re-sync re-fetches the actual JPEG from MinIO.
 		var credValue *string
 		_ = h.db.Pool.QueryRow(ctx,
 			`SELECT value FROM dm3_identity.credentials
@@ -364,7 +388,7 @@ func (h *TungSonHandlers) HandleExtendFaceList(w http.ResponseWriter, r *http.Re
 			entry.UserID, tenantID,
 		).Scan(&credValue)
 
-		if credValue != nil && *credValue != "" {
+		if credValue != nil && *credValue != "" && !strings.HasPrefix(*credValue, "DC_") {
 			faceBase64 = *credValue
 		} else if avatarURL != nil && *avatarURL != "" && h.objectStore != nil {
 			// Avatar DB value is a public URL path (/photos/tenants/...),
@@ -399,8 +423,21 @@ func (h *TungSonHandlers) HandleExtendFaceList(w http.ResponseWriter, r *http.Re
 				}},
 			}
 		}
+
+		// Check BEFORE append — once we've already shipped at least one
+		// person, refuse to add another that would push us past the cap.
+		// First person is always included so a single oversized avatar
+		// can't deadlock the queue (one slow poll beats no progress).
+		if len(persons) > 0 && totalBytes+len(faceBase64) > maxResponseBytes {
+			slog.Debug("tungson: ExtendFaceList byte cap, deferring rest",
+				"camera_id", cameraID, "shipped", len(persons),
+				"deferred", len(entries)-len(persons), "bytes", totalBytes,
+				"would_add", len(faceBase64))
+			break
+		}
 		persons = append(persons, person)
 		sentIDs = append(sentIDs, entry.ID)
+		totalBytes += len(faceBase64)
 	}
 
 	// Mark entries as sent
