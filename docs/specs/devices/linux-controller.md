@@ -580,9 +580,10 @@ Reference: `mqtt-protocol.md`
 | `dm/{tid}/device/{did}/evt` | 1 | `access.log` | After every access decision |
 | `dm/{tid}/device/{did}/evt` | 1 | `door.state` | Every door state transition |
 | `dm/{tid}/device/{did}/evt` | 1 | `alarm.triggered` | Door forced, door held, tamper |
+| `dm/{tid}/device/{did}/evt` | 1 | `firmware.check` | On boot + every 6h + on reconnect after long offline (see §16.4) |
 | `dm/{tid}/device/{did}/sta` | 0 | `status.heartbeat` | Every 30s |
 | `dm/{tid}/device/{did}/cmd/resp` | 2 | `cmd.door.resp` | After command execution |
-| `dm/{tid}/device/{did}/cfg/ack` | 2 | Sync acknowledgments | After sync processing |
+| `dm/{tid}/device/{did}/cfg/ack` | 2 | Sync acknowledgments, `cfg.firmware.ack` | After sync / update processing |
 
 ---
 
@@ -878,10 +879,27 @@ curl -fsSL https://install.duallmaster.com/controller.sh | sudo bash -s -- \
 
 ### 16.4 Firmware Update
 
+Wire spec: `docs/architecture/mqtt-protocol.md §7.7`. Install flow is identical to the Android terminal's §12.1 with two substitutions:
+
+- **Package format:** Debian `.deb` or OCI container image instead of APK
+- **Installer:** `dpkg -i` (deb) or `docker pull` + `docker run` (container) instead of `PackageInstaller`
+
+Steps:
+
 - Via MQTT: `cfg.firmware` message with download URL and checksum
 - Controller downloads package, verifies GPG signature + SHA-256 checksum
 - Applies via `dpkg -i` (deb) or `docker pull` (container)
 - Auto-restart via systemd
+
+**Device-initiated check (pull):** controller publishes `firmware.check` on its `evt` topic to catch updates missed while offline. Triggers:
+
+| Trigger | Rationale |
+|---|---|
+| On systemd service start, after MQTT connect | Picks up firmware released while the controller was off / unreachable |
+| Every 6 hours (configurable via `firmware_check_hours` in `cfg.patch`) | Covers 24/7 controllers that miss a push due to broker blip |
+| Immediately after MQTT reconnect when the previous offline gap was ≥ 10 min | Recovers catch-up after WAN outage |
+
+Payload and response semantics match Android §12.3 — silence means "up-to-date or no firmware registered for this device_type". Do not block startup waiting for a response; do not spam-retry.
 
 ---
 

@@ -156,9 +156,10 @@ type MQTTHandler struct {
 	nats      *natsutil.Client
 	hub       *EventHub
 	sync      *SyncService
+	firmware  *FirmwareHandlers
 	audit     *audit.Logger
-	appCtx    context.Context      // application-lifetime context for background goroutines
-	syncGroup singleflight.Group   // deduplicates concurrent auto-syncs per device
+	appCtx    context.Context    // application-lifetime context for background goroutines
+	syncGroup singleflight.Group // deduplicates concurrent auto-syncs per device
 }
 
 func NewMQTTHandler(database *db.DB, natsClient *natsutil.Client, hub *EventHub) *MQTTHandler {
@@ -174,6 +175,14 @@ func (h *MQTTHandler) SetAppContext(ctx context.Context) {
 // SetSyncService sets the sync service for auto-sync on heartbeat.
 func (h *MQTTHandler) SetSyncService(s *SyncService) {
 	h.sync = s
+}
+
+// SetFirmwareHandlers wires in the firmware handlers used by the
+// device-initiated firmware.check flow — on receiving a check event, the
+// MQTT handler asks FirmwareHandlers to compare versions and, if needed,
+// publish cfg.firmware back to the device.
+func (h *MQTTHandler) SetFirmwareHandlers(fh *FirmwareHandlers) {
+	h.firmware = fh
 }
 
 // SetAuditLogger wires in the audit logger used by handlers that change
@@ -359,8 +368,77 @@ func (h *MQTTHandler) handleEvent(ctx context.Context, pt ParsedTopic, env MQTTE
 		h.handleAlarm(ctx, pt, env)
 	case env.Type == "evt.face_result" || env.Type == "face.result" || env.Type == "face_result":
 		h.handleFaceResult(ctx, pt, env)
+	case env.Type == "firmware.check":
+		h.handleFirmwareCheck(ctx, pt, env)
 	default:
 		slog.Info("mqtt: event", "type", env.Type, "device", pt.DeviceID)
+	}
+}
+
+// firmwareCheckData is the payload devices publish on evt with
+// type="firmware.check" to ask the server whether a newer firmware exists.
+// See docs/architecture/mqtt-protocol.md §5.6.
+type firmwareCheckData struct {
+	CurrentVersion string `json:"current_version"`
+	DeviceType     string `json:"device_type,omitempty"` // optional — server prefers the DB value
+}
+
+// handleFirmwareCheck looks up the latest active firmware for the device's
+// type and, if newer than the reported current_version, publishes
+// cfg.firmware back. No response message is sent when the device is already
+// up-to-date — the device assumes no news is good news.
+func (h *MQTTHandler) handleFirmwareCheck(ctx context.Context, pt ParsedTopic, env MQTTEnvelope) {
+	if h.firmware == nil {
+		slog.Warn("firmware.check: no firmware handler wired", "device", pt.DeviceID)
+		return
+	}
+
+	var data firmwareCheckData
+	if err := json.Unmarshal(env.Data, &data); err != nil {
+		slog.Warn("firmware.check: bad data payload", "error", err, "device", pt.DeviceID)
+		return
+	}
+
+	// Resolve device DB id + authoritative device_type from the devices
+	// table — the device's self-reported device_type is a fallback only.
+	var deviceDBID, deviceType string
+	err := h.db.Pool.QueryRow(ctx,
+		`SELECT id::text, COALESCE(type,'') FROM dm3_devices.devices
+		  WHERE device_id = $1 AND tenant_id = $2::uuid`,
+		pt.DeviceID, pt.TenantID,
+	).Scan(&deviceDBID, &deviceType)
+	if err != nil {
+		slog.Warn("firmware.check: device not found", "device", pt.DeviceID, "tenant", pt.TenantID, "error", err)
+		return
+	}
+	if deviceType == "" {
+		deviceType = data.DeviceType
+	}
+	if deviceType == "" {
+		slog.Warn("firmware.check: no device_type known", "device", pt.DeviceID)
+		return
+	}
+
+	deploymentID, latestVersion, sent, checkErr := h.firmware.CheckAndDeployLatest(
+		ctx, pt.TenantID, deviceDBID, pt.DeviceID, deviceType, data.CurrentVersion,
+	)
+	if checkErr != nil {
+		slog.Error("firmware.check: check/deploy failed", "device", pt.DeviceID, "error", checkErr)
+		return
+	}
+	if sent {
+		slog.Info("firmware.check: update queued",
+			"device", pt.DeviceID,
+			"from", data.CurrentVersion,
+			"to", latestVersion,
+			"deployment_id", deploymentID,
+		)
+	} else {
+		slog.Info("firmware.check: up-to-date",
+			"device", pt.DeviceID,
+			"current", data.CurrentVersion,
+			"latest", latestVersion,
+		)
 	}
 }
 

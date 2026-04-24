@@ -193,8 +193,8 @@ func (h *FirmwareHandlers) GetFirmware(w http.ResponseWriter, r *http.Request) {
 
 // UploadFirmware handles POST /api/v1/system/firmware
 func (h *FirmwareHandlers) UploadFirmware(w http.ResponseWriter, r *http.Request) {
-	// Max 100MB
-	if err := r.ParseMultipartForm(100 << 20); err != nil {
+	// Max 500MB
+	if err := r.ParseMultipartForm(500 << 20); err != nil {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "firmware.file_too_large")
 		return
 	}
@@ -219,8 +219,8 @@ func (h *FirmwareHandlers) UploadFirmware(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Check file size (100MB limit)
-	if header.Size > 100<<20 {
+	// Check file size (500MB limit)
+	if header.Size > 500<<20 {
 		i18n.ErrorResponse(w, r, http.StatusBadRequest, "firmware.file_too_large")
 		return
 	}
@@ -496,60 +496,25 @@ func (h *FirmwareHandlers) DeployFirmware(w http.ResponseWriter, r *http.Request
 
 		slog.Info("DeployFirmware: deploying to device", "device", deviceID, "tenant_id", tenantID, "firmware", firmwareID)
 
-		// Secure download token (hex, 32 bytes = 64 chars)
-		tokenBytes := make([]byte, 32)
-		_, _ = io.ReadFull(rand.Reader, tokenBytes)
-		token := hex.EncodeToString(tokenBytes)
-
-		downloadURL := fmt.Sprintf("%s/api/v1/gateway/firmware/download/%s", h.downloadURL, token)
-
-		var deployID string
-		if insertErr := h.db.Pool.QueryRow(r.Context(),
-			`INSERT INTO dm3_devices.firmware_deployments
-				(tenant_id, firmware_id, device_id, device_db_id, version, device_type,
-				 status, download_token, download_url, expires_at,
-				 deployed_by, deployed_by_email, sent_at)
-			 VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5, $6,
-				 'sent', $7, $8, $9, $10::uuid, $11, now())
-			 RETURNING id`,
-			tenantID, firmwareID, deviceID, deviceDBID, fw.Version, fw.DeviceType,
-			token, downloadURL, expiresAt,
-			nullableStrFw(actorID), actorEmail,
-		).Scan(&deployID); insertErr != nil {
-			slog.Error("DeployFirmware: insert failed", "error", insertErr, "device", deviceID)
-			results = append(results, deployResult{DeviceID: deviceID, Status: "failed", Error: "db error"})
+		deployID, sendErr := h.SendFirmwareToDevice(r.Context(), fw, tenantID, deviceDBID, deviceID, req.Force, actorID, actorEmail)
+		if sendErr != nil {
+			// SendFirmwareToDevice already updated the deployment row to
+			// 'failed' for publish errors. Translate the error to a short
+			// client-facing code.
+			errCode := "failed"
+			msg := sendErr.Error()
+			switch {
+			case strings.Contains(msg, "mqtt publish"):
+				errCode = "mqtt failed"
+			case strings.Contains(msg, "insert deployment"):
+				errCode = "db error"
+			}
+			results = append(results, deployResult{DeploymentID: deployID, DeviceID: deviceID, Status: "failed", Error: errCode})
 			continue
 		}
 
-		// Publish cfg.firmware MQTT message
-		checksumStr := ""
-		if fw.Checksum != nil {
-			checksumStr = *fw.Checksum
-		}
-		topic := fmt.Sprintf("dm/%s/device/%s/cfg", tenantID, deviceID)
-		payload, _ := json.Marshal(MQTTEnvelope{
-			Version: 1,
-			Type:    "cfg.firmware",
-			Data: mustMarshalRaw(map[string]any{
-				"version":       fw.Version,
-				"url":           downloadURL,
-				"checksum":      "sha256:" + checksumStr,
-				"size_bytes":    fw.FileSize,
-				"deployment_id": deployID,
-				"force":         req.Force,
-			}),
-		})
-		slog.Info("DeployFirmware: publishing MQTT", "topic", topic, "payload", string(payload))
-		if pubErr := h.mqtt.Publish(r.Context(), topic, 2, payload); pubErr != nil {
-			slog.Error("DeployFirmware: MQTT publish failed", "error", pubErr, "device", deviceID)
-			_, _ = h.db.Pool.Exec(r.Context(),
-				`UPDATE dm3_devices.firmware_deployments SET status='failed', error_message=$2, updated_at=now() WHERE id=$1::uuid`,
-				deployID, "mqtt publish failed")
-			results = append(results, deployResult{DeploymentID: deployID, DeviceID: deviceID, Status: "failed", Error: "mqtt failed"})
-			continue
-		}
-
-		// Audit + device history
+		// Audit + device history — logged only for admin-triggered deploys;
+		// device-initiated checks skip this since there's no actor.
 		h.audit.LogFromRequest(r, "firmware.deploy", "firmware_deployment", deployID, deviceID, "success", nil,
 			map[string]any{"firmware_id": firmwareID, "version": fw.Version})
 		go InsertDeviceEvent(context.Background(), h.db.Pool, DeviceEvent{
@@ -566,6 +531,146 @@ func (h *FirmwareHandlers) DeployFirmware(w http.ResponseWriter, r *http.Request
 		"firmware_id": firmwareID, "version": fw.Version,
 		"device_type": fw.DeviceType, "expires_at": expiresAt, "results": results,
 	})
+}
+
+// SendFirmwareToDevice inserts a firmware_deployments row and publishes the
+// cfg.firmware MQTT message to one device. Shared by the admin Deploy button
+// and the device-initiated firmware.check flow.
+//
+// For MQTT failures the deployment row is updated to status='failed' with the
+// error recorded, then the error is returned — callers decide whether to
+// surface it per-device (batch deploy) or log it (device check).
+//
+// The publish uses its own 10s timeout context, not the caller's, so the HTTP
+// handler returning early doesn't abort the QoS-1 PUBACK round-trip mid-flight.
+func (h *FirmwareHandlers) SendFirmwareToDevice(
+	ctx context.Context,
+	fw FirmwareDTO,
+	tenantID, deviceDBID, deviceID string,
+	force bool,
+	actorID, actorEmail string,
+) (deploymentID string, err error) {
+	tokenBytes := make([]byte, 32)
+	if _, readErr := io.ReadFull(rand.Reader, tokenBytes); readErr != nil {
+		return "", fmt.Errorf("token generate: %w", readErr)
+	}
+	token := hex.EncodeToString(tokenBytes)
+	expiresAt := time.Now().Add(5 * time.Minute)
+	downloadURL := fmt.Sprintf("%s/api/v1/gateway/firmware/download/%s", h.downloadURL, token)
+
+	if insertErr := h.db.Pool.QueryRow(ctx,
+		`INSERT INTO dm3_devices.firmware_deployments
+			(tenant_id, firmware_id, device_id, device_db_id, version, device_type,
+			 status, download_token, download_url, expires_at,
+			 deployed_by, deployed_by_email, sent_at)
+		 VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5, $6,
+			 'sent', $7, $8, $9, $10, $11, now())
+		 RETURNING id`,
+		tenantID, fw.ID, deviceID, deviceDBID, fw.Version, fw.DeviceType,
+		token, downloadURL, expiresAt,
+		nullableStrFw(actorID), actorEmail,
+	).Scan(&deploymentID); insertErr != nil {
+		return "", fmt.Errorf("insert deployment: %w", insertErr)
+	}
+
+	checksumStr := ""
+	if fw.Checksum != nil {
+		checksumStr = *fw.Checksum
+	}
+	topic := fmt.Sprintf("dm/%s/device/%s/cfg", tenantID, deviceID)
+	payload, _ := json.Marshal(MQTTEnvelope{
+		Version: 1,
+		Type:    "cfg.firmware",
+		Data: mustMarshalRaw(map[string]any{
+			"version":       fw.Version,
+			"url":           downloadURL,
+			"checksum":      "sha256:" + checksumStr,
+			"size_bytes":    fw.FileSize,
+			"deployment_id": deploymentID,
+			"force":         force,
+		}),
+	})
+
+	pubCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	slog.Info("firmware: publishing cfg.firmware", "topic", topic, "deployment_id", deploymentID, "version", fw.Version, "size_bytes", len(payload))
+	if pubErr := h.mqtt.Publish(pubCtx, topic, 1, payload); pubErr != nil {
+		slog.Error("firmware: MQTT publish failed", "error", pubErr, "device", deviceID, "deployment_id", deploymentID)
+		_, _ = h.db.Pool.Exec(context.Background(),
+			`UPDATE dm3_devices.firmware_deployments SET status='failed', error_message=$2, updated_at=now() WHERE id=$1::uuid`,
+			deploymentID, "mqtt publish failed: "+pubErr.Error())
+		return deploymentID, fmt.Errorf("mqtt publish: %w", pubErr)
+	}
+	return deploymentID, nil
+}
+
+// CheckAndDeployLatest is the entry point for device-initiated firmware
+// checks. It finds the latest active firmware for the device's type and, if
+// newer than the reported current_version, publishes cfg.firmware to the
+// device.
+//
+// Returns (deploymentID, latestVersion, sent, err):
+//   - sent=true  → a cfg.firmware was published
+//   - sent=false → device is already up-to-date, or no firmware exists for
+//     this device_type (both are normal, not errors)
+func (h *FirmwareHandlers) CheckAndDeployLatest(
+	ctx context.Context,
+	tenantID, deviceDBID, deviceID, deviceType, currentVersion string,
+) (deploymentID, latestVersion string, sent bool, err error) {
+	var fw FirmwareDTO
+	qErr := h.db.Pool.QueryRow(ctx,
+		`SELECT id, version, device_type, COALESCE(file_path,''), file_size, checksum, is_active
+		   FROM dm3_devices.firmwares
+		  WHERE device_type = $1 AND is_active = true
+		  ORDER BY created_at DESC LIMIT 1`, deviceType,
+	).Scan(&fw.ID, &fw.Version, &fw.DeviceType, &fw.FilePath, &fw.FileSize, &fw.Checksum, &fw.IsActive)
+	if qErr != nil {
+		if errors.Is(qErr, pgx.ErrNoRows) {
+			return "", "", false, nil
+		}
+		return "", "", false, fmt.Errorf("firmware lookup: %w", qErr)
+	}
+
+	// Already up-to-date — compareVersions returns >=0 means current >= latest.
+	if currentVersion != "" && compareFirmwareVersions(currentVersion, fw.Version) >= 0 {
+		return "", fw.Version, false, nil
+	}
+
+	deploymentID, err = h.SendFirmwareToDevice(ctx, fw, tenantID, deviceDBID, deviceID, false, "", "system:firmware.check")
+	if err != nil {
+		return deploymentID, fw.Version, false, err
+	}
+	return deploymentID, fw.Version, true, nil
+}
+
+// compareFirmwareVersions does a dot-separated numeric comparison of two
+// version strings. Returns -1 if a<b, 0 if equal, 1 if a>b. Non-numeric parts
+// fall back to Atoi=0, so "1.2.3-beta" vs "1.2.3" compares equal — acceptable
+// because we only use this as a "don't re-deploy what's already installed"
+// gate, not as a full semver implementation.
+func compareFirmwareVersions(a, b string) int {
+	as := strings.Split(strings.TrimPrefix(a, "v"), ".")
+	bs := strings.Split(strings.TrimPrefix(b, "v"), ".")
+	n := len(as)
+	if len(bs) > n {
+		n = len(bs)
+	}
+	for i := 0; i < n; i++ {
+		var x, y int
+		if i < len(as) {
+			x, _ = strconv.Atoi(as[i])
+		}
+		if i < len(bs) {
+			y, _ = strconv.Atoi(bs[i])
+		}
+		if x < y {
+			return -1
+		}
+		if x > y {
+			return 1
+		}
+	}
+	return 0
 }
 
 func mustMarshalRaw(v any) json.RawMessage {

@@ -391,7 +391,7 @@
   "firmware.selectDeviceType": "Chọn loại thiết bị",
   "firmware.descriptionPlaceholder": "Ghi chú phát hành, changelog...",
   "firmware.dropHere": "Kéo thả file firmware hoặc nhấn để chọn",
-  "firmware.fileTooLarge": "File vượt quá giới hạn 100MB",
+  "firmware.fileTooLarge": "File vượt quá giới hạn 500MB",
   "firmware.fillRequired": "File, phiên bản và loại thiết bị là bắt buộc",
   "firmware.uploading": "Đang tải lên...",
   "firmware.uploadSuccess": "Tải Firmware Thành Công",
