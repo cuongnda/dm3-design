@@ -89,6 +89,12 @@ func NewMinIOStore(ctx context.Context, cfg Config) (*MinIOStore, error) {
 		presignClient, err = minio.New(cfg.PublicEndpoint, &minio.Options{
 			Creds:  credentials.NewStaticV4(cfg.AccessKeyID, cfg.SecretAccessKey, ""),
 			Secure: cfg.PublicUseSSL,
+			// Force path-style so nginx fronted by a custom subdomain
+			// (dm3-s3.demasterpro.com/<bucket>/<key>) doesn't return
+			// 301 Moved Permanently on the SDK's virtual-hosted-style
+			// bucket lookup.
+			BucketLookup: minio.BucketLookupPath,
+			Region:       "us-east-1",
 		})
 		if err != nil {
 			return nil, fmt.Errorf("create minio presign client: %w", err)

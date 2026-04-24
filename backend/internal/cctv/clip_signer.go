@@ -36,6 +36,16 @@ func NewObjectStoreClipSigner(endpoint, accessKey, secretKey, bucket string, use
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: useSSL,
+		// Force path-style URLs (dm3-s3.demasterpro.com/dm3/<key>) instead
+		// of virtual-hosted-style (dm3.dm3-s3.demasterpro.com/<key>). The
+		// SDK's default auto-detection for a custom endpoint sometimes
+		// picks VH style, which makes MinIO/nginx reply 301 Moved
+		// Permanently to the canonical host — that 301 is what the clip
+		// playback handler surfaces as "internal error".
+		BucketLookup: minio.BucketLookupPath,
+		// Lock in the region too so the SDK doesn't issue a
+		// GetBucketLocation round-trip during the first presign.
+		Region: "us-east-1",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("clip signer: create minio client: %w", err)
