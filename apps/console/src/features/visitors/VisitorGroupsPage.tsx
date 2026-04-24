@@ -72,13 +72,13 @@ export function VisitorGroupsPage() {
       qc.invalidateQueries({ queryKey: ['visit-groups'] });
       setShowForm(false);
       resetForm();
-      showToast({ type: 'success', title: 'Group created' });
+      showToast({ type: 'success', title: t('visitors.groups.toasts.created') });
     },
     onError: (err) => {
       showToast({
         type: 'error',
-        title: 'Could not create group',
-        description: getErrorMessage(err, 'Please check the form and try again.'),
+        title: t('visitors.groups.toasts.createError'),
+        description: getErrorMessage(err, t('visitors.groups.toasts.createErrorFallback')),
       });
     },
   });
@@ -87,13 +87,13 @@ export function VisitorGroupsPage() {
     mutationFn: (id: string) => deleteVisitGroup(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['visit-groups'] });
-      showToast({ type: 'success', title: 'Group deleted' });
+      showToast({ type: 'success', title: t('visitors.groups.toasts.deleted') });
     },
     onError: (err) => {
       showToast({
         type: 'error',
-        title: 'Could not delete group',
-        description: getErrorMessage(err, 'Try again in a moment.'),
+        title: t('visitors.groups.toasts.deleteError'),
+        description: getErrorMessage(err, t('visitors.groups.toasts.deleteErrorFallback')),
       });
     },
   });
@@ -102,15 +102,15 @@ export function VisitorGroupsPage() {
   const total = data?.total ?? 0;
 
   const columns: Column<VisitGroupDTO>[] = [
-    { key: 'name', header: t('visitors.groups.name', 'Name'), render: (r) => <span className="font-medium">{r.name}</span> },
-    { key: 'purpose', header: t('visitors.groups.purpose', 'Purpose'), render: (r) => <span className="text-muted-foreground text-[13px] capitalize">{r.purpose.replace(/_/g, ' ')}</span> },
+    { key: 'name', header: t('visitors.groups.name'), render: (r) => <span className="font-medium">{r.name}</span> },
+    { key: 'purpose', header: t('visitors.groups.purpose'), render: (r) => <span className="text-muted-foreground text-[13px] capitalize">{r.purpose.replace(/_/g, ' ')}</span> },
     {
-      key: 'expected_arrival', header: t('visitors.groups.arrival', 'Arrival'), width: '140px',
+      key: 'expected_arrival', header: t('visitors.groups.arrival'), width: '140px',
       render: (r) => <span className="font-mono text-[12px] text-muted-foreground">{new Date(r.expected_arrival).toLocaleDateString()}</span>,
     },
-    { key: 'member_count', header: t('visitors.groups.visitCount', 'Visitors'), width: '80px', render: (r) => <span className="text-muted-foreground">{r.member_count}</span> },
+    { key: 'member_count', header: t('visitors.groups.visitCount'), width: '80px', render: (r) => <span className="text-muted-foreground">{r.member_count}</span> },
     {
-      key: 'created_at', header: t('visitors.groups.created', 'Created'), width: '140px',
+      key: 'created_at', header: t('visitors.groups.created'), width: '140px',
       render: (r) => <span className="font-mono text-[12px] text-muted-foreground">{new Date(r.created_at).toLocaleDateString()}</span>,
     },
     {
@@ -129,21 +129,21 @@ export function VisitorGroupsPage() {
 
   return (
     <div>
-      <PageHeader title={t('visitors.groups.title', 'Visit Groups')} description={t('visitors.groups.description_page', 'Organize visits into groups for batch management')}>
+      <PageHeader title={t('visitors.groups.title')} description={t('visitors.groups.pageDescription')}>
         <Button size="sm" onClick={() => setShowForm(true)} className="bg-emerald-600 hover:bg-emerald-700" data-testid="visitors-button-create-group">
-          <Plus size={16} className="mr-1" /> {t('visitors.groups.create', 'Create Group')}
+          <Plus size={16} className="mr-1" /> {t('visitors.groups.create')}
         </Button>
       </PageHeader>
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">{t('visitors.loading', 'Loading...')}</div>
+        <div className="text-center py-12 text-muted-foreground">{t('visitors.loading')}</div>
       ) : groups.length === 0 ? (
         <div className="py-10">
           <EmptyState
             icon={<Users size={32} strokeWidth={1.2} />}
-            title={t('visitors.groups.empty', 'No visit groups yet')}
-            description="Group multiple visitors under one host and purpose — useful for meetings, tours, or delivery batches. Everyone in the group shares a check-in time and access rules."
-            primaryAction={{ label: t('visitors.groups.create', 'Create Group'), icon: <Plus size={14} />, onClick: () => setShowForm(true), 'data-testid': 'visitors-button-create-group-empty' }}
+            title={t('visitors.groups.empty')}
+            description={t('visitors.groups.empty.description')}
+            primaryAction={{ label: t('visitors.groups.create'), icon: <Plus size={14} />, onClick: () => setShowForm(true), 'data-testid': 'visitors-button-create-group-empty' }}
           />
         </div>
       ) : (
@@ -151,9 +151,9 @@ export function VisitorGroupsPage() {
           <DataTable columns={columns} data={groups} rowKey={(r) => r.id} />
           {total > 20 && (
             <div className="flex justify-center gap-2 mt-4">
-              <Button size="xs" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</Button>
-              <span className="text-[12px] text-muted-foreground py-1">Page {page} of {Math.ceil(total / 20)}</span>
-              <Button size="xs" variant="outline" disabled={page >= Math.ceil(total / 20)} onClick={() => setPage(p => p + 1)}>Next</Button>
+              <Button size="xs" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>{t('visitors.history.prev')}</Button>
+              <span className="text-[12px] text-muted-foreground py-1">{t('visitors.history.pageOf', { page, total: Math.ceil(total / 20) })}</span>
+              <Button size="xs" variant="outline" disabled={page >= Math.ceil(total / 20)} onClick={() => setPage(p => p + 1)}>{t('visitors.history.next')}</Button>
             </div>
           )}
         </>
@@ -162,22 +162,22 @@ export function VisitorGroupsPage() {
       <AppModal
         open={showForm}
         onOpenChange={(open) => { setShowForm(open); if (!open) resetForm(); }}
-        title={t('visitors.groups.create', 'Create Group')}
+        title={t('visitors.groups.create')}
         size="sm"
         showCancelButton
         primaryAction={{
-          label: createMutation.isPending ? 'Creating...' : 'Create',
+          label: createMutation.isPending ? t('visitors.groups.form.creatingLabel') : t('visitors.recurring.buttons.createLabel'),
           onClick: () => createMutation.mutate(),
           disabled: !canCreate || createMutation.isPending,
         }}
       >
         <div className="space-y-3">
           <div>
-            <Label className="text-[12px]">{t('visitors.groups.name', 'Name')} *</Label>
+            <Label className="text-[12px]">{t('visitors.groups.name')} *</Label>
             <Input className="mt-1 h-8 text-[13px]" value={name} onChange={(e) => setName(e.target.value)} data-testid="visitors-input-group-name" />
           </div>
           <div>
-            <Label className="text-[12px]">{t('visitors.groups.description', 'Description')}</Label>
+            <Label className="text-[12px]">{t('visitors.groups.description')}</Label>
             <Input className="mt-1 h-8 text-[13px]" value={description} onChange={(e) => setDescription(e.target.value)} data-testid="visitors-input-group-description" />
           </div>
           <div>
@@ -194,11 +194,11 @@ export function VisitorGroupsPage() {
             />
           </div>
           <div>
-            <Label className="text-[12px]">Purpose *</Label>
-            <Input className="mt-1 h-8 text-[13px]" placeholder="e.g. meeting, interview, delivery" value={purpose} onChange={(e) => setPurpose(e.target.value)} data-testid="visitors-input-group-purpose" />
+            <Label className="text-[12px]">{t('visitors.groups.form.purposeLabel')}</Label>
+            <Input className="mt-1 h-8 text-[13px]" placeholder={t('visitors.groups.form.purposePlaceholder')} value={purpose} onChange={(e) => setPurpose(e.target.value)} data-testid="visitors-input-group-purpose" />
           </div>
           <div>
-            <Label className="text-[12px]">Expected Arrival *</Label>
+            <Label className="text-[12px]">{t('visitors.groups.form.arrivalLabel')}</Label>
             <Input type="datetime-local" className="mt-1 h-8 text-[13px]" value={expectedArrival} onChange={(e) => setExpectedArrival(e.target.value)} data-testid="visitors-input-group-arrival" />
           </div>
         </div>

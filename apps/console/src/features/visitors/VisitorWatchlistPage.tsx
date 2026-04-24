@@ -41,20 +41,20 @@ export function VisitorWatchlistPage() {
 
   const columns: Column<WatchlistEntryDTO>[] = [
     {
-      key: 'entry_type', header: t('visitors.watchlist.type', 'Type'), width: '100px',
+      key: 'entry_type', header: t('visitors.watchlist.form.typeLabel'), width: '100px',
       render: (r) => (
         <span className={cn('text-[12px] font-medium px-2 py-0.5 rounded',
           r.entry_type === 'blacklisted' ? 'bg-destructive/20 text-destructive' : 'bg-amber-500/20 text-amber-400'
         )}>
-          {r.entry_type === 'blacklisted' ? t('visitors.watchlist.blocklist', 'Blocklist') : t('visitors.watchlist.flagged', 'Flagged')}
+          {r.entry_type === 'blacklisted' ? t('visitors.watchlist.blocklistLabel') : t('visitors.watchlist.flaggedLabel')}
         </span>
       ),
     },
-    { key: 'match_field', header: t('visitors.watchlist.field', 'Field'), width: '100px', render: (r) => <span className="text-muted-foreground">{r.match_field}</span> },
-    { key: 'match_value', header: t('visitors.watchlist.value', 'Value'), render: (r) => <span className="font-medium">{r.match_value}</span> },
-    { key: 'reason', header: t('visitors.watchlist.reason', 'Reason'), render: (r) => <span className="text-muted-foreground text-[13px]">{r.reason}</span> },
+    { key: 'match_field', header: t('visitors.watchlist.columnField'), width: '100px', render: (r) => <span className="text-muted-foreground">{r.match_field}</span> },
+    { key: 'match_value', header: t('visitors.watchlist.columnValue'), render: (r) => <span className="font-medium">{r.match_value}</span> },
+    { key: 'reason', header: t('visitors.watchlist.reason'), render: (r) => <span className="text-muted-foreground text-[13px]">{r.reason}</span> },
     {
-      key: 'expires_at', header: t('visitors.watchlist.expires', 'Expires'), width: '120px',
+      key: 'expires_at', header: t('visitors.watchlist.columnExpires'), width: '120px',
       render: (r) => <span className="font-mono text-[12px] text-muted-foreground">{r.expires_at ? new Date(r.expires_at).toLocaleDateString() : '—'}</span>,
     },
     {
@@ -79,21 +79,21 @@ export function VisitorWatchlistPage() {
 
   return (
     <div>
-      <PageHeader title={t('visitors.watchlist.title', 'Watchlist')} description={t('visitors.watchlist.description', 'Manage blocklisted and flagged visitors')}>
+      <PageHeader title={t('visitors.watchlist.title')} description={t('visitors.watchlist.description')}>
         <Button size="sm" onClick={() => setShowForm(true)} className="bg-emerald-600 hover:bg-emerald-700" data-testid="visitors-button-add-watchlist">
-          <Plus size={16} className="mr-1" /> {t('visitors.watchlist.add', 'Add Entry')}
+          <Plus size={16} className="mr-1" /> {t('visitors.watchlist.add')}
         </Button>
       </PageHeader>
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">{t('visitors.loading', 'Loading...')}</div>
+        <div className="text-center py-12 text-muted-foreground">{t('visitors.loading')}</div>
       ) : entries.length === 0 ? (
         <div className="py-10">
           <EmptyState
             icon={<ShieldAlert size={32} strokeWidth={1.2} />}
-            title={t('visitors.watchlist.empty', 'No watchlist entries')}
-            description="Watchlist entries block or flag visitors at check-in by email, phone, national ID, or name. Add an entry to prevent a specific person from registering, or to alert staff when someone attempts a visit."
-            primaryAction={{ label: t('visitors.watchlist.add', 'Add Entry'), icon: <Plus size={14} />, onClick: () => setShowForm(true), 'data-testid': 'visitors-button-add-watchlist-empty' }}
+            title={t('visitors.watchlist.empty.title')}
+            description={t('visitors.watchlist.empty.description')}
+            primaryAction={{ label: t('visitors.watchlist.add'), icon: <Plus size={14} />, onClick: () => setShowForm(true), 'data-testid': 'visitors-button-add-watchlist-empty' }}
           />
         </div>
       ) : (
@@ -101,39 +101,39 @@ export function VisitorWatchlistPage() {
           <DataTable columns={columns} data={entries} rowKey={(r) => r.id} />
           {total > 20 && (
             <div className="flex justify-center gap-2 mt-4">
-              <Button size="xs" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</Button>
-              <span className="text-[12px] text-muted-foreground py-1">Page {page} of {Math.ceil(total / 20)}</span>
-              <Button size="xs" variant="outline" disabled={page >= Math.ceil(total / 20)} onClick={() => setPage(p => p + 1)}>Next</Button>
+              <Button size="xs" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>{t('visitors.history.prev')}</Button>
+              <span className="text-[12px] text-muted-foreground py-1">{t('visitors.history.pageOf', { page, total: Math.ceil(total / 20) })}</span>
+              <Button size="xs" variant="outline" disabled={page >= Math.ceil(total / 20)} onClick={() => setPage(p => p + 1)}>{t('visitors.history.next')}</Button>
             </div>
           )}
         </>
       )}
 
-      <AppModal open={showForm} onOpenChange={setShowForm} title={t('visitors.watchlist.add', 'Add Watchlist Entry')} size="sm" showCancelButton
-        primaryAction={{ label: 'Add', onClick: handleSubmit, disabled: !formData.match_value || !formData.reason || createMutation.isPending }}>
+      <AppModal open={showForm} onOpenChange={setShowForm} title={t('visitors.watchlist.form.addTitle')} size="sm" showCancelButton
+        primaryAction={{ label: t('visitors.watchlist.form.addSubmit'), onClick: handleSubmit, disabled: !formData.match_value || !formData.reason || createMutation.isPending }}>
         <div className="space-y-3">
           <div>
-            <Label className="text-[12px]">{t('visitors.watchlist.type', 'Type')}</Label>
+            <Label className="text-[12px]">{t('visitors.watchlist.form.typeLabel')}</Label>
             <Select className="mt-1 h-8 text-[12px]" value={formData.entry_type} onChange={(e) => setFormData(prev => ({ ...prev, entry_type: e.target.value }))}>
-              <SelectOption value="blacklisted">{t('visitors.watchlist.blocklist', 'Blocklist')}</SelectOption>
-              <SelectOption value="vip">{t('visitors.watchlist.flagged', 'Flagged')}</SelectOption>
+              <SelectOption value="blacklisted">{t('visitors.watchlist.blocklistLabel')}</SelectOption>
+              <SelectOption value="vip">{t('visitors.watchlist.flaggedLabel')}</SelectOption>
             </Select>
           </div>
           <div>
-            <Label className="text-[12px]">{t('visitors.watchlist.field', 'Match Field')}</Label>
+            <Label className="text-[12px]">{t('visitors.watchlist.form.fieldLabel')}</Label>
             <Select className="mt-1 h-8 text-[12px]" value={formData.match_field} onChange={(e) => setFormData(prev => ({ ...prev, match_field: e.target.value }))}>
-              <SelectOption value="email">Email</SelectOption>
-              <SelectOption value="phone">Phone</SelectOption>
-              <SelectOption value="national_id">National ID</SelectOption>
-              <SelectOption value="name">Name</SelectOption>
+              <SelectOption value="email">{t('visitors.watchlist.form.fieldEmail')}</SelectOption>
+              <SelectOption value="phone">{t('visitors.watchlist.form.fieldPhone')}</SelectOption>
+              <SelectOption value="national_id">{t('visitors.watchlist.form.fieldNationalId')}</SelectOption>
+              <SelectOption value="name">{t('visitors.watchlist.form.fieldName')}</SelectOption>
             </Select>
           </div>
           <div>
-            <Label className="text-[12px]">{t('visitors.watchlist.value', 'Value')}</Label>
+            <Label className="text-[12px]">{t('visitors.watchlist.form.valueLabel')}</Label>
             <Input className="mt-1 h-8 text-[13px]" value={formData.match_value} onChange={(e) => setFormData(prev => ({ ...prev, match_value: e.target.value }))} data-testid="visitors-input-watchlist-value" />
           </div>
           <div>
-            <Label className="text-[12px]">{t('visitors.watchlist.reason', 'Reason')}</Label>
+            <Label className="text-[12px]">{t('visitors.watchlist.reason')}</Label>
             <Input className="mt-1 h-8 text-[13px]" value={formData.reason} onChange={(e) => setFormData(prev => ({ ...prev, reason: e.target.value }))} data-testid="visitors-input-watchlist-reason" />
           </div>
         </div>

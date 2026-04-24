@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import {
   PageHeader,
@@ -16,6 +17,7 @@ import {
 } from '@dm3/api-client';
 
 export function VisitorAccessHistoryPage() {
+  const { t } = useTranslation('manage');
   const [visitorId, setVisitorId] = useState<string>('');
   const [page, setPage] = useState(1);
   const [dateFrom, setDateFrom] = useState('');
@@ -43,40 +45,40 @@ export function VisitorAccessHistoryPage() {
 
   const columns: Column<VisitorAccessLogDTO>[] = [
     {
-      key: 'event_time', header: 'Time', width: '160px',
+      key: 'event_time', header: t('visitors.history.columnTime'), width: '160px',
       render: (r) => (
         <span className="font-mono text-[12px] text-muted-foreground">
           {new Date(r.event_time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
         </span>
       ),
     },
-    { key: 'access_point_name', header: 'Access Point', render: (r) => <span className="font-medium">{r.access_point_name ?? r.access_point_id ?? '—'}</span> },
-    { key: 'zone_name', header: 'Zone', width: '120px', render: (r) => <span className="text-muted-foreground text-[12px]">{r.zone_name ?? '—'}</span> },
+    { key: 'access_point_name', header: t('visitors.history.columnAccessPoint'), render: (r) => <span className="font-medium">{r.access_point_name ?? r.access_point_id ?? '—'}</span> },
+    { key: 'zone_name', header: t('visitors.history.columnZone'), width: '120px', render: (r) => <span className="text-muted-foreground text-[12px]">{r.zone_name ?? '—'}</span> },
     {
-      key: 'direction', header: 'Direction', width: '80px',
+      key: 'direction', header: t('visitors.history.columnDirection'), width: '80px',
       render: (r) => (
         <span className={cn('text-[12px] font-medium', r.direction === 'entry' ? 'text-emerald-400' : 'text-orange-400')}>
-          {r.direction === 'entry' ? 'Entry' : r.direction === 'exit' ? 'Exit' : r.direction ?? '—'}
+          {r.direction === 'entry' ? t('visitors.history.entryLabel') : r.direction === 'exit' ? t('visitors.history.exitLabel') : r.direction ?? '—'}
         </span>
       ),
     },
     {
-      key: 'decision', header: 'Result', width: '80px',
+      key: 'decision', header: t('visitors.history.columnResult'), width: '80px',
       render: (r) => (
         <span className={cn('text-[12px] font-medium', r.decision === 'granted' ? 'text-emerald-400' : 'text-destructive')}>
-          {r.decision === 'granted' ? 'Granted' : 'Denied'}
+          {r.decision === 'granted' ? t('visitors.history.grantedLabel') : t('visitors.history.deniedLabel')}
         </span>
       ),
     },
-    { key: 'credential_type', header: 'Method', width: '100px', render: (r) => <span className="text-muted-foreground text-[12px]">{r.credential_type ?? '—'}</span> },
+    { key: 'credential_type', header: t('visitors.history.columnMethod'), width: '100px', render: (r) => <span className="text-muted-foreground text-[12px]">{r.credential_type ?? '—'}</span> },
   ];
 
   return (
     <div>
-      <PageHeader title="Visitor Access History" description="Track visitor entry and exit through access points">
+      <PageHeader title={t('visitors.history.title')} description={t('visitors.history.description')}>
         <div className="flex gap-2 items-center">
           <Input type="date" className="h-8 text-[12px] w-36" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} data-testid="visitors-input-history-from" />
-          <span className="text-muted-foreground text-[12px]">to</span>
+          <span className="text-muted-foreground text-[12px]">{t('visitors.history.dateRangeSeparator')}</span>
           <Input type="date" className="h-8 text-[12px] w-36" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} data-testid="visitors-input-history-to" />
         </div>
       </PageHeader>
@@ -88,10 +90,10 @@ export function VisitorAccessHistoryPage() {
           onChange={(e) => { setVisitorId(e.target.value); setPage(1); }}
           data-testid="visitors-select-history-visitor"
         >
-          <option value="">Select a visitor…</option>
+          <option value="">{t('visitors.history.selectPlaceholder')}</option>
           {visitors.map((v) => (
             <option key={v.visitor_id} value={v.visitor_id}>
-              {v.name}{v.company ? ` — ${v.company}` : ''} · {v.visit_count} visits
+              {v.name}{v.company ? ` — ${v.company}` : ''} · {t('visitors.history.visitsCount', { count: v.visit_count })}
             </option>
           ))}
         </select>
@@ -99,20 +101,20 @@ export function VisitorAccessHistoryPage() {
 
       {!visitorId ? (
         <div className="text-center py-12 text-muted-foreground text-[13px]">
-          Select a visitor to view their access history.
+          {t('visitors.history.selectPrompt')}
         </div>
       ) : isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        <div className="text-center py-12 text-muted-foreground">{t('visitors.history.loading')}</div>
       ) : logs.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">No access log entries found</div>
+        <div className="text-center py-12 text-muted-foreground">{t('visitors.history.noLogs')}</div>
       ) : (
         <>
           <DataTable columns={columns} data={logs} rowKey={(r) => r.id} />
           {total > 20 && (
             <div className="flex justify-center gap-2 mt-4">
-              <Button size="xs" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</Button>
-              <span className="text-[12px] text-muted-foreground py-1">Page {page} of {Math.ceil(total / 20)}</span>
-              <Button size="xs" variant="outline" disabled={page >= Math.ceil(total / 20)} onClick={() => setPage(p => p + 1)}>Next</Button>
+              <Button size="xs" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>{t('visitors.history.prev')}</Button>
+              <span className="text-[12px] text-muted-foreground py-1">{t('visitors.history.pageOf', { page, total: Math.ceil(total / 20) })}</span>
+              <Button size="xs" variant="outline" disabled={page >= Math.ceil(total / 20)} onClick={() => setPage(p => p + 1)}>{t('visitors.history.next')}</Button>
             </div>
           )}
         </>

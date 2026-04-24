@@ -92,7 +92,10 @@ function useHostOptions(search: string) {
         params.set('search', trimmedSearch);
       }
 
-      const response = await apiFetch<{ users?: HostOption[] }>(`/api/v1/users?${params.toString()}`);
+      // Vite proxy only routes /api/v1/identity/ to identity-svc (see
+      // apps/console/vite.config.ts). Bare /api/v1/users doesn't reach
+      // the backend in dev mode — that's why the host dropdown was empty.
+      const response = await apiFetch<{ users?: HostOption[] }>(`/api/v1/identity/users?${params.toString()}`);
       return (response.users ?? []).filter((host) => host.id);
     },
     staleTime: 60_000,
@@ -147,7 +150,11 @@ function HostSelect({ value, onChange, disabled, placeholder, buttonTestId, sear
           <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[360px] p-0" align="start">
+      <PopoverContent
+        className="z-60 p-0"
+        align="start"
+        style={{ width: 'var(--radix-popover-trigger-width)' }}
+      >
         <Command shouldFilter={false}>
           <CommandInput
             placeholder={placeholder}
@@ -325,6 +332,13 @@ export function VisitorsPage() {
   const handlePreRegSubmit = () => {
     if (!formData.firstName || !formData.lastName || !formData.purpose) return;
     if (hostRequired && !formData.hostUserId) return;
+    // <input type="datetime-local"> yields "2026-04-24T14:30" without a
+    // timezone — Go's time.Time JSON decoder rejects that and leaves the
+    // field zero, which BE then reports as "expected_arrival is required".
+    // Normalise to full RFC3339 by roundtripping through Date.
+    const expectedArrivalIso = formData.expectedArrival
+      ? new Date(formData.expectedArrival).toISOString()
+      : new Date().toISOString();
     createVisitMutation.mutate({
       visitor: {
         first_name: formData.firstName,
@@ -335,7 +349,7 @@ export function VisitorsPage() {
       },
       host_user_id: formData.hostUserId || undefined,
       purpose: formData.purpose,
-      expected_arrival: formData.expectedArrival || new Date().toISOString(),
+      expected_arrival: expectedArrivalIso,
       vehicle_plate: formData.vehiclePlate || undefined,
     }, {
       onSuccess: () => {
