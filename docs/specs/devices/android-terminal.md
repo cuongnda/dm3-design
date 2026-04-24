@@ -682,9 +682,10 @@ Reference: `mqtt-protocol.md`
 | `dm/{tid}/device/{did}/evt` | 1 | `access.log` | After every access decision |
 | `dm/{tid}/device/{did}/evt` | 1 | `door.state` | Door sensor change |
 | `dm/{tid}/device/{did}/evt` | 1 | `alarm.triggered` | Tamper, forced door, held open |
+| `dm/{tid}/device/{did}/evt` | 1 | `firmware.check` | On boot + every 6h + on reconnect after long offline (see §12.3) |
 | `dm/{tid}/device/{did}/sta` | 0 | `status.heartbeat` | Every 30 seconds |
 | `dm/{tid}/device/{did}/cmd/resp` | 2 | `cmd.door.resp`, `cmd.snapshot.resp` | After command execution |
-| `dm/{tid}/device/{did}/cfg/ack` | 2 | `cfg.person_sync.ack`, `cfg.access_rules.ack` | After sync processing |
+| `dm/{tid}/device/{did}/cfg/ack` | 2 | `cfg.person_sync.ack`, `cfg.access_rules.ack`, `cfg.firmware.ack` | After sync / update processing |
 
 ### 9.4 LWT
 
@@ -795,25 +796,73 @@ When MQTT is disconnected:
 
 ## 12. OTA Updates
 
-### 12.1 Firmware Update Flow
+OTA supports two triggers that converge on the same `cfg.firmware` install path:
+
+- **Admin-initiated (push)** — operator clicks *Deploy* in the console and the server publishes `cfg.firmware` to the selected devices.
+- **Device-initiated (pull)** — the app publishes `firmware.check` on its `evt` topic; if the server has a newer version for this device_type it responds with `cfg.firmware`. This closes the gap for devices that were offline during a push (admin pushes are **not retained**, so a device offline at deploy time never sees the message).
+
+Full wire spec for both messages lives in `docs/architecture/mqtt-protocol.md §7.7`. This section documents the device-side behaviour.
+
+### 12.1 Install Flow (common to both triggers)
 
 ```
-1. Server publishes cfg.firmware to device
-2. Device validates: version > current, checksum format valid
+1. Device receives cfg.firmware (either from admin push or as a response to firmware.check)
+2. Device validates: version > current, checksum format valid, deployment_id not already applied
 3. If force=false: schedule download at specified time (or 2 AM default)
    If force=true: download immediately
-4. Download APK from URL (HTTPS, resume-capable)
+4. Download APK from URL (HTTPS, resume-capable, 5-min token validity)
 5. Verify SHA-256 checksum
 6. Install via Android PackageInstaller (device owner mode)
 7. App restarts → boot sequence → sync
 8. Heartbeat reports new firmware version
 ```
 
+Between step 1 and step 8 the app publishes `cfg.firmware.ack` progress updates (`downloading` → `installing` → `success` / `failed` / `rolled_back`) so the console can show live progress. See §7.7 of `mqtt-protocol.md` for the ack schema.
+
 ### 12.2 Rollback
 
 - Previous APK retained on device
-- If new version fails to start 3 times → auto-rollback to previous
+- If new version fails to start 3 times → auto-rollback to previous, device publishes `cfg.firmware.ack` with `status=rolled_back` and `previous_version`
 - Server can issue `cfg.firmware` with previous version to force rollback
+
+### 12.3 Device-Initiated Check (pull)
+
+**Why:** admin pushes are not retained, so an offline device misses them. Periodic pull lets the device catch up without operator intervention.
+
+**When to publish `firmware.check`:**
+
+| Trigger | Rationale |
+|---|---|
+| On app boot, ~5s after MQTT is connected | Picks up any firmware uploaded while the device was powered off. Delay avoids overlapping with the initial sync burst. |
+| Every 6 hours (configurable via `cfg.patch.firmware_check_hours`) | Covers devices that stay online 24/7 but miss a push due to broker blip or MQTT reconnect timing. |
+| Immediately after MQTT reconnect when the previous offline gap was ≥ 10 min | Devices that recover from network outages re-request the latest; shorter gaps are ignored to avoid needless traffic. |
+
+**Payload (publish on `dm/{tid}/device/{did}/evt`, QoS 1):**
+
+```json
+{
+  "v": 1,
+  "type": "firmware.check",
+  "data": {
+    "current_version": "3.2.1",
+    "device_type": "ra08"
+  }
+}
+```
+
+`device_type` is optional — the server prefers `dm3_devices.devices.type` and falls back to this field only when the DB row has no type set.
+
+**Response semantics:**
+
+- **Newer version available** → server publishes `cfg.firmware` on the device's `cfg` topic within a few seconds; install flow continues from step 1 of §12.1.
+- **Already up-to-date** → server silently logs and sends nothing. Device treats silence as "no update" — do **not** retry on a short timer; the next scheduled check covers this.
+- **No firmware registered for this device_type** → same silent outcome as up-to-date from the device's POV.
+
+**Don'ts:**
+
+- Do **not** block boot waiting for a response — `firmware.check` is fire-and-forget; the rest of the app must continue.
+- Do **not** spam retries. If nothing arrives within 30s, assume no update and move on.
+- Do **not** include the current APK checksum in the request — the server makes its decision purely on `device_type` + `current_version`.
 
 ---
 

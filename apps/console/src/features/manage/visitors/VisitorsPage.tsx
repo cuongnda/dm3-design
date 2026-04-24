@@ -25,6 +25,7 @@ import { Check, ChevronsUpDown, Loader2, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
 import type { VisitDTO } from '@dm3/api-client';
+import { getVisitorSettings } from '@dm3/api-client';
 import { useQuery } from '@tanstack/react-query';
 import {
   useVisitsList,
@@ -211,6 +212,14 @@ export function VisitorsPage() {
 
   const { data: visitsData, isLoading, error } = useVisitsList(params);
   const { data: summary } = useTodaySummary();
+  const { data: visitorSettings } = useQuery({
+    queryKey: ['visitor-settings'],
+    queryFn: () => getVisitorSettings(),
+    staleTime: 5 * 60_000,
+  });
+  // Host is required only when the tenant has the approval workflow on —
+  // otherwise the visit auto-approves and there's no host to route to.
+  const hostRequired = visitorSettings?.approval_required ?? true;
   const createVisitMutation = useCreateVisit();
   const approveMutation = useApproveVisit();
   const checkinMutation = useCheckinVisit();
@@ -314,7 +323,8 @@ export function VisitorsPage() {
   });
 
   const handlePreRegSubmit = () => {
-    if (!formData.firstName || !formData.lastName || !formData.hostUserId || !formData.purpose) return;
+    if (!formData.firstName || !formData.lastName || !formData.purpose) return;
+    if (hostRequired && !formData.hostUserId) return;
     createVisitMutation.mutate({
       visitor: {
         first_name: formData.firstName,
@@ -323,7 +333,7 @@ export function VisitorsPage() {
         phone: formData.phone || undefined,
         company: formData.company || undefined,
       },
-      host_user_id: formData.hostUserId,
+      host_user_id: formData.hostUserId || undefined,
       purpose: formData.purpose,
       expected_arrival: formData.expectedArrival || new Date().toISOString(),
       vehicle_plate: formData.vehiclePlate || undefined,
@@ -439,7 +449,7 @@ export function VisitorsPage() {
           size: 'sm',
           className: 'bg-manage hover:bg-manage/90',
           onClick: handlePreRegSubmit,
-          disabled: createVisitMutation.isPending || !formData.hostUserId,
+          disabled: createVisitMutation.isPending || (hostRequired && !formData.hostUserId),
         }}
       >
         <div className="space-y-3">
@@ -473,7 +483,9 @@ export function VisitorsPage() {
               value={formData.company} onChange={e => updateForm('company', e.target.value)} />
           </div>
           <div>
-            <Label className="text-[12px]">{t('visitors.form.host')}</Label>
+            <Label className="text-[12px]">
+              {t('visitors.form.host')}{hostRequired ? ' *' : ''}
+            </Label>
             <HostSelect
               value={formData.hostUserId}
               onChange={(host) => setFormData((prev) => ({
@@ -551,7 +563,9 @@ export function VisitorsPage() {
             </div>
           </div>
           <div>
-            <Label className="text-[12px]">{t('visitors.form.host')}</Label>
+            <Label className="text-[12px]">
+              {t('visitors.form.host')}{hostRequired ? ' *' : ''}
+            </Label>
             <HostSelect
               value={walkinData.hostUserId}
               onChange={(host) => setWalkinData((prev) => ({

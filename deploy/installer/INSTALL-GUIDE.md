@@ -48,8 +48,15 @@ The installer will automatically:
   (`API_URL`, `APP_URL`, `MQTT_WS_URL`, `CORS_ORIGIN`, `MEDIAMTX_PUBLIC_IP`),
   so a fresh install works on a raw IP out of the box. You can override these
   later with real domain names once DNS + TLS are set up.
-- Open the `.env` file for you to edit secrets (`DB_PASSWORD`, `JWT_SECRET`, etc.)
+- **Auto-generate strong random secrets** for `DB_PASSWORD`, `JWT_SECRET`,
+  `BOOTSTRAP_SECRET`, `MINIO_ROOT_PASSWORD`, `CCTV_CREDENTIAL_KEY`,
+  `MEDIAMTX_STREAM_PASS`, `MEDIAMTX_API_PASS` via `openssl rand`. Values are
+  written only to `.env` (mode 0600) — never printed.
+- Refuse to start if any critical secret is still a placeholder (no bypass).
 - Start all selected services
+
+The only value you may need to edit manually is `SMTP_PASSWORD` — and only if
+you want transactional email. Email features stay disabled until it's set.
 
 **Install directory auto-selection**
 - Default: `/opt/dm3`
@@ -97,16 +104,20 @@ nano $DM3_DIR/.env
 
 ### Required Variables
 
-| Variable | Description | How to Generate |
+`install.sh` auto-generates all of these except `SMTP_PASSWORD` on a fresh
+install. You only need to edit `.env` manually if you want to rotate them
+later, or to set `SMTP_PASSWORD` for email.
+
+| Variable | Description | Auto-generated? |
 |---|---|---|
-| `DB_PASSWORD` | Database password | Use a strong password (16+ chars) |
-| `JWT_SECRET` | JWT signing key (≥32 chars) | `openssl rand -hex 64` |
-| `BOOTSTRAP_SECRET` | Device bootstrap key | `openssl rand -hex 32` |
-| `MINIO_ROOT_PASSWORD` | MinIO storage password | Use a strong password |
-| `CCTV_CREDENTIAL_KEY` | Encryption key for stored RTSP creds (cctv-svc) | `openssl rand -base64 32` |
-| `MEDIAMTX_STREAM_PASS` | MediaMTX stream publish/read password | `openssl rand -hex 24` |
-| `MEDIAMTX_API_PASS` | MediaMTX admin API password | `openssl rand -hex 24` |
-| `SMTP_PASSWORD` | SMTP password for transactional email | App password from provider |
+| `DB_PASSWORD` | Database password | ✅ `openssl rand -hex 24` |
+| `JWT_SECRET` | JWT signing key | ✅ `openssl rand -hex 64` |
+| `BOOTSTRAP_SECRET` | Device bootstrap key | ✅ `openssl rand -hex 32` |
+| `MINIO_ROOT_PASSWORD` | MinIO storage password | ✅ `openssl rand -hex 24` |
+| `CCTV_CREDENTIAL_KEY` | Encryption key for stored RTSP creds (cctv-svc) | ✅ `openssl rand -base64 32` |
+| `MEDIAMTX_STREAM_PASS` | MediaMTX stream publish/read password | ✅ `openssl rand -hex 24` |
+| `MEDIAMTX_API_PASS` | MediaMTX admin API password | ✅ `openssl rand -hex 24` |
+| `SMTP_PASSWORD` | SMTP password for transactional email | ❌ Set manually (provider app password) |
 
 ### Optional Variables
 

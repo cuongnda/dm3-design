@@ -218,6 +218,7 @@ func main() {
 		fwDownloadURL = fmt.Sprintf("http://localhost:%d", cfg.HTTPPort)
 	}
 	firmwareHandlers := gateway.NewFirmwareHandlers(database, objectStore, mqttClient, auditLog, fwDownloadURL)
+	mqttHandler.SetFirmwareHandlers(firmwareHandlers)
 	emqxHandlers := gateway.NewEMQXHandlers(cfg.EMQXApiURL, cfg.EMQXApiUser, cfg.EMQXApiPassword)
 	mediaHandlers := gateway.NewMediaHandlers(objectStore, cfg.JWTSecret)
 

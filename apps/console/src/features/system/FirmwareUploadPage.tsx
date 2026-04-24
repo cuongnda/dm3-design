@@ -24,7 +24,7 @@ export function FirmwareUploadPage() {
   });
 
   const setFile = useCallback((file: File | null) => {
-    if (file && file.size > 100 * 1024 * 1024) {
+    if (file && file.size > 500 * 1024 * 1024) {
       setError(t('firmware.fileTooLarge'));
       return;
     }

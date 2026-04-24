@@ -164,7 +164,7 @@ func (h *VisitorHandlers) GetEvacuationList(w http.ResponseWriter, r *http.Reque
 		SELECT v.id, v.visitor_id,
 		       vis.first_name || ' ' || vis.last_name,
 		       vis.company, vis.phone, vis.photo_ref,
-		       v.host_user_id,
+		       COALESCE(v.host_user_id::text,''),
 		       v.actual_checkin,
 		       last_log.access_point_name, last_log.zone_name, last_log.event_time
 		FROM dm3_visitor.visits v

@@ -15,12 +15,14 @@ import {
 } from '@dm3/ui';
 import { Trash2, PauseCircle, PlayCircle, Plus, Pencil, CalendarClock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 import {
   listRecurringTemplates,
   createRecurringTemplate,
   updateRecurringTemplate,
   deleteRecurringTemplate,
   listVisits,
+  getVisitorSettings,
   type RecurringTemplateDTO,
   type VisitorDTO,
   type CreateRecurringTemplateRequest,
@@ -69,6 +71,7 @@ function getVisitorLabel(v: VisitorDTO): string {
 }
 
 export function VisitorRecurringPage() {
+  const { t } = useTranslation('manage');
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -79,6 +82,14 @@ export function VisitorRecurringPage() {
     queryFn: () => listRecurringTemplates(),
   });
   const templates = data?.data ?? [];
+
+  const { data: visitorSettings } = useQuery({
+    queryKey: ['visitor-settings'],
+    queryFn: () => getVisitorSettings(),
+    staleTime: 5 * 60_000,
+  });
+  // Host is required only when the tenant has the approval workflow on.
+  const hostRequired = visitorSettings?.approval_required ?? true;
 
   // Derive visitor pool from recent visits (no dedicated /visitors endpoint)
   const { data: visitsData } = useQuery({
@@ -188,14 +199,15 @@ export function VisitorRecurringPage() {
   });
 
   const canSubmit = Boolean(
-    form.visitor_id && form.host_user_id && form.purpose && form.recurrence_rule && form.start_date
+    form.visitor_id && form.purpose && form.recurrence_rule && form.start_date
+      && (!hostRequired || form.host_user_id),
   );
 
   const handleSubmit = () => {
     if (!canSubmit) return;
     const payload: CreateRecurringTemplateRequest = {
       visitor_id: form.visitor_id,
-      host_user_id: form.host_user_id,
+      host_user_id: form.host_user_id || undefined,
       purpose: form.purpose,
       recurrence_rule: form.recurrence_rule,
       start_date: form.start_date,
@@ -360,12 +372,14 @@ export function VisitorRecurringPage() {
           </div>
 
           <div>
-            <Label className="text-[12px]">Host *</Label>
+            <Label className="text-[12px]">
+              {t('visitors.form.host')}{hostRequired ? ' *' : ''}
+            </Label>
             <HostSelect
               value={form.host_user_id}
               onChange={(host) => setForm((f) => ({ ...f, host_user_id: host?.id ?? '' }))}
-              placeholder="Select host user"
-              emptyLabel="No matching hosts"
+              placeholder={t('visitors.form.hostPlaceholder')}
+              emptyLabel={t('visitors.form.hostEmpty')}
               buttonTestId="visitors-select-recurring-host"
               searchInputTestId="visitors-search-recurring-host"
             />

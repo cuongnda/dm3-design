@@ -391,7 +391,7 @@
   "firmware.selectDeviceType": "Select device type",
   "firmware.descriptionPlaceholder": "Release notes, changelog...",
   "firmware.dropHere": "Drop firmware file here or click to browse",
-  "firmware.fileTooLarge": "File exceeds 100MB limit",
+  "firmware.fileTooLarge": "File exceeds 500MB limit",
   "firmware.fillRequired": "File, version and device type are required",
   "firmware.uploading": "Uploading...",
   "firmware.uploadSuccess": "Firmware Uploaded Successfully",

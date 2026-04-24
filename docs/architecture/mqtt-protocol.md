@@ -3,6 +3,7 @@
 > IoT Device ↔ Server Communication Protocol
 > Version: 1.8 | Updated: 2026-04-22
 > Changelog:
+> - v1.9 — §7.7 adds **device-initiated firmware check** (`firmware.check` published on `evt`) and a new `denied_force_close` reason on access.log. Firmware OTA now supports both admin push and device pull — pull closes the gap for devices that were offline during a push, since `cfg.firmware` is **not retained**. Server-side publish QoS for `cfg.firmware` lowered from 2 → 1 to match the server's subscribe QoS and avoid QoS 2's 4-way handshake on slow brokers; duplication is idempotent via `deployment_id`.
 > - v1.8 — `cfg.person_sync` entries now carry `user_code` alongside `user_id`. Face-enrol terminals (df970/ba8300/bd8500/ra08/dq200) need this to build `credential_value: "M_<user_code>"` on their `evt.face_result` ack — without it the server could never flip the M_ credential to `active`.
 > - v1.7 — Credential objects in `cfg.person_sync` now emit a **stable shape**: every entry carries the same keys (`uid`, `template`, `code`, `version`, `finger`) regardless of `type`, with unused fields sent as empty strings. Lets firmware parse with one schema instead of branching on which JSON key is present.
 > - v1.6 — §7.9 added: `cfg.kiosk_config` pushes `{api_base_url, company_code, kiosk_token}` to DM3-provisioned LPR kiosks so the `/register-visit` bearer is distributed by Transmit Data rather than manually pasted. Every push rotates the token.
@@ -399,7 +400,7 @@ All messages follow a standard envelope format:
     "user_id": "user-uuid",
     "user_name": "Nguyễn Văn A",
     "confidence": 0.97,
-    "reason": "authorized|denied_expired|denied_zone|denied_time|denied_unknown|denied_blacklist|denied_invalid_card|denied_invalid_qr|denied_invalid_pin|denied_invalid_face|denied_invalid_fp|denied_no_credential|denied_anti_passback|denied_offline",
+    "reason": "authorized|denied_expired|denied_zone|denied_time|denied_unknown|denied_blacklist|denied_invalid_card|denied_invalid_qr|denied_invalid_pin|denied_invalid_face|denied_invalid_fp|denied_no_credential|denied_anti_passback|denied_offline|denied_force_close",
     "credentials": [                          // Ordered list of credentials presented in this scan (preferred)
       { "type": "qr_code",  "value": "123456789" },
       { "type": "card_uid", "value": "9A232AE9" }
@@ -429,6 +430,9 @@ left untouched in `access_events.metadata`; new rows always store keys.
 
 **Field notes:**
 
+- **`reason`** — enum of outcome codes. Most values describe credential/rule failures; two describe device-level states where no rule was evaluated:
+  - `denied_offline` — device had no synced user DB / rules available at scan time.
+  - `denied_force_close` — door is in **force-close / lockdown** state (e.g. triggered by a guard, emergency lockdown, or a `door.forced` alarm). User presented a valid credential but the door is temporarily refusing all check-ins until the force-close state is cleared. Pair this with a `door.state` event where `state=forced` for the incident timeline.
 - **`user_id`** — must be the full 36-character UUID. Some legacy firmware truncates this to 30 chars; the server will reject the truncated value via `uuidRegex` and fall back to resolving the user via the credential value (see below). Firmware must send the complete UUID.
 - **`user_name`** — optional. If empty, the server enriches the broadcast with the resolved user's full name from `dm3_identity.users`.
 - **`credentials`** *(preferred — added 2026-04)* — an **ordered array** of every credential the device matched in this scan. Each entry is `{ "type": "<credential_type>", "value": "<raw_value>" }`. The order reflects the actual scan sequence in N-step verify, so a "QR then card" verify yields:
@@ -1167,7 +1171,12 @@ Device logic: if `passage_time` is active for the current time → open for all 
 
 ### 7.7 Firmware OTA Update
 
-#### Flow
+Firmware OTA supports **two directions**, both producing the same `cfg.firmware` push from the server:
+
+1. **Admin-initiated (push):** operator clicks *Deploy* in the console.
+2. **Device-initiated (pull):** device publishes `firmware.check` on `evt` and the server decides whether to respond with a `cfg.firmware`. Use this on boot, after a long offline window, or on a periodic timer — it lets devices catch up on updates they missed while offline (retain is **not** set on `cfg.firmware`, so a push delivered while the device is offline is lost).
+
+#### Flow — Admin-initiated
 
 ```
 Admin uploads firmware → clicks Deploy → selects devices
@@ -1176,7 +1185,7 @@ Server creates deployment record per device
     ↓
 Server generates time-limited download token (5 min expiry)
     ↓
-Server publishes cfg.firmware MQTT message (QoS 2) to each device
+Server publishes cfg.firmware MQTT message (QoS 1) to each device
     ↓
 Device receives message, downloads binary via token URL
     ↓
@@ -1187,9 +1196,54 @@ Server updates deployment status, device firmware_version, device_event history
 Frontend shows real-time progress (3s polling)
 ```
 
+#### Flow — Device-initiated
+
+```
+Device boots OR timer fires OR reconnects after offline gap
+    ↓
+Device publishes firmware.check on dm/{tid}/device/{did}/evt (QoS 1)
+    ↓
+Server looks up latest active firmware for this device_type in dm3_devices.firmwares
+    ↓
+Compares reported current_version vs latest (dot-numeric compare, "v" prefix stripped)
+    ↓
+If latest > current  → reuses the admin-deploy path (creates deployment row,
+                       generates token, publishes cfg.firmware back)
+If latest ≤ current  → no response (device treats silence as up-to-date)
+If no firmware for   → no response; server logs for visibility
+this device_type
+```
+
+#### Device → Server: `firmware.check`
+
+Topic: `dm/{tenant_id}/device/{device_id}/evt` (QoS 1)
+
+```json
+{
+  "v": 1,
+  "type": "firmware.check",
+  "data": {
+    "current_version": "3.2.1",
+    "device_type": "ra08"
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `current_version` | string | Firmware version currently running on the device. Empty string is accepted and forces the server to send the latest. |
+| `device_type` | string | *(Optional)* device model. Server prefers `dm3_devices.devices.type` and falls back to this when the DB row has no type set. |
+
+**When to send:**
+- On boot, after MQTT is connected (a few seconds delay is fine).
+- On a low-frequency timer (e.g. every 6–24h) so devices that boot before a new firmware is uploaded still pick it up later in the day.
+- Right after reconnecting from a long offline window, since offline devices miss non-retained admin pushes.
+
+**Server response semantics:** if an update is needed the device will receive `cfg.firmware` on its `cfg` topic within a few seconds. No explicit "no update" message is sent — devices should not block or retry on silence.
+
 #### Server → Device: `cfg.firmware`
 
-Topic: `dm/{tenant_id}/device/{device_id}/cfg` (QoS 2)
+Topic: `dm/{tenant_id}/device/{device_id}/cfg` (QoS 1)
 
 ```json
 {

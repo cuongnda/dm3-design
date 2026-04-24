@@ -276,7 +276,10 @@ services:
       # Shared with cctv-svc: required to provision type=camera devices via
       # /api/v1/gateway/devices/provision (encrypts RTSP password at rest).
       CCTV_CREDENTIAL_KEY: ${CCTV_CREDENTIAL_KEY:?CCTV_CREDENTIAL_KEY must be set in .env (32+ chars)}
-      WS_ALLOWED_ORIGINS: "https://dm3.demasterpro.com,http://dm3.demasterpro.com"
+      # Reads from .env so IP-mode installers can substitute
+      # __SERVER_IP__ without editing compose. Falls back to the production
+      # domain list so existing demo/prod deploys stay working if .env is bare.
+      WS_ALLOWED_ORIGINS: "${WS_ALLOWED_ORIGINS:-https://dm3.demasterpro.com,http://dm3.demasterpro.com}"
     depends_on:
       migrate:
         condition: service_completed_successfully

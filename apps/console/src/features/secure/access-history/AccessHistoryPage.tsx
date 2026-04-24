@@ -12,11 +12,27 @@ import {
   listAccessEvents,
   exportAccessEvents,
   listAccessPoints,
-  listPersons,
   type AccessEventRecord,
   type ListAccessEventsParams,
   type CCTVMediaItem,
 } from '@dm3/api-client';
+import { apiFetch } from '@/lib/api';
+
+// Identity service exposes the user list at /api/v1/identity/users (the Vite
+// proxy in apps/console/vite.config.ts only routes paths under that prefix
+// to the identity-svc on :8004). `listPersons` from @dm3/api-client points
+// at /api/v1/persons which doesn't exist, hence the empty dropdown bug.
+// Response shape is `{ users: [...], pagination: {...} }`, reshaped here to
+// match what PersonSelect already expects.
+type PersonOption = { id: string; first_name: string; last_name: string };
+
+async function fetchUserOptions(search?: string): Promise<{ data: PersonOption[] }> {
+  const qs = new URLSearchParams({ limit: '100', status: 'active', sort_by: 'full_name', sort_order: 'ASC' });
+  const trimmed = search?.trim();
+  if (trimmed) qs.set('search', trimmed);
+  const res = await apiFetch<{ users?: PersonOption[] }>(`/api/v1/identity/users?${qs.toString()}`);
+  return { data: (res.users ?? []).filter((u) => u.id) };
+}
 import {
   Button,
   Label,
@@ -54,7 +70,10 @@ import { toast } from '@/lib/toast';
 
 const LIMIT = 50;
 
-const CREDENTIAL_TYPES = ['card', 'pin', 'face', 'plate', 'qr', 'uhf'] as const;
+// Values written to access_events.credential_type by every ingest path —
+// keep in sync with backend/internal/access/handlers.go credentialTypeAliases.
+// `plate` is server-side expanded to also match Hanet's `plate_number`.
+const CREDENTIAL_TYPES = ['card', 'pin', 'face', 'plate', 'qr', 'uhf', 'fingerprint', 'nfc', 'rfid'] as const;
 
 // ─── URL-param helpers ──────────────────────────────────────────────────────
 
@@ -533,7 +552,7 @@ function AccessPointSelect({ value, onChange }: AccessPointSelectProps) {
               <CommandItem
                 value="__all__"
                 onSelect={() => handleSelect('')}
-                className="text-[13px]"
+                className="text-[13px] cursor-pointer"
               >
                 <Check className={cn('mr-2 size-4', !value ? 'opacity-100' : 'opacity-0')} />
                 {t('accessHistory.filters.accessPointAll')}
@@ -543,7 +562,7 @@ function AccessPointSelect({ value, onChange }: AccessPointSelectProps) {
                   key={ap.id}
                   value={ap.id}
                   onSelect={() => handleSelect(ap.id)}
-                  className="text-[13px]"
+                  className="text-[13px] cursor-pointer"
                 >
                   <Check className={cn('mr-2 size-4', value === ap.id ? 'opacity-100' : 'opacity-0')} />
                   {ap.name}
@@ -557,11 +576,11 @@ function AccessPointSelect({ value, onChange }: AccessPointSelectProps) {
   );
 }
 
-// ─── User (person) combobox ──────────────────────────────────────────────────
+// ─── User (person) multi-select combobox ────────────────────────────────────
 
 interface PersonSelectProps {
-  value: string;
-  onChange: (id: string) => void;
+  value: string[];
+  onChange: (ids: string[]) => void;
 }
 
 function PersonSelect({ value, onChange }: PersonSelectProps) {
@@ -572,32 +591,46 @@ function PersonSelect({ value, onChange }: PersonSelectProps) {
 
   const { data, isLoading } = useQuery({
     queryKey: ['persons-filter', debouncedSearch],
-    queryFn: () =>
-      listPersons({ limit: 100, ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}) }),
+    queryFn: () => fetchUserOptions(debouncedSearch),
     staleTime: 60_000,
   });
 
   const items = data?.data ?? [];
 
-  const { data: selectedData } = useQuery({
-    queryKey: ['persons-filter-selected', value],
-    queryFn: () => listPersons({ limit: 1, search: value }),
-    enabled: !!value && !items.find((p) => p.id === value),
+  // When exactly one user is selected and it's not in the current items list
+  // (e.g. after a page reload), fetch its name so the trigger shows it
+  // instead of a bare "1 selected". For 2+ selected we just show a count.
+  const singleSelectedId = value.length === 1 ? value[0] : '';
+  const { data: singleSelectedData } = useQuery({
+    queryKey: ['persons-filter-selected', singleSelectedId],
+    queryFn: () => fetchUserOptions(singleSelectedId),
+    enabled: !!singleSelectedId && !items.find((p) => p.id === singleSelectedId),
     staleTime: 5 * 60_000,
   });
-
-  const selectedFromList = items.find((p) => p.id === value);
-  const selectedFromFallback = selectedData?.data?.[0];
-  const selected = selectedFromList ?? (value ? selectedFromFallback ?? null : null);
 
   function getDisplayName(p: { first_name: string; last_name: string }) {
     return `${p.first_name} ${p.last_name}`.trim();
   }
 
-  function handleSelect(id: string) {
-    onChange(id === value ? '' : id);
-    setOpen(false);
-    setSearch('');
+  function toggle(id: string) {
+    onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
+    // Don't close — multi-select UX. User clicks outside / hits Escape to commit.
+  }
+
+  function clearAll() {
+    onChange([]);
+  }
+
+  let triggerLabel: string;
+  if (value.length === 0) {
+    triggerLabel = t('accessHistory.filters.userAll');
+  } else if (value.length === 1) {
+    const fromList = items.find((p) => p.id === value[0]);
+    const fromFallback = singleSelectedData?.data?.[0];
+    const sel = fromList ?? fromFallback;
+    triggerLabel = sel ? getDisplayName(sel) : t('accessHistory.filters.usersSelected', { count: 1 });
+  } else {
+    triggerLabel = t('accessHistory.filters.usersSelected', { count: value.length });
   }
 
   return (
@@ -617,9 +650,7 @@ function PersonSelect({ value, onChange }: PersonSelectProps) {
           data-testid="access-history-select-user"
           className="w-[220px] h-9 justify-between text-[13px] font-normal"
         >
-          <span className="truncate text-left">
-            {selected ? getDisplayName(selected) : t('accessHistory.filters.userAll')}
-          </span>
+          <span className="truncate text-left">{triggerLabel}</span>
           <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -641,22 +672,23 @@ function PersonSelect({ value, onChange }: PersonSelectProps) {
                 <CommandGroup>
                   <CommandItem
                     value="__all__"
-                    onSelect={() => handleSelect('')}
-                    className="text-[13px]"
+                    onSelect={clearAll}
+                    className="text-[13px] cursor-pointer"
                   >
-                    <Check className={cn('mr-2 size-4', !value ? 'opacity-100' : 'opacity-0')} />
+                    <Check className={cn('mr-2 size-4', value.length === 0 ? 'opacity-100' : 'opacity-0')} />
                     {t('accessHistory.filters.userAll')}
                   </CommandItem>
                   {items.map((person) => {
                     const name = getDisplayName(person);
+                    const checked = value.includes(person.id);
                     return (
                       <CommandItem
                         key={person.id}
                         value={person.id}
-                        onSelect={() => handleSelect(person.id)}
-                        className="text-[13px]"
+                        onSelect={() => toggle(person.id)}
+                        className="text-[13px] cursor-pointer"
                       >
-                        <Check className={cn('mr-2 size-4', value === person.id ? 'opacity-100' : 'opacity-0')} />
+                        <Check className={cn('mr-2 size-4', checked ? 'opacity-100' : 'opacity-0')} />
                         {name}
                       </CommandItem>
                     );
@@ -664,6 +696,90 @@ function PersonSelect({ value, onChange }: PersonSelectProps) {
                 </CommandGroup>
               </>
             )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Generic multi-option combobox (used for decision + credential type) ───
+//
+// Differs from PersonSelect: static option list (no server search), single
+// "All" reset, click toggles without closing the popover.
+
+interface MultiOption {
+  value: string;
+  label: string;
+}
+
+interface MultiOptionSelectProps {
+  value: string[];
+  onChange: (values: string[]) => void;
+  options: MultiOption[];
+  allLabel: string;
+  selectedSummary: (count: number) => string;
+  width?: string;
+  testId?: string;
+}
+
+function MultiOptionSelect({
+  value, onChange, options, allLabel, selectedSummary, width = '160px', testId,
+}: MultiOptionSelectProps) {
+  const [open, setOpen] = useState(false);
+
+  function toggle(v: string) {
+    onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v]);
+  }
+
+  let triggerLabel: string;
+  if (value.length === 0) {
+    triggerLabel = allLabel;
+  } else if (value.length === 1) {
+    triggerLabel = options.find((o) => o.value === value[0])?.label ?? value[0];
+  } else {
+    triggerLabel = selectedSummary(value.length);
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          data-testid={testId}
+          className="h-9 justify-between text-[13px] font-normal"
+          style={{ width }}
+        >
+          <span className="truncate text-left">{triggerLabel}</span>
+          <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0" align="start" style={{ width }}>
+        <Command shouldFilter={false}>
+          <CommandList>
+            <CommandGroup>
+              <CommandItem value="__all__" onSelect={() => onChange([])} className="text-[13px] cursor-pointer">
+                <Check className={cn('mr-2 size-4', value.length === 0 ? 'opacity-100' : 'opacity-0')} />
+                {allLabel}
+              </CommandItem>
+              {options.map((o) => {
+                const checked = value.includes(o.value);
+                return (
+                  <CommandItem
+                    key={o.value}
+                    value={o.value}
+                    onSelect={() => toggle(o.value)}
+                    className="text-[13px] cursor-pointer"
+                  >
+                    <Check className={cn('mr-2 size-4', checked ? 'opacity-100' : 'opacity-0')} />
+                    {o.label}
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
           </CommandList>
         </Command>
       </PopoverContent>
@@ -1034,6 +1150,22 @@ export function AccessHistoryPage() {
   const credentialTypeParam = searchParams.get('credential_type') ?? '';
   const pageParam = Number(searchParams.get('page') ?? '1') || 1;
 
+  // Multi-select tokens come through as a single comma-separated URL value
+  // (e.g. ?user_id=uuid1,uuid2). Memoised so the array identity is stable per
+  // URL state — otherwise React Query refetches on every render.
+  const userIds = useMemo(
+    () => (userIdParam ? userIdParam.split(',').filter(Boolean) : []),
+    [userIdParam],
+  );
+  const decisionTokens = useMemo(
+    () => (decisionParam ? decisionParam.split(',').filter(Boolean) : []),
+    [decisionParam],
+  );
+  const credentialTokens = useMemo(
+    () => (credentialTypeParam ? credentialTypeParam.split(',').filter(Boolean) : []),
+    [credentialTypeParam],
+  );
+
   const defaultRange = useMemo(
     () => ({ from: defaultFromIso(), to: defaultToIso() }),
     [],
@@ -1076,9 +1208,9 @@ export function AccessHistoryPage() {
     from: fromIso,
     to: toIso,
     ...(accessPointParam ? { access_point_id: accessPointParam } : {}),
-    ...(userIdParam ? { user_id: userIdParam } : {}),
-    ...(decisionParam ? { decision: decisionParam } : {}),
-    ...(credentialTypeParam ? { credential_type: credentialTypeParam } : {}),
+    ...(userIds.length > 0 ? { user_id: userIds } : {}),
+    ...(decisionTokens.length > 0 ? { decision: decisionTokens } : {}),
+    ...(credentialTokens.length > 0 ? { credential_type: credentialTokens } : {}),
   };
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -1129,7 +1261,7 @@ export function AccessHistoryPage() {
         from: fromIso,
         to: toIso,
         ...(accessPointParam ? { access_point_id: accessPointParam } : {}),
-        ...(userIdParam ? { user_id: userIdParam } : {}),
+        ...(userIds.length > 0 ? { user_id: userIds } : {}),
         ...(decisionParam ? { decision: decisionParam } : {}),
         ...(credentialTypeParam ? { credential_type: credentialTypeParam } : {}),
       };
@@ -1228,40 +1360,40 @@ export function AccessHistoryPage() {
           <div className="flex flex-col gap-1">
             <Label className="text-[11px]">{t('accessHistory.filters.user')}</Label>
             <PersonSelect
-              value={userIdParam}
-              onChange={(id) => updateParams({ user_id: id, page: '' })}
+              value={userIds}
+              onChange={(ids) => updateParams({ user_id: ids.join(','), page: '' })}
             />
           </div>
 
           {/* Decision */}
           <div className="flex flex-col gap-1">
             <Label className="text-[11px]">{t('accessHistory.filters.decision')}</Label>
-            <Select
-              value={decisionParam}
-              onChange={(e) => updateParams({ decision: e.target.value, page: '' })}
-              className="w-[140px]"
-              data-testid="access-history-select-decision"
-            >
-              <SelectOption value="">{t('accessHistory.filters.allDecisions')}</SelectOption>
-              <SelectOption value="granted">{t('accessHistory.filters.granted')}</SelectOption>
-              <SelectOption value="denied">{t('accessHistory.filters.denied')}</SelectOption>
-            </Select>
+            <MultiOptionSelect
+              value={decisionTokens}
+              onChange={(vs) => updateParams({ decision: vs.join(','), page: '' })}
+              options={[
+                { value: 'granted', label: t('accessHistory.filters.granted') },
+                { value: 'denied', label: t('accessHistory.filters.denied') },
+              ]}
+              allLabel={t('accessHistory.filters.allDecisions')}
+              selectedSummary={(count) => t('accessHistory.filters.decisionsSelected', { count })}
+              width="160px"
+              testId="access-history-select-decision"
+            />
           </div>
 
           {/* Credential Type */}
           <div className="flex flex-col gap-1">
             <Label className="text-[11px]">{t('accessHistory.filters.credentialType')}</Label>
-            <Select
-              value={credentialTypeParam}
-              onChange={(e) => updateParams({ credential_type: e.target.value, page: '' })}
-              className="w-[140px]"
-              data-testid="access-history-select-credential-type"
-            >
-              <SelectOption value="">{t('accessHistory.filters.allCredentials')}</SelectOption>
-              {CREDENTIAL_TYPES.map((ct) => (
-                <SelectOption key={ct} value={ct}>{ct}</SelectOption>
-              ))}
-            </Select>
+            <MultiOptionSelect
+              value={credentialTokens}
+              onChange={(vs) => updateParams({ credential_type: vs.join(','), page: '' })}
+              options={CREDENTIAL_TYPES.map((ct) => ({ value: ct, label: ct }))}
+              allLabel={t('accessHistory.filters.allCredentials')}
+              selectedSummary={(count) => t('accessHistory.filters.credentialsSelected', { count })}
+              width="180px"
+              testId="access-history-select-credential-type"
+            />
           </div>
 
           {/* Clear */}

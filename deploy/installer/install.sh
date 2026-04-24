@@ -163,16 +163,54 @@ install_files() {
   else
     sed "s|__SERVER_IP__|${server_ip}|g" "$SCRIPT_DIR/.env.example" > "$INSTALL_DIR/.env"
     echo -e "  ${GREEN}✓${RESET} .env (from template, __SERVER_IP__ → ${server_ip})"
-    echo ""
-    echo -e "${YELLOW}╔════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${YELLOW}║  ⚠  IMPORTANT: You MUST edit .env before starting!       ║${RESET}"
-    echo -e "${YELLOW}║     Change all CHANGE_ME values to real passwords.        ║${RESET}"
-    echo -e "${YELLOW}╚════════════════════════════════════════════════════════════╝${RESET}"
-    echo ""
-    read -p "  Edit .env now? [Y/n] " -r
-    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-      ${EDITOR:-nano} "$INSTALL_DIR/.env"
+
+    # Auto-generate strong random secrets for every placeholder we know how to
+    # fill. Generation happens entirely on the target server — values are
+    # never printed to stdout/stderr. User can still edit .env to override.
+    # Skipped: SMTP_PASSWORD (requires real provider-issued credential) and
+    # anything already customised (only values matching CHANGE_ME* / placeholder
+    # tokens are replaced).
+    if ! command -v openssl &>/dev/null; then
+      echo -e "  ${YELLOW}⚠${RESET} openssl not available — cannot auto-generate secrets"
+      echo -e "     ${DIM}Edit ${INSTALL_DIR}/.env manually before starting.${RESET}"
+    else
+      echo -e "  ${CYAN}🔐 Auto-generating secrets into .env...${RESET}"
+      local DB_PW JWT BOOT MINIO_PW CCTV_KEY MTX_STREAM MTX_API
+      DB_PW=$(openssl rand -hex 24)
+      JWT=$(openssl rand -hex 64)
+      BOOT=$(openssl rand -hex 32)
+      MINIO_PW=$(openssl rand -hex 24)
+      CCTV_KEY=$(openssl rand -base64 32 | tr -d '\n')
+      MTX_STREAM=$(openssl rand -hex 24)
+      MTX_API=$(openssl rand -hex 24)
+
+      # Sanity: CCTV_CREDENTIAL_KEY must base64-decode cleanly.
+      if ! echo "$CCTV_KEY" | base64 -d >/dev/null 2>&1; then
+        echo -e "  ${RED}✗ generated CCTV_KEY failed base64 self-test — aborting${RESET}" >&2
+        exit 1
+      fi
+
+      # Substitute via perl -i -pe (handles +/= in base64 without escape hell).
+      export DB_PW JWT BOOT MINIO_PW CCTV_KEY MTX_STREAM MTX_API
+      perl -i -pe '
+        s|^DB_PASSWORD=CHANGE_ME.*|DB_PASSWORD=$ENV{DB_PW}|;
+        s|^JWT_SECRET=CHANGE_ME.*|JWT_SECRET=$ENV{JWT}|;
+        s|^BOOTSTRAP_SECRET=CHANGE_ME.*|BOOTSTRAP_SECRET=$ENV{BOOT}|;
+        s|^MINIO_ROOT_PASSWORD=CHANGE_ME.*|MINIO_ROOT_PASSWORD=$ENV{MINIO_PW}|;
+        s|^CCTV_CREDENTIAL_KEY=<base64-encoded-32-random-bytes>|CCTV_CREDENTIAL_KEY=$ENV{CCTV_KEY}|;
+        s|^MEDIAMTX_STREAM_PASS=<random-hex>|MEDIAMTX_STREAM_PASS=$ENV{MTX_STREAM}|;
+        s|^MEDIAMTX_API_PASS=<random-hex>|MEDIAMTX_API_PASS=$ENV{MTX_API}|;
+      ' "$INSTALL_DIR/.env"
+      unset DB_PW JWT BOOT MINIO_PW CCTV_KEY MTX_STREAM MTX_API
+
+      echo -e "  ${GREEN}✓${RESET} secrets written (DB, JWT, bootstrap, MinIO, CCTV, MediaMTX×2)"
+      echo -e "     ${DIM}SMTP_PASSWORD still placeholder — only needed if you use email${RESET}"
     fi
+
+    chmod 600 "$INSTALL_DIR/.env"
+
+    echo ""
+    echo -e "  ${DIM}To inspect or customise: sudo \${EDITOR:-nano} ${INSTALL_DIR}/.env${RESET}"
   fi
 
   # Guide
@@ -191,12 +229,36 @@ start_services() {
 
   cd "$INSTALL_DIR"
 
-  # Ensure .env has no CHANGE_ME values
+  # Refuse to start if CRITICAL secrets are still placeholder values. cctv-svc
+  # rejects an invalid CCTV_CREDENTIAL_KEY at startup (it will crashloop and
+  # take the rest of the stack down as a dep-failed-to-start), and the other
+  # services silently fall back to insecure dev defaults — both outcomes are
+  # worse than a hard stop here.
+  local critical_broken=()
+  local key
+  for key in DB_PASSWORD JWT_SECRET BOOTSTRAP_SECRET MINIO_ROOT_PASSWORD CCTV_CREDENTIAL_KEY MEDIAMTX_STREAM_PASS MEDIAMTX_API_PASS; do
+    # pull the raw value, check for placeholder patterns
+    local val
+    val=$(grep -E "^${key}=" "$INSTALL_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2-)
+    if [[ -z "$val" ]] \
+      || [[ "$val" == CHANGE_ME* ]] \
+      || [[ "$val" == \<*\> ]]; then
+      critical_broken+=("$key")
+    fi
+  done
+  if [[ ${#critical_broken[@]} -gt 0 ]]; then
+    echo -e "${RED}✗ Critical secrets in ${INSTALL_DIR}/.env are still placeholders:${RESET}"
+    for key in "${critical_broken[@]}"; do
+      echo -e "    ${RED}• $key${RESET}"
+    done
+    echo -e "  ${DIM}Fix: edit ${INSTALL_DIR}/.env and replace the placeholder values.${RESET}"
+    echo -e "  ${DIM}Or re-run this installer on a machine with openssl so it can auto-generate.${RESET}"
+    exit 1
+  fi
+
+  # Non-critical placeholder warning (SMTP_PASSWORD etc.) — just a nudge
   if grep -q "CHANGE_ME" "$INSTALL_DIR/.env" 2>/dev/null; then
-    echo -e "${RED}✗ .env still contains CHANGE_ME placeholder values!${RESET}"
-    echo -e "  Please edit ${INSTALL_DIR}/.env first."
-    read -p "  Start anyway (NOT recommended for production)? [y/N] " -r
-    [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
+    echo -e "${YELLOW}⚠ .env still has CHANGE_ME values (e.g. SMTP_PASSWORD) — email features will not work until set.${RESET}"
   fi
 
   docker compose up -d --remove-orphans

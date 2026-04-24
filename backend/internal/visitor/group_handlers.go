@@ -47,7 +47,7 @@ func (h *VisitorHandlers) ListVisitGroups(w http.ResponseWriter, r *http.Request
 		`SELECT COUNT(*) FROM dm3_visitor.visit_groups WHERE tenant_id = $1::uuid`, cid).Scan(&total)
 
 	rows, err := h.db.Pool.Query(r.Context(), `
-		SELECT g.id, g.tenant_id, g.name, g.description, g.host_user_id,
+		SELECT g.id, g.tenant_id, g.name, g.description, COALESCE(g.host_user_id::text,''),
 		       g.purpose, g.expected_arrival, g.expected_departure,
 		       g.access_areas, g.escort_required, g.created_by,
 		       g.created_at, g.updated_at,
@@ -101,7 +101,7 @@ func (h *VisitorHandlers) GetVisitGroup(w http.ResponseWriter, r *http.Request) 
 
 	var g VisitGroup
 	err := h.db.Pool.QueryRow(r.Context(), `
-		SELECT g.id, g.tenant_id, g.name, g.description, g.host_user_id,
+		SELECT g.id, g.tenant_id, g.name, g.description, COALESCE(g.host_user_id::text,''),
 		       g.purpose, g.expected_arrival, g.expected_departure,
 		       g.access_areas, g.escort_required, g.created_by,
 		       g.created_at, g.updated_at,
@@ -137,8 +137,21 @@ func (h *VisitorHandlers) CreateVisitGroup(w http.ResponseWriter, r *http.Reques
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.Name == "" || req.HostUserID == "" || req.Purpose == "" || req.ExpectedArrival.IsZero() {
-		httputil.Error(w, http.StatusBadRequest, "name, host_user_id, purpose, and expected_arrival are required")
+	if req.Name == "" || req.Purpose == "" || req.ExpectedArrival.IsZero() {
+		httputil.Error(w, http.StatusBadRequest, "name, purpose, and expected_arrival are required")
+		return
+	}
+
+	// Host requirement mirrors the single-visit gate (migration 000052+):
+	// only required when the tenant's approval workflow is enabled.
+	settings, err := h.getOrCreateSettings(r.Context(), cid)
+	if err != nil {
+		slog.Error("create group: load visitor settings error", "error", err, "tenant_id", cid)
+		httputil.Error(w, http.StatusInternalServerError, "failed to load visitor settings")
+		return
+	}
+	if settings.ApprovalRequired && req.HostUserID == "" {
+		httputil.Error(w, http.StatusBadRequest, "host_user_id is required when tenant requires host approval")
 		return
 	}
 
@@ -149,12 +162,12 @@ func (h *VisitorHandlers) CreateVisitGroup(w http.ResponseWriter, r *http.Reques
 	}
 
 	var g VisitGroup
-	err := h.db.Pool.QueryRow(r.Context(), `
+	err = h.db.Pool.QueryRow(r.Context(), `
 		INSERT INTO dm3_visitor.visit_groups
 		  (tenant_id, name, description, host_user_id, purpose,
 		   expected_arrival, expected_departure, access_areas, escort_required, created_by)
-		VALUES ($1::uuid, $2, $3, $4::uuid, $5, $6, $7, $8::uuid[], $9, $10::uuid)
-		RETURNING id, tenant_id, name, description, host_user_id, purpose,
+		VALUES ($1::uuid, $2, $3, NULLIF($4,'')::uuid, $5, $6, $7, $8::uuid[], $9, $10::uuid)
+		RETURNING id, tenant_id, name, description, COALESCE(host_user_id::text,''), purpose,
 		          expected_arrival, expected_departure, access_areas, escort_required,
 		          created_by, created_at, updated_at`,
 		cid, req.Name, req.Description, req.HostUserID, req.Purpose,
@@ -269,7 +282,7 @@ func (h *VisitorHandlers) BatchCreateVisits(w http.ResponseWriter, r *http.Reque
 	}
 	var group VisitGroup
 	err := h.db.Pool.QueryRow(r.Context(), `
-		SELECT id, tenant_id, host_user_id, purpose, expected_arrival, expected_departure,
+		SELECT id, tenant_id, COALESCE(host_user_id::text,''), purpose, expected_arrival, expected_departure,
 		       access_areas, escort_required
 		FROM dm3_visitor.visit_groups
 		WHERE id = $1::uuid AND tenant_id = $2::uuid`, req.GroupID, cid).Scan(
@@ -345,11 +358,11 @@ func (h *VisitorHandlers) BatchCreateVisits(w http.ResponseWriter, r *http.Reque
 			   qr_token, qr_expires_at, access_areas, escort_required,
 			   group_id, host_approved, host_approved_at)
 			VALUES
-			  ($1::uuid, $2::uuid, $3::uuid, $4,
+			  ($1::uuid, $2::uuid, NULLIF($3,'')::uuid, $4,
 			   $5, $6, $7,
 			   $8, $9, $10::uuid[], $11,
 			   $12::uuid, $13, CASE WHEN $13 THEN now() ELSE NULL END)
-			RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
+			RETURNING id, tenant_id, visitor_id, COALESCE(host_user_id::text,''), purpose, purpose_note,
 			          status, expected_arrival, expected_departure,
 			          actual_checkin, actual_checkout,
 			          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
