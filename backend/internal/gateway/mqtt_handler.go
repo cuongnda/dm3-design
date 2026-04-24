@@ -850,8 +850,15 @@ func (h *MQTTHandler) handleStatus(ctx context.Context, pt ParsedTopic, env MQTT
 	}
 }
 
-func (h *MQTTHandler) handleCommandResponse(_ context.Context, pt ParsedTopic, env MQTTEnvelope) {
+func (h *MQTTHandler) handleCommandResponse(ctx context.Context, pt ParsedTopic, env MQTTEnvelope) {
 	slog.Info("command response", "device", pt.DeviceID, "type", env.Type, "ref", env.Ref, "status", env.Status)
+
+	// cmd.logs.resp closes a remote-log pull — update the tracking row so the
+	// admin UI stops polling. Dispatched to log_handlers.go so the response
+	// logic lives next to the request logic.
+	if env.Type == "cmd.logs.resp" {
+		handleLogAck(ctx, h.db, pt.TenantID, pt.DeviceID, env)
+	}
 
 	desc := fmt.Sprintf("Command response: %s — %s", env.Type, env.Status)
 	if env.Error != "" {

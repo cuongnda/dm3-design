@@ -3,6 +3,7 @@
 > IoT Device ↔ Server Communication Protocol
 > Version: 1.8 | Updated: 2026-04-22
 > Changelog:
+> - v1.10 — §6.5 added: remote log pull (`cmd.logs` + `cmd.logs.resp`). Admin presigns a MinIO PUT URL, device ships gzipped logs directly, acks with byte/line counts. Lifecycle tracked in `dm3_devices.device_log_requests`. Emergency Lockdown renumbered §6.5 → §6.6.
 > - v1.9 — §7.7 adds **device-initiated firmware check** (`firmware.check` published on `evt`) and a new `denied_force_close` reason on access.log. Firmware OTA now supports both admin push and device pull — pull closes the gap for devices that were offline during a push, since `cfg.firmware` is **not retained**. Server-side publish QoS for `cfg.firmware` lowered from 2 → 1 to match the server's subscribe QoS and avoid QoS 2's 4-way handshake on slow brokers; duplication is idempotent via `deployment_id`.
 > - v1.8 — `cfg.person_sync` entries now carry `user_code` alongside `user_id`. Face-enrol terminals (df970/ba8300/bd8500/ra08/dq200) need this to build `credential_value: "M_<user_code>"` on their `evt.face_result` ack — without it the server could never flip the M_ credential to `active`.
 > - v1.7 — Credential objects in `cfg.person_sync` now emit a **stable shape**: every entry carries the same keys (`uid`, `template`, `code`, `version`, `finger`) regardless of `type`, with unused fields sent as empty strings. Lets firmware parse with one schema instead of branching on which JSON key is present.
@@ -811,7 +812,93 @@ that doesn't start with `events/` as a legacy reference.
 }
 ```
 
-### 6.5 Emergency Lockdown
+### 6.5 Remote Log Pull
+
+Admins can request a fresh log dump from any online device. The server presigns a MinIO PUT URL up front and hands it to the device in `cmd.logs`; the device collects its recent log output (Logcat on Android terminals, journalctl on Linux controllers), gzips it, and PUTs directly to MinIO — no extra round-trip via the gateway, no base64 in the MQTT payload. Device then publishes `cmd.logs.resp` with the byte/line counts so the admin UI can stop polling.
+
+Lifecycle row in `dm3_devices.device_log_requests` tracks each request. Admins fetch the uploaded file via a server-issued presigned GET URL (§15 pattern) so the binary never flows through the gateway.
+
+**Command:** `cmd.logs`
+**Topic:** `dm/{tid}/device/{did}/cmd` (QoS 1)
+
+```json
+{
+  "v": 1,
+  "id": "msg-uuid",
+  "ts": 1740000000000,
+  "type": "cmd.logs",
+  "data": {
+    "request_id":        "8a3f...-uuid",
+    "upload_url":        "https://minio.public.example.com/dm3/tenants/{tid}/device-logs/{did}/{request_id}.txt.gz?X-Amz-Algorithm=...",
+    "object_key":        "tenants/{tid}/device-logs/{did}/{request_id}.txt.gz",
+    "upload_expires_at": "2026-04-24T15:00:00Z",
+    "content_type":      "application/gzip",
+    "from_ts":           1739900000000,   // optional — earliest log line (Unix ms)
+    "to_ts":             1740000000000,   // optional — latest log line
+    "lines_max":         10000,            // optional — device-side cap
+    "level_min":         "info"            // optional — info|warn|error
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `request_id` | string (UUID) | ✓ | Echoed by device in the ack; also the primary key into `device_log_requests` |
+| `upload_url` | string | ✓ | Presigned PUT URL; valid for 10 minutes |
+| `object_key` | string | ✓ | MinIO object key (tenant-scoped prefix `tenants/{tid}/device-logs/...`) |
+| `upload_expires_at` | string (RFC3339) | ✓ | Absolute expiry of `upload_url` |
+| `content_type` | string | ✓ | Must match `Content-Type` header the device sets on PUT (always `application/gzip`) |
+| `from_ts`, `to_ts` | int (Unix ms) | optional | Inclusive time window for log lines |
+| `lines_max` | int | optional | Upper bound on lines; device truncates oldest first when over |
+| `level_min` | string | optional | Drop lines below this severity (`info` < `warn` < `error`) |
+
+**Device behaviour:**
+
+1. Collect logs matching the filters. Missing filter = no filter.
+2. gzip the text file (UTF-8, one log line per row, timestamp prefix preferred but not mandatory).
+3. `PUT` to `upload_url` with `Content-Type: application/gzip`. Retry once on transient 5xx.
+4. Publish `cmd.logs.resp` on the `cmd/resp` topic.
+5. On error (nothing to send, upload failed, filters invalid), still publish `cmd.logs.resp` with `status=error` so the admin UI can stop polling.
+
+**Response:** `cmd.logs.resp`
+**Topic:** `dm/{tid}/device/{did}/cmd/resp` (QoS 1)
+
+```json
+{
+  "v": 1,
+  "type": "cmd.logs.resp",
+  "ref": "original-msg-id",
+  "status": "ok",
+  "data": {
+    "request_id":     "8a3f...-uuid",
+    "object_key":     "tenants/{tid}/device-logs/{did}/{request_id}.txt.gz",
+    "lines_uploaded": 8542,
+    "bytes":          234567
+  }
+}
+```
+
+Error shape:
+
+```json
+{
+  "v": 1,
+  "type": "cmd.logs.resp",
+  "ref": "original-msg-id",
+  "status": "error",
+  "error": "upload_failed",
+  "data": {
+    "request_id": "8a3f...-uuid",
+    "error":      "upload_failed"
+  }
+}
+```
+
+**Error codes** (in `error`): `upload_failed`, `no_logs`, `filters_invalid`, `url_expired`, `unauthorized`, `device_busy`.
+
+> The server uses `data.request_id` — not `ref` — as the correlation key. Legacy firmware that can't echo `request_id` MUST still populate it in the data block; the server will drop acks missing this field.
+
+### 6.6 Emergency Lockdown
 
 **Topic:** `dm/{tid}/emergency/broadcast`
 **QoS:** 2

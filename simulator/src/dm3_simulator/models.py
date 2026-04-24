@@ -134,6 +134,7 @@ class MqttMessage(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict)
     ref: str | None = None
     status: str | None = None
+    error: str | None = None
 
 
 class DeviceConfig(BaseModel):

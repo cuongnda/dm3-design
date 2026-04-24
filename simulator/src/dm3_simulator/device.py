@@ -513,6 +513,14 @@ class VirtualDevice:
             elif msg_type == "cmd.snapshot":
                 await self._handle_snapshot(payload)
 
+            elif msg_type == "cmd.logs":
+                # Run the upload on a background task so one slow MinIO PUT
+                # doesn't stall the MQTT router. Matches the real firmware
+                # contract from docs/specs/devices/android-terminal.md §13.3
+                # which says log collection must never block the UI / control
+                # loop.
+                asyncio.create_task(self._handle_log_request(payload))
+
             else:
                 logger.debug("unhandled_message", device_id=self.device_id, type=msg_type)
 
@@ -717,6 +725,112 @@ class VirtualDevice:
         0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01,
         0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xD9,
     ])
+
+    async def _handle_log_request(self, payload: dict[str, Any]) -> None:
+        """Handle cmd.logs — simulate the Android/Linux log-pull flow.
+
+        Wire spec: docs/architecture/mqtt-protocol.md §6.5.
+
+        Simulator shortcut: we don't actually have a rolling log buffer, so we
+        synthesise a handful of plausible log lines that echo the device_id +
+        any filters the server asked for, gzip them, PUT to the presigned URL,
+        and ack. Real firmware would collect from Logcat / journalctl here.
+        """
+        import gzip
+        import aiohttp
+
+        data = payload.get("data", {}) or {}
+        msg_id = payload.get("id")
+        request_id = data.get("request_id", "")
+        upload_url = data.get("upload_url", "")
+        object_key = data.get("object_key", "")
+        content_type = data.get("content_type", "application/gzip")
+
+        async def _ack(status: str, ack_data: dict[str, Any], error: str | None = None) -> None:
+            resp = MqttMessage(
+                src=f"device:{self.device_id}",
+                type="cmd.logs.resp",
+                ref=msg_id,
+                status=status,
+                data=ack_data,
+            )
+            if error:
+                resp.error = error
+            await self.mqtt.publish(
+                f"{self.mqtt.topic_prefix}/cmd/resp",
+                resp.model_dump_json(),
+                qos=1,
+            )
+
+        if not request_id or not upload_url:
+            logger.warning("cmd.logs: missing request_id or upload_url",
+                           device_id=self.device_id)
+            await _ack("error",
+                       {"request_id": request_id, "error": "filters_invalid"},
+                       error="filters_invalid")
+            return
+
+        # Synthesise a log body. Keep it human-readable so automation tests
+        # can assert on its contents after downloading.
+        lines: list[str] = [
+            f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} INFO simulator boot device_id={self.device_id}",
+            f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} INFO mqtt connected topic_prefix={self.mqtt.topic_prefix}",
+            f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} INFO cmd.logs received request_id={request_id}",
+        ]
+        if data.get("from_ts"):
+            lines.append(f"INFO filter from_ts={data['from_ts']}")
+        if data.get("to_ts"):
+            lines.append(f"INFO filter to_ts={data['to_ts']}")
+        if data.get("level_min"):
+            lines.append(f"INFO filter level_min={data['level_min']}")
+        if data.get("lines_max") is not None:
+            max_lines = int(data["lines_max"])
+            if max_lines >= 0:
+                lines = lines[:max_lines]
+
+        body_bytes = gzip.compress(("\n".join(lines) + "\n").encode("utf-8"))
+
+        timeout = aiohttp.ClientTimeout(total=10)
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.put(
+                    upload_url,
+                    data=body_bytes,
+                    headers={"Content-Type": content_type},
+                ) as put_resp:
+                    if put_resp.status not in (200, 204):
+                        put_body = await put_resp.text()
+                        logger.warning(
+                            "cmd.logs: upload failed",
+                            device_id=self.device_id,
+                            status=put_resp.status,
+                            body=put_body[:200],
+                        )
+                        await _ack("error",
+                                   {"request_id": request_id, "object_key": object_key,
+                                    "error": "upload_failed"},
+                                   error="upload_failed")
+                        return
+        except Exception as e:
+            logger.warning("cmd.logs: upload exception",
+                           device_id=self.device_id, error=str(e))
+            await _ack("error",
+                       {"request_id": request_id, "object_key": object_key,
+                        "error": "upload_failed"},
+                       error="upload_failed")
+            return
+
+        logger.info("cmd.logs: uploaded",
+                    device_id=self.device_id,
+                    request_id=request_id,
+                    lines=len(lines),
+                    bytes=len(body_bytes))
+        await _ack("ok", {
+            "request_id": request_id,
+            "object_key": object_key,
+            "lines_uploaded": len(lines),
+            "bytes": len(body_bytes),
+        })
 
     async def _upload_snapshot_placeholder(self) -> str | None:
         """Run the two-step §15 media upload and return the object_key.

@@ -146,6 +146,32 @@ func IssueSnapshotPutURL(ctx context.Context, presigner MediaPresigner, tenantID
 	return signed.String(), objectKey, time.Now().Add(expiry), nil
 }
 
+// IssueDeviceLogPutURL presigns a PUT URL the server will hand to a device in
+// cmd.logs. Devices are expected to upload a gzipped text file (Logcat output
+// on Android, journalctl dump on Linux controller) so the key carries a .txt.gz
+// suffix. The request_id is echoed by the device in cmd.logs.resp, letting the
+// server close the lifecycle row in device_log_requests without relying on the
+// key alone.
+//
+// expiry should be longer than the device's command timeout + the time needed
+// to collect + compress + upload. 10 minutes is a safe default — devices that
+// take longer than that almost certainly failed and should be re-requested.
+func IssueDeviceLogPutURL(ctx context.Context, presigner MediaPresigner, tenantID, deviceID, requestID string, expiry time.Duration) (uploadURL, objectKey string, expiresAt time.Time, err error) {
+	if presigner == nil {
+		return "", "", time.Time{}, fmt.Errorf("media: presigner not configured")
+	}
+	if tenantID == "" || deviceID == "" || requestID == "" {
+		return "", "", time.Time{}, fmt.Errorf("media: tenant_id, device_id and request_id are required")
+	}
+	objectKey = fmt.Sprintf("tenants/%s/device-logs/%s/%s.txt.gz",
+		tenantID, deviceID, requestID)
+	signed, err := presigner.PresignedPutURL(ctx, objectKey, expiry)
+	if err != nil {
+		return "", "", time.Time{}, fmt.Errorf("media: presign device-log put: %w", err)
+	}
+	return signed.String(), objectKey, time.Now().Add(expiry), nil
+}
+
 // mediaExtensionFor validates the (kind, content_type) pair and returns the
 // file extension to append to the object key. Devices must declare the kind
 // up front so the gateway can enforce per-kind content-type allowlists —

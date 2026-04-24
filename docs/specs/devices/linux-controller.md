@@ -829,6 +829,16 @@ Accessible on LAN only. Provides:
 
 **Authentication:** HTTP Basic Auth with device admin credentials.
 
+### 15.3 Remote Log Pull (over MQTT)
+
+Wire spec: `docs/architecture/mqtt-protocol.md §6.5`. Install flow mirrors Android terminal §13.3 with these substitutions:
+
+- **Source of log lines:** `journalctl -u dm3-controller --since ... --until ... -o short-iso` (or systemd-journal equivalent for containerised deploys), NOT Logcat.
+- **Filter mapping:** `level_min=info|warn|error` → `-p info|warning|err` on journalctl.
+- **Redaction:** none at the device; the server is the trust boundary (same rule as Android §13.3).
+
+Respect the same constraints: run on a worker so the control loop isn't blocked, cap concurrency at 1 per controller, reply with `cmd.logs.resp error=device_busy` if a second request arrives while the first is in flight.
+
 ---
 
 ## 16. Deployment & Installation
