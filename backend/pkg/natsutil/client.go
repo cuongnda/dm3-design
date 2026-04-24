@@ -91,16 +91,25 @@ func (c *Client) subscribeWithPolicy(ctx context.Context, stream, consumer, filt
 	}
 	cons, err := c.js.CreateOrUpdateConsumer(ctx, stream, cfg)
 	if err != nil {
-		// JetStream rejects updates to DeliverPolicy on an existing consumer
-		// with "deliver policy can not be updated" (err_code 10012). This
-		// happens after a service upgrade that flips the default from
-		// DeliverAll → DeliverNew (see Subscribe docs). Dropping the
-		// durable consumer and recreating it is safe for the affected
-		// subscribers: they don't depend on backfill, and the new
-		// DeliverNew consumer will begin tracking messages from now on.
-		if strings.Contains(err.Error(), "deliver policy can not be updated") {
-			slog.Warn("nats: deliver policy mismatch, recreating consumer",
-				"stream", stream, "consumer", consumer)
+		// JetStream rejects updates to many ConsumerConfig fields on an
+		// existing durable consumer — deliver policy, ack policy,
+		// filter subject, etc. The error message / code varies across
+		// server versions (e.g. "deliver policy can not be updated",
+		// "consumer configuration can not be updated", err_code 10012).
+		// Rather than guess which exact string matches, treat ANY
+		// "can not be updated" style error as a policy mismatch: drop
+		// the stale consumer and recreate with the requested config.
+		// Safe for our subscribers because none of them depend on
+		// accumulated ack state across upgrades — DeliverNew guarantees
+		// we won't reprocess historical messages, which is the whole
+		// point of this path.
+		msg := err.Error()
+		lower := strings.ToLower(msg)
+		if strings.Contains(lower, "can not be updated") ||
+			strings.Contains(lower, "cannot be updated") ||
+			strings.Contains(msg, "10012") {
+			slog.Warn("nats: consumer config mismatch, recreating",
+				"stream", stream, "consumer", consumer, "err", msg)
 			if delErr := c.js.DeleteConsumer(ctx, stream, consumer); delErr != nil {
 				return fmt.Errorf("nats delete stale consumer: %w", delErr)
 			}

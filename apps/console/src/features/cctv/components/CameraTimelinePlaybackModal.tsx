@@ -284,7 +284,12 @@ export function CameraTimelinePlaybackModal({ open, camera, onOpenChange }: Prop
           }}
         />
 
-        <div className="rounded-lg bg-black">
+        {/* Fixed-height black viewport so the modal NEVER resizes when the
+            <video> src switches between clips — load latency on a slow
+            network used to collapse the player to near-zero height, which
+            bounced the whole modal around. Video + placeholder are both
+            absolutely positioned inside so they fill the box equally. */}
+        <div className="relative rounded-lg bg-black h-[50vh] overflow-hidden">
           {playUrl ? (
             <video
               ref={videoRef}
@@ -309,11 +314,11 @@ export function CameraTimelinePlaybackModal({ open, camera, onOpenChange }: Prop
               }}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
-              className="w-full rounded-lg bg-black max-h-[50vh]"
+              className="absolute inset-0 w-full h-full object-contain"
               data-testid="cctv-video-timeline-player"
             />
           ) : (
-            <div className="flex items-center justify-center text-muted-foreground text-[13px] h-[50vh]">
+            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-[13px]">
               {playable.length === 0
                 ? t('cctv.cameras.noPlayableClips')
                 : t('cctv.cameras.selectClipOrPlayAll')}
@@ -391,10 +396,16 @@ function Timeline({
   const [hoverX, setHoverX] = useState<number | null>(null);
   const [hoverLabel, setHoverLabel] = useState<string>('');
   const [view, setView] = useState<{ start: number; end: number }>({ start: 0, end: DAY_TOTAL });
-  // scrub = operator is dragging the playhead. Mouse-down on empty track
-  // arms it; while dragging, setPlayheadSec fires continuously; mouse-up
-  // commits and triggers playback from the new position.
-  const scrubbing = useRef<boolean>(false);
+  // Interaction modes on a mouse-held track:
+  //   - Simple click (no drag)      → set playhead + play from there.
+  //   - Drag with track zoomed in   → pan the visible window.
+  //   - Drag with track at full day → scrub the playhead continuously.
+  // pendingClick records where mouse-down started; on first meaningful
+  // move we promote it to a pan or scrub session. The 5-px threshold
+  // keeps tiny involuntary wiggles from stealing a click.
+  const pendingClick = useRef<null | { clientX: number; startViewStart: number }>(null);
+  const mode = useRef<'idle' | 'scrub' | 'pan'>('idle');
+  const DRAG_THRESHOLD_PX = 5;
 
   // Reset zoom whenever the clip list changes (new camera/day) — the old
   // window almost never makes sense on a different timeline.
@@ -448,10 +459,32 @@ function Timeline({
     const el = trackRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    if (scrubbing.current) {
+
+    // Promote a pending click into a pan/scrub session once the operator
+    // has moved past the dead-zone threshold.
+    if (pendingClick.current && mode.current === 'idle') {
+      const dx = e.clientX - pendingClick.current.clientX;
+      if (Math.abs(dx) > DRAG_THRESHOLD_PX) {
+        mode.current = zoomedIn ? 'pan' : 'scrub';
+      }
+    }
+
+    if (mode.current === 'pan' && pendingClick.current) {
+      const dx = e.clientX - pendingClick.current.clientX;
+      const deltaSec = -(dx / rect.width) * span;
+      let next = pendingClick.current.startViewStart + deltaSec;
+      if (next < 0) next = 0;
+      if (next + span > DAY_TOTAL) next = DAY_TOTAL - span;
+      setView({ start: next, end: next + span });
+      return;
+    }
+
+    if (mode.current === 'scrub') {
       onPlayheadChange(secondsAtX(e.clientX, rect));
       return;
     }
+
+    // Default idle hover tooltip.
     const x = e.clientX - rect.left;
     if (x < 0 || x > rect.width) {
       setHoverX(null);
@@ -462,27 +495,41 @@ function Timeline({
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Clicks on clip bands stay for seeking to that specific clip; empty-
-    // track clicks arm the playhead scrubber.
+    // Clicks on clip bands stay for seeking to that specific clip.
     if ((e.target as HTMLElement).closest('button')) return;
     const el = trackRef.current;
     if (!el) return;
     e.preventDefault();
-    const rect = el.getBoundingClientRect();
-    scrubbing.current = true;
-    onPlayheadChange(secondsAtX(e.clientX, rect));
+    pendingClick.current = { clientX: e.clientX, startViewStart: view.start };
+    mode.current = 'idle';
   };
 
   const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!scrubbing.current) return;
-    scrubbing.current = false;
     const el = trackRef.current;
-    if (!el) return;
+    const started = pendingClick.current;
+    pendingClick.current = null;
+    const finishedMode = mode.current;
+    mode.current = 'idle';
+    if (!el || !started) return;
     const rect = el.getBoundingClientRect();
+
+    if (finishedMode === 'pan') {
+      // Pan completed — the view.start was already updated during drag,
+      // nothing further to commit.
+      return;
+    }
+    if (finishedMode === 'scrub') {
+      onPlayheadCommit(secondsAtX(e.clientX, rect));
+      return;
+    }
+    // idle + mouseup = plain click. Treat as "seek playhead here and play".
     onPlayheadCommit(secondsAtX(e.clientX, rect));
   };
 
-  const endDrag = () => { scrubbing.current = false; };
+  const endDrag = () => {
+    pendingClick.current = null;
+    mode.current = 'idle';
+  };
 
   const labels = [0, 0.25, 0.5, 0.75, 1].map((r) => formatHMS(view.start + r * span).slice(0, 5));
 
@@ -504,7 +551,7 @@ function Timeline({
           clipping. */}
       <div
         ref={trackRef}
-        className={`relative pt-6 ${scrubbing.current ? 'cursor-grabbing' : 'cursor-pointer'} select-none`}
+        className={`relative pt-6 ${mode.current === 'pan' ? 'cursor-grabbing' : zoomedIn ? 'cursor-grab' : 'cursor-pointer'} select-none`}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => { setHoverX(null); endDrag(); }}
         onMouseDown={handleMouseDown}
