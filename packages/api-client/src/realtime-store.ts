@@ -35,6 +35,15 @@ export interface RealtimeAccessEvent {
    *  photoRef: it lets the realtime monitoring page render the image
    *  immediately, without a REST refresh. */
   photoUrl?: string;
+  /** Multi-camera snapshot keys from `data.photos` on the access.log payload
+   *  (mqtt-protocol.md §4.1). Present when the device captured the event from
+   *  multiple angles. Prefer `photoUrls` (presigned) over this raw list. When
+   *  only a single photo exists, stays `undefined` and the single-photo
+   *  fields above carry the value. */
+  photoRefs?: string[];
+  /** Parallel presigned GET URL list (5 min TTL), one per entry in photoRefs.
+   *  Same precedence as photoUrl vs photoRef — prefer photoUrls when set. */
+  photoUrls?: string[];
 }
 
 // Named RealtimeDeviceStatus to avoid collision with DeviceStatus const in types/enums
@@ -239,6 +248,8 @@ export function transformAccessEvent(data: AccessEventData, event: WSEvent): Rea
     credentials: Array.isArray(data.credentials) && data.credentials.length > 0 ? data.credentials : undefined,
     photoRef: data.photo || undefined,
     photoUrl: data.photo_url || undefined,
+    photoRefs: Array.isArray(data.photos) && data.photos.length > 0 ? data.photos : undefined,
+    photoUrls: Array.isArray(data.photo_urls) && data.photo_urls.length > 0 ? data.photo_urls : undefined,
   };
 }
 

@@ -22,6 +22,16 @@ import {
 } from '@dm3/api-client';
 import { HostSelect } from '@/components/common/HostSelect';
 
+/**
+ * Format the current local time as a value accepted by <input type="datetime-local">.
+ * Shape: YYYY-MM-DDTHH:mm (no seconds, no timezone).
+ */
+function nowAsDatetimeLocal(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function getErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error && err.message) return err.message;
   return fallback;
@@ -130,7 +140,12 @@ export function VisitorGroupsPage() {
   return (
     <div>
       <PageHeader title={t('visitors.groups.title')} description={t('visitors.groups.pageDescription')}>
-        <Button size="sm" onClick={() => setShowForm(true)} className="bg-emerald-600 hover:bg-emerald-700" data-testid="visitors-button-create-group">
+        <Button
+          size="sm"
+          onClick={() => { setExpectedArrival(nowAsDatetimeLocal()); setShowForm(true); }}
+          className="bg-emerald-600 hover:bg-emerald-700"
+          data-testid="visitors-button-create-group"
+        >
           <Plus size={16} className="mr-1" /> {t('visitors.groups.create')}
         </Button>
       </PageHeader>
@@ -143,7 +158,7 @@ export function VisitorGroupsPage() {
             icon={<Users size={32} strokeWidth={1.2} />}
             title={t('visitors.groups.empty')}
             description={t('visitors.groups.empty.description')}
-            primaryAction={{ label: t('visitors.groups.create'), icon: <Plus size={14} />, onClick: () => setShowForm(true), 'data-testid': 'visitors-button-create-group-empty' }}
+            primaryAction={{ label: t('visitors.groups.create'), icon: <Plus size={14} />, onClick: () => { setExpectedArrival(nowAsDatetimeLocal()); setShowForm(true); }, 'data-testid': 'visitors-button-create-group-empty' }}
           />
         </div>
       ) : (

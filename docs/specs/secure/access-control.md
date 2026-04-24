@@ -608,7 +608,7 @@ InterlockModeEnum: mutual_exclusive | sequential
 | `dm/{tid}/device/{did}/cfg` (type: cfg.blacklist)      | server→device | 2   | See mqtt-protocol.md §7.4                                     | Blacklist push (priority)                                      |
 | `dm/{tid}/device/{did}/cfg/ack`                        | device→server | 2   | Ack with local versions and counts                            | Sync confirmation                                              |
 | `dm/{tid}/device/{did}/sta` (type: status.heartbeat)   | device→server | 0   | See mqtt-protocol.md §5.1                                     | Device health + sync status                                    |
-| `dm/{tid}/emergency/broadcast` (type: cmd.lockdown)    | server→all    | 2   | See mqtt-protocol.md §6.5                                     | Emergency lockdown broadcast                                   |
+| `dm/{tid}/emergency/broadcast` (type: cmd.lockdown)    | server→all    | 2   | See mqtt-protocol.md §6.6                                     | Emergency lockdown broadcast                                   |
 
 ## Business Rules
 

@@ -81,6 +81,13 @@ type accessLogData struct {
 	// DB column stay `photo_ref` for backward compat — only the JSON tag needs
 	// to match what devices actually send.
 	PhotoRef             string            `json:"photo"`
+	// Multi-camera snapshot keys (mqtt-protocol.md §4.1, optional). When set,
+	// all entries are persisted to `photo_refs TEXT[]`. On ingest the consumer
+	// merges `photo` into the list if missing, so devices that populate either
+	// field (or both) converge on the same stored representation. The
+	// cross-tenant `mediaAcceptable` guard runs per entry; bad keys are
+	// dropped, not whole-event rejected.
+	Photos               []string          `json:"photos"`
 	// ClipObjectKey is the MinIO object key for an optional video clip
 	// attached to the access event (mqtt-protocol.md §4.1). There is no
 	// dedicated DB column — it is persisted under metadata.clip_object_key
@@ -348,6 +355,44 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 			"photo_ref", ald.PhotoRef, "event_id", evt.ID)
 		ald.PhotoRef = ""
 	}
+
+	// Consolidate photos[] + photo into a single deduped list. Apply the
+	// cross-tenant guard to each entry individually so a single bad key
+	// doesn't poison the rest. `photo_ref` column stays populated with
+	// photos[0] for back-compat with older readers.
+	seenPhoto := make(map[string]struct{}, len(ald.Photos)+1)
+	consolidatedPhotos := make([]string, 0, len(ald.Photos)+1)
+	if ald.PhotoRef != "" {
+		seenPhoto[ald.PhotoRef] = struct{}{}
+		consolidatedPhotos = append(consolidatedPhotos, ald.PhotoRef)
+	}
+	for _, p := range ald.Photos {
+		if p == "" {
+			continue
+		}
+		if _, dup := seenPhoto[p]; dup {
+			continue
+		}
+		if !mediaAcceptable(p) {
+			slog.Warn("nats: rejecting cross-tenant photo in photos[] on access.log",
+				"tenant_id", tenantID, "device_id", deviceID, "device_uuid", deviceUUID,
+				"photo", p, "event_id", evt.ID)
+			continue
+		}
+		seenPhoto[p] = struct{}{}
+		consolidatedPhotos = append(consolidatedPhotos, p)
+	}
+	// If the legacy photo_ref was rejected but photos[] had a valid entry,
+	// backfill photo_ref with the first good photo so legacy readers see it.
+	if ald.PhotoRef == "" && len(consolidatedPhotos) > 0 {
+		ald.PhotoRef = consolidatedPhotos[0]
+	}
+	// Store nil (not []) when there are no photos so Postgres writes a NULL
+	// instead of an empty array — lets us keep the column optional/diagnosable.
+	var photoRefsArg any
+	if len(consolidatedPhotos) > 0 {
+		photoRefsArg = consolidatedPhotos
+	}
 	if ald.ClipObjectKey != "" {
 		if mediaAcceptable(ald.ClipObjectKey) {
 			ald.Metadata["clip_object_key"] = ald.ClipObjectKey
@@ -401,11 +446,11 @@ func (c *NATSConsumer) handleEvent(ctx context.Context, subject string, data []b
 	// events without an id still insert (legacy path), they just won't
 	// dedupe.
 	_, err := c.db.Pool.Exec(dbCtx,
-		`INSERT INTO dm3_access.access_events (time, tenant_id, event_id, access_point_id, door_id, user_id, user_name, credential_type, direction, decision, reason, confidence, photo_ref, temperature, decided_locally, metadata)
-		 VALUES ($1, $2::uuid, NULLIF($3,''), $4::uuid, $5::uuid, $6::uuid, NULLIF($7,''), NULLIF($8,''), NULLIF($9,''), $10, NULLIF($11,''), $12, NULLIF($13,''), $14, $15, $16)
+		`INSERT INTO dm3_access.access_events (time, tenant_id, event_id, access_point_id, door_id, user_id, user_name, credential_type, direction, decision, reason, confidence, photo_ref, photo_refs, temperature, decided_locally, metadata)
+		 VALUES ($1, $2::uuid, NULLIF($3,''), $4::uuid, $5::uuid, $6::uuid, NULLIF($7,''), NULLIF($8,''), NULLIF($9,''), $10, NULLIF($11,''), $12, NULLIF($13,''), $14, $15, $16, $17)
 		 ON CONFLICT (tenant_id, "time", event_id) WHERE event_id IS NOT NULL DO NOTHING`,
 		evtTime, tenantID, evt.ID, accessPointID, toUUIDPtr(ald.DoorID), resolvedUserID, resolvedUserName, ald.CredentialType,
-		ald.Direction, ald.Decision, ald.Reason, ald.Confidence, ald.PhotoRef, ald.Temperature, decidedLocally, metadataJSON)
+		ald.Direction, ald.Decision, ald.Reason, ald.Confidence, ald.PhotoRef, photoRefsArg, ald.Temperature, decidedLocally, metadataJSON)
 	if err != nil {
 		slog.Error("nats: failed to insert access event", "error", err)
 		return err

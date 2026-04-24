@@ -51,6 +51,18 @@ const STATUS_COLORS: Record<string, string> = {
 const PURPOSES = ['meeting', 'interview', 'delivery', 'maintenance', 'tour', 'contract_signing', 'other'] as const;
 const HOST_SEARCH_LIMIT = 10;
 
+/**
+ * Format the current local time as a value accepted by <input type="datetime-local">.
+ * Shape: YYYY-MM-DDTHH:mm (no seconds, no timezone — browser interprets as local).
+ * Can't reuse new Date().toISOString() because that's UTC and has seconds +
+ * trailing Z, which the datetime-local input ignores / renders blank.
+ */
+function nowAsDatetimeLocal(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 type TabStatus = '' | 'pre_registered' | 'approved' | 'waiting' | 'checked_in' | 'checked_out';
 
 type HostOption = {
@@ -393,7 +405,17 @@ export function VisitorsPage() {
           <Button size="sm" variant="outline" onClick={() => setShowWalkinForm(true)} data-testid="manage-button-walkin-visitor">
             {t('visitors.actions.walkin')}
           </Button>
-          <Button size="sm" onClick={() => setShowPreRegForm(true)} className="bg-manage hover:bg-manage/90" data-testid="manage-button-preregister-visitor">
+          <Button
+            size="sm"
+            onClick={() => {
+              // Seed expectedArrival to "now" each time the modal opens so
+              // stale values from yesterday's session don't leak through.
+              setFormData((prev) => ({ ...prev, expectedArrival: nowAsDatetimeLocal() }));
+              setShowPreRegForm(true);
+            }}
+            className="bg-manage hover:bg-manage/90"
+            data-testid="manage-button-preregister-visitor"
+          >
             {t('visitors.preRegister')}
           </Button>
         </div>

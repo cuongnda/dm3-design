@@ -223,6 +223,9 @@ func main() {
 	}
 	firmwareHandlers := gateway.NewFirmwareHandlers(database, objectStore, mqttClient, auditLog, fwDownloadURL)
 	mqttHandler.SetFirmwareHandlers(firmwareHandlers)
+	// Remote-log pull: admin presigns a PUT URL + publishes cmd.logs; device
+	// ships gzipped logs to MinIO; admin retrieves via presigned GET URL.
+	deviceLogHandlers := gateway.NewDeviceLogHandlers(database, mqttClient, auditLog, objectStore, objectStore)
 	emqxHandlers := gateway.NewEMQXHandlers(cfg.EMQXApiURL, cfg.EMQXApiUser, cfg.EMQXApiPassword)
 	mediaHandlers := gateway.NewMediaHandlers(objectStore, cfg.JWTSecret)
 
@@ -301,6 +304,11 @@ func main() {
 				er.Post("/devices/{id}/command", handlers.SendCommand)
 				er.Post("/access-points/{id}/door-command", handlers.SendDoorCommand)
 				er.Post("/access-points/door-command/bulk", handlers.BulkDoorCommand)
+				// Remote log pull: request → MQTT publish; list + detail read
+				// the tracking table and issue a download URL once uploaded.
+				er.Post("/devices/{id}/logs/request", deviceLogHandlers.RequestDeviceLog)
+				er.Get("/devices/{id}/logs", deviceLogHandlers.ListDeviceLogRequests)
+				er.Get("/devices/{id}/logs/{request_id}", deviceLogHandlers.GetDeviceLogRequest)
 			})
 			// Sync: sync jobs mutate device state, so we require device.manage.
 			cr.Group(func(mr chi.Router) {

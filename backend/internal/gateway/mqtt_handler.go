@@ -598,7 +598,12 @@ type accessLogData struct {
 	PersonDetected   bool     `json:"person_detected"`
 	Temperature      *float64 `json:"temperature"`
 	MaskDetected     *bool    `json:"mask_detected"`
+	// Photo is the legacy single snapshot object key (mqtt-protocol.md §4.1).
+	// Photos is the new multi-camera array. Devices sending both are treated
+	// as consistent: Photo (when set and missing from Photos) gets prepended
+	// so no image is dropped.
 	Photo            string   `json:"photo"`
+	Photos           []string `json:"photos,omitempty"`
 	LocalDBVersion   int      `json:"local_db_version"`
 	LocalPersonCount int      `json:"local_person_count"`
 }
@@ -674,12 +679,34 @@ func (h *MQTTHandler) handleAlarm(_ context.Context, pt ParsedTopic, env MQTTEnv
 	// Canonical impl lives in internal/access/nats_consumer.go
 	// (isOwnTenantMediaKey) — duplicated here because the two packages can't
 	// cleanly share internal helpers (uuidRegex is similarly duplicated).
+	prefix := "events/" + pt.TenantID + "/" + pt.DeviceID + "/"
 	if photo, _ := data["photo"].(string); photo != "" {
-		prefix := "events/" + pt.TenantID + "/" + pt.DeviceID + "/"
 		if !strings.HasPrefix(photo, prefix) {
 			slog.Warn("mqtt: rejecting cross-tenant media reference on alarm",
 				"tenant", pt.TenantID, "device", pt.DeviceID, "photo", photo)
 			delete(data, "photo")
+		}
+	}
+	// Same guard for the multi-photo array — a compromised device could
+	// smuggle keys from another tenant here. Drop bad entries; keep good ones.
+	if raw, ok := data["photos"].([]any); ok {
+		filtered := make([]any, 0, len(raw))
+		for _, p := range raw {
+			s, _ := p.(string)
+			if s == "" {
+				continue
+			}
+			if !strings.HasPrefix(s, prefix) {
+				slog.Warn("mqtt: rejecting cross-tenant media reference on alarm",
+					"tenant", pt.TenantID, "device", pt.DeviceID, "photo", s)
+				continue
+			}
+			filtered = append(filtered, s)
+		}
+		if len(filtered) == 0 {
+			delete(data, "photos")
+		} else {
+			data["photos"] = filtered
 		}
 	}
 	go InsertDeviceEvent(h.appCtx, h.db.Pool, DeviceEvent{
@@ -850,8 +877,15 @@ func (h *MQTTHandler) handleStatus(ctx context.Context, pt ParsedTopic, env MQTT
 	}
 }
 
-func (h *MQTTHandler) handleCommandResponse(_ context.Context, pt ParsedTopic, env MQTTEnvelope) {
+func (h *MQTTHandler) handleCommandResponse(ctx context.Context, pt ParsedTopic, env MQTTEnvelope) {
 	slog.Info("command response", "device", pt.DeviceID, "type", env.Type, "ref", env.Ref, "status", env.Status)
+
+	// cmd.logs.resp closes a remote-log pull — update the tracking row so the
+	// admin UI stops polling. Dispatched to log_handlers.go so the response
+	// logic lives next to the request logic.
+	if env.Type == "cmd.logs.resp" {
+		handleLogAck(ctx, h.db, pt.TenantID, pt.DeviceID, env)
+	}
 
 	desc := fmt.Sprintf("Command response: %s — %s", env.Type, env.Status)
 	if env.Error != "" {

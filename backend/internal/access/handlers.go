@@ -431,7 +431,7 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(e.access_point_id::text,''),
 		       COALESCE(e.user_id::text,''), COALESCE(e.user_name,''), COALESCE(e.credential_type,''),
 		       COALESCE(e.direction,''), e.decision, COALESCE(e.reason,''), e.confidence,
-		       COALESCE(e.photo_ref,''), e.metadata,
+		       COALESCE(e.photo_ref,''), COALESCE(e.photo_refs, ARRAY[]::TEXT[]), e.metadata,
 		       COALESCE(d.id::text,''), COALESCE(d.name,'')
 		FROM dm3_access.access_events e
 		LEFT JOIN LATERAL (
@@ -460,13 +460,22 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 		var e eventResponse
 		if err := rows.Scan(&e.ID, &e.EventID, &e.TenantID, &e.Time, &e.AccessPointID,
 			&e.UserID, &e.UserName, &e.CredentialType, &e.Direction, &e.Decision,
-			&e.Reason, &e.Confidence, &e.PhotoRef, &e.Metadata,
+			&e.Reason, &e.Confidence, &e.PhotoRef, &e.PhotoRefs, &e.Metadata,
 			&e.DeviceID, &e.DeviceName); err != nil {
 			slog.Error("list events scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		e.PhotoURL = presignPhotoIfMinIOKey(r.Context(), presigner, e.PhotoRef)
+		// Presign every key in the multi-photo list. Empty slice → nil so the
+		// JSON tag's omitempty keeps single-photo responses the old shape.
+		if len(e.PhotoRefs) > 0 {
+			urls := make([]string, 0, len(e.PhotoRefs))
+			for _, key := range e.PhotoRefs {
+				urls = append(urls, presignPhotoIfMinIOKey(r.Context(), presigner, key))
+			}
+			e.PhotoURLs = urls
+		}
 		events = append(events, e)
 	}
 	if err := rows.Err(); err != nil {
@@ -614,25 +623,40 @@ func splitCSV(v string) []string {
 
 // expandCredentialTypes maps each canonical filter token from the FE dropdown
 // to the set of values that may actually be stored in access_events.credential_type.
-// The column is written by three different code paths with inconsistent
-// vocabularies (see docs/architecture/mqtt-protocol.md):
+// The column is written by several paths with INCONSISTENT vocabularies (see
+// docs/architecture/mqtt-protocol.md §4.1 for the device-side names):
 //
 //   - access/nats_consumer.go (devices via MQTT) writes whatever the firmware
-//     sends — usually `card`, `face`, `pin`, `qr`, `uhf`, `fingerprint`.
+//     sends. Per MQTT protocol §4.1, the canonical device-side tokens are
+//     `face_template`, `card_uid`, `qr_code`, `fp_template`, `pin`, `nfc`.
+//     Some older firmware still sends the short form (`face`, `card`, `qr`,
+//     `fingerprint`), which is why we accept both.
 //   - access/parking_access_consumer.go (parking-svc) writes `nfc`, `rfid`,
 //     `plate`, `manual`.
 //   - cctv/hanet_webhook.go (Hanet ANPR/face cameras) writes `face` or
 //     `plate_number` (note: NOT `plate`).
 //
-// Without this expansion, "Plate" misses every Hanet ANPR row. Tokens not in
-// the alias table pass through as-is so unknown types still behave as exact
-// match. Returns deduped values across the whole input set.
+// The FE dropdown only knows the short tokens (`card`, `face`, `plate`, `qr`,
+// etc.). Without this expansion, filtering by "Card" returns zero rows in any
+// tenant running current firmware, because every row is stored as `card_uid`.
+// Tokens not in the alias table pass through as-is so unknown types still
+// behave as exact match. Returns deduped values across the whole input set.
 func expandCredentialTypes(tokens []string) []string {
 	if len(tokens) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(tokens))
-	seen := make(map[string]struct{}, len(tokens))
+	// aliases: short FE token → every real value the BE may have stored.
+	// Include the short form itself so legacy rows still match after firmware
+	// rolls out the canonical names.
+	aliases := map[string][]string{
+		"card":        {"card", "card_uid"},
+		"face":        {"face", "face_template"},
+		"qr":          {"qr", "qr_code"},
+		"fingerprint": {"fingerprint", "fp_template"},
+		"plate":       {"plate", "plate_number"},
+	}
+	out := make([]string, 0, len(tokens)*2)
+	seen := make(map[string]struct{}, len(tokens)*2)
 	add := func(v string) {
 		if _, ok := seen[v]; ok {
 			return
@@ -641,11 +665,12 @@ func expandCredentialTypes(tokens []string) []string {
 		out = append(out, v)
 	}
 	for _, t := range tokens {
-		switch strings.ToLower(strings.TrimSpace(t)) {
-		case "plate":
-			add("plate")
-			add("plate_number")
-		default:
+		key := strings.ToLower(strings.TrimSpace(t))
+		if expansions, ok := aliases[key]; ok {
+			for _, e := range expansions {
+				add(e)
+			}
+		} else {
 			add(t)
 		}
 	}
@@ -716,7 +741,14 @@ type eventResponse struct {
 	// refs (identity-svc avatars) this stays empty and the frontend falls
 	// back to assetUrl(photo_ref).
 	PhotoURL string         `json:"photo_url,omitempty"`
-	Metadata map[string]any `json:"metadata,omitempty"`
+	// PhotoRefs is the multi-camera snapshot key list (mqtt-protocol.md §4.1).
+	// PhotoURLs is the parallel presigned-GET URL list (same 5-min TTL as
+	// PhotoURL). Both are omitted when only a single photo is attached; the
+	// frontend should prefer PhotoURLs[] when non-empty and fall back to
+	// PhotoURL for legacy rows.
+	PhotoRefs []string       `json:"photo_refs,omitempty"`
+	PhotoURLs []string       `json:"photo_urls,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
 }
 
 // exportRow holds one row of export data.

@@ -892,9 +892,23 @@ All settings in `cfg.full` can be updated remotely:
 
 ### 13.3 Log Upload
 
-- Device maintains 7 days of app logs (Logcat)
-- Server can request log upload via command
-- Logs uploaded to MinIO via HTTPS (pre-signed URL)
+Wire spec: `docs/architecture/mqtt-protocol.md §6.5`. This section documents the device-side behaviour.
+
+**Storage:** the app maintains a 7-day rolling buffer of Logcat output in the app's private storage. Older lines are evicted by a daily cleanup task. The buffer is SQLCipher-encrypted along with the rest of the local DB (see §14).
+
+**On receiving `cmd.logs`:**
+
+1. Validate `upload_url` + `upload_expires_at`. Reject with `url_expired` if the expiry is in the past (rare — round-trip is < 1s typically).
+2. Query the local log buffer applying optional `from_ts` / `to_ts` / `level_min` / `lines_max` filters. If the result is empty, go straight to step 5 with `status=error`, `error=no_logs`.
+3. gzip the selected lines as a single UTF-8 text file (one line per log entry, timestamp prefix retained).
+4. `PUT` the gzipped blob to `upload_url` with `Content-Type: application/gzip`. On transient 5xx retry once after 2s; give up after that with `error=upload_failed`.
+5. Publish `cmd.logs.resp` on `cmd/resp` with `data.request_id` echoing the value from the command. Include `lines_uploaded` + `bytes` on success, `error` code on failure.
+
+**Constraints:**
+- Never block access-control or UI threads — run the collect-gzip-upload flow on a background worker.
+- Cap concurrent log requests at 1 per device: if a second `cmd.logs` arrives while one is in flight, reply with `error=device_busy` and do not queue.
+- Log pull does NOT rotate the 7-day buffer — the same lines can be pulled again with a fresh request_id.
+- Redact nothing on the device — the server is the trust boundary. If a log line contains a card UID or PIN, it gets uploaded as-is. Operators who need redaction should do it server-side.
 
 ---
 
