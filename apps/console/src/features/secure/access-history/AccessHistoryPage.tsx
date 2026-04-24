@@ -243,7 +243,7 @@ function SkeletonRows({ count }: { count: number }) {
     <>
       {Array.from({ length: count }).map((_, i) => (
         <TableRow key={i} className="animate-pulse">
-          {Array.from({ length: 9 }).map((__, j) => (
+          {Array.from({ length: 10 }).map((__, j) => (
             <TableCell key={j} className="px-4 py-2">
               <div className="h-4 bg-muted rounded w-full" />
             </TableCell>
@@ -254,52 +254,98 @@ function SkeletonRows({ count }: { count: number }) {
   );
 }
 
-// ─── Photo thumbnail & modal ────────────────────────────────────────────────
+// ─── Photo & Video cells ────────────────────────────────────────────────────
 
-// MediaCell renders every image/video linked to the event:
-//   - the device-side check-in photo (photo_url / photo_ref legacy fallback)
-//   - each camera's thumbnail from cctv-svc (event_clips via cctv_media)
-// The cell shows up to 3 stacked thumbnails + "+N" badge when more exist.
-// Click opens a modal grid with full-size previews and inline video for clips.
-//
-// Tiles overlap by design (stack-left offset) so 3 cameras still fit in one
-// column without widening the table.
-function MediaCell({
+// PhotoCell shows ONLY the device-side check-in image (terminal capture).
+// CCTV camera media has its own column — see VideoCell below.
+function PhotoCell({
   photoUrl,
   photoRef,
-  media,
   t,
 }: {
   photoUrl?: string;
   photoRef?: string;
+  t: (k: string) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  const deviceUrl = photoUrl || (photoRef ? assetUrl(photoRef) : '');
+
+  if (!deviceUrl) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
+        className="h-8 w-8 overflow-hidden rounded border border-border bg-muted flex items-center justify-center hover:opacity-80 transition-opacity"
+        title={t('accessHistory.photo.view')}
+        aria-label={t('accessHistory.photo.view')}
+      >
+        <img
+          src={deviceUrl}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={(e) => {
+            const el = e.currentTarget as HTMLImageElement;
+            el.style.display = 'none';
+            if (el.nextElementSibling) {
+              (el.nextElementSibling as HTMLElement).style.display = 'flex';
+            }
+          }}
+        />
+        <span className="hidden items-center justify-center text-muted-foreground">
+          <ImageOff size={14} />
+        </span>
+      </button>
+
+      <AppModal
+        open={open}
+        onOpenChange={setOpen}
+        title={t('accessHistory.photo.modal')}
+        size="md"
+      >
+        <figure className="space-y-2">
+          <img
+            src={deviceUrl}
+            alt={t('accessHistory.photo.device')}
+            className="w-full h-auto max-h-[70vh] rounded border border-border object-contain bg-muted"
+          />
+          <figcaption className="text-[11px] text-muted-foreground">
+            {t('accessHistory.photo.device')}
+          </figcaption>
+        </figure>
+      </AppModal>
+    </>
+  );
+}
+
+// VideoCell renders every CCTV-camera media item linked to the event
+// (clips and snapshots) as up-to-3 stacked thumbnails + "+N" badge. Click
+// opens a modal grid with full-size previews — clips render as <video>,
+// snapshots as <img>. Tiles overlap (stack-left offset) so multiple cameras
+// fit in one column without widening the table.
+function VideoCell({
+  media,
+  t,
+}: {
   media?: CCTVMediaItem[];
   t: (k: string) => string;
 }) {
   const [open, setOpen] = useState(false);
-
-  const deviceUrl = photoUrl || (photoRef ? assetUrl(photoRef) : '');
   const cctvMedia = media ?? [];
-  const tiles: { url: string; kind: 'device' | 'camera'; label?: string; playback?: string }[] = [];
 
-  if (deviceUrl) {
-    tiles.push({ url: deviceUrl, kind: 'device', label: t('accessHistory.photo.device') });
-  }
-  for (const m of cctvMedia) {
-    if (!m.thumbnail_url) continue;
-    tiles.push({
-      url: m.thumbnail_url,
-      kind: 'camera',
-      label: m.camera_name,
-      playback: m.media_type === 'clip' ? m.playback_url : undefined,
-    });
+  if (cctvMedia.length === 0) {
+    return <span className="text-muted-foreground text-[11px]">{t('accessHistory.video.noClip')}</span>;
   }
 
-  if (tiles.length === 0) {
-    return <span className="text-muted-foreground">—</span>;
-  }
-
+  const tiles = cctvMedia.filter((m) => !!m.thumbnail_url);
   const visible = tiles.slice(0, 3);
-  const extra = tiles.length - visible.length;
+  const extra = cctvMedia.length - visible.length;
 
   return (
     <>
@@ -315,13 +361,13 @@ function MediaCell({
       >
         {visible.map((tile, i) => (
           <span
-            key={i}
+            key={tile.clip_id}
             className="h-8 w-8 overflow-hidden rounded border border-border bg-muted flex items-center justify-center hover:opacity-80 transition-opacity"
             style={{ marginLeft: i === 0 ? 0 : -10, zIndex: 3 - i }}
-            title={tile.label}
+            title={tile.camera_name}
           >
             <img
-              src={tile.url}
+              src={tile.thumbnail_url}
               alt=""
               className="h-full w-full object-cover"
               onError={(e) => {
@@ -337,6 +383,13 @@ function MediaCell({
             </span>
           </span>
         ))}
+        {/* When some clips have no thumbnail (still pending), show a generic
+            tile so the cell is clickable instead of empty. */}
+        {visible.length === 0 && (
+          <span className="h-8 px-2 rounded border border-border bg-muted text-[11px] text-muted-foreground flex items-center">
+            {t('accessHistory.photo.processing')}
+          </span>
+        )}
         {extra > 0 && (
           <span className="h-8 min-w-[2rem] px-1.5 ml-[-10px] rounded border border-border bg-muted text-[11px] font-medium text-muted-foreground flex items-center justify-center">
             +{extra}
@@ -347,46 +400,40 @@ function MediaCell({
       <AppModal
         open={open}
         onOpenChange={setOpen}
-        title={t('accessHistory.photo.modal')}
+        title={t('accessHistory.video.modal')}
         size="lg"
       >
+        {/* Uniform 16:9 grid — mirrors CCTVLiveViewPage tile aspect so the
+            modal stays a clean grid regardless of each clip's intrinsic
+            resolution. Click "details" on a single tile later to view at the
+            clip's native aspect. */}
         <div className="grid grid-cols-2 gap-3">
-          {deviceUrl && (
-            <figure className="space-y-1">
-              <img
-                src={deviceUrl}
-                alt={t('accessHistory.photo.device')}
-                className="w-full h-auto max-h-[50vh] rounded border border-border object-contain bg-muted"
-              />
-              <figcaption className="text-[11px] text-muted-foreground">
-                {t('accessHistory.photo.device')}
-              </figcaption>
-            </figure>
-          )}
           {cctvMedia.map((m) => (
             <figure key={m.clip_id} className="space-y-1">
-              {m.media_type === 'clip' && m.playback_url ? (
-                <video
-                  src={m.playback_url}
-                  poster={m.thumbnail_url}
-                  controls
-                  className="w-full h-auto max-h-[50vh] rounded border border-border bg-black"
-                />
-              ) : m.thumbnail_url ? (
-                <img
-                  src={m.thumbnail_url}
-                  alt={m.camera_name}
-                  className="w-full h-auto max-h-[50vh] rounded border border-border object-contain bg-muted"
-                />
-              ) : (
-                <div className="w-full h-40 rounded border border-border bg-muted flex items-center justify-center text-[12px] text-muted-foreground">
-                  {m.status === 'pending' || m.status === 'recording'
-                    ? t('accessHistory.photo.processing')
-                    : m.status === 'failed'
-                      ? t('accessHistory.photo.failed')
-                      : t('accessHistory.photo.noMedia')}
-                </div>
-              )}
+              <div className="relative aspect-video rounded border border-border bg-black overflow-hidden">
+                {m.media_type === 'clip' && m.playback_url ? (
+                  <video
+                    src={m.playback_url}
+                    poster={m.thumbnail_url}
+                    controls
+                    className="absolute inset-0 w-full h-full object-cover bg-black"
+                  />
+                ) : m.thumbnail_url ? (
+                  <img
+                    src={m.thumbnail_url}
+                    alt={m.camera_name}
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center text-[12px] text-muted-foreground bg-muted">
+                    {m.status === 'pending' || m.status === 'recording'
+                      ? t('accessHistory.photo.processing')
+                      : m.status === 'failed'
+                        ? t('accessHistory.photo.failed')
+                        : t('accessHistory.photo.noMedia')}
+                  </div>
+                )}
+              </div>
               <figcaption className="text-[11px] text-muted-foreground">
                 {m.camera_name || m.camera_id} · {m.media_type}
                 {m.status !== 'finalized' && ` · ${m.status}`}
@@ -1263,6 +1310,7 @@ export function AccessHistoryPage() {
                   <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.decision')}</TableHead>
                   <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.reason')}</TableHead>
                   <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.photo')}</TableHead>
+                  <TableHead className="px-4 text-[11px] uppercase tracking-wider">{t('accessHistory.columns.video')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1270,7 +1318,7 @@ export function AccessHistoryPage() {
                   <SkeletonRows count={10} />
                 ) : events.length === 0 ? (
                   <TableRow data-testid="access-history-empty">
-                    <TableCell colSpan={9} className="px-4 py-12">
+                    <TableCell colSpan={10} className="px-4 py-12">
                       <EmptyState
                         icon={<History size={32} strokeWidth={1.2} />}
                         title={hasActiveFilters
@@ -1339,12 +1387,14 @@ export function AccessHistoryPage() {
                         {event.reason || '—'}
                       </TableCell>
                       <TableCell className="px-4" onClick={(e) => e.stopPropagation()}>
-                        <MediaCell
+                        <PhotoCell
                           photoUrl={event.photo_url}
                           photoRef={event.photo_ref}
-                          media={event.cctv_media}
                           t={t}
                         />
+                      </TableCell>
+                      <TableCell className="px-4" onClick={(e) => e.stopPropagation()}>
+                        <VideoCell media={event.cctv_media} t={t} />
                       </TableCell>
                     </TableRow>
                   ))
