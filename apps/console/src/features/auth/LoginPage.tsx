@@ -193,20 +193,7 @@ export function LoginPage() {
               )}
             </Button>
 
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-border" />
-              </div>
-              <div className="relative flex justify-center text-[12px]">
-                <span className="bg-background px-3 text-muted-foreground">{t('orContinueWith')}</span>
-              </div>
-            </div>
-
-            <Button type="button" variant="outline" className="w-full inline-flex items-center justify-center gap-2">
-              <Building2 size={14} /> {t('signInWithSSO')}
-            </Button>
-
-            <div className="text-center mt-4">
+            <div className="text-center mt-6">
               <Link to="/forgot-password" className="text-[12px] text-primary hover:underline">
                 {t('forgotPassword')}
               </Link>
@@ -284,8 +271,7 @@ export function LoginPage() {
         </div>
 
         {/* Footer */}
-        <div className="mt-10 flex items-center justify-between text-[12px] text-muted-foreground border-t border-border pt-4">
-          <span>Building: Landmark 81 ▾</span>
+        <div className="mt-10 flex items-center justify-end text-[12px] text-muted-foreground border-t border-border pt-4">
           <LanguageSwitcher />
         </div>
       </div>
