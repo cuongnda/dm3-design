@@ -88,6 +88,10 @@ func main() {
 	// Sync service
 	syncService := gateway.NewSyncService(database, mqttClient)
 	syncService.AttachHub(hub)
+	// Fan a sync request out to non-MQTT services (cctv-svc routes
+	// person_sync to TungSon cameras over VIID). Pass the existing NATS
+	// client; cctv-svc subscribes on dm3.devices.sync.request.
+	syncService.AttachNATS(natsClient)
 	syncService.AttachKioskConfig(cfg.KioskAPIBaseURL)
 	// Presigner for avatar URLs in cfg.person_sync / cfg.visitor_sync is wired
 	// below, after the MinIO client is initialised (see objectStore).

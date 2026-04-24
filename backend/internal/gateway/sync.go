@@ -17,6 +17,7 @@ import (
 	"github.com/duali/dm3-backend/pkg/db"
 	"github.com/duali/dm3-backend/pkg/httputil"
 	"github.com/duali/dm3-backend/pkg/mqtt"
+	"github.com/duali/dm3-backend/pkg/natsutil"
 	"github.com/duali/dm3-backend/pkg/objectstore"
 )
 
@@ -25,6 +26,7 @@ import (
 type SyncService struct {
 	db        *db.DB
 	mqtt      *mqtt.Client
+	nats      *natsutil.Client // optional fan-out for non-MQTT devices (e.g. TungSon cameras)
 	handlers  *GatewayHandlers // for pushDeviceConfig
 	hub       *EventHub        // for broadcasting sync.progress events
 	Jobs      *JobRegistry     // tracks manual transmit progress
@@ -70,6 +72,13 @@ func (s *SyncService) AttachAssetPresigner(p objectstore.GetURLPresigner) {
 	if s.Visitors != nil {
 		s.Visitors.assetPresigner = p
 	}
+}
+
+// AttachNATS lets the sync service fan a sync request out to non-MQTT
+// services (e.g. cctv-svc which proxies face sync to TungSon cameras over
+// VIID HTTP). Optional — when nil, sync stays MQTT-only.
+func (s *SyncService) AttachNATS(client *natsutil.Client) {
+	s.nats = client
 }
 
 // AttachHub gives the sync service the WebSocket hub so it can broadcast
@@ -322,10 +331,10 @@ func (s *SyncService) HandleSyncRequest(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Look up device
-	var companyID, deviceID string
+	var companyID, deviceID, deviceType string
 	err := s.db.Pool.QueryRow(r.Context(),
-		`SELECT tenant_id, device_id FROM dm3_devices.devices WHERE id = $1::uuid`, id,
-	).Scan(&companyID, &deviceID)
+		`SELECT tenant_id, device_id, type FROM dm3_devices.devices WHERE id = $1::uuid`, id,
+	).Scan(&companyID, &deviceID, &deviceType)
 	if err != nil {
 		httputil.Error(w, http.StatusNotFound, "device not found")
 		return
@@ -337,6 +346,13 @@ func (s *SyncService) HandleSyncRequest(w http.ResponseWriter, r *http.Request) 
 	// message is published and acked.
 	job := s.Jobs.Create(companyID, deviceID, types)
 	results, _ := s.pushSyncTypes(r.Context(), companyID, id, deviceID, types, true, job)
+
+	// Fan out to non-MQTT services. Cameras (TungSon VIID) don't subscribe
+	// MQTT, so cctv-svc owns its own face sync queue and listens on this
+	// NATS subject to translate the gateway sync request into a VIID push.
+	// Best-effort: a publish failure here doesn't roll back the MQTT pushes
+	// already done above.
+	s.publishSyncRequest(r.Context(), companyID, id, deviceID, deviceType, types)
 
 	actorID, actorEmail := audit.ActorFromContext(r.Context())
 	go InsertDeviceEvent(context.Background(), s.db.Pool, DeviceEvent{
@@ -350,13 +366,46 @@ func (s *SyncService) HandleSyncRequest(w http.ResponseWriter, r *http.Request) 
 	})
 
 	httputil.JSON(w, http.StatusOK, map[string]any{
-		"status":    "sync_pushed",
-		"job_id":    job.ID,
-		"types":     types,
-		"results":   results,
-		"device_id": deviceID,
-		"tenant_id": companyID,
+		"status":      "sync_pushed",
+		"job_id":      job.ID,
+		"types":       types,
+		"results":     results,
+		"device_id":   deviceID,
+		"device_uuid": id,
+		"device_type": deviceType,
+		"tenant_id":   companyID,
 	})
+}
+
+// publishSyncRequest emits a fan-out event so non-MQTT services (currently
+// cctv-svc, future: parking-svc, visitor-svc) can react to a manual sync
+// trigger without us hard-coding device-type branches into the gateway.
+//
+// Subject: dm3.devices.sync.request
+// Subscribers filter by device_type and the requested types[] themselves.
+// Publish errors are logged but never bubble to the HTTP response — the
+// MQTT half of the sync has already succeeded by the time we get here.
+func (s *SyncService) publishSyncRequest(ctx context.Context, tenantID, deviceUUID, deviceID, deviceType string, types []string) {
+	if s.nats == nil {
+		return
+	}
+	payload, err := json.Marshal(map[string]any{
+		"tenant_id":   tenantID,
+		"device_uuid": deviceUUID, // dm3_devices.devices.id (UUID), what cctv keys on
+		"device_id":   deviceID,   // human-readable short code, kept for tracing
+		"device_type": deviceType,
+		"types":       types,
+		"manual":      true,
+		"ts_ms":       time.Now().UnixMilli(),
+	})
+	if err != nil {
+		slog.Warn("sync: marshal fan-out payload failed", "error", err)
+		return
+	}
+	if err := s.nats.Publish(ctx, "dm3.devices.sync.request", payload); err != nil {
+		slog.Warn("sync: publish fan-out request failed", "error", err,
+			"device_uuid", deviceUUID, "device_type", deviceType)
+	}
 }
 
 // HandleGetSyncJob handles GET /api/v1/gateway/devices/{id}/sync/jobs/{jobID}

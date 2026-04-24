@@ -303,6 +303,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Bridge gateway "Transmit Data" sync into the TungSon face queue.
+	// Gateway publishes dm3.devices.sync.request whenever the operator hits
+	// /api/v1/gateway/devices/{id}/sync; this consumer turns camera-targeted
+	// requests into an EnqueueFullSync.
+	deviceSyncConsumer := cctv.NewDeviceSyncRequestConsumer(database, natsClient, faceSyncSvc)
+	if err := deviceSyncConsumer.Start(ctx); err != nil {
+		slog.Error("failed to start device sync request consumer", "error", err)
+		os.Exit(1)
+	}
+
 	// Register full-sync API endpoint (manager+ only, under /api/v1/cctv/)
 	cctv.RegisterSyncRoutes(r, faceSyncSvc, cfg.JWTSecret)
 
