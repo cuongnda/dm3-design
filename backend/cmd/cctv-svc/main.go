@@ -160,8 +160,10 @@ func main() {
 	go cctv.BootstrapMediaMTXPaths(ctx, database, mediamtxClient)
 
 	// Camera liveness: poll MediaMTX for RTSP stream readiness and sweep stale
-	// tungson heartbeats. Keeps dm3_devices.devices.status in sync with reality.
-	cctv.RunStatusMonitor(ctx, database, mediamtxClient)
+	// tungson heartbeats. Keeps dm3_devices.devices.status in sync with reality
+	// AND pushes a status.heartbeat WS event on every transition so the
+	// monitoring UI updates without polling.
+	cctv.RunStatusMonitor(ctx, database, mediamtxClient, natsClient)
 
 	// Object store + clip signer
 	// ObjectStoreClipSigner uses the MinIO client directly for presigned URLs.

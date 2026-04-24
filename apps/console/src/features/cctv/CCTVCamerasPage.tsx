@@ -7,7 +7,6 @@ import {
   Plus,
   Trash2,
   Pencil,
-  Play,
   Film,
   Video,
   MapPin,
@@ -22,6 +21,7 @@ import {
   deleteCamera,
   deleteCameraPreview,
   testCameraConnection,
+  useRealtimeStore,
   type CameraDTO,
   type CreateCameraRequest,
   type TestConnectionDTO,
@@ -116,18 +116,8 @@ export function CCTVCamerasPage() {
 
   const testMutation = useMutation({
     mutationFn: (id: string) => testCameraConnection(id),
-    onSuccess: (result, id) => {
+    onSuccess: (result) => {
       setTestResult(result);
-      // Show toast when testing from list (modal not open)
-      if (!modalOpen) {
-        const cam = cameras.find((c) => c.id === id);
-        const name = cam?.name ?? id;
-        if (result.ok) {
-          toast(`${name}: Connection OK · ${result.latency_ms}ms${result.codec ? ` · ${result.codec}` : ''}`, 'success');
-        } else {
-          toast(`${name}: Connection failed${result.error ? ` — ${result.error}` : ''}`, 'error');
-        }
-      }
     },
   });
 
@@ -161,7 +151,30 @@ export function CCTVCamerasPage() {
     if (editing) testMutation.mutate(editing.id);
   };
 
-  const cameras = data?.data ?? [];
+  const baseCameras = data?.data ?? [];
+  // Realtime overlay: cctv-svc publishes `status.heartbeat` on every
+  // online/offline transition via dm3.cctv.ws.{tenant}.{device}. The shared
+  // WebSocket plumbing populates `deviceStatuses` in the realtime store, so
+  // we can reflect status flips without refetching the camera list every few
+  // seconds (the user pushed back on refetchInterval as extra server load).
+  //
+  // Only override when the realtime event is strictly newer than the REST
+  // snapshot — on a cold page load the REST response is authoritative.
+  const realtimeStatuses = useRealtimeStore((s) => s.deviceStatuses);
+  const cameras = useMemo(() => {
+    return baseCameras.map((cam) => {
+      const rs = realtimeStatuses[cam.device_id];
+      if (!rs) return cam;
+      const rsMs = rs.lastSeen.getTime();
+      const restMs = cam.last_seen ? new Date(cam.last_seen).getTime() : 0;
+      if (rsMs <= restMs) return cam;
+      return {
+        ...cam,
+        status: rs.online ? 'online' : 'offline',
+        last_seen: rs.lastSeen.toISOString(),
+      };
+    });
+  }, [baseCameras, realtimeStatuses]);
   const submitting = createMutation.isPending || updateMutation.isPending;
 
   const columns: Column<CameraDTO>[] = [
@@ -287,15 +300,6 @@ export function CCTVCamerasPage() {
             aria-label={t('cctv.cameras.playback')}
           >
             <Film size={14} />
-          </Button>
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={() => testMutation.mutate(r.id)}
-            data-testid={`cctv-button-test-camera-${r.id}`}
-            aria-label={t('cctv.cameras.test')}
-          >
-            <Play size={14} />
           </Button>
           <Button
             size="xs"
