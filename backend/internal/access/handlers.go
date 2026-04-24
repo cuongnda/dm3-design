@@ -368,19 +368,41 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 		idx++
 	}
 	if v := r.URL.Query().Get("user_id"); v != "" {
-		where += fmt.Sprintf(" AND user_id = $%d::uuid", idx)
-		args = append(args, v)
-		idx++
+		// Multi-select: FE may send a comma-separated list of UUIDs.
+		// Use ANY($n::uuid[]) so a single placeholder covers any count.
+		ids := splitCSV(v)
+		if len(ids) > 0 {
+			where += fmt.Sprintf(" AND user_id = ANY($%d::uuid[])", idx)
+			args = append(args, ids)
+			idx++
+		}
 	}
 	if v := r.URL.Query().Get("decision"); v != "" {
-		where += fmt.Sprintf(" AND decision = $%d", idx)
-		args = append(args, v)
-		idx++
+		decisions := splitCSV(v)
+		if len(decisions) > 0 {
+			placeholders := make([]string, len(decisions))
+			for i, d := range decisions {
+				args = append(args, d)
+				placeholders[i] = fmt.Sprintf("$%d", idx)
+				idx++
+			}
+			where += fmt.Sprintf(" AND decision IN (%s)", strings.Join(placeholders, ","))
+		}
 	}
 	if v := r.URL.Query().Get("credential_type"); v != "" {
-		where += fmt.Sprintf(" AND credential_type = $%d", idx)
-		args = append(args, v)
-		idx++
+		// Different writers store different vocabularies for license plates:
+		// parking-svc uses "plate" but the Hanet ANPR webhook uses "plate_number".
+		// Treat the FE's "plate" filter as covering both so users see all
+		// plate-driven events under one option. Also expanded for multi-select
+		// values via splitCSV — `card,face` becomes IN ('card','face').
+		aliases := expandCredentialTypes(splitCSV(v))
+		placeholders := make([]string, len(aliases))
+		for i, a := range aliases {
+			args = append(args, a)
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			idx++
+		}
+		where += fmt.Sprintf(" AND credential_type IN (%s)", strings.Join(placeholders, ","))
 	}
 	if v := r.URL.Query().Get("from"); v != "" {
 		if t, err := time.Parse(time.RFC3339, v); err == nil {
@@ -565,6 +587,71 @@ func presignOrEmpty(ctx context.Context, presigner objectstore.GetURLPresigner, 
 	return u.String()
 }
 
+// splitCSV parses a comma-separated query parameter (e.g. multi-select user_id
+// or credential_type) into a deduped, trimmed slice. Empty tokens dropped so
+// "a,,b" → ["a","b"]. Callers can pass the result straight to a SQL `ANY` or
+// `IN` clause.
+func splitCSV(v string) []string {
+	if v == "" {
+		return nil
+	}
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	return out
+}
+
+// expandCredentialTypes maps each canonical filter token from the FE dropdown
+// to the set of values that may actually be stored in access_events.credential_type.
+// The column is written by three different code paths with inconsistent
+// vocabularies (see docs/architecture/mqtt-protocol.md):
+//
+//   - access/nats_consumer.go (devices via MQTT) writes whatever the firmware
+//     sends — usually `card`, `face`, `pin`, `qr`, `uhf`, `fingerprint`.
+//   - access/parking_access_consumer.go (parking-svc) writes `nfc`, `rfid`,
+//     `plate`, `manual`.
+//   - cctv/hanet_webhook.go (Hanet ANPR/face cameras) writes `face` or
+//     `plate_number` (note: NOT `plate`).
+//
+// Without this expansion, "Plate" misses every Hanet ANPR row. Tokens not in
+// the alias table pass through as-is so unknown types still behave as exact
+// match. Returns deduped values across the whole input set.
+func expandCredentialTypes(tokens []string) []string {
+	if len(tokens) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(tokens))
+	seen := make(map[string]struct{}, len(tokens))
+	add := func(v string) {
+		if _, ok := seen[v]; ok {
+			return
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	for _, t := range tokens {
+		switch strings.ToLower(strings.TrimSpace(t)) {
+		case "plate":
+			add("plate")
+			add("plate_number")
+		default:
+			add(t)
+		}
+	}
+	return out
+}
+
 // presignPhotoIfMinIOKey returns a 5-minute presigned GET URL when photoRef is
 // a MinIO object key uploaded via the device media-url flow (see
 // docs/architecture/mqtt-protocol.md §15). Returns empty string for legacy
@@ -703,19 +790,34 @@ func (h *AccessHandlers) ExportEvents(w http.ResponseWriter, r *http.Request) {
 		idx++
 	}
 	if v := r.URL.Query().Get("user_id"); v != "" {
-		where += fmt.Sprintf(" AND e.user_id = $%d::uuid", idx)
-		args = append(args, v)
-		idx++
+		ids := splitCSV(v)
+		if len(ids) > 0 {
+			where += fmt.Sprintf(" AND e.user_id = ANY($%d::uuid[])", idx)
+			args = append(args, ids)
+			idx++
+		}
 	}
 	if v := r.URL.Query().Get("decision"); v != "" {
-		where += fmt.Sprintf(" AND e.decision = $%d", idx)
-		args = append(args, v)
-		idx++
+		decisions := splitCSV(v)
+		if len(decisions) > 0 {
+			placeholders := make([]string, len(decisions))
+			for i, d := range decisions {
+				args = append(args, d)
+				placeholders[i] = fmt.Sprintf("$%d", idx)
+				idx++
+			}
+			where += fmt.Sprintf(" AND e.decision IN (%s)", strings.Join(placeholders, ","))
+		}
 	}
 	if v := r.URL.Query().Get("credential_type"); v != "" {
-		where += fmt.Sprintf(" AND e.credential_type = $%d", idx)
-		args = append(args, v)
-		idx++
+		aliases := expandCredentialTypes(splitCSV(v))
+		placeholders := make([]string, len(aliases))
+		for i, a := range aliases {
+			args = append(args, a)
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			idx++
+		}
+		where += fmt.Sprintf(" AND e.credential_type IN (%s)", strings.Join(placeholders, ","))
 	}
 
 	var fromTime, toTime time.Time

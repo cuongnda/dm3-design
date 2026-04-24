@@ -34,7 +34,8 @@ export function listEvents(params?: ListEventsParams): Promise<Paginated<AccessE
   if (params?.limit) qs.set('limit', String(params.limit));
   if (params?.door_id) qs.set('door_id', params.door_id);
   if (params?.person_id) qs.set('person_id', params.person_id);
-  if (params?.decision) qs.set('decision', params.decision);
+  const decisions = joinCSV(params?.decision);
+  if (decisions) qs.set('decision', decisions);
   if (params?.from) qs.set('from', params.from);
   if (params?.to) qs.set('to', params.to);
   const q = qs.toString();
@@ -84,11 +85,21 @@ export interface ListAccessEventsParams {
   page?: number;
   limit?: number;
   access_point_id?: string;
-  user_id?: string;
-  decision?: string;
-  credential_type?: string;
+  /** Single UUID or array of UUIDs. Backend treats `?user_id=a,b,c` as multi-select. */
+  user_id?: string | string[];
+  /** Single token or array (e.g. ['granted','denied']). Backend splits on comma. */
+  decision?: string | string[];
+  /** Single token or array. Backend uses splitCSV + alias expansion. */
+  credential_type?: string | string[];
   from?: string;
   to?: string;
+}
+
+// joinCSV serializes a multi-select param. Backend uses splitCSV() to parse.
+// Returns empty string when input is empty/missing so the caller can skip set().
+function joinCSV(v: string | string[] | undefined): string {
+  if (!v) return '';
+  return Array.isArray(v) ? v.filter(Boolean).join(',') : v;
 }
 
 export function listAccessEvents(
@@ -98,9 +109,12 @@ export function listAccessEvents(
   if (params?.page) qs.set('page', String(params.page));
   if (params?.limit) qs.set('limit', String(params.limit));
   if (params?.access_point_id) qs.set('access_point_id', params.access_point_id);
-  if (params?.user_id) qs.set('user_id', params.user_id);
-  if (params?.decision) qs.set('decision', params.decision);
-  if (params?.credential_type) qs.set('credential_type', params.credential_type);
+  const userIds = joinCSV(params?.user_id);
+  if (userIds) qs.set('user_id', userIds);
+  const decisions = joinCSV(params?.decision);
+  if (decisions) qs.set('decision', decisions);
+  const credTypes = joinCSV(params?.credential_type);
+  if (credTypes) qs.set('credential_type', credTypes);
   if (params?.from) qs.set('from', params.from);
   if (params?.to) qs.set('to', params.to);
   const suffix = qs.toString() ? `?${qs}` : '';
@@ -114,9 +128,12 @@ export async function exportAccessEvents(
   const qs = new URLSearchParams();
   qs.set('format', format);
   if (params?.access_point_id) qs.set('access_point_id', params.access_point_id);
-  if (params?.user_id) qs.set('user_id', params.user_id);
-  if (params?.decision) qs.set('decision', params.decision);
-  if (params?.credential_type) qs.set('credential_type', params.credential_type);
+  const userIds = joinCSV(params?.user_id);
+  if (userIds) qs.set('user_id', userIds);
+  const decisions = joinCSV(params?.decision);
+  if (decisions) qs.set('decision', decisions);
+  const credTypes = joinCSV(params?.credential_type);
+  if (credTypes) qs.set('credential_type', credTypes);
   if (params?.from) qs.set('from', params.from);
   if (params?.to) qs.set('to', params.to);
 
