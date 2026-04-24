@@ -134,6 +134,7 @@ var detectors = []detector{
 	{vendor: "axis", run: probeAxis},
 	{vendor: "uniview", run: probeUniview},
 	{vendor: "hanet", run: probeHanet},
+	{vendor: "hisilicon", run: probeHisilicon},
 	{vendor: "generic_onvif", run: probeGenericONVIF},
 }
 
@@ -153,6 +154,8 @@ func priority(v string) int {
 		return 5
 	case "hanet":
 		return 6
+	case "hisilicon":
+		return 7
 	case "generic_onvif":
 		return 99
 	}
@@ -252,12 +255,17 @@ func probeAxis(ctx context.Context, c *http.Client, ip string) (bool, string, st
 		return false, "", "", ""
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusUnauthorized {
-		return true, "HTTP 401 (auth required)", "", ""
+	// Demand a WWW-Authenticate that explicitly names Axis; a bare 401
+	// from something else (Hik digest, IIS, …) shouldn't count.
+	if resp.StatusCode == http.StatusUnauthorized &&
+		strings.Contains(strings.ToLower(resp.Header.Get("Www-Authenticate")), "axis") {
+		return true, "HTTP 401 Axis realm", "", ""
 	}
-	body := readLimited(resp, 4096)
-	if strings.Contains(string(body), "Brand.Brand=") || strings.Contains(strings.ToLower(string(body)), "axis") {
-		return true, "HTTP 200 axis-cgi", "", ""
+	body := string(readLimited(resp, 4096))
+	// Require the exact key=value shape Axis produces. The substring
+	// "axis" alone false-positives on any page that mentions the word.
+	if resp.StatusCode == http.StatusOK && strings.Contains(body, "Brand.Brand=AXIS") {
+		return true, "HTTP 200 Brand.Brand=AXIS", "", ""
 	}
 	return false, "", "", ""
 }
@@ -270,52 +278,128 @@ func probeUniview(ctx context.Context, c *http.Client, ip string) (bool, string,
 		return false, "", "", ""
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusUnauthorized {
-		return true, "HTTP 401 (auth required)", "", ""
+	// 401 w/ "Uniview"/"LAPI" in the realm = real cam. A bare 401
+	// could be any auth-protected endpoint.
+	wwwAuth := strings.ToLower(resp.Header.Get("Www-Authenticate"))
+	if resp.StatusCode == http.StatusUnauthorized &&
+		(strings.Contains(wwwAuth, "uniview") || strings.Contains(wwwAuth, "lapi")) {
+		return true, "HTTP 401 LAPI realm", "", ""
 	}
 	if resp.StatusCode == http.StatusOK {
-		return true, "HTTP 200 LAPI", "", ""
+		body := string(readLimited(resp, 2048))
+		// LAPI returns a JSON envelope with "Response" / "DeviceInfo".
+		if strings.Contains(body, "\"Response\"") || strings.Contains(body, "DeviceInfo") {
+			return true, "HTTP 200 LAPI envelope", "", ""
+		}
 	}
 	return false, "", "", ""
 }
 
 func probeHanet(ctx context.Context, c *http.Client, ip string) (bool, string, string, string) {
 	// Hanet cams are mostly cloud-bridged; local HTTP typically exposes
-	// a login page at / or a manufacturer CGI. Signal is weak — check
-	// for "hanet" in the root page title so we don't false-positive on
-	// every nginx default page.
+	// a login page at /. Check three signals in order of strength so
+	// we don't false-positive on unrelated web UIs:
+	//
+	//  1. <title>…Hanet…</title>
+	//  2. HTML body has "hanet" inside a meaningful tag (not a comment
+	//     or random JS string)
+	//  3. Known Hanet endpoint paths (undocumented; add as we find them)
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+ip+"/", nil)
 	resp, err := c.Do(req)
 	if err != nil {
 		return false, "", "", ""
 	}
 	defer resp.Body.Close()
-	body := strings.ToLower(string(readLimited(resp, 16*1024)))
-	if strings.Contains(body, "hanet") {
-		return true, "root page mentions hanet", "", ""
+	body := string(readLimited(resp, 16*1024))
+	low := strings.ToLower(body)
+	if i := strings.Index(low, "<title>"); i >= 0 {
+		rest := low[i+len("<title>"):]
+		if j := strings.Index(rest, "</title>"); j >= 0 {
+			title := rest[:j]
+			if strings.Contains(title, "hanet") {
+				return true, "<title> contains hanet", "", ""
+			}
+		}
+	}
+	// Hanet-branded OEM often ship model names prefixed "ai-" in the
+	// page. Stricter than a bare "hanet" substring.
+	if strings.Contains(low, "hanet.com") || strings.Contains(low, "hanet camera") {
+		return true, "body mentions hanet.com / hanet camera", "", ""
 	}
 	return false, "", "", ""
 }
 
-// probeGenericONVIF is the catch-all: if /onvif/device_service exists
-// the cam speaks some ONVIF dialect — we can talk to it even without
-// a native adapter. Low priority so it's only the "winning" vendor
-// when nothing else matches.
+// probeHisilicon catches OEM cams built on HiSilicon reference
+// firmware (Vstarcam, Vsun, V380, HCAM and dozens of Chinese IPC
+// rebrands, including many LPR/license-plate cams). The hi3510
+// CGI at /cgi-bin/hi3510/param.cgi always returns a deterministic
+// `Error,return=-N` text body when hit without a valid `cmd=` — that
+// error shape is the strongest signature we have.
+func probeHisilicon(ctx context.Context, c *http.Client, ip string) (bool, string, string, string) {
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet,
+		"http://"+ip+"/cgi-bin/hi3510/param.cgi", nil)
+	resp, err := c.Do(req)
+	if err != nil {
+		return false, "", "", ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized {
+		return true, "HTTP 401 (auth required)", "", ""
+	}
+	body := strings.TrimSpace(string(readLimited(resp, 2048)))
+	// `Error,return=-21` (missing cmd), `Error,return=-1` (auth), etc.
+	if strings.HasPrefix(body, "Error,return=") {
+		return true, "hi3510 returned " + body, "", ""
+	}
+	// Some variants reply with `var=value` lines when cmd is implicit —
+	// accept only when the body has at least one camera-ish key. Raw
+	// key=value heuristics false-flag random web servers (DM3 proxy
+	// was hit this way in early testing).
+	if resp.StatusCode == http.StatusOK && len(body) < 1024 && len(body) > 0 {
+		lb := strings.ToLower(body)
+		for _, k := range []string{"var ", "return=", "osd_", "chan_", "bitrate=", "fps=", "sysver"} {
+			if strings.Contains(lb, k) {
+				return true, "HTTP 200 hi3510 "+k, "", ""
+			}
+		}
+	}
+	return false, "", "", ""
+}
+
+// probeGenericONVIF tries a real SOAP GetDeviceInformation against
+// /onvif/device_service. Any ONVIF cam will reply either with a SOAP
+// envelope (if anonymous is allowed) or with a SOAP Fault (wsse auth
+// required). A generic web server returning 404/400 to the same POST
+// is NOT ONVIF — earlier we treated HEAD 4xx as a positive match,
+// which false-flagged routers and our own DM3 server. Full body
+// check eliminates those.
 func probeGenericONVIF(ctx context.Context, c *http.Client, ip string) (bool, string, string, string) {
-	// Many cams expose ONVIF on an odd port (8091 for TungSon, 2000 for
-	// some Dahua, …). Try the common ones.
+	soap := `<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">
+  <s:Body><tds:GetDeviceInformation xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/></s:Body>
+</s:Envelope>`
 	for _, port := range []string{"80", "8091", "8080", "8000", "2000"} {
-		req, _ := http.NewRequestWithContext(ctx, http.MethodHead,
-			"http://"+ip+":"+port+"/onvif/device_service", nil)
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost,
+			"http://"+ip+":"+port+"/onvif/device_service", strings.NewReader(soap))
+		req.Header.Set("Content-Type", `application/soap+xml; charset=utf-8`)
 		resp, err := c.Do(req)
 		if err != nil {
 			continue
 		}
+		body := readLimited(resp, 4096)
 		resp.Body.Close()
-		// ONVIF services typically 400/405 on HEAD (they want POST),
-		// but the status code itself proves the endpoint exists.
-		if resp.StatusCode != 0 && resp.StatusCode < 500 {
-			return true, "HEAD :"+port+" → "+httpStatus(resp.StatusCode), "", ""
+		if resp.StatusCode == 0 {
+			continue
+		}
+		// Positive only when the response is actually SOAP — either a
+		// GetDeviceInformationResponse or a SOAP Fault. Any other
+		// body (HTML login page, JSON, empty) means "not ONVIF here".
+		bodyLower := strings.ToLower(string(body))
+		if strings.Contains(bodyLower, "envelope") &&
+			(strings.Contains(bodyLower, "getdeviceinformationresponse") ||
+				strings.Contains(bodyLower, ":fault") ||
+				strings.Contains(bodyLower, "onvif.org")) {
+			return true, "SOAP envelope :"+port+" "+httpStatus(resp.StatusCode), "", ""
 		}
 	}
 	return false, "", "", ""
@@ -364,6 +448,47 @@ func intToString(n int) string {
 		b[i] = '-'
 	}
 	return string(b[i:])
+}
+
+// EnumerateCIDR expands a CIDR into the list of usable host IPs.
+// Same semantics as tungson.scan: trims network + broadcast for
+// ranges of 3+ IPs, caps at 4096 so a /16 typo doesn't blow up.
+func EnumerateCIDR(cidr string) ([]string, error) {
+	_, ipnet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return nil, err
+	}
+	ip := ipnet.IP.Mask(ipnet.Mask).To4()
+	if ip == nil {
+		return nil, nil // IPv6 unsupported here
+	}
+	bcast := make(net.IP, 4)
+	copy(bcast, ip)
+	for i := range bcast {
+		bcast[i] |= ^ipnet.Mask[i]
+	}
+	out := make([]string, 0, 256)
+	cur := make(net.IP, 4)
+	copy(cur, ip)
+	for {
+		out = append(out, cur.String())
+		if cur.Equal(bcast) {
+			break
+		}
+		for i := len(cur) - 1; i >= 0; i-- {
+			cur[i]++
+			if cur[i] != 0 {
+				break
+			}
+		}
+		if len(out) >= 4096 {
+			break
+		}
+	}
+	if len(out) > 2 {
+		out = out[1 : len(out)-1] // drop network + broadcast
+	}
+	return out, nil
 }
 
 func netLess(a, b string) bool {

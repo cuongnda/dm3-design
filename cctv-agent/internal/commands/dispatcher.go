@@ -95,17 +95,25 @@ func (d *Dispatcher) dispatchGeneric(ctx context.Context, req Request) (json.Raw
 	return nil, fmt.Errorf("generic: unknown command type %q", req.Type)
 }
 
-// handleBrandProbe fingerprints one IP or every IP in a list so the
-// operator knows what vendor API each cam speaks before committing
-// to a per-vendor flow. Accepts either a single `ip` or an `ips[]`
-// list. For CIDR-wide sweeps the operator should first run `scan`
-// or `discover` then feed the IP list in.
+// handleBrandProbe fingerprints one IP, a list of IPs, or every
+// host inside a CIDR. Three input modes because the operator rarely
+// wants to type 254 IPs:
+//
+//   - `ip`: single host
+//   - `ips[]`: typically fed from a prior discover response
+//   - `cidr`: whole subnet sweep, returns only responders (other
+//     hosts are dropped so the UI list doesn't drown in unknowns)
+//
+// `include_unknown`: opt-in flag that keeps the unreachable /
+// non-responder hosts in the result. Off by default.
 func handleBrandProbe(ctx context.Context, raw json.RawMessage) (json.RawMessage, error) {
 	var p struct {
-		IP          string   `json:"ip"`
-		IPs         []string `json:"ips"`
-		TimeoutMs   int      `json:"timeout_ms"`
-		Concurrency int      `json:"concurrency"`
+		IP             string   `json:"ip"`
+		IPs            []string `json:"ips"`
+		CIDR           string   `json:"cidr"`
+		IncludeUnknown bool     `json:"include_unknown"`
+		TimeoutMs      int      `json:"timeout_ms"`
+		Concurrency    int      `json:"concurrency"`
 	}
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &p); err != nil {
@@ -116,15 +124,43 @@ func handleBrandProbe(ctx context.Context, raw json.RawMessage) (json.RawMessage
 	if p.TimeoutMs > 0 {
 		opts.Timeout = time.Duration(p.TimeoutMs) * time.Millisecond
 	}
-	ips := p.IPs
+	ips := append([]string(nil), p.IPs...)
 	if p.IP != "" {
 		ips = append(ips, p.IP)
 	}
-	if len(ips) == 0 {
-		return nil, fmt.Errorf("brand_probe needs either params.ip or params.ips[]")
+	if p.CIDR != "" {
+		expanded, err := brand.EnumerateCIDR(p.CIDR)
+		if err != nil {
+			return nil, fmt.Errorf("expand cidr: %w", err)
+		}
+		ips = append(ips, expanded...)
 	}
-	results := brand.ProbeMany(ctx, ips, opts)
-	return json.Marshal(map[string]any{"count": len(results), "results": results})
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("brand_probe needs params.ip, params.ips[], or params.cidr")
+	}
+
+	all := brand.ProbeMany(ctx, ips, opts)
+	if p.IncludeUnknown {
+		return json.Marshal(map[string]any{
+			"count":   len(all),
+			"results": all,
+			"probed":  len(ips),
+		})
+	}
+	// Filter out hosts that didn't respond to any detector — those
+	// are silent TCP sockets, not cams, and would make a /24 scan
+	// return 250+ noise rows.
+	hits := make([]brand.ProbeResult, 0, len(all))
+	for _, r := range all {
+		if len(r.Matches) > 0 {
+			hits = append(hits, r)
+		}
+	}
+	return json.Marshal(map[string]any{
+		"count":   len(hits),
+		"results": hits,
+		"probed":  len(ips),
+	})
 }
 
 // dispatchONVIF routes standard-protocol commands: network discovery
