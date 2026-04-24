@@ -121,6 +121,22 @@ func (c *AccessEventConsumer) handleAccessEvent(ctx context.Context, subject str
 		return nil
 	}
 
+	// Hard guard: never create a clip for an event that's already old. A
+	// clip is only meaningful for live captures (rolling buffer still
+	// on disk, operator actively watching) — and stale events appearing
+	// in the consumer almost always indicate a JetStream replay, not
+	// genuine new activity. Ack-and-skip so we don't recreate thousands
+	// of rows after a redeploy with a mis-configured DeliverPolicy.
+	if evt.TS > 0 {
+		eventTS := time.UnixMilli(evt.TS)
+		if time.Since(eventTS) > 5*time.Minute {
+			slog.Debug("cctv: skipping stale event",
+				"age_sec", int(time.Since(eventTS).Seconds()),
+				"event_id", evt.ID, "type", evt.Type)
+			return nil
+		}
+	}
+
 	parts := strings.SplitN(subject, ".", 5)
 	if len(parts) < 5 || !uuidRegex.MatchString(parts[2]) {
 		slog.Warn("cctv: invalid subject format", "subject", subject)
