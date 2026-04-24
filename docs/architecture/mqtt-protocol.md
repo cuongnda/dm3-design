@@ -413,6 +413,10 @@ All messages follow a standard envelope format:
     "temperature": 36.5,       // Optional: thermal reading (°C)
     "mask_detected": true,     // Optional: mask detection
     "photo": "events/<tenant>/<device>/snapshot/<uuid>.jpg",  // Optional: object key from §15 upload, NOT base64
+    "photos": [                                               // Optional (preferred when multi-camera): full snapshot list
+      "events/<tenant>/<device>/snapshot/<cam1-uuid>.jpg",
+      "events/<tenant>/<device>/snapshot/<cam2-uuid>.jpg"
+    ],
     "clip_object_key": "events/<tenant>/<device>/clip/<uuid>.mp4", // Optional: video clip object key from §15 upload
     "local_db_version": 42,    // Current user DB version on device
     "local_person_count": 4998 // Number of users in local DB
@@ -420,14 +424,22 @@ All messages follow a standard envelope format:
 }
 ```
 
-**Media fields (`photo`, `clip_object_key`)** *(updated 2026-04)* — both are
-**MinIO object keys**, not embedded binary. Devices upload the bytes first
-via the presigned-URL flow in **§15 Media Uploads**, then publish the
-access.log MQTT event with the returned `object_key`. The legacy
+**Media fields (`photo`, `photos`, `clip_object_key`)** *(updated 2026-04)* —
+all three are **MinIO object keys**, not embedded binary. Devices upload the
+bytes first via the presigned-URL flow in **§15 Media Uploads**, then publish
+the access.log MQTT event with the returned `object_key`. The legacy
 `"photo": "base64_jpeg"` payload format is no longer accepted; brokers and
 NATS bridges enforce the 256 KB envelope limit, so any media >1 MB never
 worked over MQTT in practice. Existing rows with base64-encoded `photo` are
 left untouched in `access_events.metadata`; new rows always store keys.
+
+`photos` is an **optional array** of object keys for multi-camera devices
+(e.g. kiosks capturing the same event from multiple angles). When the device
+sets only `photo`, the server reads it as a single-element list. When it sets
+only `photos`, the server persists `photo_ref = photos[0]` for backwards
+compatibility with older readers. If both are set, `photo` is merged into the
+list (deduped). Each entry is run through the same cross-tenant key-prefix
+guard as `photo`; bad entries are dropped, the event is still stored.
 
 **Field notes:**
 

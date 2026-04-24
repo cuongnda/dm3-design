@@ -41,6 +41,12 @@ export interface AccessEventData {
   // waiting for a REST refresh.
   photo?: string;
   photo_url?: string;
+  // Multi-camera snapshot keys (mqtt-protocol.md §4.1). `photos` mirrors
+  // `photo` but carries every captured angle; `photo_urls` is the parallel
+  // presigned-GET list when the publisher could sign them. Omitted for
+  // single-camera events — legacy `photo`/`photo_url` still fill that case.
+  photos?: string[];
+  photo_urls?: string[];
 }
 
 export interface DoorStateData {

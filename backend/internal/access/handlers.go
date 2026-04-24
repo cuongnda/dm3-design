@@ -431,7 +431,7 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(e.access_point_id::text,''),
 		       COALESCE(e.user_id::text,''), COALESCE(e.user_name,''), COALESCE(e.credential_type,''),
 		       COALESCE(e.direction,''), e.decision, COALESCE(e.reason,''), e.confidence,
-		       COALESCE(e.photo_ref,''), e.metadata,
+		       COALESCE(e.photo_ref,''), COALESCE(e.photo_refs, ARRAY[]::TEXT[]), e.metadata,
 		       COALESCE(d.id::text,''), COALESCE(d.name,'')
 		FROM dm3_access.access_events e
 		LEFT JOIN LATERAL (
@@ -460,13 +460,22 @@ func (h *AccessHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 		var e eventResponse
 		if err := rows.Scan(&e.ID, &e.EventID, &e.TenantID, &e.Time, &e.AccessPointID,
 			&e.UserID, &e.UserName, &e.CredentialType, &e.Direction, &e.Decision,
-			&e.Reason, &e.Confidence, &e.PhotoRef, &e.Metadata,
+			&e.Reason, &e.Confidence, &e.PhotoRef, &e.PhotoRefs, &e.Metadata,
 			&e.DeviceID, &e.DeviceName); err != nil {
 			slog.Error("list events scan error", "error", err)
 			httputil.Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		e.PhotoURL = presignPhotoIfMinIOKey(r.Context(), presigner, e.PhotoRef)
+		// Presign every key in the multi-photo list. Empty slice → nil so the
+		// JSON tag's omitempty keeps single-photo responses the old shape.
+		if len(e.PhotoRefs) > 0 {
+			urls := make([]string, 0, len(e.PhotoRefs))
+			for _, key := range e.PhotoRefs {
+				urls = append(urls, presignPhotoIfMinIOKey(r.Context(), presigner, key))
+			}
+			e.PhotoURLs = urls
+		}
 		events = append(events, e)
 	}
 	if err := rows.Err(); err != nil {
@@ -732,7 +741,14 @@ type eventResponse struct {
 	// refs (identity-svc avatars) this stays empty and the frontend falls
 	// back to assetUrl(photo_ref).
 	PhotoURL string         `json:"photo_url,omitempty"`
-	Metadata map[string]any `json:"metadata,omitempty"`
+	// PhotoRefs is the multi-camera snapshot key list (mqtt-protocol.md §4.1).
+	// PhotoURLs is the parallel presigned-GET URL list (same 5-min TTL as
+	// PhotoURL). Both are omitted when only a single photo is attached; the
+	// frontend should prefer PhotoURLs[] when non-empty and fall back to
+	// PhotoURL for legacy rows.
+	PhotoRefs []string       `json:"photo_refs,omitempty"`
+	PhotoURLs []string       `json:"photo_urls,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
 }
 
 // exportRow holds one row of export data.
