@@ -144,6 +144,20 @@ func segmentsForWindow(all []segment, from, to time.Time) []segment {
 		if !all[i].Start.Before(to) {
 			break
 		}
+		// Stop as soon as we hit a gap with the previous picked segment.
+		// MediaMTX writes one segment every recordSegmentDuration (~10 s
+		// default); if the next segment starts much later than that, the
+		// camera's RTSP stream was dropped in between and concatenating
+		// them would produce a visible time jump in the output video.
+		// A cliff of 20 s (2× default segment duration) is the smallest
+		// threshold that reliably distinguishes "normal segment rollover"
+		// from "camera reconnected after a drop".
+		if len(out) > 0 {
+			const maxSegmentGap = 20 * time.Second
+			if all[i].Start.Sub(out[len(out)-1].Start) > maxSegmentGap {
+				break
+			}
+		}
 		out = append(out, all[i])
 	}
 	return out
