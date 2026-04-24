@@ -1,0 +1,20 @@
+# cctv-agent config. Copy to agent.yml alongside the binary and edit.
+
+http:
+  # Listen address for the local HTTP API. Keep on loopback unless you
+  # trust the LAN; any LAN host that can reach this port can issue
+  # camera commands (no auth at the transport layer for now).
+  addr: "127.0.0.1:8088"
+
+agent:
+  # These fields are only consumed by the forthcoming MQTT server
+  # bridge. Safe to leave as placeholders while running standalone.
+  tenant_id: "00000000-0000-0000-0000-000000000000"
+  agent_id: "lan-local-dev"
+
+mqtt:
+  # Unused in standalone mode — keep empty or comment out. Will be
+  # used once the server publishes commands through EMQX.
+  broker_url: ""
+  username: ""
+  password: ""

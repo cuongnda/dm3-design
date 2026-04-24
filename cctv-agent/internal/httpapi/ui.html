@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>cctv-agent console</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+  :root { color-scheme: dark; --bg:#0B1120; --card:#111a2e; --border:#1e2a44; --fg:#e4e8f0; --muted:#8b93a7; --blue:#3B82F6; --green:#10B981; --amber:#F59E0B; --red:#EF4444; --violet:#8B5CF6; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font: 14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  header { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:16px; }
+  header h1 { margin:0; font-size:16px; font-weight:600; }
+  header .status { font-size:12px; color:var(--muted); }
+  main { display:grid; grid-template-columns: 320px 1fr; gap:16px; padding:16px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:14px; }
+  .card h2 { margin:0 0 10px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:600; }
+  label { display:block; font-size:12px; color:var(--muted); margin:8px 0 4px; }
+  input[type=text], input[type=password] { width:100%; background:#0b1120; border:1px solid var(--border); border-radius:6px; color:var(--fg); padding:8px 10px; font: inherit; }
+  input:focus { outline:none; border-color:var(--blue); }
+  .group { margin-top:14px; }
+  .group-title { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:14px 0 6px; font-weight:600; }
+  button { background:#1a2640; color:var(--fg); border:1px solid var(--border); border-radius:6px; padding:7px 10px; font: inherit; cursor:pointer; margin:3px 3px 0 0; transition:background .1s; }
+  button:hover { background:#24324f; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  button.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+  button.primary:hover { background:#2563eb; }
+  button.warn { background:#3a2d0a; border-color:#5c4513; color:var(--amber); }
+  button.danger { background:#3a1212; border-color:#5c1e1e; color:var(--red); }
+  button.success { background:#0d2e22; border-color:#145c3f; color:var(--green); }
+  button.violet { background:#251539; border-color:#422770; color:var(--violet); }
+  .cams-list { display:flex; flex-direction:column; gap:4px; margin-top:6px; }
+  .cam-chip { display:flex; justify-content:space-between; align-items:center; background:#0b1120; border:1px solid var(--border); border-radius:6px; padding:6px 10px; cursor:pointer; font-size:12px; }
+  .cam-chip:hover { border-color:var(--blue); }
+  .cam-chip .ip { font-family:ui-monospace,Menlo,monospace; color:var(--blue); }
+  .cam-chip .vendor { color:var(--muted); font-size:11px; }
+  .right { display:flex; flex-direction:column; gap:16px; min-width:0; }
+  pre { margin:0; background:#050912; border:1px solid var(--border); border-radius:6px; padding:12px; overflow:auto; max-height:calc(100vh - 220px); font: 12px/1.45 ui-monospace,Menlo,monospace; white-space:pre-wrap; word-break:break-word; }
+  .meta { display:flex; gap:12px; align-items:center; font-size:12px; color:var(--muted); padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:10px; }
+  .meta .pill { background:#111a2e; padding:2px 8px; border-radius:999px; border:1px solid var(--border); font-family:ui-monospace,Menlo,monospace; color:var(--fg); }
+  .meta .ok { color:var(--green); }
+  .meta .fail { color:var(--red); }
+  .input-row { display:flex; gap:8px; }
+  .input-row input { flex:1; }
+  .help { font-size:11px; color:var(--muted); margin-top:6px; }
+  .joystick { display:grid; grid-template-columns:repeat(3,46px); grid-gap:6px; margin-top:4px; }
+  .joystick .jbtn { height:46px; font-size:18px; display:flex; align-items:center; justify-content:center; user-select:none; background:#1a2640; border:1px solid var(--border); color:var(--fg); border-radius:6px; }
+  .joystick .jbtn:active { background:var(--blue); border-color:var(--blue); }
+  .zoom-row { display:flex; gap:6px; margin-top:6px; }
+  .zoom-row .jbtn.wide { flex:1; height:40px; user-select:none; }
+  .zoom-row .jbtn.wide:active { background:var(--blue); border-color:var(--blue); }
+</style>
+</head>
+<body>
+<header>
+  <h1>cctv-agent console</h1>
+  <span class="status" id="status">ready</span>
+</header>
+<main>
+  <section class="card">
+    <h2>Target camera</h2>
+    <label>IP (optional for discover/scan)</label>
+    <div class="input-row">
+      <input type="text" id="cam_ip" placeholder="192.168.1.234"/>
+    </div>
+    <label>Username</label>
+    <input type="text" id="cam_user" value="admin"/>
+    <label>Password</label>
+    <input type="password" id="cam_pass"/>
+
+    <div class="group">
+      <div class="group-title">Discovery</div>
+      <button class="violet" onclick="run('onvif','discover',{timeout_ms:5000},false)">ONVIF discover (L2 multicast)</button>
+      <label>CIDR (for scan)</label>
+      <input type="text" id="cidr" value="192.168.1.0/24"/>
+      <button class="violet" onclick="run('viid_tungson','scan',{cidr:cidrValue(),timeout_ms:800,concurrency:80},false)">Tungson CIDR scan</button>
+    </div>
+
+    <div class="cams-list" id="cams_list"></div>
+  </section>
+
+  <section class="right">
+    <div class="card">
+      <h2>Tungson commands</h2>
+
+      <div class="group-title">Identity</div>
+      <button onclick="run('viid_tungson','get_device_info',{})">get_device_info</button>
+      <button onclick="run('viid_tungson','get_version',{})">get_version</button>
+      <button onclick="run('viid_tungson','get_run_status',{})">get_run_status</button>
+      <button onclick="run('viid_tungson','get_user',{})">get_user</button>
+      <button onclick="run('viid_tungson','get_timezone',{})">get_timezone</button>
+
+      <div class="group-title">Time</div>
+      <button class="success" onclick="run('viid_tungson','set_time',{timezone_minutes:420,mode:0})">set_time (now, UTC+07)</button>
+
+      <div class="group-title">PTZ — directional (ONVIF)</div>
+      <div class="joystick">
+        <div></div>
+        <button class="jbtn" onmousedown="ptzHold(0, 0.5)" ontouchstart="ptzHold(0, 0.5)">▲</button>
+        <div></div>
+        <button class="jbtn" onmousedown="ptzHold(-0.5, 0)" ontouchstart="ptzHold(-0.5, 0)">◀</button>
+        <button class="jbtn" onclick="ptzOnce({stop_pan_tilt:true,stop_zoom:true},'ptz_stop')">■</button>
+        <button class="jbtn" onmousedown="ptzHold(0.5, 0)" ontouchstart="ptzHold(0.5, 0)">▶</button>
+        <div></div>
+        <button class="jbtn" onmousedown="ptzHold(0, -0.5)" ontouchstart="ptzHold(0, -0.5)">▼</button>
+        <div></div>
+      </div>
+      <div class="zoom-row">
+        <button class="jbtn wide" onmousedown="ptzZoomHold(0.5)" ontouchstart="ptzZoomHold(0.5)">＋ zoom in</button>
+        <button class="jbtn wide" onmousedown="ptzZoomHold(-0.5)" ontouchstart="ptzZoomHold(-0.5)">− zoom out</button>
+      </div>
+      <div class="help">Press &amp; hold to move, release to stop. Nút ■ = stop. Giữ phím càng lâu, cam xoay/zoom càng nhiều.</div>
+      <label>Speed (0.1 – 1.0)</label>
+      <input type="text" id="ptz_speed" value="0.5" style="width:80px"/>
+
+      <div class="group-title">PTZ — preset actions (Tungson)</div>
+      <button onclick="run('viid_tungson','get_presets',{})">get_presets</button>
+      <button onclick="run('viid_tungson','ptz_action',{action:'guard'})">guard (home)</button>
+      <button class="success" onclick="run('viid_tungson','ptz_action',{action:'cruise_start'})">cruise_start</button>
+      <button class="warn" onclick="run('viid_tungson','ptz_action',{action:'cruise_stop'})">cruise_stop</button>
+      <button onclick="run('viid_tungson','ptz_action',{action:'line_scan_start'})">line_scan_start</button>
+      <button class="warn" onclick="run('viid_tungson','ptz_action',{action:'line_scan_stop'})">line_scan_stop</button>
+      <button onclick="run('viid_tungson','ptz_action',{action:'refocus'})">refocus</button>
+      <button onclick="run('viid_tungson','ptz_action',{action:'lens_self_check'})">lens_self_check</button>
+      <button onclick="run('viid_tungson','ptz_action',{action:'ptz_self_check'})">ptz_self_check</button>
+      <button class="warn" onclick="run('viid_tungson','ptz_action',{action:'stop_tracking'})">stop_tracking</button>
+
+      <div class="group-title">Preset by ID</div>
+      <div class="input-row">
+        <input type="text" id="preset_id" placeholder="1" value="1" style="width:80px"/>
+        <button onclick="run('viid_tungson','goto_preset',{id:+presetId()})">goto_preset</button>
+        <button onclick="run('viid_tungson','set_preset',{id:+presetId()})">set_preset (save current)</button>
+      </div>
+
+      <div class="group-title">Lens</div>
+      <button onclick="run('viid_tungson','align_zoom_curve',{})">align_zoom_curve</button>
+      <button onclick="run('viid_tungson','focus_assist',{})">focus_assist</button>
+      <button onclick="run('viid_tungson','lens_init',{})">lens_init</button>
+
+      <div class="group-title">Config — get (safe, read-only)</div>
+      <button onclick="run('viid_tungson','get_network',{})">get_network</button>
+      <button onclick="run('viid_tungson','get_stream',{sub:false})">get_stream (main)</button>
+      <button onclick="run('viid_tungson','get_stream',{sub:true})">get_stream (sub)</button>
+      <button onclick="run('viid_tungson','get_osd',{})">get_osd</button>
+      <button onclick="run('viid_tungson','get_audio',{})">get_audio</button>
+      <button onclick="run('viid_tungson','get_recording',{})">get_recording</button>
+      <button onclick="run('viid_tungson','get_timed_capture',{})">get_timed_capture</button>
+      <button onclick="run('viid_tungson','get_motion_detect',{})">get_motion_detect</button>
+      <button onclick="run('viid_tungson','get_area_intrusion',{})">get_area_intrusion</button>
+      <button onclick="run('viid_tungson','get_work_mode',{})">get_work_mode</button>
+      <button onclick="run('viid_tungson','get_light_mode',{})">get_light_mode</button>
+      <button onclick="run('viid_tungson','get_image_params',{})">get_image_params</button>
+      <button onclick="run('viid_tungson','get_rtmp',{})">get_rtmp</button>
+      <button onclick="run('viid_tungson','get_gat1400',{})">get_gat1400</button>
+      <button onclick="run('viid_tungson','get_gb28181',{secondary:false})">get_gb28181</button>
+      <button onclick="run('viid_tungson','get_alarm_out',{})">get_alarm_out</button>
+      <button onclick="run('viid_tungson','get_alarm_in',{})">get_alarm_in</button>
+      <button onclick="run('viid_tungson','get_tf_card',{})">get_tf_card</button>
+      <button onclick="run('viid_tungson','get_privacy_cover',{})">get_privacy_cover</button>
+      <button onclick="run('viid_tungson','get_roi',{})">get_roi</button>
+      <button onclick="run('viid_tungson','get_occlusion',{})">get_occlusion</button>
+      <button onclick="run('viid_tungson','get_silent',{})">get_silent</button>
+      <button onclick="run('viid_tungson','get_ai_type',{})">get_ai_type</button>
+      <button onclick="run('viid_tungson','get_ip_conflict',{})">get_ip_conflict</button>
+
+      <div class="group-title">Config — set (requires params)</div>
+      <div class="help">Click a "SET" button to see its JSON shape in the editor below, tweak, then hit "Apply".</div>
+      <button onclick="loadSet('set_password',{user:'admin',pass:'NEW_PASS'})">set_password</button>
+      <button onclick="loadSet('set_network',{dhcp:1})">set_network</button>
+      <button onclick="loadSet('set_work_mode',{antiflicker:50,wdr:0,flip:0,mirror:0,af_mode:0,light_level:0,light_mode:0,light_period:'0:0-0:0'})">set_work_mode</button>
+      <button onclick="loadSet('set_light_mode',{light_level:50,light_wkmode:2})">set_light_mode</button>
+      <button onclick="loadSet('set_stream',{sub:false,bm_type:1,frame:15,fbl:0,bitrate:3000,I_interval:4000,quality:0,rc_mode:0,smart_encode:0})">set_stream</button>
+      <button onclick="loadSet('set_rtmp',{enable:0,audio:0,addr:'rtmp://...',stream_no:0})">set_rtmp</button>
+      <button onclick="loadSet('set_gat1400',{enable:1,gat_1400_addr:'http://...',user:'admin',password:'',hart_time:30,hart_num:3,re_upload:1,report_image_mode:3,channel_id:'',device_id:''})">set_gat1400</button>
+      <button onclick="loadSet('set_gb28181',{secondary:false,enable:1,server_id:'',server_addr:'',server_domain:'',server_port:5060,server_pass:'',dev_port:5060,device_id:'',alarm_id:'',channel_id:'',expire_time:3600,hart_time:30,hart_num:3,proto_type:0,protocol_version:0,stream_num:0})">set_gb28181</button>
+      <button onclick="loadSet('set_recording',{enable:1,all_time:1,pre_record:10})">set_recording</button>
+      <button onclick="loadSet('set_timed_capture',{enable:0,all_time:1,interval_time:60})">set_timed_capture</button>
+      <button onclick="loadSet('set_ai_type',{ai_type:1})">set_ai_type</button>
+      <div class="setbox" id="setbox" style="display:none">
+        <label>Type: <span id="set_type_label"></span></label>
+        <textarea id="set_body" rows="10" style="width:100%;background:#050912;border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:8px;font:12px/1.45 ui-monospace,Menlo,monospace"></textarea>
+        <div style="margin-top:6px">
+          <button class="primary" onclick="applySet()">Apply</button>
+          <button onclick="hideSet()">Cancel</button>
+        </div>
+      </div>
+
+      <div class="group-title">Escape hatch (any config)</div>
+      <div class="help">Use when the command you need isn't above. `cfg_get` takes `name`; `cfg_set` takes `action` + JSON `body`.</div>
+      <div class="input-row" style="align-items:flex-start;margin-top:4px">
+        <input type="text" id="cfg_name" placeholder="timezone / dev / ai_type / ..." style="flex:1"/>
+        <button onclick="run('viid_tungson','cfg_get',{name:document.getElementById('cfg_name').value.trim()})">cfg_get</button>
+      </div>
+
+      <div class="group-title">System</div>
+      <button class="warn" onclick="confirmRun('Reboot camera?','viid_tungson','reboot',{})">reboot</button>
+      <button class="danger" onclick="confirmRun('⚠ FACTORY RESET — wipes users, presets, config. Proceed?','viid_tungson','factory_reset',{})">factory_reset</button>
+      <button class="danger" onclick="confirmRun('⚠ CLEAR ALL PRESETS?','viid_tungson','ptz_action',{action:'clear_presets'})">clear_presets</button>
+      <button class="danger" onclick="confirmRun('⚠ FORMAT TF CARD — wipes all recordings?','viid_tungson','format_tf_card',{})">format_tf_card</button>
+      <button onclick="run('viid_tungson','enable_file_list',{enable:true})">enable_file_list (on)</button>
+      <button onclick="run('viid_tungson','enable_file_list',{enable:false})">enable_file_list (off)</button>
+    </div>
+
+    <div class="card">
+      <div class="meta">
+        <span>Last response</span>
+        <span class="pill" id="m_type">—</span>
+        <span class="pill" id="m_ip">—</span>
+        <span id="m_status">—</span>
+        <span class="pill" id="m_dur">—</span>
+      </div>
+      <pre id="output">Click a button to call the agent…</pre>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+// Persist creds to localStorage so reloads don't wipe them.
+['cam_ip','cam_user','cam_pass','cidr','preset_id'].forEach(k => {
+  const v = localStorage.getItem('agent.'+k);
+  if (v) $(k).value = v;
+  $(k).addEventListener('input', e => localStorage.setItem('agent.'+k, e.target.value));
+});
+
+const cidrValue = () => $('cidr').value.trim();
+const presetId = () => $('preset_id').value.trim();
+
+async function run(protocol, type, params, requireCam = true) {
+  const body = {
+    type, protocol,
+    camera_ip: $('cam_ip').value.trim(),
+    username: $('cam_user').value.trim(),
+    password: $('cam_pass').value,
+    params
+  };
+  if (requireCam && !body.camera_ip) {
+    render({}, 'set Target camera → IP first', 400, type, body.camera_ip, 0);
+    return;
+  }
+  $('status').textContent = `running ${type}…`;
+  const started = performance.now();
+  try {
+    const resp = await fetch('/v1/commands', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    const text = await resp.text();
+    let json;
+    try { json = JSON.parse(text); } catch { json = { raw: text }; }
+    render(json, '', resp.status, type, body.camera_ip, Math.round(performance.now() - started));
+    if (type === 'discover' || type === 'scan') {
+      renderDiscoveredList(json);
+      if (type === 'discover') rememberDiscover(json);
+    }
+  } catch (e) {
+    render({}, String(e), 0, type, body.camera_ip, Math.round(performance.now() - started));
+  } finally {
+    $('status').textContent = 'ready';
+  }
+}
+
+function confirmRun(msg, protocol, type, params) {
+  if (!confirm(msg)) return;
+  run(protocol, type, params, true);
+}
+
+// Map the clicked cam IP back to its ONVIF XAddr so PTZ can hit the
+// right port (cam's ONVIF service was on :8091 in testing). Captured
+// from the last discover response.
+let lastDiscover = {};
+function rememberDiscover(json) {
+  (json?.data?.devices || []).forEach(d => {
+    lastDiscover[d.ip] = (d.xaddrs && d.xaddrs[0]) || '';
+  });
+}
+
+// --- PTZ joystick (press-and-hold) ---
+function ptzSpeedScale() {
+  const v = parseFloat(document.getElementById('ptz_speed').value);
+  if (!v || isNaN(v)) return 0.5;
+  return Math.max(0.1, Math.min(1.0, v));
+}
+function ptzXAddr() {
+  const ip = document.getElementById('cam_ip').value.trim();
+  return lastDiscover[ip] || ''; // empty → dispatcher falls back to port 80
+}
+function ptzPayload(pan, tilt, zoom) {
+  return {
+    xaddr: ptzXAddr(),
+    pan, tilt, zoom,
+    duration_ms: 0, // open-ended move; stopped on mouseup/touchend
+  };
+}
+let ptzActive = false;
+function ptzHold(panRaw, tiltRaw) {
+  if (ptzActive) return;
+  ptzActive = true;
+  const s = ptzSpeedScale();
+  run('onvif', 'ptz_move', ptzPayload(panRaw * s / 0.5, tiltRaw * s / 0.5, 0), false);
+  window.addEventListener('mouseup', ptzRelease, { once: true });
+  window.addEventListener('touchend', ptzRelease, { once: true });
+}
+function ptzZoomHold(dir) {
+  if (ptzActive) return;
+  ptzActive = true;
+  const s = ptzSpeedScale();
+  run('onvif', 'ptz_move', ptzPayload(0, 0, Math.sign(dir) * s), false);
+  window.addEventListener('mouseup', ptzRelease, { once: true });
+  window.addEventListener('touchend', ptzRelease, { once: true });
+}
+function ptzRelease() {
+  if (!ptzActive) return;
+  ptzActive = false;
+  run('onvif', 'ptz_stop', { xaddr: ptzXAddr(), stop_pan_tilt: true, stop_zoom: true }, false);
+}
+function ptzOnce(params) {
+  run('onvif', 'ptz_stop', { xaddr: ptzXAddr(), ...params }, false);
+}
+
+// --- SET config editor ---
+let currentSetType = '';
+function loadSet(type, params) {
+  currentSetType = type;
+  document.getElementById('set_type_label').textContent = type;
+  document.getElementById('set_body').value = JSON.stringify(params, null, 2);
+  document.getElementById('setbox').style.display = 'block';
+}
+function hideSet() {
+  document.getElementById('setbox').style.display = 'none';
+}
+function applySet() {
+  let params;
+  try {
+    params = JSON.parse(document.getElementById('set_body').value);
+  } catch (e) {
+    alert('Invalid JSON: ' + e.message);
+    return;
+  }
+  const type = currentSetType;
+  // cfg_set needs a specific shape; for everything else the params
+  // ARE the body the typed command expects.
+  if (type === 'cfg_set') {
+    run('viid_tungson', 'cfg_set', { action: params.action, body: params.body });
+  } else {
+    run('viid_tungson', type, params);
+  }
+}
+
+function render(json, err, httpStatus, type, ip, ms) {
+  $('m_type').textContent = type;
+  $('m_ip').textContent = ip || '—';
+  $('m_dur').textContent = ms + ' ms';
+  const st = $('m_status');
+  if (err) {
+    st.textContent = `http ${httpStatus}`;
+    st.className = 'fail';
+    $('output').textContent = err + '\n\n' + JSON.stringify(json, null, 2);
+    return;
+  }
+  if (json.success === true) {
+    st.textContent = 'success';
+    st.className = 'ok';
+  } else if (json.success === false) {
+    st.textContent = 'failed';
+    st.className = 'fail';
+  } else {
+    st.textContent = `http ${httpStatus}`;
+    st.className = '';
+  }
+  $('output').textContent = JSON.stringify(json, null, 2);
+}
+
+// Clicking on a discovered cam chip fills the IP field, so chaining
+// "discover → identity" is one click each.
+function renderDiscoveredList(json) {
+  const list = $('cams_list');
+  list.innerHTML = '';
+  const items = (json?.data?.devices || json?.data?.cameras || []);
+  items.forEach(d => {
+    const ip = d.ip;
+    const vendor = d.vendor_hint || d.model || (d.auth_required ? 'auth required' : '');
+    const el = document.createElement('div');
+    el.className = 'cam-chip';
+    el.innerHTML = `<span class="ip">${ip}</span><span class="vendor">${vendor}</span>`;
+    el.onclick = () => { $('cam_ip').value = ip; localStorage.setItem('agent.cam_ip', ip); };
+    list.appendChild(el);
+  });
+}
+</script>
+</body>
+</html>
