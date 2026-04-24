@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -17,24 +18,50 @@ import (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get("Origin")
-		if origin == "" {
-			return true // non-browser clients (e.g. curl, device SDKs)
+	CheckOrigin:     checkWebSocketOrigin,
+}
+
+// checkWebSocketOrigin gates browser WebSocket upgrades. Precedence:
+//  1. Empty Origin (curl, device SDKs) → allow — no browser involved.
+//  2. WS_ALLOWED_ORIGINS (comma-separated) → explicit allowlist.
+//  3. CORS_ORIGIN (same env var HTTP handlers already use) as fallback.
+//  4. Same-origin (Origin's host matches request Host) → allow.
+//  5. Dev localhost defaults when nothing else is configured.
+//
+// Prior behaviour defaulted to localhost:3000/5173 only, which broke every
+// production-style deploy because the real server origin was never in the
+// list and users had to know to set WS_ALLOWED_ORIGINS. Falling back to
+// CORS_ORIGIN means one env var covers both REST and WebSocket allowlists.
+func checkWebSocketOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true // non-browser clients (curl, device SDKs)
+	}
+
+	// Explicit allowlist (comma-separated). WS_ALLOWED_ORIGINS wins; otherwise
+	// reuse CORS_ORIGIN so operators configure allowed origins once.
+	allowed := os.Getenv("WS_ALLOWED_ORIGINS")
+	if allowed == "" {
+		allowed = os.Getenv("CORS_ORIGIN")
+	}
+	if allowed == "" {
+		// Dev convenience only — production deploys set CORS_ORIGIN.
+		allowed = "http://localhost:3000,http://localhost:5173"
+	}
+	for _, o := range strings.Split(allowed, ",") {
+		if strings.TrimSpace(o) == origin {
+			return true
 		}
-		allowed := os.Getenv("WS_ALLOWED_ORIGINS")
-		if allowed == "" {
-			// Default: allow localhost dev and same-origin
-			allowed = "http://localhost:3000,http://localhost:5173"
-		}
-		for _, o := range strings.Split(allowed, ",") {
-			if strings.TrimSpace(o) == origin {
-				return true
-			}
-		}
-		slog.Warn("ws origin rejected", "origin", origin)
-		return false
-	},
+	}
+
+	// Same-origin check: if the client's Origin host matches the request Host,
+	// the request is definitionally same-site and safe to accept.
+	if originURL, err := url.Parse(origin); err == nil && originURL.Host != "" && originURL.Host == r.Host {
+		return true
+	}
+
+	slog.Warn("ws origin rejected", "origin", origin)
+	return false
 }
 
 // WSEvent is sent to WebSocket clients.
