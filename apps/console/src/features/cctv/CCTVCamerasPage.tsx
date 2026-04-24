@@ -8,6 +8,7 @@ import {
   Trash2,
   Pencil,
   Play,
+  Film,
   Video,
   MapPin,
   Clock,
@@ -27,6 +28,7 @@ import {
 } from '@dm3/api-client';
 import { SeverityPill, deriveSeverity } from './components/CameraStatusBadge';
 import { CameraFormModal } from './components/CameraFormModal';
+import { CameraTimelinePlaybackModal } from './components/CameraTimelinePlaybackModal';
 
 type RelTone = 'fresh' | 'stale' | 'dead';
 
@@ -60,6 +62,7 @@ export function CCTVCamerasPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<CameraDTO | null>(null);
   const [testResult, setTestResult] = useState<TestConnectionDTO | null>(null);
+  const [playbackCamera, setPlaybackCamera] = useState<CameraDTO | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['cctv-cameras', page, statusFilter],
@@ -264,7 +267,7 @@ export function CCTVCamerasPage() {
     {
       key: 'actions',
       header: '',
-      width: '110px',
+      width: '140px',
       render: (r) => (
         <div className="flex items-center gap-1">
           <Button
@@ -275,6 +278,15 @@ export function CCTVCamerasPage() {
             aria-label={t('cctv.cameras.edit')}
           >
             <Pencil size={14} />
+          </Button>
+          <Button
+            size="xs"
+            variant="ghost"
+            onClick={() => setPlaybackCamera(r)}
+            data-testid={`cctv-button-playback-camera-${r.id}`}
+            aria-label={t('cctv.cameras.playback')}
+          >
+            <Film size={14} />
           </Button>
           <Button
             size="xs"
@@ -373,6 +385,12 @@ export function CCTVCamerasPage() {
         testResult={testResult}
         testPending={testMutation.isPending}
         submitting={submitting}
+      />
+
+      <CameraTimelinePlaybackModal
+        open={playbackCamera !== null}
+        camera={playbackCamera}
+        onOpenChange={(o) => { if (!o) setPlaybackCamera(null); }}
       />
     </div>
   );
