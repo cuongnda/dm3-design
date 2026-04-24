@@ -357,7 +357,7 @@ func (s *PersonSyncer) PushPersonSyncJob(ctx context.Context, tenantID, deviceID
 			UserID:      u.ID,
 			UserCode:    u.UserCode,
 			Name:        u.Name,
-			Avatar:      presignIdentityAsset(ctx, s.assetPresigner, u.Avatar),
+			Avatar:      presignIdentityAsset(ctx, s.assetPresigner, u.Avatar, "user:"+u.ID),
 			Credentials: creds,
 			Active:      true,
 		}

@@ -559,6 +559,25 @@ func (h *GatewayHandlers) pushDeviceConfigJob(ctx context.Context, d models.Devi
 		return
 	}
 
+	// Resolve effective timezone for the device.
+	//
+	// Operators configure timezone against the *access point* (via the
+	// schedule / access_time attached to it) because a device's time zone
+	// is a property of its physical location, not of the device row.
+	// Historically this handler sent dm3_devices.devices.timezone blindly,
+	// which meant AP-level edits never reached the firmware — see the
+	// DF970 "Wrong timezone" report where AP was +9 but the cfg payload
+	// shipped 'Asia/Ho_Chi_Minh' (the devices.timezone default).
+	//
+	// Resolution order (first non-empty wins):
+	//   1. access_time.timezone of any access_point the device is bound to
+	//   2. zones.timezone of the access_point's zone (AP can have one even
+	//      without a schedule)
+	//   3. devices.timezone (legacy column — still the source of truth for
+	//      standalone devices that aren't bound to any AP)
+	//   4. 'Asia/Ho_Chi_Minh' (final fallback; matches the column default)
+	effectiveTimezone := resolveDeviceTimezone(ctx, h.db, d)
+
 	// Flat payload matching the fields editable on the EditDevicePage.
 	// Firmware authors map these to their local equivalents. See
 	// docs/architecture/mqtt-protocol.md §7.2 for context — this is a
@@ -569,7 +588,7 @@ func (h *GatewayHandlers) pushDeviceConfigJob(ctx context.Context, d models.Devi
 		"location":       d.Location,
 		"model":          d.Model,
 		"open_relay_ms":  d.OpenRelayMs,
-		"timezone":       d.Timezone,
+		"timezone":       effectiveTimezone,
 		"verify_methods": d.VerifyMethods,
 		"verify_logic":   d.VerifyLogic,
 	}
@@ -619,6 +638,58 @@ func (h *GatewayHandlers) pushDeviceConfigJob(ctx context.Context, d models.Devi
 	}
 	slog.Info("pushDeviceConfig: sent",
 		"device_id", d.DeviceID, "tenant_id", d.TenantID, "topic", topic)
+}
+
+// resolveDeviceTimezone resolves the timezone to ship in cfg.device_update.
+// Fallback order: access_time.timezone (of any linked AP) → zones.timezone
+// (of the AP's zone) → devices.timezone → 'Asia/Ho_Chi_Minh'.
+//
+// The lookup is a single query with COALESCE so that one round-trip covers
+// every fallback level; a connection hiccup just falls back to the column
+// value on the row we already have.
+func resolveDeviceTimezone(ctx context.Context, database *db.DB, d models.Device) string {
+	const defaultTZ = "Asia/Ho_Chi_Minh"
+
+	fallback := d.Timezone
+	if fallback == "" {
+		fallback = defaultTZ
+	}
+
+	queryCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	var resolved string
+	err := database.Pool.QueryRow(queryCtx, `
+		SELECT COALESCE(NULLIF(at.timezone, ''), NULLIF(z.timezone, ''), $3)
+		  FROM dm3_access.access_point_devices apd
+		  JOIN dm3_access.access_points ap ON ap.id = apd.access_point_id
+		  LEFT JOIN dm3_access.access_times at ON at.id = ap.access_time_id
+		  LEFT JOIN dm3_access.zones        z  ON z.id  = ap.zone_id
+		 WHERE apd.access_device_id = $1
+		   AND apd.tenant_id        = $2::uuid
+		   AND (NULLIF(at.timezone, '') IS NOT NULL OR NULLIF(z.timezone, '') IS NOT NULL)
+		 ORDER BY apd.created_at ASC
+		 LIMIT 1
+	`, d.ID, d.TenantID, fallback).Scan(&resolved)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			slog.Warn("pushDeviceConfig: timezone lookup failed, using device column",
+				"error", err, "device_id", d.DeviceID)
+		}
+		return fallback
+	}
+
+	if resolved != "" && resolved != fallback {
+		slog.Info("pushDeviceConfig: timezone resolved from access point",
+			"device_id", d.DeviceID,
+			"device_timezone", d.Timezone,
+			"resolved", resolved,
+		)
+	}
+	if resolved == "" {
+		return fallback
+	}
+	return resolved
 }
 
 // ─── Get / Update Device (system admin, cross-tenant) ───────────────────────
