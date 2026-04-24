@@ -25,7 +25,8 @@ CYAN='\033[0;36m'; BOLD='\033[1m'; DIM='\033[2m'; RESET='\033[0m'
 # ── Service registry ────────────────────────────────────────────────────────
 # All services in display order. Infrastructure is mandatory.
 INFRA_SERVICES=(timescaledb emqx nats valkey minio)
-BACKEND_SERVICES=(auth-svc identity-svc access-svc device-gateway)
+BACKEND_SERVICES=(auth-svc identity-svc access-svc audit-svc device-gateway visitor-svc parking-svc cctv-svc attend-svc)
+MEDIA_SERVICES=(mediamtx)
 FRONTEND_SERVICES=(webapp nginx)
 OPTIONAL_SERVICES=(simulator)
 
@@ -39,7 +40,13 @@ declare -A SVC_DESC=(
   [auth-svc]="Authentication & Users"
   [identity-svc]="Person & Group Management"
   [access-svc]="Access Control & Events"
+  [audit-svc]="Audit Log"
   [device-gateway]="Device Management & MQTT Gateway"
+  [visitor-svc]="Visitor Management (plugin)"
+  [parking-svc]="Parking Management (plugin)"
+  [cctv-svc]="CCTV Cameras & Clips (plugin)"
+  [attend-svc]="Attendance & Shifts (plugin)"
+  [mediamtx]="MediaMTX RTSP/WebRTC/HLS (cctv-svc dep)"
   [webapp]="Web Dashboard"
   [nginx]="Nginx Reverse Proxy"
   [simulator]="Device Simulator (staging)"
@@ -52,15 +59,23 @@ declare -A PULL_IMAGES=(
   [nats]="nats:2.10-alpine"
   [valkey]="valkey/valkey:8.0-alpine"
   [minio]="minio/minio:latest"
+  [mediamtx]="bluenviron/mediamtx:1.9.3"
   [nginx]="nginx:alpine"
 )
 
 # Build contexts: service -> "context|dockerfile"
+# Every backend service shares a single ./backend build → produces dm3/backend:VERSION,
+# deduplicated in build_images/export_images.
 declare -A BUILD_CTX=(
   [auth-svc]="./backend|Dockerfile"
   [identity-svc]="./backend|Dockerfile"
   [access-svc]="./backend|Dockerfile"
+  [audit-svc]="./backend|Dockerfile"
   [device-gateway]="./backend|Dockerfile"
+  [visitor-svc]="./backend|Dockerfile"
+  [parking-svc]="./backend|Dockerfile"
+  [cctv-svc]="./backend|Dockerfile"
+  [attend-svc]="./backend|Dockerfile"
   [migrate]="./backend|Dockerfile"
   [webapp]=".|apps/console/Dockerfile"
   [simulator]="./simulator|Dockerfile"
@@ -72,6 +87,7 @@ declare -A SELECTED=()
 init_defaults() {
   for svc in "${INFRA_SERVICES[@]}"; do SELECTED[$svc]=1; done
   for svc in "${BACKEND_SERVICES[@]}"; do SELECTED[$svc]=1; done
+  for svc in "${MEDIA_SERVICES[@]}"; do SELECTED[$svc]=1; done
   for svc in "${FRONTEND_SERVICES[@]}"; do SELECTED[$svc]=1; done
   for svc in "${OPTIONAL_SERVICES[@]}"; do SELECTED[$svc]=0; done
 }
@@ -155,7 +171,7 @@ parse_args() {
       --output)
         OUTPUT_DIR="$2"; shift 2 ;;
       --all)
-        for svc in "${BACKEND_SERVICES[@]}" "${FRONTEND_SERVICES[@]}" "${OPTIONAL_SERVICES[@]}"; do
+        for svc in "${BACKEND_SERVICES[@]}" "${MEDIA_SERVICES[@]}" "${FRONTEND_SERVICES[@]}" "${OPTIONAL_SERVICES[@]}"; do
           SELECTED[$svc]=1
         done
         INTERACTIVE=false; shift ;;
@@ -167,7 +183,7 @@ parse_args() {
         INTERACTIVE=false; shift ;;
       --services)
         # Reset non-infra to 0, then enable specified
-        for svc in "${BACKEND_SERVICES[@]}" "${FRONTEND_SERVICES[@]}" "${OPTIONAL_SERVICES[@]}"; do
+        for svc in "${BACKEND_SERVICES[@]}" "${MEDIA_SERVICES[@]}" "${FRONTEND_SERVICES[@]}" "${OPTIONAL_SERVICES[@]}"; do
           SELECTED[$svc]=0
         done
         IFS=',' read -ra svc_list <<< "$2"
@@ -219,6 +235,15 @@ show_menu() {
     done
 
     echo ""
+    echo -e "${BOLD}  MEDIA${RESET} ${DIM}(required for cctv-svc)${RESET}"
+    for svc in "${MEDIA_SERVICES[@]}"; do
+      local icon="${GREEN}✅${RESET}"
+      [[ "${SELECTED[$svc]}" == "0" ]] && icon="${RED}❌${RESET}"
+      printf "    %b %2d) %-20s %s\n" "$icon" "$idx" "$svc" "${SVC_DESC[$svc]}"
+      ((idx++))
+    done
+
+    echo ""
     echo -e "${BOLD}  FRONTEND${RESET}"
     for svc in "${FRONTEND_SERVICES[@]}"; do
       local icon="${GREEN}✅${RESET}"
@@ -242,7 +267,7 @@ show_menu() {
     read -r choice
 
     # Map number → service name
-    local all_toggleable=("${BACKEND_SERVICES[@]}" "${FRONTEND_SERVICES[@]}" "${OPTIONAL_SERVICES[@]}")
+    local all_toggleable=("${BACKEND_SERVICES[@]}" "${MEDIA_SERVICES[@]}" "${FRONTEND_SERVICES[@]}" "${OPTIONAL_SERVICES[@]}")
     local infra_count=${#INFRA_SERVICES[@]}
 
     case "$choice" in
@@ -302,6 +327,14 @@ get_selected_services() {
     services+=("migrate")
   fi
 
+  # cctv-svc requires mediamtx — auto-enable if not explicitly selected
+  if [[ "${SELECTED[cctv-svc]:-0}" == "1" && "${SELECTED[mediamtx]:-0}" == "0" ]]; then
+    SELECTED[mediamtx]=1
+  fi
+  for svc in "${MEDIA_SERVICES[@]}"; do
+    [[ "${SELECTED[$svc]}" == "1" ]] && services+=("$svc")
+  done
+
   for svc in "${FRONTEND_SERVICES[@]}"; do
     [[ "${SELECTED[$svc]}" == "1" ]] && services+=("$svc")
   done
@@ -322,8 +355,20 @@ build_images() {
   for svc in "${services[@]}"; do
     # Skip third-party images (they get pulled, not built)
     if [[ -n "${PULL_IMAGES[$svc]+x}" ]]; then
-      echo -e "  ${DIM}⏬ Pulling $svc → ${PULL_IMAGES[$svc]}${RESET}"
-      docker pull "${PULL_IMAGES[$svc]}"
+      local pull_tag="${PULL_IMAGES[$svc]}"
+      echo -e "  ${DIM}⏬ Pulling $svc → $pull_tag${RESET}"
+      if ! docker pull "$pull_tag"; then
+        echo -e "  ${RED}✗ docker pull failed for $pull_tag${RESET}" >&2
+        exit 1
+      fi
+      # Verify image is actually present locally — pulls have been observed to
+      # exit 0 with interleaved output yet leave the image absent. Fail fast.
+      if ! docker image inspect "$pull_tag" >/dev/null 2>&1; then
+        echo -e "  ${RED}✗ Image $pull_tag not present after pull — retrying once${RESET}" >&2
+        docker pull "$pull_tag" || { echo -e "  ${RED}✗ Retry failed${RESET}" >&2; exit 1; }
+        docker image inspect "$pull_tag" >/dev/null 2>&1 \
+          || { echo -e "  ${RED}✗ Image $pull_tag still missing after retry${RESET}" >&2; exit 1; }
+      fi
       continue
     fi
 
@@ -494,6 +539,11 @@ generate_compose() {
   fi
 
   # 7. Remove unused volumes
+  # Dedupe the volume name list BEFORE passing to yq. When two services mount
+  # the same named volume (e.g. mediamtx + cctv-svc both use
+  # `mediamtx_recordings`), yq's `pick([a,b,a])` emits the key twice, producing
+  # a compose with a duplicate top-level key that `docker compose config -q`
+  # rejects as "mapping key already defined".
   local used_volumes=()
   for svc in "${services[@]}"; do
     local vols
@@ -503,8 +553,12 @@ generate_compose() {
     done
   done
   if [[ ${#used_volumes[@]} -gt 0 ]]; then
+    local unique_volumes=()
+    while IFS= read -r v; do
+      [[ -n "$v" ]] && unique_volumes+=("$v")
+    done < <(printf '%s\n' "${used_volumes[@]}" | awk '!seen[$0]++')
     local vol_list
-    vol_list=$(printf '"%s",' "${used_volumes[@]}")
+    vol_list=$(printf '"%s",' "${unique_volumes[@]}")
     vol_list="[${vol_list%,}]"
     $YQ -i ".volumes |= pick($vol_list)" "$out"
   else
@@ -593,11 +647,14 @@ main() {
   local date_stamp
   date_stamp=$(date +%Y%m%d)
   local pkg_name="dm3-installer-${VERSION}-${date_stamp}"
-  local work_dir
-  work_dir=$(mktemp -d -p "$PROJECT_ROOT" ".pkg-XXXXXX")
-  # Rename to final name inside temp parent
   local final_work="$PROJECT_ROOT/$pkg_name"
-  mv "$work_dir" "$final_work"
+  # If a previous run left the dir behind, clear it so mktemp→mv doesn't nest a
+  # .pkg-XXXXXX scaffold inside the final archive.
+  if [[ -e "$final_work" ]]; then
+    echo -e "  ${YELLOW}⚠  Removing stale work dir: $final_work${RESET}"
+    rm -rf "$final_work"
+  fi
+  mkdir -p "$final_work"
 
   # Build & export
   build_images "${services[@]}"
