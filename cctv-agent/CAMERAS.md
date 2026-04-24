@@ -10,6 +10,25 @@ command envelope (`POST /v1/commands`).
 
 ---
 
+## Cross-vendor (`protocol: "generic"`)
+
+Utilities that aren't tied to a single vendor API. Use these first
+when you don't yet know what's on the LAN.
+
+| Command | Status | Notes |
+|---|---|---|
+| `brand_probe` | ✅ implemented | HTTP-fingerprints an IP (or list) against 7 vendor detectors (tungson, hikvision, dahua, axis, uniview, hanet, generic_onvif). Unauth — works even when the cam rejects anonymous requests (a `401 Digest` from `/ISAPI/` is a positive Hikvision hit). Returns `vendor` (best match), `matches[]` (all detectors that fired), and `evidence{}` (why each matched). Params: `ip` or `ips[]`, `timeout_ms`, `concurrency`. |
+
+The normal onboarding flow:
+
+```
+1. ONVIF discover           → list of cams on the L2 broadcast domain
+2. brand_probe on those IPs → which vendor API each speaks
+3. per-vendor adapter       → control the cam (today: tungson; roadmap: hikvision, dahua, …)
+```
+
+---
+
 ## ONVIF (discovery-only) — `protocol: "onvif"`
 
 Cross-vendor standard. Today we only use it for network discovery —
@@ -216,23 +235,67 @@ don't need to know about them:
 
 ---
 
-## Hanet — `protocol: "hanet"` (not implemented)
+## Hikvision — `protocol: "hik_isapi"` (detector only, no commands yet)
 
-Hanet cameras are cloud-managed: they phone home to Hanet's platform
-and pull config from there. There is nothing the LAN agent can
-usefully do that the Hanet cloud doesn't already handle.
+Hikvision cameras speak **ISAPI** — a well-documented XML-over-HTTP
+protocol also used by many OEM brands (LTS, CCTV-Direct, and any
+Hik-based rebrand). `brand_probe` identifies them via `GET /ISAPI/System/deviceInfo`
+(returns `HTTP 401 Digest` on factory default, `HTTP 200 <DeviceInfo>`
+when anonymous probe is enabled).
 
-| Command | Status |
-|---|---|
-| anything | ❌ out of scope |
+| Command | Status | Notes |
+|---|---|---|
+| `brand_probe` → `hikvision` | ✅ | Fingerprint only; no control yet. |
+| `get_device_info` (model/firmware/serial) | ⏳ planned | `GET /ISAPI/System/deviceInfo`, Digest auth. |
+| `reboot`, `factory_reset` | ⏳ planned | `PUT /ISAPI/System/reboot`, `POST /ISAPI/System/factoryReset`. |
+| `set_time` | ⏳ planned | `PUT /ISAPI/System/time` (XML body). |
+| `ptz_move`, `ptz_stop`, `goto_preset`, `set_preset` | ⏳ planned (or use `onvif` today) | `PUT /ISAPI/PTZCtrl/channels/1/continuous`, `/presets/{id}/goto`. Meanwhile Hik cams respond to the ONVIF adapter. |
+| Stream / OSD / image / motion / recording | ⏳ planned | Rich ISAPI surface covering most everything TungSon does. |
 
-Notes:
-- Face sync, clock sync, firmware, event push — all via Hanet cloud
-  API from the server (`cctv-svc`). The LAN agent does not sit in
-  this path.
-- If we ever want local LAN override (e.g. offline sync without
-  internet), we'd need to reverse-engineer Hanet's local HTTP which
-  isn't publicly documented.
+---
+
+## Dahua — `protocol: "dahua"` (detector only, no commands yet)
+
+Dahua + any Dahua-OEM brand (Lorex, Amcrest, …). Identified via
+`GET /cgi-bin/magicBox.cgi?action=getSystemInfo` (401 or key=value
+text body).
+
+| Command | Status | Notes |
+|---|---|---|
+| `brand_probe` → `dahua` | ✅ | Fingerprint only. |
+| Any control commands | ⏳ planned | Dahua uses `/cgi-bin/*.cgi?action=...` with Digest auth. Most operations exist on both the native CGI and via ONVIF. |
+
+---
+
+## Axis — `protocol: "axis"` (detector only)
+
+`brand_probe` → `axis` via `GET /axis-cgi/param.cgi?action=list&group=Brand`.
+Excellent ONVIF support — use the `onvif` protocol for control today.
+
+---
+
+## Uniview — `protocol: "uniview"` (detector only)
+
+`brand_probe` → `uniview` via `GET /LAPI/V1.0/System/DeviceInfo`.
+Uses LAPI (JSON/REST). Decent ONVIF support for basic operations.
+
+---
+
+## Hanet — `protocol: "hanet"` (detector only, largely cloud-managed)
+
+Hanet cameras are primarily cloud-managed: they phone home to
+Hanet's platform and pull config from there. For most workflows the
+LAN agent is not in the path.
+
+| Command | Status | Notes |
+|---|---|---|
+| `brand_probe` → `hanet` | ✅ (weak signal) | Matches on "hanet" string in the root page HTML; often the cam's login page. |
+| Local HTTP control | ⏳ not documented publicly | Would need to reverse the firmware's local HTTP API. |
+| Face sync / event push | out of scope | Goes via Hanet cloud from `cctv-svc`. |
+| Basic PTZ / stream | ⏳ often works via `onvif` | Try ONVIF WS-Discovery — many Hanet models expose `/onvif/`. |
+
+If a Hanet cam doesn't show up in discover, try pinging common ports
+(554 for RTSP, 80 for HTTP login) to confirm it's on the LAN at all.
 
 ---
 
@@ -245,7 +308,8 @@ and not documented in our references.
 
 | Command | Status |
 |---|---|
-| anything | ⏳ needs vendor docs |
+| Any control | ⏳ needs vendor docs |
+| ONVIF fallback | ✅ if the cam implements it |
 
 ---
 

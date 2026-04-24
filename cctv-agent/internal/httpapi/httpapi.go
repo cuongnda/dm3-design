@@ -106,8 +106,8 @@ func (s *Server) handleCommand(w http.ResponseWriter, r *http.Request) {
 	// of camera_ip, which is the common case after a discover run).
 	if cmd.CameraIP == "" {
 		switch cmd.Type {
-		case "scan", "discover", "ptz_move", "ptz_stop":
-			// OK — either no cam, or params carry the XAddr.
+		case "scan", "discover", "ptz_move", "ptz_stop", "brand_probe":
+			// OK — either no cam, or params carry the XAddr / IP list.
 		default:
 			http.Error(w, "camera_ip is required for this command type", http.StatusBadRequest)
 			return

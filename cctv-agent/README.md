@@ -142,7 +142,7 @@ Response is always HTTP 200 (unless the envelope itself is malformed):
 
 | `type` | Params | Purpose |
 |---|---|---|
-| `discover` | `timeout_ms`, `interface` (optional) | Multicast WS-Discovery probe to `239.255.255.250:3702`. Finds cameras on the same L2 broadcast domain even when they're on a different subnet (factory-default IPs). |
+| `discover` | `timeout_ms`, `interface` (optional) | Multicast WS-Discovery probe to `239.255.255.250:3702`. Finds cameras on the same L2 broadcast domain even when they're on a different subnet (factory-default IPs). Works against any ONVIF-compliant cam (Hikvision, Dahua, Axis, Uniview, Hanet, TungSon/CDYCTX — not brand-specific). |
 | `ptz_move` | `xaddr` (required), `pan`, `tilt`, `zoom` (all -1..1), `duration_ms` (0 = hold until stop) | ONVIF ContinuousMove joystick. When called with `duration_ms > 0`, the agent blocks for that duration and then auto-sends Stop. When `duration_ms = 0`, the caller issues `ptz_stop` on release. |
 | `ptz_stop` | `xaddr`, `stop_pan_tilt`, `stop_zoom` (both default true) | ONVIF Stop. |
 
@@ -150,6 +150,28 @@ Response is always HTTP 200 (unless the envelope itself is malformed):
 response, e.g. `http://192.168.1.222:8091/onvif/device_service`.
 When absent we fall back to `http://{camera_ip}:80/onvif/device_service`,
 which works for cams that publish on the default port.
+
+### Commands — `protocol: "generic"` (cross-vendor)
+
+| `type` | Params | Purpose |
+|---|---|---|
+| `brand_probe` | `ip` or `ips[]`, `timeout_ms` (default 600), `concurrency` (default 32) | HTTP-fingerprint a cam (or a list of cams) to figure out which vendor API it speaks. Runs every detector in parallel; returns the winning vendor plus all matches + evidence strings. Unauth — meant for "what cams do I have on this LAN" before committing to a per-vendor flow. |
+
+Detector fingerprints (extend `internal/adapters/brand/probe.go` to add more):
+
+| Vendor | Endpoint probed | Positive signal |
+|---|---|---|
+| `tungson` | `GET /cgi-bin/vs_cgi_v2?act=cfg_get&name=version` | JSON envelope with `status` + `data.model` |
+| `hikvision` | `GET /ISAPI/System/deviceInfo` | `HTTP 401 Digest` OR `HTTP 200` with `<DeviceInfo>` XML |
+| `dahua` | `GET /cgi-bin/magicBox.cgi?action=getSystemInfo` | `HTTP 401` OR key=value text body |
+| `axis` | `GET /axis-cgi/param.cgi?action=list&group=Brand` | `HTTP 401` OR `Brand.Brand=` line |
+| `uniview` | `GET /LAPI/V1.0/System/DeviceInfo` | `HTTP 401` or `HTTP 200` |
+| `hanet` | `GET /` | `hanet` string in body (weak signal, often just the cam's login page) |
+| `generic_onvif` | `HEAD /onvif/device_service` on ports 80, 8091, 8080, 8000, 2000 | any 2xx/4xx proves the endpoint exists |
+
+When multiple detectors match, priority = native adapter first,
+`generic_onvif` last (a Hik cam that also speaks ONVIF reports as
+`hikvision` because that gives us richer control).
 
 ### Commands — `protocol: "viid_tungson"`
 

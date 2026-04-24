@@ -73,6 +73,8 @@
       <label>CIDR (for scan)</label>
       <input type="text" id="cidr" value="192.168.1.0/24"/>
       <button class="violet" onclick="run('viid_tungson','scan',{cidr:cidrValue(),timeout_ms:800,concurrency:80},false)">Tungson CIDR scan</button>
+      <button class="violet" onclick="probeAll()">Brand probe (fingerprint all)</button>
+      <div class="help">Brand probe HTTP-fingerprints every cam from the last discover so you know which API each speaks (tungson / hikvision / dahua / axis / uniview / hanet / generic_onvif).</div>
     </div>
 
     <div class="cams-list" id="cams_list"></div>
@@ -250,7 +252,7 @@ async function run(protocol, type, params, requireCam = true) {
     let json;
     try { json = JSON.parse(text); } catch { json = { raw: text }; }
     render(json, '', resp.status, type, body.camera_ip, Math.round(performance.now() - started));
-    if (type === 'discover' || type === 'scan') {
+    if (type === 'discover' || type === 'scan' || type === 'brand_probe') {
       renderDiscoveredList(json);
       if (type === 'discover') rememberDiscover(json);
     }
@@ -373,20 +375,39 @@ function render(json, err, httpStatus, type, ip, ms) {
 }
 
 // Clicking on a discovered cam chip fills the IP field, so chaining
-// "discover → identity" is one click each.
+// "discover → identity" is one click each. We also remember the IP
+// list so "Brand probe" can fingerprint every discovered cam in one
+// call.
+let discoveredIPs = [];
 function renderDiscoveredList(json) {
   const list = $('cams_list');
   list.innerHTML = '';
-  const items = (json?.data?.devices || json?.data?.cameras || []);
+  const items = (json?.data?.devices || json?.data?.cameras || json?.data?.results || []);
+  discoveredIPs = items.map(d => d.ip).filter(Boolean);
   items.forEach(d => {
     const ip = d.ip;
-    const vendor = d.vendor_hint || d.model || (d.auth_required ? 'auth required' : '');
+    const vendor = d.vendor || d.vendor_hint || d.model || (d.auth_required ? 'auth required' : '');
     const el = document.createElement('div');
     el.className = 'cam-chip';
     el.innerHTML = `<span class="ip">${ip}</span><span class="vendor">${vendor}</span>`;
     el.onclick = () => { $('cam_ip').value = ip; localStorage.setItem('agent.cam_ip', ip); };
     list.appendChild(el);
   });
+}
+
+// Fingerprint every IP the last discover/scan returned. If nothing
+// has been discovered yet, probe just the IP currently in the input.
+function probeAll() {
+  const ips = discoveredIPs.length > 0 ? discoveredIPs : [];
+  if (ips.length === 0) {
+    const single = $('cam_ip').value.trim();
+    if (!single) {
+      alert('Run ONVIF discover or Tungson scan first — or fill the cam IP field.');
+      return;
+    }
+    ips.push(single);
+  }
+  run('generic', 'brand_probe', { ips, timeout_ms: 800, concurrency: 32 }, false);
 }
 </script>
 </body>

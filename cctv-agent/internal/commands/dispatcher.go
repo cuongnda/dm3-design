@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/duali/cctv-agent/internal/adapters/brand"
 	"github.com/duali/cctv-agent/internal/adapters/onvif"
 	"github.com/duali/cctv-agent/internal/adapters/tungson"
 )
@@ -51,7 +52,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, req Request) Response {
 	// need a longer timeout because UDP multicast collection waits
 	// for a window, and CIDR scans fan out over whole /24s.
 	timeout := 20 * time.Second
-	if req.Type == "scan" || req.Type == "discover" {
+	if req.Type == "scan" || req.Type == "discover" || req.Type == "brand_probe" {
 		timeout = 60 * time.Second
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -70,9 +71,60 @@ func (d *Dispatcher) Dispatch(ctx context.Context, req Request) Response {
 			return Response{Success: false, Error: err.Error()}
 		}
 		return Response{Success: true, Data: data}
+	case "generic":
+		// Cross-vendor utilities (brand_probe today; future: firmware
+		// fingerprint, mac-OUI vendor lookup, …). Protocol "generic"
+		// keeps them out of any single vendor's namespace.
+		data, err := d.dispatchGeneric(ctx, req)
+		if err != nil {
+			return Response{Success: false, Error: err.Error()}
+		}
+		return Response{Success: true, Data: data}
 	default:
 		return Response{Success: false, Error: fmt.Sprintf("unsupported protocol %q", req.Protocol)}
 	}
+}
+
+// dispatchGeneric handles cross-vendor commands — anything whose
+// behaviour doesn't depend on a specific cam protocol.
+func (d *Dispatcher) dispatchGeneric(ctx context.Context, req Request) (json.RawMessage, error) {
+	switch req.Type {
+	case "brand_probe":
+		return handleBrandProbe(ctx, req.Params)
+	}
+	return nil, fmt.Errorf("generic: unknown command type %q", req.Type)
+}
+
+// handleBrandProbe fingerprints one IP or every IP in a list so the
+// operator knows what vendor API each cam speaks before committing
+// to a per-vendor flow. Accepts either a single `ip` or an `ips[]`
+// list. For CIDR-wide sweeps the operator should first run `scan`
+// or `discover` then feed the IP list in.
+func handleBrandProbe(ctx context.Context, raw json.RawMessage) (json.RawMessage, error) {
+	var p struct {
+		IP          string   `json:"ip"`
+		IPs         []string `json:"ips"`
+		TimeoutMs   int      `json:"timeout_ms"`
+		Concurrency int      `json:"concurrency"`
+	}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return nil, fmt.Errorf("parse brand_probe params: %w", err)
+		}
+	}
+	opts := brand.ProbeOptions{Concurrency: p.Concurrency}
+	if p.TimeoutMs > 0 {
+		opts.Timeout = time.Duration(p.TimeoutMs) * time.Millisecond
+	}
+	ips := p.IPs
+	if p.IP != "" {
+		ips = append(ips, p.IP)
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("brand_probe needs either params.ip or params.ips[]")
+	}
+	results := brand.ProbeMany(ctx, ips, opts)
+	return json.Marshal(map[string]any{"count": len(results), "results": results})
 }
 
 // dispatchONVIF routes standard-protocol commands: network discovery
