@@ -614,25 +614,40 @@ func splitCSV(v string) []string {
 
 // expandCredentialTypes maps each canonical filter token from the FE dropdown
 // to the set of values that may actually be stored in access_events.credential_type.
-// The column is written by three different code paths with inconsistent
-// vocabularies (see docs/architecture/mqtt-protocol.md):
+// The column is written by several paths with INCONSISTENT vocabularies (see
+// docs/architecture/mqtt-protocol.md §4.1 for the device-side names):
 //
 //   - access/nats_consumer.go (devices via MQTT) writes whatever the firmware
-//     sends — usually `card`, `face`, `pin`, `qr`, `uhf`, `fingerprint`.
+//     sends. Per MQTT protocol §4.1, the canonical device-side tokens are
+//     `face_template`, `card_uid`, `qr_code`, `fp_template`, `pin`, `nfc`.
+//     Some older firmware still sends the short form (`face`, `card`, `qr`,
+//     `fingerprint`), which is why we accept both.
 //   - access/parking_access_consumer.go (parking-svc) writes `nfc`, `rfid`,
 //     `plate`, `manual`.
 //   - cctv/hanet_webhook.go (Hanet ANPR/face cameras) writes `face` or
 //     `plate_number` (note: NOT `plate`).
 //
-// Without this expansion, "Plate" misses every Hanet ANPR row. Tokens not in
-// the alias table pass through as-is so unknown types still behave as exact
-// match. Returns deduped values across the whole input set.
+// The FE dropdown only knows the short tokens (`card`, `face`, `plate`, `qr`,
+// etc.). Without this expansion, filtering by "Card" returns zero rows in any
+// tenant running current firmware, because every row is stored as `card_uid`.
+// Tokens not in the alias table pass through as-is so unknown types still
+// behave as exact match. Returns deduped values across the whole input set.
 func expandCredentialTypes(tokens []string) []string {
 	if len(tokens) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(tokens))
-	seen := make(map[string]struct{}, len(tokens))
+	// aliases: short FE token → every real value the BE may have stored.
+	// Include the short form itself so legacy rows still match after firmware
+	// rolls out the canonical names.
+	aliases := map[string][]string{
+		"card":        {"card", "card_uid"},
+		"face":        {"face", "face_template"},
+		"qr":          {"qr", "qr_code"},
+		"fingerprint": {"fingerprint", "fp_template"},
+		"plate":       {"plate", "plate_number"},
+	}
+	out := make([]string, 0, len(tokens)*2)
+	seen := make(map[string]struct{}, len(tokens)*2)
 	add := func(v string) {
 		if _, ok := seen[v]; ok {
 			return
@@ -641,11 +656,12 @@ func expandCredentialTypes(tokens []string) []string {
 		out = append(out, v)
 	}
 	for _, t := range tokens {
-		switch strings.ToLower(strings.TrimSpace(t)) {
-		case "plate":
-			add("plate")
-			add("plate_number")
-		default:
+		key := strings.ToLower(strings.TrimSpace(t))
+		if expansions, ok := aliases[key]; ok {
+			for _, e := range expansions {
+				add(e)
+			}
+		} else {
 			add(t)
 		}
 	}
