@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS dm3_devices.device_log_requests (
     lines_uploaded     BIGINT,                             -- reported by device on ack
     bytes              BIGINT,                             -- reported by device on ack
     error_message      TEXT,                               -- set when status='failed'
-    requested_by       UUID REFERENCES dm3_auth.users(id),
+    requested_by       UUID REFERENCES dm3_identity.users(id),
     requested_by_email VARCHAR(255),
     sent_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
     completed_at       TIMESTAMPTZ,
