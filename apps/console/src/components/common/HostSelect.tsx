@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import {
   Button,
@@ -53,7 +54,9 @@ export function useHostOptions(search: string) {
       });
       const trimmedSearch = search.trim();
       if (trimmedSearch) params.set('search', trimmedSearch);
-      const response = await apiFetch<{ users?: HostOption[] }>(`/api/v1/users?${params.toString()}`);
+      // Vite proxy only routes /api/v1/identity/ to identity-svc (see
+      // apps/console/vite.config.ts). Bare /api/v1/users doesn't reach BE.
+      const response = await apiFetch<{ users?: HostOption[] }>(`/api/v1/identity/users?${params.toString()}`);
       return (response.users ?? []).filter((host) => host.id);
     },
     staleTime: 60_000,
@@ -76,13 +79,19 @@ export function HostSelect({
   value,
   onChange,
   disabled,
-  placeholder = 'Select host',
-  loadingLabel = 'Loading…',
-  emptyLabel = 'No host users found',
+  placeholder,
+  loadingLabel,
+  emptyLabel,
   buttonTestId,
   searchInputTestId,
   className,
 }: HostSelectProps) {
+  const { t } = useTranslation('manage');
+  // Defaults resolved at render-time so locale switches reflect immediately
+  // and parent callers don't have to translate themselves.
+  const placeholderText = placeholder ?? t('visitors.hostSelect.placeholder');
+  const loadingText = loadingLabel ?? t('visitors.hostSelect.loading');
+  const emptyText = emptyLabel ?? t('visitors.hostSelect.empty');
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const { data: hosts = [], isLoading } = useHostOptions(search);
@@ -95,7 +104,7 @@ export function HostSelect({
     setSearch('');
   };
 
-  const buttonLabel = selectedHost ? getHostLabel(selectedHost) : placeholder;
+  const buttonLabel = selectedHost ? getHostLabel(selectedHost) : placeholderText;
   const selectedMeta = selectedHost ? getHostMeta(selectedHost) : '';
 
   return (
@@ -123,10 +132,14 @@ export function HostSelect({
           <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[360px] p-0" align="start">
+      <PopoverContent
+        className="z-60 p-0"
+        align="start"
+        style={{ width: 'var(--radix-popover-trigger-width)' }}
+      >
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder={placeholder}
+            placeholder={placeholderText}
             value={search}
             onValueChange={setSearch}
             data-testid={searchInputTestId}
@@ -135,11 +148,11 @@ export function HostSelect({
             {isLoading ? (
               <div className="flex items-center justify-center gap-2 px-3 py-6 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" />
-                <span>{loadingLabel}</span>
+                <span>{loadingText}</span>
               </div>
             ) : (
               <>
-                <CommandEmpty>{emptyLabel}</CommandEmpty>
+                <CommandEmpty>{emptyText}</CommandEmpty>
                 <CommandGroup>
                   {hosts.map((host) => {
                     const label = getHostLabel(host);

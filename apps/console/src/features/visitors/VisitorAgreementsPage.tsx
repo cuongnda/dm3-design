@@ -47,22 +47,22 @@ export function VisitorAgreementsPage() {
   });
 
   const columns: Column<AgreementDTO>[] = [
-    { key: 'name', header: 'Name', render: (r) => <span className="font-medium">{r.name}</span> },
+    { key: 'name', header: t('visitors.agreements.columnName'), render: (r) => <span className="font-medium">{r.name}</span> },
     {
-      key: 'active', header: 'Status', width: '100px',
+      key: 'active', header: t('visitors.agreements.columnStatus'), width: '100px',
       render: (r) => (
         <span className={cn('text-[12px] font-medium', r.active ? 'text-emerald-400' : 'text-muted-foreground')}>
-          {r.active ? 'Active' : 'Inactive'}
+          {r.active ? t('visitors.agreements.activeLabel') : t('visitors.agreements.inactiveLabel')}
         </span>
       ),
     },
-    { key: 'version', header: 'Version', width: '80px', render: (r) => <span className="text-muted-foreground">v{r.version}</span> },
+    { key: 'version', header: t('visitors.agreements.columnVersion'), width: '80px', render: (r) => <span className="text-muted-foreground">v{r.version}</span> },
     {
-      key: 'required_for', header: 'Required For', width: '160px',
-      render: (r) => <span className="text-muted-foreground text-[12px]">{r.required_for?.join(', ') || 'All purposes'}</span>,
+      key: 'required_for', header: t('visitors.agreements.columnRequired'), width: '160px',
+      render: (r) => <span className="text-muted-foreground text-[12px]">{r.required_for?.join(', ') || t('visitors.agreements.allPurposes')}</span>,
     },
     {
-      key: 'created_at', header: 'Created', width: '120px',
+      key: 'created_at', header: t('visitors.agreements.columnCreated'), width: '120px',
       render: (r) => <span className="font-mono text-[12px] text-muted-foreground">{new Date(r.created_at).toLocaleDateString()}</span>,
     },
     {
@@ -72,7 +72,7 @@ export function VisitorAgreementsPage() {
           size="xs"
           variant="ghost"
           onClick={() => toggleMutation.mutate({ id: r.id, active: !r.active })}
-          title={r.active ? 'Deactivate' : 'Activate'}
+          title={r.active ? t('visitors.agreements.actions.deactivate') : t('visitors.agreements.actions.activate')}
         >
           {r.active
             ? <PauseCircle size={14} className="text-amber-400" />
@@ -84,16 +84,16 @@ export function VisitorAgreementsPage() {
 
   return (
     <div>
-      <PageHeader title="Visitor Agreements" description="Manage NDA, safety, and compliance agreements for visitors">
+      <PageHeader title={t('visitors.agreements.title')} description={t('visitors.agreements.description')}>
         <Button size="sm" onClick={() => setShowForm(true)} className="bg-emerald-600 hover:bg-emerald-700" data-testid="visitors-button-create-agreement">
-          <Plus size={16} className="mr-1" /> Create Agreement
+          <Plus size={16} className="mr-1" /> {t('visitors.agreements.createButton')}
         </Button>
       </PageHeader>
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        <div className="text-center py-12 text-muted-foreground">{t('visitors.agreements.loading')}</div>
       ) : agreements.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">No agreements configured yet</div>
+        <div className="text-center py-12 text-muted-foreground">{t('visitors.agreements.empty')}</div>
       ) : (
         <DataTable columns={columns} data={agreements} rowKey={(r) => r.id} />
       )}
@@ -101,23 +101,23 @@ export function VisitorAgreementsPage() {
       <AppModal
         open={showForm}
         onOpenChange={(open) => { setShowForm(open); if (!open) { setName(''); setContent(''); } }}
-        title="Create Agreement"
+        title={t('visitors.agreements.createTitle')}
         size="md"
         showCancelButton
-        primaryAction={{ label: 'Create', onClick: () => createMutation.mutate(), disabled: !name.trim() || !content.trim() || createMutation.isPending }}
+        primaryAction={{ label: t('visitors.agreements.createSubmit'), onClick: () => createMutation.mutate(), disabled: !name.trim() || !content.trim() || createMutation.isPending }}
       >
         <div className="space-y-3">
           <div>
-            <Label className="text-[12px]">Name *</Label>
-            <Input className="mt-1 h-8 text-[13px]" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Non-Disclosure Agreement" data-testid="visitors-input-agreement-name" />
+            <Label className="text-[12px]">{t('visitors.agreements.form.nameLabel')}</Label>
+            <Input className="mt-1 h-8 text-[13px]" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('visitors.agreements.form.namePlaceholder')} data-testid="visitors-input-agreement-name" />
           </div>
           <div>
-            <Label className="text-[12px]">Content *</Label>
+            <Label className="text-[12px]">{t('visitors.agreements.form.contentLabel')}</Label>
             <textarea
               className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-[13px] min-h-[120px] resize-y"
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="Agreement text content..."
+              placeholder={t('visitors.agreements.form.contentPlaceholder')}
               data-testid="visitors-input-agreement-content"
             />
           </div>

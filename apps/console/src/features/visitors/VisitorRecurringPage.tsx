@@ -31,11 +31,13 @@ import { HostSelect } from '@/components/common/HostSelect';
 
 const PURPOSES = ['meeting', 'interview', 'delivery', 'maintenance', 'tour', 'contract_signing', 'other'] as const;
 
-const RRULE_PRESETS: { label: string; value: string }[] = [
-  { label: 'Every weekday (Mon-Fri)', value: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR' },
-  { label: 'Weekly on Monday', value: 'FREQ=WEEKLY;BYDAY=MO' },
-  { label: 'Monthly on the 1st', value: 'FREQ=MONTHLY;BYMONTHDAY=1' },
-  { label: 'Daily', value: 'FREQ=DAILY' },
+// Label keys are resolved via t() at render time (not at module-load) so the
+// presets respond to language switches.
+const RRULE_PRESETS: { labelKey: string; value: string }[] = [
+  { labelKey: 'visitors.recurring.rrulePresets.weekdays', value: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR' },
+  { labelKey: 'visitors.recurring.rrulePresets.weekly', value: 'FREQ=WEEKLY;BYDAY=MO' },
+  { labelKey: 'visitors.recurring.rrulePresets.monthly', value: 'FREQ=MONTHLY;BYMONTHDAY=1' },
+  { labelKey: 'visitors.recurring.rrulePresets.daily', value: 'FREQ=DAILY' },
 ];
 
 type FormState = {
@@ -142,13 +144,13 @@ export function VisitorRecurringPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['visitor-recurring'] });
       setShowForm(false);
-      showToast({ type: 'success', title: 'Recurring template created' });
+      showToast({ type: 'success', title: t('visitors.recurring.toasts.created') });
     },
     onError: (err) => {
       showToast({
         type: 'error',
-        title: 'Could not create template',
-        description: getErrorMessage(err, 'Please check the form and try again.'),
+        title: t('visitors.recurring.toasts.createError'),
+        description: getErrorMessage(err, t('visitors.recurring.toasts.createErrorFallback')),
       });
     },
   });
@@ -159,13 +161,13 @@ export function VisitorRecurringPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['visitor-recurring'] });
       setShowForm(false);
-      showToast({ type: 'success', title: 'Template updated' });
+      showToast({ type: 'success', title: t('visitors.recurring.toasts.updated') });
     },
     onError: (err) => {
       showToast({
         type: 'error',
-        title: 'Could not update template',
-        description: getErrorMessage(err, 'Please check the form and try again.'),
+        title: t('visitors.recurring.toasts.updateError'),
+        description: getErrorMessage(err, t('visitors.recurring.toasts.createErrorFallback')),
       });
     },
   });
@@ -174,13 +176,13 @@ export function VisitorRecurringPage() {
     mutationFn: (id: string) => deleteRecurringTemplate(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['visitor-recurring'] });
-      showToast({ type: 'success', title: 'Template deleted' });
+      showToast({ type: 'success', title: t('visitors.recurring.toasts.deleted') });
     },
     onError: (err) => {
       showToast({
         type: 'error',
-        title: 'Could not delete template',
-        description: getErrorMessage(err, 'Try again in a moment.'),
+        title: t('visitors.recurring.toasts.deleteError'),
+        description: getErrorMessage(err, t('visitors.recurring.toasts.retryFallback')),
       });
     },
   });
@@ -192,8 +194,8 @@ export function VisitorRecurringPage() {
     onError: (err) => {
       showToast({
         type: 'error',
-        title: 'Could not update status',
-        description: getErrorMessage(err, 'Try again in a moment.'),
+        title: t('visitors.recurring.toasts.statusError'),
+        description: getErrorMessage(err, t('visitors.recurring.toasts.retryFallback')),
       });
     },
   });
@@ -224,36 +226,36 @@ export function VisitorRecurringPage() {
   const columns: Column<RecurringTemplateDTO>[] = [
     {
       key: 'visitor',
-      header: 'Visitor',
+      header: t('visitors.recurring.columnVisitor'),
       render: (r) => (
         <span className="font-medium">
           {r.visitor ? getVisitorLabel(r.visitor) : r.visitor_id.slice(0, 8)}
         </span>
       ),
     },
-    { key: 'purpose', header: 'Purpose', render: (r) => <span className="capitalize">{r.purpose.replace(/_/g, ' ')}</span> },
+    { key: 'purpose', header: t('visitors.recurring.columnPurpose'), render: (r) => <span className="capitalize">{r.purpose.replace(/_/g, ' ')}</span> },
     {
-      key: 'recurrence_rule', header: 'Schedule',
+      key: 'recurrence_rule', header: t('visitors.recurring.columnSchedule'),
       render: (r) => <span className="text-muted-foreground text-[12px] font-mono">{r.recurrence_rule}</span>,
     },
     {
-      key: 'start_date', header: 'Period', width: '180px',
+      key: 'start_date', header: t('visitors.recurring.columnPeriod'), width: '180px',
       render: (r) => (
         <span className="text-muted-foreground text-[12px]">
-          {r.start_date}{r.end_date ? ` — ${r.end_date}` : ' — ongoing'}
+          {r.start_date}{r.end_date ? ` — ${r.end_date}` : t('visitors.recurring.ongoingSuffix')}
         </span>
       ),
     },
     {
-      key: 'active', header: 'Status', width: '80px',
+      key: 'active', header: t('visitors.recurring.columnStatus'), width: '80px',
       render: (r) => (
         <span className={cn('text-[12px] font-medium', r.active ? 'text-emerald-400' : 'text-muted-foreground')}>
-          {r.active ? 'Active' : 'Paused'}
+          {r.active ? t('visitors.recurring.activeLabel') : t('visitors.recurring.pausedLabel')}
         </span>
       ),
     },
     {
-      key: 'last_generated', header: 'Last Generated', width: '140px',
+      key: 'last_generated', header: t('visitors.recurring.columnLastGenerated'), width: '140px',
       render: (r) => (
         <span className="font-mono text-[12px] text-muted-foreground">
           {r.last_generated ? new Date(r.last_generated).toLocaleDateString() : '—'}
@@ -296,27 +298,27 @@ export function VisitorRecurringPage() {
 
   return (
     <div>
-      <PageHeader title="Recurring Visits" description="Manage recurring visit templates for regular visitors">
+      <PageHeader title={t('visitors.recurring.title')} description={t('visitors.recurring.description')}>
         <Button
           size="sm"
           onClick={openCreate}
           className="bg-emerald-600 hover:bg-emerald-700"
           data-testid="visitors-button-create-recurring"
         >
-          <Plus size={16} className="mr-1" /> New Template
+          <Plus size={16} className="mr-1" /> {t('visitors.recurring.newTemplate')}
         </Button>
       </PageHeader>
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        <div className="text-center py-12 text-muted-foreground">{t('visitors.recurring.loading')}</div>
       ) : templates.length === 0 ? (
         <div className="py-10">
           <EmptyState
             icon={<CalendarClock size={32} strokeWidth={1.2} />}
-            title="No recurring templates yet"
-            description="Schedule regular visitors — weekly contractors, monthly auditors, daily deliveries — so the system auto-generates visits on the cadence you define."
+            title={t('visitors.recurring.empty.title')}
+            description={t('visitors.recurring.empty.description')}
             primaryAction={{
-              label: 'New Template',
+              label: t('visitors.recurring.newTemplate'),
               icon: <Plus size={14} />,
               onClick: openCreate,
               'data-testid': 'visitors-button-create-recurring-empty',
@@ -330,14 +332,14 @@ export function VisitorRecurringPage() {
       <AppModal
         open={showForm}
         onOpenChange={setShowForm}
-        title={editingId ? 'Edit Recurring Template' : 'New Recurring Template'}
-        description="Schedule recurring visits using an RRULE pattern."
+        title={editingId ? t('visitors.recurring.form.titleEdit') : t('visitors.recurring.form.titleNew')}
+        description={t('visitors.recurring.form.description')}
         size="md"
         showCancelButton
         primaryAction={{
           label: createMutation.isPending || updateMutation.isPending
-            ? (editingId ? 'Saving…' : 'Creating…')
-            : (editingId ? 'Save' : 'Create'),
+            ? (editingId ? t('visitors.recurring.buttons.savingLabel') : t('visitors.recurring.buttons.creatingLabel'))
+            : (editingId ? t('visitors.recurring.buttons.saveLabel') : t('visitors.recurring.buttons.createLabel')),
           onClick: handleSubmit,
           disabled: !canSubmit || createMutation.isPending || updateMutation.isPending,
           'data-testid': 'visitors-button-recurring-submit',
@@ -345,7 +347,7 @@ export function VisitorRecurringPage() {
       >
         <div className="space-y-3">
           <div>
-            <Label className="text-[12px]">Visitor *</Label>
+            <Label className="text-[12px]">{t('visitors.recurring.form.visitorLabel')}</Label>
             <Select
               className="mt-1 h-8 text-[13px]"
               value={form.visitor_id}
@@ -353,10 +355,10 @@ export function VisitorRecurringPage() {
               data-testid="visitors-select-recurring-visitor"
               disabled={!!editingId}
             >
-              <SelectOption value="">Select visitor…</SelectOption>
+              <SelectOption value="">{t('visitors.recurring.form.visitorPlaceholder')}</SelectOption>
               {/* When editing, ensure the current visitor is in the list even if not in recent visits */}
               {editingId && !visitorOptions.some((v) => v.id === form.visitor_id) && form.visitor_id && (
-                <SelectOption value={form.visitor_id}>{form.visitor_id.slice(0, 8)}… (current)</SelectOption>
+                <SelectOption value={form.visitor_id}>{form.visitor_id.slice(0, 8)}{t('visitors.recurring.form.visitorCurrentSuffix')}</SelectOption>
               )}
               {visitorOptions.map((v) => (
                 <SelectOption key={v.id} value={v.id}>
@@ -366,7 +368,7 @@ export function VisitorRecurringPage() {
             </Select>
             {!editingId && visitorOptions.length === 0 && (
               <p className="text-[11px] text-muted-foreground mt-1">
-                No recent visitors available. Register a walk-in or pre-register a visit first.
+                {t('visitors.recurring.form.noRecentVisitors')}
               </p>
             )}
           </div>
@@ -387,7 +389,7 @@ export function VisitorRecurringPage() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-[12px]">Purpose *</Label>
+              <Label className="text-[12px]">{t('visitors.recurring.form.purposeLabel')}</Label>
               <Select
                 className="mt-1 h-8 text-[13px]"
                 value={form.purpose}
@@ -395,26 +397,26 @@ export function VisitorRecurringPage() {
                 data-testid="visitors-select-recurring-purpose"
               >
                 {PURPOSES.map((p) => (
-                  <SelectOption key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1).replace(/_/g, ' ')}</SelectOption>
+                  <SelectOption key={p} value={p}>{t(`visitors.purpose.${p}`)}</SelectOption>
                 ))}
               </Select>
             </div>
             <div>
-              <Label className="text-[12px]">Escort</Label>
+              <Label className="text-[12px]">{t('visitors.recurring.form.escortLabel')}</Label>
               <Select
                 className="mt-1 h-8 text-[13px]"
                 value={form.escort_required ? 'yes' : 'no'}
                 onChange={(e) => setForm((f) => ({ ...f, escort_required: e.target.value === 'yes' }))}
                 data-testid="visitors-select-recurring-escort"
               >
-                <SelectOption value="no">Not required</SelectOption>
-                <SelectOption value="yes">Required</SelectOption>
+                <SelectOption value="no">{t('visitors.recurring.form.escortNotRequired')}</SelectOption>
+                <SelectOption value="yes">{t('visitors.recurring.form.escortRequired')}</SelectOption>
               </Select>
             </div>
           </div>
 
           <div>
-            <Label className="text-[12px]">Recurrence (RRULE) *</Label>
+            <Label className="text-[12px]">{t('visitors.recurring.form.rruleLabel')}</Label>
             <Select
               className="mt-1 h-8 text-[13px]"
               value={RRULE_PRESETS.some((p) => p.value === form.recurrence_rule) ? form.recurrence_rule : ''}
@@ -423,26 +425,26 @@ export function VisitorRecurringPage() {
               }}
               data-testid="visitors-select-recurring-rrule-preset"
             >
-              <SelectOption value="">Custom</SelectOption>
+              <SelectOption value="">{t('visitors.recurring.form.rruleCustom')}</SelectOption>
               {RRULE_PRESETS.map((p) => (
-                <SelectOption key={p.value} value={p.value}>{p.label}</SelectOption>
+                <SelectOption key={p.value} value={p.value}>{t(p.labelKey)}</SelectOption>
               ))}
             </Select>
             <Input
               className="mt-2 h-8 text-[13px] font-mono"
               value={form.recurrence_rule}
               onChange={(e) => setForm((f) => ({ ...f, recurrence_rule: e.target.value }))}
-              placeholder="FREQ=WEEKLY;BYDAY=MO"
+              placeholder={t('visitors.recurring.form.rrulePlaceholder')}
               data-testid="visitors-input-recurring-rrule"
             />
             <p className="text-[11px] text-muted-foreground mt-1">
-              iCalendar RRULE format. Pick a preset above or edit directly.
+              {t('visitors.recurring.form.rruleHelper')}
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-[12px]">Start Date *</Label>
+              <Label className="text-[12px]">{t('visitors.recurring.form.startDateLabel')}</Label>
               <Input
                 type="date"
                 className="mt-1 h-8 text-[13px]"
@@ -452,7 +454,7 @@ export function VisitorRecurringPage() {
               />
             </div>
             <div>
-              <Label className="text-[12px]">End Date</Label>
+              <Label className="text-[12px]">{t('visitors.recurring.form.endDateLabel')}</Label>
               <Input
                 type="date"
                 className="mt-1 h-8 text-[13px]"
@@ -465,15 +467,15 @@ export function VisitorRecurringPage() {
 
           {editingId && (
             <div>
-              <Label className="text-[12px]">Status</Label>
+              <Label className="text-[12px]">{t('visitors.recurring.form.statusLabel')}</Label>
               <Select
                 className="mt-1 h-8 text-[13px]"
                 value={form.active ? 'active' : 'paused'}
                 onChange={(e) => setForm((f) => ({ ...f, active: e.target.value === 'active' }))}
                 data-testid="visitors-select-recurring-status"
               >
-                <SelectOption value="active">Active</SelectOption>
-                <SelectOption value="paused">Paused</SelectOption>
+                <SelectOption value="active">{t('visitors.recurring.form.statusActive')}</SelectOption>
+                <SelectOption value="paused">{t('visitors.recurring.form.statusPaused')}</SelectOption>
               </Select>
             </div>
           )}

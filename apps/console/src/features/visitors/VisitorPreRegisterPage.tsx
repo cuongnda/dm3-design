@@ -108,23 +108,23 @@ export function VisitorPreRegisterPage() {
   return (
     <div>
       <PageHeader
-        title={t('visitors.preRegister', 'Pre-register Visitors')}
-        description={t('visitors.preRegisterDescription', 'View and manage pre-registered visits pending approval')}
+        title={t('visitors.preRegister.title')}
+        description={t('visitors.preRegister.description')}
       />
       {error ? (
         <div className="text-center py-12 text-destructive">{t('visitors.error')}</div>
       ) : isLoading ? (
         <div className="text-center py-12 text-muted-foreground">{t('visitors.loading')}</div>
       ) : visits.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">{t('visitors.noVisits', 'No pre-registered visits')}</div>
+        <div className="text-center py-12 text-muted-foreground">{t('visitors.preRegister.noVisits')}</div>
       ) : (
         <>
           <DataTable columns={columns} data={visits} rowKey={(r) => r.id} />
           {total > 20 && (
             <div className="flex justify-center gap-2 mt-4">
-              <Button size="xs" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</Button>
-              <span className="text-[12px] text-muted-foreground py-1">Page {page} of {Math.ceil(total / 20)}</span>
-              <Button size="xs" variant="outline" disabled={page >= Math.ceil(total / 20)} onClick={() => setPage(p => p + 1)}>Next</Button>
+              <Button size="xs" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>{t('visitors.history.prev')}</Button>
+              <span className="text-[12px] text-muted-foreground py-1">{t('visitors.history.pageOf', { page, total: Math.ceil(total / 20) })}</span>
+              <Button size="xs" variant="outline" disabled={page >= Math.ceil(total / 20)} onClick={() => setPage(p => p + 1)}>{t('visitors.history.next')}</Button>
             </div>
           )}
         </>

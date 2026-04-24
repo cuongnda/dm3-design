@@ -552,7 +552,7 @@ function AccessPointSelect({ value, onChange }: AccessPointSelectProps) {
               <CommandItem
                 value="__all__"
                 onSelect={() => handleSelect('')}
-                className="text-[13px] cursor-pointer"
+                className="text-[13px]"
               >
                 <Check className={cn('mr-2 size-4', !value ? 'opacity-100' : 'opacity-0')} />
                 {t('accessHistory.filters.accessPointAll')}
@@ -562,7 +562,7 @@ function AccessPointSelect({ value, onChange }: AccessPointSelectProps) {
                   key={ap.id}
                   value={ap.id}
                   onSelect={() => handleSelect(ap.id)}
-                  className="text-[13px] cursor-pointer"
+                  className="text-[13px]"
                 >
                   <Check className={cn('mr-2 size-4', value === ap.id ? 'opacity-100' : 'opacity-0')} />
                   {ap.name}
@@ -673,7 +673,7 @@ function PersonSelect({ value, onChange }: PersonSelectProps) {
                   <CommandItem
                     value="__all__"
                     onSelect={clearAll}
-                    className="text-[13px] cursor-pointer"
+                    className="text-[13px]"
                   >
                     <Check className={cn('mr-2 size-4', value.length === 0 ? 'opacity-100' : 'opacity-0')} />
                     {t('accessHistory.filters.userAll')}
@@ -686,7 +686,7 @@ function PersonSelect({ value, onChange }: PersonSelectProps) {
                         key={person.id}
                         value={person.id}
                         onSelect={() => toggle(person.id)}
-                        className="text-[13px] cursor-pointer"
+                        className="text-[13px]"
                       >
                         <Check className={cn('mr-2 size-4', checked ? 'opacity-100' : 'opacity-0')} />
                         {name}
@@ -761,7 +761,7 @@ function MultiOptionSelect({
         <Command shouldFilter={false}>
           <CommandList>
             <CommandGroup>
-              <CommandItem value="__all__" onSelect={() => onChange([])} className="text-[13px] cursor-pointer">
+              <CommandItem value="__all__" onSelect={() => onChange([])} className="text-[13px]">
                 <Check className={cn('mr-2 size-4', value.length === 0 ? 'opacity-100' : 'opacity-0')} />
                 {allLabel}
               </CommandItem>
@@ -772,7 +772,7 @@ function MultiOptionSelect({
                     key={o.value}
                     value={o.value}
                     onSelect={() => toggle(o.value)}
-                    className="text-[13px] cursor-pointer"
+                    className="text-[13px]"
                   >
                     <Check className={cn('mr-2 size-4', checked ? 'opacity-100' : 'opacity-0')} />
                     {o.label}
