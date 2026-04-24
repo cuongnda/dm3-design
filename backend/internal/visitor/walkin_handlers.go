@@ -52,7 +52,21 @@ func (h *VisitorHandlers) WalkinVisit(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusBadRequest, "valid purpose is required")
 		return
 	}
-	if req.HostUserID == "" || !h.hostExists(r, cid, req.HostUserID) {
+
+	// Host is only required when the tenant's approval workflow is enabled —
+	// without an approver, there's no one to route the visit to. With approval
+	// off, walk-ins can be registered before knowing who they'll meet.
+	settings, err := h.getOrCreateSettings(r.Context(), cid)
+	if err != nil {
+		slog.Error("walkin load visitor settings error", "error", err, "tenant_id", cid)
+		httputil.Error(w, http.StatusInternalServerError, "failed to load visitor settings")
+		return
+	}
+	if settings.ApprovalRequired && req.HostUserID == "" {
+		httputil.Error(w, http.StatusBadRequest, "host_user_id is required when tenant requires host approval")
+		return
+	}
+	if req.HostUserID != "" && !h.hostExists(r, cid, req.HostUserID) {
 		httputil.Error(w, http.StatusBadRequest, "host_user_id does not reference an active host")
 		return
 	}
@@ -85,9 +99,9 @@ func (h *VisitorHandlers) WalkinVisit(w http.ResponseWriter, r *http.Request) {
 		   status, expected_arrival, expected_departure, qr_token, qr_expires_at,
 		   access_areas, escort_required, vehicle_plate)
 		VALUES
-		  ($1::uuid, $2::uuid, $3::uuid, $4, $5,
+		  ($1::uuid, $2::uuid, NULLIF($3,'')::uuid, $4, $5,
 		   'waiting', now(), $6, $7, $8, $9::uuid[], $10, $11)
-		RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
+		RETURNING id, tenant_id, visitor_id, COALESCE(host_user_id::text,''), purpose, purpose_note,
 		          status, expected_arrival, expected_departure,
 		          actual_checkin, actual_checkout,
 		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,

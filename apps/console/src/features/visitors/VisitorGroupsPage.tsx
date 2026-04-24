@@ -17,6 +17,7 @@ import {
   listVisitGroups,
   createVisitGroup,
   deleteVisitGroup,
+  getVisitorSettings,
   type VisitGroupDTO,
 } from '@dm3/api-client';
 import { HostSelect } from '@/components/common/HostSelect';
@@ -42,6 +43,15 @@ export function VisitorGroupsPage() {
     queryFn: () => listVisitGroups({ page, limit: 20 }),
   });
 
+  const { data: visitorSettings } = useQuery({
+    queryKey: ['visitor-settings'],
+    queryFn: () => getVisitorSettings(),
+    staleTime: 5 * 60_000,
+  });
+  // Host is required only when the tenant has the approval workflow on —
+  // otherwise the visit auto-approves and there's no host to route to.
+  const hostRequired = visitorSettings?.approval_required ?? true;
+
   const resetForm = () => {
     setName('');
     setDescription('');
@@ -54,7 +64,7 @@ export function VisitorGroupsPage() {
     mutationFn: () => createVisitGroup({
       name,
       description: description || undefined,
-      host_user_id: hostUserId,
+      host_user_id: hostUserId || undefined,
       purpose,
       expected_arrival: new Date(expectedArrival).toISOString(),
     }),
@@ -113,7 +123,9 @@ export function VisitorGroupsPage() {
     },
   ];
 
-  const canCreate = name.trim() && hostUserId.trim() && purpose.trim() && expectedArrival;
+  const canCreate = Boolean(
+    name.trim() && purpose.trim() && expectedArrival && (!hostRequired || hostUserId.trim()),
+  );
 
   return (
     <div>
@@ -169,12 +181,14 @@ export function VisitorGroupsPage() {
             <Input className="mt-1 h-8 text-[13px]" value={description} onChange={(e) => setDescription(e.target.value)} data-testid="visitors-input-group-description" />
           </div>
           <div>
-            <Label className="text-[12px]">Host *</Label>
+            <Label className="text-[12px]">
+              {t('visitors.form.host')}{hostRequired ? ' *' : ''}
+            </Label>
             <HostSelect
               value={hostUserId}
               onChange={(host) => setHostUserId(host?.id ?? '')}
-              placeholder="Select host user"
-              emptyLabel="No matching hosts"
+              placeholder={t('visitors.form.hostPlaceholder')}
+              emptyLabel={t('visitors.form.hostEmpty')}
               buttonTestId="visitors-select-group-host"
               searchInputTestId="visitors-search-group-host"
             />

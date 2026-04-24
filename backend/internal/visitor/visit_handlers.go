@@ -79,7 +79,7 @@ func (h *VisitorHandlers) ListVisits(w http.ResponseWriter, r *http.Request) {
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM dm3_visitor.visits v JOIN dm3_visitor.visitors vis ON vis.id = v.visitor_id `+where, countArgs...).Scan(&total)
 
 	query := fmt.Sprintf(`
-		SELECT v.id, v.tenant_id, v.visitor_id, v.host_user_id, v.purpose, v.purpose_note,
+		SELECT v.id, v.tenant_id, v.visitor_id, COALESCE(v.host_user_id::text,''), v.purpose, v.purpose_note,
 		       v.status, v.expected_arrival, v.expected_departure,
 		       v.actual_checkin, v.actual_checkout,
 		       v.checkin_method, v.checkin_device_id, v.checkin_photo_ref, v.checkout_by,
@@ -151,7 +151,7 @@ func (h *VisitorHandlers) GetVisit(w http.ResponseWriter, r *http.Request) {
 	id := visitIDParam(r)
 
 	row := h.db.Pool.QueryRow(r.Context(), `
-		SELECT v.id, v.tenant_id, v.visitor_id, v.host_user_id, v.purpose, v.purpose_note,
+		SELECT v.id, v.tenant_id, v.visitor_id, COALESCE(v.host_user_id::text,''), v.purpose, v.purpose_note,
 		       v.status, v.expected_arrival, v.expected_departure,
 		       v.actual_checkin, v.actual_checkout,
 		       v.checkin_method, v.checkin_device_id, v.checkin_photo_ref, v.checkout_by,
@@ -244,24 +244,31 @@ func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusBadRequest, "visitor first_name and last_name are required")
 		return
 	}
-	if req.HostUserID == "" || req.Purpose == "" || req.ExpectedArrival.IsZero() {
-		httputil.Error(w, http.StatusBadRequest, "host_user_id, purpose, and expected_arrival are required")
+	if req.Purpose == "" || req.ExpectedArrival.IsZero() {
+		httputil.Error(w, http.StatusBadRequest, "purpose and expected_arrival are required")
 		return
 	}
 	if !isValidVisitPurpose(req.Purpose) {
 		httputil.Error(w, http.StatusBadRequest, "invalid purpose")
 		return
 	}
-	if !h.hostExists(r, cid, req.HostUserID) {
-		httputil.Error(w, http.StatusBadRequest, "host_user_id does not reference an active host")
-		return
-	}
 
-	// Load tenant visitor settings for validation and auto-approve rules
+	// Load tenant visitor settings for validation and auto-approve rules.
+	// Loaded BEFORE the host check because host is only required when the
+	// tenant has approval workflow enabled (someone has to do the approving).
 	settings, err := h.getOrCreateSettings(r.Context(), cid)
 	if err != nil {
 		slog.Error("load visitor settings error", "error", err, "tenant_id", cid)
 		httputil.Error(w, http.StatusInternalServerError, "failed to load visitor settings")
+		return
+	}
+
+	if settings.ApprovalRequired && req.HostUserID == "" {
+		httputil.Error(w, http.StatusBadRequest, "host_user_id is required when tenant requires host approval")
+		return
+	}
+	if req.HostUserID != "" && !h.hostExists(r, cid, req.HostUserID) {
+		httputil.Error(w, http.StatusBadRequest, "host_user_id does not reference an active host")
 		return
 	}
 
@@ -337,11 +344,11 @@ func (h *VisitorHandlers) CreateVisit(w http.ResponseWriter, r *http.Request) {
 		   qr_token, qr_expires_at, access_areas, escort_required, vehicle_plate,
 		   host_approved, host_approved_at)
 		VALUES
-		  ($1::uuid, $2::uuid, $3::uuid, $4, $5,
+		  ($1::uuid, $2::uuid, NULLIF($3,'')::uuid, $4, $5,
 		   $6, $7, $8,
 		   $9, $10, $11::uuid[], $12, $13,
 		   $14, CASE WHEN $14 THEN now() ELSE NULL END)
-		RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
+		RETURNING id, tenant_id, visitor_id, COALESCE(host_user_id::text,''), purpose, purpose_note,
 		          status, expected_arrival, expected_departure,
 		          actual_checkin, actual_checkout,
 		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
@@ -435,7 +442,7 @@ func (h *VisitorHandlers) UpdateVisit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var oldVisit Visit
-	if err := h.db.Pool.QueryRow(r.Context(), `SELECT id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
+	if err := h.db.Pool.QueryRow(r.Context(), `SELECT id, tenant_id, visitor_id, COALESCE(host_user_id::text,''), purpose, purpose_note,
 		status, expected_arrival, expected_departure, actual_checkin, actual_checkout,
 		checkin_method, checkin_device_id, checkin_photo_ref, checkout_by, qr_token, qr_expires_at,
 		badge_number, temp_credential_id, access_areas, escort_required, vehicle_plate, items_carried,
@@ -466,7 +473,7 @@ func (h *VisitorHandlers) UpdateVisit(w http.ResponseWriter, r *http.Request) {
 		    updated_at         = now()
 		WHERE id = $1::uuid AND tenant_id = $2::uuid
 		  AND status IN ('pre_registered','approved','waiting')
-		RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
+		RETURNING id, tenant_id, visitor_id, COALESCE(host_user_id::text,''), purpose, purpose_note,
 		          status, expected_arrival, expected_departure,
 		          actual_checkin, actual_checkout,
 		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
@@ -519,7 +526,7 @@ func (h *VisitorHandlers) ApproveVisit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var hostUserID string
-	if err := h.db.Pool.QueryRow(r.Context(), `SELECT host_user_id FROM dm3_visitor.visits WHERE id = $1::uuid AND tenant_id = $2::uuid`, id, cid).Scan(&hostUserID); err != nil {
+	if err := h.db.Pool.QueryRow(r.Context(), `SELECT COALESCE(host_user_id::text,'') FROM dm3_visitor.visits WHERE id = $1::uuid AND tenant_id = $2::uuid`, id, cid).Scan(&hostUserID); err != nil {
 		httputil.Error(w, http.StatusNotFound, "visit not found")
 		return
 	}
@@ -542,7 +549,7 @@ func (h *VisitorHandlers) ApproveVisit(w http.ResponseWriter, r *http.Request) {
 		    notes            = COALESCE($5, notes),
 		    updated_at       = now()
 		WHERE id = $1::uuid AND tenant_id = $2::uuid AND status IN ('pre_registered','waiting')
-		RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
+		RETURNING id, tenant_id, visitor_id, COALESCE(host_user_id::text,''), purpose, purpose_note,
 		          status, expected_arrival, expected_departure,
 		          actual_checkin, actual_checkout,
 		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
@@ -660,7 +667,7 @@ func (h *VisitorHandlers) ReinviteVisit(w http.ResponseWriter, r *http.Request) 
 		    updated_at     = now()
 		WHERE id = $1::uuid AND tenant_id = $2::uuid
 		  AND status IN ('pre_registered', 'approved')
-		RETURNING id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
+		RETURNING id, tenant_id, visitor_id, COALESCE(host_user_id::text,''), purpose, purpose_note,
 		          status, expected_arrival, expected_departure,
 		          actual_checkin, actual_checkout,
 		          checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,
@@ -1317,7 +1324,7 @@ func loadVisitForLifecycle(ctx context.Context, tx pgx.Tx, tenantID, visitID str
 	var tempUserID *string
 	var tempCredID *string
 	err := tx.QueryRow(ctx, `
-		SELECT v.id, v.tenant_id, v.visitor_id, v.host_user_id, v.purpose, v.purpose_note,
+		SELECT v.id, v.tenant_id, v.visitor_id, COALESCE(v.host_user_id::text,''), v.purpose, v.purpose_note,
 		       v.status, v.expected_arrival, v.expected_departure,
 		       v.actual_checkin, v.actual_checkout,
 		       v.checkin_method, v.checkin_device_id, v.checkin_photo_ref, v.checkout_by,
@@ -1412,7 +1419,7 @@ func ensureTemporaryAccess(ctx context.Context, tx pgx.Tx, tenantID string, visi
 func getVisitByIDTx(ctx context.Context, tx pgx.Tx, tenantID, visitID string) (Visit, error) {
 	var visit Visit
 	err := tx.QueryRow(ctx, `
-		SELECT id, tenant_id, visitor_id, host_user_id, purpose, purpose_note,
+		SELECT id, tenant_id, visitor_id, COALESCE(host_user_id::text,''), purpose, purpose_note,
 		       status, expected_arrival, expected_departure,
 		       actual_checkin, actual_checkout,
 		       checkin_method, checkin_device_id, checkin_photo_ref, checkout_by,

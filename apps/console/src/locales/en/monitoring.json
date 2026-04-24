@@ -77,6 +77,7 @@
     "denied_no_credential": "No credential provided",
     "denied_anti_passback": "Anti-passback violation",
     "denied_offline": "Device offline",
+    "denied_force_close": "Door in force-close state",
     "forced": "Door forced open",
     "held_open": "Door held open",
     "tampered": "Tamper detected"

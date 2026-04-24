@@ -95,7 +95,12 @@ export interface CreateVisitRequest {
     phone?: string;
     company?: string;
   };
-  host_user_id: string;
+  /**
+   * Host user UUID. Required only when the tenant's visitor settings have
+   * `approval_required = true` (the server enforces this). When approval is
+   * off, the visit auto-approves and the host can be left empty.
+   */
+  host_user_id?: string;
   purpose: string;
   purpose_note?: string;
   expected_arrival: string;
@@ -296,7 +301,12 @@ export interface VisitGroupDTO {
 export interface CreateVisitGroupRequest {
   name: string;
   description?: string;
-  host_user_id: string;
+  /**
+   * Host user UUID. Required only when the tenant's visitor settings have
+   * `approval_required = true` (server-enforced). When approval is off, a
+   * group can be registered without a designated host (e.g. open-house).
+   */
+  host_user_id?: string;
   purpose: string;
   expected_arrival: string;
   expected_departure?: string;
@@ -510,7 +520,11 @@ export interface RecurringTemplateDTO {
 
 export interface CreateRecurringTemplateRequest {
   visitor_id: string;
-  host_user_id: string;
+  /**
+   * Host user UUID. Required only when the tenant's visitor settings have
+   * `approval_required = true` (server-enforced).
+   */
+  host_user_id?: string;
   purpose: string;
   recurrence_rule: string;
   start_date: string;

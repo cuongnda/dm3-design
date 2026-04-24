@@ -77,6 +77,7 @@
     "denied_no_credential": "Không có thông tin xác thực",
     "denied_anti_passback": "Vi phạm chống đi vòng",
     "denied_offline": "Thiết bị ngoại tuyến",
+    "denied_force_close": "Cửa đang ở trạng thái khoá cưỡng bức",
     "forced": "Cửa bị mở cưỡng bức",
     "held_open": "Cửa bị giữ mở",
     "tampered": "Phát hiện can thiệp"

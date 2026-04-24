@@ -399,7 +399,7 @@ All messages follow a standard envelope format:
     "user_id": "user-uuid",
     "user_name": "Nguyễn Văn A",
     "confidence": 0.97,
-    "reason": "authorized|denied_expired|denied_zone|denied_time|denied_unknown|denied_blacklist|denied_invalid_card|denied_invalid_qr|denied_invalid_pin|denied_invalid_face|denied_invalid_fp|denied_no_credential|denied_anti_passback|denied_offline",
+    "reason": "authorized|denied_expired|denied_zone|denied_time|denied_unknown|denied_blacklist|denied_invalid_card|denied_invalid_qr|denied_invalid_pin|denied_invalid_face|denied_invalid_fp|denied_no_credential|denied_anti_passback|denied_offline|denied_force_close",
     "credentials": [                          // Ordered list of credentials presented in this scan (preferred)
       { "type": "qr_code",  "value": "123456789" },
       { "type": "card_uid", "value": "9A232AE9" }
@@ -429,6 +429,9 @@ left untouched in `access_events.metadata`; new rows always store keys.
 
 **Field notes:**
 
+- **`reason`** — enum of outcome codes. Most values describe credential/rule failures; two describe device-level states where no rule was evaluated:
+  - `denied_offline` — device had no synced user DB / rules available at scan time.
+  - `denied_force_close` — door is in **force-close / lockdown** state (e.g. triggered by a guard, emergency lockdown, or a `door.forced` alarm). User presented a valid credential but the door is temporarily refusing all check-ins until the force-close state is cleared. Pair this with a `door.state` event where `state=forced` for the incident timeline.
 - **`user_id`** — must be the full 36-character UUID. Some legacy firmware truncates this to 30 chars; the server will reject the truncated value via `uuidRegex` and fall back to resolving the user via the credential value (see below). Firmware must send the complete UUID.
 - **`user_name`** — optional. If empty, the server enriches the broadcast with the resolved user's full name from `dm3_identity.users`.
 - **`credentials`** *(preferred — added 2026-04)* — an **ordered array** of every credential the device matched in this scan. Each entry is `{ "type": "<credential_type>", "value": "<raw_value>" }`. The order reflects the actual scan sequence in N-step verify, so a "QR then card" verify yields:

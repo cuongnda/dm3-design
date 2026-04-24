@@ -2,7 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader, Button, Input, Label } from '@dm3/ui';
 import { Save } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
+import { toast } from '@/lib/toast';
 import {
   getVisitorSettings,
   updateVisitorSettings,
@@ -34,6 +36,7 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
 }
 
 export function VisitorSettingsPage() {
+  const { t } = useTranslation('manage');
   const qc = useQueryClient();
   const { data: settings, isLoading } = useQuery({
     queryKey: ['visitor-settings'],
@@ -78,6 +81,10 @@ export function VisitorSettingsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['visitor-settings'] });
       setDirty(false);
+      toast(t('visitors.settings.toast.saved'), 'success');
+    },
+    onError: (err: unknown) => {
+      toast(err instanceof Error ? err.message : t('visitors.settings.toast.saveFailed'), 'error');
     },
   });
 
@@ -89,15 +96,15 @@ export function VisitorSettingsPage() {
   if (isLoading) {
     return (
       <div>
-        <PageHeader title="Visitor Settings" description="Configure visitor management policies for your tenant" />
-        <div className="text-center py-12 text-muted-foreground">Loading settings...</div>
+        <PageHeader title={t('visitors.settings.title')} description={t('visitors.settings.description')} />
+        <div className="text-center py-12 text-muted-foreground">{t('visitors.settings.loading')}</div>
       </div>
     );
   }
 
   return (
     <div>
-      <PageHeader title="Visitor Settings" description="Configure visitor management policies for your tenant">
+      <PageHeader title={t('visitors.settings.title')} description={t('visitors.settings.description')}>
         <Button
           size="sm"
           disabled={!dirty || saveMutation.isPending}
@@ -106,49 +113,49 @@ export function VisitorSettingsPage() {
           data-testid="visitors-button-save-settings"
         >
           <Save size={16} className="mr-1" />
-          {saveMutation.isPending ? 'Saving...' : 'Save Settings'}
+          {saveMutation.isPending ? t('visitors.settings.saving') : t('visitors.settings.save')}
         </Button>
       </PageHeader>
 
       <div className="max-w-2xl space-y-6">
         <section className="rounded-lg border border-border p-4">
-          <h3 className="text-[13px] font-semibold mb-3">Approval & Verification</h3>
+          <h3 className="text-[13px] font-semibold mb-3">{t('visitors.settings.sections.approval')}</h3>
           <div className="divide-y divide-border">
-            <Toggle checked={form.approval_required ?? false} onChange={(v) => update('approval_required', v)} label="Require host approval before visit" />
-            <Toggle checked={form.auto_approve_returning ?? false} onChange={(v) => update('auto_approve_returning', v)} label="Auto-approve returning visitors" />
-            <Toggle checked={form.auto_approve_vip ?? false} onChange={(v) => update('auto_approve_vip', v)} label="Auto-approve VIP visitors" />
-            <Toggle checked={form.require_nda ?? false} onChange={(v) => update('require_nda', v)} label="Require NDA / agreement signature" />
-            <Toggle checked={form.require_photo ?? false} onChange={(v) => update('require_photo', v)} label="Require visitor photo at check-in" />
-            <Toggle checked={form.require_national_id ?? false} onChange={(v) => update('require_national_id', v)} label="Require national ID" />
-            <Toggle checked={form.require_phone ?? false} onChange={(v) => update('require_phone', v)} label="Require phone number" />
-            <Toggle checked={form.require_email ?? false} onChange={(v) => update('require_email', v)} label="Require email address" />
-            <Toggle checked={form.require_company ?? false} onChange={(v) => update('require_company', v)} label="Require company name" />
+            <Toggle checked={form.approval_required ?? false} onChange={(v) => update('approval_required', v)} label={t('visitors.settings.fields.approvalRequired')} />
+            <Toggle checked={form.auto_approve_returning ?? false} onChange={(v) => update('auto_approve_returning', v)} label={t('visitors.settings.fields.autoApproveReturning')} />
+            <Toggle checked={form.auto_approve_vip ?? false} onChange={(v) => update('auto_approve_vip', v)} label={t('visitors.settings.fields.autoApproveVip')} />
+            <Toggle checked={form.require_nda ?? false} onChange={(v) => update('require_nda', v)} label={t('visitors.settings.fields.requireNda')} />
+            <Toggle checked={form.require_photo ?? false} onChange={(v) => update('require_photo', v)} label={t('visitors.settings.fields.requirePhoto')} />
+            <Toggle checked={form.require_national_id ?? false} onChange={(v) => update('require_national_id', v)} label={t('visitors.settings.fields.requireNationalId')} />
+            <Toggle checked={form.require_phone ?? false} onChange={(v) => update('require_phone', v)} label={t('visitors.settings.fields.requirePhone')} />
+            <Toggle checked={form.require_email ?? false} onChange={(v) => update('require_email', v)} label={t('visitors.settings.fields.requireEmail')} />
+            <Toggle checked={form.require_company ?? false} onChange={(v) => update('require_company', v)} label={t('visitors.settings.fields.requireCompany')} />
           </div>
         </section>
 
         <section className="rounded-lg border border-border p-4">
-          <h3 className="text-[13px] font-semibold mb-3">Badge & Notifications</h3>
+          <h3 className="text-[13px] font-semibold mb-3">{t('visitors.settings.sections.badge')}</h3>
           <div className="divide-y divide-border">
-            <Toggle checked={form.badge_enabled ?? false} onChange={(v) => update('badge_enabled', v)} label="Enable badge printing" />
-            <Toggle checked={form.badge_auto_assign ?? false} onChange={(v) => update('badge_auto_assign', v)} label="Auto-assign badge numbers" />
-            <Toggle checked={form.notify_host_on_arrival ?? false} onChange={(v) => update('notify_host_on_arrival', v)} label="Notify host on visitor arrival" />
-            <Toggle checked={form.notify_host_on_register ?? false} onChange={(v) => update('notify_host_on_register', v)} label="Notify host on visitor registration" />
+            <Toggle checked={form.badge_enabled ?? false} onChange={(v) => update('badge_enabled', v)} label={t('visitors.settings.fields.badgeEnabled')} />
+            <Toggle checked={form.badge_auto_assign ?? false} onChange={(v) => update('badge_auto_assign', v)} label={t('visitors.settings.fields.badgeAutoAssign')} />
+            <Toggle checked={form.notify_host_on_arrival ?? false} onChange={(v) => update('notify_host_on_arrival', v)} label={t('visitors.settings.fields.notifyHostOnArrival')} />
+            <Toggle checked={form.notify_host_on_register ?? false} onChange={(v) => update('notify_host_on_register', v)} label={t('visitors.settings.fields.notifyHostOnRegister')} />
           </div>
         </section>
 
         <section className="rounded-lg border border-border p-4">
-          <h3 className="text-[13px] font-semibold mb-3">Self Service</h3>
+          <h3 className="text-[13px] font-semibold mb-3">{t('visitors.settings.sections.selfService')}</h3>
           <div className="divide-y divide-border">
-            <Toggle checked={form.self_service_enabled ?? false} onChange={(v) => update('self_service_enabled', v)} label="Enable self-service kiosk" />
-            <Toggle checked={form.self_service_requires_qr ?? false} onChange={(v) => update('self_service_requires_qr', v)} label="Self-service requires QR code" />
+            <Toggle checked={form.self_service_enabled ?? false} onChange={(v) => update('self_service_enabled', v)} label={t('visitors.settings.fields.selfServiceEnabled')} />
+            <Toggle checked={form.self_service_requires_qr ?? false} onChange={(v) => update('self_service_requires_qr', v)} label={t('visitors.settings.fields.selfServiceRequiresQr')} />
           </div>
         </section>
 
         <section className="rounded-lg border border-border p-4">
-          <h3 className="text-[13px] font-semibold mb-3">Limits & Timing</h3>
+          <h3 className="text-[13px] font-semibold mb-3">{t('visitors.settings.sections.limits')}</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-[12px]">Auto-checkout hour (0-23)</Label>
+              <Label className="text-[12px]">{t('visitors.settings.fields.autoCheckoutHour')}</Label>
               <Input
                 type="number"
                 className="mt-1 h-8 text-[13px]"
@@ -160,7 +167,7 @@ export function VisitorSettingsPage() {
               />
             </div>
             <div>
-              <Label className="text-[12px]">Max visit duration (hours)</Label>
+              <Label className="text-[12px]">{t('visitors.settings.fields.maxDurationHours')}</Label>
               <Input
                 type="number"
                 className="mt-1 h-8 text-[13px]"
@@ -170,7 +177,7 @@ export function VisitorSettingsPage() {
               />
             </div>
             <div>
-              <Label className="text-[12px]">Default visit duration (hours)</Label>
+              <Label className="text-[12px]">{t('visitors.settings.fields.defaultDurationHours')}</Label>
               <Input
                 type="number"
                 className="mt-1 h-8 text-[13px]"
@@ -180,7 +187,7 @@ export function VisitorSettingsPage() {
               />
             </div>
             <div>
-              <Label className="text-[12px]">No-show grace (minutes)</Label>
+              <Label className="text-[12px]">{t('visitors.settings.fields.noShowGraceMinutes')}</Label>
               <Input
                 type="number"
                 className="mt-1 h-8 text-[13px]"
@@ -190,7 +197,7 @@ export function VisitorSettingsPage() {
               />
             </div>
             <div>
-              <Label className="text-[12px]">QR valid before arrival (hours)</Label>
+              <Label className="text-[12px]">{t('visitors.settings.fields.qrValidityBeforeHours')}</Label>
               <Input
                 type="number"
                 className="mt-1 h-8 text-[13px]"
@@ -200,7 +207,7 @@ export function VisitorSettingsPage() {
               />
             </div>
             <div>
-              <Label className="text-[12px]">QR valid after arrival (hours)</Label>
+              <Label className="text-[12px]">{t('visitors.settings.fields.qrValidityAfterHours')}</Label>
               <Input
                 type="number"
                 className="mt-1 h-8 text-[13px]"
