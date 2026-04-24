@@ -194,12 +194,23 @@ func main() {
 		}
 		slog.Info("using MinIO object storage", "endpoint", cfg.ObjectStoreEndpoint)
 
+		// Presigned URLs must embed the PUBLIC-facing endpoint so browsers
+		// can hit them — signing against minio:9000 (container network) is
+		// fine for PutObject calls from cctv-svc itself, but baking that
+		// internal hostname into clip playback URLs breaks the UI. Fall
+		// back to the internal endpoint when public isn't configured (dev).
+		presignEndpoint := cfg.ObjectStorePublicEndpoint
+		presignUseSSL := cfg.ObjectStorePublicUseSSL
+		if presignEndpoint == "" {
+			presignEndpoint = cfg.ObjectStoreEndpoint
+			presignUseSSL = cfg.ObjectStoreUseSSL
+		}
 		realSigner, signerErr := cctv.NewObjectStoreClipSigner(
-			cfg.ObjectStoreEndpoint,
+			presignEndpoint,
 			cfg.ObjectStoreAccessKeyID,
 			cfg.ObjectStoreSecretAccessKey,
 			cfg.ObjectStoreBucket,
-			cfg.ObjectStoreUseSSL,
+			presignUseSSL,
 		)
 		if signerErr != nil {
 			slog.Error("failed to initialize clip signer", "error", signerErr)

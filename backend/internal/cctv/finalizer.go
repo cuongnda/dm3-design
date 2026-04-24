@@ -55,6 +55,14 @@ func (f *ClipFinalizer) Run(ctx context.Context) {
 	if f == nil {
 		return
 	}
+	// Purge stale in-flight rows before the ticker spins up. Anything still
+	// pending/recording with updated_at older than our reclaim window is
+	// either from a crashed previous run or from a JetStream replay that
+	// shouldn't have happened (see pkg/natsutil.Subscribe docs). Deleting
+	// them avoids creating thousands of zero-content mp4 files for events
+	// that happened hours ago.
+	f.purgeStaleClips(ctx)
+
 	slog.Info("cctv finalizer started", "interval", finalizerPollInterval.String())
 	t := time.NewTicker(finalizerPollInterval)
 	defer t.Stop()
@@ -65,6 +73,44 @@ func (f *ClipFinalizer) Run(ctx context.Context) {
 		case <-t.C:
 			f.tick(ctx)
 		}
+	}
+}
+
+// purgeStaleClips deletes event_clips rows left in a non-terminal state
+// (pending / recording) whose updated_at is older than 10 minutes. That gives
+// the legitimate in-flight horizon (finalizer waits ≤ 12 s after end_at for
+// segments to land; even generous retry windows finish well inside a couple
+// of minutes) plenty of margin. Anything older is orphaned and safe to drop.
+//
+// Using DELETE rather than UPDATE status='failed' because the point is to
+// avoid confusing operators with phantom rows — a junk pending clip wasn't a
+// real event on this tenant's timeline.
+func (f *ClipFinalizer) purgeStaleClips(ctx context.Context) {
+	purgeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	// Clear the junction first to avoid orphan rows. event_clip_events has
+	// no declared FK to event_clips (by design — clip_id is nullable at the
+	// app layer), so Postgres won't cascade for us.
+	tag, err := f.db.Pool.Exec(purgeCtx, `
+		WITH stale AS (
+		  SELECT id FROM dm3_cctv.event_clips
+		   WHERE status IN ('pending','recording')
+		     AND updated_at < now() - interval '10 minutes'
+		),
+		_ AS (
+		  DELETE FROM dm3_cctv.event_clip_events ece
+		   USING stale
+		   WHERE ece.clip_id = stale.id
+		)
+		DELETE FROM dm3_cctv.event_clips ec
+		 USING stale
+		 WHERE ec.id = stale.id`)
+	if err != nil {
+		slog.Warn("cctv finalizer: purge stale clips failed", "error", err)
+		return
+	}
+	if n := tag.RowsAffected(); n > 0 {
+		slog.Info("cctv finalizer: purged stale clips on startup", "rows", n)
 	}
 }
 
