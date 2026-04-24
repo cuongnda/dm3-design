@@ -5,6 +5,11 @@ build/
 out/
 .turbo/
 
+# Offline installer packaging artifacts (deploy/installer/create-package.sh)
+/dm3-installer-*/
+/.pkg-*/
+deploy/installer/.yq
+
 # Env files (secrets)
 .env
 .env.local
