@@ -1,610 +1,482 @@
-# Duall Master 3.0 — SEO & Content Strategy
+# Duall Master — SEO & Content Strategy
 
-**Version:** 1.0  
-**Date:** February 2026  
-**Kanban Task:** task-1771437325
-
----
-
-## Table of Contents
-
-1. [Keyword Research](#1-keyword-research)
-2. [Competitor Website Analysis](#2-competitor-website-analysis)
-3. [Site Architecture](#3-site-architecture)
-4. [Content Plan Per Page](#4-content-plan-per-page)
-5. [Technical SEO Checklist](#5-technical-seo-checklist)
+**Version:** 2.0  
+**Date:** April 2026  
+**Status:** Current working strategy aligned to `docs/VISION.md` v3.0 and `docs/marketing/website-copy.md`
 
 ---
 
-## 1. Keyword Research
+## 1. Strategy summary
 
-### 1.1 Primary Keywords (English)
+This SEO plan is built around the current product truth:
+- **Duall Master** is the external product name
+- category = **building operations and security command platform**
+- website IA should be **module-first**
+- **Secure / Operate / Manage** should support messaging, not lead navigation
+- market focus = **Vietnam + South Korea first**, broader Southeast Asia later
+- AI should be framed as **assistive and credible**, not as the lead overclaim
+- **partner / channel positioning is non-SEO scope** in the current plan — partner discovery and enablement are handled through direct sales and partner-facing materials, not through organic search. Add a `/partners/` SEO page only if inbound partner discovery becomes a real goal later.
 
-| Keyword | Est. Monthly Volume (Global) | Difficulty | Intent |
-|---------|------------------------------|-----------|--------|
-| access control system | 18,000–27,000 | High | Commercial |
-| building security system | 3,600–5,400 | Medium | Commercial |
-| visitor management system | 6,600–9,900 | Medium | Commercial |
-| physical security platform | 1,000–1,600 | Low-Med | Commercial |
-| building management software | 2,400–3,600 | Medium | Commercial |
-| facility management software | 8,100–12,000 | High | Commercial |
-| parking management system | 2,900–4,400 | Medium | Commercial |
-| video surveillance system | 6,600–9,900 | High | Commercial |
-| time and attendance system | 4,400–6,600 | Medium | Commercial |
-| security management platform | 1,300–2,400 | Low-Med | Commercial |
-| unified security platform | 720–1,300 | Low | Commercial |
-| smart building platform | 1,600–2,900 | Low-Med | Commercial |
-| intercom system for buildings | 1,900–2,900 | Medium | Commercial |
-| guard tour system | 1,600–2,400 | Low | Commercial |
+### SEO objective
 
-### 1.2 Primary Keywords (Vietnamese)
+Capture high-intent demand around the modules customers actually buy first, while building topical authority around the platform foundation, deployment trust, and integration-ready operating model.
 
-| Keyword | Est. Monthly Volume (VN) | Difficulty | Intent |
-|---------|--------------------------|-----------|--------|
-| hệ thống kiểm soát ra vào | 1,000–1,900 | Medium | Commercial |
-| kiểm soát truy cập | 590–880 | Low-Med | Commercial |
-| hệ thống an ninh tòa nhà | 480–720 | Low | Commercial |
-| quản lý khách thăm | 320–480 | Low | Commercial |
-| phần mềm quản lý tòa nhà | 720–1,300 | Medium | Commercial |
-| hệ thống camera giám sát | 2,400–3,600 | High | Commercial |
-| máy chấm công | 6,600–9,900 | High | Commercial |
-| quản lý bãi đỗ xe | 390–590 | Low | Commercial |
-| hệ thống chuông cửa thông minh | 480–720 | Low | Commercial |
-| quản lý cơ sở vật chất | 260–390 | Low | Commercial |
-| nền tảng quản lý tòa nhà thông minh | 110–260 | Low | Informational |
-| hệ thống an ninh thông minh | 390–590 | Low | Commercial |
+### Core SEO principle
 
-### 1.3 Long-Tail Keywords by Segment
-
-#### Office Buildings
-- EN: "office building access control system", "visitor management for office buildings", "corporate security platform", "office attendance tracking system", "meeting room booking software"
-- VN: "hệ thống kiểm soát ra vào văn phòng", "quản lý khách thăm tòa nhà văn phòng", "đặt phòng họp trực tuyến"
-
-#### Residential / Apartments
-- EN: "apartment access control system", "residential visitor management", "smart intercom for apartments", "resident mobile app", "apartment parking management"
-- VN: "hệ thống kiểm soát ra vào chung cư", "quản lý khách thăm chung cư", "chuông cửa thông minh chung cư", "app cư dân", "quản lý bãi xe chung cư"
-
-#### Industrial / Factories
-- EN: "factory access control system", "industrial security platform", "worker attendance tracking factory", "safety compliance access management", "warehouse security system"
-- VN: "hệ thống kiểm soát ra vào nhà máy", "chấm công nhà máy", "an ninh khu công nghiệp", "quản lý an toàn nhà xưởng"
-
-#### Government & Military
-- EN: "government building security system", "high security access control", "data sovereign security platform", "military grade access control", "government visitor management"
-- VN: "hệ thống an ninh cơ quan nhà nước", "kiểm soát ra vào cấp độ cao", "an ninh quốc phòng"
-
-#### Education
-- EN: "school security system", "campus access control", "student attendance system", "school visitor management", "emergency lockdown system school"
-- VN: "hệ thống an ninh trường học", "kiểm soát ra vào trường học", "điểm danh học sinh tự động"
-
-#### Healthcare
-- EN: "hospital security system", "healthcare access control", "patient visitor management hospital", "pharmacy access control", "healthcare facility management"
-- VN: "hệ thống an ninh bệnh viện", "kiểm soát ra vào bệnh viện", "quản lý khách thăm bệnh viện"
-
-### 1.4 Feature-Specific Long-Tail Keywords
-- "AI-powered building security", "on-premise AI security assistant", "predictive maintenance building"
-- "mobile-first access control", "phone as access credential", "BLE mobile unlock"
-- "unified security and facility management", "single platform building management"
-- "building energy management ESG reporting", "smart building IoT sensors"
-- "zero trust physical security", "cybersecure access control platform"
+Rank first for recognizable buyer language such as **access control**, **visitor management**, **parking management**, **attendance**, **Video Management (VMS)**, and **Video Intercom** — then connect those entry points back to the broader Duall Master platform story.
 
 ---
 
-## 2. Competitor Website Analysis
+## 2. Keyword strategy
 
-### 2.1 Genetec (genetec.com)
+### 2.1 Primary category and platform keywords
 
-**Positioning:** "Leader in unified physical security software"
+Use these for homepage, platform overview, and high-level commercial pages.
 
-| Aspect | Analysis |
-|--------|----------|
-| **Structure** | `/products/` → individual product pages; `/solutions/` → by industry; `/resources/` → whitepapers, videos, blog |
-| **Content Approach** | Heavy on gated content (whitepapers, demos). Product pages are feature-rich with comparison tables. Strong resource center. |
-| **SEO Tactics** | Targets "unified security platform", "physical security software". Heavy use of structured data. Resource hub drives organic traffic. Industry-specific landing pages. |
-| **Weakness** | Heavy JavaScript rendering (poor for SEO crawling). Enterprise-focused messaging excludes mid-market. Complex navigation. |
+| Cluster | Example target keywords | Intent | Notes |
+|---|---|---|---|
+| Category | building operations and security platform, physical security platform, security management platform | Commercial | Use for platform overview and thought leadership; volume lower but strategically important |
+| Platform model | unified security platform, modular security platform, building command platform | Commercial / informational | Useful for category creation, but must stay grounded in buyer language |
+| Trust & deployment | on-premise security platform, hybrid security platform, multi-tenant security software | Commercial | Good for security / deployment pages |
+| Ecosystem | security platform integrations, access control API, event-driven security platform | Commercial / informational | Use carefully where product truth supports it |
 
-### 2.2 Gallagher (security.gallagher.com)
+### 2.2 Module keyword clusters
 
-**Positioning:** "People. Site. Security."
+These should drive the initial site architecture and page roadmap.
 
-| Aspect | Analysis |
-|--------|----------|
-| **Structure** | `/products/` by category (access, perimeter, intruder); `/solutions/` by industry; `/about/` |
-| **Content Approach** | Case studies prominently featured. Product pages with specification downloads. Clean, professional tone. |
-| **SEO Tactics** | Targets "perimeter security", "access control" by industry. Good use of case studies for long-tail. Regional subdomains. |
-| **Weakness** | Less content depth. Fewer blog posts. Dated design in places. |
+| Module | Core keywords | Secondary / long-tail keywords |
+|---|---|---|
+| Access Control | access control system, access control software, building access control | office access control system, apartment access control system, factory access control system, cloud vs on-premise access control |
+| Visitor Management | visitor management system, visitor check-in software | office visitor management, residential visitor management, visitor access workflow |
+| Attendance | time and attendance system, attendance management software | access-based attendance, workforce attendance system, factory attendance tracking |
+| Parking | parking management system, vehicle access management | apartment parking system, gate parking management, parking operations software |
+| Video Management (VMS) | video management system, VMS software, video surveillance management | event-linked video review, security video operations |
+| Video Intercom | building intercom system, video intercom software, smart intercom for buildings | apartment video intercom, intercom access workflow |
 
-### 2.3 HID Global (hidglobal.com)
+### 2.3 Regional keyword clusters
 
-**Positioning:** "Trusted identities for people, places, and things"
+#### Vietnam priority terms
+- hệ thống kiểm soát ra vào
+- kiểm soát truy cập
+- quản lý khách thăm
+- phần mềm chấm công / hệ thống chấm công
+- quản lý bãi đỗ xe
+- hệ thống camera giám sát
+- hệ thống chuông cửa / intercom tòa nhà
+- phần mềm quản lý an ninh tòa nhà
 
-| Aspect | Analysis |
-|--------|----------|
-| **Structure** | `/solutions/` organized by use case; `/products/` by category; `/resources/` extensive library |
-| **Content Approach** | Very technical, product-spec focused. Strong in identity/credential content. |
-| **SEO Tactics** | Dominates "mobile access credential", "smart card reader". Extensive product catalog pages. Technical docs indexed. |
-| **Weakness** | Fragmented product portfolio, confusing navigation. Hardware-centric messaging. |
+#### South Korea priority approach
+Do not publish Korean-language SEO content until native copy review is available. Start with:
+- English commercial pages that can support Korean outbound and partner conversations
+- later Korean localization for module pages with native terminology validation
 
-### 2.4 Brivo (brivo.com)
+### 2.4 Keywords to de-prioritize for now
 
-**Positioning:** "Cloud-based access control & smart building technology"
+Avoid making these major landing-page bets until product truth is stronger or scope is clearer:
+- predictive maintenance building
+- room booking software
+- energy management platform
+- ESG building reporting
+- guard tour system
+- intrusion detection platform
+- emergency lockdown platform
+- AI threat detection platform
 
-| Aspect | Analysis |
-|--------|----------|
-| **Structure** | Clean SaaS website: `/products/`, `/solutions/` by segment, `/resources/blog/`, `/pricing/` |
-| **Content Approach** | Modern SaaS marketing — clear value props, comparison pages ("Brivo vs competitors"), ROI calculators. Active blog. |
-| **SEO Tactics** | Targets "cloud access control", "smart building". Comparison/alternative pages drive high-intent traffic. Blog with consistent publishing. |
-| **Weakness** | US-focused only. Limited scope (access control primarily). No video surveillance. |
-
-### 2.5 Verkada (verkada.com)
-
-**Positioning:** "Modern, cloud-based physical security"
-
-| Aspect | Analysis |
-|--------|----------|
-| **Structure** | `/products/` (cameras, access control, sensors, alarms); `/solutions/` by industry; `/resources/` |
-| **Content Approach** | Beautiful product pages with interactive demos. Strong video content. Clean UX-focused design. Product-led growth. |
-| **SEO Tactics** | Targets "cloud security cameras", "modern access control". Product pages rank well due to strong UX signals. Competitor comparison pages. |
-| **Weakness** | Premium pricing. Privacy controversies. US-centric. No facility management features. |
-
-### 2.6 Key Takeaways for Duall Master
-
-1. **Do:** Industry/segment landing pages (all competitors do this well)
-2. **Do:** Resource center with ungated + gated content mix
-3. **Do:** Competitor comparison pages (Brivo & Verkada succeed here)
-4. **Do:** Case studies — critical for trust in security industry
-5. **Do:** Clean, modern design (Verkada/Brivo standard, not Genetec/HID complexity)
-6. **Differentiate:** Bilingual (EN/VN) — none of these serve SEA markets well
-7. **Differentiate:** Unified platform positioning (security + people + facilities) — broader than any single competitor
-8. **Differentiate:** Mid-market pricing with enterprise features — fill the gap
+These topics can appear later if they become real product strengths. They should not shape the site today.
 
 ---
 
-## 3. Site Architecture
+## 3. Site IA and page strategy
 
-### 3.1 Full Sitemap & URL Structure
+### 3.1 IA principle
 
-```
-duallmaster.com/                              ← Home
-├── /platform/                                ← Product Overview
-│   ├── /platform/secure/                     ← SECURE Domain
-│   │   ├── /platform/secure/access-control/
-│   │   ├── /platform/secure/video-surveillance/
-│   │   ├── /platform/secure/intrusion-detection/
-│   │   ├── /platform/secure/intercom/
-│   │   ├── /platform/secure/ai-threat-detection/
-│   │   └── /platform/secure/emergency-lockdown/
-│   ├── /platform/manage/                     ← MANAGE Domain
-│   │   ├── /platform/manage/visitor-management/
-│   │   ├── /platform/manage/identity-management/
-│   │   ├── /platform/manage/time-attendance/
-│   │   ├── /platform/manage/contractor-management/
-│   │   ├── /platform/manage/delivery-management/
-│   │   └── /platform/manage/access-provisioning/
-│   ├── /platform/operate/                    ← OPERATE Domain
-│   │   ├── /platform/operate/parking-management/
-│   │   ├── /platform/operate/room-booking/
-│   │   ├── /platform/operate/maintenance/
-│   │   ├── /platform/operate/guard-tour/
-│   │   ├── /platform/operate/key-management/
-│   │   └── /platform/operate/iot-energy/
-│   ├── /platform/smart/                      ← SMART Layer
-│   │   ├── /platform/smart/dashboard/
-│   │   ├── /platform/smart/analytics/
-│   │   ├── /platform/smart/ai-assistant/
-│   │   ├── /platform/smart/automation/
-│   │   └── /platform/smart/predictive-intelligence/
-│   └── /platform/technology/                 ← PLATFORM Layer
-│       ├── /platform/technology/cybersecurity/
-│       ├── /platform/technology/api-integrations/
-│       ├── /platform/technology/mobile-app/
-│       └── /platform/technology/cloud/
-├── /solutions/                               ← Solutions by Segment
-│   ├── /solutions/office/
-│   ├── /solutions/residential/
-│   ├── /solutions/industrial/
-│   ├── /solutions/government/
-│   ├── /solutions/education/
-│   └── /solutions/healthcare/
-├── /pricing/                                 ← Pricing
-├── /resources/                               ← Resource Center
-│   ├── /blog/                                ← Blog
-│   │   ├── /blog/category/security/
-│   │   ├── /blog/category/facility-management/
-│   │   ├── /blog/category/smart-building/
-│   │   └── /blog/category/industry-news/
-│   ├── /resources/case-studies/
-│   ├── /resources/whitepapers/
-│   ├── /resources/webinars/
-│   └── /resources/guides/
-├── /about/                                   ← About Duali
-│   ├── /about/company/
-│   ├── /about/partners/
-│   └── /about/careers/
-├── /contact/                                 ← Contact / Demo Request
-├── /support/                                 ← Support Portal
-└── /vi/                                      ← Vietnamese mirror (all pages)
-```
+Use **module-first IA** with supporting platform, solutions, and trust pages.
 
-### 3.2 Page Hierarchy
+### Recommended top-level structure
 
 ```
-Level 0: Home
-Level 1: Platform | Solutions | Pricing | Resources | About | Contact
-Level 2: SECURE / MANAGE / OPERATE / SMART / Technology | Office / Residential / etc.
-Level 3: Individual feature pages (Access Control, Visitor Management, etc.)
-Level 4: Blog posts, case studies, guides
+/
+/platform/
+/modules/
+  /modules/access-control/
+  /modules/visitor-management/
+  /modules/attendance/
+  /modules/parking/
+  /modules/video-management/
+  /modules/video-intercom/
+/solutions/
+  /solutions/offices/
+  /solutions/residential/
+  /solutions/industrial/
+  /solutions/campus-institutional/
+  /solutions/security-sensitive-sites/
+/security-deployment/
+/integrations/
+/intelligence/
+/resources/
+  /resources/blog/
+  /resources/case-studies/
+/contact/
 ```
 
-### 3.3 Internal Linking Strategy
+### 3.2 Role of each page type
 
-| Strategy | Implementation |
-|----------|---------------|
-| **Domain ↔ Feature** | Each domain page links to all its feature pages; features link back to domain |
-| **Feature ↔ Solution** | Feature pages link to relevant solution pages (e.g., Access Control → Office, Residential, Industrial) |
-| **Solution ↔ Case Study** | Each solution page links to 2–3 relevant case studies |
-| **Blog → Product** | Every blog post links to 1–2 relevant product/feature pages |
-| **CTA Hub** | All pages link to /contact/ or /pricing/ via prominent CTAs |
-| **Cross-domain** | Each domain page highlights synergies with other domains (e.g., SECURE ↔ SMART) |
-| **Breadcrumbs** | Full breadcrumb navigation on all pages for crawlability |
-| **Related Content** | Bottom-of-page "Related" sections on blog posts and feature pages |
-| **Footer Mega-Menu** | All Level 1 and Level 2 pages in footer |
+#### Homepage (`/`)
+Target category and brand terms. Introduce platform foundation, modules, and the Secure / Operate / Manage value story.
+
+#### Platform overview (`/platform/`)
+Explain the shared foundation: identity, devices, events, audit, deployment, integrations, and realtime operations.
+
+#### Module pages (`/modules/...`)
+Primary SEO acquisition pages. Each page should target a recognizable buyer problem and explain how the module benefits from the shared platform.
+
+#### Solutions pages (`/solutions/...`)
+Map module combinations to deployment contexts such as offices, residential, industrial, campuses, and security-sensitive environments.
+
+#### Security / deployment page (`/security-deployment/`)
+Support security-grade and deployment-related searches: tenant isolation, RBAC, audit, cloud/on-premise/hybrid.
+
+#### Integrations page (`/integrations/`)
+Support ecosystem and modernization narratives: APIs, event flows, phased adoption, adjacent systems.
+
+#### Intelligence page (`/intelligence/`)
+Explain assistive search, investigation, summarization, and guided response. This is a support page, not the homepage lead.
 
 ---
 
-## 4. Content Plan Per Page
+## 4. Priority pages to build first
 
-### 4.1 Home Page (`/`)
+### Phase 1 — must-build foundation
+1. `/`
+2. `/platform/`
+3. `/modules/access-control/`
+4. `/modules/visitor-management/`
+5. `/modules/parking/`
+6. `/modules/attendance/`
+7. `/security-deployment/`
+8. `/integrations/`
+9. `/contact/`
 
-| Element | Content |
-|---------|---------|
-| **Target Keywords** | unified building security platform, building management software, Duall Master |
-| **Meta Title** | Duall Master — Unified Building Security & Facility Management Platform |
-| **Meta Description** | One platform for building security, people management, and facility operations. Access control, CCTV, visitor management, parking, and AI-powered intelligence. |
-| **H1** | The Operating System for Your Building |
-| **Content Brief** | Hero with tagline + demo CTA. Three-domain visual (SECURE / MANAGE / OPERATE). Key stats (modules, deployments). Segment cards (Office, Residential, etc.). Testimonial carousel. Feature highlights (AI, Mobile, Cybersecurity). Partner logos. Blog preview. |
-| **CTA** | "Request a Demo" (primary), "See Pricing" (secondary) |
+### Why these first
+- They map to the clearest commercial demand.
+- They match the current product truth and sales story.
+- They let the site rank on buyer language without overextending into future-heavy topics.
 
-### 4.2 Product Overview (`/platform/`)
+### Phase 2 — expand product depth
+10. `/modules/video-management/`
+11. `/modules/video-intercom/`
+12. `/solutions/offices/`
+13. `/solutions/residential/`
+14. `/solutions/industrial/`
+15. `/intelligence/`
+16. `/resources/blog/`
 
-| Element | Content |
-|---------|---------|
-| **Target Keywords** | building security platform, unified security software, facility management platform |
-| **Meta Title** | Duall Master 3.0 Platform — SECURE · MANAGE · OPERATE · SMART |
-| **Meta Description** | Explore Duall Master 3.0's unified architecture: three domains covering security, people, and facility operations, powered by AI intelligence. |
-| **H1** | One Platform. Three Domains. Complete Building Intelligence. |
-| **Content Brief** | Architecture diagram. Overview of each domain with icons and 3-line summaries. SMART layer highlight. Technology foundation section. Deployment options (on-prem, cloud, hybrid). Comparison table vs. point solutions. |
-| **CTA** | "Explore [Domain]" buttons, "Request Demo" |
-
-### 4.3 SECURE Page (`/platform/secure/`)
-
-| Element | Content |
-|---------|---------|
-| **Target Keywords** | building security system, physical security platform, access control and video surveillance |
-| **Meta Title** | SECURE — Building Security System | Access Control, CCTV, Intrusion Detection |
-| **Meta Description** | Protect your building with unified access control, video surveillance, AI threat detection, intercom, and emergency management — all in one platform. |
-| **H1** | SECURE — Protect Your Building |
-| **Content Brief** | Domain overview. 6 module cards with feature summaries: Access Control, CCTV, Intrusion Detection, Intercom, AI Threat Detection, Emergency & Lockdown. Use cases per module. Integration diagram. Security certification mentions. |
-| **CTA** | "Schedule Security Assessment", "Download Security Datasheet" |
-
-### 4.4 MANAGE Page (`/platform/manage/`)
-
-| Element | Content |
-|---------|---------|
-| **Target Keywords** | visitor management system, identity management, time and attendance software, people management platform |
-| **Meta Title** | MANAGE — Visitor, Identity & Attendance Management Platform |
-| **Meta Description** | Manage every user in your building — employees, visitors, contractors, deliveries — with unified identity and automated access provisioning. |
-| **H1** | MANAGE — Handle All People |
-| **Content Brief** | Domain overview. 6 module cards: Identity, Visitors, Contractors, Time & Attendance, Delivery, Access Provisioning. Workflow diagrams (visitor journey, employee onboarding). HR integration highlight. |
-| **CTA** | "See How It Works", "Request Demo" |
-
-### 4.5 OPERATE Page (`/platform/operate/`)
-
-| Element | Content |
-|---------|---------|
-| **Target Keywords** | facility management software, parking management system, building operations platform, maintenance management |
-| **Meta Title** | OPERATE — Facility Management Software | Parking, Rooms, Maintenance, IoT |
-| **Meta Description** | Run your building efficiently with parking management, room booking, maintenance, guard tour, and IoT energy monitoring — all integrated. |
-| **H1** | OPERATE — Run Your Facility |
-| **Content Brief** | Domain overview. 6 module cards: Parking, Room Booking, Maintenance, Guard Tour, Key Management, IoT & Energy. Efficiency metrics (space utilization, energy savings). ESG/green building angle. |
-| **CTA** | "Calculate Your Savings", "Request Demo" |
-
-### 4.6 SMART Page (`/platform/smart/`)
-
-| Element | Content |
-|---------|---------|
-| **Target Keywords** | AI building security, smart building analytics, building AI assistant, predictive building intelligence |
-| **Meta Title** | SMART — AI-Powered Building Intelligence | Dashboard, Analytics, AI Assistant |
-| **Meta Description** | AI that makes your building smarter — unified dashboard, predictive analytics, on-premise AI assistant, and automation engine for proactive security. |
-| **H1** | SMART — Intelligence Across Everything |
-| **Content Brief** | AI capabilities overview. Dashboard demo screenshots. AI Assistant showcase (query examples). Anomaly detection use cases. Automation engine examples (if-then rules). On-premise AI differentiator (privacy, latency, cost). |
-| **CTA** | "See AI in Action", "Request Demo" |
-
-### 4.7 Solution Pages
-
-#### Office (`/solutions/office/`)
-
-| Element | Content |
-|---------|---------|
-| **Target Keywords** | office building security system, corporate access control, office visitor management |
-| **Meta Title** | Office Building Security & Management — Duall Master |
-| **Meta Description** | Complete security and facility management for offices: access control, visitor management, room booking, attendance, and AI-powered monitoring. |
-| **H1** | Smart Security for Modern Offices |
-| **Content Brief** | Office-specific challenges. Relevant modules mapped to office needs. Day-in-the-life scenario (employee, visitor, security manager). ROI highlights. Case study preview. |
-| **CTA** | "Get an Office Security Quote" |
-
-#### Residential (`/solutions/residential/`)
-
-| Element | Content |
-|---------|---------|
-| **Target Keywords** | apartment access control, residential security system, smart apartment management, resident app |
-| **Meta Title** | Residential & Apartment Security Platform — Duall Master |
-| **Meta Description** | Smart security for apartments and condos: mobile access, intercom, visitor management, parking, and a resident app — all in one platform. |
-| **H1** | Smart Living for Modern Residences |
-| **Content Brief** | Resident app showcase. Intercom + mobile unlock flow. Visitor management for apartments. Parking management. Community features. Property management benefits. |
-| **CTA** | "See Residential Demo" |
-
-#### Industrial (`/solutions/industrial/`)
-
-| Element | Content |
-|---------|---------|
-| **Target Keywords** | factory security system, industrial access control, worker attendance factory, warehouse security |
-| **Meta Title** | Industrial & Factory Security System — Duall Master |
-| **Meta Description** | Secure factories and industrial sites with access control, worker attendance, CCTV, safety compliance, and AI-powered monitoring. |
-| **H1** | Industrial-Grade Security & Workforce Management |
-| **Content Brief** | Factory-specific challenges (large workforce, shifts, safety). Attendance + access integration. Perimeter security. Safety compliance tracking. Multi-site management. |
-| **CTA** | "Request Industrial Assessment" |
-
-#### Government (`/solutions/government/`)
-
-| Element | Content |
-|---------|---------|
-| **Target Keywords** | government building security, high security access control, data sovereign security platform |
-| **Meta Title** | Government & Military Security Platform — Duall Master |
-| **Meta Description** | High-security building management for government facilities: on-premise deployment, data sovereignty, audit trails, and zero-trust architecture. |
-| **H1** | Secure Government Facilities with Confidence |
-| **Content Brief** | Data sovereignty & on-premise emphasis. Zero-trust architecture. Audit trail compliance. Multi-level security clearances. On-premise AI (no cloud dependency). Certification roadmap. |
-| **CTA** | "Request Government Briefing" |
-
-#### Education (`/solutions/education/`)
-
-| Element | Content |
-|---------|---------|
-| **Target Keywords** | school security system, campus access control, student attendance system, school emergency lockdown |
-| **Meta Title** | School & Campus Security System — Duall Master |
-| **Meta Description** | Protect students and staff with campus access control, automated attendance, visitor screening, and emergency lockdown capabilities. |
-| **H1** | Safe Campuses, Smarter Schools |
-| **Content Brief** | Student safety narrative. Automated attendance. Visitor screening for schools. Emergency lockdown scenarios. Parent notification. Multi-campus management. |
-| **CTA** | "Get Campus Security Plan" |
-
-#### Healthcare (`/solutions/healthcare/`)
-
-| Element | Content |
-|---------|---------|
-| **Target Keywords** | hospital security system, healthcare access control, patient visitor management |
-| **Meta Title** | Hospital & Healthcare Security System — Duall Master |
-| **Meta Description** | Secure healthcare facilities with access control, visitor management, pharmacy security, and compliance-ready audit trails. |
-| **H1** | Secure Healthcare, Protect Patients |
-| **Content Brief** | Healthcare-specific challenges (controlled areas, pharmacy, infant security). Visitor management for hospitals. Staff access by department. Compliance features. Emergency response. |
-| **CTA** | "Request Healthcare Demo" |
-
-### 4.8 Pricing (`/pricing/`)
-
-| Element | Content |
-|---------|---------|
-| **Target Keywords** | access control system pricing, building security cost, facility management software price |
-| **Meta Title** | Pricing — Duall Master | Starter, Professional, Enterprise |
-| **Meta Description** | Transparent pricing for Duall Master: Starter for small offices, Professional for mid-size, Enterprise for large complexes. On-premise & cloud options. |
-| **H1** | Plans That Grow With Your Building |
-| **Content Brief** | Three-tier comparison table (Starter / Professional / Enterprise). Feature matrix. FAQ (billing, deployment, scaling). Cloud vs. on-premise pricing. "Contact for Enterprise" CTA. |
-| **CTA** | "Start Free Trial" (cloud), "Contact Sales" (enterprise) |
-
-### 4.9 About Us (`/about/company/`)
-
-| Element | Content |
-|---------|---------|
-| **Target Keywords** | Duali Vietnam, building security company Vietnam, Duall Master company |
-| **Meta Title** | About Duali — Building Security & Facility Management Company |
-| **Meta Description** | Duali is a Vietnam-based building technology company creating Duall Master, the unified platform for security and facility management. |
-| **H1** | Building Technology for the Next Generation |
-| **Content Brief** | Company story. Mission/vision. Team highlights. Vietnam-based with global ambition. Technology DNA. Partner ecosystem. |
-| **CTA** | "Join Our Team", "Become a Partner" |
-
-### 4.10 Contact (`/contact/`)
-
-| Element | Content |
-|---------|---------|
-| **Target Keywords** | building security demo, access control consultation, Duall Master contact |
-| **Meta Title** | Contact Us — Request a Demo | Duall Master |
-| **Meta Description** | Get in touch with Duall Master. Request a demo, get pricing, or talk to a building security expert. |
-| **H1** | Let's Secure Your Building |
-| **Content Brief** | Demo request form. Contact info. Office locations. Response time promise. "What to expect" section. |
-| **CTA** | "Submit Request" |
-
-### 4.11 Blog (`/blog/`)
-
-| Element | Content |
-|---------|---------|
-| **Target Keywords** | building security blog, access control tips, smart building trends, facility management guide |
-| **Meta Title** | Blog — Building Security & Smart Building Insights | Duall Master |
-| **Meta Description** | Expert insights on building security, access control, facility management, and smart building technology from the Duall Master team. |
-| **H1** | Insights for Smarter Buildings |
-
-**Content Calendar — First 3 Months:**
-
-| Week | Title | Target Keyword | Category |
-|------|-------|---------------|----------|
-| 1 | "Why Buildings Need a Unified Security Platform in 2026" | unified security platform | Smart Building |
-| 2 | "Access Control System Buyer's Guide: What to Look For" | access control system guide | Security |
-| 3 | "5 Signs Your Visitor Management System Needs an Upgrade" | visitor management system | Facility Mgmt |
-| 4 | "On-Premise vs Cloud Security: Which Deployment is Right?" | on-premise vs cloud security | Security |
-| 5 | "How AI is Transforming Building Security" | AI building security | Smart Building |
-| 6 | "Apartment Security in Vietnam: Trends for 2026" | apartment security Vietnam | Industry News |
-| 7 | "The True Cost of Managing Multiple Security Vendors" | building security cost | Security |
-| 8 | "Mobile-First Security: Why Your Guards Need an App" | mobile security app | Smart Building |
-| 9 | "Factory Security Best Practices: Access + Attendance" | factory security system | Security |
-| 10 | "ESG and Smart Buildings: Energy Management Basics" | smart building energy management | Facility Mgmt |
-| 11 | "Duall Master vs. Traditional Access Control: A Comparison" | access control comparison | Security |
-| 12 | "School Safety: Modern Campus Security Technology" | school security system | Industry News |
+### Phase 3 — trust and proof expansion
+17. `/solutions/campus-institutional/`
+18. `/solutions/security-sensitive-sites/`
+19. `/resources/case-studies/`
+20. comparison / migration / deployment explainer pages only after product proof is ready
 
 ---
 
-## 5. Technical SEO Checklist
+## 5. Page-level content guidance
 
-### 5.1 Core Web Vitals Targets
+### Homepage
 
-| Metric | Target | Strategy |
-|--------|--------|----------|
-| **LCP** (Largest Contentful Paint) | < 2.5s | Optimize hero images (WebP/AVIF), CDN, preload critical assets |
-| **INP** (Interaction to Next Paint) | < 200ms | Minimize JS bundle, code-split, defer non-critical scripts |
-| **CLS** (Cumulative Layout Shift) | < 0.1 | Set explicit image dimensions, reserve space for dynamic content |
-| **TTFB** (Time to First Byte) | < 800ms | Edge caching, server-side rendering or static generation |
+**Target themes**
+- Duall Master brand
+- building operations and security command platform
+- platform foundation + modules
+- secure / realtime / integration-ready / deployment-flexible
 
-### 5.2 Schema Markup
+**Do not do**
+- build the homepage around AI
+- structure navigation around Secure / Operate / Manage
+- claim a complete end-to-end stack beyond current truth
 
-```json
-// Organization (site-wide)
-{
-  "@type": "Organization",
-  "name": "Duali",
-  "url": "https://duallmaster.com",
-  "logo": "https://duallmaster.com/logo.png",
-  "sameAs": ["LinkedIn", "Facebook", "YouTube"]
-}
+### Platform page
 
-// Product (platform page)
-{
-  "@type": "SoftwareApplication",
-  "name": "Duall Master 3.0",
-  "applicationCategory": "SecurityApplication",
-  "operatingSystem": "Web, iOS, Android",
-  "offers": {
-    "@type": "AggregateOffer",
-    "priceCurrency": "USD"
-  }
-}
+Explain:
+- shared identity and policy
+- shared realtime operations
+- shared audit and history
+- deployment flexibility
+- integration-ready architecture
+- why modules are stronger because the foundation is shared
 
-// FAQ (pricing, product pages)
-{
-  "@type": "FAQPage",
-  "mainEntity": [...]
-}
+### Module pages
 
-// BreadcrumbList (all pages)
-{
-  "@type": "BreadcrumbList",
-  "itemListElement": [...]
-}
+Use this structure consistently:
+1. problem the module solves
+2. what Duall Master does
+3. who it is for
+4. key workflows
+5. how it connects to the shared platform
+6. related solutions and adjacent modules
+7. CTA
 
-// Article (blog posts)
-{
-  "@type": "Article",
-  "headline": "...",
-  "author": {...},
-  "datePublished": "..."
-}
+### Solutions pages
 
-// LocalBusiness (contact page)
-{
-  "@type": "LocalBusiness",
-  "name": "Duali Vietnam",
-  "address": {...}
-}
-```
-
-### 5.3 Sitemap & Robots
-
-**sitemap.xml:**
-- Auto-generated, split by section: sitemap-pages.xml, sitemap-blog.xml, sitemap-resources.xml
-- Include `<lastmod>`, `<changefreq>`, `<priority>`
-- Submit to Google Search Console and Bing Webmaster Tools
-- Separate sitemaps for /en/ and /vi/
-
-**robots.txt:**
-```
-User-agent: *
-Allow: /
-Disallow: /api/
-Disallow: /admin/
-Disallow: /app/
-Sitemap: https://duallmaster.com/sitemap.xml
-```
-
-### 5.4 Mobile-First & Page Speed
-
-- **Mobile-first design** — all pages designed for mobile viewport first
-- **Responsive images** — `srcset` with WebP/AVIF formats
-- **Lazy loading** — images below the fold
-- **Critical CSS** — inline above-fold CSS, defer rest
-- **JS budget** — < 200KB compressed total JS
-- **Font optimization** — subset fonts, `font-display: swap`
-- **CDN** — Cloudflare or AWS CloudFront for global delivery
-- **Target:** 90+ on Google PageSpeed Insights (mobile)
-
-### 5.5 Hreflang for Bilingual Content
-
-```html
-<!-- On English pages -->
-<link rel="alternate" hreflang="en" href="https://duallmaster.com/platform/" />
-<link rel="alternate" hreflang="vi" href="https://duallmaster.com/vi/platform/" />
-<link rel="alternate" hreflang="x-default" href="https://duallmaster.com/platform/" />
-
-<!-- On Vietnamese pages -->
-<link rel="alternate" hreflang="en" href="https://duallmaster.com/platform/" />
-<link rel="alternate" hreflang="vi" href="https://duallmaster.com/vi/platform/" />
-<link rel="alternate" hreflang="x-default" href="https://duallmaster.com/platform/" />
-```
-
-**Implementation:**
-- `/` → English (default)
-- `/vi/` → Vietnamese mirror of all pages
-- Language switcher in header
-- Auto-detect via `Accept-Language` header on first visit (with cookie to remember)
-- All `<html lang="en">` / `<html lang="vi">` properly set
-- Vietnamese content is **native, not translated** — written by Vietnamese copywriter
-
-### 5.6 Additional Technical SEO
-
-| Item | Implementation |
-|------|---------------|
-| **Canonical URLs** | Self-referencing canonicals on all pages |
-| **HTTPS** | Enforce HTTPS site-wide, HSTS headers |
-| **404 page** | Custom 404 with search + popular links |
-| **301 redirects** | Redirect plan for any URL changes |
-| **XML sitemap** | Auto-generated, submitted to GSC |
-| **Internal search** | Site search with analytics tracking |
-| **Open Graph** | OG tags on all pages for social sharing |
-| **Twitter Cards** | Summary large image cards |
-| **Structured URLs** | Lowercase, hyphens, descriptive, no parameters |
-| **Pagination** | `rel="next"` / `rel="prev"` for blog listing |
-| **Image alt text** | Descriptive, keyword-relevant alt text on all images |
-| **Heading hierarchy** | Single H1 per page, logical H2/H3 structure |
+Each solutions page should:
+- describe the operating environment
+- map the most relevant modules
+- show deployment and trust considerations
+- avoid pretending there is a separate product per industry
 
 ---
 
-## 6. Quick Wins & Priority Actions
+## 6. Regional and language strategy
 
-### Month 1: Foundation
-1. ✅ Set up domain (duallmaster.com) with SSL
-2. ✅ Implement site structure with proper URL hierarchy
-3. ✅ Build Home, Platform Overview, and 3 domain pages
-4. ✅ Set up Google Search Console + Analytics 4
-5. ✅ Implement hreflang for EN/VN
-6. ✅ Schema markup on all initial pages
+### Vietnam
 
-### Month 2: Content
-1. ✅ Launch all 6 solution pages
-2. ✅ Pricing page
-3. ✅ First 4 blog posts
-4. ✅ About + Contact pages
-5. ✅ Submit sitemap, request indexing
+This should be the first serious SEO localization market.
 
-### Month 3: Growth
-1. ✅ Individual feature pages (Access Control, Visitor Mgmt, etc.)
-2. ✅ First 2 case studies
-3. ✅ Continue weekly blog cadence
-4. ✅ Begin link building (Vietnamese tech publications, security industry)
-5. ✅ Monitor rankings, adjust keyword targeting
+#### Recommendations
+- publish Vietnamese pages for homepage, platform, key modules, contact, and core solutions
+- write Vietnamese copy natively, not by literal translation
+- tune CTA language for consultative buying behavior
+- prioritize office, residential, and industrial vocabulary in Vietnam first
+
+#### URL recommendation
+Use a dedicated language path:
+- `/vi/`
+- `/vi/platform/`
+- `/vi/modules/access-control/`
+
+### South Korea
+
+Treat South Korea as a commercial market first and an SEO localization market second.
+
+#### Recommendations
+- keep English pages available for near-term credibility
+- do not publish Korean SEO pages until terminology, native copy, and partner validation are ready
+- when launched, start with a small set of high-intent pages rather than mirroring the entire site immediately
+
+### Southeast Asia later
+
+Do not fragment the site too early with many country variants. Build authority on core English + Vietnamese assets first.
+
+### Hreflang rule
+Only publish hreflang for language pairs that truly exist and are maintained.
 
 ---
 
-*Document prepared for Duall Master 3.0 marketing website — February 2026*
+## 7. Content themes and editorial priorities
+
+### Content goal
+Build authority around the practical problems Duall Master can credibly address now.
+
+### Editorial themes
+
+#### 1. Access and identity operations
+Examples:
+- access control system buyer guides
+- how to modernize access without replacing everything at once
+- visitor access workflow best practices
+- linking access and attendance data responsibly
+
+#### 2. Site operations and operator workflows
+Examples:
+- how operators reduce response time with one event view
+- why disconnected site tools create operational blind spots
+- parking and gate operations for mixed-use or residential sites
+
+#### 3. Security-grade trust and deployment
+Examples:
+- cloud vs on-premise vs hybrid for site security systems
+- what tenant isolation and auditability matter in multi-site deployments
+- how to evaluate security platform deployment models
+
+#### 4. Integration and modernization
+Examples:
+- phased modernization for legacy access and video environments
+- what “integration-ready” should mean in physical security software
+- how APIs and event flows reduce operational silos
+
+#### 5. Regional market content
+Examples:
+- office access control in Vietnam
+- residential visitor and parking operations in Vietnam
+- industrial attendance and access workflows for factories
+
+### Publish later, not now
+- AI thought leadership that outruns real use cases
+- broad “smart city” or “building OS” essays
+- speculative content on modules not yet strong enough commercially
+
+---
+
+## 8. Suggested initial content backlog
+
+### High-priority commercial pages
+- Access Control
+- Visitor Management
+- Parking
+- Attendance
+- Platform overview
+- Security / Deployment
+- Integrations
+
+### High-priority blog / resource topics
+1. How to choose an access control system for a modern site
+2. Why visitor management breaks when it is disconnected from access workflows
+3. Cloud vs on-premise vs hybrid for security-grade site operations
+4. How to modernize parking and gate operations without replatforming everything
+5. What makes a security platform integration-ready
+6. Access events and attendance: where the operational value really comes from
+7. Residential site operations in Vietnam: visitors, parking, and intercom workflows
+8. Factory access and attendance workflows: what teams should standardize first
+
+### Case study guidance
+Only publish case studies when they can prove at least one of these clearly:
+- module adoption success
+- deployment trust in a sensitive environment
+- operational simplification across disconnected workflows
+- phased expansion on the same platform
+
+---
+
+## 9. Internal linking guidance
+
+### Core rules
+- homepage links to platform page, all primary module pages, selected solutions, and trust pages
+- every module page links back to `/platform/`
+- every module page links to 2–3 adjacent modules where the workflow connection is real
+- every solutions page links to the most relevant modules and trust pages
+- every blog post links to one primary commercial page and one secondary related page
+- contact CTAs should appear on all commercial pages
+
+### Recommended linking patterns
+
+#### Module → Platform
+Explain why the module is stronger because identity, devices, events, and audit are shared.
+
+#### Module → Solution
+Examples:
+- Access Control → Offices / Residential / Industrial
+- Parking → Residential / Offices
+- Video Intercom → Residential / Security-sensitive sites
+
+#### Blog → Commercial page
+Examples:
+- access control buyer guide → Access Control page
+- deployment explainer → Security / Deployment page
+- modernization article → Integrations page
+
+### Avoid
+- orphan pages
+- mega-footers stuffed with weak links
+- forcing every page to link to every other page
+
+---
+
+## 10. Technical SEO checklist
+
+### Crawlability and indexation
+- server-render or statically generate marketing pages where possible
+- use clean HTML with crawlable text content
+- ensure every important page is linked from at least one indexed page
+- submit XML sitemap in Search Console
+- use robots.txt only to block true non-public areas
+
+### Core Web Vitals
+- LCP under 2.5s
+- INP under 200ms
+- CLS under 0.1
+- keep marketing pages lightweight; avoid overbuilt animation-heavy experiences
+
+### Metadata
+- unique title tag and meta description for every page
+- single H1 per page
+- clean heading hierarchy
+- canonical tags on all indexable pages
+- Open Graph and social metadata on all major pages
+
+### Structured data
+Use where relevant:
+- Organization
+- SoftwareApplication / Product
+- BreadcrumbList
+- FAQPage
+- Article
+- LocalBusiness for contact page if needed
+
+### International SEO
+- use `hreflang` only for real maintained language variants
+- set correct `lang` attributes
+- avoid machine-translated thin pages
+
+### Media and assets
+- compress images
+- use descriptive alt text
+- reserve image dimensions to prevent layout shift
+- prefer screenshots and diagrams that support product truth, not decorative stock overload
+
+### Analytics and measurement
+- Search Console
+- GA4 or equivalent
+- event tracking for demo/contact CTAs
+- monitor impressions and CTR by page cluster: homepage, platform, module pages, solutions, blog
+
+---
+
+## 11. What not to publish yet
+
+Do not create dedicated SEO pages for these unless the product truth becomes materially stronger:
+- intrusion detection
+- emergency lockdown
+- predictive maintenance
+- room booking
+- energy / ESG operations
+- autonomous AI operations
+- on-premise AI assistant as a lead differentiator
+- comparison pages against major competitors without strong sales proof and legal review
+- pricing pages with artificial tiers if pricing is not actually settled
+
+### Rule of thumb
+If sales cannot defend the claim in a live call without caveats, do not build an SEO page around it yet.
+
+---
+
+## 12. Execution sequence
+
+### First build
+- homepage
+- platform page
+- Access Control page
+- Visitor Management page
+- Parking page
+- Attendance page
+- Security / Deployment page
+- Integrations page
+- Contact page
+
+### Then localize for Vietnam
+- homepage
+- platform
+- Access Control
+- Visitor Management
+- Parking
+- Attendance
+- contact page
+
+### Then expand
+- Video Management
+- Video Intercom
+- Offices / Residential / Industrial solutions
+- blog program
+- case studies when proof is ready
+
+---
+
+## 13. Success signals
+
+In the first meaningful SEO cycle, success should look like:
+- branded visibility for Duall Master
+- early ranking traction on module keywords
+- stronger CTR on commercially clear page titles
+- contact/demo conversions from module pages
+- Vietnamese traffic quality improving on localized pages
+- content authority building around integration, deployment, and practical module adoption
+
+The goal is not maximum page count. The goal is **credible authority around the product Duall Master actually is**.

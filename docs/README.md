@@ -24,8 +24,10 @@ docs/
 │   └── guard-station-ux.md            # Security operations center
 │
 ├── marketing/                         # How we sell it
-│   ├── website-copy.md                # Marketing website content (15 pages)
-│   └── seo-content-strategy.md        # SEO & content marketing plan
+│   ├── README.md                      # Marketing doc index, status, and source-of-truth order
+│   ├── website-copy.md                # Current website narrative and reusable copy
+│   ├── sales-one-pager.md             # Concise external sales summary
+│   └── seo-content-strategy.md        # SEO/content plan (needs rewrite where it conflicts with VISION)
 │
 ├── research/                          # Reference material (not source of truth)
 │   ├── competitor-analysis.md         # Genetec, Gallagher, Verkada, etc.
